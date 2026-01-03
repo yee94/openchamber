@@ -563,7 +563,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     </div>
 
                                     {/* Scrollable content */}
-                                    <ScrollableOverlay outerClassName="max-h-[400px] flex-1">
+                                    <ScrollableOverlay outerClassName="max-h-[min(400px,calc(100dvh-12rem))] flex-1">
                                         <div className="p-1">
                                             {/* Not selected option */}
                                             <div

@@ -1870,7 +1870,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             </div>
 
                             {/* Scrollable content */}
-                            <ScrollableOverlay outerClassName="max-h-[400px] flex-1">
+                            <ScrollableOverlay outerClassName="max-h-[min(400px,calc(100dvh-12rem))] flex-1">
                                 <div className="p-1">
                                     {!hasResults && (
                                         <div className="px-2 py-4 text-center typography-meta text-muted-foreground">

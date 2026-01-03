@@ -111,8 +111,10 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   const [isOpen, setIsOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [availableHeight, setAvailableHeight] = React.useState<number | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const itemRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 
   // Count occurrences of each model for display purposes
@@ -192,6 +194,17 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   }, [providers, filterByQuery]);
 
   const hasResults = filteredFavorites.length > 0 || filteredRecents.length > 0 || filteredProviders.length > 0;
+
+  // Calculate available height when dropdown opens
+  React.useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // Space above trigger minus padding from top edge
+      const spaceAbove = rect.top - 100;
+      // Cap at 400px max, minimum 150px
+      setAvailableHeight(Math.max(150, Math.min(400, spaceAbove)));
+    }
+  }, [isOpen]);
 
   // Focus search input when opened
   React.useEffect(() => {
@@ -280,6 +293,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         {/* Add model button (dropdown trigger) */}
         <div className="relative" ref={dropdownRef}>
           <Button
+            ref={triggerRef}
             type="button"
             variant="outline"
             size="sm"
@@ -369,7 +383,10 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                 </div>
 
                 {/* Models list */}
-                <ScrollableOverlay outerClassName="max-h-[400px] flex-1">
+                <ScrollableOverlay 
+                  outerClassName="flex-1"
+                  style={{ maxHeight: availableHeight ? `${availableHeight}px` : '300px' }}
+                >
                   <div className="p-1">
                     {!hasResults && (
                       <div className="px-2 py-4 text-center typography-meta text-muted-foreground">
