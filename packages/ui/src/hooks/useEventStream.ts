@@ -127,6 +127,31 @@ export const useEventStream = () => {
     return undefined;
   }, [activeSessionDirectory, fallbackDirectory]);
 
+  const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const normalized = trimmed.replace(/\\/g, '/');
+    return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+  }, []);
+
+  const resolveSessionDirectoryForStatus = React.useCallback(
+    (sessionId: string | null | undefined): string | null => {
+      if (!sessionId) return null;
+      try {
+        const metadata = getWorktreeMetadata?.(sessionId);
+        const metaPath = normalizeDirectory(metadata?.path ?? null);
+        if (metaPath) return metaPath;
+      } catch {
+        // ignored
+      }
+
+      const record = sessions.find((entry) => entry.id === sessionId);
+      return normalizeDirectory((record as { directory?: string | null })?.directory ?? null);
+    },
+    [getWorktreeMetadata, normalizeDirectory, sessions]
+  );
+
   const setEventStreamStatus = useUIStore((state) => state.setEventStreamStatus);
   const lastStatusRef = React.useRef<{ status: EventStreamStatus; hint: string | null } | null>(null);
 
@@ -240,6 +265,7 @@ export const useEventStream = () => {
   const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const lastEventTimestampRef = React.useRef<number>(Date.now());
   const isDesktopRuntimeRef = React.useRef<boolean>(false);
+  const activityStreamAbortControllerRef = React.useRef<AbortController | null>(null);
 
   const maybeBootstrapIfStale = React.useCallback(
     (reason: string) => {
@@ -266,6 +292,8 @@ export const useEventStream = () => {
   const sessionStatusLastRefreshAtRef = React.useRef<number>(0);
   const sessionStatusRefreshInFlightRef = React.useRef<Promise<void> | null>(null);
   const currentSessionIdRef = React.useRef<string | null>(currentSessionId);
+  const previousSessionIdRef = React.useRef<string | null>(null);
+  const previousSessionDirectoryRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
@@ -361,28 +389,6 @@ export const useEventStream = () => {
     }
     sessionStatusLastRefreshAtRef.current = now;
 
-    const normalizeDirectory = (value: string | null | undefined): string | null => {
-      if (typeof value !== 'string') return null;
-      const trimmed = value.trim();
-      if (!trimmed) return null;
-      const normalized = trimmed.replace(/\\/g, '/');
-      return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
-    };
-
-    const resolveSessionDirectoryForStatus = (sessionId: string): string | null => {
-      try {
-        const metadata = getWorktreeMetadata?.(sessionId);
-        const metaPath = normalizeDirectory(metadata?.path ?? null);
-        if (metaPath) return metaPath;
-      } catch {
-        // ignored
-      }
-
-      const record = sessions.find((entry) => entry.id === sessionId);
-      const recordPath = normalizeDirectory((record as { directory?: string | null })?.directory ?? null);
-      return recordPath;
-    };
-
     const applyStatusMap = (statusMap: Record<string, { type?: string }>) => {
       Object.entries(statusMap).forEach(([sessionId, raw]) => {
         if (!sessionId || !raw) return;
@@ -439,7 +445,109 @@ export const useEventStream = () => {
 
     sessionStatusRefreshInFlightRef.current = task;
     return task;
-  }, [effectiveDirectory, getWorktreeMetadata, sessions, updateSessionActivityPhase]);
+  }, [effectiveDirectory, normalizeDirectory, resolveSessionDirectoryForStatus, sessions, updateSessionActivityPhase]);
+
+  React.useEffect(() => {
+    const nextSessionId = currentSessionId ?? null;
+    const prevSessionId = previousSessionIdRef.current;
+    const nextDirectory = resolveSessionDirectoryForStatus(nextSessionId);
+    const prevDirectory = previousSessionDirectoryRef.current;
+
+    if (prevSessionId && nextSessionId && prevSessionId !== nextSessionId) {
+      if (prevDirectory && nextDirectory && prevDirectory !== nextDirectory) {
+        void refreshSessionActivityStatus();
+      }
+    }
+
+    previousSessionIdRef.current = nextSessionId;
+    previousSessionDirectoryRef.current = nextDirectory;
+  }, [currentSessionId, refreshSessionActivityStatus, resolveSessionDirectoryForStatus]);
+
+  const handleActivityEvent = React.useCallback((event: EventData) => {
+    if (!event?.type) return;
+
+    const props = (event.properties ?? {}) as Record<string, unknown>;
+
+    if (event.type === 'openchamber:session-activity') {
+      const sessionId =
+        typeof props.sessionId === 'string'
+          ? props.sessionId
+          : typeof props.sessionID === 'string'
+            ? props.sessionID
+            : null;
+      const phase = typeof props.phase === 'string' ? props.phase : null;
+      if (sessionId && (phase === 'idle' || phase === 'busy' || phase === 'cooldown')) {
+        updateSessionActivityPhase(sessionId, phase);
+        requestSessionListRefresh();
+      }
+      return;
+    }
+
+    if (event.type === 'session.status') {
+      const sessionId =
+        typeof props.sessionID === 'string'
+          ? props.sessionID
+          : typeof props.sessionId === 'string'
+            ? props.sessionId
+            : null;
+      const statusObj =
+        typeof props.status === 'object' && props.status !== null
+          ? (props.status as Record<string, unknown>)
+          : null;
+      const statusType = typeof statusObj?.type === 'string' ? (statusObj.type as string) : null;
+
+      if (sessionId && statusType) {
+        updateSessionActivityPhase(
+          sessionId,
+          statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle',
+        );
+        requestSessionListRefresh();
+      }
+      return;
+    }
+
+    if (event.type === 'session.idle') {
+      const sessionId =
+        typeof props.sessionID === 'string'
+          ? props.sessionID
+          : typeof props.sessionId === 'string'
+            ? props.sessionId
+            : null;
+      if (sessionId) {
+        updateSessionActivityPhase(sessionId, 'idle');
+        requestSessionListRefresh();
+      }
+      return;
+    }
+
+    if (event.type === 'message.updated' || event.type === 'message.part.updated') {
+      const messageInfo =
+        typeof props.info === 'object' && props.info !== null ? (props.info as Record<string, unknown>) : props;
+
+      const sessionId =
+        typeof (messageInfo as { sessionID?: unknown }).sessionID === 'string'
+          ? (messageInfo as { sessionID?: string }).sessionID
+          : typeof (messageInfo as { sessionId?: unknown }).sessionId === 'string'
+            ? (messageInfo as { sessionId?: string }).sessionId
+            : typeof props.sessionID === 'string'
+              ? (props.sessionID as string)
+              : typeof props.sessionId === 'string'
+                ? (props.sessionId as string)
+                : null;
+
+      const role = (messageInfo as { role?: unknown }).role;
+      const finish = (messageInfo as { finish?: unknown }).finish;
+
+      if (sessionId && role === 'assistant' && finish === 'stop') {
+        const currentPhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
+        if (currentPhase === 'busy') {
+          updateSessionActivityPhase(sessionId, 'cooldown');
+          requestSessionListRefresh();
+        }
+      }
+      return;
+    }
+  }, [requestSessionListRefresh, updateSessionActivityPhase]);
 
   const handleEvent = React.useCallback((event: EventData) => {
     lastEventTimestampRef.current = Date.now();
@@ -793,7 +901,8 @@ export const useEventStream = () => {
             }
           }
 
-          if (messageId !== latestAssistantMessageId) break;
+          const isActiveSession = currentSessionId === sessionId;
+          if (isActiveSession && messageId !== latestAssistantMessageId) break;
 
           if (!stopMarkerPresent && isDesktopRuntimeRef.current) {
             trackMessage(messageId, 'desktop_completion_without_stop');
@@ -1035,6 +1144,7 @@ export const useEventStream = () => {
       console.debug('[useEventStream] Connection state:', {
         isDesktopRuntime: isDesktopRuntimeRef.current,
         hasUnsubscribe: Boolean(unsubscribeRef.current),
+        hasActivityStream: Boolean(activityStreamAbortControllerRef.current),
         currentSessionId: currentSessionIdRef.current,
         effectiveDirectory,
         onlineStatus: onlineStatusRef.current,
@@ -1071,6 +1181,15 @@ export const useEventStream = () => {
       } catch (error) {
         console.warn('[useEventStream] Error during unsubscribe:', error);
       }
+    }
+
+    if (activityStreamAbortControllerRef.current) {
+      try {
+        activityStreamAbortControllerRef.current.abort();
+      } catch (error) {
+        console.warn('[useEventStream] Error during activity stream abort:', error);
+      }
+      activityStreamAbortControllerRef.current = null;
     }
 
     isCleaningUpRef.current = false;
@@ -1159,7 +1278,143 @@ export const useEventStream = () => {
     }
 
     try {
-      const sdkUnsub = opencodeClient.subscribeToEvents(handleEvent, onError, onOpen, effectiveDirectory);
+      const sdkUnsub = opencodeClient.subscribeToEvents(
+        handleEvent,
+        onError,
+        onOpen,
+        effectiveDirectory,
+        { scope: 'directory', key: 'events' }
+      );
+
+      if (!isDesktopRuntimeRef.current) {
+        if (activityStreamAbortControllerRef.current) {
+          activityStreamAbortControllerRef.current.abort();
+        }
+
+        const activityAbortController = new AbortController();
+        activityStreamAbortControllerRef.current = activityAbortController;
+
+        const parseSseEventBlock = (block: string): EventData | null => {
+          if (!block) return null;
+
+          const dataLines = block
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).replace(/^\s/, ''));
+
+          if (dataLines.length === 0) {
+            return null;
+          }
+
+          const payloadText = dataLines.join('\n').trim();
+          if (!payloadText) {
+            return null;
+          }
+
+          try {
+            const parsed = JSON.parse(payloadText) as unknown;
+            if (!parsed || typeof parsed !== 'object') {
+              return null;
+            }
+
+            const record = parsed as Record<string, unknown>;
+            if (typeof record.type === 'string') {
+              return record as unknown as EventData;
+            }
+
+            const nestedPayload = record.payload;
+            if (nestedPayload && typeof nestedPayload === 'object') {
+              const nestedRecord = nestedPayload as Record<string, unknown>;
+              if (typeof nestedRecord.type === 'string') {
+                return nestedRecord as unknown as EventData;
+              }
+            }
+
+            return null;
+          } catch {
+            return null;
+          }
+        };
+
+        void (async () => {
+          try {
+            const candidateEndpoints = ['/api/global/event', '/api/event'];
+            let response: Response | null = null;
+            let lastError: unknown = null;
+
+            for (const endpoint of candidateEndpoints) {
+              try {
+                const candidateResponse = await fetch(endpoint, {
+                  method: 'GET',
+                  headers: {
+                    Accept: 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                  },
+                  signal: activityAbortController.signal,
+                });
+
+                if (candidateResponse.ok && candidateResponse.body) {
+                  response = candidateResponse;
+                  if (streamDebugEnabled()) {
+                    console.info('[useEventStream] Activity stream connected:', endpoint);
+                  }
+                  break;
+                }
+
+                lastError = new Error(`Activity stream failed: ${candidateResponse.status}`);
+              } catch (error) {
+                lastError = error;
+              }
+            }
+
+            if (!response) {
+              throw lastError ?? new Error('Activity stream failed');
+            }
+
+            const responseBody = response.body;
+            if (!responseBody) {
+              throw new Error('Activity stream missing body');
+            }
+
+            const reader = responseBody.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (activityAbortController.signal.aborted) break;
+              if (!value || value.length === 0) continue;
+
+              buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+              const blocks = buffer.split('\n\n');
+              buffer = blocks.pop() ?? '';
+              for (const block of blocks) {
+                const event = parseSseEventBlock(block);
+                if (event) {
+                  handleActivityEvent(event);
+                }
+              }
+            }
+
+            const remaining = buffer.trim();
+            if (remaining) {
+              const event = parseSseEventBlock(remaining);
+              if (event) {
+                handleActivityEvent(event);
+              }
+            }
+          } catch (error) {
+            if (!activityAbortController.signal.aborted) {
+              console.warn('[useEventStream] Activity stream error:', error);
+            }
+          } finally {
+            if (activityStreamAbortControllerRef.current === activityAbortController) {
+              activityStreamAbortControllerRef.current = null;
+            }
+          }
+        })();
+      }
 
       const compositeUnsub = () => {
         try {
@@ -1173,6 +1428,10 @@ export const useEventStream = () => {
         unsubscribeRef.current = compositeUnsub;
       } else {
         compositeUnsub();
+        if (activityStreamAbortControllerRef.current) {
+          activityStreamAbortControllerRef.current.abort();
+          activityStreamAbortControllerRef.current = null;
+        }
       }
     } catch (subscriptionError) {
       console.error('[useEventStream] Error during subscription:', subscriptionError);
@@ -1186,6 +1445,7 @@ export const useEventStream = () => {
     resyncMessages,
     requestSessionMetadataRefresh,
     handleEvent,
+    handleActivityEvent,
     effectiveDirectory,
     refreshSessionActivityStatus,
     waitForDesktopBridge,

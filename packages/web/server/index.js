@@ -937,7 +937,16 @@ function parseSseDataPayload(block) {
   }
 
   try {
-    return JSON.parse(payloadText);
+    const parsed = JSON.parse(payloadText);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof parsed.payload === 'object' &&
+      parsed.payload !== null
+    ) {
+      return parsed.payload;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -950,7 +959,7 @@ function deriveSessionActivity(payload) {
 
   if (payload.type === 'session.status') {
     const status = payload.properties?.status;
-    const sessionId = payload.properties?.sessionID;
+    const sessionId = payload.properties?.sessionID ?? payload.properties?.sessionId;
     const statusType = status?.type;
 
     if (typeof sessionId === 'string' && sessionId.length > 0 && typeof statusType === 'string') {
@@ -961,7 +970,17 @@ function deriveSessionActivity(payload) {
 
   if (payload.type === 'message.updated') {
     const info = payload.properties?.info;
-    const sessionId = info?.sessionID;
+    const sessionId = info?.sessionID ?? info?.sessionId ?? payload.properties?.sessionID ?? payload.properties?.sessionId;
+    const role = info?.role;
+    const finish = info?.finish;
+    if (typeof sessionId === 'string' && sessionId.length > 0 && role === 'assistant' && finish === 'stop') {
+      return { sessionId, phase: 'cooldown' };
+    }
+  }
+
+  if (payload.type === 'message.part.updated') {
+    const info = payload.properties?.info;
+    const sessionId = info?.sessionID ?? info?.sessionId ?? payload.properties?.sessionID ?? payload.properties?.sessionId;
     const role = info?.role;
     const finish = info?.finish;
     if (typeof sessionId === 'string' && sessionId.length > 0 && role === 'assistant' && finish === 'stop') {
@@ -970,7 +989,7 @@ function deriveSessionActivity(payload) {
   }
 
   if (payload.type === 'session.idle') {
-    const sessionId = payload.properties?.sessionID;
+    const sessionId = payload.properties?.sessionID ?? payload.properties?.sessionId;
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       return { sessionId, phase: 'idle' };
     }
@@ -2072,11 +2091,119 @@ async function main(options = {}) {
     }
   });
 
-  app.get('/api/event', async (req, res) => {
-    if (!openCodePort) {
+  app.get('/api/global/event', async (req, res) => {
+    if (!openCodeApiPrefixDetected) {
+      try {
+        await detectOpenCodeApiPrefix();
+      } catch {
+        // ignore detection failures
+      }
+    }
+
+    let targetUrl;
+    try {
+      const prefix = openCodeApiPrefixDetected ? openCodeApiPrefix : '';
+      targetUrl = new URL(buildOpenCodeUrl('/global/event', prefix));
+    } catch (error) {
       return res.status(503).json({ error: 'OpenCode service unavailable' });
     }
 
+    const headers = {
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive'
+    };
+
+    const lastEventId = req.header('Last-Event-ID');
+    if (typeof lastEventId === 'string' && lastEventId.length > 0) {
+      headers['Last-Event-ID'] = lastEventId;
+    }
+
+    const controller = new AbortController();
+    const cleanup = () => {
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
+    };
+
+    req.on('close', cleanup);
+    req.on('error', cleanup);
+
+    let upstream;
+    try {
+      upstream = await fetch(targetUrl.toString(), {
+        headers,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      return res.status(502).json({ error: 'Failed to connect to OpenCode event stream' });
+    }
+
+    if (!upstream.ok || !upstream.body) {
+      return res.status(502).json({ error: `OpenCode event stream unavailable (${upstream.status})` });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    const decoder = new TextDecoder();
+    const reader = upstream.body.getReader();
+    let buffer = '';
+
+    const forwardBlock = (block) => {
+      if (!block) return;
+      res.write(`${block}\n\n`);
+      const payload = parseSseDataPayload(block);
+      const activity = deriveSessionActivity(payload);
+      if (activity) {
+        writeSseEvent(res, {
+          type: 'openchamber:session-activity',
+          properties: {
+            sessionId: activity.sessionId,
+            phase: activity.phase,
+          }
+        });
+      }
+    };
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+        let separatorIndex;
+        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+          const block = buffer.slice(0, separatorIndex);
+          buffer = buffer.slice(separatorIndex + 2);
+          forwardBlock(block);
+        }
+      }
+
+      if (buffer.trim().length > 0) {
+        forwardBlock(buffer.trim());
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.warn('SSE proxy stream error:', error);
+      }
+    } finally {
+      cleanup();
+      try {
+        res.end();
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  app.get('/api/event', async (req, res) => {
     if (!openCodeApiPrefixDetected) {
       try {
         await detectOpenCodeApiPrefix();

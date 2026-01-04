@@ -129,7 +129,7 @@ const getDesktopFilesApi = (): FilesAPI | null => {
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
-  private sseAbortController: AbortController | null = null;
+  private sseAbortControllers: Map<string, AbortController> = new Map();
   private currentDirectory: string | undefined = undefined;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
@@ -835,16 +835,18 @@ class OpencodeService {
     onMessage: (event: { type: string; properties?: Record<string, unknown> }) => void,
     onError?: (error: unknown) => void,
     onOpen?: () => void,
-    directoryOverride?: string | null
+    directoryOverride?: string | null,
+    options?: { scope?: 'global' | 'directory'; key?: string }
   ): () => void {
-    // Stop any existing subscription
-    if (this.sseAbortController) {
-      this.sseAbortController.abort();
+    const subscriptionKey = options?.key ?? 'default';
+    const existingController = this.sseAbortControllers.get(subscriptionKey);
+    if (existingController) {
+      existingController.abort();
     }
 
     // Create new AbortController for this subscription
     const abortController = new AbortController();
-    this.sseAbortController = abortController;
+    this.sseAbortControllers.set(subscriptionKey, abortController);
 
     let lastEventId: string | undefined;
 
@@ -853,10 +855,12 @@ class OpencodeService {
     // Start async generator in background with reconnect on failure
     (async () => {
       const resolvedDirectory =
-        typeof directoryOverride === 'string' && directoryOverride.trim().length > 0
-          ? directoryOverride.trim()
-          : this.currentDirectory;
-      console.log('[OpencodeClient] Connecting to SSE with directory:', resolvedDirectory);
+        options?.scope === 'global'
+          ? undefined
+          : typeof directoryOverride === 'string' && directoryOverride.trim().length > 0
+            ? directoryOverride.trim()
+            : this.currentDirectory;
+      console.log('[OpencodeClient] Connecting to SSE with directory:', resolvedDirectory ?? 'global');
 
       const connect = async (attempt: number): Promise<void> => {
         try {
@@ -939,16 +943,16 @@ class OpencodeService {
         await connect(0);
       } finally {
         console.log('[OpencodeClient] SSE subscription cleanup');
-        if (this.sseAbortController === abortController) {
-          this.sseAbortController = null;
+        if (this.sseAbortControllers.get(subscriptionKey) === abortController) {
+          this.sseAbortControllers.delete(subscriptionKey);
         }
       }
     })();
 
     // Return cleanup function
     return () => {
-      if (this.sseAbortController === abortController) {
-        this.sseAbortController = null;
+      if (this.sseAbortControllers.get(subscriptionKey) === abortController) {
+        this.sseAbortControllers.delete(subscriptionKey);
       }
       abortController.abort();
     };

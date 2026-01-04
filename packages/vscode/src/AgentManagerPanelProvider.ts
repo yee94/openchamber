@@ -144,6 +144,7 @@ export class AgentManagerPanelProvider {
 
     const { path, headers } = (payload || {}) as { path?: string; headers?: Record<string, string> };
     const normalizedPath = typeof path === 'string' && path.trim().length > 0 ? path.trim() : '/event';
+    const shouldInjectActivity = normalizedPath === '/event' || normalizedPath === '/global/event';
 
     if (!apiBaseUrl) {
       return {
@@ -211,11 +212,12 @@ export class AgentManagerPanelProvider {
               if (!chunk) continue;
 
               // Reduce webview message pressure by forwarding complete SSE blocks.
-              sseBuffer += chunk;
+              sseBuffer += shouldInjectActivity ? chunk.replace(/\r\n/g, '\n') : chunk;
               const blocks = sseBuffer.split('\n\n');
               sseBuffer = blocks.pop() ?? '';
               if (blocks.length > 0) {
-                const joined = blocks.map((block) => `${block}\n\n`).join('');
+                const outboundBlocks = shouldInjectActivity ? expandSseBlocksWithActivity(blocks) : blocks;
+                const joined = outboundBlocks.map((block: string) => `${block}\n\n`).join('');
                 this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
               }
             }
@@ -223,10 +225,16 @@ export class AgentManagerPanelProvider {
 
           const tail = decoder.decode();
           if (tail) {
-            sseBuffer += tail;
+            sseBuffer += shouldInjectActivity ? tail.replace(/\r\n/g, '\n') : tail;
           }
           if (sseBuffer) {
-            this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: sseBuffer });
+            if (shouldInjectActivity) {
+              const outboundBlocks = expandSseBlocksWithActivity([sseBuffer]);
+              const joined = outboundBlocks.map((block: string) => `${block}\n\n`).join('');
+              this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
+            } else {
+              this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: sseBuffer });
+            }
           }
         } finally {
           try {
@@ -286,3 +294,116 @@ export class AgentManagerPanelProvider {
     });
   }
 }
+
+type SessionActivityPhase = 'idle' | 'busy' | 'cooldown';
+
+type SessionActivity = {
+  sessionId: string;
+  phase: SessionActivityPhase;
+};
+
+const parseSseDataPayload = (block: string): Record<string, unknown> | null => {
+  if (!block) {
+    return null;
+  }
+
+  const dataLines = block
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).replace(/^\s/, ''));
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  const payloadText = dataLines.join('\n').trim();
+  if (!payloadText) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payloadText) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      const record = parsed as Record<string, unknown>;
+      const nestedPayload = record.payload;
+      if (nestedPayload && typeof nestedPayload === 'object') {
+        return nestedPayload as Record<string, unknown>;
+      }
+      return record;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const deriveSessionActivity = (payload: Record<string, unknown> | null): SessionActivity | null => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const type = payload.type;
+  const properties = payload.properties as Record<string, unknown> | undefined;
+
+  if (type === 'session.status') {
+    const status = properties?.status as Record<string, unknown> | undefined;
+    const sessionId = properties?.sessionID ?? properties?.sessionId;
+    const statusType = status?.type;
+
+    if (typeof sessionId === 'string' && sessionId.length > 0 && typeof statusType === 'string') {
+      const phase: SessionActivityPhase = statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle';
+      return { sessionId, phase };
+    }
+  }
+
+  if (type === 'message.updated') {
+    const info = properties?.info as Record<string, unknown> | undefined;
+    const sessionId = info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId;
+    const role = info?.role;
+    const finish = info?.finish;
+    if (typeof sessionId === 'string' && sessionId.length > 0 && role === 'assistant' && finish === 'stop') {
+      return { sessionId, phase: 'cooldown' };
+    }
+  }
+
+  if (type === 'message.part.updated') {
+    const info = properties?.info as Record<string, unknown> | undefined;
+    const sessionId = info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId;
+    const role = info?.role;
+    const finish = info?.finish;
+    if (typeof sessionId === 'string' && sessionId.length > 0 && role === 'assistant' && finish === 'stop') {
+      return { sessionId, phase: 'cooldown' };
+    }
+  }
+
+  if (type === 'session.idle') {
+    const sessionId = properties?.sessionID ?? properties?.sessionId;
+    if (typeof sessionId === 'string' && sessionId.length > 0) {
+      return { sessionId, phase: 'idle' };
+    }
+  }
+
+  return null;
+};
+
+const buildActivityEventBlock = (activity: SessionActivity): string => {
+  return `data: ${JSON.stringify({
+    type: 'openchamber:session-activity',
+    properties: {
+      sessionId: activity.sessionId,
+      phase: activity.phase,
+    },
+  })}`;
+};
+
+const expandSseBlocksWithActivity = (blocks: string[]): string[] => {
+  const expanded: string[] = [];
+  for (const block of blocks) {
+    expanded.push(block);
+    const activity = deriveSessionActivity(parseSseDataPayload(block));
+    if (activity) {
+      expanded.push(buildActivityEventBlock(activity));
+    }
+  }
+  return expanded;
+};
