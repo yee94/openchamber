@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use futures_util::TryStreamExt;
@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
 
+use crate::path_utils::expand_tilde_path;
 use crate::DesktopRuntime;
 
 #[derive(Deserialize)]
@@ -126,13 +127,16 @@ async fn run_once(
                 // No data received recently; if we are connected to a directory-scoped stream and the working directory
                 // has changed, reconnect so activity tracking follows the new directory.
                 if let SseScope::Directory(connected_dir) = &scope {
-                    let current_dir = opencode.get_working_directory();
-                    if current_dir != *connected_dir {
-                        debug!(
-                            "[desktop:activity] Working directory changed; reconnecting activity SSE (from {:?} to {:?})",
-                            connected_dir, current_dir
-                        );
-                        return Ok(());
+                    if let Some(current_dir) =
+                        resolve_project_directory_from_settings(runtime).await
+                    {
+                        if current_dir != *connected_dir {
+                            debug!(
+                                "[desktop:activity] Project directory changed; reconnecting activity SSE (from {:?} to {:?})",
+                                connected_dir, current_dir
+                            );
+                            return Ok(());
+                        }
                     }
                 }
                 continue;
@@ -183,13 +187,34 @@ fn parse_event_envelope(raw: &str) -> Result<(EventEnvelope, Option<String>)> {
     Ok((multiplexed.payload, multiplexed.directory))
 }
 
+async fn resolve_project_directory_from_settings(runtime: &DesktopRuntime) -> Option<PathBuf> {
+    let settings = runtime.settings().load().await.ok()?;
+
+    if let Some(active_id) = settings.get("activeProjectId").and_then(Value::as_str) {
+        if let Some(projects) = settings.get("projects").and_then(Value::as_array) {
+            if let Some(path) = projects.iter().find_map(|entry| {
+                let id = entry.get("id").and_then(Value::as_str)?;
+                if id != active_id {
+                    return None;
+                }
+                entry.get("path").and_then(Value::as_str)
+            }) {
+                return Some(expand_tilde_path(path));
+            }
+        }
+    }
+
+    settings
+        .get("lastDirectory")
+        .and_then(Value::as_str)
+        .map(expand_tilde_path)
+}
+
 async fn connect_activity_sse(
     runtime: &DesktopRuntime,
     client: &Client,
     base: &str,
 ) -> Result<(reqwest::Response, SseScope)> {
-    let opencode = runtime.opencode_manager();
-
     let global_url = format!("{base}/global/event");
     match try_connect_sse(client, &global_url, "[desktop:activity]").await {
         Ok(response) => {
@@ -216,7 +241,9 @@ async fn connect_activity_sse(
         }
     }
 
-    let working_dir = opencode.get_working_directory();
+    let Some(working_dir) = resolve_project_directory_from_settings(runtime).await else {
+        anyhow::bail!("No project directory available for SSE fallback");
+    };
     let directory = working_dir.to_string_lossy().to_string();
     let mut parsed = reqwest::Url::parse(&event_url)?;
     parsed

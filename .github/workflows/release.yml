@@ -175,6 +175,47 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Verify macOS entitlements
+        run: |
+          set -euo pipefail
+
+          BUNDLE_DIR="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "Error: bundle directory not found: $BUNDLE_DIR"
+            exit 1
+          fi
+
+          APP_PATH=$(find "$BUNDLE_DIR" -maxdepth 2 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: .app bundle not found under $BUNDLE_DIR"
+            echo "Contents:"; ls -la "$BUNDLE_DIR"
+            exit 1
+          fi
+
+          echo "Verifying app bundle: $APP_PATH"
+          codesign -vv "$APP_PATH"
+
+          ENTITLEMENTS=$(codesign -d --entitlements :- "$APP_PATH" 2>&1 || true)
+          echo "$ENTITLEMENTS"
+
+          if echo "$ENTITLEMENTS" | grep -q "com.apple.security.app-sandbox"; then
+            echo "Error: app sandbox entitlement is present"
+            exit 1
+          fi
+
+          for key in \
+            com.apple.security.cs.allow-jit \
+            com.apple.security.cs.allow-unsigned-executable-memory \
+            com.apple.security.cs.disable-executable-page-protection \
+            com.apple.security.cs.disable-library-validation
+          do
+            if ! echo "$ENTITLEMENTS" | grep -q "<key>$key</key>"; then
+              echo "Error: required entitlement missing: $key"
+              exit 1
+            fi
+          done
+
       - name: Prepare release artifacts
         run: |
           mkdir -p artifacts

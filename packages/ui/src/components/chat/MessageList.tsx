@@ -3,14 +3,14 @@ import type { Message, Part } from '@opencode-ai/sdk/v2';
 
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
-import type { Permission } from '@/types/permission';
+import type { PermissionRequest } from '@/types/permission';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
 import { useTurnGrouping } from './hooks/useTurnGrouping';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
-    permissions: Permission[];
+    permissions: PermissionRequest[];
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     hasMoreAbove: boolean;

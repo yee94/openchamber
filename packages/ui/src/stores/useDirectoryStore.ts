@@ -1,15 +1,9 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
-import type { DirectorySwitchResult } from '@/lib/opencode/client';
 import { getDesktopHomeDirectory } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from '@/lib/configUpdate';
-import { useSessionStore } from '@/stores/useSessionStore';
-import { refreshAfterOpenCodeRestart } from '@/stores/useAgentsStore';
-import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
-import { emitConfigChange } from '@/lib/configSync';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { getSafeStorage } from './utils/safeStorage';
 
@@ -37,89 +31,6 @@ const persistedLastDirectory = safeStorage.getItem('lastDirectory');
 const initialHasPersistedDirectory =
   typeof persistedLastDirectory === 'string' && persistedLastDirectory.length > 0;
 
-const notifyOpenCodeWorkingDirectory = (path: string, options?: { showOverlay?: boolean }) => {
-  const showOverlay = options?.showOverlay ?? true;
-  if (showOverlay) {
-    startConfigUpdate('Switching project directory…');
-  }
-
-  return opencodeClient.setOpenCodeWorkingDirectory(path).catch((error) => {
-    console.warn('Failed to synchronize OpenCode working directory:', error);
-    throw error;
-  });
-};
-
-const scheduleDirectoryFollowUp = (
-  restartPromise: Promise<DirectorySwitchResult | null>,
-  options: { showOverlay: boolean },
-  onComplete?: (result: DirectorySwitchResult | null) => void
-) => {
-  const { showOverlay } = options;
-
-  const reloadSessions = () => {
-    try {
-      useSessionStore.getState().loadSessions();
-    } catch (err) {
-      console.error('Failed to reload sessions after directory change:', err);
-    }
-  };
-
-  void (async () => {
-    let result: DirectorySwitchResult | null = null;
-
-    try {
-      result = await restartPromise;
-    } catch (error) {
-      console.error('Failed to update OpenCode working directory:', error);
-      if (showOverlay) {
-        updateConfigUpdateMessage('Failed to switch directory. Please try again.');
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        finishConfigUpdate();
-      }
-      onComplete?.(result);
-      reloadSessions();
-      return;
-    }
-
-    try {
-      if (result && result.restarted) {
-        try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.removeItem('commands-store');
-          }
-        } catch (storageError) {
-          console.warn('Failed to reset commands-store cache:', storageError);
-        }
-
-        await refreshAfterOpenCodeRestart({ message: 'Refreshing OpenCode configuration…' });
-
-        try {
-          await useCommandsStore.getState().loadCommands();
-
-          try {
-            emitConfigChange('commands', { source: 'useCommandsStore' });
-          } catch (syncError) {
-            console.warn('Failed to emit command configuration change:', syncError);
-          }
-        } catch (commandError) {
-          console.warn('Failed to reload commands after directory change:', commandError);
-        }
-      } else if (showOverlay) {
-        finishConfigUpdate();
-      }
-    } catch (error) {
-      console.error('Failed to refresh configuration after directory change:', error);
-      if (showOverlay) {
-        updateConfigUpdateMessage('Failed to refresh configuration. Please reload manually.');
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        finishConfigUpdate();
-      }
-    } finally {
-      onComplete?.(result);
-      reloadSessions();
-    }
-  })();
-};
 
 const invalidateFileSearchCache = (scope?: string | null) => {
   try {
@@ -295,26 +206,20 @@ export const useDirectoryStore = create<DirectoryStore>()(
       isSwitchingDirectory: false,
 
       setDirectory: (path: string, options?: { showOverlay?: boolean }) => {
+        void options;
         const homeDir = cachedHomeDirectory || get().homeDirectory || safeStorage.getItem('homeDirectory');
         const resolvedPath = resolveDirectoryPath(path, homeDir);
         if (streamDebugEnabled()) {
           console.log('[DirectoryStore] setDirectory called with path:', resolvedPath);
         }
-        const showOverlay = options?.showOverlay ?? true;
 
         opencodeClient.setDirectory(resolvedPath);
         invalidateFileSearchCache();
-        const restartPromise = notifyOpenCodeWorkingDirectory(resolvedPath, { showOverlay });
-        if (streamDebugEnabled()) {
-          console.log('[DirectoryStore] notifyOpenCodeWorkingDirectory initiated');
-        }
 
         set((state) => {
-
           const newHistory = [...state.directoryHistory.slice(0, state.historyIndex + 1), resolvedPath];
 
           safeStorage.setItem('lastDirectory', resolvedPath);
-
           void updateDesktopSettings({ lastDirectory: resolvedPath });
 
           return {
@@ -323,20 +228,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
             historyIndex: newHistory.length - 1,
             hasPersistedDirectory: true,
             isHomeReady: true,
-            isSwitchingDirectory: true,
+            isSwitchingDirectory: false,
           };
-        });
-
-        scheduleDirectoryFollowUp(restartPromise, { showOverlay }, () => {
-          set((state) => {
-            if (state.currentDirectory !== resolvedPath) {
-              return {};
-            }
-            if (!state.isSwitchingDirectory) {
-              return {};
-            }
-            return { isSwitchingDirectory: false };
-          });
         });
       },
 
@@ -348,7 +241,6 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
           opencodeClient.setDirectory(newDirectory);
           invalidateFileSearchCache();
-          const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
 
           safeStorage.setItem('lastDirectory', newDirectory);
 
@@ -359,19 +251,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
             historyIndex: newIndex,
             hasPersistedDirectory: true,
             isHomeReady: true,
-            isSwitchingDirectory: true,
-          });
-
-          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true }, () => {
-            set((state) => {
-              if (state.currentDirectory !== newDirectory) {
-                return {};
-              }
-              if (!state.isSwitchingDirectory) {
-                return {};
-              }
-              return { isSwitchingDirectory: false };
-            });
+            isSwitchingDirectory: false,
           });
         }
       },
@@ -384,7 +264,6 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
           opencodeClient.setDirectory(newDirectory);
           invalidateFileSearchCache();
-          const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
 
           safeStorage.setItem('lastDirectory', newDirectory);
 
@@ -395,19 +274,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
             historyIndex: newIndex,
             hasPersistedDirectory: true,
             isHomeReady: true,
-            isSwitchingDirectory: true,
-          });
-
-          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true }, () => {
-            set((state) => {
-              if (state.currentDirectory !== newDirectory) {
-                return {};
-              }
-              if (!state.isSwitchingDirectory) {
-                return {};
-              }
-              return { isSwitchingDirectory: false };
-            });
+            isSwitchingDirectory: false,
           });
         }
       },
@@ -484,12 +351,12 @@ export const useDirectoryStore = create<DirectoryStore>()(
           updates.currentDirectory = resolvedHome;
           updates.directoryHistory = [resolvedHome];
           updates.historyIndex = 0;
-          updates.isSwitchingDirectory = true;
+          updates.isSwitchingDirectory = false;
         } else if (currentChanged || historyChanged) {
           updates.currentDirectory = resolvedCurrent as string;
           updates.directoryHistory = resolvedHistory;
           updates.historyIndex = Math.min(state.historyIndex, resolvedHistory.length - 1);
-          updates.isSwitchingDirectory = true;
+          updates.isSwitchingDirectory = false;
         }
 
         set(() => updates as Partial<DirectoryStore>);
@@ -501,18 +368,6 @@ export const useDirectoryStore = create<DirectoryStore>()(
           safeStorage.setItem('lastDirectory', nextDirectory);
           void updateDesktopSettings({ lastDirectory: nextDirectory });
 
-          const restartPromise = notifyOpenCodeWorkingDirectory(nextDirectory, { showOverlay: false });
-          scheduleDirectoryFollowUp(restartPromise, { showOverlay: false }, () => {
-            set((state) => {
-              if (state.currentDirectory !== nextDirectory) {
-                return {};
-              }
-              if (!state.isSwitchingDirectory) {
-                return {};
-              }
-              return { isSwitchingDirectory: false };
-            });
-          });
         }
 
         void updateDesktopSettings({ homeDirectory: resolvedHome });

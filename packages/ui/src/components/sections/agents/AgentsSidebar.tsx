@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { RiAddLine, RiAiAgentFill, RiAiAgentLine, RiDeleteBinLine, RiFileCopyLine, RiMore2Line, RiRobot2Line, RiRobotLine, RiRestartLine, RiEditLine } from '@remixicon/react';
-import { useAgentsStore, isAgentBuiltIn, isAgentHidden, type AgentScope } from '@/stores/useAgentsStore';
+import { useAgentsStore, isAgentBuiltIn, isAgentHidden, type AgentScope, type AgentDraft } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -29,6 +29,103 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 interface AgentsSidebarProps {
   onItemSelect?: () => void;
 }
+
+type PermissionAction = 'allow' | 'ask' | 'deny';
+type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
+
+type PermissionConfigValue = PermissionAction | Record<string, PermissionAction>;
+
+// OpenCode's built-in defaults for permissions that differ from "allow"
+const getOpenCodeDefaultActionForPermission = (permissionName: string): PermissionAction => {
+  if (permissionName === 'doom_loop' || permissionName === 'external_directory') {
+    return 'ask';
+  }
+  return 'allow';
+};
+
+const toPermissionRuleset = (ruleset: unknown): PermissionRule[] => {
+  if (!Array.isArray(ruleset)) {
+    return [];
+  }
+
+  const parsed: PermissionRule[] = [];
+  for (const entry of ruleset) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const candidate = entry as Partial<PermissionRule>;
+    if (typeof candidate.permission !== 'string' || typeof candidate.pattern !== 'string' || typeof candidate.action !== 'string') {
+      continue;
+    }
+    if (candidate.action !== 'allow' && candidate.action !== 'ask' && candidate.action !== 'deny') {
+      continue;
+    }
+    parsed.push({ permission: candidate.permission, pattern: candidate.pattern, action: candidate.action });
+  }
+
+  return parsed;
+};
+
+const rulesetToPermissionConfig = (ruleset: unknown): AgentDraft['permission'] => {
+  const parsed = toPermissionRuleset(ruleset);
+  if (parsed.length === 0) {
+    return undefined;
+  }
+
+  const byPermission: Record<string, Record<string, PermissionAction>> = {};
+  for (const rule of parsed) {
+    if (!rule.permission) {
+      continue;
+    }
+    (byPermission[rule.permission] ||= {})[rule.pattern] = rule.action;
+  }
+
+  // Get the global default (wildcard * with pattern *)
+  const globalDefault = byPermission['*']?.['*'];
+
+  const permissionNames = Object.keys(byPermission);
+  if (
+    permissionNames.length === 1 &&
+    permissionNames[0] === '*' &&
+    Object.keys(byPermission['*'] || {}).length === 1 &&
+    byPermission['*']?.['*']
+  ) {
+    return byPermission['*']['*'];
+  }
+
+  const result: Record<string, PermissionConfigValue> = {};
+  for (const permissionName of permissionNames) {
+    const map = byPermission[permissionName];
+    const patterns = Object.keys(map);
+
+    // For wildcard-only entries, check if they're redundant
+    if (patterns.length === 1 && patterns[0] === '*' && permissionName !== '*') {
+      const action = map['*'];
+      const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
+
+      // Skip if this permission is redundant (matches effective default)
+      if (globalDefault) {
+        if (action === globalDefault) continue;
+      } else {
+        if (action === opencodeDefault) continue;
+      }
+
+      result[permissionName] = action;
+    } else if (permissionName === '*') {
+      // Include global default
+      if (patterns.length === 1 && patterns[0] === '*') {
+        result[permissionName] = map['*'];
+      } else {
+        result[permissionName] = map;
+      }
+    } else {
+      // Non-wildcard patterns - include as-is
+      result[permissionName] = map;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? (result as AgentDraft['permission']) : undefined;
+};
 
 export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) => {
   const [renameDialogAgent, setRenameDialogAgent] = React.useState<Agent | null>(null);
@@ -132,12 +229,9 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
     // Set draft with prefilled values from source agent
     const extAgent = agent as Agent & { scope?: AgentScope };
-    // Convert model object to string if needed (SDK type vs API type difference)
-    const modelStr = typeof agent.model === 'string'
-      ? agent.model
-      : agent.model?.providerID && agent.model?.modelID
-        ? `${agent.model.providerID}/${agent.model.modelID}`
-        : undefined;
+    const modelStr = agent.model?.providerID && agent.model?.modelID
+      ? `${agent.model.providerID}/${agent.model.modelID}`
+      : null;
     const draftAgent = agent as Agent & { disable?: boolean };
     setAgentDraft({
       name: newName,
@@ -148,8 +242,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       top_p: agent.topP,
       prompt: agent.prompt,
       mode: agent.mode,
-      tools: agent.tools,
-      permission: agent.permission,
+      permission: rulesetToPermissionConfig(agent.permission),
       disable: draftAgent.disable,
     });
     setSelectedAgent(newName);
@@ -185,12 +278,9 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     }
 
     // Create new agent with new name and all existing config
-    // Convert model object to string if needed (SDK type vs API type difference)
-    const renameModelStr = typeof renameDialogAgent.model === 'string'
-      ? renameDialogAgent.model
-      : renameDialogAgent.model?.providerID && renameDialogAgent.model?.modelID
-        ? `${renameDialogAgent.model.providerID}/${renameDialogAgent.model.modelID}`
-        : undefined;
+    const renameModelStr = renameDialogAgent.model?.providerID && renameDialogAgent.model?.modelID
+      ? `${renameDialogAgent.model.providerID}/${renameDialogAgent.model.modelID}`
+      : null;
     const renameExt = renameDialogAgent as Agent & { scope?: AgentScope; disable?: boolean };
     const success = await createAgent({
       name: sanitizedName,
@@ -200,8 +290,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       top_p: renameDialogAgent.topP,
       prompt: renameDialogAgent.prompt,
       mode: renameDialogAgent.mode,
-      tools: renameDialogAgent.tools,
-      permission: renameDialogAgent.permission,
+      permission: rulesetToPermissionConfig(renameDialogAgent.permission),
       disable: renameExt.disable,
       scope: renameExt.scope,
     });

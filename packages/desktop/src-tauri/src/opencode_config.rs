@@ -105,9 +105,30 @@ fn get_config_file() -> PathBuf {
     get_config_dir().join("opencode.json")
 }
 
-/// Get project config file path
+/// Get all possible project config paths in priority order
+/// Priority: root > .opencode/, json > jsonc
+fn get_project_config_candidates(working_directory: &Path) -> Vec<PathBuf> {
+    vec![
+        working_directory.join("opencode.json"),
+        working_directory.join("opencode.jsonc"),
+        working_directory.join(".opencode").join("opencode.json"),
+        working_directory.join(".opencode").join("opencode.jsonc"),
+    ]
+}
+
+/// Find existing project config file or return default path for new config
 fn get_project_config_file(working_directory: &Path) -> PathBuf {
-    working_directory.join("opencode.json")
+    let candidates = get_project_config_candidates(working_directory);
+
+    // Return first existing config file
+    for candidate in &candidates {
+        if candidate.exists() {
+            return candidate.clone();
+        }
+    }
+
+    // Default to root opencode.json for new configs
+    candidates.into_iter().next().unwrap_or_else(|| working_directory.join("opencode.json"))
 }
 
 /// Get custom config file path from OPENCODE_CONFIG env var
@@ -165,7 +186,9 @@ async fn read_config_file(path: &Path) -> Result<Value> {
         return Ok(Value::Object(serde_json::Map::new()));
     }
 
-    serde_json::from_str(&normalized).map_err(|e| anyhow!("Failed to parse config: {}", e))
+    serde_json::from_str(&normalized)
+        .or_else(|_| json5::from_str::<serde_json::Value>(&normalized))
+        .map_err(|e| anyhow!("Failed to parse config: {}", e))
 }
 
 async fn read_config_layers(working_directory: Option<&Path>) -> Result<ConfigLayers> {

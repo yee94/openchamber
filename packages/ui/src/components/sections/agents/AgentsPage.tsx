@@ -6,12 +6,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useAgentsStore, type AgentConfig, type AgentScope } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { usePermissionStore } from '@/stores/permissionStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { opencodeClient } from '@/lib/opencode/client';
 import { RiAddLine, RiAiAgentFill, RiAiAgentLine, RiInformationLine, RiRobot2Line, RiRobotLine, RiSaveLine, RiSubtractLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from './ModelSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { useAvailableTools } from '@/hooks/useAvailableTools';
 import {
   Select,
   SelectContent,
@@ -19,10 +21,231 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 
+type PermissionAction = 'allow' | 'ask' | 'deny';
+type DefaultOverride = 'default' | PermissionAction;
+type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
+type PermissionConfigValue = PermissionAction | Record<string, PermissionAction>;
+
+type ParsedPermissionConfig = {
+  entries: Record<string, PermissionConfigValue>;
+};
+
+const STANDARD_PERMISSION_KEYS = [
+  'read',
+  'edit',
+  'glob',
+  'grep',
+  'list',
+  'bash',
+  'task',
+  'skill',
+  'lsp',
+  'todoread',
+  'todowrite',
+  'webfetch',
+  'websearch',
+  'codesearch',
+  'external_directory',
+  'doom_loop',
+] as const;
+
+const isPermissionAction = (value: unknown): value is PermissionAction =>
+  value === 'allow' || value === 'ask' || value === 'deny';
+
+const parsePermissionConfigValue = (value: unknown): PermissionConfigValue | undefined => {
+  if (isPermissionAction(value)) {
+    return value;
+  }
+
+  // We only manage wildcard rules in this UI. If a granular object is provided,
+  // read its wildcard action and ignore all other patterns.
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const wildcard = (value as Record<string, unknown>)['*'];
+    if (isPermissionAction(wildcard)) {
+      return wildcard;
+    }
+  }
+
+  return undefined;
+};
+
+const parsePermissionConfig = (value: unknown): ParsedPermissionConfig => {
+  if (isPermissionAction(value)) {
+    return { entries: { '*': value } };
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { entries: {} };
+  }
+
+  const entries: Record<string, PermissionConfigValue> = {};
+
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const parsedValue = parsePermissionConfigValue(raw);
+    if (parsedValue !== undefined) {
+      entries[key] = parsedValue;
+    }
+  }
+
+  return { entries };
+};
+
+const splitDefaultOverrideFromEntries = (entries: Record<string, PermissionConfigValue>): {
+  defaultOverride: DefaultOverride;
+  overrides: Record<string, PermissionConfigValue>;
+} => {
+  const overrides: Record<string, PermissionConfigValue> = { ...entries };
+
+  const maybeDefault = overrides['*'];
+  if (isPermissionAction(maybeDefault)) {
+    delete overrides['*'];
+    return { defaultOverride: maybeDefault, overrides };
+  }
+
+  return { defaultOverride: 'default', overrides };
+};
+
+const getOpenCodeDefaultActionForPermission = (permissionName: string): PermissionAction => {
+  if (permissionName === 'doom_loop' || permissionName === 'external_directory') {
+    return 'ask';
+  }
+  return 'allow';
+};
+
+const getAgentBaseDefaultActionForPermission = (
+  permissionName: string,
+  defaultOverride: DefaultOverride,
+): PermissionAction => {
+  if (defaultOverride === 'default') {
+    return getOpenCodeDefaultActionForPermission(permissionName);
+  }
+
+  return defaultOverride;
+};
+
+const pruneRedundantPermissionOverrides = (
+  entries: Record<string, PermissionConfigValue>,
+  defaultOverride: DefaultOverride,
+): Record<string, PermissionConfigValue> => {
+  const pruned: Record<string, PermissionConfigValue> = { ...entries };
+
+  for (const [permissionName, value] of Object.entries(entries)) {
+    if (permissionName === '*') {
+      continue;
+    }
+
+    const baseDefaultAction = getAgentBaseDefaultActionForPermission(permissionName, defaultOverride);
+    const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
+
+    // For doom_loop and external_directory (OpenCode default = "ask"),
+    // always keep explicit config if it differs from "ask"
+    if (isPermissionAction(value) && value !== opencodeDefault) {
+      continue;
+    }
+
+    if (isPermissionAction(value) && value === baseDefaultAction) {
+      delete pruned[permissionName];
+      continue;
+    }
+
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const map = value as Record<string, PermissionAction>;
+      const patterns = Object.keys(map);
+      const wildcardAction = map['*'];
+      // Keep if wildcard differs from OpenCode default
+      if (wildcardAction !== undefined && wildcardAction !== opencodeDefault) {
+        continue;
+      }
+      if (patterns.length === 1 && patterns[0] === '*' && wildcardAction === baseDefaultAction) {
+        delete pruned[permissionName];
+      }
+    }
+  }
+
+  return pruned;
+};
+
+const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const rules: PermissionRule[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const candidate = entry as Partial<PermissionRule>;
+    if (typeof candidate.permission !== 'string' || typeof candidate.pattern !== 'string' || typeof candidate.action !== 'string') {
+      continue;
+    }
+    if (candidate.action !== 'allow' && candidate.action !== 'ask' && candidate.action !== 'deny') {
+      continue;
+    }
+    rules.push({ permission: candidate.permission, pattern: candidate.pattern, action: candidate.action });
+  }
+
+  return rules;
+};
+
+const rulesetToPermissionConfig = (ruleset: unknown): ParsedPermissionConfig => {
+  const rules = asPermissionRuleset(ruleset);
+  if (!rules || rules.length === 0) {
+    return { entries: {} };
+  }
+
+  const wildcardByPermission: Record<string, PermissionAction> = {};
+
+  for (const rule of rules) {
+    if (!rule.permission || rule.permission === 'invalid') {
+      continue;
+    }
+
+    // This UI only manages wildcard ("*") rules.
+    if (rule.pattern !== '*') {
+      continue;
+    }
+
+    wildcardByPermission[rule.permission] = rule.action;
+  }
+
+  // Get the global default from the ruleset (if any)
+  const globalDefault = wildcardByPermission['*'];
+
+  const entries: Record<string, PermissionConfigValue> = {};
+  for (const [permissionName, action] of Object.entries(wildcardByPermission)) {
+    if (permissionName === '*') {
+      entries[permissionName] = action;
+      continue;
+    }
+
+    // Determine what this permission would be without explicit config
+    const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
+
+    if (globalDefault) {
+      // If there's a global default, skip permissions that match it
+      // (they're redundant - the global default covers them)
+      if (action === globalDefault) {
+        continue;
+      }
+    } else {
+      // No global default - skip permissions that match OpenCode's built-in default
+      // (they're not explicitly configured, just inherited)
+      if (action === opencodeDefault) {
+        continue;
+      }
+    }
+
+    entries[permissionName] = action;
+  }
+
+  return { entries };
+};
+
 export const AgentsPage: React.FC = () => {
   const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents, agentDraft, setAgentDraft } = useAgentsStore();
   useConfigStore();
-  const { tools: availableTools } = useAvailableTools();
 
   const selectedAgent = selectedAgentName ? getAgentByName(selectedAgentName) : null;
   const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent);
@@ -35,18 +258,223 @@ export const AgentsPage: React.FC = () => {
   const [temperature, setTemperature] = React.useState<number | undefined>(undefined);
   const [topP, setTopP] = React.useState<number | undefined>(undefined);
   const [prompt, setPrompt] = React.useState('');
-  const [tools, setTools] = React.useState<Record<string, boolean>>({});
-  const [editPermission, setEditPermission] = React.useState<'allow' | 'ask' | 'deny'>('allow');
-  const [webfetchPermission, setWebfetchPermission] = React.useState<'allow' | 'ask' | 'deny'>('allow');
-  const [bashPermission, setBashPermission] = React.useState<'allow' | 'ask' | 'deny'>('allow');
-  const [skillPermission, setSkillPermission] = React.useState<'allow' | 'ask' | 'deny'>('allow');
-  const [doomLoopPermission, setDoomLoopPermission] = React.useState<'allow' | 'ask' | 'deny'>('ask');
-  const [externalDirectoryPermission, setExternalDirectoryPermission] = React.useState<'allow' | 'ask' | 'deny'>('ask');
+  const [defaultOverride, setDefaultOverride] = React.useState<DefaultOverride>('default');
+  const [permissionEntries, setPermissionEntries] = React.useState<Record<string, PermissionConfigValue>>({});
+  const [pendingOverrideName, setPendingOverrideName] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
 
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
+  const [toolIds, setToolIds] = React.useState<string[]>([]);
+
+  const permissionsBySession = usePermissionStore((state) => state.permissions);
+
   React.useEffect(() => {
+    let cancelled = false;
+
+    const fetchToolIds = async () => {
+      const ids = await opencodeClient.listToolIds({ directory: currentDirectory });
+      if (cancelled) {
+        return;
+      }
+
+      // OpenCode permissions are keyed by tool name, but some tools are grouped
+      // under a single permission key. E.g. `edit` covers `write`, `patch`, and `multiedit`.
+      const editCoveredToolIds = new Set(['write', 'patch', 'multiedit']);
+
+      const normalized = ids
+        .map((id) => (typeof id === 'string' ? id.trim() : ''))
+        .filter(Boolean)
+        .filter((id) => id !== '*')
+        .filter((id) => id !== 'invalid')
+        .filter((id) => !editCoveredToolIds.has(id));
+
+      setToolIds(Array.from(new Set(normalized)).sort((a, b) => a.localeCompare(b)));
+    };
+
+    void fetchToolIds();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDirectory]);
+
+  const knownPermissionNames = React.useMemo(() => {
+    const names = new Set<string>();
+
+    for (const agent of agents) {
+      const rules = asPermissionRuleset((agent as { permission?: unknown }).permission);
+      if (!rules) {
+        continue;
+      }
+      for (const rule of rules) {
+        if (rule.permission && rule.permission !== '*' && rule.permission !== 'invalid') {
+          names.add(rule.permission);
+        }
+      }
+    }
+
+    for (const permissions of permissionsBySession.values()) {
+      for (const request of permissions) {
+        const permissionName = request.permission?.trim();
+        if (permissionName && permissionName !== 'invalid') {
+          names.add(permissionName);
+        }
+      }
+    }
+
+    for (const toolId of toolIds) {
+      names.add(toolId);
+    }
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [agents, permissionsBySession, toolIds]);
+
+  const getOverrideWildcardAction = React.useCallback((permissionName: string): PermissionAction | undefined => {
+    const configured = permissionEntries[permissionName];
+    if (isPermissionAction(configured)) {
+      return configured;
+    }
+    if (configured && typeof configured === 'object' && !Array.isArray(configured)) {
+      const wildcard = (configured as Record<string, unknown>)['*'];
+      if (isPermissionAction(wildcard)) {
+        return wildcard;
+      }
+    }
+    return undefined;
+  }, [permissionEntries]);
+
+  const getCustomPatternCount = React.useCallback((permissionName: string): number => {
+    const configured = permissionEntries[permissionName];
+    if (!configured || typeof configured !== 'object' || Array.isArray(configured)) {
+      return 0;
+    }
+    const patterns = Object.keys(configured).filter((pattern) => pattern !== '*');
+    return patterns.length;
+  }, [permissionEntries]);
+
+  const setOverrideAction = React.useCallback((permissionName: string, action: PermissionAction) => {
+    if (permissionName === '*') {
+      return;
+    }
+
+    setPermissionEntries((prev) => {
+      const next: Record<string, PermissionConfigValue> = { ...prev };
+      const current = next[permissionName];
+
+      const uiDefaultAction = getAgentBaseDefaultActionForPermission(permissionName, defaultOverride);
+      const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
+
+      // Only remove if action matches BOTH the UI default AND OpenCode's built-in default
+      // If they differ, we need to keep the explicit override to ensure correct behavior
+      const canRemove = action === uiDefaultAction && action === opencodeDefault;
+
+      if (current && typeof current === 'object' && !Array.isArray(current)) {
+        const map: Record<string, PermissionAction> = { ...(current as Record<string, PermissionAction>) };
+        map['*'] = action;
+
+        const nonWildcardPatterns = Object.keys(map).filter((pattern) => pattern !== '*');
+        if (canRemove && nonWildcardPatterns.length === 0) {
+          delete next[permissionName];
+          return next;
+        }
+
+        next[permissionName] = map;
+        return next;
+      }
+
+      if (canRemove) {
+        delete next[permissionName];
+        return next;
+      }
+
+      next[permissionName] = action;
+      return next;
+    });
+  }, [defaultOverride]);
+
+  const removeOverride = React.useCallback((permissionName: string) => {
+    setPermissionEntries((prev) => {
+      if (!(permissionName in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[permissionName];
+      return next;
+    });
+  }, []);
+
+  const overrides = React.useMemo(() => {
+    const entries = Object.entries(permissionEntries).filter(([name]) => name !== '*');
+    entries.sort(([a], [b]) => a.localeCompare(b));
+    return entries;
+  }, [permissionEntries]);
+
+  const availableOverrideNames = React.useMemo(() => {
+    const names = new Set<string>();
+
+    for (const key of STANDARD_PERMISSION_KEYS) {
+      names.add(key);
+    }
+
+    for (const key of knownPermissionNames) {
+      names.add(key);
+    }
+
+    for (const key of Object.keys(permissionEntries)) {
+      names.delete(key);
+    }
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [knownPermissionNames, permissionEntries]);
+
+  const applyPendingOverride = React.useCallback((action: PermissionAction) => {
+    const name = pendingOverrideName.trim();
+    if (!name) {
+      return;
+    }
+
+    const baseDefaultAction = getAgentBaseDefaultActionForPermission(name, defaultOverride);
+
+    if (action === baseDefaultAction) {
+      const basis = defaultOverride === 'default'
+        ? 'OpenCode defaults'
+        : `Default Permissions ("${defaultOverride}")`;
+
+      toast.message(`"${name}" already matches ${basis} (${baseDefaultAction}).`);
+      setPendingOverrideName('');
+      return;
+    }
+
+    setOverrideAction(name, action);
+    setPendingOverrideName('');
+  }, [pendingOverrideName, setOverrideAction, defaultOverride]);
+
+  const formatPermissionLabel = React.useCallback((permissionName: string): string => {
+    if (permissionName === 'webfetch') return 'WebFetch';
+    if (permissionName === 'websearch') return 'WebSearch';
+    if (permissionName === 'codesearch') return 'CodeSearch';
+    if (permissionName === 'doom_loop') return 'Doom Loop';
+    if (permissionName === 'external_directory') return 'External Directory';
+    if (permissionName === 'todowrite') return 'TodoWrite';
+    if (permissionName === 'todoread') return 'TodoRead';
+
+    return permissionName
+      .split(/[_-]+/g)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  }, []);
+
+  React.useEffect(() => {
+    setPendingOverrideName('');
+
+    const applyPermissionState = (entries: Record<string, PermissionConfigValue>) => {
+      const split = splitDefaultOverrideFromEntries(entries);
+      setDefaultOverride(split.defaultOverride);
+      setPermissionEntries(pruneRedundantPermissionOverrides(split.overrides, split.defaultOverride));
+    };
+
     if (isNewAgent && agentDraft) {
-      // Prefill from draft (for new or duplicated agents)
       setDraftName(agentDraft.name || '');
       setDraftScope(agentDraft.scope || 'user');
       setDescription(agentDraft.description || '');
@@ -55,58 +483,13 @@ export const AgentsPage: React.FC = () => {
       setTemperature(agentDraft.temperature);
       setTopP(agentDraft.top_p);
       setPrompt(agentDraft.prompt || '');
-      
-      const draftTools = agentDraft.tools || {};
-      setTools(draftTools);
-      
-      // Determine permission based on explicit permission first, then tool state
-      const resolvePermission = (
-        explicitPerm: string | undefined,
-        toolDisabled: boolean,
-        fallback: 'allow' | 'ask' | 'deny'
-      ): 'allow' | 'ask' | 'deny' => {
-        if (explicitPerm === 'allow' || explicitPerm === 'ask' || explicitPerm === 'deny') {
-          return explicitPerm;
-        }
-        if (toolDisabled) {
-          return 'deny';
-        }
-        return fallback;
-      };
 
-      const permission = (agentDraft.permission || {}) as {
-        edit?: unknown;
-        bash?: unknown;
-        skill?: unknown;
-        webfetch?: unknown;
-        doom_loop?: unknown;
-        external_directory?: unknown;
-      };
-      
-      const getPermissionValue = (value: unknown): 'allow' | 'ask' | 'deny' | undefined => {
-        if (value === 'allow' || value === 'ask' || value === 'deny') {
-          return value;
-        }
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const wildcard = (value as Record<string, unknown>)['*'];
-          if (wildcard === 'allow' || wildcard === 'ask' || wildcard === 'deny') {
-            return wildcard;
-          }
-        }
-        return undefined;
-      };
+      const parsed = parsePermissionConfig(agentDraft.permission);
+      applyPermissionState(parsed.entries);
+      return;
+    }
 
-      const editToolDisabled = draftTools.edit === false || draftTools.write === false || draftTools.patch === false;
-      setEditPermission(resolvePermission(getPermissionValue(permission.edit), editToolDisabled, 'allow'));
-      
-      setBashPermission(resolvePermission(getPermissionValue(permission.bash), draftTools.bash === false, 'allow'));
-      
-      setWebfetchPermission(resolvePermission(getPermissionValue(permission.webfetch), draftTools.webfetch === false, 'allow'));
-
-      setSkillPermission(resolvePermission(getPermissionValue(permission.skill), draftTools.skill === false, 'allow'));
-      setDoomLoopPermission(resolvePermission(getPermissionValue(permission.doom_loop), false, 'ask'));
-      setExternalDirectoryPermission(resolvePermission(getPermissionValue(permission.external_directory), false, 'ask'));
-    } else if (selectedAgent) {
+    if (selectedAgent && selectedAgentName === selectedAgent.name) {
       setDescription(selectedAgent.description || '');
       setMode(selectedAgent.mode || 'subagent');
 
@@ -119,63 +502,15 @@ export const AgentsPage: React.FC = () => {
       setTemperature(selectedAgent.temperature);
       setTopP(selectedAgent.topP);
       setPrompt(selectedAgent.prompt || '');
-      
-      const agentTools = selectedAgent.tools || {};
-      setTools(agentTools);
 
-      // Determine permission based on explicit permission first, then tool state
-      const resolvePermission = (
-        explicitPerm: string | undefined,
-        toolDisabled: boolean,
-        fallback: 'allow' | 'ask' | 'deny'
-      ): 'allow' | 'ask' | 'deny' => {
-        if (explicitPerm === 'allow' || explicitPerm === 'ask' || explicitPerm === 'deny') {
-          return explicitPerm;
-        }
-        if (toolDisabled) {
-          return 'deny';
-        }
-        return fallback;
-      };
-
-      const permission = (selectedAgent.permission || {}) as {
-        edit?: unknown;
-        bash?: unknown;
-        skill?: unknown;
-        webfetch?: unknown;
-        doom_loop?: unknown;
-        external_directory?: unknown;
-      };
-
-      const getPermissionValue = (value: unknown): 'allow' | 'ask' | 'deny' | undefined => {
-        if (value === 'allow' || value === 'ask' || value === 'deny') {
-          return value;
-        }
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const wildcard = (value as Record<string, unknown>)['*'];
-          if (wildcard === 'allow' || wildcard === 'ask' || wildcard === 'deny') {
-            return wildcard;
-          }
-        }
-        return undefined;
-      };
-
-      // For edit permission, check 'edit', 'write', and 'patch' tools
-      // If ANY of these tools is explicitly disabled (false), edit permission is 'deny'
-      const editToolDisabled = agentTools.edit === false || agentTools.write === false || agentTools.patch === false;
-      setEditPermission(resolvePermission(getPermissionValue(permission.edit), editToolDisabled, 'allow'));
-      
-      // For bash permission
-      setBashPermission(resolvePermission(getPermissionValue(permission.bash), agentTools.bash === false, 'allow'));
-      
-      // For webfetch permission
-      setWebfetchPermission(resolvePermission(getPermissionValue(permission.webfetch), agentTools.webfetch === false, 'allow'));
-
-      setSkillPermission(resolvePermission(getPermissionValue(permission.skill), agentTools.skill === false, 'allow'));
-      setDoomLoopPermission(resolvePermission(getPermissionValue(permission.doom_loop), false, 'ask'));
-      setExternalDirectoryPermission(resolvePermission(getPermissionValue(permission.external_directory), false, 'ask'));
+      const parsed = rulesetToPermissionConfig(selectedAgent.permission);
+      applyPermissionState(parsed.entries);
     }
-  }, [selectedAgent, isNewAgent, selectedAgentName, agents, agentDraft]);
+  }, [agentDraft, isNewAgent, selectedAgent, selectedAgentName]);
+
+  // Note: We no longer prune overrides when defaultOverride changes.
+  // This preserves user's explicit overrides until they save.
+  // Pruning only happens in handleSave to avoid losing overrides during editing.
 
   const handleSave = async () => {
     const agentName = isNewAgent ? draftName.trim().replace(/\s+/g, '-') : selectedAgentName?.trim();
@@ -203,15 +538,36 @@ export const AgentsPage: React.FC = () => {
         temperature,
         top_p: topP,
         prompt: prompt.trim() || undefined,
-        tools: Object.keys(tools).length > 0 ? tools : undefined,
-        permission: {
-          edit: editPermission,
-          webfetch: webfetchPermission,
-          bash: bashPermission,
-          skill: skillPermission,
-          doom_loop: doomLoopPermission,
-          external_directory: externalDirectoryPermission,
-        },
+        permission: (() => {
+          const overrides = pruneRedundantPermissionOverrides(permissionEntries, defaultOverride);
+          const combined: Record<string, PermissionConfigValue> = defaultOverride === 'default'
+            ? overrides
+            : { '*': defaultOverride, ...overrides };
+
+          // Always explicitly include doom_loop and external_directory
+          // These have special OpenCode defaults ("ask") that differ from the general default ("allow")
+          const specialPermissions = ['doom_loop', 'external_directory'] as const;
+          for (const perm of specialPermissions) {
+            if (!(perm in combined)) {
+              // Use explicit override if set, otherwise derive from effective default
+              const explicit = permissionEntries[perm];
+              if (isPermissionAction(explicit)) {
+                combined[perm] = explicit;
+              } else {
+                combined[perm] = getAgentBaseDefaultActionForPermission(perm, defaultOverride);
+              }
+            }
+          }
+
+          const keys = Object.keys(combined);
+
+          if (keys.length === 0) {
+            return isNewAgent ? undefined : null;
+          }
+
+          // Don't simplify to single action - always use object form when we have special permissions
+          return combined as unknown as AgentConfig['permission'];
+        })(),
         scope: isNewAgent ? draftScope : undefined,
       };
 
@@ -232,26 +588,13 @@ export const AgentsPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error saving agent:', error);
-      toast.error('An error occurred while saving');
+      const message = error instanceof Error && error.message ? error.message : 'An error occurred while saving';
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const toggleTool = (tool: string) => {
-    setTools((prev) => ({
-      ...prev,
-      [tool]: !prev[tool],
-    }));
-  };
-
-  const toggleAllTools = (enabled: boolean) => {
-    const allTools: Record<string, boolean> = {};
-    availableTools.forEach((tool: string) => {
-      allTools[tool] = enabled;
-    });
-    setTools(allTools);
-  };
 
   if (!selectedAgentName) {
     return (
@@ -565,49 +908,11 @@ export const AgentsPage: React.FC = () => {
 
       {}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Available Tools</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Select tools this agent can access
-            </p>
-          </div>
-          <div className="flex gap-1 w-fit">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toggleAllTools(true)}
-              className="h-6 px-2 text-xs"
-            >
-              Enable All
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toggleAllTools(false)}
-              className="h-6 px-2 text-xs"
-            >
-              Disable All
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {availableTools.map((tool) => (
-            <button
-              key={tool}
-              type="button"
-              onClick={() => toggleTool(tool)}
-              className={cn(
-                "h-6 px-2 rounded-lg border text-[13px] cursor-pointer transition-colors",
-                tools[tool]
-                  ? "bg-primary border-primary text-primary-foreground"
-                  : "border-border/40 bg-sidebar/30 text-foreground hover:bg-sidebar/50"
-              )}
-            >
-              {tool}
-            </button>
-          ))}
+        <div className="space-y-1">
+          <h2 className="typography-h2 font-semibold text-foreground">Tool Access</h2>
+          <p className="typography-meta text-muted-foreground/80">
+            OpenCode v1.1.1+ configures tool access via the permissions below.
+          </p>
         </div>
       </div>
 
@@ -616,44 +921,57 @@ export const AgentsPage: React.FC = () => {
         <div className="space-y-1">
           <h2 className="typography-h2 font-semibold text-foreground">Permissions</h2>
           <p className="typography-meta text-muted-foreground/80">
-            Configure permission levels for different operations
+            This editor only updates wildcard ("*") rules; existing pattern rules are preserved.
           </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Edit Permission
-            </label>
+            <h3 className="typography-ui-header font-semibold text-foreground">Default Permissions</h3>
+            <p className="typography-meta text-muted-foreground/80">
+              Set the default behavior for all permissions for this agent.
+            </p>
+
             <div className="flex gap-1 w-fit">
               <Button
                 size="sm"
-                variant={editPermission === 'allow' ? 'default' : 'outline'}
-                onClick={() => setEditPermission('allow')}
+                variant={defaultOverride === 'default' ? 'default' : 'outline'}
+                onClick={() => setDefaultOverride('default')}
+                className="h-6 px-2 text-xs"
+              >
+                Default
+              </Button>
+              <Button
+                size="sm"
+                variant={defaultOverride === 'allow' ? 'default' : 'outline'}
+                onClick={() => setDefaultOverride('allow')}
                 className="h-6 px-2 text-xs"
               >
                 Allow
               </Button>
               <Button
                 size="sm"
-                variant={editPermission === 'ask' ? 'default' : 'outline'}
-                onClick={() => setEditPermission('ask')}
+                variant={defaultOverride === 'ask' ? 'default' : 'outline'}
+                onClick={() => setDefaultOverride('ask')}
                 className="h-6 px-2 text-xs"
               >
                 Ask
               </Button>
               <Button
                 size="sm"
-                variant={editPermission === 'deny' ? 'default' : 'outline'}
-                onClick={() => setEditPermission('deny')}
+                variant={defaultOverride === 'deny' ? 'default' : 'outline'}
+                onClick={() => setDefaultOverride('deny')}
                 className="h-6 px-2 text-xs"
               >
                 Deny
               </Button>
             </div>
+
             <div className="flex items-center gap-2">
               <p className="typography-meta text-muted-foreground">
-                Controls file editing permissions.
+                {defaultOverride === 'default'
+                  ? 'Uses OpenCode defaults unless overridden below.'
+                  : 'Applies to any permission without an explicit override below.'}
               </p>
               <Tooltip delayDuration={1000}>
                 <TooltipTrigger asChild>
@@ -661,9 +979,10 @@ export const AgentsPage: React.FC = () => {
                 </TooltipTrigger>
                 <TooltipContent sideOffset={8} className="max-w-xs">
                   <div className="space-y-1">
-                    <p><strong>Allow:</strong> Allows file editing without confirmation</p>
-                    <p><strong>Ask:</strong> Prompts for confirmation before editing</p>
-                    <p><strong>Deny:</strong> Blocks all file editing operations</p>
+                    <p><strong>Default:</strong> Follow OpenCode default behavior</p>
+                    <p><strong>Allow:</strong> Run without confirmation</p>
+                    <p><strong>Ask:</strong> Prompt for confirmation</p>
+                    <p><strong>Deny:</strong> Block the operation</p>
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -671,248 +990,150 @@ export const AgentsPage: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Bash Permission
-            </label>
-            <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
-                variant={bashPermission === 'allow' ? 'default' : 'outline'}
-                onClick={() => setBashPermission('allow')}
-                className="h-6 px-2 text-xs"
-              >
-                Allow
-              </Button>
-              <Button
-                size="sm"
-                variant={bashPermission === 'ask' ? 'default' : 'outline'}
-                onClick={() => setBashPermission('ask')}
-                className="h-6 px-2 text-xs"
-              >
-                Ask
-              </Button>
-              <Button
-                size="sm"
-                variant={bashPermission === 'deny' ? 'default' : 'outline'}
-                onClick={() => setBashPermission('deny')}
-                className="h-6 px-2 text-xs"
-              >
-                Deny
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="typography-meta text-muted-foreground">
-                Permission for running bash commands
-              </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  <div className="space-y-1">
-                    <p><strong>Allow:</strong> Run bash commands without confirmation</p>
-                    <p><strong>Ask:</strong> Prompt for confirmation before execution</p>
-                    <p><strong>Deny:</strong> Block all bash command execution</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+            <h3 className="typography-ui-header font-semibold text-foreground">Overrides</h3>
+            <p className="typography-meta text-muted-foreground/80">
+              Add overrides for permissions that should behave differently for this agent.
+            </p>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              WebFetch Permission
-            </label>
-            <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
-                variant={webfetchPermission === 'allow' ? 'default' : 'outline'}
-                onClick={() => setWebfetchPermission('allow')}
-                className="h-6 px-2 text-xs"
-              >
-                Allow
-              </Button>
-              <Button
-                size="sm"
-                variant={webfetchPermission === 'ask' ? 'default' : 'outline'}
-                onClick={() => setWebfetchPermission('ask')}
-                className="h-6 px-2 text-xs"
-              >
-                Ask
-              </Button>
-              <Button
-                size="sm"
-                variant={webfetchPermission === 'deny' ? 'default' : 'outline'}
-                onClick={() => setWebfetchPermission('deny')}
-                className="h-6 px-2 text-xs"
-              >
-                Deny
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="typography-meta text-muted-foreground">
-                Permission for fetching web content
-              </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  <div className="space-y-1">
-                    <p><strong>Allow:</strong> Fetch web content without confirmation</p>
-                    <p><strong>Ask:</strong> Prompt for confirmation before fetching</p>
-                    <p><strong>Deny:</strong> Block all web content access</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Select value={pendingOverrideName} onValueChange={setPendingOverrideName}>
+                  <SelectTrigger className="h-8 w-full sm:w-72">
+                    {pendingOverrideName ? (
+                      <span className="truncate">{formatPermissionLabel(pendingOverrideName)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Add override…</span>
+                    )}
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableOverrideNames.map((name) => (
+                      <SelectItem key={name} value={name} className="pr-2 [&>span:first-child]:hidden">
+                        <div className="flex items-center justify-between gap-4">
+                          <span>{formatPermissionLabel(name)}</span>
+                          <span className="typography-micro text-muted-foreground font-mono">{name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Skill Permission
-            </label>
-            <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
-                variant={skillPermission === 'allow' ? 'default' : 'outline'}
-                onClick={() => setSkillPermission('allow')}
-                className="h-6 px-2 text-xs"
-              >
-                Allow
-              </Button>
-              <Button
-                size="sm"
-                variant={skillPermission === 'ask' ? 'default' : 'outline'}
-                onClick={() => setSkillPermission('ask')}
-                className="h-6 px-2 text-xs"
-              >
-                Ask
-              </Button>
-              <Button
-                size="sm"
-                variant={skillPermission === 'deny' ? 'default' : 'outline'}
-                onClick={() => setSkillPermission('deny')}
-                className="h-6 px-2 text-xs"
-              >
-                Deny
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="typography-meta text-muted-foreground">
-                Permission for loading skills
-              </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  <div className="space-y-1">
-                    <p><strong>Allow:</strong> Load skills without confirmation</p>
-                    <p><strong>Ask:</strong> Prompt for confirmation before loading skills</p>
-                    <p><strong>Deny:</strong> Block all skill loading</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+                <div className="flex gap-1 w-fit">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!pendingOverrideName}
+                    onClick={() => applyPendingOverride('allow')}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Allow
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!pendingOverrideName}
+                    onClick={() => applyPendingOverride('ask')}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Ask
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!pendingOverrideName}
+                    onClick={() => applyPendingOverride('deny')}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Deny
+                  </Button>
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Doom Loop Permission
-            </label>
-            <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
-                variant={doomLoopPermission === 'allow' ? 'default' : 'outline'}
-                onClick={() => setDoomLoopPermission('allow')}
-                className="h-6 px-2 text-xs"
-              >
-                Allow
-              </Button>
-              <Button
-                size="sm"
-                variant={doomLoopPermission === 'ask' ? 'default' : 'outline'}
-                onClick={() => setDoomLoopPermission('ask')}
-                className="h-6 px-2 text-xs"
-              >
-                Ask
-              </Button>
-              <Button
-                size="sm"
-                variant={doomLoopPermission === 'deny' ? 'default' : 'outline'}
-                onClick={() => setDoomLoopPermission('deny')}
-                className="h-6 px-2 text-xs"
-              >
-                Deny
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="typography-meta text-muted-foreground">
-                Permission for repeated identical tool calls
-              </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  <div className="space-y-1">
-                    <p><strong>Allow:</strong> Continue without confirmation</p>
-                    <p><strong>Ask:</strong> Prompt when a doom loop is detected</p>
-                    <p><strong>Deny:</strong> Block repeated tool calls</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              External Directory Permission
-            </label>
-            <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
-                variant={externalDirectoryPermission === 'allow' ? 'default' : 'outline'}
-                onClick={() => setExternalDirectoryPermission('allow')}
-                className="h-6 px-2 text-xs"
-              >
-                Allow
-              </Button>
-              <Button
-                size="sm"
-                variant={externalDirectoryPermission === 'ask' ? 'default' : 'outline'}
-                onClick={() => setExternalDirectoryPermission('ask')}
-                className="h-6 px-2 text-xs"
-              >
-                Ask
-              </Button>
-              <Button
-                size="sm"
-                variant={externalDirectoryPermission === 'deny' ? 'default' : 'outline'}
-                onClick={() => setExternalDirectoryPermission('deny')}
-                className="h-6 px-2 text-xs"
-              >
-                Deny
-              </Button>
             </div>
-            <div className="flex items-center gap-2">
+
+            {overrides.length === 0 ? (
               <p className="typography-meta text-muted-foreground">
-                Permission for file access outside project
+                {defaultOverride === 'default'
+                  ? 'No overrides configured. Everything follows OpenCode defaults.'
+                  : `No overrides configured. All permissions default to "${defaultOverride}" for this agent.`}
               </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  <div className="space-y-1">
-                    <p><strong>Allow:</strong> Access external paths without confirmation</p>
-                    <p><strong>Ask:</strong> Prompt before accessing external paths</p>
-                    <p><strong>Deny:</strong> Block external directory access</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                {overrides.map(([permissionName]) => {
+                  const wildcardAction = getOverrideWildcardAction(permissionName);
+                  const customPatternCount = getCustomPatternCount(permissionName);
+                  const label = formatPermissionLabel(permissionName);
+
+                  return (
+                    <div key={permissionName} className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
+                          <span>{label}</span>
+                          <span className="typography-micro text-muted-foreground font-mono">
+                            {permissionName}
+                          </span>
+                          <Tooltip delayDuration={1000}>
+                            <TooltipTrigger asChild>
+                              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent sideOffset={8} className="max-w-xs">
+                              <div className="space-y-1">
+                                <p><strong>Allow:</strong> Run without confirmation</p>
+                                <p><strong>Ask:</strong> Prompt for confirmation</p>
+                                <p><strong>Deny:</strong> Block this operation</p>
+                                <p><strong>Remove:</strong> Return to default behavior</p>
+                                <p><strong>Note:</strong> Buttons set the "*" rule only</p>
+                                {customPatternCount > 0 ? (
+                                  <p><strong>Patterns:</strong> {customPatternCount} pattern rules preserved</p>
+                                ) : null}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </label>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => removeOverride(permissionName)}
+                          className="h-6 px-2 text-xs gap-1"
+                        >
+                          <RiSubtractLine className="h-3 w-3" />
+                          Remove
+                        </Button>
+                      </div>
+
+                      <div className="flex gap-1 w-fit">
+                        <Button
+                          size="sm"
+                          variant={wildcardAction === 'allow' ? 'default' : 'outline'}
+                          onClick={() => setOverrideAction(permissionName, 'allow')}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Allow
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={wildcardAction === 'ask' ? 'default' : 'outline'}
+                          onClick={() => setOverrideAction(permissionName, 'ask')}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Ask
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={wildcardAction === 'deny' ? 'default' : 'outline'}
+                          onClick={() => setOverrideAction(permissionName, 'deny')}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Deny
+                        </Button>
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

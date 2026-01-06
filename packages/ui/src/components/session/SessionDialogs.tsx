@@ -38,6 +38,9 @@ import {
 import { checkIsGitRepository, ensureOpenChamberIgnored, getGitBranches } from '@/lib/gitApi';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
+import { isDesktopRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -122,6 +125,7 @@ export const SessionDialogs: React.FC = () => {
     const [isCheckingGitRepository, setIsCheckingGitRepository] = React.useState(false);
     const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
     const [isCreatingWorktree, setIsCreatingWorktree] = React.useState(false);
+    const [worktreeManagerProjectId, setWorktreeManagerProjectId] = React.useState<string | null>(null);
     const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
     const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
     const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
@@ -140,13 +144,22 @@ export const SessionDialogs: React.FC = () => {
         getWorktreeMetadata,
         isLoading,
     } = useSessionStore();
-    const { currentDirectory, homeDirectory, hasPersistedDirectory, isHomeReady } = useDirectoryStore();
+    const { currentDirectory, homeDirectory, isHomeReady, setDirectory } = useDirectoryStore();
+    const { projects, addProject, activeProjectId } = useProjectsStore();
+    const { requestAccess, startAccessing } = useFileSystemAccess();
     const { agents } = useConfigStore();
     const { isSessionCreateDialogOpen, setSessionCreateDialogOpen } = useUIStore();
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const useMobileOverlay = isMobile || isTablet || hasTouchInput;
 
-    const projectDirectory = React.useMemo(() => normalizeProjectDirectory(currentDirectory), [currentDirectory]);
+    const projectDirectory = React.useMemo(() => {
+        const targetProjectId = worktreeManagerProjectId ?? activeProjectId;
+        const targetProject = targetProjectId
+            ? projects.find((project) => project.id === targetProjectId) ?? null
+            : null;
+        const targetPath = targetProject?.path ?? currentDirectory;
+        return normalizeProjectDirectory(targetPath);
+    }, [activeProjectId, currentDirectory, projects, worktreeManagerProjectId]);
     const sanitizedNewBranchName = React.useMemo(() => sanitizeBranchNameInput(branchName), [branchName]);
     const worktreeTargetBranch = React.useMemo(
         () => (worktreeCreateMode === 'existing' ? existingWorktreeBranch.trim() : sanitizedNewBranchName),
@@ -213,15 +226,75 @@ export const SessionDialogs: React.FC = () => {
         loadSessions();
     }, [loadSessions, currentDirectory]);
 
+    const projectsKey = React.useMemo(
+        () => projects.map((project) => `${project.id}:${project.path}`).join('|'),
+        [projects],
+    );
+    const lastProjectsKeyRef = React.useRef(projectsKey);
+
     React.useEffect(() => {
-        if (!hasShownInitialDirectoryPrompt && isHomeReady && !hasPersistedDirectory) {
-            setIsDirectoryDialogOpen(true);
-            setHasShownInitialDirectoryPrompt(true);
+        if (projectsKey === lastProjectsKeyRef.current) {
+            return;
         }
-    }, [hasPersistedDirectory, hasShownInitialDirectoryPrompt, isHomeReady]);
+
+        lastProjectsKeyRef.current = projectsKey;
+        loadSessions();
+    }, [loadSessions, projectsKey]);
+
+    React.useEffect(() => {
+        if (hasShownInitialDirectoryPrompt || !isHomeReady || projects.length > 0) {
+            return;
+        }
+
+        setHasShownInitialDirectoryPrompt(true);
+
+        if (isDesktopRuntime()) {
+            requestAccess('')
+                .then(async (result) => {
+                    if (!result.success || !result.path) {
+                        if (result.error && result.error !== 'Directory selection cancelled') {
+                            toast.error('Failed to select directory', {
+                                description: result.error,
+                            });
+                        }
+                        return;
+                    }
+
+                    const accessResult = await startAccessing(result.path);
+                    if (!accessResult.success) {
+                        toast.error('Failed to open directory', {
+                            description: accessResult.error || 'Desktop could not grant file access.',
+                        });
+                        return;
+                    }
+
+                    const added = addProject(result.path, { id: result.projectId });
+                    if (!added) {
+                        toast.error('Failed to add project', {
+                            description: 'Please select a valid directory path.',
+                        });
+                    }
+                })
+                .catch((error) => {
+                    console.error('Desktop: Error selecting directory:', error);
+                    toast.error('Failed to select directory');
+                });
+            return;
+        }
+
+        setIsDirectoryDialogOpen(true);
+    }, [
+        addProject,
+        hasShownInitialDirectoryPrompt,
+        isHomeReady,
+        projects.length,
+        requestAccess,
+        startAccessing,
+    ]);
 
     React.useEffect(() => {
         if (!isSessionCreateDialogOpen) {
+            setWorktreeManagerProjectId(null);
             setWorktreeCreateMode('new');
             setBranchName('');
             setExistingWorktreeBranch('');
@@ -372,7 +445,9 @@ export const SessionDialogs: React.FC = () => {
     }, []);
 
     React.useEffect(() => {
-        return sessionEvents.onCreateRequest(() => {
+        return sessionEvents.onCreateRequest((request) => {
+            const projectId = typeof request?.projectId === 'string' && request.projectId.trim() ? request.projectId : null;
+            setWorktreeManagerProjectId(projectId);
             setWorktreeCreateMode('new');
             setBranchName('');
             setExistingWorktreeBranch('');
@@ -554,6 +629,9 @@ export const SessionDialogs: React.FC = () => {
             initializeNewOpenChamberSession(session.id, agents);
             setSessionDirectory(session.id, metadata.path);
             setWorktreeMetadata(session.id, createdMetadata);
+
+            // Ensure directory-scoped caches and session lists include the new worktree.
+            setDirectory(metadata.path, { showOverlay: false });
 
             await refreshWorktrees();
             setBranchName('');

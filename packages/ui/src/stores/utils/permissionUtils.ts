@@ -15,14 +15,33 @@ export const isEditPermissionType = (type?: string | null): boolean => {
     return EDIT_PERMISSION_TOOL_NAMES.has(type.toLowerCase());
 };
 
-const resolveConfigStore = () => {
+type PermissionAction = 'allow' | 'deny' | 'ask';
+
+type PermissionRule = {
+    permission: string;
+    pattern: string;
+    action: PermissionAction;
+};
+
+type ConfigStoreAgent = {
+    name: string;
+    permission?: PermissionRule[];
+};
+
+type ConfigStoreState = {
+    agents?: ConfigStoreAgent[];
+};
+
+type ConfigStoreRef = { getState?: () => ConfigStoreState };
+
+const resolveConfigStore = (): ConfigStoreRef | undefined => {
     if (typeof window === 'undefined') {
         return undefined;
     }
-    return (window as { __zustand_config_store__?: { getState?: () => { agents?: Array<{ name: string; permission?: { edit?: string }; tools?: { edit?: boolean } }> } } }).__zustand_config_store__;
+    return (window as { __zustand_config_store__?: ConfigStoreRef }).__zustand_config_store__;
 };
 
-const getAgentDefinition = (agentName?: string): { name: string; permission?: { edit?: string }; tools?: { edit?: boolean } } | undefined => {
+const getAgentDefinition = (agentName?: string): ConfigStoreAgent | undefined => {
     if (!agentName) {
         return undefined;
     }
@@ -31,11 +50,37 @@ const getAgentDefinition = (agentName?: string): { name: string; permission?: { 
         const configStore = resolveConfigStore();
         if (configStore?.getState) {
             const state = configStore.getState();
-            return state.agents?.find?.((agent: { name: string; permission?: { edit?: string }; tools?: { edit?: boolean } }) => agent.name === agentName);
+            return state.agents?.find?.((agent) => agent.name === agentName);
         }
-    } catch { /* ignored */ }
+    } catch {
+        /* ignored */
+    }
 
     return undefined;
+};
+
+const resolvePermissionAction = (ruleset: PermissionRule[] | undefined, permission: string): PermissionAction => {
+    if (!ruleset || ruleset.length === 0) {
+        return 'ask';
+    }
+
+    // Prefer explicit rule for the tool at wildcard pattern.
+    for (let index = ruleset.length - 1; index >= 0; index -= 1) {
+        const rule = ruleset[index];
+        if (rule.permission === permission && rule.pattern === '*') {
+            return rule.action;
+        }
+    }
+
+    // Fall back to global wildcard.
+    for (let index = ruleset.length - 1; index >= 0; index -= 1) {
+        const rule = ruleset[index];
+        if (rule.permission === '*' && rule.pattern === '*') {
+            return rule.action;
+        }
+    }
+
+    return 'ask';
 };
 
 export const getAgentDefaultEditPermission = (agentName?: string): EditPermissionMode => {
@@ -44,11 +89,6 @@ export const getAgentDefaultEditPermission = (agentName?: string): EditPermissio
         return 'ask';
     }
 
-    const permission = agent.permission?.edit;
-    if (permission === 'allow' || permission === 'ask' || permission === 'deny' || permission === 'full') {
-        return permission;
-    }
-
-    const editToolEnabled = agent.tools ? agent.tools.edit !== false : true;
-    return editToolEnabled ? 'ask' : 'deny';
+    const action = resolvePermissionAction(agent.permission, 'edit');
+    return action;
 };

@@ -45,6 +45,7 @@
       "exceptionDomain": "localhost",
       "minimumSystemVersion": "14.0",
       "signingIdentity": null,
+      "entitlements": "./entitlements.plist",
       "infoPlist": "Info.plist",
       "dmg": {
         "appPosition": {

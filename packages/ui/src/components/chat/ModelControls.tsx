@@ -55,6 +55,70 @@ type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
+type PermissionAction = 'allow' | 'ask' | 'deny';
+type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
+
+const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
+    if (!Array.isArray(value)) {
+        return null;
+    }
+    const rules: PermissionRule[] = [];
+    for (const entry of value) {
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+        const candidate = entry as Partial<PermissionRule>;
+        if (typeof candidate.permission !== 'string' || typeof candidate.pattern !== 'string' || typeof candidate.action !== 'string') {
+            continue;
+        }
+        if (candidate.action !== 'allow' && candidate.action !== 'ask' && candidate.action !== 'deny') {
+            continue;
+        }
+        rules.push({ permission: candidate.permission, pattern: candidate.pattern, action: candidate.action });
+    }
+    return rules;
+};
+
+const resolveWildcardPermissionAction = (ruleset: unknown, permission: string): PermissionAction | undefined => {
+    const rules = asPermissionRuleset(ruleset);
+    if (!rules || rules.length === 0) {
+        return undefined;
+    }
+
+    for (let i = rules.length - 1; i >= 0; i -= 1) {
+        const rule = rules[i];
+        if (rule.permission === permission && rule.pattern === '*') {
+            return rule.action;
+        }
+    }
+
+    for (let i = rules.length - 1; i >= 0; i -= 1) {
+        const rule = rules[i];
+        if (rule.permission === '*' && rule.pattern === '*') {
+            return rule.action;
+        }
+    }
+
+    return undefined;
+};
+
+const buildPermissionActionMap = (ruleset: unknown, permission: string): Record<string, PermissionAction | undefined> | undefined => {
+    const rules = asPermissionRuleset(ruleset);
+    if (!rules || rules.length === 0) {
+        return undefined;
+    }
+
+    const map: Record<string, PermissionAction | undefined> = {};
+    for (const rule of rules) {
+        if (rule.permission !== permission) {
+            continue;
+        }
+        map[rule.pattern] = rule.action;
+    }
+
+    return Object.keys(map).length > 0 ? map : undefined;
+};
+
 interface CapabilityDefinition {
     key: 'tool_call' | 'reasoning';
     icon: IconComponent;
@@ -314,19 +378,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     }, [desktopModelQuery]);
 
     const currentAgent = getCurrentAgent?.();
-    const agentPermissionRaw = currentAgent?.permission?.edit;
-    let agentDefaultEditMode: EditPermissionMode = 'ask';
-    if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny' || agentPermissionRaw === 'full') {
-        agentDefaultEditMode = agentPermissionRaw;
-    }
 
-    const editToolConfigured = currentAgent ? (currentAgent.tools?.['edit'] !== false) : false;
-    if (!currentAgent || !editToolConfigured) {
-        agentDefaultEditMode = 'deny';
-    }
+    const agentDefaultEditMode = React.useMemo<EditPermissionMode>(() => {
+        if (!currentAgent) {
+            return 'deny';
+        }
+        const action = resolveWildcardPermissionAction(currentAgent.permission, 'edit') ?? 'ask';
+        return action;
+    }, [currentAgent]);
 
-    const agentWebfetchPermission = currentAgent?.permission?.webfetch;
-    const agentBashPermission = currentAgent?.permission?.bash as BashPermissionSetting | undefined;
+    const agentWebfetchPermission = React.useMemo(() => {
+        if (!currentAgent) {
+            return undefined;
+        }
+        return resolveWildcardPermissionAction(currentAgent.permission, 'webfetch');
+    }, [currentAgent]);
+
+    const agentBashPermission = React.useMemo<BashPermissionSetting | undefined>(() => {
+        if (!currentAgent) {
+            return undefined;
+        }
+        const map = buildPermissionActionMap(currentAgent.permission, 'bash');
+        return map ? (map as BashPermissionSetting) : undefined;
+    }, [currentAgent]);
 
     const permissionUiState = React.useMemo(() => calculateEditPermissionUIState({
         agentDefaultEditMode,
@@ -994,27 +1068,27 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const renderMobileAgentTooltip = () => {
         if (!isCompact || mobileTooltipOpen !== 'agent' || !currentAgent) return null;
 
-        const enabledTools = Object.entries(currentAgent.tools || {})
-            .filter(([, enabled]) => enabled)
-            .map(([tool]) => tool)
-            .sort();
-
         const hasCustomPrompt = Boolean(currentAgent.prompt && currentAgent.prompt.trim().length > 0);
         const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.modelID;
         const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
 
-        const getPermissionIcon = (permission?: string) => {
-            const mode: EditPermissionMode =
-                permission === 'full' || permission === 'allow' || permission === 'deny' ? permission : 'ask';
-            return renderEditModeIcon(mode, 'h-3.5 w-3.5');
+        const summarizePermission = (permissionName: string): { mode: EditPermissionMode; label: string } => {
+            const rules = asPermissionRuleset(currentAgent.permission) ?? [];
+            const hasCustom = rules.some((rule) => rule.permission === permissionName && rule.pattern !== '*');
+            const action = resolveWildcardPermissionAction(rules, permissionName) ?? 'ask';
+
+            if (hasCustom) {
+                return { mode: 'ask', label: 'Custom' };
+            }
+
+            if (action === 'allow') return { mode: 'allow', label: 'Allow' };
+            if (action === 'deny') return { mode: 'deny', label: 'Deny' };
+            return { mode: 'ask', label: 'Ask' };
         };
 
-        const getPermissionLabel = (permission?: string) => {
-            if (permission === 'full') return 'Full';
-            if (permission === 'allow') return 'Allow';
-            if (permission === 'deny') return 'Deny';
-            return 'Ask';
-        };
+        const editPermissionSummary = summarizePermission('edit');
+        const bashPermissionSummary = summarizePermission('bash');
+        const webfetchPermissionSummary = summarizePermission('webfetch');
 
         return (
             <MobileOverlayPanel
@@ -1066,24 +1140,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         </div>
                     )}
 
-                    {}
-                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
-                        <div className="typography-micro text-muted-foreground mb-1">Tools</div>
-                        {enabledTools.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 leading-tight">
-                                {enabledTools.map((tool) => (
-                                    <span
-                                        key={tool}
-                                        className="inline-flex items-center rounded-lg bg-muted/60 px-1.5 py-0.5 typography-meta text-foreground"
-                                    >
-                                        {tool}
-                                    </span>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="typography-meta text-muted-foreground">All enabled</div>
-                        )}
-                    </div>
 
                     {}
                     <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
@@ -1092,27 +1148,27 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             <div className="flex items-center justify-between">
                                 <span className="typography-meta text-muted-foreground/80">Edit</span>
                                 <div className="flex items-center gap-1.5">
-                                    {getPermissionIcon(currentAgent.permission?.edit)}
+                                    {renderEditModeIcon(editPermissionSummary.mode, 'h-3.5 w-3.5')}
                                     <span className="typography-meta font-medium text-foreground">
-                                        {getPermissionLabel(currentAgent.permission?.edit)}
+                                        {editPermissionSummary.label}
                                     </span>
                                 </div>
                             </div>
                             <div className="flex items-center justify-between">
                                 <span className="typography-meta text-muted-foreground/80">Bash</span>
                                 <div className="flex items-center gap-1.5">
-                                    {getPermissionIcon(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                    {renderEditModeIcon(bashPermissionSummary.mode, 'h-3.5 w-3.5')}
                                     <span className="typography-meta font-medium text-foreground">
-                                        {getPermissionLabel(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                        {bashPermissionSummary.label}
                                     </span>
                                 </div>
                             </div>
                             <div className="flex items-center justify-between">
                                 <span className="typography-meta text-muted-foreground/80">WebFetch</span>
                                 <div className="flex items-center gap-1.5">
-                                    {getPermissionIcon(currentAgent.permission?.webfetch)}
+                                    {renderEditModeIcon(webfetchPermissionSummary.mode, 'h-3.5 w-3.5')}
                                     <span className="typography-meta font-medium text-foreground">
-                                        {getPermissionLabel(currentAgent.permission?.webfetch)}
+                                        {webfetchPermissionSummary.label}
                                     </span>
                                 </div>
                             </div>
@@ -1983,27 +2039,27 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             );
         }
 
-        const enabledTools = Object.entries(currentAgent.tools || {})
-            .filter(([, enabled]) => enabled)
-            .map(([tool]) => tool)
-            .sort();
-
         const hasCustomPrompt = Boolean(currentAgent.prompt && currentAgent.prompt.trim().length > 0);
         const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.modelID;
         const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
 
-        const getPermissionIcon = (permission?: string) => {
-            const mode: EditPermissionMode =
-                permission === 'full' || permission === 'allow' || permission === 'deny' ? permission : 'ask';
-            return renderEditModeIcon(mode, 'h-3.5 w-3.5');
+        const summarizePermission = (permissionName: string): { mode: EditPermissionMode; label: string } => {
+            const rules = asPermissionRuleset(currentAgent.permission) ?? [];
+            const hasCustom = rules.some((rule) => rule.permission === permissionName && rule.pattern !== '*');
+            const action = resolveWildcardPermissionAction(rules, permissionName) ?? 'ask';
+
+            if (hasCustom) {
+                return { mode: 'ask', label: 'Custom' };
+            }
+
+            if (action === 'allow') return { mode: 'allow', label: 'Allow' };
+            if (action === 'deny') return { mode: 'deny', label: 'Deny' };
+            return { mode: 'ask', label: 'Ask' };
         };
 
-        const getPermissionLabel = (permission?: string) => {
-            if (permission === 'full') return 'Full';
-            if (permission === 'allow') return 'Allow';
-            if (permission === 'deny') return 'Deny';
-            return 'Ask';
-        };
+        const editPermissionSummary = summarizePermission('edit');
+        const bashPermissionSummary = summarizePermission('bash');
+        const webfetchPermissionSummary = summarizePermission('webfetch');
 
         return (
             <TooltipContent align="start" sideOffset={8} className="max-w-[280px]">
@@ -2053,50 +2109,33 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         </div>
                     )}
 
-                    <div className="flex flex-col gap-1">
-                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Tools</span>
-                        {enabledTools.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 leading-tight">
-                                {enabledTools.map((tool) => (
-                                    <span
-                                        key={tool}
-                                        className="inline-flex items-center rounded-lg bg-muted/60 px-1.5 py-0.5 typography-meta text-foreground"
-                                    >
-                                        {tool}
-                                    </span>
-                                ))}
-                            </div>
-                        ) : (
-                            <span className="typography-meta text-muted-foreground">All enabled</span>
-                        )}
-                    </div>
 
                     <div className="flex flex-col gap-1">
                         <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Permissions</span>
                         <div className="flex items-center gap-3">
                             <span className="typography-meta text-muted-foreground/80 w-16">Edit</span>
                             <div className="flex items-center gap-1.5">
-                                {getPermissionIcon(currentAgent.permission?.edit)}
+                                {renderEditModeIcon(editPermissionSummary.mode, 'h-3.5 w-3.5')}
                                 <span className="typography-meta font-medium text-foreground w-12">
-                                    {getPermissionLabel(currentAgent.permission?.edit)}
+                                    {editPermissionSummary.label}
                                 </span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="typography-meta text-muted-foreground/80 w-16">Bash</span>
                             <div className="flex items-center gap-1.5">
-                                {getPermissionIcon(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                {renderEditModeIcon(bashPermissionSummary.mode, 'h-3.5 w-3.5')}
                                 <span className="typography-meta font-medium text-foreground w-12">
-                                    {getPermissionLabel(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                    {bashPermissionSummary.label}
                                 </span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="typography-meta text-muted-foreground/80 w-16">WebFetch</span>
                             <div className="flex items-center gap-1.5">
-                                {getPermissionIcon(currentAgent.permission?.webfetch)}
+                                {renderEditModeIcon(webfetchPermissionSummary.mode, 'h-3.5 w-3.5')}
                                 <span className="typography-meta font-medium text-foreground w-12">
-                                    {getPermissionLabel(currentAgent.permission?.webfetch)}
+                                    {webfetchPermissionSummary.label}
                                 </span>
                             </div>
                         </div>

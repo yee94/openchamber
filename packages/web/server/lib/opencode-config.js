@@ -101,20 +101,70 @@ function getAgentWritePath(agentName, workingDirectory, requestedScope) {
   if (existing.path) {
     return existing;
   }
-  
+
   // For new agents or built-in overrides: use requested scope or default to user
   const scope = requestedScope || AGENT_SCOPE.USER;
   if (scope === AGENT_SCOPE.PROJECT && workingDirectory) {
-    return { 
-      scope: AGENT_SCOPE.PROJECT, 
-      path: getProjectAgentPath(workingDirectory, agentName) 
+    return {
+      scope: AGENT_SCOPE.PROJECT,
+      path: getProjectAgentPath(workingDirectory, agentName)
     };
   }
-  
-  return { 
-    scope: AGENT_SCOPE.USER, 
-    path: getUserAgentPath(agentName) 
+
+  return {
+    scope: AGENT_SCOPE.USER,
+    path: getUserAgentPath(agentName)
   };
+}
+
+/**
+ * Detect where an agent's permission field is currently defined
+ * Priority: project .md > user .md > project JSON > user JSON
+ * Returns: { source: 'md'|'json'|null, scope: 'project'|'user'|null, path: string|null }
+ */
+function getAgentPermissionSource(agentName, workingDirectory) {
+  // Check project-level .md first
+  if (workingDirectory) {
+    const projectMdPath = getProjectAgentPath(workingDirectory, agentName);
+    if (fs.existsSync(projectMdPath)) {
+      const { frontmatter } = parseMdFile(projectMdPath);
+      if (frontmatter.permission !== undefined) {
+        return { source: 'md', scope: AGENT_SCOPE.PROJECT, path: projectMdPath };
+      }
+    }
+  }
+
+  // Check user-level .md
+  const userMdPath = getUserAgentPath(agentName);
+  if (fs.existsSync(userMdPath)) {
+    const { frontmatter } = parseMdFile(userMdPath);
+    if (frontmatter.permission !== undefined) {
+      return { source: 'md', scope: AGENT_SCOPE.USER, path: userMdPath };
+    }
+  }
+
+  // Check JSON layers (project > user)
+  const layers = readConfigLayers(workingDirectory);
+
+  // Project opencode.json
+  const projectJsonPermission = layers.projectConfig?.agent?.[agentName]?.permission;
+  if (projectJsonPermission !== undefined && layers.paths.projectPath) {
+    return { source: 'json', scope: AGENT_SCOPE.PROJECT, path: layers.paths.projectPath };
+  }
+
+  // User opencode.json
+  const userJsonPermission = layers.userConfig?.agent?.[agentName]?.permission;
+  if (userJsonPermission !== undefined) {
+    return { source: 'json', scope: AGENT_SCOPE.USER, path: layers.paths.userPath };
+  }
+
+  // Custom config (env var)
+  const customJsonPermission = layers.customConfig?.agent?.[agentName]?.permission;
+  if (customJsonPermission !== undefined && layers.paths.customPath) {
+    return { source: 'json', scope: 'custom', path: layers.paths.customPath };
+  }
+
+  return { source: null, scope: null, path: null };
 }
 
 // ============== COMMAND SCOPE HELPERS ==============
@@ -412,9 +462,125 @@ function writePromptFile(filePath, content) {
   console.log(`Updated prompt file: ${filePath}`);
 }
 
+/**
+ * Get all possible project config paths in priority order
+ * Priority: root > .opencode/, json > jsonc
+ */
+function getProjectConfigCandidates(workingDirectory) {
+  if (!workingDirectory) return [];
+  return [
+    path.join(workingDirectory, 'opencode.json'),
+    path.join(workingDirectory, 'opencode.jsonc'),
+    path.join(workingDirectory, '.opencode', 'opencode.json'),
+    path.join(workingDirectory, '.opencode', 'opencode.jsonc'),
+  ];
+}
+
+/**
+ * Find existing project config file or return default path for new config
+ */
 function getProjectConfigPath(workingDirectory) {
   if (!workingDirectory) return null;
-  return path.join(workingDirectory, 'opencode.json');
+
+  const candidates = getProjectConfigCandidates(workingDirectory);
+
+  // Return first existing config file
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Default to root opencode.json for new configs
+  return candidates[0];
+}
+
+/**
+ * Merge new permission config with existing non-wildcard patterns
+ * Non-wildcard patterns (patterns other than "*") are preserved from existing config
+ * @param {object|string|null} newPermission - New permission config from UI (wildcards only)
+ * @param {object} permissionSource - Result from getAgentPermissionSource
+ * @param {string} agentName - Agent name
+ * @param {string|null} workingDirectory - Working directory
+ * @returns {object|string|null} Merged permission config
+ */
+function mergePermissionWithNonWildcards(newPermission, permissionSource, agentName, workingDirectory) {
+  // If no existing permission, return new permission as-is
+  if (!permissionSource.source || !permissionSource.path) {
+    return newPermission;
+  }
+
+  // Get existing permission config
+  let existingPermission = null;
+  if (permissionSource.source === 'md') {
+    const { frontmatter } = parseMdFile(permissionSource.path);
+    existingPermission = frontmatter.permission;
+  } else if (permissionSource.source === 'json') {
+    const config = readConfigFile(permissionSource.path);
+    existingPermission = config?.agent?.[agentName]?.permission;
+  }
+
+  // If no existing permission or it's a simple string, return new permission as-is
+  if (!existingPermission || typeof existingPermission === 'string') {
+    return newPermission;
+  }
+
+  // If new permission is null/undefined, return null to clear it
+  if (newPermission == null) {
+    return null;
+  }
+
+  // If new permission is a simple string (e.g., "allow"), return it as-is
+  if (typeof newPermission === 'string') {
+    return newPermission;
+  }
+
+  // Extract non-wildcard patterns from existing permission
+  const nonWildcardPatterns = {};
+  for (const [permKey, permValue] of Object.entries(existingPermission)) {
+    if (permKey === '*') continue; // Skip global default
+
+    if (typeof permValue === 'object' && permValue !== null && !Array.isArray(permValue)) {
+      // Permission has pattern-based config (e.g., { "npm *": "allow", "*": "ask" })
+      const nonWildcards = {};
+      for (const [pattern, action] of Object.entries(permValue)) {
+        if (pattern !== '*') {
+          nonWildcards[pattern] = action;
+        }
+      }
+      if (Object.keys(nonWildcards).length > 0) {
+        nonWildcardPatterns[permKey] = nonWildcards;
+      }
+    }
+    // Simple string values (e.g., "allow") don't have patterns, skip them
+  }
+
+  // If no non-wildcard patterns to preserve, return new permission as-is
+  if (Object.keys(nonWildcardPatterns).length === 0) {
+    return newPermission;
+  }
+
+  // Merge non-wildcards into new permission
+  const merged = { ...newPermission };
+  for (const [permKey, patterns] of Object.entries(nonWildcardPatterns)) {
+    const newValue = merged[permKey];
+    if (typeof newValue === 'string') {
+      // Convert string to object with wildcard + preserved patterns
+      merged[permKey] = { '*': newValue, ...patterns };
+    } else if (typeof newValue === 'object' && newValue !== null) {
+      // Merge patterns, new wildcards take precedence
+      merged[permKey] = { ...patterns, ...newValue };
+    } else {
+      // Permission not in new config - preserve existing patterns with their wildcard if it existed
+      const existingValue = existingPermission[permKey];
+      if (typeof existingValue === 'object' && existingValue !== null) {
+        const wildcard = existingValue['*'];
+        merged[permKey] = wildcard ? { '*': wildcard, ...patterns } : patterns;
+      }
+    }
+  }
+
+  return merged;
 }
 
 function getConfigPaths(workingDirectory) {
@@ -539,22 +705,23 @@ function getJsonWriteTarget(layers, preferredScope) {
 }
 
 function parseMdFile(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  const content = fs.readFileSync(filePath, 'utf8');
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
 
-    if (!match) {
-      return { frontmatter: {}, body: content.trim() };
-    }
-
-    const frontmatter = yaml.parse(match[1]) || {};
-    const body = match[2].trim();
-
-    return { frontmatter, body };
-  } catch (error) {
-    console.error(`Failed to parse markdown file ${filePath}:`, error);
-    throw new Error('Failed to parse agent markdown file');
+  if (!match) {
+    return { frontmatter: {}, body: content.trim() };
   }
+
+  let frontmatter = {};
+  try {
+    frontmatter = yaml.parse(match[1]) || {};
+  } catch (error) {
+    console.warn(`Failed to parse markdown frontmatter ${filePath}, treating as empty:`, error);
+    frontmatter = {};
+  }
+
+  const body = match[2].trim();
+  return { frontmatter, body };
 }
 
 function writeMdFile(filePath, frontmatter, body) {
@@ -606,12 +773,6 @@ function getAgentSources(agentName, workingDirectory) {
       scope: jsonSource.exists ? jsonScope : null,
       fields: []
     },
-    json: {
-      exists: jsonSource.exists,
-      path: jsonPath,
-      scope: jsonSource.exists ? jsonScope : null,
-      fields: []
-    },
     // Additional info about both levels
     projectMd: {
       exists: projectExists,
@@ -636,6 +797,48 @@ function getAgentSources(agentName, workingDirectory) {
   }
 
   return sources;
+}
+
+function getAgentConfig(agentName, workingDirectory) {
+  // Prefer markdown agents (project > user)
+  const projectPath = workingDirectory ? getProjectAgentPath(workingDirectory, agentName) : null;
+  const projectExists = projectPath && fs.existsSync(projectPath);
+
+  const userPath = getUserAgentPath(agentName);
+  const userExists = fs.existsSync(userPath);
+
+  if (projectExists || userExists) {
+    const mdPath = projectExists ? projectPath : userPath;
+    const { frontmatter, body } = parseMdFile(mdPath);
+
+    return {
+      source: 'md',
+      scope: projectExists ? AGENT_SCOPE.PROJECT : AGENT_SCOPE.USER,
+      config: {
+        ...frontmatter,
+        ...(typeof body === 'string' && body.length > 0 ? { prompt: body } : {}),
+      },
+    };
+  }
+
+  // Then fall back to opencode.json (highest-precedence entry)
+  const layers = readConfigLayers(workingDirectory);
+  const jsonSource = getJsonEntrySource(layers, 'agent', agentName);
+
+  if (jsonSource.exists && jsonSource.section) {
+    const scope = jsonSource.path === layers.paths.projectPath ? AGENT_SCOPE.PROJECT : AGENT_SCOPE.USER;
+    return {
+      source: 'json',
+      scope,
+      config: { ...jsonSource.section },
+    };
+  }
+
+  return {
+    source: 'none',
+    scope: null,
+    config: {},
+  };
 }
 
 function createAgent(agentName, config, workingDirectory, scope) {
@@ -693,7 +896,7 @@ function updateAgent(agentName, updates, workingDirectory) {
   const hasJsonFields = jsonSource.exists && jsonSection && Object.keys(jsonSection).length > 0;
   const jsonTarget = jsonSource.exists
     ? { config: jsonSource.config, path: jsonSource.path }
-    : getJsonWriteTarget(layers, workingDirectory ? AGENT_SCOPE.PROJECT : AGENT_SCOPE.USER);
+    : getJsonWriteTarget(layers, AGENT_SCOPE.USER);
   let config = jsonTarget.config || {};
   
   // Determine if we should create a new md file:
@@ -742,7 +945,7 @@ function updateAgent(agentName, updates, workingDirectory) {
         jsonModified = true;
         continue;
       }
-      
+
       // For JSON-only agents, store prompt inline in JSON
       if (!config.agent) config.agent = {};
       if (!config.agent[agentName]) config.agent[agentName] = {};
@@ -751,8 +954,78 @@ function updateAgent(agentName, updates, workingDirectory) {
       continue;
     }
 
+    // Special handling for permission field - uses location detection and preserves non-wildcards
+    if (field === 'permission') {
+      const permissionSource = getAgentPermissionSource(agentName, workingDirectory);
+      const newPermission = mergePermissionWithNonWildcards(value, permissionSource, agentName, workingDirectory);
+
+      if (permissionSource.source === 'md') {
+        // Write to existing .md file
+        const existingMdData = parseMdFile(permissionSource.path);
+        existingMdData.frontmatter.permission = newPermission;
+        writeMdFile(permissionSource.path, existingMdData.frontmatter, existingMdData.body);
+        console.log(`Updated permission in .md file: ${permissionSource.path}`);
+      } else if (permissionSource.source === 'json') {
+        // Write to existing JSON location
+        const existingConfig = readConfigFile(permissionSource.path);
+        if (!existingConfig.agent) existingConfig.agent = {};
+        if (!existingConfig.agent[agentName]) existingConfig.agent[agentName] = {};
+        existingConfig.agent[agentName].permission = newPermission;
+        writeConfig(existingConfig, permissionSource.path);
+        console.log(`Updated permission in JSON: ${permissionSource.path}`);
+      } else {
+        // Permission not defined anywhere - use agent's source location
+        if ((mdExists || creatingNewMd) && mdData) {
+          mdData.frontmatter.permission = newPermission;
+          mdModified = true;
+        } else if (hasJsonFields) {
+          // Agent exists in JSON - add permission there
+          if (!config.agent) config.agent = {};
+          if (!config.agent[agentName]) config.agent[agentName] = {};
+          config.agent[agentName].permission = newPermission;
+          jsonModified = true;
+        } else {
+          // Built-in agent with no config - write to project JSON if available, else user JSON
+          const writeTarget = workingDirectory
+            ? { config: layers.projectConfig || {}, path: layers.paths.projectPath || layers.paths.userPath }
+            : { config: layers.userConfig || {}, path: layers.paths.userPath };
+          if (!writeTarget.config.agent) writeTarget.config.agent = {};
+          if (!writeTarget.config.agent[agentName]) writeTarget.config.agent[agentName] = {};
+          writeTarget.config.agent[agentName].permission = newPermission;
+          writeConfig(writeTarget.config, writeTarget.path);
+          console.log(`Created permission in JSON: ${writeTarget.path}`);
+        }
+      }
+      continue;
+    }
+
     const inMd = mdData?.frontmatter?.[field] !== undefined;
     const inJson = jsonSection?.[field] !== undefined;
+
+    if (value === null) {
+      // Treat null as a request to remove the field.
+      if (mdData && inMd) {
+        delete mdData.frontmatter[field];
+        mdModified = true;
+      }
+
+      if (inJson) {
+        if (config.agent?.[agentName]) {
+          delete config.agent[agentName][field];
+
+          if (Object.keys(config.agent[agentName]).length === 0) {
+            delete config.agent[agentName];
+          }
+          if (Object.keys(config.agent).length === 0) {
+            delete config.agent;
+          }
+
+          jsonModified = true;
+        }
+      }
+
+      continue;
+    }
 
     // JSON takes precedence over md, so update JSON first if field exists there
     if (inJson) {
@@ -852,6 +1125,7 @@ function getCommandSources(commandName, workingDirectory) {
   const jsonSource = getJsonEntrySource(layers, 'command', commandName);
   const jsonSection = jsonSource.section;
   const jsonPath = jsonSource.path || layers.paths.customPath || layers.paths.projectPath || layers.paths.userPath;
+  const jsonScope = jsonSource.path === layers.paths.projectPath ? COMMAND_SCOPE.PROJECT : COMMAND_SCOPE.USER;
 
   const sources = {
     md: {
@@ -863,6 +1137,7 @@ function getCommandSources(commandName, workingDirectory) {
     json: {
       exists: jsonSource.exists,
       path: jsonPath,
+      scope: jsonSource.exists ? jsonScope : null,
       fields: []
     },
     // Additional info about both levels
@@ -1373,6 +1648,8 @@ function deleteSkill(skillName, workingDirectory) {
 export {
   getAgentSources,
   getAgentScope,
+  getAgentPermissionSource,
+  getAgentConfig,
   createAgent,
   updateAgent,
   deleteAgent,

@@ -2,8 +2,20 @@ import React from 'react';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { SIDEBAR_SECTIONS } from '@/constants/sidebar';
 import type { SidebarSection } from '@/constants/sidebar';
-import { RiArrowLeftSLine, RiCloseLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowLeftSLine, RiCloseLine, RiFolderLine } from '@remixicon/react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
+import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
@@ -99,7 +111,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return () => observer.disconnect();
   }, []);
 
+  const projects = useProjectsStore((state) => state.projects);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const setActiveProject = useProjectsStore((state) => state.setActiveProject);
+
+  const sortedProjects = React.useMemo(() => {
+    return [...projects].sort((a, b) => (a.label || a.path).localeCompare(b.label || b.path));
+  }, [projects]);
+
+  const activeProject = React.useMemo(() => {
+    if (sortedProjects.length === 0) {
+      return null;
+    }
+    return sortedProjects.find((p) => p.id === activeProjectId) ?? sortedProjects[0];
+  }, [activeProjectId, sortedProjects]);
+
+  // Format project label: kebab-case/snake_case → Title Case
+  const formatProjectLabel = React.useCallback((label: string): string => {
+    return label
+      .replace(/[-_]/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }, []);
+
+  const activeProjectLabel = React.useMemo(() => {
+    if (!activeProject) {
+      return 'Project';
+    }
+    const rawLabel = activeProject.label && activeProject.label.trim().length > 0
+      ? activeProject.label
+      : (activeProject.path.split('/').filter(Boolean).pop() || activeProject.path);
+    return formatProjectLabel(rawLabel);
+  }, [activeProject, formatProjectLabel]);
+
+  const showProjectSwitcher = sortedProjects.length > 0;
+
   const showTabLabels = containerWidth === 0 || containerWidth >= TAB_LABELS_MIN_WIDTH;
+
+  React.useEffect(() => {
+    // Force reload when activeProject changes to ensure scopes update
+    if (activeTab === 'agents') {
+      // Small delay to allow store state to propagate if needed
+      setTimeout(() => void useAgentsStore.getState().loadAgents(), 0);
+      return;
+    }
+
+    if (activeTab === 'commands') {
+      setTimeout(() => void useCommandsStore.getState().loadCommands(), 0);
+      return;
+    }
+
+    if (activeTab === 'skills') {
+      void useSkillsStore.getState().loadSkills();
+      void useSkillsCatalogStore.getState().loadCatalog();
+    }
+  }, [activeProjectId, activeTab]);
 
   // Update proportional width on window resize (if not manually resized)
   React.useEffect(() => {
@@ -341,26 +406,79 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           })}
         </div>
 
-        {onClose && (
-          <div className={cn('flex items-center', isMobile ? '' : 'pr-3')}>
-            <Tooltip delayDuration={500}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Close settings"
-                  className={cn(
-                    'inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                    !isMobile && 'app-region-no-drag'
+        {(onClose || showProjectSwitcher) && (
+          <div className={cn('flex items-center gap-2', isMobile ? '' : 'pr-3')}>
+            {showProjectSwitcher && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  {isMobile ? (
+                    <button
+                      type="button"
+                      aria-label="Switch project"
+                      title={activeProjectLabel}
+                      className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <RiFolderLine className="h-5 w-5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label="Switch project"
+                      title={activeProjectLabel}
+                      className={cn(
+                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 text-foreground outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring',
+                        !isMobile && 'app-region-no-drag'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate typography-ui-label font-medium">{activeProjectLabel}</span>
+                      <RiArrowDownSLine className="size-4 opacity-50" />
+                    </button>
                   )}
-                >
-                  <RiCloseLine className="h-5 w-5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Close Settings ({shortcutKey}+,)</p>
-              </TooltipContent>
-            </Tooltip>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-auto">
+                  <DropdownMenuRadioGroup
+                    value={activeProject?.id ?? ''}
+                    onValueChange={(value) => {
+                      if (!value) return;
+                      setActiveProject(value);
+                    }}
+                  >
+                    {sortedProjects.map((project) => {
+                      const rawLabel = project.label?.trim()
+                        ? project.label.trim()
+                        : (project.path.split('/').filter(Boolean).pop() || project.path);
+                      const label = formatProjectLabel(rawLabel);
+                      return (
+                        <DropdownMenuRadioItem key={project.id} value={project.id}>
+                          <span className="min-w-0 truncate typography-ui">{label}</span>
+                        </DropdownMenuRadioItem>
+                      );
+                    })}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {onClose && (
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Close settings"
+                    className={cn(
+                      'inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      !isMobile && 'app-region-no-drag'
+                    )}
+                  >
+                    <RiCloseLine className="h-5 w-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Close Settings ({shortcutKey}+,)</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         )}
       </div>

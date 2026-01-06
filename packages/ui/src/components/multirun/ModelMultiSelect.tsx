@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { cn } from '@/lib/utils';
+import { isIMECompositionEvent } from '@/lib/ime';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import type { ModelMetadata } from '@/types';
@@ -325,6 +326,9 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
 
             // Handle keyboard navigation
             const handleKeyDown = (e: React.KeyboardEvent) => {
+              if (isIMECompositionEvent(e)) {
+                return;
+              }
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 e.stopPropagation();

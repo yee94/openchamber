@@ -22,9 +22,9 @@ use anyhow::{anyhow, Result};
 use assistant_notifications::spawn_assistant_notifications;
 use axum::{
     body::{to_bytes, Body},
-    extract::{OriginalUri, State},
-    http::{Method, Request, Response, StatusCode},
-    response::IntoResponse,
+    extract::{Request, State},
+    http::{Method, StatusCode},
+    response::{IntoResponse, Response},
     routing::{any, get, post},
     Json, Router,
 };
@@ -39,6 +39,7 @@ use commands::git::{
     update_git_identity,
 };
 use commands::logs::fetch_desktop_logs;
+
 use commands::notifications::desktop_notify;
 use commands::permissions::{
     pick_directory, process_directory_selection, request_directory_access,
@@ -157,10 +158,7 @@ pub(crate) struct DesktopRuntime {
 impl DesktopRuntime {
     fn initialize_sync() -> Result<Self> {
         let settings = Arc::new(SettingsStore::new()?);
-        let initial_dir = tauri::async_runtime::block_on(settings.last_directory())
-            .ok()
-            .flatten();
-        let opencode = Arc::new(OpenCodeManager::new_with_directory(initial_dir.clone()));
+        let opencode = Arc::new(OpenCodeManager::new_with_directory(None));
 
         let client = Client::builder().build()?;
 
@@ -170,6 +168,7 @@ impl DesktopRuntime {
         let server_state = ServerState {
             client,
             opencode: opencode.clone(),
+            settings: settings.clone(),
             server_port,
             directory_change_lock: Arc::new(Mutex::new(())),
             models_metadata_cache: Arc::new(Mutex::new(ModelsMetadataCache::default())),
@@ -217,6 +216,7 @@ impl DesktopRuntime {
 struct ServerState {
     client: Client,
     opencode: Arc<OpenCodeManager>,
+    settings: Arc<SettingsStore>,
     server_port: u16,
     directory_change_lock: Arc<Mutex<()>>,
     models_metadata_cache: Arc<Mutex<ModelsMetadataCache>>,
@@ -420,21 +420,11 @@ fn build_macos_menu<R: tauri::Runtime>(
     )?;
 
     // View menu items
-    let open_git_tab = MenuItem::with_id(
-        app,
-        MENU_ITEM_OPEN_GIT_TAB_ID,
-        "Git",
-        true,
-        Some("Cmd+G"),
-    )?;
+    let open_git_tab =
+        MenuItem::with_id(app, MENU_ITEM_OPEN_GIT_TAB_ID, "Git", true, Some("Cmd+G"))?;
 
-    let open_diff_tab = MenuItem::with_id(
-        app,
-        MENU_ITEM_OPEN_DIFF_TAB_ID,
-        "Diff",
-        true,
-        Some("Cmd+E"),
-    )?;
+    let open_diff_tab =
+        MenuItem::with_id(app, MENU_ITEM_OPEN_DIFF_TAB_ID, "Diff", true, Some("Cmd+E"))?;
 
     let open_terminal_tab = MenuItem::with_id(
         app,
@@ -718,18 +708,8 @@ fn main() {
 
             let app_handle = app.app_handle().clone();
             let runtime_clone = runtime.clone();
-            let has_initial_dir =
-                tauri::async_runtime::block_on(runtime.settings().last_directory())
-                    .ok()
-                    .flatten()
-                    .is_some();
             tauri::async_runtime::spawn(async move {
-                // Only start opencode if we have a saved directory, otherwise frontend will prompt
-                if has_initial_dir {
-                    runtime_clone.start_opencode().await;
-                } else {
-                    info!("[desktop] No saved directory - waiting for user to select one");
-                }
+                runtime_clone.start_opencode().await;
 
                 if let Err(e) =
                     restore_bookmarks_on_startup(app_handle.state::<DesktopRuntime>().clone()).await
@@ -1190,11 +1170,11 @@ struct DirectoryChangeResponse {
     path: String,
 }
 
-fn json_response<T: Serialize>(status: StatusCode, payload: T) -> Response<Body> {
+fn json_response<T: Serialize>(status: StatusCode, payload: T) -> Response {
     (status, Json(payload)).into_response()
 }
 
-fn config_error_response(status: StatusCode, message: impl Into<String>) -> Response<Body> {
+fn config_error_response(status: StatusCode, message: impl Into<String>) -> Response {
     json_response(
         status,
         ConfigErrorResponse {
@@ -1203,10 +1183,8 @@ fn config_error_response(status: StatusCode, message: impl Into<String>) -> Resp
     )
 }
 
-async fn parse_request_payload(
-    req: Request<Body>,
-) -> Result<HashMap<String, Value>, Response<Body>> {
-    let (_, body) = req.into_parts();
+async fn parse_request_payload(req: &mut Request) -> Result<HashMap<String, Value>, Response> {
+    let body = std::mem::take(req.body_mut());
     let body_bytes = to_bytes(body, PROXY_BODY_LIMIT)
         .await
         .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Invalid request body"))?;
@@ -1222,7 +1200,7 @@ async fn parse_request_payload(
 async fn refresh_opencode_after_config_change(
     state: &ServerState,
     reason: &str,
-) -> Result<(), Response<Body>> {
+) -> Result<(), Response> {
     info!("[desktop:config] Restarting OpenCode after {}", reason);
     state.opencode.restart().await.map_err(|err| {
         config_error_response(
@@ -1233,21 +1211,146 @@ async fn refresh_opencode_after_config_change(
     Ok(())
 }
 
+fn extract_directory_from_request(req: &Request) -> Option<String> {
+    if let Some(value) = req.headers().get("x-opencode-directory") {
+        if let Ok(text) = value.to_str() {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    let query = req.uri().query()?;
+    for pair in query.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        let key = parts.next()?;
+        if key != "directory" {
+            continue;
+        }
+        let value = parts.next().unwrap_or("");
+        if let Ok(decoded) = urlencoding::decode(value) {
+            let trimmed = decoded.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+async fn resolve_directory_candidate(candidate: &str) -> Result<PathBuf, Response> {
+    let mut resolved = expand_tilde_path(candidate);
+    if !resolved.is_absolute() {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+        resolved = home.join(resolved);
+    }
+
+    let metadata = fs::metadata(&resolved)
+        .await
+        .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Directory not found"))?;
+    if !metadata.is_dir() {
+        return Err(config_error_response(
+            StatusCode::BAD_REQUEST,
+            "Specified path is not a directory",
+        ));
+    }
+
+    if let Ok(canonicalized) = fs::canonicalize(&resolved).await {
+        resolved = canonicalized;
+    }
+
+    Ok(resolved)
+}
+
+async fn resolve_project_directory_from_settings(
+    settings: &SettingsStore,
+) -> Result<Option<PathBuf>, Response> {
+    let raw = settings.load().await.map_err(|_| {
+        config_error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to load settings")
+    })?;
+
+    let active_id = raw
+        .get("activeProjectId")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let projects = raw.get("projects").and_then(|value| value.as_array());
+    if let Some(projects) = projects {
+        if let Some(entry) = projects.iter().find(|entry| {
+            entry
+                .get("id")
+                .and_then(|value| value.as_str())
+                .map(|value| value.trim() == active_id)
+                .unwrap_or(false)
+        }) {
+            if let Some(path) = entry.get("path").and_then(|value| value.as_str()) {
+                return resolve_directory_candidate(path).await.map(Some);
+            }
+        }
+
+        if let Some(entry) = projects.first() {
+            if let Some(path) = entry.get("path").and_then(|value| value.as_str()) {
+                return resolve_directory_candidate(path).await.map(Some);
+            }
+        }
+    }
+
+    let legacy = raw
+        .get("lastDirectory")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .trim();
+    if !legacy.is_empty() {
+        return resolve_directory_candidate(legacy).await.map(Some);
+    }
+
+    Ok(None)
+}
+
+async fn resolve_project_directory(
+    state: &ServerState,
+    directory: Option<String>,
+) -> Result<PathBuf, Response> {
+    if let Some(directory) = directory {
+        return resolve_directory_candidate(&directory).await;
+    }
+
+    match resolve_project_directory_from_settings(state.settings.as_ref()).await? {
+        Some(path) => Ok(path),
+        None => Err(config_error_response(
+            StatusCode::BAD_REQUEST,
+            "Directory parameter or active project is required",
+        )),
+    }
+}
+
 async fn handle_agent_route(
     state: &ServerState,
     method: Method,
-    req: Request<Body>,
+    mut req: Request,
     name: String,
-) -> Result<Response<Body>, StatusCode> {
+) -> Result<Response, StatusCode> {
     // Get working directory for project-level agent detection
-    let working_directory = state.opencode.get_working_directory();
-
+    let working_directory =
+        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
+            Ok(directory) => directory,
+            Err(response) => return Ok(response),
+        };
 
     match method {
         Method::GET => {
             match opencode_config::get_agent_sources(&name, Some(&working_directory)).await {
                 Ok(sources) => {
-                    let scope = sources.md.scope.clone().map(|s| match s {
+                    let resolved_scope = if sources.md.exists {
+                        sources.md.scope.clone()
+                    } else {
+                        sources.json.scope.clone()
+                    };
+                    let scope = resolved_scope.map(|s| match s {
                         opencode_config::Scope::User => opencode_config::CommandScope::User,
                         opencode_config::Scope::Project => opencode_config::CommandScope::Project,
                     });
@@ -1271,11 +1374,10 @@ async fn handle_agent_route(
             }
         }
         Method::POST => {
-            let payload = match parse_request_payload(req).await {
+            let payload = match parse_request_payload(&mut req).await {
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
-
 
             // Extract scope from payload if present
             let scope = payload
@@ -1320,7 +1422,7 @@ async fn handle_agent_route(
             }
         }
         Method::PATCH => {
-            let payload = match parse_request_payload(req).await {
+            let payload = match parse_request_payload(&mut req).await {
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
@@ -1421,10 +1523,16 @@ struct SkillFileResponse {
     content: String,
 }
 
-async fn handle_skill_list_route(state: &ServerState) -> Result<Response<Body>, StatusCode> {
-    let working_directory = state.opencode.get_working_directory();
+async fn handle_skill_list_route(
+    state: &ServerState,
+    req: Request,
+) -> Result<Response, StatusCode> {
+    let working_directory =
+        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
+            Ok(directory) => directory,
+            Err(response) => return Ok(response),
+        };
     let discovered = opencode_config::discover_skills(Some(&working_directory));
-
 
     let mut skills = Vec::new();
     for skill in discovered {
@@ -1447,18 +1555,24 @@ async fn handle_skill_list_route(state: &ServerState) -> Result<Response<Body>, 
         }
     }
 
-    Ok(json_response(StatusCode::OK, serde_json::json!({ "skills": skills })))
+    Ok(json_response(
+        StatusCode::OK,
+        serde_json::json!({ "skills": skills }),
+    ))
 }
 
 async fn handle_skill_route(
     state: &ServerState,
     method: Method,
-    req: Request<Body>,
+    mut req: Request,
     name: String,
     file_path: Option<String>,
-) -> Result<Response<Body>, StatusCode> {
-    let working_directory = state.opencode.get_working_directory();
-
+) -> Result<Response, StatusCode> {
+    let working_directory =
+        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
+            Ok(directory) => directory,
+            Err(response) => return Ok(response),
+        };
 
     // Handle file operations: /api/config/skills/:name/files/*
     if let Some(ref fp) = file_path {
@@ -1504,11 +1618,14 @@ async fn handle_skill_route(
             }
             Method::PUT => {
                 // Write supporting file
-                let payload = match parse_request_payload(req).await {
+                let payload = match parse_request_payload(&mut req).await {
                     Ok(data) => data,
                     Err(resp) => return Ok(resp),
                 };
-                let content = payload.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                let content = payload
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
 
                 match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
                     Ok(sources) => {
@@ -1616,12 +1733,13 @@ async fn handle_skill_route(
                 }
             }
             Method::POST => {
-                let payload = match parse_request_payload(req).await {
+                let payload = match parse_request_payload(&mut req).await {
                     Ok(data) => data,
                     Err(resp) => return Ok(resp),
                 };
 
-                let scope = payload.get("scope")
+                let scope = payload
+                    .get("scope")
                     .and_then(|v| v.as_str())
                     .and_then(|s| match s {
                         "project" => Some(opencode_config::SkillScope::Project),
@@ -1667,7 +1785,7 @@ async fn handle_skill_route(
                 }
             }
             Method::PATCH => {
-                let payload = match parse_request_payload(req).await {
+                let payload = match parse_request_payload(&mut req).await {
                     Ok(data) => data,
                     Err(resp) => return Ok(resp),
                 };
@@ -1744,18 +1862,26 @@ async fn handle_skill_route(
 async fn handle_command_route(
     state: &ServerState,
     method: Method,
-    req: Request<Body>,
+    mut req: Request,
     name: String,
-) -> Result<Response<Body>, StatusCode> {
+) -> Result<Response, StatusCode> {
     // Get working directory for project-level command detection
-    let working_directory = state.opencode.get_working_directory();
-
+    let working_directory =
+        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
+            Ok(directory) => directory,
+            Err(response) => return Ok(response),
+        };
 
     match method {
         Method::GET => {
             match opencode_config::get_command_sources(&name, Some(&working_directory)).await {
                 Ok(sources) => {
-                    let scope = sources.md.scope.clone().map(|s| match s {
+                    let resolved_scope = if sources.md.exists {
+                        sources.md.scope.clone()
+                    } else {
+                        sources.json.scope.clone()
+                    };
+                    let scope = resolved_scope.map(|s| match s {
                         opencode_config::Scope::User => opencode_config::CommandScope::User,
                         opencode_config::Scope::Project => opencode_config::CommandScope::Project,
                     });
@@ -1779,11 +1905,10 @@ async fn handle_command_route(
             }
         }
         Method::POST => {
-            let payload = match parse_request_payload(req).await {
+            let payload = match parse_request_payload(&mut req).await {
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
-
 
             // Extract scope from payload if present
             let scope = payload
@@ -1831,7 +1956,7 @@ async fn handle_command_route(
             }
         }
         Method::PATCH => {
-            let payload = match parse_request_payload(req).await {
+            let payload = match parse_request_payload(&mut req).await {
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
@@ -1913,8 +2038,8 @@ async fn handle_config_routes(
     state: ServerState,
     path: &str,
     method: Method,
-    req: Request<Body>,
-) -> Result<Response<Body>, StatusCode> {
+    mut req: Request,
+) -> Result<Response, StatusCode> {
     if let Some(name) = path.strip_prefix("/api/config/agents/") {
         let trimmed = name.trim();
         if trimmed.is_empty() {
@@ -1945,13 +2070,17 @@ async fn handle_config_routes(
             .map(|q| q.contains("refresh=true"))
             .unwrap_or(false);
 
-        let working_directory = state.opencode.get_working_directory();
+        let working_directory =
+            match resolve_project_directory(&state, extract_directory_from_request(&req)).await {
+                Ok(directory) => directory,
+                Err(response) => return Ok(response),
+            };
         let payload = skills_catalog::get_catalog(&working_directory, refresh).await;
         return Ok(json_response(StatusCode::OK, payload));
     }
 
     if path == "/api/config/skills/scan" && method == Method::POST {
-        let payload_map = match parse_request_payload(req).await {
+        let payload_map = match parse_request_payload(&mut req).await {
             Ok(data) => data,
             Err(resp) => return Ok(resp),
         };
@@ -1991,7 +2120,7 @@ async fn handle_config_routes(
     }
 
     if path == "/api/config/skills/install" && method == Method::POST {
-        let payload_map = match parse_request_payload(req).await {
+        let payload_map = match parse_request_payload(&mut req).await {
             Ok(data) => data,
             Err(resp) => return Ok(resp),
         };
@@ -2019,15 +2148,22 @@ async fn handle_config_routes(
                 }
             };
 
-        let working_directory = state.opencode.get_working_directory();
-        let response = skills_catalog::install_skills(&working_directory, install_request).await;
+        let working_directory = if install_request.scope == "project" {
+            match resolve_project_directory(&state, extract_directory_from_request(&req)).await {
+                Ok(directory) => directory,
+                Err(response) => return Ok(response),
+            }
+        } else {
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+        };
 
+        let response = skills_catalog::install_skills(&working_directory, install_request).await;
         let status = if response.ok {
             StatusCode::OK
-        } else if response.error.as_ref().map(|e| e.kind.as_str()) == Some("conflicts") {
-            StatusCode::CONFLICT
         } else if response.error.as_ref().map(|e| e.kind.as_str()) == Some("authRequired") {
             StatusCode::UNAUTHORIZED
+        } else if response.error.as_ref().map(|e| e.kind.as_str()) == Some("conflicts") {
+            StatusCode::CONFLICT
         } else {
             StatusCode::BAD_REQUEST
         };
@@ -2037,7 +2173,7 @@ async fn handle_config_routes(
 
     // Handle skill routes: /api/config/skills and /api/config/skills/:name
     if path == "/api/config/skills" && method == Method::GET {
-        return handle_skill_list_route(&state).await;
+        return handle_skill_list_route(&state, req).await;
     }
 
     if let Some(rest) = path.strip_prefix("/api/config/skills/") {
@@ -2058,7 +2194,6 @@ async fn handle_config_routes(
             return handle_skill_route(&state, method, req, name.to_string(), Some(file_path))
                 .await;
         }
-
 
         let trimmed = rest.trim();
         if trimmed.is_empty() {
@@ -2158,7 +2293,8 @@ async fn change_directory_handler(
 
     let mut resolved_path = expand_tilde_path(requested_path);
     if !resolved_path.is_absolute() {
-        resolved_path = state.opencode.get_working_directory().join(resolved_path);
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+        resolved_path = home.join(resolved_path);
     }
 
     // Validate directory exists and is accessible
@@ -2185,51 +2321,72 @@ async fn change_directory_handler(
         resolved_path = canonicalized;
     }
 
-    let current_dir = state.opencode.get_working_directory();
-    let is_running = state.opencode.current_port().is_some();
+    let path_value = resolved_path.to_string_lossy().to_string();
 
-    // If already on this directory and OpenCode is running, no restart needed
-    if current_dir == resolved_path && is_running {
-        return Ok(Json(DirectoryChangeResponse {
-            success: true,
-            restarted: false,
-            path: resolved_path.to_string_lossy().to_string(),
-        }));
-    }
-
-    info!("[desktop:http] Changing directory to {:?}", resolved_path);
-
-    // Update working directory and restart OpenCode
     state
-        .opencode
-        .set_working_directory(resolved_path.clone())
-        .await
-        .map_err(|e| {
-            error!(
-                "[desktop:http] ERROR: Failed to set working directory: {}",
-                e
-            );
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .settings
+        .update(|mut settings| {
+            if !settings.is_object() {
+                settings = Value::Object(Default::default());
+            }
 
-    state.opencode.restart().await.map_err(|e| {
-        error!("[desktop:http] ERROR: Failed to restart OpenCode: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            let mut projects = settings
+                .get("projects")
+                .and_then(|value| value.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            let existing_index = projects.iter().position(|entry| {
+                entry
+                    .get("path")
+                    .and_then(|value| value.as_str())
+                    .map(|value| value == path_value)
+                    .unwrap_or(false)
+            });
+
+            let active_project_id = if let Some(index) = existing_index {
+                projects[index]
+                    .get("id")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("")
+                    .to_string()
+            } else {
+                let id = uuid::Uuid::new_v4().to_string();
+                let project = serde_json::json!({
+                    "id": id,
+                    "path": path_value,
+                    "addedAt": chrono::Utc::now().timestamp_millis(),
+                    "lastOpenedAt": chrono::Utc::now().timestamp_millis(),
+                });
+                projects.push(project);
+                id
+            };
+
+            let map = settings.as_object_mut().unwrap();
+            map.insert("projects".to_string(), Value::Array(projects));
+            map.insert(
+                "activeProjectId".to_string(),
+                Value::String(active_project_id.clone()),
+            );
+            map.insert("lastDirectory".to_string(), Value::String(path_value.clone()));
+
+            settings
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(DirectoryChangeResponse {
         success: true,
-        restarted: true,
-        path: resolved_path.to_string_lossy().to_string(),
+        restarted: false,
+        path: path_value,
     }))
 }
 
 async fn proxy_to_opencode(
     State(state): State<ServerState>,
-    original: OriginalUri,
-    req: Request<Body>,
-) -> Result<Response<Body>, StatusCode> {
-    let origin_path = original.0.path().to_string();
+    req: Request,
+) -> Result<Response, axum::http::StatusCode> {
+    let origin_path = req.uri().path().to_string();
     let method = req.method().clone();
 
     // Check if this is a provider auth deletion request (DELETE /api/provider/:id/auth)
@@ -2253,7 +2410,7 @@ async fn proxy_to_opencode(
         StatusCode::SERVICE_UNAVAILABLE
     })?;
 
-    let query = original.0.query();
+    let query = req.uri().query();
     let rewritten_path = state.opencode.rewrite_path(&origin_path);
     let mut target = format!("http://127.0.0.1:{port}{rewritten_path}");
     if let Some(q) = query {
@@ -2351,14 +2508,41 @@ impl SettingsStore {
         }
     }
 
-    pub(crate) async fn save(&self, payload: Value) -> Result<()> {
+
+    pub(crate) async fn update_with<R, F>(&self, f: F) -> Result<(Value, R)>
+    where
+        F: FnOnce(Value) -> (Value, R),
+    {
         let _lock = self.guard.lock().await;
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).await.ok();
+
+        let current = match fs::read(&self.path).await {
+            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default())),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                Value::Object(Default::default())
+            }
+            Err(err) => return Err(err.into()),
+        };
+
+        let current_snapshot = current.clone();
+        let (next, result) = f(current);
+
+        if next != current_snapshot {
+            if let Some(parent) = self.path.parent() {
+                fs::create_dir_all(parent).await.ok();
+            }
+            let bytes = serde_json::to_vec_pretty(&next)?;
+            fs::write(&self.path, bytes).await?;
         }
-        let bytes = serde_json::to_vec_pretty(&payload)?;
-        fs::write(&self.path, bytes).await?;
-        Ok(())
+
+        Ok((next, result))
+    }
+
+    pub(crate) async fn update<F>(&self, f: F) -> Result<Value>
+    where
+        F: FnOnce(Value) -> Value,
+    {
+        let (next, _) = self.update_with(|current| (f(current), ())).await?;
+        Ok(next)
     }
 
     pub(crate) async fn last_directory(&self) -> Result<Option<PathBuf>> {

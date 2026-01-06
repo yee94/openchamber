@@ -1,5 +1,5 @@
 import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
-import type { Permission, PermissionResponse } from "@/types/permission";
+import type { PermissionRequest, PermissionResponse } from "@/types/permission";
 
 export interface AttachedFile {
     id: string;
@@ -70,13 +70,14 @@ export type NewSessionDraftState = {
 export interface SessionStore {
 
     sessions: Session[];
+    sessionsByDirectory: Map<string, Session[]>;
     currentSessionId: string | null;
     lastLoadedDirectory: string | null;
     messages: Map<string, { info: Message; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>;
     messageStreamStates: Map<string, MessageStreamLifecycle>;
     sessionCompactionUntil: Map<string, number>;
-    permissions: Map<string, Permission[]>;
+    permissions: Map<string, PermissionRequest[]>;
     sessionAbortFlags: Map<string, { timestamp: number; acknowledged: boolean }>;
     attachedFiles: AttachedFile[];
     abortPromptSessionId: string | null;
@@ -96,6 +97,7 @@ export interface SessionStore {
     webUICreatedSessions: Set<string>;
     worktreeMetadata: Map<string, import('@/types/worktree').WorktreeMetadata>;
     availableWorktrees: import('@/types/worktree').WorktreeMetadata[];
+    availableWorktreesByProject: Map<string, import('@/types/worktree').WorktreeMetadata[]>;
 
     currentAgentContext: Map<string, string>;
 
@@ -139,10 +141,11 @@ export interface SessionStore {
     markMessageStreamSettled: (messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: Message) => void;
     updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => void;
-    addPermission: (permission: Permission) => void;
-    respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
+    addPermission: (permission: PermissionRequest) => void;
+    respondToPermission: (sessionId: string, requestId: string, response: PermissionResponse) => Promise<void>;
     clearError: () => void;
     getSessionsByDirectory: (directory: string) => Session[];
+    getDirectoryForSession: (sessionId: string) => string | null;
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
     getCurrentAgent: (sessionId: string) => string | undefined;
     syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
@@ -190,6 +193,7 @@ export interface SessionStore {
 
      pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts?: number) => void;
      updateSession: (session: Session) => void;
+     removeSessionFromStore: (sessionId: string) => void;
 
      revertToMessage: (sessionId: string, messageId: string) => Promise<void>;
      handleSlashUndo: (sessionId: string) => Promise<void>;

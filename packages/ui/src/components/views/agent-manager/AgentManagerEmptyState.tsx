@@ -16,22 +16,13 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from '@/components/multirun/ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
 import { AgentSelector } from '@/components/multirun/AgentSelector';
+import { isIMECompositionEvent } from '@/lib/ime';
 import type { CreateMultiRunParams, MultiRunFileAttachment } from '@/types/multirun';
 
 /** Max file size in bytes (10MB) */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 /** Max number of concurrent runs */
 const MAX_MODELS = 5;
-
-/**
- * Detects if a keyboard event is part of IME composition.
- * Uses both isComposing and keyCode === 229 (MDN recommended).
- * WebKit may fire compositionend before keydown, causing isComposing to be false
- * while keyCode remains 229, so both checks are needed.
- */
-const isIMECompositionEvent = (e: React.KeyboardEvent): boolean => {
-    return e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229;
-};
 
 /** Attached file for agent manager */
 interface AttachedFile {
@@ -191,7 +182,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
     if (isIMECompositionEvent(e)) return;
 
     // Enter submits if valid, Shift+Enter adds newline
-    if (e.key === 'Enter' && !e.shiftKey && !isIMECompositionEvent(e)) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (isValid && !isSubmittingOrCreating) {
         handleSubmit(e as unknown as React.FormEvent);
@@ -247,7 +238,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
             onChange={setSelectedAgent}
           />
           <p className="typography-micro text-muted-foreground">
-            Optional agent to use for all runs
+            Defaults to your configured default agent
           </p>
         </div>
 

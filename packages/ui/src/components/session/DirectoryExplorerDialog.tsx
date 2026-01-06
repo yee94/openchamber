@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DirectoryTree } from './DirectoryTree';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -33,7 +34,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   open,
   onOpenChange,
 }) => {
-  const { currentDirectory, homeDirectory, setDirectory, isHomeReady } = useDirectoryStore();
+  const { currentDirectory, homeDirectory, isHomeReady } = useDirectoryStore();
+  const { addProject, getActiveProject } = useProjectsStore();
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
   const [pathInputValue, setPathInputValue] = React.useState('');
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
@@ -67,12 +69,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (open) {
       setHasUserSelection(false);
       setIsConfirming(false);
-      // Initialize with current directory
-      const initialPath = currentDirectory || homeDirectory || '';
+      // Initialize with active project or current directory
+      const activeProject = getActiveProject();
+      const initialPath = activeProject?.path || currentDirectory || homeDirectory || '';
       setPendingPath(initialPath);
       setPathInputValue(formatPath(initialPath));
     }
-  }, [open, currentDirectory, homeDirectory, formatPath]);
+  }, [open, currentDirectory, homeDirectory, formatPath, getActiveProject]);
 
   // Set initial pending path to home when ready (only if not yet selected)
   React.useEffect(() => {
@@ -104,13 +107,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (!targetPath || isConfirming) {
       return;
     }
-    if (targetPath === currentDirectory) {
-      handleClose();
-      return;
-    }
     setIsConfirming(true);
     try {
       let resolvedPath = targetPath;
+      let projectId: string | undefined;
 
       if (isDesktop) {
         const accessResult = await requestAccess(targetPath);
@@ -121,6 +121,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           return;
         }
         resolvedPath = accessResult.path ?? targetPath;
+        projectId = accessResult.projectId;
 
         const startResult = await startAccessing(resolvedPath);
         if (!startResult.success) {
@@ -131,7 +132,14 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         }
       }
 
-      setDirectory(resolvedPath);
+      const added = addProject(resolvedPath, { id: projectId });
+      if (!added) {
+        toast.error('Failed to add project', {
+          description: 'Please select a valid directory path.',
+        });
+        return;
+      }
+
       handleClose();
     } catch (error) {
       toast.error('Failed to select directory', {
@@ -141,11 +149,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       setIsConfirming(false);
     }
   }, [
-    currentDirectory,
+    addProject,
     handleClose,
     isDesktop,
     requestAccess,
-    setDirectory,
     startAccessing,
     isConfirming,
   ]);
@@ -200,9 +207,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
   const dialogHeader = (
     <DialogHeader className="flex-shrink-0 px-4 pb-2 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-3 sm:pt-0">
-      <DialogTitle>Select project directory</DialogTitle>
+      <DialogTitle>Add project directory</DialogTitle>
       <DialogDescription className="hidden sm:block">
-        Choose the working directory for sessions and OpenCode operations.
+        Choose a folder to add as a project.
       </DialogDescription>
     </DialogHeader>
   );
@@ -304,7 +311,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         disabled={isConfirming || !hasUserSelection || (!pendingPath && !pathInputValue.trim())}
         className="flex-1 sm:flex-none sm:w-auto sm:min-w-[140px]"
       >
-        {isConfirming ? 'Applying...' : 'Open Directory'}
+        {isConfirming ? 'Adding...' : 'Add Project'}
       </Button>
     </>
   );
@@ -314,7 +321,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       <MobileOverlayPanel
         open={open}
         onClose={() => onOpenChange(false)}
-        title="Select project directory"
+        title="Add project directory"
         className="max-w-full"
         contentMaxHeightClassName="max-h-[min(70vh,520px)] h-[min(70vh,520px)]"
         footer={<div className="flex flex-row gap-2">{renderActionButtons()}</div>}

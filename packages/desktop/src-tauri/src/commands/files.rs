@@ -136,8 +136,8 @@ pub async fn list_directory(
     path: Option<String>,
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<DirectoryListResult, String> {
-    let workspace_root = resolve_workspace_root(state.settings()).await;
-    let resolved_path = resolve_sandboxed_path(path, workspace_root.as_ref())
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_sandboxed_path(path, &workspace_roots, default_root.as_ref())
         .await
         .map_err(|err| err.to_list_message())?;
 
@@ -150,10 +150,12 @@ pub async fn list_directory(
     }
 
     // Re-check boundary after canonicalization to guard against traversal
-    if let Some(root) = &workspace_root {
-        if !resolved_path.starts_with(root) {
-            return Err(FsCommandError::OutsideWorkspace.to_list_message());
-        }
+    if !workspace_roots.is_empty()
+        && !workspace_roots
+            .iter()
+            .any(|root| resolved_path.starts_with(root))
+    {
+        return Err(FsCommandError::OutsideWorkspace.to_list_message());
     }
 
     let mut entries = Vec::new();
@@ -223,8 +225,8 @@ pub async fn search_files(
     max_results: Option<usize>,
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<SearchFilesResponse, String> {
-    let workspace_root = resolve_workspace_root(state.settings()).await;
-    let resolved_root = resolve_sandboxed_path(directory, workspace_root.as_ref())
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_root = resolve_sandboxed_path(directory, &workspace_roots, default_root.as_ref())
         .await
         .map_err(|err| err.to_search_message())?;
 
@@ -352,8 +354,8 @@ pub async fn create_directory(
         return Err("Path is required".to_string());
     }
 
-    let workspace_root = resolve_workspace_root(state.settings()).await;
-    let resolved_path = resolve_creatable_path(trimmed, workspace_root.as_ref())
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_creatable_path(trimmed, &workspace_roots, default_root.as_ref())
         .await
         .map_err(|err| err.to_create_message())?;
 
@@ -369,35 +371,40 @@ pub async fn create_directory(
 
 async fn resolve_sandboxed_path(
     path: Option<String>,
-    workspace_root: Option<&PathBuf>,
+    workspace_roots: &[PathBuf],
+    default_root: Option<&PathBuf>,
 ) -> Result<PathBuf, FsCommandError> {
     let candidate_input = path
         .as_ref()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty());
 
-    let candidate_path = match (candidate_input, workspace_root) {
-        (Some(value), _) => expand_tilde_path(value),
-        (None, Some(root)) => root.clone(),
-        (None, None) => default_home_directory(),
+    let fallback_root = default_root
+        .or_else(|| workspace_roots.first())
+        .cloned()
+        .unwrap_or_else(default_home_directory);
+
+    let candidate_path = match candidate_input {
+        Some(value) => expand_tilde_path(value),
+        None => fallback_root.clone(),
     };
 
     let resolved = if candidate_path.is_absolute() {
         candidate_path
-    } else if let Some(root) = workspace_root {
-        root.join(candidate_path)
     } else {
-        default_home_directory().join(candidate_path)
+        fallback_root.join(candidate_path)
     };
 
     let canonicalized = fs::canonicalize(&resolved)
         .await
         .map_err(FsCommandError::from)?;
 
-    if let Some(root) = workspace_root {
-        if !canonicalized.starts_with(root) {
-            return Err(FsCommandError::OutsideWorkspace);
-        }
+    if !workspace_roots.is_empty()
+        && !workspace_roots
+            .iter()
+            .any(|root| canonicalized.starts_with(root))
+    {
+        return Err(FsCommandError::OutsideWorkspace);
     }
 
     Ok(canonicalized)
@@ -405,19 +412,23 @@ async fn resolve_sandboxed_path(
 
 async fn resolve_creatable_path(
     path: &str,
-    workspace_root: Option<&PathBuf>,
+    workspace_roots: &[PathBuf],
+    default_root: Option<&PathBuf>,
 ) -> Result<PathBuf, FsCommandError> {
     let candidate = expand_tilde_path(path);
     if candidate.as_os_str().is_empty() {
         return Err(FsCommandError::Other("Path is required".to_string()));
     }
 
+    let fallback_root = default_root
+        .or_else(|| workspace_roots.first())
+        .cloned()
+        .unwrap_or_else(default_home_directory);
+
     let absolute = if candidate.is_absolute() {
         candidate
-    } else if let Some(root) = workspace_root {
-        root.join(candidate)
     } else {
-        default_home_directory().join(candidate)
+        fallback_root.join(candidate)
     };
 
     let parent = absolute.parent().ok_or(FsCommandError::NotDirectory)?;
@@ -426,22 +437,79 @@ async fn resolve_creatable_path(
         .await
         .map_err(FsCommandError::from)?;
 
-    if let Some(root) = workspace_root {
-        if !canonical_parent.starts_with(root) {
-            return Err(FsCommandError::OutsideWorkspace);
-        }
+    if !workspace_roots.is_empty()
+        && !workspace_roots
+            .iter()
+            .any(|root| canonical_parent.starts_with(root))
+    {
+        return Err(FsCommandError::OutsideWorkspace);
     }
 
     Ok(absolute)
 }
 
-async fn resolve_workspace_root(settings: &SettingsStore) -> Option<PathBuf> {
-    if let Ok(Some(last_dir)) = settings.last_directory().await {
-        if let Ok(canonicalized) = fs::canonicalize(&last_dir).await {
-            return Some(canonicalized);
+async fn resolve_workspace_roots(settings: &SettingsStore) -> (Vec<PathBuf>, Option<PathBuf>) {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    let mut default_root: Option<PathBuf> = None;
+
+    let settings_value = settings.load().await.ok();
+
+    if let Some(value) = settings_value.as_ref() {
+        if let Some(active_id) = value.get("activeProjectId").and_then(|v| v.as_str()) {
+            if let Some(projects) = value.get("projects").and_then(|v| v.as_array()) {
+                if let Some(active_path) = projects.iter().find_map(|entry| {
+                    let id = entry.get("id").and_then(|v| v.as_str())?;
+                    if id != active_id {
+                        return None;
+                    }
+                    entry.get("path").and_then(|v| v.as_str())
+                }) {
+                    if let Ok(canonicalized) =
+                        fs::canonicalize(expand_tilde_path(active_path)).await
+                    {
+                        default_root = Some(canonicalized.clone());
+                        roots.push(canonicalized);
+                    }
+                }
+            }
+        }
+
+        if let Some(projects) = value.get("projects").and_then(|v| v.as_array()) {
+            for entry in projects {
+                if let Some(path) = entry.get("path").and_then(|v| v.as_str()) {
+                    if let Ok(canonicalized) = fs::canonicalize(expand_tilde_path(path)).await {
+                        roots.push(canonicalized);
+                    }
+                }
+            }
+        }
+
+        if let Some(last_dir) = value.get("lastDirectory").and_then(|v| v.as_str()) {
+            if let Ok(canonicalized) = fs::canonicalize(expand_tilde_path(last_dir)).await {
+                if default_root.is_none() {
+                    default_root = Some(canonicalized.clone());
+                }
+                roots.push(canonicalized);
+            }
         }
     }
-    None
+
+    if default_root.is_none() {
+        if let Ok(Some(last_dir)) = settings.last_directory().await {
+            if let Ok(canonicalized) = fs::canonicalize(last_dir).await {
+                default_root = Some(canonicalized);
+            }
+        }
+    }
+
+    let mut deduped: Vec<PathBuf> = Vec::new();
+    for root in roots {
+        if !deduped.iter().any(|existing| existing == &root) {
+            deduped.push(root);
+        }
+    }
+
+    (deduped, default_root)
 }
 
 fn default_home_directory() -> PathBuf {

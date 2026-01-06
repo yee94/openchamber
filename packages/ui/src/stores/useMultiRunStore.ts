@@ -6,6 +6,7 @@ import { createWorktree } from '@/lib/git/worktreeService';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
 import { useDirectoryStore } from './useDirectoryStore';
+import { useProjectsStore } from './useProjectsStore';
 
 /**
  * Generate a git-safe slug from a string.
@@ -48,8 +49,33 @@ const sanitizeWorktreeSlug = (value: string): string => {
 };
 
 
-const getCurrentDirectory = (): string | null => {
-  return useDirectoryStore.getState().currentDirectory ?? null;
+const resolveProjectDirectory = (): string | null => {
+  const projectsState = useProjectsStore.getState();
+  const activeProjectId = projectsState.activeProjectId;
+  const activeProjectPath = activeProjectId
+    ? projectsState.projects.find((project) => project.id === activeProjectId)?.path
+    : undefined;
+
+  if (typeof activeProjectPath === 'string' && activeProjectPath.trim().length > 0) {
+    return activeProjectPath;
+  }
+
+  const currentDirectory = useDirectoryStore.getState().currentDirectory ?? null;
+  if (!currentDirectory) {
+    return null;
+  }
+
+  const normalized = currentDirectory.replace(/\\/g, '/').replace(/\/+$/, '') || currentDirectory;
+  const marker = '/.openchamber/';
+  const markerIndex = normalized.indexOf(marker);
+  if (markerIndex > 0) {
+    return normalized.slice(0, markerIndex);
+  }
+  if (normalized.endsWith('/.openchamber')) {
+    return normalized.slice(0, normalized.length - '/.openchamber'.length);
+  }
+
+  return normalized;
 };
 
 interface MultiRunState {
@@ -99,7 +125,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
         set({ isLoading: true, error: null });
 
         try {
-          const directory = getCurrentDirectory();
+          const directory = resolveProjectDirectory();
           if (!directory) {
             set({ error: 'No directory selected', isLoading: false });
             return null;
@@ -236,7 +262,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
           })();
 
           set({ isLoading: false });
-          return { sessionIds, firstSessionId };
+          return { groupSlug, sessionIds, firstSessionId };
         } catch (error) {
           set({
             error: error instanceof Error ? error.message : 'Failed to create Multi-Run',

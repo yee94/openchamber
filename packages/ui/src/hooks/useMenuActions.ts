@@ -2,11 +2,12 @@ import React from 'react';
 import { toast } from 'sonner';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { isDesktopRuntime } from '@/lib/desktop';
+import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 
 const MENU_ACTION_EVENT = 'openchamber:menu-action';
 
@@ -42,20 +43,36 @@ export const useMenuActions = (
     setSettingsDialogOpen,
     setAboutDialogOpen,
   } = useUIStore();
-  const { setDirectory } = useDirectoryStore();
+  const { addProject } = useProjectsStore();
+  const { requestAccess, startAccessing } = useFileSystemAccess();
   const { setThemeMode } = useThemeSystem();
   const isDownloadingLogsRef = React.useRef(false);
 
   const handleChangeWorkspace = React.useCallback(() => {
-    if (isDesktopRuntime() && window.opencodeDesktop?.requestDirectoryAccess) {
-      window.opencodeDesktop
-        .requestDirectoryAccess('')
-        .then((result) => {
-          if (result.success && result.path) {
-            setDirectory(result.path, { showOverlay: true });
-          } else if (result.error && result.error !== 'Directory selection cancelled') {
-            toast.error('Failed to select directory', {
-              description: result.error,
+    if (isDesktopRuntime()) {
+      requestAccess('')
+        .then(async (result) => {
+          if (!result.success || !result.path) {
+            if (result.error && result.error !== 'Directory selection cancelled') {
+              toast.error('Failed to select directory', {
+                description: result.error,
+              });
+            }
+            return;
+          }
+
+          const accessResult = await startAccessing(result.path);
+          if (!accessResult.success) {
+            toast.error('Failed to open directory', {
+              description: accessResult.error || 'Desktop could not grant file access.',
+            });
+            return;
+          }
+
+          const added = addProject(result.path, { id: result.projectId });
+          if (!added) {
+            toast.error('Failed to add project', {
+              description: 'Please select a valid directory path.',
             });
           }
         })
@@ -66,7 +83,7 @@ export const useMenuActions = (
     } else {
       sessionEvents.requestDirectoryDialog();
     }
-  }, [setDirectory]);
+  }, [addProject, requestAccess, startAccessing]);
 
   React.useEffect(() => {
     const handleMenuAction = (event: Event) => {

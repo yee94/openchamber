@@ -172,9 +172,37 @@ const writePromptFile = (filePath: string, content: string) => {
   fs.writeFileSync(filePath, content, 'utf8');
 };
 
+/**
+ * Get all possible project config paths in priority order
+ * Priority: root > .opencode/, json > jsonc
+ */
+const getProjectConfigCandidates = (workingDirectory?: string): string[] => {
+  if (!workingDirectory) return [];
+  return [
+    path.join(workingDirectory, 'opencode.json'),
+    path.join(workingDirectory, 'opencode.jsonc'),
+    path.join(workingDirectory, '.opencode', 'opencode.json'),
+    path.join(workingDirectory, '.opencode', 'opencode.jsonc'),
+  ];
+};
+
+/**
+ * Find existing project config file or return default path for new config
+ */
 const getProjectConfigPath = (workingDirectory?: string): string | null => {
   if (!workingDirectory) return null;
-  return path.join(workingDirectory, 'opencode.json');
+
+  const candidates = getProjectConfigCandidates(workingDirectory);
+
+  // Return first existing config file
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Default to root opencode.json for new configs
+  return candidates[0] || null;
 };
 
 const getConfigPaths = (workingDirectory?: string) => ({
@@ -289,7 +317,14 @@ const parseMdFile = (filePath: string): { frontmatter: Record<string, unknown>; 
   const content = fs.readFileSync(filePath, 'utf8');
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) return { frontmatter: {}, body: content.trim() };
-  return { frontmatter: (yaml.parse(match[1]) || {}) as Record<string, unknown>, body: (match[2] || '').trim() };
+  let frontmatter: Record<string, unknown> = {};
+  try {
+    frontmatter = (yaml.parse(match[1]) || {}) as Record<string, unknown>;
+  } catch (error) {
+    console.warn(`[OpenChamber][VSCode] Failed to parse frontmatter for ${filePath}, treating as empty:`, error);
+    frontmatter = {};
+  }
+  return { frontmatter, body: (match[2] || '').trim() };
 };
 
 const writeMdFile = (filePath: string, frontmatter: Record<string, unknown>, body: string) => {
@@ -541,10 +576,11 @@ export const getCommandSources = (commandName: string, workingDirectory?: string
   const jsonSource = getJsonEntrySource(layers, 'command', commandName);
   const commandSection = jsonSource.section as Record<string, unknown> | undefined;
   const jsonPath = jsonSource.path || layers.paths.customPath || layers.paths.projectPath || layers.paths.userPath;
+  const jsonScope = jsonSource.path === layers.paths.projectPath ? COMMAND_SCOPE.PROJECT : COMMAND_SCOPE.USER;
 
   const sources: ConfigSources = {
     md: { exists: mdExists, path: mdPath, scope: mdScope, fields: [] },
-    json: { exists: jsonSource.exists, path: jsonPath || CONFIG_FILE, fields: [] },
+    json: { exists: jsonSource.exists, path: jsonPath || CONFIG_FILE, scope: jsonSource.exists ? jsonScope : null, fields: [] },
     projectMd: { exists: projectExists, path: projectPath },
     userMd: { exists: userExists, path: userPath }
   };
@@ -1141,4 +1177,3 @@ export const deleteSkill = (skillName: string, workingDirectory?: string): void 
     throw new Error(`Skill "${skillName}" not found`);
   }
 };
-

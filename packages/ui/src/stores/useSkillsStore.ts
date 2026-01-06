@@ -8,8 +8,14 @@ import {
 } from "@/lib/configUpdate";
 import { getSafeStorage } from "./utils/safeStorage";
 
-// Access directory store without circular dependency
+import { opencodeClient } from '@/lib/opencode/client';
+
 const getCurrentDirectory = (): string | null => {
+  const opencodeDirectory = opencodeClient.getDirectory();
+  if (typeof opencodeDirectory === 'string' && opencodeDirectory.trim().length > 0) {
+    return opencodeDirectory;
+  }
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = (window as any).__zustand_directory_store__;
@@ -19,6 +25,7 @@ const getCurrentDirectory = (): string | null => {
   } catch {
     // ignore
   }
+
   return null;
 };
 

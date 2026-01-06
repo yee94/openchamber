@@ -1,7 +1,7 @@
 import React from 'react';
 import { RiCheckLine, RiCloseLine, RiFileEditLine, RiGlobalLine, RiPencilAiLine, RiQuestionLine, RiTerminalBoxLine, RiTimeLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
-import type { Permission, PermissionResponse } from '@/types/permission';
+import type { PermissionRequest, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -10,7 +10,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { DiffPreview, WritePreview } from './DiffPreview';
 
 interface PermissionCardProps {
-  permission: Permission;
+  permission: PermissionRequest;
   onResponse?: (response: 'once' | 'always' | 'reject') => void;
 }
 
@@ -82,7 +82,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
     return null;
   }
 
-  const toolName = permission.type || 'Unknown Tool';
+  const toolName = permission.permission || 'unknown';
   const tool = toolName.toLowerCase();
 
   const getMeta = (key: string, fallback: string = ''): string => {
@@ -106,9 +106,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       const description = getMeta('description');
       const workingDir = getMeta('cwd') || getMeta('working_directory') || getMeta('directory') || getMeta('path');
       const timeout = getMetaNum('timeout');
-
-      const commandInTitle = permission.title === command;
-
+ 
       return (
         <>
           {description && (
@@ -125,7 +123,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
             </div>
           )}
           {}
-          {command && !commandInTitle && (
+          {command && (
             <div>
               <SyntaxHighlighter
                 language="bash"
@@ -329,110 +327,15 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
 
           {}
           <div className="px-2 py-2">
-            {/* Show patterns being requested */}
-            {(permission.patterns as string[]) && (permission.patterns as string[]).length > 0 && (
+            {permission.patterns.length > 0 && (
               <div className="mb-2">
                 <div className="typography-meta text-muted-foreground mb-1">Patterns:</div>
                 <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
-                  {(permission.patterns as string[]).join(", ")}
+                  {permission.patterns.join(", ")}
                 </code>
               </div>
             )}
 
-            {!((permission.patterns as string[]) && (permission.patterns as string[]).length > 0) &&
-             (permission.pattern as string | string[]) &&
-             <div className="mb-2">
-               <div className="typography-meta text-muted-foreground mb-1">Pattern:</div>
-               <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
-                 {Array.isArray(permission.pattern) ? permission.pattern.join(", ") : permission.pattern}
-               </code>
-             </div>
-            }
-
-            {(() => {
-
-              let primaryContent = '';
-              let primaryLanguage = 'text';
-              let shouldHighlight = false;
-
-              if (tool === 'bash' || tool === 'shell' || tool === 'shell_command') {
-                primaryContent = getMeta('command') || getMeta('cmd') || getMeta('script');
-                primaryLanguage = 'bash';
-                shouldHighlight = true;
-              }
-
-              else if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool' || tool === 'write' || tool === 'create' || tool === 'file_write') {
-                primaryContent = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
-                shouldHighlight = false;
-              }
-
-              else if (tool === 'webfetch' || tool === 'fetch') {
-                primaryContent = getMeta('url') || getMeta('uri') || getMeta('endpoint');
-                shouldHighlight = false;
-              }
-
-              const titleMatchesContent = permission.title === primaryContent;
-
-              if (titleMatchesContent && primaryContent && shouldHighlight) {
-                return (
-                  <div className="mb-3">
-                    <SyntaxHighlighter
-                      language={primaryLanguage}
-                      style={syntaxTheme}
-                      PreTag="div"
-                      customStyle={{
-                        margin: 0,
-                        padding: '0.5rem',
-                        fontSize: 'var(--text-meta)',
-                        lineHeight: '1.25rem',
-                        background: 'rgb(var(--muted) / 0.3)',
-                        borderRadius: '0.25rem',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        overflowWrap: 'break-word',
-                        overflow: 'visible'
-                      }}
-                      codeTagProps={{
-                        style: {
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                          overflowWrap: 'break-word'
-                        }
-                      }}
-                      wrapLongLines={true}
-                    >
-                      {primaryContent}
-                    </SyntaxHighlighter>
-                  </div>
-                );
-              }
-
-              if (titleMatchesContent && primaryContent && !shouldHighlight) {
-                return (
-                  <div className="mb-3">
-                    <code className="typography-ui-label px-2 py-1 bg-muted/30 rounded block break-all">
-                      {primaryContent}
-                    </code>
-                  </div>
-                );
-              }
-
-              if (permission.title) {
-                return (
-                  <div className={cn(
-                    "typography-ui-label text-foreground mb-3",
-
-                    (shouldHighlight || primaryContent) && "font-mono"
-                  )}>
-                    {permission.title}
-                  </div>
-                );
-              }
-
-              return null;
-            })()}
-
-            {}
             {renderToolContent()}
           </div>
 
@@ -460,7 +363,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               Allow Once
             </button>
 
-            {(permission.always as string[]) && (permission.always as string[]).length > 0 ? (
+            {permission.always.length > 0 ? (
               <button
                 onClick={() => handleResponse('always')}
                 disabled={isResponding}

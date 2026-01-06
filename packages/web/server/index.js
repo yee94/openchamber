@@ -6,6 +6,7 @@ import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
 
@@ -315,6 +316,76 @@ const writeSettingsToDisk = async (settings) => {
   }
 };
 
+const resolveDirectoryCandidate = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = normalizeDirectoryPath(trimmed);
+  return path.resolve(normalized);
+};
+
+const validateDirectoryPath = async (candidate) => {
+  const resolved = resolveDirectoryCandidate(candidate);
+  if (!resolved) {
+    return { ok: false, error: 'Directory parameter is required' };
+  }
+  try {
+    const stats = await fsPromises.stat(resolved);
+    if (!stats.isDirectory()) {
+      return { ok: false, error: 'Specified path is not a directory' };
+    }
+    return { ok: true, directory: resolved };
+  } catch (error) {
+    const err = error;
+    if (err && typeof err === 'object' && err.code === 'ENOENT') {
+      return { ok: false, error: 'Directory not found' };
+    }
+    if (err && typeof err === 'object' && err.code === 'EACCES') {
+      return { ok: false, error: 'Access to directory denied' };
+    }
+    return { ok: false, error: 'Failed to validate directory' };
+  }
+};
+
+const resolveProjectDirectory = async (req) => {
+  const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+  const queryDirectory = Array.isArray(req.query?.directory)
+    ? req.query.directory[0]
+    : req.query?.directory;
+  const requested = headerDirectory || queryDirectory || null;
+
+  if (requested) {
+    const validated = await validateDirectoryPath(requested);
+    if (!validated.ok) {
+      return { directory: null, error: validated.error };
+    }
+    return { directory: validated.directory, error: null };
+  }
+
+  const settings = await readSettingsFromDiskMigrated();
+  const projects = sanitizeProjects(settings.projects) || [];
+  if (projects.length === 0) {
+    return { directory: null, error: 'Directory parameter or active project is required' };
+  }
+
+  const activeId = typeof settings.activeProjectId === 'string' ? settings.activeProjectId : '';
+  const active = projects.find((project) => project.id === activeId) || projects[0];
+  if (!active || !active.path) {
+    return { directory: null, error: 'Directory parameter or active project is required' };
+  }
+
+  const validated = await validateDirectoryPath(active.path);
+  if (!validated.ok) {
+    return { directory: null, error: validated.error };
+  }
+
+  return { directory: validated.directory, error: null };
+};
+
 const sanitizeTypographySizesPartial = (input) => {
   if (!input || typeof input !== 'object') {
     return undefined;
@@ -384,6 +455,47 @@ const sanitizeSkillCatalogs = (input) => {
   return result;
 };
 
+const sanitizeProjects = (input) => {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+
+  const result = [];
+  const seenIds = new Set();
+  const seenPaths = new Set();
+
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') continue;
+
+    const candidate = entry;
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
+    const normalizedPath = rawPath ? path.resolve(normalizeDirectoryPath(rawPath)) : '';
+    const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+    const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
+    const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt)
+      ? Number(candidate.lastOpenedAt)
+      : null;
+
+    if (!id || !normalizedPath) continue;
+    if (seenIds.has(id)) continue;
+    if (seenPaths.has(normalizedPath)) continue;
+
+    seenIds.add(id);
+    seenPaths.add(normalizedPath);
+
+    result.push({
+      id,
+      path: normalizedPath,
+      ...(label ? { label } : {}),
+      ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
+      ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
+    });
+  }
+
+  return result;
+};
+
 const sanitizeSettingsUpdate = (payload) => {
   if (!payload || typeof payload !== 'object') {
     return {};
@@ -412,6 +524,15 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
     result.homeDirectory = candidate.homeDirectory;
+  }
+  if (Array.isArray(candidate.projects)) {
+    const projects = sanitizeProjects(candidate.projects);
+    if (projects) {
+      result.projects = projects;
+    }
+  }
+  if (typeof candidate.activeProjectId === 'string' && candidate.activeProjectId.length > 0) {
+    result.activeProjectId = candidate.activeProjectId;
   }
 
   if (Array.isArray(candidate.approvedDirectories)) {
@@ -481,6 +602,16 @@ const mergePersistedSettings = (current, changes) => {
   if (typeof changes.homeDirectory === 'string' && changes.homeDirectory.length > 0) {
     additionalApproved.push(changes.homeDirectory);
   }
+  const projectEntries = Array.isArray(changes.projects)
+    ? changes.projects
+    : Array.isArray(current.projects)
+      ? current.projects
+      : [];
+  projectEntries.forEach((project) => {
+    if (project && typeof project.path === 'string' && project.path.length > 0) {
+      additionalApproved.push(project.path);
+    }
+  });
   const approvedSource = [...baseApproved, ...additionalApproved];
 
   const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
@@ -535,10 +666,124 @@ const formatSettingsResponse = (settings) => {
   };
 };
 
+const validateProjectEntries = async (projects) => {
+  if (!Array.isArray(projects)) {
+    return [];
+  }
+
+  const results = [];
+  for (const project of projects) {
+    if (!project || typeof project.path !== 'string' || project.path.length === 0) {
+      continue;
+    }
+    try {
+      const stats = await fsPromises.stat(project.path);
+      if (!stats.isDirectory()) {
+        continue;
+      }
+      results.push(project);
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        continue;
+      }
+      continue;
+    }
+  }
+
+  return results;
+};
+
+const migrateSettingsFromLegacyLastDirectory = async (current) => {
+  const settings = current && typeof current === 'object' ? current : {};
+  const now = Date.now();
+
+  const sanitizedProjects = sanitizeProjects(settings.projects) || [];
+  let nextProjects = sanitizedProjects;
+  let nextActiveProjectId =
+    typeof settings.activeProjectId === 'string' ? settings.activeProjectId : undefined;
+
+  let changed = false;
+
+  if (nextProjects.length === 0) {
+    const legacy = typeof settings.lastDirectory === 'string' ? settings.lastDirectory.trim() : '';
+    const candidate = legacy ? resolveDirectoryCandidate(legacy) : null;
+
+    if (candidate) {
+      try {
+        const stats = await fsPromises.stat(candidate);
+        if (stats.isDirectory()) {
+          const id = crypto.randomUUID();
+          nextProjects = [
+            {
+              id,
+              path: candidate,
+              addedAt: now,
+              lastOpenedAt: now,
+            },
+          ];
+          nextActiveProjectId = id;
+          changed = true;
+        }
+      } catch {
+        // ignore invalid lastDirectory
+      }
+    }
+  }
+
+  if (nextProjects.length > 0) {
+    const active = nextProjects.find((project) => project.id === nextActiveProjectId) || null;
+    if (!active) {
+      nextActiveProjectId = nextProjects[0].id;
+      changed = true;
+    }
+  } else if (nextActiveProjectId) {
+    nextActiveProjectId = undefined;
+    changed = true;
+  }
+
+  if (!changed) {
+    return { settings, changed: false };
+  }
+
+  const merged = mergePersistedSettings(settings, {
+    ...settings,
+    projects: nextProjects,
+    ...(nextActiveProjectId ? { activeProjectId: nextActiveProjectId } : { activeProjectId: undefined }),
+  });
+
+  return { settings: merged, changed: true };
+};
+
+const readSettingsFromDiskMigrated = async () => {
+  const current = await readSettingsFromDisk();
+  const { settings, changed } = await migrateSettingsFromLegacyLastDirectory(current);
+  if (changed) {
+    await writeSettingsToDisk(settings);
+  }
+  return settings;
+};
+
 const persistSettings = async (changes) => {
   const current = await readSettingsFromDisk();
   const sanitized = sanitizeSettingsUpdate(changes);
-  const next = mergePersistedSettings(current, sanitized);
+  let next = mergePersistedSettings(current, sanitized);
+
+  if (Array.isArray(next.projects)) {
+    const validated = await validateProjectEntries(next.projects);
+    next = { ...next, projects: validated };
+  }
+
+  if (Array.isArray(next.projects) && next.projects.length > 0) {
+    const activeId = typeof next.activeProjectId === 'string' ? next.activeProjectId : '';
+    const active = next.projects.find((project) => project.id === activeId) || null;
+    if (!active) {
+      next = { ...next, activeProjectId: next.projects[0].id };
+    }
+  } else if (next.activeProjectId) {
+    next = { ...next, activeProjectId: undefined };
+  }
+
   await writeSettingsToDisk(next);
   return formatSettingsResponse(next);
 };
@@ -551,7 +796,7 @@ const getHmrState = () => {
     globalThis[HMR_STATE_KEY] = {
       openCodeProcess: null,
       openCodePort: null,
-      openCodeWorkingDirectory: process.cwd(),
+      openCodeWorkingDirectory: os.homedir(),
       isShuttingDown: false,
       signalsAttached: false,
     };
@@ -2152,6 +2397,10 @@ async function main(options = {}) {
       res.flushHeaders();
     }
 
+    const heartbeatInterval = setInterval(() => {
+      writeSseEvent(res, { type: 'openchamber:heartbeat', timestamp: Date.now() });
+    }, 30000);
+
     const decoder = new TextDecoder();
     const reader = upstream.body.getReader();
     let buffer = '';
@@ -2194,6 +2443,7 @@ async function main(options = {}) {
         console.warn('SSE proxy stream error:', error);
       }
     } finally {
+      clearInterval(heartbeatInterval);
       cleanup();
       try {
         res.end();
@@ -2220,11 +2470,13 @@ async function main(options = {}) {
       return res.status(503).json({ error: 'OpenCode service unavailable' });
     }
 
+    const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
     const directoryParam = Array.isArray(req.query.directory)
       ? req.query.directory[0]
       : req.query.directory;
-    if (typeof directoryParam === 'string' && directoryParam.trim().length > 0) {
-      targetUrl.searchParams.set('directory', directoryParam.trim());
+    const resolvedDirectory = headerDirectory || directoryParam || null;
+    if (typeof resolvedDirectory === 'string' && resolvedDirectory.trim().length > 0) {
+      targetUrl.searchParams.set('directory', resolvedDirectory.trim());
     }
 
     const headers = {
@@ -2271,6 +2523,10 @@ async function main(options = {}) {
       res.flushHeaders();
     }
 
+    const heartbeatInterval = setInterval(() => {
+      writeSseEvent(res, { type: 'openchamber:heartbeat', timestamp: Date.now() });
+    }, 30000);
+
     const decoder = new TextDecoder();
     const reader = upstream.body.getReader();
     let buffer = '';
@@ -2313,6 +2569,7 @@ async function main(options = {}) {
         console.warn('SSE proxy stream error:', error);
       }
     } finally {
+      clearInterval(heartbeatInterval);
       cleanup();
       try {
         res.end();
@@ -2324,7 +2581,7 @@ async function main(options = {}) {
 
   app.get('/api/config/settings', async (_req, res) => {
     try {
-      const settings = await readSettingsFromDisk();
+      const settings = await readSettingsFromDiskMigrated();
       res.json(formatSettingsResponse(settings));
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -2345,6 +2602,7 @@ async function main(options = {}) {
   const {
     getAgentSources,
     getAgentScope,
+    getAgentConfig,
     createAgent,
     updateAgent,
     deleteAgent,
@@ -2357,16 +2615,23 @@ async function main(options = {}) {
     COMMAND_SCOPE
   } = await import('./lib/opencode-config.js');
 
-  app.get('/api/config/agents/:name', (req, res) => {
+  app.get('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
-      const sources = getAgentSources(agentName, workingDirectory);
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+      const sources = getAgentSources(agentName, directory);
+
+      const scope = sources.md.exists
+        ? sources.md.scope
+        : (sources.json.exists ? sources.json.scope : null);
 
       res.json({
         name: agentName,
         sources: sources,
-        scope: sources.md.scope,
+        scope,
         isBuiltIn: !sources.md.exists && !sources.json.exists
       });
     } catch (error) {
@@ -2375,17 +2640,36 @@ async function main(options = {}) {
     }
   });
 
+  app.get('/api/config/agents/:name/config', async (req, res) => {
+    try {
+      const agentName = req.params.name;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+
+      const configInfo = getAgentConfig(agentName, directory);
+      res.json(configInfo);
+    } catch (error) {
+      console.error('Failed to get agent config:', error);
+      res.status(500).json({ error: 'Failed to get agent configuration' });
+    }
+  });
+
   app.post('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;
       const { scope, ...config } = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
       console.log('[Server] Creating agent:', agentName);
       console.log('[Server] Config received:', JSON.stringify(config, null, 2));
-      console.log('[Server] Scope:', scope, 'Working directory:', workingDirectory);
+      console.log('[Server] Scope:', scope, 'Working directory:', directory);
 
-      createAgent(agentName, config, workingDirectory, scope);
+      createAgent(agentName, config, directory, scope);
       await refreshOpenCodeAfterConfigChange('agent creation', {
         agentName
       });
@@ -2406,13 +2690,16 @@ async function main(options = {}) {
     try {
       const agentName = req.params.name;
       const updates = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
       console.log(`[Server] Updating agent: ${agentName}`);
       console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
-      console.log('[Server] Working directory:', workingDirectory);
+      console.log('[Server] Working directory:', directory);
 
-      updateAgent(agentName, updates, workingDirectory);
+      updateAgent(agentName, updates, directory);
       await refreshOpenCodeAfterConfigChange('agent update');
 
       console.log(`[Server] Agent ${agentName} updated successfully`);
@@ -2433,9 +2720,12 @@ async function main(options = {}) {
   app.delete('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
-      deleteAgent(agentName, workingDirectory);
+      deleteAgent(agentName, directory);
       await refreshOpenCodeAfterConfigChange('agent deletion');
 
       res.json({
@@ -2450,16 +2740,23 @@ async function main(options = {}) {
     }
   });
 
-  app.get('/api/config/commands/:name', (req, res) => {
+  app.get('/api/config/commands/:name', async (req, res) => {
     try {
       const commandName = req.params.name;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
-      const sources = getCommandSources(commandName, workingDirectory);
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+      const sources = getCommandSources(commandName, directory);
+
+      const scope = sources.md.exists
+        ? sources.md.scope
+        : (sources.json.exists ? sources.json.scope : null);
 
       res.json({
         name: commandName,
         sources: sources,
-        scope: sources.md.scope,
+        scope,
         isBuiltIn: !sources.md.exists && !sources.json.exists
       });
     } catch (error) {
@@ -2472,13 +2769,16 @@ async function main(options = {}) {
     try {
       const commandName = req.params.name;
       const { scope, ...config } = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
       console.log('[Server] Creating command:', commandName);
       console.log('[Server] Config received:', JSON.stringify(config, null, 2));
-      console.log('[Server] Scope:', scope, 'Working directory:', workingDirectory);
+      console.log('[Server] Scope:', scope, 'Working directory:', directory);
 
-      createCommand(commandName, config, workingDirectory, scope);
+      createCommand(commandName, config, directory, scope);
       await refreshOpenCodeAfterConfigChange('command creation', {
         commandName
       });
@@ -2499,13 +2799,16 @@ async function main(options = {}) {
     try {
       const commandName = req.params.name;
       const updates = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
       console.log(`[Server] Updating command: ${commandName}`);
       console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
-      console.log('[Server] Working directory:', workingDirectory);
+      console.log('[Server] Working directory:', directory);
 
-      updateCommand(commandName, updates, workingDirectory);
+      updateCommand(commandName, updates, directory);
       await refreshOpenCodeAfterConfigChange('command update');
 
       console.log(`[Server] Command ${commandName} updated successfully`);
@@ -2526,9 +2829,12 @@ async function main(options = {}) {
   app.delete('/api/config/commands/:name', async (req, res) => {
     try {
       const commandName = req.params.name;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
-      deleteCommand(commandName, workingDirectory);
+      deleteCommand(commandName, directory);
       await refreshOpenCodeAfterConfigChange('command deletion');
 
       res.json({
@@ -2559,14 +2865,17 @@ async function main(options = {}) {
   } = await import('./lib/opencode-config.js');
 
   // List all discovered skills
-  app.get('/api/config/skills', (req, res) => {
+  app.get('/api/config/skills', async (req, res) => {
     try {
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
-      const skills = discoverSkills(workingDirectory);
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+      const skills = discoverSkills(directory);
       
       // Enrich with full sources info
       const enrichedSkills = skills.map(skill => {
-        const sources = getSkillSources(skill.name, workingDirectory);
+        const sources = getSkillSources(skill.name, directory);
         return {
           ...skill,
           sources
@@ -2616,7 +2925,10 @@ async function main(options = {}) {
 
   app.get('/api/config/skills/catalog', async (req, res) => {
     try {
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
       const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
 
       const curatedSources = getCuratedSkillsSources();
@@ -2634,7 +2946,7 @@ async function main(options = {}) {
 
       const sources = [...curatedSources, ...customSources];
 
-      const discovered = discoverSkills(workingDirectory);
+      const discovered = discoverSkills(directory);
       const installedByName = new Map(discovered.map((s) => [s.name, s]));
 
       const itemsBySource = {};
@@ -2738,12 +3050,16 @@ async function main(options = {}) {
         conflictDecisions,
       } = req.body || {};
 
-      const workingDirectory = req.query.directory;
-      if (scope === 'project' && !workingDirectory) {
-        return res.status(400).json({
-          ok: false,
-          error: { kind: 'invalidSource', message: 'Project installs require a directory parameter' },
-        });
+      let workingDirectory = null;
+      if (scope === 'project') {
+        const resolved = await resolveProjectDirectory(req);
+        if (!resolved.directory) {
+          return res.status(400).json({
+            ok: false,
+            error: { kind: 'invalidSource', message: resolved.error || 'Project installs require a directory parameter' },
+          });
+        }
+        workingDirectory = resolved.directory;
       }
       const identity = resolveGitIdentity(gitIdentityId);
 
@@ -2785,11 +3101,14 @@ async function main(options = {}) {
   });
 
   // Get single skill sources
-  app.get('/api/config/skills/:name', (req, res) => {
+  app.get('/api/config/skills/:name', async (req, res) => {
     try {
       const skillName = req.params.name;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
-      const sources = getSkillSources(skillName, workingDirectory);
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+      const sources = getSkillSources(skillName, directory);
 
       res.json({
         name: skillName,
@@ -2805,13 +3124,16 @@ async function main(options = {}) {
   });
 
   // Get skill supporting file content
-  app.get('/api/config/skills/:name/files/*filePath', (req, res) => {
+  app.get('/api/config/skills/:name/files/*filePath', async (req, res) => {
     try {
       const skillName = req.params.name;
       const filePath = decodeURIComponent(req.params.filePath); // Decode URL-encoded path
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
       
-      const sources = getSkillSources(skillName, workingDirectory);
+      const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
@@ -2833,12 +3155,15 @@ async function main(options = {}) {
     try {
       const skillName = req.params.name;
       const { scope, ...config } = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
       console.log('[Server] Creating skill:', skillName);
-      console.log('[Server] Scope:', scope, 'Working directory:', workingDirectory);
+      console.log('[Server] Scope:', scope, 'Working directory:', directory);
 
-      createSkill(skillName, config, workingDirectory, scope);
+      createSkill(skillName, config, directory, scope);
       // Skills are just files - OpenCode loads them on-demand, no restart needed
 
       res.json({
@@ -2857,12 +3182,15 @@ async function main(options = {}) {
     try {
       const skillName = req.params.name;
       const updates = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
       console.log(`[Server] Updating skill: ${skillName}`);
-      console.log('[Server] Working directory:', workingDirectory);
+      console.log('[Server] Working directory:', directory);
 
-      updateSkill(skillName, updates, workingDirectory);
+      updateSkill(skillName, updates, directory);
       // Skills are just files - OpenCode loads them on-demand, no restart needed
 
       res.json({
@@ -2882,9 +3210,12 @@ async function main(options = {}) {
       const skillName = req.params.name;
       const filePath = decodeURIComponent(req.params.filePath); // Decode URL-encoded path
       const { content } = req.body;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
       
-      const sources = getSkillSources(skillName, workingDirectory);
+      const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
@@ -2906,9 +3237,12 @@ async function main(options = {}) {
     try {
       const skillName = req.params.name;
       const filePath = decodeURIComponent(req.params.filePath); // Decode URL-encoded path
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
       
-      const sources = getSkillSources(skillName, workingDirectory);
+      const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
@@ -2929,9 +3263,12 @@ async function main(options = {}) {
   app.delete('/api/config/skills/:name', async (req, res) => {
     try {
       const skillName = req.params.name;
-      const workingDirectory = req.query.directory || openCodeWorkingDirectory;
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
 
-      deleteSkill(skillName, workingDirectory);
+      deleteSkill(skillName, directory);
       // Skills are just files - OpenCode loads them on-demand, no restart needed
 
       res.json({
@@ -3677,40 +4014,41 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Path is required' });
       }
 
-      const resolvedPath = path.resolve(normalizeDirectoryPath(requestedPath));
-      let stats;
-      try {
-        stats = await fsPromises.stat(resolvedPath);
-      } catch (error) {
-        const err = error;
-        if (err && typeof err === 'object' && 'code' in err) {
-          if (err.code === 'ENOENT') {
-            return res.status(404).json({ error: 'Directory not found' });
-          }
-          if (err.code === 'EACCES') {
-            return res.status(403).json({ error: 'Access to directory denied' });
-          }
-        }
-        throw error;
+      const validated = await validateDirectoryPath(requestedPath);
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
       }
 
-      if (!stats.isDirectory()) {
-        return res.status(400).json({ error: 'Specified path is not a directory' });
-      }
+      const resolvedPath = validated.directory;
+      const currentSettings = await readSettingsFromDisk();
+      const existingProjects = sanitizeProjects(currentSettings.projects) || [];
+      const existing = existingProjects.find((project) => project.path === resolvedPath) || null;
 
-      if (openCodeWorkingDirectory === resolvedPath && openCodeProcess && openCodeProcess.exitCode === null) {
-        return res.json({ success: true, restarted: false, path: resolvedPath });
-      }
+      const nextProjects = existing
+        ? existingProjects
+        : [
+            ...existingProjects,
+            {
+              id: crypto.randomUUID(),
+              path: resolvedPath,
+              addedAt: Date.now(),
+              lastOpenedAt: Date.now(),
+            },
+          ];
 
-      openCodeWorkingDirectory = resolvedPath;
-      syncToHmrState();
+      const activeProjectId = existing ? existing.id : nextProjects[nextProjects.length - 1].id;
 
-      await refreshOpenCodeAfterConfigChange('directory change');
+      const updated = await persistSettings({
+        projects: nextProjects,
+        activeProjectId,
+        lastDirectory: resolvedPath,
+      });
 
       res.json({
         success: true,
-        restarted: true,
-        path: resolvedPath
+        restarted: false,
+        path: resolvedPath,
+        settings: updated,
       });
     } catch (error) {
       console.error('Failed to update OpenCode working directory:', error);

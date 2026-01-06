@@ -57,7 +57,7 @@ fn normalize_api_prefix(prefix: &str) -> String {
 }
 
 impl OpenCodeManager {
-    pub fn new_with_directory(initial_dir: Option<PathBuf>) -> Self {
+    pub fn new_with_directory(_initial_dir: Option<PathBuf>) -> Self {
         let desired_port = std::env::var("OPENCHAMBER_OPENCODE_PORT")
             .ok()
             .and_then(|raw| raw.parse::<u16>().ok())
@@ -88,7 +88,7 @@ impl OpenCodeManager {
         }
 
         let env = build_augmented_env();
-        let working_dir = initial_dir
+        let working_dir = dirs::home_dir()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
         info!(
@@ -177,11 +177,13 @@ impl OpenCodeManager {
         self.graceful_stop().await
     }
 
+    #[allow(dead_code)]
     pub async fn set_working_directory(&self, new_dir: PathBuf) -> Result<()> {
         *self.working_dir.write() = new_dir;
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_working_directory(&self) -> PathBuf {
         self.working_dir.read().clone()
     }
@@ -191,7 +193,7 @@ impl OpenCodeManager {
             return Err(anyhow!("Cannot detect API prefix without port"));
         };
 
-        // Try empty prefix first (OpenCode default), then /api (some installations)
+        // Try no prefix first, then /api (compatibility).
         let candidates = ["", "/api"];
         for candidate in candidates {
             let base = if candidate.is_empty() {

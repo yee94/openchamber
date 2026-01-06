@@ -230,7 +230,6 @@ const getTaskSummaryLabel = (entry: TaskToolSummaryEntry): string => {
 };
 
 const stripTaskMetadataFromOutput = (output: string): string => {
-    // OpenCode appends a non-user-facing session marker for task tools.
     // Strip only a trailing <task_metadata>...</task_metadata> block.
     return output.replace(/\n*<task_metadata>[\s\S]*?<\/task_metadata>\s*$/i, '').trimEnd();
 };

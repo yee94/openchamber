@@ -32,6 +32,16 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
     localStorage.setItem('homeDirectory', settings.homeDirectory);
     window.__OPENCHAMBER_HOME__ = settings.homeDirectory;
   }
+  if (Array.isArray(settings.projects) && settings.projects.length > 0) {
+    localStorage.setItem('projects', JSON.stringify(settings.projects));
+  } else {
+    localStorage.removeItem('projects');
+  }
+  if (settings.activeProjectId) {
+    localStorage.setItem('activeProjectId', settings.activeProjectId);
+  } else {
+    localStorage.removeItem('activeProjectId');
+  }
   if (Array.isArray(settings.pinnedDirectories) && settings.pinnedDirectories.length > 0) {
     localStorage.setItem('pinnedDirectories', JSON.stringify(settings.pinnedDirectories));
   } else {
@@ -76,6 +86,55 @@ const sanitizeSkillCatalogs = (value: unknown): DesktopSettings['skillCatalogs']
   }
 
   return result;
+};
+
+const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const result: NonNullable<DesktopSettings['projects']> = [];
+  const seenIds = new Set<string>();
+  const seenPaths = new Set<string>();
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const candidate = entry as Record<string, unknown>;
+
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
+    if (!id || !rawPath) continue;
+
+    const normalizedPath = rawPath === '/' ? rawPath : rawPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!normalizedPath) continue;
+
+    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue;
+    seenIds.add(id);
+    seenPaths.add(normalizedPath);
+
+    const project: NonNullable<DesktopSettings['projects']>[number] = {
+      id,
+      path: normalizedPath,
+    };
+
+    if (typeof candidate.label === 'string' && candidate.label.trim().length > 0) {
+      project.label = candidate.label.trim();
+    }
+    if (typeof candidate.addedAt === 'number' && Number.isFinite(candidate.addedAt) && candidate.addedAt >= 0) {
+      project.addedAt = candidate.addedAt;
+    }
+    if (
+      typeof candidate.lastOpenedAt === 'number' &&
+      Number.isFinite(candidate.lastOpenedAt) &&
+      candidate.lastOpenedAt >= 0
+    ) {
+      project.lastOpenedAt = candidate.lastOpenedAt;
+    }
+
+    result.push(project);
+  }
+
+  return result.length > 0 ? result : undefined;
 };
 
 const getPersistApi = (): PersistApi | undefined => {
@@ -138,6 +197,15 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
     result.homeDirectory = candidate.homeDirectory;
   }
+
+  const projects = sanitizeProjects(candidate.projects);
+  if (projects) {
+    result.projects = projects;
+  }
+  if (typeof candidate.activeProjectId === 'string' && candidate.activeProjectId.length > 0) {
+    result.activeProjectId = candidate.activeProjectId;
+  }
+
   if (Array.isArray(candidate.approvedDirectories)) {
     result.approvedDirectories = candidate.approvedDirectories.filter(
       (entry): entry is string => typeof entry === 'string' && entry.length > 0

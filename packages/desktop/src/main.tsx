@@ -144,22 +144,12 @@ window.opencodeDesktop = {
     }
   },
   async getSettings(): Promise<DesktopSettings> {
-    try {
-      const result = await invoke<{ settings: DesktopSettings; source: string }>('load_settings');
-      return result.settings;
-    } catch (error) {
-      console.error('[desktop] Error loading settings:', error);
-      return {} as DesktopSettings;
-    }
+    const result = await invoke<{ settings: DesktopSettings; source: string }>('load_settings');
+    return result.settings;
   },
   async updateSettings(changes: Partial<DesktopSettings>): Promise<DesktopSettings> {
-    try {
-      const result = await invoke<DesktopSettings>('save_settings', { changes });
-      return result;
-    } catch (error) {
-      console.error('[desktop] Error updating settings:', error);
-      return {};
-    }
+    const result = await invoke<DesktopSettings>('save_settings', { changes });
+    return result;
   },
   async restartOpenCode() {
     try {
@@ -188,22 +178,42 @@ window.opencodeDesktop = {
   markRendererReady() {
 
   },
-  async requestDirectoryAccess() {
+  async requestDirectoryAccess(directoryPath?: string) {
     try {
+      const normalized = typeof directoryPath === 'string' ? directoryPath.trim() : '';
+
+      // When the UI already picked a path (typed / directory tree), skip native dialog.
+      if (normalized.length > 0) {
+        const result = await invoke<{
+          success: boolean;
+          path?: string;
+          projectId?: string;
+          error?: string;
+        }>('process_directory_selection', {
+          path: normalized,
+        });
+
+        return result;
+      }
 
       const { open } = await import('@tauri-apps/plugin-dialog');
       const selected = await open({
         directory: true,
         multiple: false,
-        title: 'Select Working Directory'
+        title: 'Select Working Directory',
       });
 
       if (!selected || typeof selected !== 'string') {
         return { success: false, error: 'Directory selection cancelled' };
       }
 
-      const result = await invoke<{ success: boolean; path?: string; error?: string }>('process_directory_selection', {
-        path: selected
+      const result = await invoke<{
+        success: boolean;
+        path?: string;
+        projectId?: string;
+        error?: string;
+      }>('process_directory_selection', {
+        path: selected,
       });
 
       return result;

@@ -1,11 +1,11 @@
 import React from 'react';
 import { RiCheckLine, RiCloseLine, RiTimeLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
-import type { Permission, PermissionResponse } from '@/types/permission';
+import type { PermissionRequest as PermissionRequestPayload, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
 
 interface PermissionRequestProps {
-  permission: Permission;
+  permission: PermissionRequestPayload;
   onResponse?: (response: 'once' | 'always' | 'reject') => void;
 }
 
@@ -35,7 +35,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
 
   const command = typeof permission.metadata.command === 'string'
     ? permission.metadata.command
-    : permission.title;
+    : (permission.patterns?.[0] ?? permission.permission);
 
   return (
     <div className="flex items-center justify-between">

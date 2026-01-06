@@ -8,7 +8,7 @@ export const useFileSystemAccess = () => {
     setIsDesktop(isDesktopRuntime());
   }, []);
 
-  const requestAccess = useCallback(async (directoryPath: string): Promise<{ success: boolean; path?: string; error?: string }> => {
+  const requestAccess = useCallback(async (directoryPath: string): Promise<{ success: boolean; path?: string; projectId?: string; error?: string }> => {
     if (!isDesktop) {
       return { success: true, path: directoryPath };
     }

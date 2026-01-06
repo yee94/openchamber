@@ -1,3 +1,5 @@
+import type { ProjectEntry } from '@/lib/api/types';
+
 export type AssistantNotificationPayload = {
   title?: string;
   body?: string;
@@ -43,6 +45,8 @@ export type DesktopSettings = {
   darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
+  projects?: ProjectEntry[];
+  activeProjectId?: string;
   approvedDirectories?: string[];
   securityScopedBookmarks?: string[];
   pinnedDirectories?: string[];
@@ -72,7 +76,7 @@ export type DesktopApi = {
   getHomeDirectory?: () => Promise<{ success: boolean; path: string | null }>;
   getSettings?: () => Promise<DesktopSettings>;
   updateSettings?: (changes: Partial<DesktopSettings>) => Promise<DesktopSettings>;
-  requestDirectoryAccess?: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  requestDirectoryAccess?: (path: string) => Promise<{ success: boolean; path?: string; projectId?: string; error?: string }>;
   startAccessingDirectory?: (path: string) => Promise<{ success: boolean; error?: string }>;
   stopAccessingDirectory?: (path: string) => Promise<{ success: boolean; error?: string }>;
   notifyAssistantCompletion?: (payload?: AssistantNotificationPayload) => Promise<{ success: boolean }>;
@@ -205,7 +209,7 @@ export const updateDesktopSettings = async (
 
 export const requestDirectoryAccess = async (
   directoryPath: string
-): Promise<{ success: boolean; path?: string; error?: string }> => {
+): Promise<{ success: boolean; path?: string; projectId?: string; error?: string }> => {
   const api = getDesktopApi();
   if (!api || !api.requestDirectoryAccess) {
     return { success: true, path: directoryPath };

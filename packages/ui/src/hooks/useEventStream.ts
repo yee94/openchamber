@@ -1,11 +1,12 @@
 import React from 'react';
-import { opencodeClient } from '@/lib/opencode/client';
+import { opencodeClient, type RoutedOpencodeEvent } from '@/lib/opencode/client';
 import { saveSessionCursor } from '@/lib/messageCursorPersistence';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import type { Part, Session, Message, Permission } from '@opencode-ai/sdk/v2';
+import type { Part, Session, Message } from '@opencode-ai/sdk/v2';
+import type { PermissionRequest } from '@/types/permission';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 
@@ -93,7 +94,9 @@ export const useEventStream = () => {
     sessions,
     getWorktreeMetadata,
     loadMessages,
-    loadSessions
+    loadSessions,
+    updateSession,
+    removeSessionFromStore
   } = useSessionStore();
 
   const { checkConnection } = useConfigStore();
@@ -126,6 +129,31 @@ export const useEventStream = () => {
     }
     return undefined;
   }, [activeSessionDirectory, fallbackDirectory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapPendingPermissions = async () => {
+      try {
+        const pending = await opencodeClient.listPendingPermissions();
+        if (cancelled || pending.length === 0) {
+          return;
+        }
+
+        pending.forEach((request) => {
+          addPermission(request as unknown as PermissionRequest);
+        });
+      } catch {
+        // ignored
+      }
+    };
+
+    void bootstrapPendingPermissions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addPermission]);
 
   const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
     if (typeof value !== 'string') return null;
@@ -250,6 +278,7 @@ export const useEventStream = () => {
   const isCleaningUpRef = React.useRef(false);
   const resyncInFlightRef = React.useRef<Promise<void> | null>(null);
   const lastResyncAtRef = React.useRef(0);
+  const permissionToastShownRef = React.useRef<Set<string>>(new Set());
 
   const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
     if (typeof document === 'undefined') return 'visible';
@@ -265,7 +294,6 @@ export const useEventStream = () => {
   const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const lastEventTimestampRef = React.useRef<number>(Date.now());
   const isDesktopRuntimeRef = React.useRef<boolean>(false);
-  const activityStreamAbortControllerRef = React.useRef<AbortController | null>(null);
 
   const maybeBootstrapIfStale = React.useCallback(
     (reason: string) => {
@@ -299,7 +327,7 @@ export const useEventStream = () => {
   }, [currentSessionId]);
 
   const requestSessionMetadataRefresh = React.useCallback(
-    (sessionId: string | undefined | null) => {
+    (sessionId: string | undefined | null, directoryOverride?: string | null) => {
       if (!sessionId) return;
 
       const now = Date.now();
@@ -310,9 +338,35 @@ export const useEventStream = () => {
 
       timestamps.set(sessionId, now);
 
+      const resolveDirectoryForSession = (id: string): string | null => {
+        if (typeof directoryOverride === 'string' && directoryOverride.trim().length > 0) {
+          return directoryOverride.trim();
+        }
+
+        try {
+          const metadata = getWorktreeMetadata?.(id);
+          if (metadata?.path) {
+            return metadata.path;
+          }
+        } catch {
+          // ignored
+        }
+
+        const sessionRecord = sessions.find((entry) => entry.id === id) as Session & { directory?: string | null };
+        if (sessionRecord && typeof sessionRecord.directory === 'string' && sessionRecord.directory.trim().length > 0) {
+          return sessionRecord.directory.trim();
+        }
+
+        return null;
+      };
+
       setTimeout(async () => {
         try {
-          const session = await opencodeClient.getSession(sessionId);
+          const directory = resolveDirectoryForSession(sessionId);
+          const session = directory
+            ? await opencodeClient.withDirectory(directory, () => opencodeClient.getSession(sessionId))
+            : await opencodeClient.getSession(sessionId);
+
           if (session) {
             const patch: Partial<Session> = {};
             if (typeof session.title === 'string' && session.title.length > 0) {
@@ -330,21 +384,9 @@ export const useEventStream = () => {
         }
       }, 100);
     },
-    [applySessionMetadata]
+    [applySessionMetadata, getWorktreeMetadata, sessions]
   );
 
-  const requestSessionListRefresh = React.useCallback(() => {
-    if (sessionRefreshTimeoutRef.current) return;
-
-    sessionRefreshTimeoutRef.current = setTimeout(() => {
-      sessionRefreshTimeoutRef.current = null;
-      try {
-        void loadSessions();
-      } catch (error) {
-        console.warn('Failed to refresh sessions after stream completion:', error);
-      }
-    }, 500);
-  }, [loadSessions]);
 
   const updateSessionActivityPhase = React.useCallback((sessionId: string, phase: 'idle' | 'busy' | 'cooldown') => {
     const storePhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
@@ -390,12 +432,28 @@ export const useEventStream = () => {
     sessionStatusLastRefreshAtRef.current = now;
 
     const applyStatusMap = (statusMap: Record<string, { type?: string }>) => {
+      const observed = new Set<string>();
+      const knownSessionIds = new Set(sessions.map((session) => session.id));
+
       Object.entries(statusMap).forEach(([sessionId, raw]) => {
         if (!sessionId || !raw) return;
+        observed.add(sessionId);
         const phase: 'idle' | 'busy' =
           raw.type === 'busy' || raw.type === 'retry' ? 'busy' : 'idle';
         updateSessionActivityPhase(sessionId, phase);
       });
+
+      // OpenCode's /session/status may omit idle sessions (returns only busy/retry).
+      // Treat missing entries as idle to avoid sessions getting stuck "working".
+      const currentPhases = useSessionStore.getState().sessionActivityPhase;
+      if (!currentPhases) return;
+
+      for (const [sessionId, phase] of currentPhases.entries()) {
+        if (!knownSessionIds.has(sessionId)) continue;
+        if ((phase === 'busy' || phase === 'cooldown') && !observed.has(sessionId)) {
+          updateSessionActivityPhase(sessionId, 'idle');
+        }
+      }
     };
 
     const task = (async (): Promise<void> => {
@@ -435,6 +493,19 @@ export const useEventStream = () => {
           Object.assign(merged, result.value);
         });
 
+        if (Object.keys(merged).length === 0) {
+          const hasActivePhases = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
+            (phase) => phase === 'busy' || phase === 'cooldown'
+          );
+
+          if (hasActivePhases) {
+            const healthy = await opencodeClient.checkHealth().catch(() => false);
+            if (!healthy) {
+              return;
+            }
+          }
+        }
+
         applyStatusMap(merged);
       } catch {
         // ignored
@@ -462,92 +533,6 @@ export const useEventStream = () => {
     previousSessionIdRef.current = nextSessionId;
     previousSessionDirectoryRef.current = nextDirectory;
   }, [currentSessionId, refreshSessionActivityStatus, resolveSessionDirectoryForStatus]);
-
-  const handleActivityEvent = React.useCallback((event: EventData) => {
-    if (!event?.type) return;
-
-    const props = (event.properties ?? {}) as Record<string, unknown>;
-
-    if (event.type === 'openchamber:session-activity') {
-      const sessionId =
-        typeof props.sessionId === 'string'
-          ? props.sessionId
-          : typeof props.sessionID === 'string'
-            ? props.sessionID
-            : null;
-      const phase = typeof props.phase === 'string' ? props.phase : null;
-      if (sessionId && (phase === 'idle' || phase === 'busy' || phase === 'cooldown')) {
-        updateSessionActivityPhase(sessionId, phase);
-        requestSessionListRefresh();
-      }
-      return;
-    }
-
-    if (event.type === 'session.status') {
-      const sessionId =
-        typeof props.sessionID === 'string'
-          ? props.sessionID
-          : typeof props.sessionId === 'string'
-            ? props.sessionId
-            : null;
-      const statusObj =
-        typeof props.status === 'object' && props.status !== null
-          ? (props.status as Record<string, unknown>)
-          : null;
-      const statusType = typeof statusObj?.type === 'string' ? (statusObj.type as string) : null;
-
-      if (sessionId && statusType) {
-        updateSessionActivityPhase(
-          sessionId,
-          statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle',
-        );
-        requestSessionListRefresh();
-      }
-      return;
-    }
-
-    if (event.type === 'session.idle') {
-      const sessionId =
-        typeof props.sessionID === 'string'
-          ? props.sessionID
-          : typeof props.sessionId === 'string'
-            ? props.sessionId
-            : null;
-      if (sessionId) {
-        updateSessionActivityPhase(sessionId, 'idle');
-        requestSessionListRefresh();
-      }
-      return;
-    }
-
-    if (event.type === 'message.updated' || event.type === 'message.part.updated') {
-      const messageInfo =
-        typeof props.info === 'object' && props.info !== null ? (props.info as Record<string, unknown>) : props;
-
-      const sessionId =
-        typeof (messageInfo as { sessionID?: unknown }).sessionID === 'string'
-          ? (messageInfo as { sessionID?: string }).sessionID
-          : typeof (messageInfo as { sessionId?: unknown }).sessionId === 'string'
-            ? (messageInfo as { sessionId?: string }).sessionId
-            : typeof props.sessionID === 'string'
-              ? (props.sessionID as string)
-              : typeof props.sessionId === 'string'
-                ? (props.sessionId as string)
-                : null;
-
-      const role = (messageInfo as { role?: unknown }).role;
-      const finish = (messageInfo as { finish?: unknown }).finish;
-
-      if (sessionId && role === 'assistant' && finish === 'stop') {
-        const currentPhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
-        if (currentPhase === 'busy') {
-          updateSessionActivityPhase(sessionId, 'cooldown');
-          requestSessionListRefresh();
-        }
-      }
-      return;
-    }
-  }, [requestSessionListRefresh, updateSessionActivityPhase]);
 
   const handleEvent = React.useCallback((event: EventData) => {
     lastEventTimestampRef.current = Date.now();
@@ -603,8 +588,7 @@ export const useEventStream = () => {
         const phase = typeof props.phase === 'string' ? props.phase : null;
         if (sessionId && (phase === 'idle' || phase === 'busy' || phase === 'cooldown')) {
           updateSessionActivityPhase(sessionId, phase);
-          // Refresh session list on activity changes (same trigger as activity indication)
-          requestSessionListRefresh();
+          requestSessionMetadataRefresh(sessionId, typeof props.directory === 'string' ? props.directory : null);
         }
         break;
       }
@@ -621,8 +605,7 @@ export const useEventStream = () => {
               sessionId,
               statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle',
             );
-            // Refresh session list on status changes (same trigger as activity indication)
-            requestSessionListRefresh();
+            requestSessionMetadataRefresh(sessionId, typeof props.directory === 'string' ? props.directory : null);
           }
         }
         break;
@@ -1009,11 +992,15 @@ export const useEventStream = () => {
 	          }
 
 	          const rawMessageSessionId = (message as { sessionID?: string }).sessionID;
-	          const messageSessionId: string =
-	            typeof rawMessageSessionId === 'string' && rawMessageSessionId.length > 0
+          const messageSessionId: string =
+            typeof rawMessageSessionId === 'string' && rawMessageSessionId.length > 0
               ? rawMessageSessionId
               : sessionId;
-          requestSessionMetadataRefresh(messageSessionId);
+          requestSessionMetadataRefresh(
+            messageSessionId,
+            typeof props.directory === 'string' ? props.directory : null,
+          );
+
 
           const summaryInfo = message as Message & { summary?: boolean };
           if (summaryInfo.summary && typeof messageSessionId === 'string') {
@@ -1023,6 +1010,7 @@ export const useEventStream = () => {
         break;
       }
 
+      case 'session.created':
       case 'session.updated': {
         const candidate = (typeof props.info === 'object' && props.info !== null) ? props.info as Record<string, unknown> :
                          (typeof props.sessionInfo === 'object' && props.sessionInfo !== null) ? props.sessionInfo as Record<string, unknown> :
@@ -1038,6 +1026,32 @@ export const useEventStream = () => {
                             (typeof props.time === 'object' && props.time !== null) ? props.time as Record<string, unknown> : null;
           const compactingTimestamp = timeSource && typeof timeSource.compacting === 'number' ? timeSource.compacting as number : null;
           updateSessionCompaction(sessionId, compactingTimestamp);
+
+          const sessionDirectory = typeof (candidate as { directory?: unknown }).directory === 'string'
+            ? (candidate as { directory: string }).directory
+            : typeof props.directory === 'string'
+              ? (props.directory as string)
+              : null;
+
+          const patchedSession = {
+            ...(candidate as unknown as Record<string, unknown>),
+            id: sessionId,
+            ...(sessionDirectory ? { directory: sessionDirectory } : {}),
+          } as unknown as Session;
+
+          updateSession(patchedSession);
+        }
+        break;
+      }
+
+      case 'session.deleted': {
+        const sessionId = typeof props.sessionID === 'string'
+          ? props.sessionID
+          : typeof props.id === 'string'
+            ? props.id
+            : null;
+        if (sessionId) {
+          removeSessionFromStore(sessionId);
         }
         break;
       }
@@ -1058,56 +1072,65 @@ export const useEventStream = () => {
         break;
       }
 
-      case 'permission.updated':
-        if (currentSessionId === props.sessionID) {
-          addPermission(props as unknown as Permission);
+      case 'permission.asked': {
+        if (!('sessionID' in props) || typeof props.sessionID !== 'string') {
+          break;
         }
-        break;
 
-      case 'permission.asked':
-        // New permission system from OpenCode's PermissionNext
-        if ('sessionID' in props && props.sessionID === currentSessionId) {
-          const askedProps = props as {
-            id: string;
-            permission: string;
-            sessionID: string;
-            patterns?: string[];
-            always?: string[];
-            metadata: Record<string, unknown>;
-            tool?: {
-              messageID: string;
-              callID: string;
-            };
-          };
+        const request = props as unknown as PermissionRequest;
 
-          // Convert new permission.asked event format to Permission type
-          const permission = {
-            id: askedProps.id,
-            type: askedProps.permission,
-            pattern: askedProps.patterns, // Map patterns to pattern field for compatibility
-            sessionID: askedProps.sessionID,
-            messageID: askedProps.tool?.messageID || askedProps.sessionID,
-            callID: askedProps.tool?.callID,
-            title: `${askedProps.permission} permission required`,
-            metadata: {
-              ...askedProps.metadata,
-              always: askedProps.always, // Store always in metadata for UI access
-              patterns: askedProps.patterns,
-            },
-            time: { created: Date.now() },
-          } as unknown as Permission;
-          addPermission(permission);
+        addPermission(request);
+
+        // Notify if permission is for another session (common with child sessions).
+        const toastKey = `${request.sessionID}:${request.id}`;
+        if (!permissionToastShownRef.current.has(toastKey)) {
+          setTimeout(() => {
+            const current = currentSessionIdRef.current;
+            if (current === request.sessionID) {
+              return;
+            }
+
+            const pending = useSessionStore
+              .getState()
+              .permissions
+              .get(request.sessionID)
+              ?.some((entry) => entry.id === request.id);
+
+            if (!pending) {
+              return;
+            }
+
+            permissionToastShownRef.current.add(toastKey);
+
+            const sessionTitle =
+              useSessionStore.getState().sessions.find((s) => s.id === request.sessionID)?.title ||
+              'Session';
+
+            import('sonner').then(({ toast }) => {
+              toast.warning('Permission required', {
+                description: sessionTitle,
+                action: {
+                  label: 'Open',
+                  onClick: () => {
+                    useUIStore.getState().setActiveMainTab('chat');
+                    void useSessionStore.getState().setCurrentSession(request.sessionID);
+                  },
+                },
+              });
+            });
+          }, 0);
         }
+
         break;
+      }
 
       case 'permission.replied':
-        // Permission was responded to - UI will update via permissionStore
         break;
 
       case 'todo.updated': {
         const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
-        const todos = Array.isArray(props.todos) ? props.todos : [];
-        if (sessionId && todos.length > 0) {
+        const todos = Array.isArray(props.todos) ? props.todos : null;
+        if (sessionId && todos) {
           handleTodoUpdatedEvent(
             sessionId,
             todos as Array<{ id: string; content: string; status: string; priority: string }>
@@ -1124,12 +1147,13 @@ export const useEventStream = () => {
     addPermission,
     checkConnection,
     requestSessionMetadataRefresh,
-    requestSessionListRefresh,
     updateSessionCompaction,
     applySessionMetadata,
     trackMessage,
     reportMessage,
     updateSessionActivityPhase,
+    updateSession,
+    removeSessionFromStore,
     bootstrapState
   ]);
 
@@ -1144,7 +1168,6 @@ export const useEventStream = () => {
       console.debug('[useEventStream] Connection state:', {
         isDesktopRuntime: isDesktopRuntimeRef.current,
         hasUnsubscribe: Boolean(unsubscribeRef.current),
-        hasActivityStream: Boolean(activityStreamAbortControllerRef.current),
         currentSessionId: currentSessionIdRef.current,
         effectiveDirectory,
         onlineStatus: onlineStatusRef.current,
@@ -1183,14 +1206,6 @@ export const useEventStream = () => {
       }
     }
 
-    if (activityStreamAbortControllerRef.current) {
-      try {
-        activityStreamAbortControllerRef.current.abort();
-      } catch (error) {
-        console.warn('[useEventStream] Error during activity stream abort:', error);
-      }
-      activityStreamAbortControllerRef.current = null;
-    }
 
     isCleaningUpRef.current = false;
   }, []);
@@ -1239,9 +1254,9 @@ export const useEventStream = () => {
       lastEventTimestampRef.current = Date.now();
       publishStatus('connected', null);
       checkConnection();
-
+ 
       const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-        (phase) => phase === 'busy'
+        (phase) => phase === 'busy' || phase === 'cooldown'
       );
       if (hasBusySessions) {
         void refreshSessionActivityStatus();
@@ -1278,143 +1293,29 @@ export const useEventStream = () => {
     }
 
     try {
-      const sdkUnsub = opencodeClient.subscribeToEvents(
-        handleEvent,
+      const sdkUnsub = opencodeClient.subscribeToGlobalEvents(
+        (event: RoutedOpencodeEvent) => {
+          const payload = event.payload as unknown as EventData;
+          const payloadRecord = event.payload as unknown as Record<string, unknown>;
+          const baseProperties =
+            typeof payloadRecord.properties === 'object' && payloadRecord.properties !== null
+              ? (payloadRecord.properties as Record<string, unknown>)
+              : {};
+
+          const properties =
+            event.directory && event.directory !== 'global'
+              ? { ...baseProperties, directory: event.directory }
+              : baseProperties;
+
+          handleEvent({
+            type: typeof (payload as { type?: unknown }).type === 'string' ? (payload as { type: string }).type : '',
+            properties,
+          });
+        },
         onError,
         onOpen,
-        effectiveDirectory,
-        { scope: 'directory', key: 'events' }
       );
 
-      if (!isDesktopRuntimeRef.current) {
-        if (activityStreamAbortControllerRef.current) {
-          activityStreamAbortControllerRef.current.abort();
-        }
-
-        const activityAbortController = new AbortController();
-        activityStreamAbortControllerRef.current = activityAbortController;
-
-        const parseSseEventBlock = (block: string): EventData | null => {
-          if (!block) return null;
-
-          const dataLines = block
-            .split('\n')
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).replace(/^\s/, ''));
-
-          if (dataLines.length === 0) {
-            return null;
-          }
-
-          const payloadText = dataLines.join('\n').trim();
-          if (!payloadText) {
-            return null;
-          }
-
-          try {
-            const parsed = JSON.parse(payloadText) as unknown;
-            if (!parsed || typeof parsed !== 'object') {
-              return null;
-            }
-
-            const record = parsed as Record<string, unknown>;
-            if (typeof record.type === 'string') {
-              return record as unknown as EventData;
-            }
-
-            const nestedPayload = record.payload;
-            if (nestedPayload && typeof nestedPayload === 'object') {
-              const nestedRecord = nestedPayload as Record<string, unknown>;
-              if (typeof nestedRecord.type === 'string') {
-                return nestedRecord as unknown as EventData;
-              }
-            }
-
-            return null;
-          } catch {
-            return null;
-          }
-        };
-
-        void (async () => {
-          try {
-            const candidateEndpoints = ['/api/global/event', '/api/event'];
-            let response: Response | null = null;
-            let lastError: unknown = null;
-
-            for (const endpoint of candidateEndpoints) {
-              try {
-                const candidateResponse = await fetch(endpoint, {
-                  method: 'GET',
-                  headers: {
-                    Accept: 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                  },
-                  signal: activityAbortController.signal,
-                });
-
-                if (candidateResponse.ok && candidateResponse.body) {
-                  response = candidateResponse;
-                  if (streamDebugEnabled()) {
-                    console.info('[useEventStream] Activity stream connected:', endpoint);
-                  }
-                  break;
-                }
-
-                lastError = new Error(`Activity stream failed: ${candidateResponse.status}`);
-              } catch (error) {
-                lastError = error;
-              }
-            }
-
-            if (!response) {
-              throw lastError ?? new Error('Activity stream failed');
-            }
-
-            const responseBody = response.body;
-            if (!responseBody) {
-              throw new Error('Activity stream missing body');
-            }
-
-            const reader = responseBody.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              if (activityAbortController.signal.aborted) break;
-              if (!value || value.length === 0) continue;
-
-              buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-              const blocks = buffer.split('\n\n');
-              buffer = blocks.pop() ?? '';
-              for (const block of blocks) {
-                const event = parseSseEventBlock(block);
-                if (event) {
-                  handleActivityEvent(event);
-                }
-              }
-            }
-
-            const remaining = buffer.trim();
-            if (remaining) {
-              const event = parseSseEventBlock(remaining);
-              if (event) {
-                handleActivityEvent(event);
-              }
-            }
-          } catch (error) {
-            if (!activityAbortController.signal.aborted) {
-              console.warn('[useEventStream] Activity stream error:', error);
-            }
-          } finally {
-            if (activityStreamAbortControllerRef.current === activityAbortController) {
-              activityStreamAbortControllerRef.current = null;
-            }
-          }
-        })();
-      }
 
       const compositeUnsub = () => {
         try {
@@ -1428,10 +1329,6 @@ export const useEventStream = () => {
         unsubscribeRef.current = compositeUnsub;
       } else {
         compositeUnsub();
-        if (activityStreamAbortControllerRef.current) {
-          activityStreamAbortControllerRef.current.abort();
-          activityStreamAbortControllerRef.current = null;
-        }
       }
     } catch (subscriptionError) {
       console.error('[useEventStream] Error during subscription:', subscriptionError);
@@ -1445,7 +1342,6 @@ export const useEventStream = () => {
     resyncMessages,
     requestSessionMetadataRefresh,
     handleEvent,
-    handleActivityEvent,
     effectiveDirectory,
     refreshSessionActivityStatus,
     waitForDesktopBridge,
@@ -1499,8 +1395,7 @@ export const useEventStream = () => {
         const phase = typeof event.detail?.phase === 'string' ? event.detail.phase : null;
         if (sessionId && (phase === 'idle' || phase === 'busy' || phase === 'cooldown')) {
           updateSessionActivityPhase(sessionId, phase);
-          // Refresh session list on activity changes (same trigger as activity indication)
-          requestSessionListRefresh();
+          requestSessionMetadataRefresh(sessionId);
         }
       };
       window.addEventListener('openchamber:session-activity', desktopActivityHandler as EventListener);
@@ -1543,10 +1438,9 @@ export const useEventStream = () => {
             resyncMessages(sessionId, 'visibility_restore').catch(() => {});
             requestSessionMetadataRefresh(sessionId);
           }
-
-        void loadSessions();
-        void refreshSessionActivityStatus();
-        publishStatus('connecting', 'Resuming stream');
+          
+          void refreshSessionActivityStatus();
+          publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
         }
       } else {
@@ -1571,7 +1465,6 @@ export const useEventStream = () => {
               .then(() => console.info('[useEventStream] Messages refreshed on focus'))
               .catch((err) => console.warn('[useEventStream] Failed to refresh messages:', err));
           }
-          void loadSessions();
           void refreshSessionActivityStatus();
 
           publishStatus('connecting', 'Resuming stream');
@@ -1619,7 +1512,7 @@ export const useEventStream = () => {
 
       const now = Date.now();
       const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-        (phase) => phase === 'busy'
+        (phase) => phase === 'busy' || phase === 'cooldown'
       );
       if (hasBusySessions) {
         void refreshSessionActivityStatus();
@@ -1692,7 +1585,6 @@ export const useEventStream = () => {
     scheduleReconnect,
     loadMessages,
     requestSessionMetadataRefresh,
-    requestSessionListRefresh,
     updateSessionActivityPhase,
     refreshSessionActivityStatus,
     shouldHoldConnection,

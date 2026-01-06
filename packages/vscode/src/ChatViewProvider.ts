@@ -19,6 +19,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private _cachedError?: string;
   private _sseCounter = 0;
   private _sseStreams = new Map<string, AbortController>();
+  private _sseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(
     private readonly _context: vscode.ExtensionContext,
@@ -195,12 +196,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const targetUrl = new URL(normalizedPath.replace(/^\/+/, ''), base).toString();
 
     let response: Response;
+    let wrapAsGlobal = false;
+
+    const requestHeaders = this._buildSseHeaders(headers || {});
+
     try {
       response = await fetch(targetUrl, {
         method: 'GET',
-        headers: this._buildSseHeaders(headers || {}),
+        headers: requestHeaders,
         signal: controller.signal,
       });
+
+      // Fallback: OpenCode versions without /global/event.
+      // VS Code is single-workspace, so we can wrap /event into { directory, payload }.
+      if ((!response.ok || !response.body) && normalizedPath === '/global/event') {
+        const fallbackUrl = new URL('event', base).toString();
+        response = await fetch(fallbackUrl, {
+          method: 'GET',
+          headers: requestHeaders,
+          signal: controller.signal,
+        });
+        if (response.ok && response.body) {
+          wrapAsGlobal = true;
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -229,6 +248,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     this._sseStreams.set(streamId, controller);
 
+    const fallbackDirectory = this._openCodeManager?.getWorkingDirectory()
+      || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+      || 'global';
+
+    if (shouldInjectActivity) {
+      const heartbeatTimer = setInterval(() => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const heartbeatChunk = `${buildHeartbeatEventBlock()}\n\n`;
+        this._view?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: heartbeatChunk });
+      }, 30000);
+      this._sseHeartbeats.set(streamId, heartbeatTimer);
+    }
+
     (async () => {
       try {
         const reader = responseBody.getReader();
@@ -251,7 +285,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               const blocks = sseBuffer.split('\n\n');
               sseBuffer = blocks.pop() ?? '';
               if (blocks.length > 0) {
-                const outboundBlocks = shouldInjectActivity ? expandSseBlocksWithActivity(blocks) : blocks;
+                const routedBlocks = wrapAsGlobal
+                  ? wrapSseBlocksAsGlobal(blocks, fallbackDirectory)
+                  : blocks;
+                const outboundBlocks = shouldInjectActivity ? expandSseBlocksWithActivity(routedBlocks) : routedBlocks;
                 const joined = outboundBlocks.map((block: string) => `${block}\n\n`).join('');
                 this._view?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
               }
@@ -264,7 +301,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           }
           if (sseBuffer) {
             if (shouldInjectActivity) {
-              const outboundBlocks = expandSseBlocksWithActivity([sseBuffer]);
+              const baseBlocks = wrapAsGlobal
+                ? wrapSseBlocksAsGlobal([sseBuffer], fallbackDirectory)
+                : [sseBuffer];
+              const outboundBlocks = expandSseBlocksWithActivity(baseBlocks);
               const joined = outboundBlocks.map((block: string) => `${block}\n\n`).join('');
               this._view?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
             } else {
@@ -287,6 +327,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
       } finally {
         this._sseStreams.delete(streamId);
+        const heartbeat = this._sseHeartbeats.get(streamId);
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          this._sseHeartbeats.delete(streamId);
+        }
       }
     })();
 
@@ -310,6 +355,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (controller) {
         controller.abort();
         this._sseStreams.delete(streamId);
+      }
+
+      const heartbeat = this._sseHeartbeats.get(streamId);
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        this._sseHeartbeats.delete(streamId);
       }
     }
     return { id, type, success: true, data: { stopped: true } };
@@ -430,6 +481,80 @@ const buildActivityEventBlock = (activity: SessionActivity): string => {
       phase: activity.phase,
     },
   })}`;
+};
+
+const buildHeartbeatEventBlock = (): string => {
+  return `data: ${JSON.stringify({ type: 'openchamber:heartbeat', timestamp: Date.now() })}`;
+};
+
+const parseSseBlockForGlobalWrap = (block: string): { id?: string; payload: Record<string, unknown> } | null => {
+  if (!block) {
+    return null;
+  }
+
+  const lines = block.split('\n');
+  const dataLines: string[] = [];
+  let eventId: string | undefined;
+
+  for (const line of lines) {
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).replace(/^\s/, ''));
+      continue;
+    }
+    if (line.startsWith('id:')) {
+      const candidate = line.slice(3).trim();
+      if (candidate) {
+        eventId = candidate;
+      }
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  const payloadText = dataLines.join('\n').trim();
+  if (!payloadText) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payloadText) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const record = parsed as Record<string, unknown>;
+    const nestedPayload = record.payload;
+    const payload = nestedPayload && typeof nestedPayload === 'object'
+      ? (nestedPayload as Record<string, unknown>)
+      : record;
+
+    return eventId ? { id: eventId, payload } : { payload };
+  } catch {
+    return null;
+  }
+};
+
+const wrapSseBlocksAsGlobal = (blocks: string[], directory: string): string[] => {
+  const normalizedDirectory = typeof directory === 'string' && directory.trim().length > 0
+    ? directory.trim().replace(/\\/g, '/')
+    : 'global';
+
+  return blocks.map((block) => {
+    const parsed = parseSseBlockForGlobalWrap(block);
+    if (!parsed) {
+      return block;
+    }
+
+    const envelope = {
+      directory: normalizedDirectory,
+      payload: parsed.payload,
+    };
+
+    const idPrefix = parsed.id ? `id: ${parsed.id}\n` : '';
+    return `${idPrefix}data: ${JSON.stringify(envelope)}`;
+  });
 };
 
 const expandSseBlocksWithActivity = (blocks: string[]): string[] => {

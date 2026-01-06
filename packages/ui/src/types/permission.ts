@@ -1,26 +1,28 @@
-export interface Permission {
+export interface PermissionRequest {
   id: string;
-  type: string;
-  pattern?: string | string[];
-  patterns?: string[];  // New system: array of specific patterns requesting approval
-  always?: string[];    // New system: what will be auto-approved on "always" click
   sessionID: string;
-  messageID: string;
-  callID?: string;
-  title: string;
+  permission: string;
+  patterns: string[];
   metadata: Record<string, unknown>;
-  time: {
-    created: number;
-  };
+  always: string[];
   tool?: {
     messageID: string;
     callID: string;
   };
 }
 
-export interface PermissionEvent {
-  type: 'permission.updated';
-  properties: Permission;
+export type PermissionResponse = 'once' | 'always' | 'reject';
+
+export interface PermissionAskedEvent {
+  type: 'permission.asked';
+  properties: PermissionRequest;
 }
 
-export type PermissionResponse = 'once' | 'always' | 'reject';
+export interface PermissionRepliedEvent {
+  type: 'permission.replied';
+  properties: {
+    sessionID: string;
+    requestID: string;
+    reply: PermissionResponse;
+  };
+}

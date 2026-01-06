@@ -280,16 +280,8 @@ const resolveSessionDirectory = async (sessionId: string | null | undefined): Pr
 
     try {
         const sessionStore = useSessionStore.getState();
-        const metadata = sessionStore.getWorktreeMetadata(sessionId);
-        if (metadata?.path) {
-            return metadata.path;
-        }
-
-        const session = sessionStore.sessions.find((entry) => entry.id === sessionId) as { directory?: string } | undefined;
-        const sessionDirectory =
-            typeof session?.directory === 'string' && session.directory.length > 0 ? session.directory : undefined;
-
-        return sessionDirectory;
+        const directory = sessionStore.getDirectoryForSession(sessionId);
+        return directory ?? undefined;
     } catch (error) {
         console.warn('Failed to resolve session directory override:', error);
         return undefined;

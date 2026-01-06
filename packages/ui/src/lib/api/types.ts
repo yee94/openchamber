@@ -322,6 +322,14 @@ export interface FilesAPI {
   createDirectory(path: string): Promise<{ success: boolean; path: string }>;
 }
 
+export interface ProjectEntry {
+  id: string;
+  path: string;
+  label?: string;
+  addedAt?: number;
+  lastOpenedAt?: number;
+}
+
 export interface SettingsPayload {
   themeId?: string;
   useSystemTheme?: boolean;
@@ -330,6 +338,8 @@ export interface SettingsPayload {
   darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
+  projects?: ProjectEntry[];
+  activeProjectId?: string;
   approvedDirectories?: string[];
   securityScopedBookmarks?: string[];
   pinnedDirectories?: string[];

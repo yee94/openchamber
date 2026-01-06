@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use futures_util::TryStreamExt;
@@ -11,6 +11,7 @@ use tauri_plugin_notification::NotificationExt;
 use tokio::{io::AsyncBufReadExt, sync::Mutex};
 use tokio_util::io::StreamReader;
 
+use crate::path_utils::expand_tilde_path;
 use crate::DesktopRuntime;
 
 #[derive(Deserialize)]
@@ -19,6 +20,14 @@ struct EventEnvelope {
     event_type: String,
     #[serde(default)]
     properties: Value,
+}
+
+#[derive(Deserialize)]
+struct MultiplexedEventEnvelope {
+    #[serde(default)]
+    #[allow(dead_code)]
+    directory: Option<String>,
+    payload: EventEnvelope,
 }
 
 pub fn spawn_assistant_notifications(
@@ -71,41 +80,8 @@ async fn run_once(
     };
 
     let prefix = opencode.api_prefix();
-    let mut url = format!("http://127.0.0.1:{port}{}/event", prefix);
-
-    if let Some(dir) = opencode
-        .get_working_directory()
-        .to_str()
-        .map(|s| s.to_string())
-    {
-        let mut parsed = reqwest::Url::parse(&url)?;
-        parsed.query_pairs_mut().append_pair("directory", &dir);
-        url = parsed.to_string();
-    }
-
-    debug!("[desktop:notify] Connecting SSE for notifications: {url}");
-
-    let response = client
-        .get(&url)
-        .header("accept", "text/event-stream")
-        .header("accept-encoding", "identity")
-        .send()
-        .await?;
-
-    debug!(
-        "[desktop:notify] SSE response status={} headers={:?}",
-        response.status(),
-        response.headers()
-    );
-
-    if !response.status().is_success() {
-        warn!(
-            "[desktop:notify] SSE connect failed with status {}",
-            response.status()
-        );
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        return Ok(());
-    }
+    let base = format!("http://127.0.0.1:{port}{prefix}");
+    let response = connect_notifications_sse(runtime, client, &base).await?;
 
     let stream = response
         .bytes_stream()
@@ -142,7 +118,7 @@ async fn run_once(
             let raw = data_lines.join("\n");
             data_lines.clear();
 
-            match serde_json::from_str::<EventEnvelope>(&raw) {
+            match parse_event_envelope(&raw) {
                 Ok(event) => handle_event(app, event, notified_messages).await,
                 Err(err) => {
                     warn!("[desktop:notify] Failed to parse SSE data: {err}; raw={raw}");
@@ -157,6 +133,111 @@ async fn run_once(
     }
 
     Ok(())
+}
+
+fn parse_event_envelope(raw: &str) -> Result<EventEnvelope> {
+    if let Ok(event) = serde_json::from_str::<EventEnvelope>(raw) {
+        return Ok(event);
+    }
+
+    let multiplexed = serde_json::from_str::<MultiplexedEventEnvelope>(raw)?;
+    Ok(multiplexed.payload)
+}
+
+async fn resolve_project_directory_from_settings(runtime: &DesktopRuntime) -> Option<PathBuf> {
+    let settings = runtime.settings().load().await.ok()?;
+
+    if let Some(active_id) = settings.get("activeProjectId").and_then(Value::as_str) {
+        if let Some(projects) = settings.get("projects").and_then(Value::as_array) {
+            if let Some(path) = projects.iter().find_map(|entry| {
+                let id = entry.get("id").and_then(Value::as_str)?;
+                if id != active_id {
+                    return None;
+                }
+                entry.get("path").and_then(Value::as_str)
+            }) {
+                return Some(expand_tilde_path(path));
+            }
+        }
+    }
+
+    settings
+        .get("lastDirectory")
+        .and_then(Value::as_str)
+        .map(expand_tilde_path)
+}
+
+async fn connect_notifications_sse(
+    runtime: &DesktopRuntime,
+    client: &Client,
+    base: &str,
+) -> Result<reqwest::Response> {
+    let global_url = format!("{base}/global/event");
+    match try_connect_sse(client, &global_url, "[desktop:notify]").await {
+        Ok(response) => {
+            debug!("[desktop:notify] Using SSE endpoint: {global_url}");
+            return Ok(response);
+        }
+        Err(err) => {
+            debug!(
+                "[desktop:notify] SSE endpoint unavailable: {global_url} ({err:?}); falling back"
+            );
+        }
+    }
+
+    let event_url = format!("{base}/event");
+    match try_connect_sse(client, &event_url, "[desktop:notify]").await {
+        Ok(response) => {
+            debug!("[desktop:notify] Using SSE endpoint: {event_url}");
+            return Ok(response);
+        }
+        Err(err) => {
+            debug!(
+                "[desktop:notify] SSE endpoint unavailable: {event_url} ({err:?}); falling back"
+            );
+        }
+    }
+
+    let Some(working_dir) = resolve_project_directory_from_settings(runtime).await else {
+        anyhow::bail!("No project directory available for SSE fallback");
+    };
+    let directory = working_dir.to_string_lossy().to_string();
+    let mut parsed = reqwest::Url::parse(&event_url)?;
+    parsed
+        .query_pairs_mut()
+        .append_pair("directory", &directory);
+    let directory_url = parsed.to_string();
+
+    let response = try_connect_sse(client, &directory_url, "[desktop:notify]").await?;
+    debug!("[desktop:notify] Using directory-scoped SSE endpoint: {directory_url}");
+    Ok(response)
+}
+
+async fn try_connect_sse(
+    client: &Client,
+    url: &str,
+    log_prefix: &str,
+) -> Result<reqwest::Response> {
+    debug!("{log_prefix} Connecting SSE: {url}");
+
+    let response = client
+        .get(url)
+        .header("accept", "text/event-stream")
+        .header("accept-encoding", "identity")
+        .send()
+        .await?;
+
+    debug!(
+        "{log_prefix} SSE response status={} headers={:?}",
+        response.status(),
+        response.headers()
+    );
+
+    if !response.status().is_success() {
+        anyhow::bail!("SSE connect failed with status {}", response.status());
+    }
+
+    Ok(response)
 }
 
 async fn handle_event(

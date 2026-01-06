@@ -1,7 +1,10 @@
+use chrono::Utc;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::AppHandle;
 use tauri::State;
+use uuid::Uuid;
 
 use crate::path_utils::expand_tilde_path;
 use crate::DesktopRuntime;
@@ -17,6 +20,8 @@ pub struct DirectoryPermissionRequest {
 pub struct DirectoryPermissionResult {
     success: bool,
     path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    project_id: Option<String>,
     error: Option<String>,
 }
 
@@ -27,9 +32,8 @@ pub struct StartAccessingResult {
     error: Option<String>,
 }
 
-/// Process directory selection from frontend
-/// Updates settings with lastDirectory
-/// OpenCode restart is triggered separately via /api/opencode/directory endpoint
+/// Process directory selection from frontend.
+/// Updates settings (projects, activeProjectId, lastDirectory).
 #[tauri::command]
 pub async fn process_directory_selection(
     path: String,
@@ -45,6 +49,7 @@ pub async fn process_directory_selection(
         return Ok(DirectoryPermissionResult {
             success: false,
             path: None,
+            project_id: None,
             error: Some("Directory does not exist".to_string()),
         });
     }
@@ -53,38 +58,94 @@ pub async fn process_directory_selection(
         return Ok(DirectoryPermissionResult {
             success: false,
             path: None,
+            project_id: None,
             error: Some("Path is not a directory".to_string()),
         });
     }
 
-    // Update settings with lastDirectory
-    let mut settings = state
-        .settings()
-        .load()
-        .await
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+    // Update settings with projects + activeProjectId + lastDirectory
+    let now = Utc::now().timestamp_millis();
+    let normalized_path_for_update = normalized_path.clone();
 
-    if let Some(obj) = settings.as_object_mut() {
-        obj.insert(
-            "lastDirectory".to_string(),
-            serde_json::Value::String(normalized_path.clone()),
-        );
-    }
-
-    state
+    let (_, project_id) = state
         .settings()
-        .save(settings)
+        .update_with(|mut settings| {
+            if !settings.is_object() {
+                settings = json!({});
+            }
+
+            let project_id = {
+                let obj = settings.as_object_mut().unwrap();
+
+                let projects_value = obj.entry("projects").or_insert_with(|| json!([]));
+                if !projects_value.is_array() {
+                    *projects_value = json!([]);
+                }
+
+                let projects = projects_value.as_array_mut().unwrap();
+
+                let existing_index = projects.iter().position(|entry| {
+                    entry
+                        .get("path")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value == normalized_path_for_update)
+                        .unwrap_or(false)
+                });
+
+                if let Some(index) = existing_index {
+                    let entry = projects
+                        .get_mut(index)
+                        .and_then(|value| value.as_object_mut());
+                    if let Some(entry) = entry {
+                        entry.insert("lastOpenedAt".to_string(), json!(now));
+                        if let Some(id) = entry.get("id").and_then(|value| value.as_str()) {
+                            id.to_string()
+                        } else {
+                            let id = Uuid::new_v4().to_string();
+                            entry.insert("id".to_string(), json!(id));
+                            id
+                        }
+                    } else {
+                        let id = Uuid::new_v4().to_string();
+                        projects[index] = json!({
+                            "id": id,
+                            "path": normalized_path_for_update,
+                            "addedAt": now,
+                            "lastOpenedAt": now
+                        });
+                        id
+                    }
+                } else {
+                    let id = Uuid::new_v4().to_string();
+                    projects.push(json!({
+                        "id": id,
+                        "path": normalized_path_for_update,
+                        "addedAt": now,
+                        "lastOpenedAt": now
+                    }));
+                    id
+                }
+            };
+
+            if let Some(obj) = settings.as_object_mut() {
+                obj.insert("activeProjectId".to_string(), json!(project_id.clone()));
+                obj.insert("lastDirectory".to_string(), json!(normalized_path_for_update));
+            }
+
+            (settings, project_id)
+        })
         .await
         .map_err(|e| format!("Failed to save updated settings: {}", e))?;
 
     info!(
-        "[permissions] Updated settings with lastDirectory: {}",
-        normalized_path
+        "[permissions] Updated settings with active project {}: {}",
+        project_id, normalized_path
     );
 
     Ok(DirectoryPermissionResult {
         success: true,
         path: Some(normalized_path),
+        project_id: Some(project_id),
         error: None,
     })
 }
@@ -98,6 +159,7 @@ pub async fn pick_directory(
     Ok(DirectoryPermissionResult {
         success: false,
         path: None,
+        project_id: None,
         error: Some(
             "Use requestDirectoryAccess instead - it handles native dialog properly".to_string(),
         ),
@@ -122,6 +184,7 @@ pub async fn request_directory_access(
         return Ok(DirectoryPermissionResult {
             success: false,
             path: None,
+            project_id: None,
             error: Some("Directory does not exist".to_string()),
         });
     }
@@ -130,6 +193,7 @@ pub async fn request_directory_access(
         return Ok(DirectoryPermissionResult {
             success: false,
             path: None,
+            project_id: None,
             error: Some("Path is not a directory".to_string()),
         });
     }
@@ -139,11 +203,13 @@ pub async fn request_directory_access(
         Ok(_) => Ok(DirectoryPermissionResult {
             success: true,
             path: Some(normalized_path),
+            project_id: None,
             error: None,
         }),
         Err(e) => Ok(DirectoryPermissionResult {
             success: false,
             path: None,
+            project_id: None,
             error: Some(format!("Cannot access directory: {}", e)),
         }),
     }
