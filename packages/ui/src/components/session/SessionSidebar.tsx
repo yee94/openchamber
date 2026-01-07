@@ -36,6 +36,7 @@ import {
   RiDeleteBinLine,
   RiErrorWarningLine,
   RiFileCopyLine,
+  RiGitBranchLine,
   RiGitRepositoryLine,
   RiLinkUnlinkM,
   RiMore2Line,
@@ -55,7 +56,6 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 
-const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
 
@@ -102,6 +102,7 @@ const formatProjectLabel = (label: string): string => {
 type SessionNode = {
   session: Session;
   children: SessionNode[];
+  worktree: WorktreeMetadata | null;
 };
 
 type SessionGroup = {
@@ -337,17 +338,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
   const checkingDirectories = React.useRef<Set<string>>(new Set());
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const [collapsedProjects, setCollapsedProjects] = React.useState<Set<string>>(new Set());
 
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
-  const [hoveredGroupId, setHoveredGroupId] = React.useState<string | null>(null);
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
-  const [stuckHeaders, setStuckHeaders] = React.useState<Set<string>>(new Set());
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
-  const headerSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
 
@@ -380,7 +377,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
-  const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
 
   const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') {
@@ -391,13 +387,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   React.useEffect(() => {
     try {
-      const storedGroups = safeStorage.getItem(GROUP_COLLAPSE_STORAGE_KEY);
-      if (storedGroups) {
-        const parsed = JSON.parse(storedGroups);
-        if (Array.isArray(parsed)) {
-          setCollapsedGroups(new Set(parsed.filter((item) => typeof item === 'string')));
-        }
-      }
       const storedParents = safeStorage.getItem(SESSION_EXPANDED_STORAGE_KEY);
       if (storedParents) {
         const parsed = JSON.parse(storedParents);
@@ -733,20 +722,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [collectDescendants, deleteSession, deleteSessions, worktreeMetadata],
   );
 
-  const handleCreateSessionInGroup = React.useCallback(
-    (directory: string | null, projectId?: string | null) => {
-      if (projectId && projectId !== activeProjectId) {
-        setActiveProject(projectId);
-      }
-      setActiveMainTab('chat');
-      if (mobileVariant) {
-        setSessionSwitcherOpen(false);
-      }
-      openNewSessionDraft({ directoryOverride: directory ?? null });
-    },
-    [activeProjectId, openNewSessionDraft, setActiveMainTab, setActiveProject, setSessionSwitcherOpen, mobileVariant],
-  );
-
   const handleOpenWorktreeManager = React.useCallback(
     (projectId?: string | null) => {
       if (projectId && projectId !== activeProjectId) {
@@ -805,15 +780,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return {
         session,
         children: children.map((child) => buildNode(child)),
+        worktree: worktreeMetadata.get(session.id) ?? null,
       };
     },
-    [childrenMap],
+    [childrenMap, worktreeMetadata],
   );
 
 
   const buildGroupedSessions = React.useCallback(
     (projectSessions: Session[], projectRoot: string | null, availableWorktrees: WorktreeMetadata[]) => {
-      const groups = new Map<string, SessionGroup>();
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
       const sortedProjectSessions = [...projectSessions].sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0));
 
@@ -830,14 +805,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       });
       childrenMap.forEach((list) => list.sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0)));
 
-      const buildProjectNode = (session: Session): SessionNode => {
-        const children = childrenMap.get(session.id) ?? [];
-        return {
-          session,
-          children: children.map((child) => buildProjectNode(child)),
-        };
-      };
-
+      // Build worktree lookup map
       const worktreeByPath = new Map<string, WorktreeMetadata>();
       availableWorktrees.forEach((meta) => {
         if (meta.path) {
@@ -846,42 +814,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         }
       });
 
-      const ensureGroup = (session: Session) => {
+      // Helper to get worktree metadata for a session
+      const getSessionWorktree = (session: Session): WorktreeMetadata | null => {
         const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
-
         const sessionWorktreeMeta = worktreeMetadata.get(session.id) ?? null;
-        const worktree =
-          sessionWorktreeMeta ??
-          (sessionDirectory ? worktreeByPath.get(sessionDirectory) ?? null : null);
-        const isMain =
-          !worktree &&
-          ((sessionDirectory && normalizedProjectRoot
-            ? sessionDirectory === normalizedProjectRoot
-            : !sessionDirectory && Boolean(normalizedProjectRoot)));
-        const key = isMain ? 'main' : worktree?.path ?? sessionDirectory ?? session.id;
-        const directory = worktree?.path ?? sessionDirectory ?? normalizedProjectRoot ?? null;
-        if (!groups.has(key)) {
-          const label = isMain
-            ? 'Main workspace'
-            : worktree?.label || worktree?.branch || formatDirectoryName(directory || '', homeDirectory) || 'Worktree';
-          const description = worktree?.relativePath
-            ? formatPathForDisplay(worktree.relativePath, homeDirectory)
-            : directory
-              ? formatPathForDisplay(directory, homeDirectory)
-              : null;
-          groups.set(key, {
-            id: key,
-            label,
-            description,
-            isMain,
-            worktree,
-            directory,
-            sessions: [],
-          });
+        if (sessionWorktreeMeta) return sessionWorktreeMeta;
+        if (sessionDirectory) {
+          const worktree = worktreeByPath.get(sessionDirectory) ?? null;
+          // Only count as worktree if it's not the main project root
+          if (worktree && sessionDirectory !== normalizedProjectRoot) {
+            return worktree;
+          }
         }
-        return groups.get(key)!;
+        return null;
       };
 
+      const buildProjectNode = (session: Session): SessionNode => {
+        const children = childrenMap.get(session.id) ?? [];
+        return {
+          session,
+          children: children.map((child) => buildProjectNode(child)),
+          worktree: getSessionWorktree(session),
+        };
+      };
+
+      // Find root sessions (no parent or parent not in current project)
       const roots = sortedProjectSessions.filter((session) => {
         const parentID = (session as Session & { parentID?: string | null }).parentID;
         if (!parentID) {
@@ -890,69 +847,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         return !sessionMap.has(parentID);
       });
 
-      roots.forEach((session) => {
-        const group = ensureGroup(session);
-        const node = buildProjectNode(session);
-        group.sessions.push(node);
-      });
+      // Build all session nodes into a single flat group sorted by date
+      const allSessions: SessionNode[] = roots.map((session) => buildProjectNode(session));
 
-      if (!groups.has('main')) {
-        groups.set('main', {
-          id: 'main',
-          label: 'Main workspace',
-          description: normalizedProjectRoot ? formatPathForDisplay(normalizedProjectRoot, homeDirectory) : null,
-          isMain: true,
-          worktree: null,
-          directory: normalizedProjectRoot,
-          sessions: [],
-        });
-      }
-
-      worktreeByPath.forEach((meta, path) => {
-        const key = meta.path;
-        if (!groups.has(key)) {
-          groups.set(key, {
-            id: key,
-            label: meta.label || meta.branch || formatDirectoryName(path, homeDirectory) || 'Worktree',
-            description: meta.relativePath
-              ? formatPathForDisplay(meta.relativePath, homeDirectory)
-              : formatPathForDisplay(path, homeDirectory),
-            isMain: false,
-            worktree: meta,
-            directory: path,
-            sessions: [],
-          });
-        }
-      });
-
-      groups.forEach((group) => {
-        group.sessions.sort((a, b) => (b.session.time?.created || 0) - (a.session.time?.created || 0));
-      });
-
-      return Array.from(groups.values()).sort((a, b) => {
-        if (a.isMain !== b.isMain) {
-          return a.isMain ? -1 : 1;
-        }
-        return (a.label || '').localeCompare(b.label || '');
-      });
+      // Return single group with all sessions
+      return [{
+        id: 'all',
+        label: 'All sessions',
+        description: normalizedProjectRoot ? formatPathForDisplay(normalizedProjectRoot, homeDirectory) : null,
+        isMain: true,
+        worktree: null,
+        directory: normalizedProjectRoot,
+        sessions: allSessions,
+      }];
     },
     [homeDirectory, worktreeMetadata]
   );
-
-  const toggleGroup = React.useCallback((groupId: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
-      try {
-        safeStorage.setItem(GROUP_COLLAPSE_STORAGE_KEY, JSON.stringify(Array.from(next)));
-      } catch { /* ignored */ }
-      return next;
-    });
-  }, [safeStorage]);
 
   const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
     setExpandedSessionGroups((prev) => {
@@ -1037,47 +947,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       };
     });
   }, [normalizedProjects, getSessionsForProject, buildGroupedSessions, availableWorktreesByProject]);
-
-  // Track when sticky headers become "stuck" using sentinel elements
-  React.useEffect(() => {
-    if (!isDesktopRuntime) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Ignore intersection events shortly after collapse/expand
-        if (Date.now() < ignoreIntersectionUntil.current) return;
-        
-        entries.forEach((entry) => {
-          const groupId = (entry.target as HTMLElement).dataset.groupId;
-          if (!groupId) return;
-          
-          setStuckHeaders((prev) => {
-            const next = new Set(prev);
-            // When sentinel is NOT intersecting, header is stuck
-            if (!entry.isIntersecting) {
-              next.add(groupId);
-            } else {
-              next.delete(groupId);
-            }
-            return next;
-          });
-        });
-      },
-      { threshold: 0, rootMargin: '-96px 0px 0px 0px' }
-    );
-
-    // Small delay to let DOM settle after collapse/expand
-    const timeoutId = setTimeout(() => {
-      headerSentinelRefs.current.forEach((el) => {
-        if (el) observer.observe(el);
-      });
-    }, 50);
-
-    return () => {
-      clearTimeout(timeoutId);
-      observer.disconnect();
-    };
-  }, [isDesktopRuntime, projectSections, collapsedProjects]);
 
   // Track when project sticky headers become "stuck"
   React.useEffect(() => {
@@ -1286,6 +1155,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
                   {session.share ? (
                     <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
+                  ) : null}
+                  {node.worktree ? (
+                    <Tooltip delayDuration={700}>
+                      <TooltipTrigger asChild>
+                        <span className="flex-shrink-0">
+                          <RiGitBranchLine className="h-3 w-3 text-[color:var(--status-info)]" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {node.worktree.branch || node.worktree.label || 'Worktree'}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : null}
                   {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
                     <span className="flex-shrink-0 text-[0.7rem] leading-none">
@@ -1627,77 +1508,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     sentinelRef={(el) => { projectHeaderSentinelRefs.current.set(projectKey, el); }}
                   >
                     {!isCollapsed ? (
-                      <div className="space-y-2 pl-1">
-                        {section.groups.map((group) => {
-                          const groupKey = `${projectKey}:${group.id}`;
-                          return (
-                            <div key={groupKey} className="relative">
-                              {isDesktopRuntime && (
-                                <div
-                                  ref={(el) => { headerSentinelRefs.current.set(groupKey, el); }}
-                                  data-group-id={groupKey}
-                                  className="absolute top-0 h-px w-full pointer-events-none"
-                                  aria-hidden="true"
-                                />
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => toggleGroup(groupKey)}
-                                className={cn(
-                                  'sticky top-[38px] z-[9] pt-1.5 pb-1 w-full text-left cursor-pointer group/header border-b',
-                                  !isDesktopRuntime && 'bg-sidebar',
-                                )}
-                                style={{
-                                  backgroundColor: isDesktopRuntime
-                                    ? stuckHeaders.has(groupKey) ? 'var(--sidebar-stuck-bg)' : 'transparent'
-                                    : undefined,
-                                  borderColor: hoveredGroupId === groupKey
-                                    ? 'var(--color-border)'
-                                    : collapsedGroups.has(groupKey)
-                                      ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
-                                      : 'var(--color-border)'
-                                }}
-                                onMouseEnter={() => setHoveredGroupId(groupKey)}
-                                onMouseLeave={() => setHoveredGroupId(null)}
-                                aria-label={collapsedGroups.has(groupKey) ? 'Expand group' : 'Collapse group'}
-                              >
-                                <div className="flex items-center justify-between gap-2 px-1">
-                                  <span className="typography-micro font-medium text-muted-foreground truncate group-hover/header:text-foreground">
-                                    {group.label}
-                                  </span>
-                                  {!hideDirectoryControls && (
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
-                                      className={cn(
-                                        'inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
-                                      )}
-                                      aria-label="Create session in this group"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleCreateSessionInGroup(group.directory, projectKey);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                          e.stopPropagation();
-                                          handleCreateSessionInGroup(group.directory, projectKey);
-                                        }
-                                      }}
-                                    >
-                                      <RiAddLine className="h-4.5 w-4.5" />
-                                    </span>
-                                  )}
-                                </div>
-                              </button>
-
-                              {!collapsedGroups.has(groupKey) ? (
-                                <div className="space-y-[0.6rem] py-1">
-                                  {renderGroupSessions(group, groupKey, projectKey)}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
+                      <div className="space-y-[0.6rem] py-1 pl-1">
+                        {section.groups[0] ? renderGroupSessions(section.groups[0], `${projectKey}:all`, projectKey) : (
+                          <div className="py-1 text-left typography-micro text-muted-foreground">
+                            No sessions yet.
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </SortableProjectItem>
