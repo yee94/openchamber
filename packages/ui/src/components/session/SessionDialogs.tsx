@@ -1067,15 +1067,6 @@ export const SessionDialogs: React.FC = () => {
                             )}
                         </p>
                     ) : null}
-
-                    {/* Create button */}
-                    <Button
-                        onClick={handleCreateWorktree}
-                        disabled={isCreatingWorktree || isLoading || !isGitRepo || !worktreeTargetBranch}
-                        className="h-8"
-                    >
-                        {isCreatingWorktree ? 'Creating…' : 'Create'}
-                    </Button>
                 </div>
 
                 {worktreeError && <p className="typography-meta text-destructive">{worktreeError}</p>}
@@ -1187,13 +1178,21 @@ export const SessionDialogs: React.FC = () => {
     );
 
     const worktreeManagerActions = (
-        <Button
-            variant="ghost"
-            onClick={() => setSessionCreateDialogOpen(false)}
-            disabled={isCreatingWorktree}
-        >
-            Close
-        </Button>
+        <>
+            <Button
+                onClick={handleCreateWorktree}
+                disabled={isCreatingWorktree || isLoading || !isGitRepo || !worktreeTargetBranch}
+            >
+                {isCreatingWorktree ? 'Creating…' : 'Create'}
+            </Button>
+            <Button
+                variant="ghost"
+                onClick={() => setSessionCreateDialogOpen(false)}
+                disabled={isCreatingWorktree}
+            >
+                Close
+            </Button>
+        </>
     );
 
     const targetWorktree = deleteDialog?.worktree ?? deleteDialogSummaries[0]?.metadata ?? null;
