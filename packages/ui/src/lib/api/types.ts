@@ -334,12 +334,19 @@ export interface FilesAPI {
   execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }
 
+export interface WorktreeDefaults {
+  branchPrefix?: string;        // e.g. "feature", "bugfix" (no trailing slash)
+  baseBranch?: string;          // e.g. "main", "develop", or "HEAD"
+  autoCreateWorktree?: boolean; // future: skip dialog, create worktree automatically
+}
+
 export interface ProjectEntry {
   id: string;
   path: string;
   label?: string;
   addedAt?: number;
   lastOpenedAt?: number;
+  worktreeDefaults?: WorktreeDefaults;
 }
 
 export interface SettingsPayload {

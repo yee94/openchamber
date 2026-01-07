@@ -484,13 +484,33 @@ const sanitizeProjects = (input) => {
     seenIds.add(id);
     seenPaths.add(normalizedPath);
 
-    result.push({
+    const project = {
       id,
       path: normalizedPath,
       ...(label ? { label } : {}),
       ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
       ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
-    });
+    };
+
+    // Preserve worktreeDefaults
+    if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
+      const wt = candidate.worktreeDefaults;
+      const defaults = {};
+      if (typeof wt.branchPrefix === 'string' && wt.branchPrefix.trim()) {
+        defaults.branchPrefix = wt.branchPrefix.trim();
+      }
+      if (typeof wt.baseBranch === 'string' && wt.baseBranch.trim()) {
+        defaults.baseBranch = wt.baseBranch.trim();
+      }
+      if (typeof wt.autoCreateWorktree === 'boolean') {
+        defaults.autoCreateWorktree = wt.autoCreateWorktree;
+      }
+      if (Object.keys(defaults).length > 0) {
+        project.worktreeDefaults = defaults;
+      }
+    }
+
+    result.push(project);
   }
 
   return result;

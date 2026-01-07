@@ -17,13 +17,13 @@ import { useDeviceInfo } from '@/lib/device';
 import { RiAddLine, RiChatAi3Line, RiCheckLine, RiCodeLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiRestartLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine, RiTimeLine } from '@remixicon/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import { getModifierLabel } from '@/lib/utils';
+import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 
 export const CommandPalette: React.FC = () => {
   const {
     isCommandPaletteOpen,
     setCommandPaletteOpen,
     setHelpDialogOpen,
-    setSessionCreateDialogOpen,
     setActiveMainTab,
     setSettingsDialogOpen,
     setSessionSwitcherOpen,
@@ -66,9 +66,9 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
-  const handleOpenAdvancedSession = () => {
-    setSessionCreateDialogOpen(true);
+  const handleCreateWorktreeSession = () => {
     handleClose();
+    createWorktreeSession();
   };
 
   const { isMobile } = useDeviceInfo();
@@ -135,7 +135,7 @@ export const CommandPalette: React.FC = () => {
             <span>New Session</span>
             <CommandShortcut>{getModifierLabel()} + N</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={handleOpenAdvancedSession}>
+          <CommandItem onSelect={handleCreateWorktreeSession}>
             <RiGitBranchLine className="mr-2 h-4 w-4" />
             <span>New Session with Worktree</span>
             <CommandShortcut>Shift + {getModifierLabel()} + N</CommandShortcut>

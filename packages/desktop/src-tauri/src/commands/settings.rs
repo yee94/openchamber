@@ -135,6 +135,27 @@ fn sanitize_projects(value: &Value) -> Option<Value> {
             }
         }
 
+        // Preserve worktreeDefaults
+        if let Some(Value::Object(wt)) = obj.get("worktreeDefaults") {
+            let mut defaults = serde_json::Map::new();
+            if let Some(Value::String(s)) = wt.get("branchPrefix") {
+                if !s.trim().is_empty() {
+                    defaults.insert("branchPrefix".to_string(), json!(s.trim()));
+                }
+            }
+            if let Some(Value::String(s)) = wt.get("baseBranch") {
+                if !s.trim().is_empty() {
+                    defaults.insert("baseBranch".to_string(), json!(s.trim()));
+                }
+            }
+            if let Some(Value::Bool(b)) = wt.get("autoCreateWorktree") {
+                defaults.insert("autoCreateWorktree".to_string(), json!(b));
+            }
+            if !defaults.is_empty() {
+                project.insert("worktreeDefaults".to_string(), Value::Object(defaults));
+            }
+        }
+
         result.push(Value::Object(project));
     }
 

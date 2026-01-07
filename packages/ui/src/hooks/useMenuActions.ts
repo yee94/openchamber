@@ -8,6 +8,7 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { isDesktopRuntime } from '@/lib/desktop';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
+import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 
 const MENU_ACTION_EVENT = 'openchamber:menu-action';
 
@@ -16,7 +17,7 @@ type MenuAction =
   | 'settings'
   | 'command-palette'
   | 'new-session'
-  | 'worktree-creator'
+  | 'new-worktree-session'
   | 'change-workspace'
   | 'open-git-tab'
   | 'open-diff-tab'
@@ -38,7 +39,6 @@ export const useMenuActions = (
     toggleHelpDialog,
     toggleSidebar,
     setSessionSwitcherOpen,
-    setSessionCreateDialogOpen,
     setActiveMainTab,
     setSettingsDialogOpen,
     setAboutDialogOpen,
@@ -108,8 +108,10 @@ export const useMenuActions = (
           openNewSessionDraft();
           break;
 
-        case 'worktree-creator':
-          setSessionCreateDialogOpen(true);
+        case 'new-worktree-session':
+          setActiveMainTab('chat');
+          setSessionSwitcherOpen(false);
+          createWorktreeSession();
           break;
 
         case 'change-workspace':
@@ -202,7 +204,6 @@ export const useMenuActions = (
     toggleHelpDialog,
     toggleSidebar,
     setSessionSwitcherOpen,
-    setSessionCreateDialogOpen,
     setActiveMainTab,
     setSettingsDialogOpen,
     setAboutDialogOpen,
