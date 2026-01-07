@@ -36,6 +36,7 @@ import {
   RiDeleteBinLine,
   RiErrorWarningLine,
   RiFileCopyLine,
+  RiFolderAddLine,
   RiGitBranchLine,
   RiLinkUnlinkM,
   RiMore2Line,
@@ -50,10 +51,12 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
+import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
@@ -232,10 +235,6 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[180px]">
-              <DropdownMenuItem onClick={onNewSession}>
-                <RiAddLine className="mr-1.5 h-4 w-4" />
-                New Session
-              </DropdownMenuItem>
               {isRepo && !hideDirectoryControls && (
                 <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                   <ArrowsMerge className="mr-1.5 h-4 w-4" />
@@ -252,18 +251,17 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Collapse arrow */}
+          {/* New session button */}
           <button
             type="button"
-            onClick={onToggle}
-            className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0"
-            aria-label={isCollapsed ? 'Expand project' : 'Collapse project'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewSession();
+            }}
+            className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            aria-label="New session"
           >
-            {isCollapsed ? (
-              <RiArrowRightSLine className="h-4 w-4" />
-            ) : (
-              <RiArrowDownSLine className="h-4 w-4" />
-            )}
+            <RiAddLine className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -278,13 +276,11 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
 interface ProjectDragOverlayProps {
   projectLabel: string;
   isActiveProject: boolean;
-  isCollapsed: boolean;
 }
 
 const ProjectDragOverlay: React.FC<ProjectDragOverlayProps> = ({
   projectLabel,
   isActiveProject,
-  isCollapsed,
 }) => {
   return (
     <div
@@ -299,11 +295,7 @@ const ProjectDragOverlay: React.FC<ProjectDragOverlayProps> = ({
           {projectLabel}
         </span>
         <span className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground ml-auto">
-          {isCollapsed ? (
-            <RiArrowRightSLine className="h-4 w-4" />
-          ) : (
-            <RiArrowDownSLine className="h-4 w-4" />
-          )}
+          <RiAddLine className="h-4 w-4" />
         </span>
       </div>
     </div>
@@ -360,6 +352,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
+
+  const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
@@ -1420,9 +1414,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           || project.normalizedPath
       ),
       isActive: project.id === activeProjectId,
-      isCollapsed: collapsedProjects.has(project.id),
     };
-  }, [activeDragId, projectSections, homeDirectory, activeProjectId, collapsedProjects]);
+  }, [activeDragId, projectSections, homeDirectory, activeProjectId]);
 
   return (
     <div
@@ -1450,7 +1443,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               aria-label="Add project"
               title="Add project"
             >
-              <RiAddLine className="h-5 w-5" />
+              <RiFolderAddLine className="h-4.5 w-4.5" />
             </button>
           </div>
         </div>
@@ -1538,7 +1531,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       if (mobileVariant) {
                         setSessionSwitcherOpen(false);
                       }
-                      openNewSessionDraft({ directoryOverride: project.normalizedPath });
+                      if (settingsAutoCreateWorktree && isRepo) {
+                        createWorktreeSession();
+                      } else {
+                        openNewSessionDraft({ directoryOverride: project.normalizedPath });
+                      }
                     }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
@@ -1567,7 +1564,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <ProjectDragOverlay
                   projectLabel={activeDragProject.label}
                   isActiveProject={activeDragProject.isActive}
-                  isCollapsed={activeDragProject.isCollapsed}
                 />
               ) : null}
             </DragOverlay>

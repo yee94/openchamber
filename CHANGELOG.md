@@ -4,12 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Multi Run / Agent Manager: Select the Agent you want to run for the Worktree sessions (thanks to @wienans).
-- Agent Manager now submits the prompt if valid, similar to the Chat interfaces.
-- Added worktree management actions in Agent Manager: delete the group or individual worktrees or keep only selected one (thanks to @wienans).
-- Fixed IME (Input Method Editor) composition handling for CJK input methods, preventing accidental message send during character conversion (thanks to @madebyjun).
-- Added project management with multi-project support and per-project settings for agents/commands/skills.
-- Enhanced SSE event stream with heartbeat management, permission bootstrap on connect, and improved reconnection logic.
+- Agent Manager / Multi Run: select agent per worktree session (thanks to @wienans).
+- Agent Manager / Multi Run: worktree actions to delete group or individual worktrees, or keep only selected one (thanks to @wienans).
+- Agent Manager: added "Copy Worktree Path" action in the more menu (thanks to @wienans).
+- Worktrees: added session creation flow with loading screen, auto-create worktree setting, and setup commands management.
+- Session sidebar: refactoring with unified view for sessions in worktrees.
+- Settings: added ability to create new session in worktree by default
+- Git view: added branch rename for worktree.
+- Chat: fixed IME composition for CJK input to prevent accidental send (thanks to @madebyjun).
+- Projects: added multi-project support with per-project settings for agents/commands/skills.
+- Event stream: improved SSE with heartbeat management, permission bootstrap on connect, and reconnection logic.
+- Tunnel: added QR code and password URL for Cloudflare tunnel (thanks to @martindonadieu).
+- Model selector: fixed dropdowns not responding to viewport size.
 
 
 ## [1.4.3] - 2026-01-04
