@@ -1,8 +1,23 @@
 import { addGitWorktree, deleteGitBranch, deleteRemoteBranch, getGitStatus, listGitWorktrees, removeGitWorktree, type GitAddWorktreePayload, type GitWorktreeInfo } from '@/lib/gitApi';
 import { opencodeClient } from '@/lib/opencode/client';
 import type { WorktreeMetadata } from '@/types/worktree';
+import type { FilesAPI, RuntimeAPIs } from '@/lib/api/types';
+import { getWorktreeSetupCommands, substituteCommandVariables } from '@/lib/openchamberConfig';
 
 const WORKTREE_ROOT = '.openchamber';
+const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || '/api';
+
+/**
+ * Get the runtime Files API if available (Desktop/VSCode).
+ */
+function getRuntimeFilesAPI(): FilesAPI | null {
+  if (typeof window === 'undefined') return null;
+  const apis = (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__;
+  if (apis?.files) {
+    return apis.files;
+  }
+  return null;
+}
 
 const normalize = (value: string): string => {
   if (!value) {
@@ -166,4 +181,165 @@ export function mapWorktreeToMetadata(projectDirectory: string, info: GitWorktre
       ? normalizedPath.slice(normalizedProject.length + 1)
       : normalizedPath,
   };
+}
+
+export interface WorktreeSetupResult {
+  success: boolean;
+  results: Array<{
+    command: string;
+    success: boolean;
+    exitCode?: number;
+    stdout?: string;
+    stderr?: string;
+    error?: string;
+  }>;
+}
+
+/**
+ * Run worktree setup commands in the background.
+ * This does not block - it returns a promise that resolves when all commands complete.
+ * 
+ * @param worktreePath - The path to the new worktree where commands will run
+ * @param projectDirectory - The root project directory (for $ROOT_WORKTREE_PATH substitution)
+ * @param commands - Optional commands to run. If not provided, reads from config.
+ * @returns Promise resolving to setup results
+ */
+export async function runWorktreeSetupCommands(
+  worktreePath: string,
+  projectDirectory: string,
+  commands?: string[]
+): Promise<WorktreeSetupResult> {
+  const commandsToRun = commands ?? await getWorktreeSetupCommands(projectDirectory);
+  
+  if (commandsToRun.length === 0) {
+    return { success: true, results: [] };
+  }
+
+  // Substitute variables in commands
+  const substitutedCommands = commandsToRun.map(cmd => 
+    substituteCommandVariables(cmd, { rootWorktreePath: projectDirectory })
+  );
+
+  console.log('[worktreeService] Running setup commands:', { worktreePath, projectDirectory, commands: substitutedCommands });
+
+  try {
+    // Try runtime API first (Desktop/VSCode)
+    const runtimeFiles = getRuntimeFilesAPI();
+    if (runtimeFiles?.execCommands) {
+      console.log('[worktreeService] Using runtime API for exec');
+      try {
+        // Don't use background mode - we want actual results for toast notifications
+        // The bridge now uses async exec (not execSync) so it won't block other operations
+        const result = await runtimeFiles.execCommands(substitutedCommands, worktreePath);
+        console.log('[worktreeService] Runtime exec result:', result);
+        return result as WorktreeSetupResult;
+      } catch (error) {
+        console.error('[worktreeService] Runtime exec error:', error);
+        return {
+          success: false,
+          results: substitutedCommands.map(cmd => ({
+            command: cmd,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })),
+        };
+      }
+    }
+
+    // Fall back to web API
+    console.log('[worktreeService] Using web API for exec');
+
+    const startResponse = await fetch(`${DEFAULT_BASE_URL}/fs/exec`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      // Use background job so we don't hold long-lived HTTP connections.
+      body: JSON.stringify({
+        commands: substitutedCommands,
+        cwd: worktreePath,
+        background: true,
+      }),
+    });
+
+    const startPayload = await startResponse.json().catch(() => null);
+
+    if (startResponse.status === 202 && startPayload && typeof startPayload.jobId === 'string') {
+      const jobId = startPayload.jobId as string;
+      const pollIntervalMs = 800;
+      const timeoutMs = Math.max(5 * 60_000, substitutedCommands.length * 60_000);
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < timeoutMs) {
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+
+        const pollResponse = await fetch(`${DEFAULT_BASE_URL}/fs/exec/${jobId}`, {
+          method: 'GET',
+        });
+
+        const pollPayload = await pollResponse.json().catch(() => null);
+        if (!pollResponse.ok) {
+          return {
+            success: false,
+            results: substitutedCommands.map((cmd) => ({
+              command: cmd,
+              success: false,
+              error: (pollPayload && pollPayload.error) || 'Failed to poll exec job',
+            })),
+          };
+        }
+
+        const status = pollPayload?.status;
+        if (status === 'done') {
+          const results = Array.isArray(pollPayload?.results) ? pollPayload.results : [];
+          const success = pollPayload?.success === true;
+          return { success, results } as WorktreeSetupResult;
+        }
+      }
+
+      return {
+        success: false,
+        results: substitutedCommands.map((cmd) => ({
+          command: cmd,
+          success: false,
+          error: 'Setup commands timed out',
+        })),
+      };
+    }
+
+    if (!startResponse.ok) {
+      const error = (startPayload && startPayload.error) || 'Request failed';
+      console.error('[worktreeService] Web exec failed:', startPayload);
+      return {
+        success: false,
+        results: substitutedCommands.map((cmd) => ({
+          command: cmd,
+          success: false,
+          error,
+        })),
+      };
+    }
+
+    // Back-compat: older servers may still return results synchronously.
+    console.log('[worktreeService] Web exec result:', startPayload);
+    return startPayload as WorktreeSetupResult;
+  } catch (error) {
+    console.error('[worktreeService] Exec exception:', error);
+    return {
+      success: false,
+      results: substitutedCommands.map(cmd => ({
+        command: cmd,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })),
+    };
+  }
+}
+
+/**
+ * Check if worktree setup commands are configured for a project.
+ */
+export async function hasWorktreeSetupCommands(projectDirectory: string): Promise<boolean> {
+  const commands = await getWorktreeSetupCommands(projectDirectory);
+  return commands.length > 0;
 }

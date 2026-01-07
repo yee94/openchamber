@@ -531,6 +531,116 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: { home: normalizeFsPath(home) } };
       }
 
+      case 'api:fs:read': {
+        const target = (payload as { path: string })?.path;
+        if (!target) {
+          return { id, type, success: false, error: 'Path is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedPath = resolveUserPath(target, workspaceRoot);
+          const uri = vscode.Uri.file(resolvedPath);
+          const bytes = await vscode.workspace.fs.readFile(uri);
+          const content = Buffer.from(bytes).toString('utf8');
+          return { id, type, success: true, data: { content, path: normalizeFsPath(resolvedPath) } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to read file';
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:fs:write': {
+        const { path: targetPath, content } = (payload as { path: string; content: string }) || {};
+        if (!targetPath) {
+          return { id, type, success: false, error: 'Path is required' };
+        }
+        if (typeof content !== 'string') {
+          return { id, type, success: false, error: 'Content is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedPath = resolveUserPath(targetPath, workspaceRoot);
+          const uri = vscode.Uri.file(resolvedPath);
+          // Ensure parent directory exists
+          const parentUri = vscode.Uri.file(path.dirname(resolvedPath));
+          try {
+            await vscode.workspace.fs.createDirectory(parentUri);
+          } catch {
+            // Directory may already exist
+          }
+          await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+          return { id, type, success: true, data: { success: true, path: normalizeFsPath(resolvedPath) } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to write file';
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:fs:exec': {
+        const { commands, cwd } = (payload as { commands: string[]; cwd: string }) || {};
+        if (!Array.isArray(commands) || commands.length === 0) {
+          return { id, type, success: false, error: 'Commands array is required' };
+        }
+        if (!cwd) {
+          return { id, type, success: false, error: 'Working directory (cwd) is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedCwd = resolveUserPath(cwd, workspaceRoot);
+          const { exec } = await import('child_process');
+          const { promisify } = await import('util');
+          const execAsync = promisify(exec);
+          const shell = process.env.SHELL || (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
+          const shellFlag = process.platform === 'win32' ? '/c' : '-c';
+
+          const results: Array<{
+            command: string;
+            success: boolean;
+            exitCode?: number;
+            stdout?: string;
+            stderr?: string;
+            error?: string;
+          }> = [];
+
+          for (const cmd of commands) {
+            if (typeof cmd !== 'string' || !cmd.trim()) {
+              results.push({ command: cmd, success: false, error: 'Invalid command' });
+              continue;
+            }
+            try {
+              // Use async exec to not block the extension host event loop
+              const { stdout, stderr } = await execAsync(`${shell} ${shellFlag} "${cmd.replace(/"/g, '\\"')}"`, {
+                cwd: resolvedCwd,
+                timeout: 300000, // 5 minutes per command
+              });
+              results.push({
+                command: cmd,
+                success: true,
+                exitCode: 0,
+                stdout: (stdout || '').trim(),
+                stderr: (stderr || '').trim(),
+              });
+            } catch (execError) {
+              const err = execError as { code?: number; stdout?: string; stderr?: string; message?: string };
+              results.push({
+                command: cmd,
+                success: false,
+                exitCode: typeof err.code === 'number' ? err.code : 1,
+                stdout: (err.stdout || '').trim(),
+                stderr: (err.stderr || '').trim(),
+                error: err.message,
+              });
+            }
+          }
+
+          const allSucceeded = results.every((r) => r.success);
+          return { id, type, success: true, data: { success: allSucceeded, results } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to execute commands';
+          return { id, type, success: false, error: message };
+        }
+      }
+
       case 'api:files/pick': {
         const MAX_SIZE = 10 * 1024 * 1024;
         const allowMany = (payload as { allowMany?: boolean })?.allowMany !== false;

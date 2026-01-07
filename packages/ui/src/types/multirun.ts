@@ -33,6 +33,8 @@ export interface CreateMultiRunParams {
   worktreeBaseBranch?: string;
   /** Files to attach to all runs */
   files?: MultiRunFileAttachment[];
+  /** Setup commands to run in each new worktree after creation */
+  setupCommands?: string[];
 }
 
 export interface CreateMultiRunResult {

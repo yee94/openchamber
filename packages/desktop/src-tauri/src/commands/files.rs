@@ -1,9 +1,10 @@
 use crate::path_utils::expand_tilde_path;
 use crate::{DesktopRuntime, SettingsStore};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashSet, VecDeque},
     path::{Path, PathBuf},
+    process::Command,
     time::UNIX_EPOCH,
 };
 use tokio::fs;
@@ -621,4 +622,207 @@ fn relative_path(root: &Path, target: &Path) -> String {
         .strip_prefix(root)
         .map(|relative| normalize_path(relative))
         .unwrap_or_else(|_| normalize_path(target))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadFileResponse {
+    content: String,
+    path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteFileResponse {
+    success: bool,
+    path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandResult {
+    command: String,
+    success: bool,
+    exit_code: Option<i32>,
+    stdout: Option<String>,
+    stderr: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecCommandsResponse {
+    success: bool,
+    results: Vec<CommandResult>,
+}
+
+#[tauri::command]
+pub async fn read_file(
+    path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<ReadFileResponse, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|_| "File not found or access denied".to_string())?;
+
+    let metadata = fs::metadata(&resolved_path)
+        .await
+        .map_err(|_| "File not found".to_string())?;
+
+    if !metadata.is_file() {
+        return Err("Specified path is not a file".to_string());
+    }
+
+    let content = fs::read_to_string(&resolved_path)
+        .await
+        .map_err(|err| format!("Failed to read file: {}", err))?;
+
+    Ok(ReadFileResponse {
+        content,
+        path: normalize_path(&resolved_path),
+    })
+}
+
+#[tauri::command]
+pub async fn write_file(
+    path: String,
+    content: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<WriteFileResponse, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_creatable_path(trimmed, &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_create_message())?;
+
+    // Ensure parent directory exists
+    if let Some(parent) = resolved_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|err| format!("Failed to create parent directory: {}", err))?;
+    }
+
+    fs::write(&resolved_path, content)
+        .await
+        .map_err(|err| format!("Failed to write file: {}", err))?;
+
+    Ok(WriteFileResponse {
+        success: true,
+        path: normalize_path(&resolved_path),
+    })
+}
+
+#[tauri::command]
+pub async fn exec_commands(
+    commands: Vec<String>,
+    cwd: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<ExecCommandsResponse, String> {
+    if commands.is_empty() {
+        return Err("Commands array is required".to_string());
+    }
+
+    let cwd_trimmed = cwd.trim();
+    if cwd_trimmed.is_empty() {
+        return Err("Working directory (cwd) is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_cwd = resolve_sandboxed_path(Some(cwd_trimmed.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|_| "Working directory not found or access denied".to_string())?;
+
+    let metadata = fs::metadata(&resolved_cwd)
+        .await
+        .map_err(|_| "Working directory not found".to_string())?;
+
+    if !metadata.is_dir() {
+        return Err("Specified cwd is not a directory".to_string());
+    }
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "cmd.exe".to_string()
+        } else {
+            "/bin/sh".to_string()
+        }
+    });
+
+    let shell_flag = if cfg!(windows) { "/c" } else { "-c" };
+
+    let mut results = Vec::new();
+
+    for cmd in commands {
+        let cmd_trimmed = cmd.trim();
+        if cmd_trimmed.is_empty() {
+            results.push(CommandResult {
+                command: cmd.clone(),
+                success: false,
+                exit_code: None,
+                stdout: None,
+                stderr: None,
+                error: Some("Invalid command".to_string()),
+            });
+            continue;
+        }
+
+        let cwd_clone = resolved_cwd.clone();
+        let shell_clone = shell.clone();
+        let cmd_clone = cmd_trimmed.to_string();
+
+        // Run command synchronously in blocking task
+        let result = tokio::task::spawn_blocking(move || {
+            match Command::new(&shell_clone)
+                .arg(shell_flag)
+                .arg(&cmd_clone)
+                .current_dir(&cwd_clone)
+                .output()
+            {
+                Ok(output) => CommandResult {
+                    command: cmd_clone,
+                    success: output.status.success(),
+                    exit_code: output.status.code(),
+                    stdout: Some(String::from_utf8_lossy(&output.stdout).trim().to_string()),
+                    stderr: Some(String::from_utf8_lossy(&output.stderr).trim().to_string()),
+                    error: None,
+                },
+                Err(err) => CommandResult {
+                    command: cmd_clone,
+                    success: false,
+                    exit_code: None,
+                    stdout: None,
+                    stderr: None,
+                    error: Some(err.to_string()),
+                },
+            }
+        })
+        .await
+        .unwrap_or_else(|err| CommandResult {
+            command: cmd.clone(),
+            success: false,
+            exit_code: None,
+            stdout: None,
+            stderr: None,
+            error: Some(format!("Task failed: {}", err)),
+        });
+
+        results.push(result);
+    }
+
+    let all_succeeded = results.iter().all(|r| r.success);
+
+    Ok(ExecCommandsResponse {
+        success: all_succeeded,
+        results,
+    })
 }

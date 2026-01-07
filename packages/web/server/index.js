@@ -4007,6 +4007,284 @@ async function main(options = {}) {
     }
   });
 
+  // Read file contents
+  app.get('/api/fs/read', async (req, res) => {
+    const filePath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    if (!filePath) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolvedPath = path.resolve(normalizeDirectoryPath(filePath));
+      if (resolvedPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      }
+
+      const stats = await fsPromises.stat(resolvedPath);
+      if (!stats.isFile()) {
+        return res.status(400).json({ error: 'Specified path is not a file' });
+      }
+
+      const content = await fsPromises.readFile(resolvedPath, 'utf8');
+      res.type('text/plain').send(content);
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access to file denied' });
+      }
+      console.error('Failed to read file:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to read file' });
+    }
+  });
+
+  // Write file contents
+  app.post('/api/fs/write', async (req, res) => {
+    const { path: filePath, content } = req.body || {};
+    if (!filePath || typeof filePath !== 'string') {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+    if (typeof content !== 'string') {
+      return res.status(400).json({ error: 'Content is required' });
+    }
+
+    try {
+      const resolvedPath = path.resolve(normalizeDirectoryPath(filePath));
+      if (resolvedPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      }
+
+      // Ensure parent directory exists
+      await fsPromises.mkdir(path.dirname(resolvedPath), { recursive: true });
+      await fsPromises.writeFile(resolvedPath, content, 'utf8');
+      res.json({ success: true, path: resolvedPath });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to write file:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to write file' });
+    }
+  });
+
+  // Execute shell commands in a directory (for worktree setup)
+  // NOTE: This route supports background execution to avoid tying up browser connections.
+  const execJobs = new Map();
+  const EXEC_JOB_TTL_MS = 30 * 60 * 1000;
+  const COMMAND_TIMEOUT_MS = 60000;
+
+  const pruneExecJobs = () => {
+    const now = Date.now();
+    for (const [jobId, job] of execJobs.entries()) {
+      if (!job || typeof job !== 'object') {
+        execJobs.delete(jobId);
+        continue;
+      }
+      const updatedAt = typeof job.updatedAt === 'number' ? job.updatedAt : 0;
+      if (updatedAt && now - updatedAt > EXEC_JOB_TTL_MS) {
+        execJobs.delete(jobId);
+      }
+    }
+  };
+
+  const runCommandInDirectory = (shell, shellFlag, command, resolvedCwd) => {
+    return new Promise((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+
+      const child = spawn(shell, [shellFlag, command], {
+        cwd: resolvedCwd,
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // ignore
+        }
+      }, COMMAND_TIMEOUT_MS);
+
+      child.stdout?.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+
+      child.stderr?.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      child.on('error', (error) => {
+        clearTimeout(timeout);
+        resolve({
+          command,
+          success: false,
+          exitCode: undefined,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+          error: (error && error.message) || 'Command execution failed',
+        });
+      });
+
+      child.on('close', (code, signal) => {
+        clearTimeout(timeout);
+        const exitCode = typeof code === 'number' ? code : undefined;
+        const base = {
+          command,
+          success: exitCode === 0 && !timedOut,
+          exitCode,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+        };
+
+        if (timedOut) {
+          resolve({
+            ...base,
+            success: false,
+            error: `Command timed out after ${COMMAND_TIMEOUT_MS}ms` + (signal ? ` (${signal})` : ''),
+          });
+          return;
+        }
+
+        resolve(base);
+      });
+    });
+  };
+
+  const runExecJob = async (job) => {
+    job.status = 'running';
+    job.updatedAt = Date.now();
+
+    const results = [];
+
+    for (const command of job.commands) {
+      if (typeof command !== 'string' || !command.trim()) {
+        results.push({ command, success: false, error: 'Invalid command' });
+        continue;
+      }
+
+      try {
+        const result = await runCommandInDirectory(job.shell, job.shellFlag, command, job.resolvedCwd);
+        results.push(result);
+      } catch (error) {
+        results.push({
+          command,
+          success: false,
+          error: (error && error.message) || 'Command execution failed',
+        });
+      }
+
+      job.results = results;
+      job.updatedAt = Date.now();
+    }
+
+    job.results = results;
+    job.success = results.every((r) => r.success);
+    job.status = 'done';
+    job.finishedAt = Date.now();
+    job.updatedAt = Date.now();
+  };
+
+  app.post('/api/fs/exec', async (req, res) => {
+    const { commands, cwd, background } = req.body || {};
+    if (!Array.isArray(commands) || commands.length === 0) {
+      return res.status(400).json({ error: 'Commands array is required' });
+    }
+    if (!cwd || typeof cwd !== 'string') {
+      return res.status(400).json({ error: 'Working directory (cwd) is required' });
+    }
+
+    pruneExecJobs();
+
+    try {
+      const resolvedCwd = path.resolve(normalizeDirectoryPath(cwd));
+      const stats = await fsPromises.stat(resolvedCwd);
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Specified cwd is not a directory' });
+      }
+
+      const shell = process.env.SHELL || (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
+      const shellFlag = process.platform === 'win32' ? '/c' : '-c';
+
+      const jobId = crypto.randomUUID();
+      const job = {
+        jobId,
+        status: 'queued',
+        success: null,
+        commands,
+        resolvedCwd,
+        shell,
+        shellFlag,
+        results: [],
+        startedAt: Date.now(),
+        finishedAt: null,
+        updatedAt: Date.now(),
+      };
+
+      execJobs.set(jobId, job);
+
+      const isBackground = background === true;
+      if (isBackground) {
+        void runExecJob(job).catch((error) => {
+          job.status = 'done';
+          job.success = false;
+          job.results = Array.isArray(job.results) ? job.results : [];
+          job.results.push({
+            command: '',
+            success: false,
+            error: (error && error.message) || 'Command execution failed',
+          });
+          job.finishedAt = Date.now();
+          job.updatedAt = Date.now();
+        });
+
+        return res.status(202).json({
+          jobId,
+          status: 'running',
+        });
+      }
+
+      await runExecJob(job);
+      res.json({
+        jobId,
+        status: job.status,
+        success: job.success === true,
+        results: job.results,
+      });
+    } catch (error) {
+      console.error('Failed to execute commands:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to execute commands' });
+    }
+  });
+
+  app.get('/api/fs/exec/:jobId', (req, res) => {
+    const jobId = typeof req.params?.jobId === 'string' ? req.params.jobId : '';
+    if (!jobId) {
+      return res.status(400).json({ error: 'Job id is required' });
+    }
+
+    pruneExecJobs();
+
+    const job = execJobs.get(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    job.updatedAt = Date.now();
+
+    return res.json({
+      jobId: job.jobId,
+      status: job.status,
+      success: job.success === true,
+      results: Array.isArray(job.results) ? job.results : [],
+    });
+  });
+
   app.post('/api/opencode/directory', async (req, res) => {
     try {
       const requestedPath = typeof req.body?.path === 'string' ? req.body.path.trim() : '';

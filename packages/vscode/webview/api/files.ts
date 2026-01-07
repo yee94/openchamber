@@ -1,71 +1,90 @@
-import type { DirectoryListResult, FileSearchQuery, FileSearchResult, FilesAPI } from '@openchamber/ui/lib/api/types';
+import type {
+  CommandExecResult,
+  DirectoryListResult,
+  FileSearchQuery,
+  FileSearchResult,
+  FilesAPI,
+} from '@openchamber/ui/lib/api/types';
 
-// Use same endpoints as web - fetch interceptor handles URL rewriting
-const normalizePath = (path: string): string => path.replace(/\\/g, '/');
+import { sendBridgeMessage, sendBridgeMessageWithOptions } from './bridge';
+
+const normalizePath = (value: string): string => value.replace(/\\/g, '/');
 
 export const createVSCodeFilesAPI = (): FilesAPI => ({
   async listDirectory(path: string): Promise<DirectoryListResult> {
     const target = normalizePath(path);
-    const response = await fetch('/api/fs/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: target }),
-    });
+    const data = await sendBridgeMessage<{
+      directory?: string;
+      path?: string;
+      entries: Array<{ name: string; path: string; isDirectory: boolean }>;
+    }>('api:fs:list', { path: target });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to list directory');
-    }
-
-    return response.json();
+    const directory = normalizePath(data?.directory || data?.path || target);
+    const entries = Array.isArray(data?.entries) ? data.entries : [];
+    return {
+      directory,
+      entries: entries.map((entry) => ({
+        name: entry.name,
+        path: normalizePath(entry.path),
+        isDirectory: Boolean(entry.isDirectory),
+      })),
+    };
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {
-    const response = await fetch('/api/fs/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        directory: normalizePath(payload.directory),
-        query: payload.query,
-        maxResults: payload.maxResults,
-      }),
+    const data = await sendBridgeMessage<{ files: Array<{ path: string; relativePath?: string }> }>('api:fs:search', {
+      directory: normalizePath(payload.directory),
+      query: payload.query,
+      limit: payload.maxResults,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to search files');
-    }
-
-    const results = (await response.json()) as unknown;
-    if (!Array.isArray(results)) {
-      return [];
-    }
-    return results
-      .filter((item): item is FileSearchResult => !!item && typeof item === 'object' && typeof (item as { path?: string }).path === 'string')
-      .map((item) => ({
-        path: normalizePath((item as FileSearchResult).path),
-        score: (item as FileSearchResult).score,
-        preview: (item as FileSearchResult).preview,
+    const files = Array.isArray(data?.files) ? data.files : [];
+    return files
+      .filter((file) => file && typeof file.path === 'string')
+      .map((file) => ({
+        path: normalizePath(file.path),
+        preview: file.relativePath ? [normalizePath(file.relativePath)] : undefined,
       }));
   },
 
   async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path);
-    const response = await fetch('/api/fs/mkdir', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: target }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to create directory');
-    }
-
-    const result = await response.json();
+    const data = await sendBridgeMessage<{ success: boolean; path: string }>('api:fs:mkdir', { path: target });
     return {
-      success: Boolean(result?.success),
-      path: typeof result?.path === 'string' ? normalizePath(result.path) : target,
+      success: Boolean(data?.success),
+      path: typeof data?.path === 'string' ? normalizePath(data.path) : target,
+    };
+  },
+
+  async readFile(path: string): Promise<{ content: string; path: string }> {
+    const target = normalizePath(path);
+    const data = await sendBridgeMessage<{ content: string; path: string }>('api:fs:read', { path: target });
+    return {
+      content: typeof data?.content === 'string' ? data.content : '',
+      path: typeof data?.path === 'string' ? normalizePath(data.path) : target,
+    };
+  },
+
+  async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
+    const target = normalizePath(path);
+    const data = await sendBridgeMessage<{ success: boolean; path: string }>('api:fs:write', { path: target, content });
+    return {
+      success: Boolean(data?.success),
+      path: typeof data?.path === 'string' ? normalizePath(data.path) : target,
+    };
+  },
+
+  async execCommands(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }> {
+    const targetCwd = normalizePath(cwd);
+    // Use extended timeout for command execution (5 minutes)
+    const data = await sendBridgeMessageWithOptions<{ success: boolean; results?: CommandExecResult[] }>('api:fs:exec', {
+      commands,
+      cwd: targetCwd,
+    }, { timeoutMs: 300000 });
+
+    return {
+      success: Boolean(data?.success),
+      results: Array.isArray(data?.results) ? data.results : [],
     };
   },
 });

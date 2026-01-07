@@ -309,7 +309,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
             // Build flat list for keyboard navigation
             type FlatModelItem = { model: Record<string, unknown>; providerID: string; modelID: string; section: string };
             const flatModelList: FlatModelItem[] = [];
-            
+
             filteredFavorites.forEach(({ model, providerID, modelID }) => {
               flatModelList.push({ model, providerID, modelID, section: 'fav' });
             });
@@ -387,7 +387,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                 </div>
 
                 {/* Models list */}
-                <ScrollableOverlay 
+                <ScrollableOverlay
                   outerClassName="flex-1"
                   style={{ maxHeight: availableHeight ? `${availableHeight}px` : '300px' }}
                 >
@@ -477,11 +477,11 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
           );
         })}
       </div>
-      
+
       {/* Validation hint */}
       {minModels !== undefined && selectedModels.length < minModels && (
         <p className="typography-micro text-muted-foreground">
-          Select at least {minModels} model{minModels > 1 ? 's' : ''} {maxModels !== undefined ? `and at most ${maxModels} models` : ''}.
+          Select from {minModels} {maxModels !== undefined ? `to ${maxModels} models` : ''}.
         </p>
       )}
     </div>

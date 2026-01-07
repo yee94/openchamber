@@ -12,7 +12,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { AnimatedTabs } from '@/components/ui/animated-tabs';
+
 import {
     Dialog,
     DialogContent,
@@ -21,7 +21,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { RiCheckboxBlankLine, RiCheckboxLine, RiDeleteBinLine } from '@remixicon/react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { RiAddLine, RiArrowDownSLine, RiCheckboxBlankLine, RiCheckboxLine, RiCloseLine, RiDeleteBinLine } from '@remixicon/react';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';
@@ -34,7 +35,9 @@ import {
     listWorktrees as listGitWorktrees,
     mapWorktreeToMetadata,
     removeWorktree,
+    runWorktreeSetupCommands,
 } from '@/lib/git/worktreeService';
+import { getWorktreeSetupCommands, saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import { checkIsGitRepository, ensureOpenChamberIgnored, getGitBranches } from '@/lib/gitApi';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -124,6 +127,7 @@ export const SessionDialogs: React.FC = () => {
     const [worktreeError, setWorktreeError] = React.useState<string | null>(null);
     const [isCheckingGitRepository, setIsCheckingGitRepository] = React.useState(false);
     const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
+    const [mainWorktreeBranch, setMainWorktreeBranch] = React.useState<string | null>(null);
     const [isCreatingWorktree, setIsCreatingWorktree] = React.useState(false);
     const [worktreeManagerProjectId, setWorktreeManagerProjectId] = React.useState<string | null>(null);
     const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
@@ -131,6 +135,9 @@ export const SessionDialogs: React.FC = () => {
     const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
     const [deleteDialogShouldRemoveRemote, setDeleteDialogShouldRemoveRemote] = React.useState(false);
     const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
+    const [isSetupCommandsOpen, setIsSetupCommandsOpen] = React.useState(false);
+    const [setupCommands, setSetupCommands] = React.useState<string[]>([]);
+    const [isLoadingSetupCommands, setIsLoadingSetupCommands] = React.useState(false);
 
     const {
         sessions,
@@ -166,12 +173,6 @@ export const SessionDialogs: React.FC = () => {
         [existingWorktreeBranch, sanitizedNewBranchName, worktreeCreateMode],
     );
     const sanitizedWorktreeSlug = React.useMemo(() => sanitizeWorktreeSlug(worktreeTargetBranch), [worktreeTargetBranch]);
-    const worktreePreviewPath = React.useMemo(() => {
-        if (!projectDirectory || !sanitizedWorktreeSlug) {
-            return '';
-        }
-        return joinWorktreePath(projectDirectory, sanitizedWorktreeSlug);
-    }, [projectDirectory, sanitizedWorktreeSlug]);
     const isGitRepo = isGitRepository === true;
     const selectedWorktreeBaseLabel = React.useMemo(() => {
         const match = availableWorktreeBaseBranches.find((option) => option.value === worktreeBaseBranch);
@@ -307,6 +308,8 @@ export const SessionDialogs: React.FC = () => {
             setIsCheckingGitRepository(false);
             setIsGitRepository(null);
             setIsCreatingWorktree(false);
+            setSetupCommands([]);
+            setIsSetupCommandsOpen(false);
             return;
         }
 
@@ -356,6 +359,9 @@ export const SessionDialogs: React.FC = () => {
                         ? `Current (HEAD: ${branches.current})`
                         : 'Current (HEAD)';
                     worktreeBaseOptions.push({ value: 'HEAD', label: headLabel, group: 'special' });
+
+                    // Store the main worktree's current branch for exclusion
+                    setMainWorktreeBranch(branches?.current ?? null);
 
                     if (branches) {
                         const localBranches = branches.all
@@ -407,6 +413,35 @@ export const SessionDialogs: React.FC = () => {
                     setIsLoadingWorktrees(false);
                     setIsLoadingWorktreeBaseBranches(false);
                     setIsCheckingGitRepository(false);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isSessionCreateDialogOpen, projectDirectory]);
+
+    // Load setup commands when dialog opens
+    React.useEffect(() => {
+        if (!isSessionCreateDialogOpen || !projectDirectory) {
+            return;
+        }
+
+        let cancelled = false;
+        setIsLoadingSetupCommands(true);
+
+        (async () => {
+            try {
+                const commands = await getWorktreeSetupCommands(projectDirectory);
+                if (!cancelled) {
+                    setSetupCommands(commands);
+                }
+            } catch {
+                // Ignore errors, just start with empty commands
+            } finally {
+                if (!cancelled) {
+                    setIsLoadingSetupCommands(false);
                 }
             }
         })();
@@ -539,6 +574,52 @@ export const SessionDialogs: React.FC = () => {
         } catch { /* ignored */ }
     }, [projectDirectory, isGitRepository]);
 
+    // Branches already used in worktrees (cannot be reused for existing branch selection)
+    // Includes both .openchamber worktrees and the main workspace's current branch
+    const branchesInWorktrees = React.useMemo(() => {
+        const branches = availableWorktrees
+            .map((wt) => wt.branch?.replace(/^refs\/heads\//, '') || wt.label)
+            .filter(Boolean);
+        // Also exclude the main worktree's current branch
+        if (mainWorktreeBranch) {
+            branches.push(mainWorktreeBranch);
+        }
+        return new Set(branches);
+    }, [availableWorktrees, mainWorktreeBranch]);
+
+    // Available branches for existing branch selection (local + remote, excluding those already in worktrees)
+    const availableExistingBranches = React.useMemo(() =>
+        availableWorktreeBaseBranches.filter((option) => {
+            if (option.group !== 'local' && option.group !== 'remote') return false;
+            
+            // For local branches, check direct match
+            if (option.group === 'local') {
+                return !branchesInWorktrees.has(option.value);
+            }
+            
+            // For remote branches (e.g., "origin/main"), extract the branch name after the remote prefix
+            // and check if that local branch is already in a worktree
+            const remoteMatch = option.value.match(/^[^/]+\/(.+)$/);
+            const localBranchName = remoteMatch ? remoteMatch[1] : option.value;
+            return !branchesInWorktrees.has(localBranchName);
+        }),
+        [availableWorktreeBaseBranches, branchesInWorktrees]
+    );
+
+    // Auto-select first available branch if current selection is not available
+    React.useEffect(() => {
+        if (availableExistingBranches.length === 0) {
+            setExistingWorktreeBranch('');
+            return;
+        }
+        const isCurrentSelectionAvailable = availableExistingBranches.some(
+            (option) => option.value === existingWorktreeBranch
+        );
+        if (!isCurrentSelectionAvailable) {
+            setExistingWorktreeBranch(availableExistingBranches[0].value);
+        }
+    }, [availableExistingBranches, existingWorktreeBranch]);
+
     const prevDeleteDialogRef = React.useRef<DeleteDialogState | null>(null);
     React.useEffect(() => {
 
@@ -633,10 +714,56 @@ export const SessionDialogs: React.FC = () => {
             // Ensure directory-scoped caches and session lists include the new worktree.
             setDirectory(metadata.path, { showOverlay: false });
 
+            // Refresh sessions list so sidebar shows the new session immediately
+            try {
+                await loadSessions();
+            } catch {
+                // ignore
+            }
+
             await refreshWorktrees();
             setBranchName('');
             setExistingWorktreeBranch('');
-            toast.success('Worktree created');
+
+            // Save setup commands if any were configured
+            const commandsToRun = setupCommands.filter(cmd => cmd.trim().length > 0);
+            if (commandsToRun.length > 0) {
+                // Save commands to config (fire and forget)
+                saveWorktreeSetupCommands(projectDirectory, commandsToRun).catch(() => {
+                    console.warn('Failed to save worktree setup commands');
+                });
+
+                // Run setup commands in background (non-blocking)
+                toast.success('Worktree created', {
+                    description: renderToastDescription(`Running ${commandsToRun.length} setup command${commandsToRun.length === 1 ? '' : 's'}...`),
+                });
+
+                runWorktreeSetupCommands(metadata.path, projectDirectory, commandsToRun).then((result) => {
+                    if (result.success) {
+                        toast.success('Setup commands completed', {
+                            description: renderToastDescription(`All ${result.results.length} command${result.results.length === 1 ? '' : 's'} succeeded.`),
+                        });
+                    } else {
+                        const failed = result.results.filter(r => !r.success);
+                        const succeeded = result.results.filter(r => r.success);
+                        toast.error('Setup commands failed', {
+                            description: renderToastDescription(
+                                `${failed.length} of ${result.results.length} command${result.results.length === 1 ? '' : 's'} failed.` +
+                                (succeeded.length > 0 ? ` ${succeeded.length} succeeded.` : '')
+                            ),
+                        });
+                    }
+                }).catch(() => {
+                    toast.error('Setup commands failed', {
+                        description: renderToastDescription('Could not execute setup commands.'),
+                    });
+                });
+            } else {
+                toast.success('Worktree created');
+            }
+
+            // Close dialog after successful creation
+            setSessionCreateDialogOpen(false);
         } catch (error) {
             if (cleanupMetadata) {
                 await removeWorktree({ projectDirectory, path: cleanupMetadata.path, force: true }).catch(() => undefined);
@@ -752,42 +879,115 @@ export const SessionDialogs: React.FC = () => {
         }
     }, [deleteDialog, deleteDialogShouldRemoveRemote, deleteSession, deleteSessions, closeDeleteDialog, shouldArchiveWorktree, isWorktreeDelete, canRemoveRemoteBranches, projectDirectory, loadSessions]);
 
+    // Special value for "New branch" option in the unified branch selector
+    const NEW_BRANCH_VALUE = '__new_branch__';
+
     const worktreeManagerBody = (
-        <div className="space-y-4 w-full min-w-0">
-            {}
-            <div className="space-y-3 rounded-xl border border-border/40 bg-sidebar/60 p-3">
-                <div className="space-y-1">
+        <div className="space-y-5 w-full min-w-0">
+            {/* Create worktree section */}
+            <div className="space-y-3">
+                <div className="space-y-0.5">
                     <p className="typography-ui-label font-medium text-foreground">Create worktree</p>
-                    <p className="typography-meta text-muted-foreground/80">
-                        Branch-specific directory under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
+                    <p className="typography-micro text-muted-foreground/70">
+                        Branch-specific directory under <code className="font-mono text-xs">{WORKTREE_ROOT}</code>
                     </p>
                 </div>
 
                 <div className="space-y-2">
-                    <AnimatedTabs
-                        tabs={[
-                            { value: 'new', label: 'New branch' },
-                            { value: 'existing', label: 'Existing branch' },
-                        ]}
-                        value={worktreeCreateMode}
-                        onValueChange={(value) => {
-                            setWorktreeCreateMode(value);
-                            setWorktreeError(null);
-
-                            if (value === 'existing' && !existingWorktreeBranch) {
-                                const firstLocal = availableWorktreeBaseBranches.find((option) => option.group === 'local')?.value ?? '';
-                                if (firstLocal) {
-                                    setExistingWorktreeBranch(firstLocal);
+                    <label className="typography-meta font-medium text-foreground" htmlFor="worktree-branch-select">
+                        Branch
+                    </label>
+                    <div className="flex gap-2 items-center">
+                        <Select
+                            value={worktreeCreateMode === 'new' ? NEW_BRANCH_VALUE : existingWorktreeBranch}
+                            onValueChange={(value) => {
+                                setWorktreeError(null);
+                                if (value === NEW_BRANCH_VALUE) {
+                                    setWorktreeCreateMode('new');
+                                } else {
+                                    setWorktreeCreateMode('existing');
+                                    setExistingWorktreeBranch(value);
                                 }
-                            }
-                        }}
-                        animate={false}
-                    />
+                            }}
+                            disabled={!isGitRepo || isCheckingGitRepository || isLoadingWorktreeBaseBranches}
+                        >
+                            <SelectTrigger
+                                id="worktree-branch-select"
+                                size="lg"
+                                className={cn(
+                                    'typography-meta text-foreground',
+                                    worktreeCreateMode === 'new' ? 'w-auto' : 'w-auto max-w-full'
+                                )}
+                            >
+                                <SelectValue placeholder={isLoadingWorktreeBaseBranches ? 'Loading branches…' : 'Select a branch'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value={NEW_BRANCH_VALUE}>
+                                        <span className="flex items-center gap-1.5">
+                                            <RiAddLine className="h-3.5 w-3.5" />
+                                            New branch
+                                        </span>
+                                    </SelectItem>
+                                </SelectGroup>
 
-                    {worktreeCreateMode === 'new' ? (
+                                {availableExistingBranches.some((option) => option.group === 'local') && (
+                                    <>
+                                        <SelectSeparator />
+                                        <SelectGroup>
+                                            <SelectLabel>Local branches</SelectLabel>
+                                            {availableExistingBranches
+                                                .filter((option) => option.group === 'local')
+                                                .map((option) => (
+                                                    <SelectItem key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectGroup>
+                                    </>
+                                )}
+
+                                {availableExistingBranches.some((option) => option.group === 'remote') && (
+                                    <>
+                                        <SelectSeparator />
+                                        <SelectGroup>
+                                            <SelectLabel>Remote branches</SelectLabel>
+                                            {availableExistingBranches
+                                                .filter((option) => option.group === 'remote')
+                                                .map((option) => (
+                                                    <SelectItem key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectGroup>
+                                    </>
+                                )}
+                            </SelectContent>
+                        </Select>
+
+                        {/* Branch name input - inline when "New branch" is selected */}
+                        {worktreeCreateMode === 'new' && (
+                            <Input
+                                id="worktree-branch-input"
+                                value={branchName}
+                                onChange={(e) => handleBranchInputChange(e.target.value)}
+                                placeholder="feature/new-branch"
+                                className="h-8 flex-1 min-w-0 typography-meta text-foreground placeholder:text-muted-foreground/70"
+                                disabled={!isGitRepo || isCheckingGitRepository}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !isCreatingWorktree) {
+                                        handleCreateWorktree();
+                                    }
+                                }}
+                            />
+                        )}
+                    </div>
+
+                    {/* Base branch selector - only shown when "New branch" is selected */}
+                    {worktreeCreateMode === 'new' && (
                         <>
                             <label className="typography-meta font-medium text-foreground" htmlFor="worktree-base-branch-select">
-                                Base branch
+                                From
                             </label>
                             <Select
                                 value={worktreeBaseBranch}
@@ -797,7 +997,7 @@ export const SessionDialogs: React.FC = () => {
                                 <SelectTrigger
                                     id="worktree-base-branch-select"
                                     size="lg"
-                                    className="w-full typography-meta text-foreground"
+                                    className="w-auto max-w-full typography-meta text-foreground"
                                 >
                                     <SelectValue placeholder={isLoadingWorktreeBaseBranches ? 'Loading branches…' : 'Select a branch'} />
                                 </SelectTrigger>
@@ -846,113 +1046,36 @@ export const SessionDialogs: React.FC = () => {
                                     )}
                                 </SelectContent>
                             </Select>
-
-                            <label className="typography-meta font-medium text-foreground" htmlFor="worktree-branch-input">
-                                New branch name
-                            </label>
-                            <div className="flex gap-2">
-                                <Input
-                                    id="worktree-branch-input"
-                                    value={branchName}
-                                    onChange={(e) => handleBranchInputChange(e.target.value)}
-                                    placeholder="feature/new-branch"
-                                    className="h-8 flex-1 typography-meta text-foreground placeholder:text-muted-foreground/70"
-                                    disabled={!isGitRepo || isCheckingGitRepository}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !isCreatingWorktree) {
-                                            handleCreateWorktree();
-                                        }
-                                    }}
-                                />
-                                <Button
-                                    onClick={handleCreateWorktree}
-                                    disabled={isCreatingWorktree || isLoading || !isGitRepo || !worktreeTargetBranch}
-                                    className="h-8"
-                                >
-                                    {isCreatingWorktree ? 'Creating…' : 'Create'}
-                                </Button>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <label className="typography-meta font-medium text-foreground" htmlFor="worktree-existing-branch-select">
-                                Existing branch
-                            </label>
-                            <div className="flex gap-2">
-                                <Select
-                                    value={existingWorktreeBranch}
-                                    onValueChange={(value) => {
-                                        setExistingWorktreeBranch(value);
-                                        setWorktreeError(null);
-                                    }}
-                                    disabled={
-                                        !isGitRepo
-                                        || isCheckingGitRepository
-                                        || isLoadingWorktreeBaseBranches
-                                        || !availableWorktreeBaseBranches.some((option) => option.group === 'local')
-                                    }
-                                >
-                                    <SelectTrigger
-                                        id="worktree-existing-branch-select"
-                                        size="lg"
-                                        className="flex-1 typography-meta text-foreground"
-                                    >
-                                        <SelectValue placeholder={isLoadingWorktreeBaseBranches ? 'Loading branches…' : 'Select a branch'} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup>
-                                            <SelectLabel>Local branches</SelectLabel>
-                                            {availableWorktreeBaseBranches
-                                                .filter((option) => option.group === 'local')
-                                                .map((option) => (
-                                                    <SelectItem key={option.value} value={option.value}>
-                                                        {option.label}
-                                                    </SelectItem>
-                                                ))}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                                <Button
-                                    onClick={handleCreateWorktree}
-                                    disabled={isCreatingWorktree || isLoading || !isGitRepo || !worktreeTargetBranch}
-                                    className="h-8"
-                                >
-                                    {isCreatingWorktree ? 'Creating…' : 'Create'}
-                                </Button>
-                            </div>
-                            {!isLoadingWorktreeBaseBranches && !availableWorktreeBaseBranches.some((option) => option.group === 'local') ? (
-                                <p className="typography-micro text-muted-foreground/70">
-                                    No local branches found. Fetch or create a branch first.
-                                </p>
-                            ) : null}
                         </>
                     )}
 
+                    {/* Preview info */}
                     {worktreeTargetBranch ? (
                         <p className="typography-micro text-muted-foreground/70">
                             {worktreeCreateMode === 'existing' ? (
                                 <>
                                     Uses branch{' '}
                                     <code className="font-mono text-xs text-muted-foreground">{worktreeTargetBranch}</code>
-                                    {' '}at{' '}
-                                    <code className="font-mono text-xs text-muted-foreground break-all">
-                                        {formatPathForDisplay(worktreePreviewPath, homeDirectory)}
-                                    </code>
                                 </>
                             ) : (
                                 <>
-                                    Creates branch{' '}
+                                    Creates{' '}
                                     <code className="font-mono text-xs text-muted-foreground">{worktreeTargetBranch}</code>
                                     {' '}from{' '}
                                     <code className="font-mono text-xs text-muted-foreground">{selectedWorktreeBaseLabel}</code>
-                                    {' '}at{' '}
-                                    <code className="font-mono text-xs text-muted-foreground break-all">
-                                        {formatPathForDisplay(worktreePreviewPath, homeDirectory)}
-                                    </code>
                                 </>
                             )}
                         </p>
                     ) : null}
+
+                    {/* Create button */}
+                    <Button
+                        onClick={handleCreateWorktree}
+                        disabled={isCreatingWorktree || isLoading || !isGitRepo || !worktreeTargetBranch}
+                        className="h-8"
+                    >
+                        {isCreatingWorktree ? 'Creating…' : 'Create'}
+                    </Button>
                 </div>
 
                 {worktreeError && <p className="typography-meta text-destructive">{worktreeError}</p>}
@@ -963,50 +1086,100 @@ export const SessionDialogs: React.FC = () => {
                 )}
             </div>
 
-            {}
-            <div className="space-y-3 rounded-xl border border-border/40 bg-sidebar/60 p-3 overflow-hidden min-w-0">
-                <div className="space-y-1">
-                    <p className="typography-ui-label font-medium text-foreground">Existing worktrees</p>
-                </div>
+            {/* Setup commands section */}
+            <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
+                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:opacity-80 transition-opacity">
+                    <p className="typography-ui-label font-medium text-foreground">
+                        Setup commands
+                        {setupCommands.filter(cmd => cmd.trim()).length > 0 && (
+                            <span className="font-normal text-muted-foreground/70">
+                                {' '}({setupCommands.filter(cmd => cmd.trim()).length} configured)
+                            </span>
+                        )}
+                    </p>
+                    <RiArrowDownSLine className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                        isSetupCommandsOpen && 'rotate-180'
+                    )} />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <div className="pt-2 space-y-2">
+                        <p className="typography-micro text-muted-foreground/70">
+                            Commands run in the new worktree. Use <code className="font-mono text-xs">$ROOT_WORKTREE_PATH</code> for project root.
+                        </p>
+                        {isLoadingSetupCommands ? (
+                            <p className="typography-meta text-muted-foreground/70">Loading...</p>
+                        ) : (
+                            <div className="space-y-1.5">
+                                {setupCommands.map((command, index) => (
+                                    <div key={index} className="flex gap-2">
+                                        <Input
+                                            value={command}
+                                            onChange={(e) => {
+                                                const newCommands = [...setupCommands];
+                                                newCommands[index] = e.target.value;
+                                                setSetupCommands(newCommands);
+                                            }}
+                                            placeholder="e.g., bun install"
+                                            className="h-8 flex-1 font-mono text-xs"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const newCommands = setupCommands.filter((_, i) => i !== index);
+                                                setSetupCommands(newCommands);
+                                            }}
+                                            className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                            aria-label="Remove command"
+                                        >
+                                            <RiCloseLine className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setSetupCommands([...setupCommands, ''])}
+                                    className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    <RiAddLine className="h-3.5 w-3.5" />
+                                    Add command
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+
+            {/* Existing worktrees section */}
+            <div className="space-y-2 min-w-0">
+                <p className="typography-ui-label font-medium text-foreground">Existing worktrees</p>
 
                 {isLoadingWorktrees ? (
                     <p className="typography-meta text-muted-foreground/70">Loading worktrees…</p>
                 ) : availableWorktrees.length === 0 ? (
                     <p className="typography-meta text-muted-foreground/70">
-                        No worktrees found under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
+                        No worktrees found under <code className="font-mono text-xs">{WORKTREE_ROOT}</code>
                     </p>
                 ) : (
-                    <div className="space-y-1.5 min-w-0">
-                        {availableWorktrees.map((worktree) => {
-
-                            const relativePath = worktree.relativePath
-                                || (worktree.path.startsWith(projectDirectory + '/')
-                                    ? worktree.path.slice(projectDirectory.length + 1)
-                                    : worktree.path);
-                            return (
-                                <div
-                                    key={worktree.path}
-                                    className="flex items-center gap-2 rounded-lg border border-border/30 bg-sidebar-accent/20 px-3 py-2 min-w-0"
+                    <div className="space-y-0.5 min-w-0">
+                        {availableWorktrees.map((worktree) => (
+                            <div
+                                key={worktree.path}
+                                className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-sidebar-accent/30 transition-colors min-w-0 group"
+                            >
+                                <p className="flex-1 typography-meta text-foreground truncate min-w-0">
+                                    {worktree.label || worktree.branch || 'Detached HEAD'}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteWorktree(worktree)}
+                                    className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    aria-label={`Delete worktree ${worktree.branch || worktree.label}`}
                                 >
-                                    <div className="flex-1 min-w-0">
-                                        <p className="typography-meta font-medium text-foreground">
-                                            {worktree.label || worktree.branch || 'Detached HEAD'}
-                                        </p>
-                                        <p className="typography-micro text-muted-foreground/70 break-all">
-                                            {relativePath}
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDeleteWorktree(worktree)}
-                                        className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                                        aria-label={`Delete worktree ${worktree.branch || worktree.label}`}
-                                    >
-                                        <RiDeleteBinLine className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            );
-                        })}
+                                    <RiDeleteBinLine className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
@@ -1153,7 +1326,7 @@ export const SessionDialogs: React.FC = () => {
                             <DialogTitle>Worktree Manager</DialogTitle>
                         </DialogHeader>
                         {worktreeManagerBody}
-                        <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{worktreeManagerActions}</DialogFooter>
+                        <DialogFooter className="gap-2 pt-1 pb-1">{worktreeManagerActions}</DialogFooter>
                     </DialogContent>
                 </Dialog>
             )}

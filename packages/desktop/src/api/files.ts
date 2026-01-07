@@ -111,4 +111,92 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
       throw new Error(message || 'Failed to create directory');
     }
   },
+
+  async readFile(path: string): Promise<{ content: string; path: string }> {
+    try {
+      const normalizedPath = normalizePath(path);
+      const result = await safeInvoke<{ content: string; path: string }>('read_file', {
+        path: normalizedPath
+      }, {
+        timeout: 10000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Read file operation timed out');
+        }
+      });
+
+      return {
+        content: result?.content ?? '',
+        path: result?.path ? normalizePath(result.path) : normalizedPath,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to read file');
+    }
+  },
+
+  async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
+    try {
+      const normalizedPath = normalizePath(path);
+      const result = await safeInvoke<{ success: boolean; path: string }>('write_file', {
+        path: normalizedPath,
+        content
+      }, {
+        timeout: 10000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Write file operation timed out');
+        }
+      });
+
+      return {
+        success: Boolean(result?.success),
+        path: result?.path ? normalizePath(result.path) : normalizedPath,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to write file');
+    }
+  },
+
+  async execCommands(commands: string[], cwd: string): Promise<{
+    success: boolean;
+    results: Array<{
+      command: string;
+      success: boolean;
+      exitCode?: number;
+      stdout?: string;
+      stderr?: string;
+      error?: string;
+    }>;
+  }> {
+    try {
+      const normalizedCwd = normalizePath(cwd);
+      const result = await safeInvoke<{
+        success: boolean;
+        results: Array<{
+          command: string;
+          success: boolean;
+          exitCode?: number;
+          stdout?: string;
+          stderr?: string;
+          error?: string;
+        }>;
+      }>('exec_commands', {
+        commands,
+        cwd: normalizedCwd
+      }, {
+        timeout: 120000, // 2 minutes for command execution
+        onCancel: () => {
+          console.warn('[FilesAPI] Exec commands operation timed out');
+        }
+      });
+
+      return {
+        success: Boolean(result?.success),
+        results: result?.results ?? [],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to execute commands');
+    }
+  },
 });

@@ -24,15 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
@@ -347,10 +339,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const [collapsedProjects, setCollapsedProjects] = React.useState<Set<string>>(new Set());
-  const [pendingProjectClose, setPendingProjectClose] = React.useState<{
-    id: string;
-    label: string;
-  } | null>(null);
+
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredGroupId, setHoveredGroupId] = React.useState<string | null>(null);
@@ -782,21 +771,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       sessionEvents.requestDirectoryDialog();
     }
   }, [addProject, isDesktopRuntime]);
-
-  const confirmPendingProjectClose = React.useCallback(() => {
-    const pending = pendingProjectClose;
-    if (!pending) {
-      return;
-    }
-
-    removeProject(pending.id);
-    setPendingProjectClose(null);
-    toast.success('Project closed', { description: pending.label });
-  }, [pendingProjectClose, removeProject]);
-
-  const cancelPendingProjectClose = React.useCallback(() => {
-    setPendingProjectClose(null);
-  }, []);
 
   const toggleParent = React.useCallback((sessionId: string) => {
     setExpandedParents((prev) => {
@@ -1637,7 +1611,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       openMultiRunLauncher();
                     }}
-                    onClose={() => setPendingProjectClose({ id: projectKey, label: projectLabel })}
+                    onClose={() => removeProject(projectKey)}
                     sentinelRef={(el) => { projectHeaderSentinelRefs.current.set(projectKey, el); }}
                   >
                     {!isCollapsed ? (
@@ -1731,36 +1705,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         )}
       </ScrollableOverlay>
 
-      <Dialog
-        open={pendingProjectClose !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingProjectClose(null);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Close project?</DialogTitle>
-            <DialogDescription>
-              This removes it from the sidebar. You can add it again later.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="typography-ui font-medium">
-            {pendingProjectClose?.label}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="secondary" onClick={cancelPendingProjectClose}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={confirmPendingProjectClose}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

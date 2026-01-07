@@ -316,10 +316,22 @@ export interface FileSearchResult {
   preview?: string[];
 }
 
+export interface CommandExecResult {
+  command: string;
+  success: boolean;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}
+
 export interface FilesAPI {
   listDirectory(path: string): Promise<DirectoryListResult>;
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
   createDirectory(path: string): Promise<{ success: boolean; path: string }>;
+  readFile?(path: string): Promise<{ content: string; path: string }>;
+  writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>;
+  execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }
 
 export interface ProjectEntry {

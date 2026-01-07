@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { opencodeClient } from '@/lib/opencode/client';
-import { createWorktree } from '@/lib/git/worktreeService';
+import { createWorktree, runWorktreeSetupCommands } from '@/lib/git/worktreeService';
+import { saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
 import { useDirectoryStore } from './useDirectoryStore';
@@ -100,7 +101,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
       createMultiRun: async (params: CreateMultiRunParams) => {
         const groupName = params.name.trim();
         const prompt = params.prompt.trim();
-        const { models, agent, files } = params;
+        const { models, agent, files, setupCommands } = params;
 
         if (!groupName) {
           set({ error: 'Group name is required' });
@@ -150,6 +151,8 @@ export const useMultiRunStore = create<MultiRunStore>()(
             providerID: string;
             modelID: string;
           }> = [];
+
+          const commandsToRun = setupCommands?.filter((cmd) => cmd.trim().length > 0) ?? [];
 
           // Count occurrences of each model to handle duplicates
           const modelCounts = new Map<string, number>();
@@ -212,10 +215,19 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 providerID: model.providerID,
                 modelID: model.modelID,
               });
+
             } catch (error) {
               // Best-effort: allow partial success
               console.warn('[MultiRun] Failed to create session:', error);
             }
+          }
+
+          // Save setup commands to config if any were provided (for future worktree creation)
+          const commandsToSave = setupCommands?.filter(cmd => cmd.trim().length > 0) ?? [];
+          if (commandsToSave.length > 0) {
+            saveWorktreeSetupCommands(directory, commandsToSave).catch(() => {
+              console.warn('[MultiRun] Failed to save worktree setup commands');
+            });
           }
 
           const sessionIds = createdRuns.map((r) => r.sessionId);
@@ -235,6 +247,29 @@ export const useMultiRunStore = create<MultiRunStore>()(
             filename: f.filename,
             url: f.url,
           }));
+
+          // Refresh sessions list so sidebar shows the new sessions immediately
+          try {
+            await useSessionStore.getState().loadSessions();
+          } catch {
+            // Ignore refresh errors
+          }
+
+          // Kick off setup commands after sessions are visible.
+          if (commandsToRun.length > 0) {
+            for (const run of createdRuns) {
+              void runWorktreeSetupCommands(run.worktreePath, directory, commandsToRun)
+                .then((result) => {
+                  if (!result.success) {
+                    const failed = result.results.filter((r) => !r.success);
+                    console.warn(`[MultiRun] Setup commands failed for ${run.worktreePath}:`, failed);
+                  }
+                })
+                .catch((err) => {
+                  console.warn(`[MultiRun] Setup commands error for ${run.worktreePath}:`, err);
+                });
+            }
+          }
 
           void (async () => {
             try {

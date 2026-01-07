@@ -1,15 +1,18 @@
 import React from 'react';
-import { RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine, RiPlayLine } from '@remixicon/react';
+import { RiAddLine, RiArrowDownSLine, RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine, RiPlayLine } from '@remixicon/react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multirun';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from './ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from './BranchSelector';
@@ -54,9 +57,40 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const [selectedAgent, setSelectedAgent] = React.useState<string>('');
   const [attachedFiles, setAttachedFiles] = React.useState<MultiRunAttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [setupCommands, setSetupCommands] = React.useState<string[]>([]);
+  const [isSetupCommandsOpen, setIsSetupCommandsOpen] = React.useState(false);
+  const [isLoadingSetupCommands, setIsLoadingSetupCommands] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
+  
+  const vscodeWorkspaceFolder = React.useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    const folder = (window as unknown as { __VSCODE_CONFIG__?: { workspaceFolder?: unknown } }).__VSCODE_CONFIG__?.workspaceFolder;
+    return typeof folder === 'string' && folder.trim().length > 0 ? folder.trim() : null;
+  }, []);
+
+  // Get project directory for setup commands
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const projects = useProjectsStore((state) => state.projects);
+  const projectDirectory = React.useMemo(() => {
+    if (activeProjectId) {
+      const project = projects.find((p) => p.id === activeProjectId);
+      if (project?.path) return project.path;
+    }
+
+    const base = currentDirectory ?? vscodeWorkspaceFolder;
+    if (!base) return null;
+
+    const normalized = base.replace(/\\/g, '/').replace(/\/+$/, '') || base;
+    const marker = '/.openchamber/';
+    const markerIndex = normalized.indexOf(marker);
+    if (markerIndex > 0) return normalized.slice(0, markerIndex);
+    if (normalized.endsWith('/.openchamber')) return normalized.slice(0, normalized.length - '/.openchamber'.length);
+    return normalized;
+  }, [activeProjectId, projects, currentDirectory, vscodeWorkspaceFolder]);
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
 
   const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
@@ -101,6 +135,31 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
       setPrompt((prev) => (prev.trim().length > 0 ? prev : initialPrompt));
     }
   }, [initialPrompt]);
+
+  // Load setup commands from config
+  React.useEffect(() => {
+    if (!projectDirectory) return;
+    
+    let cancelled = false;
+    setIsLoadingSetupCommands(true);
+    
+    (async () => {
+      try {
+        const commands = await getWorktreeSetupCommands(projectDirectory);
+        if (!cancelled) {
+          setSetupCommands(commands);
+        }
+      } catch {
+        // Ignore errors, start with empty commands
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSetupCommands(false);
+        }
+      }
+    })();
+    
+    return () => { cancelled = true; };
+  }, [projectDirectory]);
 
   const handleAddModel = (model: ModelSelectionWithId) => {
     if (selectedModels.length >= MAX_MODELS) {
@@ -189,6 +248,9 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
         url: f.dataUrl,
       }));
 
+      // Filter setup commands
+      const commandsForStore = setupCommands.filter(cmd => cmd.trim().length > 0);
+
       const params: CreateMultiRunParams = {
         name: name.trim(),
         prompt: prompt.trim(),
@@ -196,6 +258,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
         agent: selectedAgent || undefined,
         worktreeBaseBranch,
         files: filesForStore.length > 0 ? filesForStore : undefined,
+        setupCommands: commandsForStore.length > 0 ? commandsForStore : undefined,
       };
 
       const result = await createMultiRun(params);
@@ -304,6 +367,70 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                   <code className="font-mono text-xs text-muted-foreground">{worktreeBaseBranch || 'HEAD'}</code>.
                 </p>
               </div>
+
+              {/* Setup commands collapsible */}
+              <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
+                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:opacity-80 transition-opacity">
+                  <p className="typography-ui-label font-medium text-foreground">
+                    Setup commands
+                    {setupCommands.filter(cmd => cmd.trim()).length > 0 && (
+                      <span className="font-normal text-muted-foreground/70">
+                        {' '}({setupCommands.filter(cmd => cmd.trim()).length} configured)
+                      </span>
+                    )}
+                  </p>
+                  <RiArrowDownSLine className={cn(
+                    'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                    isSetupCommandsOpen && 'rotate-180'
+                  )} />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="pt-2 space-y-2">
+                    <p className="typography-micro text-muted-foreground/70">
+                      Commands run in each new worktree. Use <code className="font-mono text-xs">$ROOT_WORKTREE_PATH</code> for project root.
+                    </p>
+                    {isLoadingSetupCommands ? (
+                      <p className="typography-meta text-muted-foreground/70">Loading...</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {setupCommands.map((command, index) => (
+                          <div key={index} className="flex gap-2">
+                            <Input
+                              value={command}
+                              onChange={(e) => {
+                                const newCommands = [...setupCommands];
+                                newCommands[index] = e.target.value;
+                                setSetupCommands(newCommands);
+                              }}
+                              placeholder="e.g., bun install"
+                              className="h-8 flex-1 font-mono text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newCommands = setupCommands.filter((_, i) => i !== index);
+                                setSetupCommands(newCommands);
+                              }}
+                              className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                              aria-label="Remove command"
+                            >
+                              <RiCloseLine className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setSetupCommands([...setupCommands, ''])}
+                          className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <RiAddLine className="h-3.5 w-3.5" />
+                          Add command
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </div>
 
             {/* Agent selection */}
