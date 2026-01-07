@@ -14,6 +14,7 @@ import { usePermissionStore } from "./permissionStore";
 import { opencodeClient } from "@/lib/opencode/client";
 import { useDirectoryStore } from "./useDirectoryStore";
 import { useConfigStore } from "./useConfigStore";
+import { useProjectsStore } from "./useProjectsStore";
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta";
 import { flattenAssistantTextParts } from "@/lib/messages/messageText";
 
@@ -114,10 +115,19 @@ export const useSessionStore = create<SessionStore>()(
                 loadSessions: () => useSessionManagementStore.getState().loadSessions(),
 
                 openNewSessionDraft: (options) => {
+                    // Use explicit directoryOverride if provided, otherwise use active project path
+                    let directory: string | null = null;
+                    if (options?.directoryOverride !== undefined) {
+                        directory = options.directoryOverride;
+                    } else {
+                        const activeProject = useProjectsStore.getState().getActiveProject();
+                        directory = activeProject?.path ?? null;
+                    }
+
                     set({
                         newSessionDraft: {
                             open: true,
-                            directoryOverride: options?.directoryOverride ?? null,
+                            directoryOverride: directory,
                             parentID: options?.parentID ?? null,
                             title: options?.title,
                         },

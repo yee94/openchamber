@@ -37,7 +37,6 @@ import {
   RiErrorWarningLine,
   RiFileCopyLine,
   RiGitBranchLine,
-  RiGitRepositoryLine,
   RiLinkUnlinkM,
   RiMore2Line,
   RiPencilAiLine,
@@ -129,7 +128,7 @@ interface SortableProjectItemProps {
   mobileVariant: boolean;
   onToggle: () => void;
   onHoverChange: (hovered: boolean) => void;
-  onOpenWorktreeManager: () => void;
+  onNewSession: () => void;
   onOpenMultiRunLauncher: () => void;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
@@ -150,7 +149,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   mobileVariant,
   onToggle,
   onHoverChange,
-  onOpenWorktreeManager,
+  onNewSession,
   onOpenMultiRunLauncher,
   onClose,
   sentinelRef,
@@ -233,17 +232,15 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuItem onClick={onNewSession}>
+                <RiAddLine className="mr-1.5 h-4 w-4" />
+                New Session
+              </DropdownMenuItem>
               {isRepo && !hideDirectoryControls && (
-                <>
-                  <DropdownMenuItem onClick={onOpenWorktreeManager}>
-                    <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
-                    Manage Worktrees
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
-                    <ArrowsMerge className="mr-1.5 h-4 w-4" />
-                    New Multi-Run
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
+                  <ArrowsMerge className="mr-1.5 h-4 w-4" />
+                  New Multi-Run
+                </DropdownMenuItem>
               )}
               <DropdownMenuItem
                 onClick={onClose}
@@ -377,6 +374,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
+  const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
 
   const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') {
@@ -691,8 +689,30 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       // Check if this is a worktree session - if so, show confirmation dialog
       const worktree = worktreeMetadata.get(session.id);
       if (worktree) {
+        // Find ALL sessions linked to this worktree (not just the triggered one)
+        const worktreePath = worktree.path;
+        const allWorktreeSessions: Session[] = [];
+        const sessionIdSet = new Set<string>();
+        
+        // Iterate through all sessions and find those linked to the same worktree
+        sessions.forEach((s) => {
+          const meta = worktreeMetadata.get(s.id);
+          if (meta && meta.path === worktreePath && !sessionIdSet.has(s.id)) {
+            allWorktreeSessions.push(s);
+            sessionIdSet.add(s.id);
+            // Also collect descendants of each worktree session
+            const sessionDescendants = collectDescendants(s.id);
+            sessionDescendants.forEach((desc) => {
+              if (!sessionIdSet.has(desc.id)) {
+                allWorktreeSessions.push(desc);
+                sessionIdSet.add(desc.id);
+              }
+            });
+          }
+        });
+
         sessionEvents.requestDelete({
-          sessions: [session, ...descendants],
+          sessions: allWorktreeSessions,
           mode: 'worktree',
           worktree,
         });
@@ -719,17 +739,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         }
       }
     },
-    [collectDescendants, deleteSession, deleteSessions, worktreeMetadata],
-  );
-
-  const handleOpenWorktreeManager = React.useCallback(
-    (projectId?: string | null) => {
-      if (projectId && projectId !== activeProjectId) {
-        setActiveProjectIdOnly(projectId);
-      }
-      sessionEvents.requestCreate({ worktreeMode: 'create', projectId: projectId ?? null });
-    },
-    [activeProjectId, setActiveProjectIdOnly],
+    [collectDescendants, deleteSession, deleteSessions, worktreeMetadata, sessions],
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
@@ -1250,6 +1260,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </DropdownMenuItem>
                       </>
                     )}
+                    {node.worktree ? (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (projectId && projectId !== activeProjectId) {
+                            setActiveProject(projectId);
+                          }
+                          setActiveMainTab('chat');
+                          if (mobileVariant) {
+                            setSessionSwitcherOpen(false);
+                          }
+                          openNewSessionDraft({ directoryOverride: node.worktree?.path ?? null });
+                        }}
+                        className="[&>svg]:mr-1"
+                      >
+                        <RiGitBranchLine className="mr-1 h-4 w-4" />
+                        New session in worktree
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive [&>svg]:mr-1"
                       onClick={() => handleDeleteSession(session)}
@@ -1289,6 +1317,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       handleDeleteSession,
       copiedSessionId,
       mobileVariant,
+      activeProjectId,
+      setActiveProject,
+      setActiveMainTab,
+      setSessionSwitcherOpen,
+      openNewSessionDraft,
     ],
   );
 
@@ -1497,7 +1530,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     mobileVariant={mobileVariant}
                     onToggle={() => toggleProject(projectKey)}
                     onHoverChange={(hovered) => setHoveredProjectId(hovered ? projectKey : null)}
-                    onOpenWorktreeManager={() => handleOpenWorktreeManager(projectKey)}
+                    onNewSession={() => {
+                      if (projectKey !== activeProjectId) {
+                        setActiveProject(projectKey);
+                      }
+                      setActiveMainTab('chat');
+                      if (mobileVariant) {
+                        setSessionSwitcherOpen(false);
+                      }
+                      openNewSessionDraft({ directoryOverride: project.normalizedPath });
+                    }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
