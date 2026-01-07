@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useUIStore } from "@/stores/useUIStore";
+import { useConfigStore } from "@/stores/useConfigStore";
 import {
   RiAddLine,
   RiArrowUpSLine,
@@ -82,6 +83,7 @@ type ShortcutSection = {
 
 export const HelpDialog: React.FC = () => {
   const { isHelpDialogOpen, setHelpDialogOpen } = useUIStore();
+  const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const mod = getModifierLabel();
 
@@ -116,13 +118,13 @@ export const HelpDialog: React.FC = () => {
       items: [
         {
           keys: [`${mod} + N`],
-          description: "Create New Session",
-          icon: RiAddLine,
+          description: settingsAutoCreateWorktree ? "Create new session in worktree" : "Create New Session",
+          icon: settingsAutoCreateWorktree ? RiGitBranchLine : RiAddLine,
         },
         {
           keys: [`Shift + ${mod} + N`],
-          description: "Open Worktree Creator",
-          icon: RiGitBranchLine,
+          description: settingsAutoCreateWorktree ? "Create New Session" : "Create new session in worktree",
+          icon: settingsAutoCreateWorktree ? RiAddLine : RiGitBranchLine,
         },
         { keys: [`${mod} + I`], description: "Focus Chat Input", icon: RiText },
         {

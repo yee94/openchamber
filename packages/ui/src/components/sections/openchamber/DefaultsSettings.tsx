@@ -7,6 +7,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { getModifierLabel } from '@/lib/utils';
 
 export const DefaultsSettings: React.FC = () => {
   const setProvider = useConfigStore((state) => state.setProvider);
@@ -14,6 +15,8 @@ export const DefaultsSettings: React.FC = () => {
   const setAgent = useConfigStore((state) => state.setAgent);
   const setSettingsDefaultModel = useConfigStore((state) => state.setSettingsDefaultModel);
   const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
+  const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
+  const setSettingsAutoCreateWorktree = useConfigStore((state) => state.setSettingsAutoCreateWorktree);
   const providers = useConfigStore((state) => state.providers);
 
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
@@ -126,6 +129,18 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [setAgent, setSettingsDefaultAgent]);
 
+  const handleAutoWorktreeChange = React.useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = e.target.checked;
+    setSettingsAutoCreateWorktree(enabled);
+    try {
+      await updateDesktopSettings({
+        autoCreateWorktree: enabled,
+      });
+    } catch (error) {
+      console.warn('Failed to save auto create worktree setting:', error);
+    }
+  }, [setSettingsAutoCreateWorktree]);
+
   if (isLoading) {
     return null;
   }
@@ -134,14 +149,13 @@ export const DefaultsSettings: React.FC = () => {
     <div className="space-y-4">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <h3 className="typography-ui-header font-semibold text-foreground">Default model & agent</h3>
+          <h3 className="typography-ui-header font-semibold text-foreground">Session Defaults</h3>
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
-              Set the default model and agent for new sessions.<br />
-              When not set, uses agent&apos;s preferred model or opencode/big-pickle as fallback.
+              Configure default behaviors for new sessions.
             </TooltipContent>
           </Tooltip>
         </div>
@@ -174,6 +188,25 @@ export const DefaultsSettings: React.FC = () => {
           {defaultAgent && <span className="text-foreground">{defaultAgent}</span>}
         </div>
       )}
+
+      <div className="pt-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 accent-primary"
+            checked={settingsAutoCreateWorktree}
+            onChange={handleAutoWorktreeChange}
+          />
+          <span className="typography-ui-label text-foreground">
+            Always create worktree for new sessions
+          </span>
+        </label>
+        <p className="typography-meta text-muted-foreground pl-5.5 mt-1">
+          {settingsAutoCreateWorktree
+            ? `New session (Worktree): ${getModifierLabel()} + N  •  New session (Standard): Shift + ${getModifierLabel()} + N`
+            : `New session (Standard): ${getModifierLabel()} + N  •  New session (Worktree): Shift + ${getModifierLabel()} + N`}
+        </p>
+      </div>
     </div>
   );
 };

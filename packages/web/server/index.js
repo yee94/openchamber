@@ -599,6 +599,9 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
   }
+  if (typeof candidate.autoCreateWorktree === 'boolean') {
+    result.autoCreateWorktree = candidate.autoCreateWorktree;
+  }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
   if (skillCatalogs) {

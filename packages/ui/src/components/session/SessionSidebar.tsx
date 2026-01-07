@@ -698,6 +698,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const handleDeleteSession = React.useCallback(
     async (session: Session) => {
       const descendants = collectDescendants(session.id);
+      
+      // Check if this is a worktree session - if so, show confirmation dialog
+      const worktree = worktreeMetadata.get(session.id);
+      if (worktree) {
+        sessionEvents.requestDelete({
+          sessions: [session, ...descendants],
+          mode: 'worktree',
+          worktree,
+        });
+        return;
+      }
+
       if (descendants.length === 0) {
 
         const success = await deleteSession(session.id);
@@ -718,7 +730,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         }
       }
     },
-    [collectDescendants, deleteSession, deleteSessions],
+    [collectDescendants, deleteSession, deleteSessions, worktreeMetadata],
   );
 
   const handleCreateSessionInGroup = React.useCallback(

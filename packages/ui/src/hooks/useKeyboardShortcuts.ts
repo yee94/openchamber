@@ -6,6 +6,7 @@ import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { hasModifier } from '@/lib/utils';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { useConfigStore } from '@/stores/useConfigStore';
 
 export const useKeyboardShortcuts = () => {
   const { openNewSessionDraft, abortCurrentOperation, armAbortPrompt, clearAbortPrompt, currentSessionId } = useSessionStore();
@@ -81,14 +82,20 @@ export const useKeyboardShortcuts = () => {
 
       if (hasModifier(e) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        if (e.shiftKey) {
-          // Shift+Cmd/Ctrl+N creates a new session with auto-generated worktree
+        
+        const autoWorktree = useConfigStore.getState().settingsAutoCreateWorktree;
+        // If autoWorktree is true: Cmd+N -> Worktree, Cmd+Shift+N -> Standard
+        // If autoWorktree is false: Cmd+N -> Standard, Cmd+Shift+N -> Worktree
+        const shouldCreateWorktree = autoWorktree ? !e.shiftKey : e.shiftKey;
+
+        if (shouldCreateWorktree) {
+          // Create new session with auto-generated worktree
           setActiveMainTab('chat');
           setSessionSwitcherOpen(false);
           createWorktreeSession();
           return;
         }
-        // Cmd/Ctrl+N opens a new session without worktree
+        // Open a new session without worktree
         setActiveMainTab('chat');
         setSessionSwitcherOpen(false);
         openNewSessionDraft();

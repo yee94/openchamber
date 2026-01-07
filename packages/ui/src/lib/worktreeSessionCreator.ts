@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { generateUniqueBranchName } from '@/lib/git/branchNameGenerator';
@@ -116,10 +117,56 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     }
 
     // Initialize the session
-    const agents = useConfigStore.getState().agents;
+    const configState = useConfigStore.getState();
+    const agents = configState.agents;
     sessionStore.initializeNewOpenChamberSession(session.id, agents);
     sessionStore.setSessionDirectory(session.id, metadata.path);
     sessionStore.setWorktreeMetadata(session.id, createdMetadata);
+
+    // Apply default agent and model settings
+    try {
+      const visibleAgents = configState.getVisibleAgents();
+      let agentName: string | undefined;
+
+      // Priority: settingsDefaultAgent → build → first visible
+      if (configState.settingsDefaultAgent) {
+        const settingsAgent = visibleAgents.find((a) => a.name === configState.settingsDefaultAgent);
+        if (settingsAgent) {
+          agentName = settingsAgent.name;
+        }
+      }
+      if (!agentName) {
+        agentName =
+          visibleAgents.find((agent) => agent.name === 'build')?.name ||
+          visibleAgents[0]?.name;
+      }
+
+      if (agentName) {
+        // 1. Update global UI state
+        configState.setAgent(agentName);
+
+        // 2. Persist to session context so it sticks after reload/switch
+        useContextStore.getState().saveSessionAgentSelection(session.id, agentName);
+
+        // 3. Handle default model for the agent if set in global settings
+        const settingsDefaultModel = configState.settingsDefaultModel;
+        if (settingsDefaultModel) {
+          const parts = settingsDefaultModel.split('/');
+          if (parts.length === 2) {
+            const [providerId, modelId] = parts;
+            // Validate model exists (optional, but good practice)
+            const modelMetadata = configState.getModelMetadata(providerId, modelId);
+            if (modelMetadata) {
+              useContextStore.getState().saveSessionModelSelection(session.id, providerId, modelId);
+              // Also save the specific agent's model preference for this session
+              useContextStore.getState().saveAgentModelForSession(session.id, agentName, providerId, modelId);
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore errors setting default agent
+    }
 
     // Update directory
     useDirectoryStore.getState().setDirectory(metadata.path, { showOverlay: false });

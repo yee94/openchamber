@@ -23,6 +23,7 @@ const FALLBACK_MODEL_ID = "big-pickle";
 interface OpenChamberDefaults {
     defaultModel?: string;
     defaultAgent?: string;
+    autoCreateWorktree?: boolean;
 }
 
 const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
@@ -33,6 +34,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             return {
                 defaultModel: settings?.defaultModel,
                 defaultAgent: settings?.defaultAgent,
+                autoCreateWorktree: settings?.autoCreateWorktree,
             };
         }
 
@@ -46,6 +48,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                     return {
                         defaultModel: typeof data?.defaultModel === 'string' ? data.defaultModel : undefined,
                         defaultAgent: typeof data?.defaultAgent === 'string' ? data.defaultAgent : undefined,
+                        autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
                     };
                 }
             } catch {
@@ -65,6 +68,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         return {
             defaultModel: typeof data?.defaultModel === 'string' ? data.defaultModel : undefined,
             defaultAgent: typeof data?.defaultAgent === 'string' ? data.defaultAgent : undefined,
+            autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
         };
     } catch {
         return {};
@@ -351,6 +355,7 @@ interface ConfigStore {
     // OpenChamber settings-based defaults (take precedence over agent preferences)
     settingsDefaultModel: string | undefined; // format: "provider/model"
     settingsDefaultAgent: string | undefined;
+    settingsAutoCreateWorktree: boolean;
 
     activateDirectory: (directory: string | null | undefined) => Promise<void>;
 
@@ -362,6 +367,7 @@ interface ConfigStore {
     setSelectedProvider: (providerId: string) => void;
     setSettingsDefaultModel: (model: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
+    setSettingsAutoCreateWorktree: (enabled: boolean) => void;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
     getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
     checkConnection: () => Promise<boolean>;
@@ -402,6 +408,7 @@ export const useConfigStore = create<ConfigStore>()(
                 modelsMetadata: new Map<string, ModelMetadata>(),
                 settingsDefaultModel: undefined,
                 settingsDefaultAgent: undefined,
+                settingsAutoCreateWorktree: false,
 
                 activateDirectory: async (directory) => {
                     const directoryKey = toDirectoryKey(directory);
@@ -730,6 +737,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 const nextState: Partial<ConfigStore> = {
                                     settingsDefaultModel: openChamberDefaults.defaultModel,
                                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
+                                    settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
                                     directoryScoped: {
                                         ...state.directoryScoped,
                                         [directoryKey]: nextSnapshot,
@@ -1109,6 +1117,10 @@ export const useConfigStore = create<ConfigStore>()(
 
                 setSettingsDefaultAgent: (agent: string | undefined) => {
                     set({ settingsDefaultAgent: agent });
+                },
+
+                setSettingsAutoCreateWorktree: (enabled: boolean) => {
+                    set({ settingsAutoCreateWorktree: enabled });
                 },
 
                 checkConnection: async () => {

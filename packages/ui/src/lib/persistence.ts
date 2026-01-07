@@ -255,6 +255,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.defaultAgent === 'string' && candidate.defaultAgent.length > 0) {
     result.defaultAgent = candidate.defaultAgent;
   }
+  if (typeof candidate.autoCreateWorktree === 'boolean') {
+    result.autoCreateWorktree = candidate.autoCreateWorktree;
+  }
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
   }

@@ -12,6 +12,7 @@ import {
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
 import { RiAddLine, RiChatAi3Line, RiCheckLine, RiCodeLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiRestartLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine, RiTimeLine } from '@remixicon/react';
@@ -36,6 +37,8 @@ export const CommandPalette: React.FC = () => {
     setCurrentSession,
     getSessionsByDirectory,
   } = useSessionStore();
+
+  const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const { currentDirectory } = useDirectoryStore();
   const { themeMode, setThemeMode } = useThemeSystem();
@@ -133,12 +136,16 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={handleCreateSession}>
             <RiAddLine className="mr-2 h-4 w-4" />
             <span>New Session</span>
-            <CommandShortcut>{getModifierLabel()} + N</CommandShortcut>
+            <CommandShortcut>
+              {settingsAutoCreateWorktree ? `Shift + ${getModifierLabel()} + N` : `${getModifierLabel()} + N`}
+            </CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleCreateWorktreeSession}>
             <RiGitBranchLine className="mr-2 h-4 w-4" />
             <span>New Session with Worktree</span>
-            <CommandShortcut>Shift + {getModifierLabel()} + N</CommandShortcut>
+            <CommandShortcut>
+              {settingsAutoCreateWorktree ? `${getModifierLabel()} + N` : `Shift + ${getModifierLabel()} + N`}
+            </CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleShowHelp}>
             <RiQuestionLine className="mr-2 h-4 w-4" />
