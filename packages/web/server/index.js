@@ -3818,6 +3818,30 @@ async function main(options = {}) {
     }
   });
 
+
+  app.put('/api/git/branches/rename', async (req, res) => {
+    const { renameBranch } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { oldName, newName } = req.body;
+      if (!oldName) {
+        return res.status(400).json({ error: 'oldName is required' });
+      }
+      if (!newName) {
+        return res.status(400).json({ error: 'newName is required' });
+      }
+
+      const result = await renameBranch(directory, oldName, newName);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to rename branch:', error);
+      res.status(500).json({ error: error.message || 'Failed to rename branch' });
+    }
+  });
   app.delete('/api/git/remote-branches', async (req, res) => {
     const { deleteRemoteBranch } = await getGitLibraries();
     try {

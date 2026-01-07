@@ -281,6 +281,7 @@ export interface GitAPI {
   gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
   checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
   createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
+  renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
   getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
   getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
   getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;

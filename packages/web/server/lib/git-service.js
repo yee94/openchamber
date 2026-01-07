@@ -29,6 +29,22 @@ const normalizeDirectoryPath = (value) => {
   return trimmed;
 };
 
+const cleanBranchName = (branch) => {
+  if (!branch) {
+    return branch;
+  }
+  if (branch.startsWith('refs/heads/')) {
+    return branch.substring('refs/heads/'.length);
+  }
+  if (branch.startsWith('heads/')) {
+    return branch.substring('heads/'.length);
+  }
+  if (branch.startsWith('refs/')) {
+    return branch.substring('refs/'.length);
+  }
+  return branch;
+};
+
 export async function isGitRepository(directory) {
   const directoryPath = normalizeDirectoryPath(directory);
   if (!directoryPath || !fs.existsSync(directoryPath)) {
@@ -805,7 +821,7 @@ export async function getWorktrees(directory) {
       } else if (line.startsWith('HEAD ')) {
         current.head = line.substring(5);
       } else if (line.startsWith('branch ')) {
-        current.branch = line.substring(7);
+        current.branch = cleanBranchName(line.substring(7));
       } else if (line === '') {
         if (current.worktree) {
           worktrees.push(current);
@@ -1083,6 +1099,19 @@ export async function getCommitFiles(directory, commitHash) {
     return { files };
   } catch (error) {
     console.error('Failed to get commit files:', error);
+    throw error;
+  }
+}
+
+export async function renameBranch(directory, oldName, newName) {
+  const git = simpleGit(normalizeDirectoryPath(directory));
+
+  try {
+    // Use git branch -m command to rename the branch
+    await git.raw(['branch', '-m', oldName, newName]);
+    return { success: true, branch: newName };
+  } catch (error) {
+    console.error('Failed to rename branch:', error);
     throw error;
   }
 }

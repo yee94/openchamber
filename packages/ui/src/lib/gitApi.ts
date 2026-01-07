@@ -179,6 +179,16 @@ export async function createBranch(
   return gitHttp.createBranch(directory, name, startPoint);
 }
 
+export async function renameBranch(
+  directory: string,
+  oldName: string,
+  newName: string
+): Promise<{ success: boolean; branch: string }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.renameBranch(directory, oldName, newName);
+  return gitHttp.renameBranch(directory, oldName, newName);
+}
+
 export async function getGitLog(
   directory: string,
   options: import('./api/types').GitLogOptions = {}

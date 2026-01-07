@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { BranchSelector } from './BranchSelector';
+import { WorktreeBranchDisplay } from './WorktreeBranchDisplay';
 import { SyncActions } from './SyncActions';
 import type { GitStatus, GitIdentityProfile } from '@/lib/api/types';
 
@@ -37,6 +38,7 @@ interface GitHeaderProps {
   onPush: () => void;
   onCheckoutBranch: (branch: string) => void;
   onCreateBranch: (name: string) => Promise<void>;
+  onRenameBranch?: (oldName: string, newName: string) => Promise<void>;
   activeIdentityProfile: GitIdentityProfile | null;
   availableIdentities: GitIdentityProfile[];
   onSelectIdentity: (profile: GitIdentityProfile) => void;
@@ -187,6 +189,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onPush,
   onCheckoutBranch,
   onCreateBranch,
+  onRenameBranch,
   activeIdentityProfile,
   availableIdentities,
   onSelectIdentity,
@@ -199,7 +202,12 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
 
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-border/40 px-3 py-2 bg-background">
-      {!isWorktreeMode && (
+      {isWorktreeMode ? (
+        <WorktreeBranchDisplay
+          currentBranch={status.current}
+          onRename={onRenameBranch}
+        />
+      ) : (
         <BranchSelector
           currentBranch={status.current}
           localBranches={localBranches}

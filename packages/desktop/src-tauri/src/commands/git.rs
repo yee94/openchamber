@@ -1697,6 +1697,22 @@ pub async fn create_branch(
 }
 
 #[tauri::command]
+pub async fn rename_branch(
+    directory: String,
+    old_name: String,
+    new_name: String,
+    state: State<'_, DesktopRuntime>,
+) -> Result<(), String> {
+    let root = validate_git_path(&directory, state.settings())
+        .await
+        .map_err(|e| e.to_string())?;
+    run_git(&["branch", "-m", &old_name, &new_name], &root)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_git_log(
     directory: String,
     max_count: Option<i32>,

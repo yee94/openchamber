@@ -28,6 +28,7 @@ export const createWebGitAPI = (): GitAPI => ({
   gitFetch: gitApiHttp.gitFetch,
   checkoutBranch: gitApiHttp.checkoutBranch,
   createBranch: gitApiHttp.createBranch,
+  renameBranch: gitApiHttp.renameBranch,
   getGitLog(directory: string, options?: GitLogOptions) {
     return gitApiHttp.getGitLog(directory, options);
   },

@@ -183,6 +183,15 @@ export const createDesktopGitAPI = (): GitAPI => ({
     return { success: true, branch: name };
   },
 
+  async renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }> {
+    await safeGitInvoke<void>('rename_branch', {
+      directory,
+      oldName,
+      newName
+    });
+    return { success: true, branch: newName };
+  },
+
   async getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse> {
     return safeGitInvoke<GitLogResponse>('get_git_log', {
       directory,

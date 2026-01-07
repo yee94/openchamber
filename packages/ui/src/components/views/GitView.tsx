@@ -424,6 +424,21 @@ export const GitView: React.FC = () => {
     }
   };
 
+  const handleRenameBranch = async (oldName: string, newName: string) => {
+    if (!currentDirectory) return;
+
+    try {
+      await git.renameBranch(currentDirectory, oldName, newName);
+      toast.success(`Renamed branch ${oldName} to ${newName}`);
+      await refreshStatusAndBranches();
+      await refreshLog();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : `Failed to rename branch ${oldName} to ${newName}`;
+      toast.error(message);
+    }
+  };
+
   const handleCheckoutBranch = async (branch: string) => {
     if (!currentDirectory) return;
     const normalized = branch.replace(/^remotes\//, '');
@@ -652,6 +667,7 @@ export const GitView: React.FC = () => {
         onPush={() => handleSyncAction('push')}
         onCheckoutBranch={handleCheckoutBranch}
         onCreateBranch={handleCreateBranch}
+        onRenameBranch={handleRenameBranch}
         activeIdentityProfile={activeIdentityProfile}
         availableIdentities={availableIdentities}
         onSelectIdentity={handleApplyIdentity}

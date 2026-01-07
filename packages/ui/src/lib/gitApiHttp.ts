@@ -404,6 +404,23 @@ export async function createBranch(
   return response.json();
 }
 
+export async function renameBranch(
+  directory: string,
+  oldName: string,
+  newName: string
+): Promise<{ success: boolean; branch: string }> {
+  const response = await fetch(buildUrl(`${API_BASE}/branches/rename`, directory), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oldName, newName }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to rename branch');
+  }
+  return response.json();
+}
+
 export async function getGitLog(
   directory: string,
   options: GitLogOptions = {}

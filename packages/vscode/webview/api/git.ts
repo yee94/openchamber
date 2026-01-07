@@ -174,6 +174,15 @@ export const createVSCodeGitAPI = (): GitAPI => ({
     });
   },
 
+  renameBranch: async (directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }> => {
+    return sendBridgeMessage<{ success: boolean; branch: string }>('api:git/branches/rename', {
+      directory,
+      method: 'PUT',
+      oldName,
+      newName,
+    });
+  },
+
   getGitLog: async (directory: string, options?: GitLogOptions): Promise<GitLogResponse> => {
     return sendBridgeMessage<GitLogResponse>('api:git/log', {
       directory,

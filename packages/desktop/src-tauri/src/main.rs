@@ -30,7 +30,7 @@ use axum::{
 };
 use commands::files::{create_directory, exec_commands, list_directory, read_file, search_files, write_file};
 use commands::git::{
-    add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit,
+    add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit, rename_branch,
     create_git_identity, delete_git_branch, delete_git_identity, delete_remote_branch,
     ensure_openchamber_ignored, generate_commit_message, get_commit_files,
     get_current_git_identity, get_git_branches, get_git_diff, get_git_file_diff,
@@ -863,6 +863,7 @@ fn main() {
             git_fetch,
             checkout_branch,
             create_branch,
+            rename_branch,
             get_git_log,
             get_commit_files,
             get_git_identities,
