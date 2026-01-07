@@ -18,6 +18,7 @@ import {
   runWorktreeSetupCommands,
 } from '@/lib/git/worktreeService';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import { startConfigUpdate, finishConfigUpdate } from '@/lib/configUpdate';
 
 const sanitizeWorktreeSlug = (value: string): string => {
   return value
@@ -67,6 +68,7 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
   }
 
   isCreatingWorktreeSession = true;
+  startConfigUpdate("Creating new worktree session...");
 
   try {
     // Get worktree defaults from project settings
@@ -171,6 +173,7 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     });
     return null;
   } finally {
+    finishConfigUpdate();
     isCreatingWorktreeSession = false;
   }
 }
