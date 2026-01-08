@@ -590,11 +590,17 @@ const sanitizeSettingsUpdate = (payload) => {
     result.typographySizes = typography;
   }
 
-  if (typeof candidate.defaultModel === 'string' && candidate.defaultModel.length > 0) {
-    result.defaultModel = candidate.defaultModel;
+  if (typeof candidate.defaultModel === 'string') {
+    const trimmed = candidate.defaultModel.trim();
+    result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
   }
-  if (typeof candidate.defaultAgent === 'string' && candidate.defaultAgent.length > 0) {
-    result.defaultAgent = candidate.defaultAgent;
+  if (typeof candidate.defaultVariant === 'string') {
+    const trimmed = candidate.defaultVariant.trim();
+    result.defaultVariant = trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof candidate.defaultAgent === 'string') {
+    const trimmed = candidate.defaultAgent.trim();
+    result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
   }
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;

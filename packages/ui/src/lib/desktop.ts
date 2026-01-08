@@ -54,6 +54,7 @@ export type DesktopSettings = {
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"
+  defaultVariant?: string;
   defaultAgent?: string;
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;

@@ -22,6 +22,7 @@ const FALLBACK_MODEL_ID = "big-pickle";
 
 interface OpenChamberDefaults {
     defaultModel?: string;
+    defaultVariant?: string;
     defaultAgent?: string;
     autoCreateWorktree?: boolean;
 }
@@ -33,6 +34,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             const settings = await getDesktopSettings();
             return {
                 defaultModel: settings?.defaultModel,
+                defaultVariant: settings?.defaultVariant,
                 defaultAgent: settings?.defaultAgent,
                 autoCreateWorktree: settings?.autoCreateWorktree,
             };
@@ -45,9 +47,14 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                 const result = await runtimeSettings.load();
                 const data = result?.settings;
                 if (data) {
+                    const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
+                    const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
+                    const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
+
                     return {
-                        defaultModel: typeof data?.defaultModel === 'string' ? data.defaultModel : undefined,
-                        defaultAgent: typeof data?.defaultAgent === 'string' ? data.defaultAgent : undefined,
+                        defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
+                        defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
+                        defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
                         autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
                     };
                 }
@@ -65,9 +72,14 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             return {};
         }
         const data = await response.json();
+        const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
+        const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
+        const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
+
         return {
-            defaultModel: typeof data?.defaultModel === 'string' ? data.defaultModel : undefined,
-            defaultAgent: typeof data?.defaultAgent === 'string' ? data.defaultAgent : undefined,
+            defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
+            defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
+            defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
             autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
         };
     } catch {
@@ -326,10 +338,12 @@ const resolveInitialDirectoryKey = (): string => {
 };
 
 interface DirectoryScopedConfig {
+
     providers: ProviderWithModelList[];
     agents: Agent[];
     currentProviderId: string;
     currentModelId: string;
+    currentVariant?: string | undefined;
     currentAgentName: string | undefined;
     selectedProviderId: string;
     agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
@@ -355,6 +369,7 @@ interface ConfigStore {
     modelsMetadata: Map<string, ModelMetadata>;
     // OpenChamber settings-based defaults (take precedence over agent preferences)
     settingsDefaultModel: string | undefined; // format: "provider/model"
+    settingsDefaultVariant: string | undefined;
     settingsDefaultAgent: string | undefined;
     settingsAutoCreateWorktree: boolean;
 
@@ -370,6 +385,7 @@ interface ConfigStore {
     setAgent: (agentName: string | undefined) => void;
     setSelectedProvider: (providerId: string) => void;
     setSettingsDefaultModel: (model: string | undefined) => void;
+    setSettingsDefaultVariant: (variant: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
@@ -412,6 +428,7 @@ export const useConfigStore = create<ConfigStore>()(
                 isInitialized: false,
                 modelsMetadata: new Map<string, ModelMetadata>(),
                 settingsDefaultModel: undefined,
+                settingsDefaultVariant: undefined,
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
 
@@ -427,6 +444,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 agents: snapshot.agents,
                                 currentProviderId: snapshot.currentProviderId,
                                 currentModelId: snapshot.currentModelId,
+                                currentVariant: snapshot.currentVariant,
                                 currentAgentName: snapshot.currentAgentName,
                                 selectedProviderId: snapshot.selectedProviderId,
                                 agentModelSelections: snapshot.agentModelSelections,
@@ -564,14 +582,14 @@ export const useConfigStore = create<ConfigStore>()(
                 setProvider: (providerId: string) => {
                     const { providers } = get();
                     const provider = providers.find((p) => p.id === providerId);
-
+ 
                     if (!provider) {
                         return;
                     }
-
+ 
                     const firstModel = provider.models[0];
                     const newModelId = firstModel?.id || "";
-
+ 
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;
                         const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
@@ -579,6 +597,7 @@ export const useConfigStore = create<ConfigStore>()(
                             agents: state.agents,
                             currentProviderId: state.currentProviderId,
                             currentModelId: state.currentModelId,
+                            currentVariant: state.currentVariant,
                             currentAgentName: state.currentAgentName,
                             selectedProviderId: state.selectedProviderId,
                             agentModelSelections: state.agentModelSelections,
@@ -612,6 +631,7 @@ export const useConfigStore = create<ConfigStore>()(
                             agents: state.agents,
                             currentProviderId: state.currentProviderId,
                             currentModelId: state.currentModelId,
+                            currentVariant: state.currentVariant,
                             currentAgentName: state.currentAgentName,
                             selectedProviderId: state.selectedProviderId,
                             agentModelSelections: state.agentModelSelections,
@@ -638,7 +658,32 @@ export const useConfigStore = create<ConfigStore>()(
                         if (state.currentVariant === variant) {
                             return state;
                         }
-                        return { currentVariant: variant };
+
+                        const directoryKey = state.activeDirectoryKey;
+                        const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
+                            providers: state.providers,
+                            agents: state.agents,
+                            currentProviderId: state.currentProviderId,
+                            currentModelId: state.currentModelId,
+                            currentVariant: state.currentVariant,
+                            currentAgentName: state.currentAgentName,
+                            selectedProviderId: state.selectedProviderId,
+                            agentModelSelections: state.agentModelSelections,
+                            defaultProviders: state.defaultProviders,
+                        };
+
+                        const nextSnapshot: DirectoryScopedConfig = {
+                            ...baseSnapshot,
+                            currentVariant: variant,
+                        };
+
+                        return {
+                            currentVariant: variant,
+                            directoryScoped: {
+                                ...state.directoryScoped,
+                                [directoryKey]: nextSnapshot,
+                            },
+                        };
                     });
                 },
 
@@ -659,18 +704,17 @@ export const useConfigStore = create<ConfigStore>()(
 
                     const current = get().currentVariant;
                     if (!current) {
-                        set((state) => (state.currentVariant === variantKeys[0] ? state : { currentVariant: variantKeys[0] }));
-                        return;
-                    }
- 
-                    const index = variantKeys.indexOf(current);
-                    if (index === -1 || index === variantKeys.length - 1) {
-                        set((state) => (state.currentVariant === undefined ? state : { currentVariant: undefined }));
+                        get().setCurrentVariant(variantKeys[0]);
                         return;
                     }
 
-                    const nextVariant = variantKeys[index + 1];
-                    set((state) => (state.currentVariant === nextVariant ? state : { currentVariant: nextVariant }));
+                    const index = variantKeys.indexOf(current);
+                    if (index === -1 || index === variantKeys.length - 1) {
+                        get().setCurrentVariant(undefined);
+                        return;
+                    }
+
+                    get().setCurrentVariant(variantKeys[index + 1]);
                 },
  
                 setSelectedProvider: (providerId: string) => {
@@ -780,9 +824,10 @@ export const useConfigStore = create<ConfigStore>()(
                                 };
 
                                 const nextState: Partial<ConfigStore> = {
-                                    settingsDefaultModel: openChamberDefaults.defaultModel,
-                                    settingsDefaultAgent: openChamberDefaults.defaultAgent,
-                                    settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
+                                     settingsDefaultModel: openChamberDefaults.defaultModel,
+                                     settingsDefaultVariant: openChamberDefaults.defaultVariant,
+                                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
+                                     settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
                                     directoryScoped: {
                                         ...state.directoryScoped,
                                         [directoryKey]: nextSnapshot,
@@ -801,9 +846,10 @@ export const useConfigStore = create<ConfigStore>()(
                                     const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                                         providers,
                                         agents: [],
-                                        currentProviderId: "",
-                                        currentModelId: "",
-                                        currentAgentName: undefined,
+                            currentProviderId: "",
+                            currentModelId: "",
+                            currentVariant: undefined,
+                            currentAgentName: undefined,
                                         selectedProviderId: "",
                                         agentModelSelections: {},
                                         defaultProviders: {},
@@ -849,7 +895,7 @@ export const useConfigStore = create<ConfigStore>()(
                             let resolvedAgent: Agent = fallbackAgent;
 
                             // Track invalid settings to clear
-                            const invalidSettings: { defaultModel?: string; defaultAgent?: string } = {};
+                             const invalidSettings: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string } = {};
 
                             // 1. Check OpenChamber settings for default agent
                             if (openChamberDefaults.defaultAgent) {
@@ -862,22 +908,34 @@ export const useConfigStore = create<ConfigStore>()(
                                 }
                             }
 
-                            // --- Model Selection ---
-                            // Priority: settings.defaultModel → agent's preferred model → opencode/big-pickle
-                            let resolvedProviderId: string | undefined;
-                            let resolvedModelId: string | undefined;
+                             // --- Model Selection ---
+                             // Priority: settings.defaultModel → agent's preferred model → opencode/big-pickle
+                             let resolvedProviderId: string | undefined;
+                             let resolvedModelId: string | undefined;
+                             let resolvedVariant: string | undefined;
 
-                            // 1. Check OpenChamber settings for default model
-                            if (openChamberDefaults.defaultModel) {
-                                const parsed = parseModelString(openChamberDefaults.defaultModel);
-                                if (parsed && validateModel(parsed.providerId, parsed.modelId)) {
-                                    resolvedProviderId = parsed.providerId;
-                                    resolvedModelId = parsed.modelId;
-                                } else {
-                                    // Model no longer exists - mark for clearing
-                                    invalidSettings.defaultModel = '';
-                                }
-                            }
+                             // 1. Check OpenChamber settings for default model
+                             if (openChamberDefaults.defaultModel) {
+                                 const parsed = parseModelString(openChamberDefaults.defaultModel);
+                                 if (parsed && validateModel(parsed.providerId, parsed.modelId)) {
+                                     resolvedProviderId = parsed.providerId;
+                                     resolvedModelId = parsed.modelId;
+
+                                     if (openChamberDefaults.defaultVariant) {
+                                         const provider = providers.find((p) => p.id === parsed.providerId);
+                                         const model = provider?.models.find((m) => m.id === parsed.modelId) as { variants?: Record<string, unknown> } | undefined;
+                                         const variants = model?.variants;
+                                         if (variants && Object.prototype.hasOwnProperty.call(variants, openChamberDefaults.defaultVariant)) {
+                                             resolvedVariant = openChamberDefaults.defaultVariant;
+                                         } else {
+                                             invalidSettings.defaultVariant = '';
+                                         }
+                                     }
+                                 } else {
+                                     // Model no longer exists - mark for clearing
+                                     invalidSettings.defaultModel = '';
+                                 }
+                             }
 
                             // 2. Fall back to agent's preferred model
                             if (!resolvedProviderId && resolvedAgent?.model?.providerID && resolvedAgent?.model?.modelID) {
@@ -919,8 +977,9 @@ export const useConfigStore = create<ConfigStore>()(
                                     providers,
                                     agents: safeAgents,
                                     currentAgentName: resolvedAgent.name,
-                                    currentProviderId: resolvedProviderId ?? baseSnapshot.currentProviderId,
-                                    currentModelId: resolvedModelId ?? baseSnapshot.currentModelId,
+                                     currentProviderId: resolvedProviderId ?? baseSnapshot.currentProviderId,
+                                     currentModelId: resolvedModelId ?? baseSnapshot.currentModelId,
+                                     currentVariant: resolvedVariant,
                                 };
 
                                 const nextState: Partial<ConfigStore> = {
@@ -930,13 +989,14 @@ export const useConfigStore = create<ConfigStore>()(
                                     },
                                 };
 
-                                if (state.activeDirectoryKey === directoryKey) {
-                                    nextState.currentAgentName = resolvedAgent.name;
-                                    if (resolvedProviderId && resolvedModelId) {
-                                        nextState.currentProviderId = resolvedProviderId;
-                                        nextState.currentModelId = resolvedModelId;
-                                    }
-                                }
+                                 if (state.activeDirectoryKey === directoryKey) {
+                                     nextState.currentAgentName = resolvedAgent.name;
+                                     if (resolvedProviderId && resolvedModelId) {
+                                         nextState.currentProviderId = resolvedProviderId;
+                                         nextState.currentModelId = resolvedModelId;
+                                         nextState.currentVariant = resolvedVariant;
+                                     }
+                                 }
 
                                 return nextState;
                             });
@@ -944,10 +1004,11 @@ export const useConfigStore = create<ConfigStore>()(
                             // Clear invalid settings from storage (best-effort cleanup)
                             if (Object.keys(invalidSettings).length > 0) {
                                 // Also clear from store state
-                                set({
-                                    settingsDefaultModel: invalidSettings.defaultModel !== undefined ? undefined : get().settingsDefaultModel,
-                                    settingsDefaultAgent: invalidSettings.defaultAgent !== undefined ? undefined : get().settingsDefaultAgent,
-                                });
+                                 set({
+                                     settingsDefaultModel: invalidSettings.defaultModel !== undefined ? undefined : get().settingsDefaultModel,
+                                     settingsDefaultVariant: invalidSettings.defaultVariant !== undefined ? undefined : get().settingsDefaultVariant,
+                                     settingsDefaultAgent: invalidSettings.defaultAgent !== undefined ? undefined : get().settingsDefaultAgent,
+                                 });
                                 updateDesktopSettings(invalidSettings).catch(() => {
                                     // Ignore errors - best effort cleanup
                                 });
@@ -1003,7 +1064,7 @@ export const useConfigStore = create<ConfigStore>()(
                 },
 
                 setAgent: (agentName: string | undefined) => {
-                    const { agents, providers, settingsDefaultModel } = get();
+                    const { agents, providers, settingsDefaultModel, settingsDefaultVariant } = get();
 
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;
@@ -1086,21 +1147,34 @@ export const useConfigStore = create<ConfigStore>()(
                                             agents: state.agents,
                                             currentProviderId: state.currentProviderId,
                                             currentModelId: state.currentModelId,
+                                            currentVariant: state.currentVariant,
                                             currentAgentName: state.currentAgentName,
                                             selectedProviderId: state.selectedProviderId,
                                             agentModelSelections: state.agentModelSelections,
                                             defaultProviders: state.defaultProviders,
                                         };
 
+                                        let nextVariant: string | undefined;
+                                        if (settingsDefaultVariant) {
+                                            const settingsProvider = providers.find((p) => p.id === parsed.providerId);
+                                            const model = settingsProvider?.models.find((m) => m.id === parsed.modelId) as { variants?: Record<string, unknown> } | undefined;
+                                            const variants = model?.variants;
+                                            if (variants && Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
+                                                nextVariant = settingsDefaultVariant;
+                                            }
+                                        }
+
                                         const nextSnapshot: DirectoryScopedConfig = {
                                             ...baseSnapshot,
                                             currentProviderId: parsed.providerId,
                                             currentModelId: parsed.modelId,
+                                            currentVariant: nextVariant,
                                         };
 
                                         return {
                                             currentProviderId: parsed.providerId,
                                             currentModelId: parsed.modelId,
+                                            currentVariant: nextVariant,
                                             directoryScoped: {
                                                 ...state.directoryScoped,
                                                 [directoryKey]: nextSnapshot,
@@ -1156,13 +1230,17 @@ export const useConfigStore = create<ConfigStore>()(
                     }
                 },
 
-                setSettingsDefaultModel: (model: string | undefined) => {
-                    set({ settingsDefaultModel: model });
-                },
+                 setSettingsDefaultModel: (model: string | undefined) => {
+                     set({ settingsDefaultModel: model });
+                 },
 
-                setSettingsDefaultAgent: (agent: string | undefined) => {
-                    set({ settingsDefaultAgent: agent });
-                },
+                 setSettingsDefaultVariant: (variant: string | undefined) => {
+                     set({ settingsDefaultVariant: variant });
+                 },
+ 
+                 setSettingsDefaultAgent: (agent: string | undefined) => {
+                     set({ settingsDefaultAgent: agent });
+                 },
 
                 setSettingsAutoCreateWorktree: (enabled: boolean) => {
                     set({ settingsAutoCreateWorktree: enabled });

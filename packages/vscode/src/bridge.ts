@@ -80,6 +80,15 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
   const current = readSettings(ctx);
   const restChanges = { ...(changes || {}) };
   delete restChanges.lastDirectory;
+
+  // Normalize empty-string clears to key removal (match web/desktop behavior)
+  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent']) {
+    const value = restChanges[key];
+    if (typeof value === 'string' && value.trim().length === 0) {
+      delete restChanges[key];
+    }
+  }
+
   const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory };
   await ctx?.context?.globalState.update(SETTINGS_KEY, merged);
   return merged;

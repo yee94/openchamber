@@ -252,6 +252,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.defaultModel === 'string' && candidate.defaultModel.length > 0) {
     result.defaultModel = candidate.defaultModel;
   }
+  if (typeof candidate.defaultVariant === 'string' && candidate.defaultVariant.length > 0) {
+    result.defaultVariant = candidate.defaultVariant;
+  }
   if (typeof candidate.defaultAgent === 'string' && candidate.defaultAgent.length > 0) {
     result.defaultAgent = candidate.defaultAgent;
   }

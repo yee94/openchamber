@@ -276,6 +276,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         currentModelId,
         currentVariant,
         currentAgentName,
+        settingsDefaultVariant,
         setProvider,
         setModel,
         setCurrentVariant,
@@ -865,13 +866,35 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     }, [currentAgentName, currentSessionId, getAgentModelForSession, tryApplyModelSelection, agents, contextHydrated]);
 
     React.useEffect(() => {
-        if (!contextHydrated || !currentSessionId || !currentAgentName) {
+        if (!contextHydrated || !currentAgentName) {
             setCurrentVariant(undefined);
             return;
         }
 
         if (!currentProviderId || !currentModelId) {
             setCurrentVariant(undefined);
+            return;
+        }
+
+        if (availableVariants.length === 0) {
+            setCurrentVariant(undefined);
+            return;
+        }
+
+        if (currentVariant && !availableVariants.includes(currentVariant)) {
+            setCurrentVariant(undefined);
+            return;
+        }
+
+        // Draft state (no session yet): seed from settings default, but don't override
+        // user selection while drafting.
+        if (!currentSessionId) {
+            if (!currentVariant) {
+                const desired = settingsDefaultVariant && availableVariants.includes(settingsDefaultVariant)
+                    ? settingsDefaultVariant
+                    : undefined;
+                setCurrentVariant(desired);
+            }
             return;
         }
 
@@ -882,12 +905,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             currentModelId,
         );
 
-        if (savedVariant && !availableVariants.includes(savedVariant)) {
-            setCurrentVariant(undefined);
-            return;
-        }
+        const resolvedSaved = savedVariant && availableVariants.includes(savedVariant)
+            ? savedVariant
+            : undefined;
 
-        setCurrentVariant(savedVariant);
+        setCurrentVariant(resolvedSaved);
     }, [
         availableVariants,
         contextHydrated,
@@ -895,8 +917,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         currentAgentName,
         currentProviderId,
         currentModelId,
+        currentVariant,
         getAgentModelVariantForSession,
         setCurrentVariant,
+        settingsDefaultVariant,
     ]);
 
     const handleVariantSelect = React.useCallback((variant: string | undefined) => {

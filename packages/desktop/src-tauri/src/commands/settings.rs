@@ -234,13 +234,27 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             }
         }
         if let Some(Value::String(s)) = obj.get("defaultModel") {
-            if !s.is_empty() {
-                result_obj.insert("defaultModel".to_string(), json!(s));
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                result_obj.insert("defaultModel".to_string(), Value::Null);
+            } else {
+                result_obj.insert("defaultModel".to_string(), json!(trimmed));
+            }
+        }
+        if let Some(Value::String(s)) = obj.get("defaultVariant") {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                result_obj.insert("defaultVariant".to_string(), Value::Null);
+            } else {
+                result_obj.insert("defaultVariant".to_string(), json!(trimmed));
             }
         }
         if let Some(Value::String(s)) = obj.get("defaultAgent") {
-            if !s.is_empty() {
-                result_obj.insert("defaultAgent".to_string(), json!(s));
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                result_obj.insert("defaultAgent".to_string(), Value::Null);
+            } else {
+                result_obj.insert("defaultAgent".to_string(), json!(trimmed));
             }
         }
 

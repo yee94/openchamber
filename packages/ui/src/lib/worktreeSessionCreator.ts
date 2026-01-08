@@ -160,6 +160,24 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
               useContextStore.getState().saveSessionModelSelection(session.id, providerId, modelId);
               // Also save the specific agent's model preference for this session
               useContextStore.getState().saveAgentModelForSession(session.id, agentName, providerId, modelId);
+
+              // Seed default variant into session context so ModelControls restore logic
+              // doesn't wipe it on first switch to the new session.
+              const settingsDefaultVariant = configState.settingsDefaultVariant;
+              if (settingsDefaultVariant) {
+                const provider = configState.providers.find((p) => p.id === providerId);
+                const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
+                  | { variants?: Record<string, unknown> }
+                  | undefined;
+                const variants = model?.variants;
+
+                if (variants && Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
+                  configState.setCurrentVariant(settingsDefaultVariant);
+                  useContextStore
+                    .getState()
+                    .saveAgentModelVariantForSession(session.id, agentName, providerId, modelId, settingsDefaultVariant);
+                }
+              }
             }
           }
         }
