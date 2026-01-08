@@ -132,7 +132,7 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
       ref={containerRef}
       className="absolute z-[100] min-w-0 w-full max-w-[360px] max-h-60 bg-background border border-border rounded-xl shadow-none bottom-full mb-2 left-0 flex flex-col"
     >
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0">
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0 pb-2" fillContainer={false}>
         {agents.length ? (
           <div>
             {agents.map((agent, index) => renderAgent(agent, index))}

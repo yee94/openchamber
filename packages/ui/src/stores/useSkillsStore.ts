@@ -62,6 +62,7 @@ export interface DiscoveredSkill {
   path: string;
   scope: SkillScope;
   source: SkillSource;
+  description?: string;
 }
 
 export interface SkillConfig {
@@ -154,7 +155,14 @@ export const useSkillsStore = create<SkillsStore>()(
               }
               
               const data = await response.json();
-              const skills = (data.skills || []) as DiscoveredSkill[];
+              const rawSkills = data.skills || [];
+              const skills = rawSkills.map((s: any) => ({
+                name: s.name,
+                path: s.path,
+                scope: s.scope,
+                source: s.source,
+                description: s.sources?.md?.description || '',
+              })) as DiscoveredSkill[];
               
               set({ skills, isLoading: false });
               return true;

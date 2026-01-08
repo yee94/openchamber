@@ -19,6 +19,7 @@ import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
 import { AgentMentionAutocomplete, type AgentMentionAutocompleteHandle } from './AgentMentionAutocomplete';
+import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomplete';
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
@@ -121,12 +122,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [commandQuery, setCommandQuery] = React.useState('');
     const [showAgentAutocomplete, setShowAgentAutocomplete] = React.useState(false);
     const [agentQuery, setAgentQuery] = React.useState('');
+    const [showSkillAutocomplete, setShowSkillAutocomplete] = React.useState(false);
+    const [skillQuery, setSkillQuery] = React.useState('');
     const [textareaSize, setTextareaSize] = React.useState<{ height: number; maxHeight: number } | null>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
     const agentRef = React.useRef<AgentMentionAutocompleteHandle>(null);
+    const skillRef = React.useRef<SkillAutocompleteHandle>(null);
 
     const sendMessage = useSessionStore((state) => state.sendMessage);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -567,6 +571,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
         }
 
+        if (showSkillAutocomplete && skillRef.current) {
+            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+                e.preventDefault();
+                skillRef.current.handleKeyDown(e.key);
+                return;
+            }
+        }
+
         if (showFileMention && mentionRef.current) {
             if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
                 e.preventDefault();
@@ -704,10 +716,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 setShowCommandAutocomplete(true);
                 setShowFileMention(false);
                 setShowAgentAutocomplete(false);
-            } else {
-                setShowCommandAutocomplete(false);
+                setShowSkillAutocomplete(false);
+                return;
             }
-            return;
         }
 
         setShowCommandAutocomplete(false);
@@ -732,6 +743,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         setShowAgentAutocomplete(false);
         setAgentQuery('');
 
+        const lastSlashSymbol = textBeforeCursor.lastIndexOf('/');
+        if (lastSlashSymbol !== -1) {
+            const charBefore = lastSlashSymbol > 0 ? textBeforeCursor[lastSlashSymbol - 1] : null;
+            const textAfterSlash = textBeforeCursor.substring(lastSlashSymbol + 1);
+            const hasSeparator = textAfterSlash.includes(' ') || textAfterSlash.includes('\n');
+            const isWordBoundary = !charBefore || /\s/.test(charBefore);
+
+            if (isWordBoundary && !hasSeparator) {
+                setSkillQuery(textAfterSlash);
+                setShowSkillAutocomplete(true);
+                setShowFileMention(false);
+                setShowAgentAutocomplete(false);
+                return;
+            }
+        }
+
+        setShowSkillAutocomplete(false);
+        setSkillQuery('');
+
         const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
         if (lastAtSymbol !== -1) {
             const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
@@ -744,7 +774,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         } else {
             setShowFileMention(false);
         }
-    }, [setAgentQuery, setCommandQuery, setMentionQuery, setShowAgentAutocomplete, setShowCommandAutocomplete, setShowFileMention]);
+    }, [setAgentQuery, setCommandQuery, setMentionQuery, setShowAgentAutocomplete, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete, setSkillQuery]);
 
     const insertTextAtSelection = React.useCallback((text: string) => {
         if (!text) {
@@ -887,6 +917,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         setShowAgentAutocomplete(false);
         setAgentQuery('');
+
+        textareaRef.current?.focus();
+    };
+
+    const handleSkillSelect = (skillName: string) => {
+        const textarea = textareaRef.current;
+        const cursorPosition = textarea?.selectionStart ?? message.length;
+        const textBeforeCursor = message.substring(0, cursorPosition);
+        const lastSlashSymbol = textBeforeCursor.lastIndexOf('/');
+
+        if (lastSlashSymbol !== -1) {
+            const newMessage =
+                message.substring(0, lastSlashSymbol) +
+                `${skillName} ` +
+                message.substring(cursorPosition);
+            setMessage(newMessage);
+
+            const nextCursor = lastSlashSymbol + skillName.length + 1;
+            requestAnimationFrame(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.selectionStart = nextCursor;
+                    textareaRef.current.selectionEnd = nextCursor;
+                }
+                adjustTextareaHeight();
+                updateAutocompleteState(newMessage, nextCursor);
+            });
+        }
+
+        setShowSkillAutocomplete(false);
+        setSkillQuery('');
 
         textareaRef.current?.focus();
     };
@@ -1341,11 +1401,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             ref={agentRef}
                             searchQuery={agentQuery}
                             onAgentSelect={handleAgentSelect}
-                            onClose={() => setShowAgentAutocomplete(false)}
-                        />
-                    )}
-                    {}
-                    {showFileMention && (
+                    onClose={() => setShowAgentAutocomplete(false)}
+                />
+            )}
+
+            {showSkillAutocomplete && (
+                <SkillAutocomplete
+                    ref={skillRef}
+                    searchQuery={skillQuery}
+                    onSkillSelect={handleSkillSelect}
+                    onClose={() => setShowSkillAutocomplete(false)}
+                />
+            )}
+
+            {showFileMention && (
+
                         <FileMentionAutocomplete
                             ref={mentionRef}
                             searchQuery={mentionQuery}
