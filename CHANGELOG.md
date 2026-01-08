@@ -4,8 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Added support for model variants (thinking effort).
-- Switched agent cycling shortcut from TAB to Shift + TAB.
+- Chat: Added support for model variants (thinking effort).
+- Shortcuts: Switched agent cycling shortcut from TAB to Shift + TAB.
+- Skills: added autocomplete for skills on "/" when it is not the first character in input.
+- Autocomplete: added scope badges for commands/agents/skills.
 
 
 ## [1.4.4] - 2026-01-08

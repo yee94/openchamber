@@ -3,6 +3,7 @@ import { RiCommandLine, RiFileLine, RiFlashlightLine, RiRefreshLine, RiScissorsL
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
@@ -12,6 +13,7 @@ interface CommandInfo {
   agent?: string;
   model?: string;
   isBuiltIn?: boolean;
+  scope?: string;
 }
 
 export interface CommandAutocompleteHandle {
@@ -43,6 +45,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const { commands: commandsWithMetadata, loadCommands: refreshCommands } = useCommandsStore();
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -66,18 +69,21 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   }, [onClose]);
 
   React.useEffect(() => {
+    // Force refresh to get latest project context when mounting
+    void refreshCommands();
+  }, [refreshCommands]);
+
+  React.useEffect(() => {
     const loadCommands = async () => {
       setLoading(true);
       try {
-
-        const apiCommands = await opencodeClient.listCommands();
-
-        const customCommands: CommandInfo[] = apiCommands.map(cmd => ({
+        const customCommands: CommandInfo[] = commandsWithMetadata.map(cmd => ({
           name: cmd.name,
           description: cmd.description,
-          agent: cmd.agent,
-          model: cmd.model,
-          isBuiltIn: false
+          agent: cmd.agent ?? undefined,
+          model: cmd.model ?? undefined,
+          isBuiltIn: cmd.name === 'init' || cmd.name === 'review',
+          scope: cmd.scope,
         }));
 
         const builtInCommands: CommandInfo[] = [
@@ -154,7 +160,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     };
 
     loadCommands();
-  }, [searchQuery, hasMessagesInCurrentSession, hasSession]);
+  }, [searchQuery, hasMessagesInCurrentSession, hasSession, commandsWithMetadata]);
 
   React.useEffect(() => {
     setSelectedIndex(0);
@@ -236,37 +242,56 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           </div>
         ) : (
           <div>
-            {commands.map((command, index) => (
-              <div
-                key={command.name}
-                ref={(el) => { itemRefs.current[index] = el; }}
-                className={cn(
-                  "flex items-start gap-2 px-3 py-2 cursor-pointer rounded-lg",
-                  index === selectedIndex && "bg-muted"
-                )}
-                onClick={() => onCommandSelect(command)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                <div className="mt-0.5">
-                  {getCommandIcon(command)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="typography-ui-label font-medium">/{command.name}</span>
-                    {command.agent && (
-                      <span className="typography-meta text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {command.agent}
-                      </span>
+            {commands.map((command, index) => {
+              const isSystem = command.isBuiltIn;
+              const isProject = command.scope === 'project';
+              
+              return (
+                <div
+                  key={command.name}
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  className={cn(
+                    "flex items-start gap-2 px-3 py-2 cursor-pointer rounded-lg",
+                    index === selectedIndex && "bg-muted"
+                  )}
+                  onClick={() => onCommandSelect(command)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  <div className="mt-0.5">
+                    {getCommandIcon(command)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="typography-ui-label font-medium">/{command.name}</span>
+                      {isSystem ? (
+                        <span className="text-[10px] leading-none uppercase font-bold tracking-tight bg-[var(--status-warning-background)] text-[var(--status-warning)] border-[var(--status-warning-border)] px-1.5 py-1 rounded border flex-shrink-0">
+                          system
+                        </span>
+                      ) : command.scope ? (
+                        <span className={cn(
+                          "text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0",
+                          isProject 
+                            ? "bg-[var(--status-info-background)] text-[var(--status-info)] border-[var(--status-info-border)]"
+                            : "bg-[var(--status-success-background)] text-[var(--status-success)] border-[var(--status-success-border)]"
+                        )}>
+                          {command.scope}
+                        </span>
+                      ) : null}
+                      {command.agent && (
+                        <span className="text-[10px] leading-none font-bold tracking-tight bg-[var(--surface-subtle)] text-[var(--surface-foreground)] border-[var(--interactive-border)] px-1.5 py-1 rounded border flex-shrink-0">
+                          {command.agent}
+                        </span>
+                      )}
+                    </div>
+                    {command.description && (
+                      <div className="typography-meta text-muted-foreground mt-0.5 truncate">
+                        {command.description}
+                      </div>
                     )}
                   </div>
-                  {command.description && (
-                    <div className="typography-meta text-muted-foreground mt-0.5 truncate">
-                      {command.description}
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {commands.length === 0 && (
               <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                 No commands found

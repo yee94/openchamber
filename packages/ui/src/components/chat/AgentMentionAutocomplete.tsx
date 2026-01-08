@@ -1,12 +1,15 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface AgentInfo {
   name: string;
   description?: string;
   mode?: string | null;
+  scope?: string;
+  isBuiltIn?: boolean;
 }
 
 export interface AgentMentionAutocompleteHandle {
@@ -34,17 +37,30 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [agents, setAgents] = React.useState<AgentInfo[]>([]);
+  const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const { getVisibleAgents } = useConfigStore();
+  const { agents: agentsWithMetadata, loadAgents } = useAgentsStore();
+
+  React.useEffect(() => {
+    if (agentsWithMetadata.length === 0) {
+      void loadAgents();
+    }
+  }, [loadAgents, agentsWithMetadata.length]);
 
   React.useEffect(() => {
     const visibleAgents = getVisibleAgents();
     const filtered = visibleAgents
       .filter((agent) => isMentionable(agent.mode))
-      .map((agent) => ({
-        name: agent.name,
-        description: agent.description,
-        mode: agent.mode ?? undefined,
-      }));
+      .map((agent) => {
+        const metadata = agentsWithMetadata.find(a => a.name === agent.name);
+        return {
+          name: agent.name,
+          description: agent.description,
+          mode: agent.mode ?? undefined,
+          scope: (metadata as any)?.scope,
+          isBuiltIn: (metadata as any)?.native || (metadata as any)?.builtIn,
+        };
+      });
 
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matches = normalizedQuery.length
@@ -56,6 +72,13 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
     setAgents(matches);
     setSelectedIndex(0);
   }, [getVisibleAgents, searchQuery]);
+
+  React.useEffect(() => {
+    itemRefs.current[selectedIndex]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+  }, [selectedIndex]);
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -104,28 +127,50 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
     },
   }), [agents, onAgentSelect, onClose, selectedIndex]);
 
-  const renderAgent = (agent: AgentInfo, index: number) => (
-    <div
-      key={agent.name}
-      className={cn(
-        'flex items-start gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label',
-        index === selectedIndex && 'bg-muted'
-      )}
-      onClick={() => onAgentSelect(agent.name)}
-      onMouseEnter={() => setSelectedIndex(index)}
->
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold">#{agent.name}</span>
-        </div>
-        {agent.description && (
-          <div className="typography-meta text-muted-foreground truncate">
-            {agent.description}
-          </div>
+  const renderAgent = (agent: AgentInfo, index: number) => {
+    const isSystem = agent.isBuiltIn;
+    const isProject = agent.scope === 'project';
+    
+    return (
+      <div
+        key={agent.name}
+        ref={(el) => {
+          itemRefs.current[index] = el;
+        }}
+        className={cn(
+          'flex items-start gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label',
+          index === selectedIndex && 'bg-muted'
         )}
+        onClick={() => onAgentSelect(agent.name)}
+        onMouseEnter={() => setSelectedIndex(index)}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">#{agent.name}</span>
+            {isSystem ? (
+              <span className="text-[10px] leading-none uppercase font-bold tracking-tight bg-[var(--status-warning-background)] text-[var(--status-warning)] border-[var(--status-warning-border)] px-1.5 py-1 rounded border flex-shrink-0">
+                system
+              </span>
+            ) : agent.scope ? (
+              <span className={cn(
+                "text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0",
+                isProject 
+                  ? "bg-[var(--status-info-background)] text-[var(--status-info)] border-[var(--status-info-border)]"
+                  : "bg-[var(--status-success-background)] text-[var(--status-success)] border-[var(--status-success-border)]"
+              )}>
+                {agent.scope}
+              </span>
+            ) : null}
+          </div>
+          {agent.description && (
+            <div className="typography-meta text-muted-foreground mt-0.5 truncate">
+              {agent.description}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div

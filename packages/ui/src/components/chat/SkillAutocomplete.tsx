@@ -106,34 +106,42 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
     },
   }), [filteredSkills, onSkillSelect, onClose, selectedIndex]);
 
-  const renderSkill = (skill: SkillInfo, index: number) => (
-    <div
-      key={`${skill.name}-${skill.scope}`}
-      ref={(el) => {
-        itemRefs.current[index] = el;
-      }}
-      className={cn(
-        'flex items-start gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label',
-        index === selectedIndex && 'bg-muted'
-      )}
-      onClick={() => onSkillSelect(skill.name)}
-      onMouseEnter={() => setSelectedIndex(index)}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold truncate">{skill.name}</span>
-          <span className="text-[10px] leading-none uppercase font-bold tracking-tight text-muted-foreground/70 bg-muted/50 px-1 py-0.5 rounded border border-border/40 flex-shrink-0">
-            {skill.scope}
-          </span>
-        </div>
-        {skill.description && (
-          <div className="typography-meta text-muted-foreground mt-0.5 truncate">
-            {skill.description}
-          </div>
+  const renderSkill = (skill: SkillInfo, index: number) => {
+    const isProject = skill.scope === 'project';
+    return (
+      <div
+        key={`${skill.name}-${skill.scope}`}
+        ref={(el) => {
+          itemRefs.current[index] = el;
+        }}
+        className={cn(
+          'flex items-start gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label',
+          index === selectedIndex && 'bg-muted'
         )}
+        onClick={() => onSkillSelect(skill.name)}
+        onMouseEnter={() => setSelectedIndex(index)}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold truncate">{skill.name}</span>
+            <span className={cn(
+              "text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0 transition-colors",
+              isProject 
+                ? "bg-[var(--status-info-background)] text-[var(--status-info)] border-[var(--status-info-border)]"
+                : "bg-[var(--status-success-background)] text-[var(--status-success)] border-[var(--status-success-border)]"
+            )}>
+              {skill.scope}
+            </span>
+          </div>
+          {skill.description && (
+            <div className="typography-meta text-muted-foreground mt-0.5 truncate">
+              {skill.description}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div
