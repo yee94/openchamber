@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Added support for model variants (thinking effort)
+- Added support for model variants (thinking effort).
+- Switched agent cycling shortcut from TAB to Shift + TAB.
 
 
 ## [1.4.4] - 2026-01-08
