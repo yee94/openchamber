@@ -150,6 +150,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
             worktreePath: string;
             providerID: string;
             modelID: string;
+            variant?: string;
           }> = [];
 
           const commandsToRun = setupCommands?.filter((cmd) => cmd.trim().length > 0) ?? [];
@@ -214,6 +215,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 worktreePath: worktreeMetadata.path,
                 providerID: model.providerID,
                 modelID: model.modelID,
+                variant: model.variant,
               });
 
             } catch (error) {
@@ -276,16 +278,17 @@ export const useMultiRunStore = create<MultiRunStore>()(
               await Promise.allSettled(
                 createdRuns.map(async (run) => {
                   try {
-                    await opencodeClient.withDirectory(run.worktreePath, () =>
-                      opencodeClient.sendMessage({
-                        id: run.sessionId,
-                        providerID: run.providerID,
-                        modelID: run.modelID,
-                        text: prompt,
-                        agent,
-                        files: filesForMessage,
-                      })
-                    );
+                      await opencodeClient.withDirectory(run.worktreePath, () =>
+                       opencodeClient.sendMessage({
+                         id: run.sessionId,
+                         providerID: run.providerID,
+                         modelID: run.modelID,
+                         variant: run.variant,
+                         text: prompt,
+                         agent,
+                         files: filesForMessage,
+                       })
+                     );
                   } catch (error) {
                     console.warn('[MultiRun] Failed to start run:', error);
                   }

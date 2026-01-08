@@ -174,6 +174,10 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     clearError();
   };
 
+  const handleUpdateModel = React.useCallback((index: number, model: ModelSelectionWithId) => {
+    setSelectedModels((prev) => prev.map((item, i) => (i === index ? model : item)));
+  }, []);
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -533,6 +537,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                 selectedModels={selectedModels}
                 onAdd={handleAddModel}
                 onRemove={handleRemoveModel}
+                onUpdate={handleUpdateModel}
                 minModels={2}
                 maxModels={MAX_MODELS}
               />

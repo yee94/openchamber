@@ -9,6 +9,7 @@ export interface MultiRunModelSelection {
   providerID: string;
   modelID: string;
   displayName?: string;
+  variant?: string;
 }
 
 export interface MultiRunFileAttachment {

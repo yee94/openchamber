@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiBrainAi3Line, RiUser3Line } from '@remixicon/react';
+import { RiAiAgentLine, RiBrainAi3Line, RiUser3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { FadeInOnReveal } from './FadeInOnReveal';
@@ -60,19 +60,22 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                             {!isUser && agentName && (
                                 <div
                                     className={cn(
-                                        'flex items-center gap-1 px-1.5 py-0 rounded',
+                                        'flex items-center gap-1 px-1.5 py-0 rounded cursor-default',
                                         'agent-badge typography-meta',
+                                        'hover:bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] hover:border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)]',
                                         getAgentColor(agentName).class
                                     )}
                                 >
+                                    <RiAiAgentLine className="h-3 w-3 flex-shrink-0" />
                                     <span className="font-medium">{agentName}</span>
                                 </div>
                             )}
                             {!isUser && variant && (
                                 <div
                                     className={cn(
-                                        'flex items-center gap-1 px-1.5 py-0 rounded',
+                                        'flex items-center gap-1 px-1.5 py-0 rounded cursor-default',
                                         'agent-badge typography-meta',
+                                        'hover:bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] hover:border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)]',
                                         variant === 'Default' ? undefined : 'agent-info'
                                     )}
                                     style={
@@ -84,6 +87,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                             : undefined
                                     }
                                 >
+                                    <RiBrainAi3Line className="h-3 w-3 flex-shrink-0" />
                                     <span className="font-medium">{variant.length > 0 ? variant[0].toLowerCase() + variant.slice(1) : variant}</span>
                                 </div>
                             )}

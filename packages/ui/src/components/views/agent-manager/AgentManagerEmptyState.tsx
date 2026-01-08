@@ -146,6 +146,10 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
     setSelectedModels((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleUpdateModel = React.useCallback((index: number, model: ModelSelectionWithId) => {
+    setSelectedModels((prev) => prev.map((item, i) => (i === index ? model : item)));
+  }, []);
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -214,10 +218,11 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
     setIsSubmitting(true);
 
     try {
-      const models = selectedModels.map(({ providerID, modelID, displayName }) => ({
+      const models = selectedModels.map(({ providerID, modelID, displayName, variant }) => ({
         providerID,
         modelID,
         displayName,
+        variant,
       }));
 
       const files: MultiRunFileAttachment[] | undefined = attachedFiles.length > 0
@@ -394,6 +399,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
             selectedModels={selectedModels}
             onAdd={handleAddModel}
             onRemove={handleRemoveModel}
+            onUpdate={handleUpdateModel}
             minModels={1}
             addButtonLabel="Add model"
             maxModels={5}

@@ -1,7 +1,8 @@
 import React from 'react';
-import { RiAddLine, RiCloseLine, RiSearchLine, RiStarFill, RiTimeLine } from '@remixicon/react';
+import { RiAddLine, RiBrainAi3Line, RiCloseLine, RiSearchLine, RiStarFill, RiTimeLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ export interface ModelSelectionWithId {
   providerID: string;
   modelID: string;
   displayName?: string;
+  variant?: string;
   instanceId: string;
 }
 
@@ -26,6 +28,7 @@ export interface ModelSelection {
   providerID: string;
   modelID: string;
   displayName?: string;
+  variant?: string;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- Utility is tightly coupled with ModelMultiSelect
@@ -85,11 +88,12 @@ export interface ModelMultiSelectProps {
   selectedModels: ModelSelectionWithId[];
   onAdd: (model: ModelSelectionWithId) => void;
   onRemove: (index: number) => void;
+  onUpdate?: (index: number, model: ModelSelectionWithId) => void;
   /** Minimum models required (shows validation hint) */
   minModels?: number;
   /** Label for the add button */
   addButtonLabel?: string;
-  /** Whether to show the selected chips inline */
+  /** Whether to show the selected chips */
   showChips?: boolean;
   /** Maximum models allowed */
   maxModels?: number;
@@ -102,6 +106,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   selectedModels,
   onAdd,
   onRemove,
+  onUpdate,
   minModels,
   addButtonLabel = 'Add model',
   showChips = true,
@@ -462,20 +467,67 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         </div>
 
         {/* Selected models */}
-        {showChips && selectedModels.map((model, index) => {
-          const key = `${model.providerID}:${model.modelID}`;
-          const totalSameModel = modelCounts.get(key) || 1;
-          const instanceIndex = getInstanceIndex(model);
-          return (
-            <ModelChip
-              key={model.instanceId}
-              model={model}
-              instanceIndex={instanceIndex}
-              totalSameModel={totalSameModel}
-              onRemove={() => onRemove(index)}
-            />
-          );
-        })}
+        {showChips && selectedModels.length > 0 && (
+          <div className="flex flex-col gap-2 w-full">
+            {selectedModels.map((model, index) => {
+              const key = `${model.providerID}:${model.modelID}`;
+              const totalSameModel = modelCounts.get(key) || 1;
+              const instanceIndex = getInstanceIndex(model);
+
+              const provider = providers.find((p) => p.id === model.providerID);
+              const providerModel = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === model.modelID) as
+                | { variants?: Record<string, unknown> }
+                | undefined;
+              const variantKeys = providerModel?.variants ? Object.keys(providerModel.variants) : [];
+              const hasVariants = variantKeys.length > 0;
+
+              const DEFAULT_VARIANT_VALUE = '__default__';
+              const variantValue = model.variant ?? DEFAULT_VARIANT_VALUE;
+
+              return (
+                <div key={model.instanceId} className="flex items-center gap-2 min-w-0">
+                  <ModelChip
+                    model={model}
+                    instanceIndex={instanceIndex}
+                    totalSameModel={totalSameModel}
+                    onRemove={() => onRemove(index)}
+                  />
+
+                  {hasVariants && (
+                    <Select
+                      value={variantValue}
+                      onValueChange={(value) => {
+                        if (!onUpdate) return;
+                        const nextVariant = value === DEFAULT_VARIANT_VALUE ? undefined : value;
+                        onUpdate(index, { ...model, variant: nextVariant });
+                      }}
+                    >
+                      <SelectTrigger size="chip" className="px-2 gap-1.5 rounded-md bg-accent/50 border-border/30 hover:bg-accent/60 typography-meta font-medium text-foreground">
+                        <RiBrainAi3Line
+                          className={cn(
+                            'h-3.5 w-3.5 flex-shrink-0',
+                            variantValue === DEFAULT_VARIANT_VALUE ? 'text-muted-foreground' : 'text-[color:var(--status-info)]'
+                          )}
+                        />
+                        <SelectValue placeholder="Thinking" />
+                      </SelectTrigger>
+                      <SelectContent fitContent>
+                        <SelectItem value={DEFAULT_VARIANT_VALUE} className="pr-2 [&>span:first-child]:hidden">
+                          Default
+                        </SelectItem>
+                        {variantKeys.map((variant) => (
+                          <SelectItem key={variant} value={variant} className="pr-2 [&>span:first-child]:hidden">
+                            {variant}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Validation hint */}

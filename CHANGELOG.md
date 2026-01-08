@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added support for model variants (thinking effort)
+
+
 ## [1.4.4] - 2026-01-08
 
 - Agent Manager / Multi Run: select agent per worktree session (thanks to @wienans).
