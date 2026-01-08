@@ -84,12 +84,6 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
     setTooltipOpen(isOpen);
   }, []);
 
-  const directoryKey = React.useMemo(() => {
-    const normalized = typeof directory === 'string' ? directory.replace(/\\/g, '/').replace(/\/+$/, '') : '';
-    return normalized.length > 0 ? normalized : '__global__';
-  }, [directory]);
-
-  const isLoading = useMcpStore((state) => Boolean(state.loadingKeys[directoryKey]));
   const [isSpinning, setIsSpinning] = React.useState(false);
 
   const [busyName, setBusyName] = React.useState<string | null>(null);

@@ -65,6 +65,19 @@ export interface DiscoveredSkill {
   description?: string;
 }
 
+// Raw skill response from API before transformation
+interface RawSkillResponse {
+  name: string;
+  path: string;
+  scope?: SkillScope;
+  source?: SkillSource;
+  sources?: {
+    md?: {
+      description?: string;
+    };
+  };
+}
+
 export interface SkillConfig {
   name: string;
   description: string;
@@ -155,14 +168,14 @@ export const useSkillsStore = create<SkillsStore>()(
               }
               
               const data = await response.json();
-              const rawSkills = data.skills || [];
-              const skills = rawSkills.map((s: any) => ({
+              const rawSkills: RawSkillResponse[] = data.skills || [];
+              const skills: DiscoveredSkill[] = rawSkills.map((s) => ({
                 name: s.name,
                 path: s.path,
-                scope: s.scope,
-                source: s.source,
+                scope: s.scope ?? 'user',
+                source: s.source ?? 'opencode',
                 description: s.sources?.md?.description || '',
-              })) as DiscoveredSkill[];
+              }));
               
               set({ skills, isLoading: false });
               return true;

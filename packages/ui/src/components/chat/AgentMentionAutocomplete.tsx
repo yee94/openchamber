@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn, fuzzyMatch } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
+import { useAgentsStore, isAgentBuiltIn, type AgentWithExtras } from '@/stores/useAgentsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface AgentInfo {
@@ -52,13 +52,13 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
     const filtered = visibleAgents
       .filter((agent) => isMentionable(agent.mode))
       .map((agent) => {
-        const metadata = agentsWithMetadata.find(a => a.name === agent.name);
+        const metadata = agentsWithMetadata.find(a => a.name === agent.name) as (AgentWithExtras & { scope?: string }) | undefined;
         return {
           name: agent.name,
           description: agent.description,
           mode: agent.mode ?? undefined,
-          scope: (metadata as any)?.scope,
-          isBuiltIn: (metadata as any)?.native || (metadata as any)?.builtIn,
+          scope: metadata?.scope,
+          isBuiltIn: metadata ? isAgentBuiltIn(metadata) : false,
         };
       });
 
@@ -71,7 +71,7 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
 
     setAgents(matches);
     setSelectedIndex(0);
-  }, [getVisibleAgents, searchQuery]);
+  }, [getVisibleAgents, searchQuery, agentsWithMetadata]);
 
   React.useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({
