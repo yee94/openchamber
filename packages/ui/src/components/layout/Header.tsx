@@ -14,6 +14,7 @@ import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
+import { McpDropdown } from '@/components/mcp/McpDropdown';
 
 interface TabConfig {
   id: MainTab;
@@ -397,22 +398,25 @@ export const Header: React.FC = () => {
       <div className="flex-1" />
 
       {}
-      <div className="flex items-center gap-1 pr-3">
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleCommandPalette}
-              aria-label="Open command palette"
-              className={headerIconButtonClass}
-            >
-              <RiCommandLine className="h-5 w-5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Command Palette ({getModifierLabel()}+K)</p>
-          </TooltipContent>
-        </Tooltip>
+       <div className="flex items-center gap-1 pr-3">
+         <Tooltip delayDuration={500}>
+           <TooltipTrigger asChild>
+             <button
+               type="button"
+               onClick={toggleCommandPalette}
+               aria-label="Open command palette"
+               className={headerIconButtonClass}
+             >
+               <RiCommandLine className="h-5 w-5" />
+             </button>
+           </TooltipTrigger>
+           <TooltipContent>
+             <p>Command Palette ({getModifierLabel()}+K)</p>
+           </TooltipContent>
+         </Tooltip>
+
+         <McpDropdown headerIconButtonClass={headerIconButtonClass} />
+
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>
             <button
@@ -454,8 +458,9 @@ export const Header: React.FC = () => {
         )}
       </div>
 
-      <div className="app-region-no-drag flex items-center gap-1.5">
-        <div className="flex items-center" role="tablist" aria-label="Main navigation">
+       <div className="app-region-no-drag flex items-center gap-1.5">
+
+         <div className="flex items-center" role="tablist" aria-label="Main navigation">
           {tabs.map((tab) => {
             const isActive = activeMainTab === tab.id;
             const Icon = tab.icon;
@@ -500,6 +505,8 @@ export const Header: React.FC = () => {
             );
           })}
         </div>
+
+        <McpDropdown headerIconButtonClass={headerIconButtonClass} />
 
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>

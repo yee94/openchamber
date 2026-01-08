@@ -5,6 +5,7 @@ import { ChatView, SettingsView } from '@/components/views';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
+import { McpDropdown } from '@/components/mcp/McpDropdown';
 import { RiAddLine, RiArrowLeftLine, RiRobot2Line, RiSettings3Line } from '@remixicon/react';
 
 // Width threshold for mobile vs desktop layout in settings
@@ -218,6 +219,7 @@ export const VSCodeLayout: React.FC = () => {
               : sessions.find(s => s.id === currentSessionId)?.title || 'Chat'}
             showBack
             onBack={handleBackToSessions}
+            showMcp
             showContextUsage
           />
           <div className="flex-1 overflow-hidden">
@@ -238,10 +240,11 @@ interface VSCodeHeaderProps {
   onNewSession?: () => void;
   onSettings?: () => void;
   onAgentManager?: () => void;
+  showMcp?: boolean;
   showContextUsage?: boolean;
 }
 
-const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, onNewSession, onSettings, onAgentManager, showContextUsage }) => {
+const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, onNewSession, onSettings, onAgentManager, showMcp, showContextUsage }) => {
   const { getCurrentModel } = useConfigStore();
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
 
@@ -282,6 +285,11 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
         >
           <RiRobot2Line className="h-5 w-5" />
         </button>
+      )}
+      {showMcp && (
+        <McpDropdown
+          headerIconButtonClass="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        />
       )}
       {onSettings && (
         <button

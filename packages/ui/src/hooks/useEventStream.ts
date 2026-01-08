@@ -9,6 +9,7 @@ import type { Part, Session, Message } from '@opencode-ai/sdk/v2';
 import type { PermissionRequest } from '@/types/permission';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
+import { useMcpStore } from '@/stores/useMcpStore';
 
 interface EventData {
   type: string;
@@ -593,6 +594,12 @@ export const useEventStream = () => {
         break;
       }
 
+      case 'mcp.tools.changed': {
+        const directory = typeof props.directory === 'string' ? props.directory : effectiveDirectory;
+        void useMcpStore.getState().refresh({ directory: directory ?? null, silent: true });
+        break;
+      }
+
       case 'session.status':
         if (isDesktopRuntimeRef.current) break;
         {
@@ -1154,7 +1161,8 @@ export const useEventStream = () => {
     updateSessionActivityPhase,
     updateSession,
     removeSessionFromStore,
-    bootstrapState
+    bootstrapState,
+    effectiveDirectory
   ]);
 
   const shouldHoldConnection = React.useCallback(() => {

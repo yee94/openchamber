@@ -4,11 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Chat: Added support for model variants (thinking effort).
+- Chat: added support for model variants (thinking effort).
 - Shortcuts: Switched agent cycling shortcut from TAB to Shift + TAB.
 - Skills: added autocomplete for skills on "/" when it is not the first character in input.
 - Autocomplete: added scope badges for commands/agents/skills.
 - Compact: changed /summarize command to be /compact and use sdk for compaction.
+- MCP: added ability to dynamically enabled/disabled configured MCP.
 
 
 ## [1.4.4] - 2026-01-08
