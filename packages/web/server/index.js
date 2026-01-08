@@ -989,18 +989,21 @@ function resolveBinaryFromPath(binaryName, searchPath) {
 }
 
 function getOpencodeSpawnConfig() {
+  const envPath = buildAugmentedPath();
+  const resolvedEnv = { ...process.env, PATH: envPath };
+
   if (OPENCODE_BINARY_ENV) {
-    const explicit = resolveBinaryFromPath(OPENCODE_BINARY_ENV, process.env.PATH);
+    const explicit = resolveBinaryFromPath(OPENCODE_BINARY_ENV, envPath);
     if (explicit) {
       console.log(`Using OpenCode binary from OPENCODE_BINARY: ${explicit}`);
-      return { command: explicit, env: undefined };
+      return { command: explicit, env: resolvedEnv };
     }
     console.warn(
       `OPENCODE_BINARY path "${OPENCODE_BINARY_ENV}" not found. Falling back to search.`
     );
   }
 
-  return { command: 'opencode', env: undefined };
+  return { command: 'opencode', env: resolvedEnv };
 }
 
 const ENV_CONFIGURED_OPENCODE_PORT = (() => {
@@ -4127,7 +4130,12 @@ async function main(options = {}) {
   // NOTE: This route supports background execution to avoid tying up browser connections.
   const execJobs = new Map();
   const EXEC_JOB_TTL_MS = 30 * 60 * 1000;
-  const COMMAND_TIMEOUT_MS = 60000;
+  const COMMAND_TIMEOUT_MS = (() => {
+    const raw = Number(process.env.OPENCHAMBER_FS_EXEC_TIMEOUT_MS);
+    if (Number.isFinite(raw) && raw > 0) return raw;
+    // `bun install` (common worktree setup cmd) often takes >60s.
+    return 5 * 60 * 1000;
+  })();
 
   const pruneExecJobs = () => {
     const now = Date.now();
@@ -4149,9 +4157,12 @@ async function main(options = {}) {
       let stderr = '';
       let timedOut = false;
 
+      const envPath = buildAugmentedPath();
+      const execEnv = { ...process.env, PATH: envPath };
+
       const child = spawn(shell, [shellFlag, command], {
         cwd: resolvedCwd,
-        env: process.env,
+        env: execEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

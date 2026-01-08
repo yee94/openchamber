@@ -126,7 +126,7 @@ function getLoginShellPath(): string | null {
   return null;
 }
 
-function buildAugmentedPath(): string {
+export function buildAugmentedPath(): string {
   const augmented = new Set<string>();
 
   const loginPath = getLoginShellPath();
