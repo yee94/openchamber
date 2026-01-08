@@ -41,7 +41,7 @@ import { getAgentColor } from '@/lib/agentColors';
 import { useDeviceInfo } from '@/lib/device';
 import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 import { getEditModeColors } from '@/lib/permissions/editModeColors';
-import { cn } from '@/lib/utils';
+import { cn, fuzzyMatch } from '@/lib/utils';
 import { useContextStore } from '@/stores/contextStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -1286,19 +1286,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const renderMobileModelPanel = () => {
         if (!isCompact) return null;
 
-        const normalizedQuery = mobileModelQuery.trim().toLowerCase();
+        const normalizedQuery = mobileModelQuery.trim();
         const filteredProviders = providers
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const matchesProvider = normalizedQuery.length === 0
                     ? true
-                    : provider.name.toLowerCase().includes(normalizedQuery) || provider.id.toLowerCase().includes(normalizedQuery);
+                    : fuzzyMatch(provider.name, normalizedQuery) || fuzzyMatch(provider.id, normalizedQuery);
                 const matchingModels = normalizedQuery.length === 0
                     ? providerModels
                     : providerModels.filter((model: ProviderModel) => {
-                        const name = getModelDisplayName(model).toLowerCase();
-                        const id = typeof model.id === 'string' ? model.id.toLowerCase() : '';
-                        return name.includes(normalizedQuery) || id.includes(normalizedQuery);
+                        const name = getModelDisplayName(model);
+                        const id = typeof model.id === 'string' ? model.id : '';
+                        return fuzzyMatch(name, normalizedQuery) || fuzzyMatch(id, normalizedQuery);
                     });
                 return { provider, providerModels: matchingModels, matchesProvider };
             })
@@ -1928,13 +1928,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         );
     };
 
-    // Filter models based on search query
+    // Filter models based on search query (fuzzy match)
     const filterByQuery = (modelName: string, providerName: string, query: string) => {
         if (!query.trim()) return true;
-        const lowerQuery = query.toLowerCase();
         return (
-            modelName.toLowerCase().includes(lowerQuery) ||
-            providerName.toLowerCase().includes(lowerQuery)
+            fuzzyMatch(modelName, query) ||
+            fuzzyMatch(providerName, query)
         );
     };
 

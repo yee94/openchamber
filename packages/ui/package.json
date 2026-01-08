@@ -34,6 +34,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "express": "^5.1.0",
+    "fuse.js": "^7.1.0",
     "ghostty-web": "^0.4.0",
     "heic2any": "^0.0.4",
     "http-proxy-middleware": "^3.0.5",

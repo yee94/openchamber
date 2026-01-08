@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, fuzzyMatch } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -62,9 +62,9 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
         };
       });
 
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = searchQuery.trim();
     const matches = normalizedQuery.length
-      ? filtered.filter((agent) => agent.name.toLowerCase().includes(normalizedQuery))
+      ? filtered.filter((agent) => fuzzyMatch(agent.name, normalizedQuery))
       : filtered;
 
     matches.sort((a, b) => a.name.localeCompare(b.name));

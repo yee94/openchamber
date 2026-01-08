@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, fuzzyMatch } from '@/lib/utils';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
@@ -36,9 +36,9 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   }, [loadSkills]);
 
   React.useEffect(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = searchQuery.trim();
     const matches = normalizedQuery.length
-      ? skills.filter((skill) => skill.name.toLowerCase().includes(normalizedQuery))
+      ? skills.filter((skill) => fuzzyMatch(skill.name, normalizedQuery))
       : skills;
 
     const sorted = [...matches].sort((a, b) => {

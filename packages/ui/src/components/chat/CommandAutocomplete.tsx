@@ -1,7 +1,6 @@
 import React from 'react';
 import { RiCommandLine, RiFileLine, RiFlashlightLine, RiRefreshLine, RiScissorsLine, RiTerminalBoxLine, RiArrowGoBackLine, RiArrowGoForwardLine, RiTimeLine } from '@remixicon/react';
-import { cn } from '@/lib/utils';
-import { opencodeClient } from '@/lib/opencode/client';
+import { cn, fuzzyMatch } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -113,8 +112,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         const allowInitCommand = !hasMessagesInCurrentSession;
         const filtered = (searchQuery
           ? allCommands.filter(cmd =>
-              cmd.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              (cmd.description && cmd.description.toLowerCase().includes(searchQuery.toLowerCase()))
+              fuzzyMatch(cmd.name, searchQuery) ||
+              (cmd.description && fuzzyMatch(cmd.description, searchQuery))
             )
           : allCommands).filter(cmd => allowInitCommand || cmd.name !== 'init');
 
@@ -148,8 +147,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
         const filtered = (searchQuery
           ? builtInCommands.filter(cmd =>
-              cmd.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              (cmd.description && cmd.description.toLowerCase().includes(searchQuery.toLowerCase()))
+              fuzzyMatch(cmd.name, searchQuery) ||
+              (cmd.description && fuzzyMatch(cmd.description, searchQuery))
             )
           : builtInCommands).filter(cmd => allowInitCommand || cmd.name !== 'init');
 

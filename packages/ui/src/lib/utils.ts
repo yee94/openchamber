@@ -128,3 +128,25 @@ export function formatDirectoryName(path: string | null | undefined, homeDirecto
   const name = segments.pop() || normalizedPath;
   return name || "/";
 }
+
+import Fuse from 'fuse.js';
+
+/**
+ * Fuzzy search using Fuse.js with typo tolerance.
+ * Returns true if query fuzzy-matches target (e.g. "coude" matches "claude")
+ */
+export function fuzzyMatch(target: string, query: string): boolean {
+  if (!query) return true;
+  if (!target) return false;
+  
+  // Quick exact substring check first
+  if (target.toLowerCase().includes(query.toLowerCase())) return true;
+  
+  const fuse = new Fuse([target], {
+    threshold: 0.4, // 0 = exact, 1 = match anything
+    distance: 100,
+    ignoreLocation: true,
+  });
+  const results = fuse.search(query);
+  return results.length > 0;
+}
