@@ -575,7 +575,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
         }
 
-        if (e.key === 'Tab' && !showCommandAutocomplete && !showFileMention) {
+        if (e.key === 'Tab' && e.shiftKey && !showCommandAutocomplete && !showAgentAutocomplete && !showFileMention) {
             e.preventDefault();
             cycleAgent();
             return;

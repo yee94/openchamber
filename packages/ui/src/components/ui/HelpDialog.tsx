@@ -10,6 +10,8 @@ import { useUIStore } from "@/stores/useUIStore";
 import { useConfigStore } from "@/stores/useConfigStore";
 import {
   RiAddLine,
+  RiAiAgentLine,
+  RiAiGenerate2,
   RiArrowUpSLine,
   RiBrainAi3Line,
   RiCloseCircleLine,
@@ -107,8 +109,18 @@ export const HelpDialog: React.FC = () => {
           icon: RiLayoutLeftLine,
         },
         {
+          keys: ["Shift + Tab"],
+          description: "Cycle Agent (chat input)",
+          icon: RiAiAgentLine,
+        },
+        {
           keys: [`Shift + ${mod} + M`],
           description: "Open Model Selector",
+          icon: RiAiGenerate2,
+        },
+        {
+          keys: [`Shift + ${mod} + T`],
+          description: "Cycle Thinking Variant",
           icon: RiBrainAi3Line,
         },
       ],
@@ -118,12 +130,12 @@ export const HelpDialog: React.FC = () => {
       items: [
         {
           keys: [`${mod} + N`],
-          description: settingsAutoCreateWorktree ? "Create new session in worktree" : "Create New Session",
+          description: settingsAutoCreateWorktree ? "Create New Session in Worktree" : "Create New Session",
           icon: settingsAutoCreateWorktree ? RiGitBranchLine : RiAddLine,
         },
         {
           keys: [`Shift + ${mod} + N`],
-          description: settingsAutoCreateWorktree ? "Create New Session" : "Create new session in worktree",
+          description: settingsAutoCreateWorktree ? "Create New Session" : "Create New Session in Worktree",
           icon: settingsAutoCreateWorktree ? RiAddLine : RiGitBranchLine,
         },
         { keys: [`${mod} + I`], description: "Focus Chat Input", icon: RiText },
@@ -172,8 +184,8 @@ export const HelpDialog: React.FC = () => {
   ];
 
   return (
-    <Dialog open={isHelpDialogOpen} onOpenChange={setHelpDialogOpen}>
-      <DialogContent className="max-w-2xl">
+      <Dialog open={isHelpDialogOpen} onOpenChange={setHelpDialogOpen}>
+      <DialogContent className="max-w-2xl w-[min(42rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RiSettings3Line className="h-5 w-5" />
@@ -184,67 +196,69 @@ export const HelpDialog: React.FC = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-3">
-          {shortcuts.map((section) => (
-            <div key={section.category}>
-              <h3 className="typography-meta font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                {section.category}
-              </h3>
-              <div className="space-y-1">
-                {section.items.map((shortcut, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between py-1 px-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      {shortcut.icon && (
-                        <shortcut.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      )}
-                      <span className="typography-meta">
-                        {shortcut.description}
-                      </span>
+        <div className="flex-1 overflow-y-auto mt-3 pr-1">
+          <div className="space-y-4">
+            {shortcuts.map((section) => (
+              <div key={section.category}>
+                <h3 className="typography-meta font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  {section.category}
+                </h3>
+                <div className="space-y-1">
+                  {section.items.map((shortcut, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between py-1 px-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        {shortcut.icon && (
+                          <shortcut.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                        <span className="typography-meta">
+                          {shortcut.description}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {(Array.isArray(shortcut.keys)
+                          ? shortcut.keys
+                          : shortcut.keys.split(" / ")
+                        ).map((keyCombo: string, i: number) => (
+                          <React.Fragment key={`${keyCombo}-${i}`}>
+                            {i > 0 && (
+                              <span className="typography-meta text-muted-foreground mx-1">
+                                or
+                              </span>
+                            )}
+                            <kbd className="inline-flex items-center gap-1 px-1.5 py-0.5 typography-meta font-mono bg-muted rounded border border-border/20">
+                              {renderKeyCombo(keyCombo)}
+                            </kbd>
+                          </React.Fragment>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {(Array.isArray(shortcut.keys)
-                        ? shortcut.keys
-                        : shortcut.keys.split(" / ")
-                      ).map((keyCombo: string, i: number) => (
-                        <React.Fragment key={`${keyCombo}-${i}`}>
-                          {i > 0 && (
-                            <span className="typography-meta text-muted-foreground mx-1">
-                              or
-                            </span>
-                          )}
-                          <kbd className="inline-flex items-center gap-1 px-1.5 py-0.5 typography-meta font-mono bg-muted rounded border border-border/20">
-                            {renderKeyCombo(keyCombo)}
-                          </kbd>
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div className="mt-4 p-2 bg-muted/30 rounded-xl">
-          <div className="flex items-start gap-2">
-            <RiQuestionLine className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
-            <div className="typography-meta text-muted-foreground">
-              <p className="font-medium mb-1">Pro Tips:</p>
-              <ul className="space-y-0.5 typography-meta">
-                <li>
-                  • Use Command Palette ({mod} + K) to quickly access all
-                  actions
-                </li>
-                <li>
-                  • The 5 most recent sessions appear in the Command Palette
-                </li>
-                <li>
-                  • Theme cycling remembers your preference across sessions
-                </li>
-              </ul>
+          <div className="mt-4 p-2 bg-muted/30 rounded-xl">
+            <div className="flex items-start gap-2">
+              <RiQuestionLine className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+              <div className="typography-meta text-muted-foreground">
+                <p className="font-medium mb-1">Pro Tips:</p>
+                <ul className="space-y-0.5 typography-meta">
+                  <li>
+                    • Use Command Palette ({mod} + K) to quickly access all
+                    actions
+                  </li>
+                  <li>
+                    • The 5 most recent sessions appear in the Command Palette
+                  </li>
+                  <li>
+                    • Theme cycling remembers your preference across sessions
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>

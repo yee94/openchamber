@@ -171,6 +171,51 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
+      // Cmd/Ctrl+Shift+T: Cycle thinking variant (same gating as Shift+M)
+      if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 't') {
+        const {
+          isSettingsDialogOpen,
+          isCommandPaletteOpen,
+          isHelpDialogOpen,
+          isSessionSwitcherOpen,
+          isAboutDialogOpen,
+          activeMainTab,
+        } = useUIStore.getState();
+
+        if (isSettingsDialogOpen) {
+          return;
+        }
+
+        const hasOverlay = isCommandPaletteOpen || isHelpDialogOpen || isSessionSwitcherOpen || isAboutDialogOpen;
+        const isChatActive = activeMainTab === 'chat';
+
+        if (hasOverlay || !isChatActive) {
+          return;
+        }
+
+        const configState = useConfigStore.getState();
+        const variants = configState.getCurrentModelVariants();
+        if (variants.length === 0) {
+          return;
+        }
+
+        e.preventDefault();
+        configState.cycleCurrentVariant();
+
+        const nextVariant = useConfigStore.getState().currentVariant;
+        const sessionState = useSessionStore.getState();
+        const sessionId = sessionState.currentSessionId;
+        const agentName = useConfigStore.getState().currentAgentName;
+        const providerId = useConfigStore.getState().currentProviderId;
+        const modelId = useConfigStore.getState().currentModelId;
+
+        if (sessionId && agentName && providerId && modelId) {
+          sessionState.saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, nextVariant);
+        }
+
+        return;
+      }
+
       if (e.key === 'Escape') {
         const {
           isSettingsDialogOpen,
