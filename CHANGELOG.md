@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-01-08
+
 - Agent Manager / Multi Run: select agent per worktree session (thanks to @wienans).
 - Agent Manager / Multi Run: worktree actions to delete group or individual worktrees, or keep only selected one (thanks to @wienans).
 - Agent Manager: added "Copy Worktree Path" action in the more menu (thanks to @wienans).
