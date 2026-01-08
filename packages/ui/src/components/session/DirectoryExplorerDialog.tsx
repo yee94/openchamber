@@ -19,9 +19,9 @@ import {
   RiCheckboxBlankLine,
   RiCheckboxLine,
 } from '@remixicon/react';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { DirectoryAutocomplete, type DirectoryAutocompleteHandle } from './DirectoryAutocomplete';
 
 const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
 
@@ -57,6 +57,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   });
   const { isDesktop, requestAccess, startAccessing } = useFileSystemAccess();
   const { isMobile } = useDeviceInfo();
+  const [autocompleteVisible, setAutocompleteVisible] = React.useState(false);
+  const autocompleteRef = React.useRef<DirectoryAutocompleteHandle>(null);
 
   // Helper to format path for display
   const formatPath = React.useCallback((path: string | null) => {
@@ -69,6 +71,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (open) {
       setHasUserSelection(false);
       setIsConfirming(false);
+      setAutocompleteVisible(false);
       // Initialize with active project or current directory
       const activeProject = getActiveProject();
       const initialPath = activeProject?.path || currentDirectory || homeDirectory || '';
@@ -182,6 +185,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     const value = e.target.value;
     setPathInputValue(value);
     setHasUserSelection(true);
+    // Show autocomplete when typing a path
+    setAutocompleteVisible(value.startsWith('/') || value.startsWith('~'));
     // Update pending path if it looks like a valid path
     if (value.startsWith('/') || value.startsWith('~')) {
       // Expand ~ to home directory
@@ -193,11 +198,26 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, [homeDirectory]);
 
   const handlePathInputKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Let autocomplete handle the key first if visible
+    if (autocompleteRef.current?.handleKeyDown(e)) {
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       handleConfirm();
     }
   }, [handleConfirm]);
+
+  const handleAutocompleteSuggestion = React.useCallback((path: string) => {
+    setPendingPath(path);
+    setHasUserSelection(true);
+    setPathInputValue(formatPath(path));
+    // Keep autocomplete open to allow further drilling down
+  }, [formatPath]);
+
+  const handleAutocompleteClose = React.useCallback(() => {
+    setAutocompleteVisible(false);
+  }, []);
 
   const toggleShowHidden = React.useCallback(() => {
     setShowHidden(prev => !prev);
@@ -205,50 +225,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
 
 
-  const dialogHeader = (
-    <DialogHeader className="flex-shrink-0 px-4 pb-2 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-3 sm:pt-0">
-      <DialogTitle>Add project directory</DialogTitle>
-      <DialogDescription className="hidden sm:block">
-        Choose a folder to add as a project.
-      </DialogDescription>
-    </DialogHeader>
-  );
-
-  const pathInputSection = (
-    <Input
-      value={pathInputValue}
-      onChange={handlePathInputChange}
-      onKeyDown={handlePathInputKeyDown}
-      placeholder="Enter path or select from tree..."
-      className="font-mono typography-meta"
-      spellCheck={false}
-      autoComplete="off"
-      autoCorrect="off"
-      autoCapitalize="off"
-    />
-  );
-
-  const treeSection = (
-    <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 p-1.5 sm:p-2 sm:flex-none">
-      <DirectoryTree
-        variant="inline"
-        currentPath={pendingPath ?? currentDirectory}
-        onSelectPath={handleSelectPath}
-        onDoubleClickPath={handleDoubleClickPath}
-        className="h-full sm:min-h-[280px] sm:h-[380px]"
-        selectionBehavior="deferred"
-        showHidden={showHidden}
-        rootDirectory={isHomeReady ? homeDirectory : null}
-        isRootReady={isHomeReady}
-      />
-    </div>
-  );
-
   const showHiddenToggle = (
     <button
       type="button"
       onClick={toggleShowHidden}
-      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-accent/40 transition-colors typography-meta text-muted-foreground"
+      className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-accent/40 transition-colors typography-meta text-muted-foreground flex-shrink-0"
     >
       {showHidden ? (
         <RiCheckboxLine className="h-4 w-4 text-primary" />
@@ -259,6 +240,59 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     </button>
   );
 
+  const dialogHeader = (
+    <DialogHeader className="flex-shrink-0 px-4 pb-2 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-3 sm:pt-0">
+      <DialogTitle>Add project directory</DialogTitle>
+      <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <DialogDescription className="flex-1">
+          Choose a folder to add as a project.
+        </DialogDescription>
+        {showHiddenToggle}
+      </div>
+    </DialogHeader>
+  );
+
+  const pathInputSection = (
+    <div className="relative">
+      <Input
+        value={pathInputValue}
+        onChange={handlePathInputChange}
+        onKeyDown={handlePathInputKeyDown}
+        placeholder="Enter path or select from tree..."
+        className="font-mono typography-meta"
+        spellCheck={false}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+      />
+      <DirectoryAutocomplete
+        ref={autocompleteRef}
+        inputValue={pathInputValue}
+        homeDirectory={homeDirectory}
+        onSelectSuggestion={handleAutocompleteSuggestion}
+        visible={autocompleteVisible}
+        onClose={handleAutocompleteClose}
+        showHidden={showHidden}
+      />
+    </div>
+  );
+
+  const treeSection = (
+    <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 overflow-hidden flex flex-col">
+      <DirectoryTree
+        variant="inline"
+        currentPath={pendingPath ?? currentDirectory}
+        onSelectPath={handleSelectPath}
+        onDoubleClickPath={handleDoubleClickPath}
+        className="flex-1 min-h-0 sm:min-h-[280px] sm:max-h-[380px]"
+        selectionBehavior="deferred"
+        showHidden={showHidden}
+        rootDirectory={isHomeReady ? homeDirectory : null}
+        isRootReady={isHomeReady}
+      />
+    </div>
+  );
+
   // Mobile: use flex layout where tree takes remaining space
   const mobileContent = (
     <div className="flex flex-col gap-3 h-full">
@@ -266,13 +300,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       <div className="flex-shrink-0 flex items-center justify-end">
         {showHiddenToggle}
       </div>
-      <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 p-1.5 overflow-hidden">
+      <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 overflow-hidden flex flex-col">
         <DirectoryTree
           variant="inline"
           currentPath={pendingPath ?? currentDirectory}
           onSelectPath={handleSelectPath}
           onDoubleClickPath={handleDoubleClickPath}
-          className="h-full"
+          className="flex-1 min-h-0"
           selectionBehavior="deferred"
           showHidden={showHidden}
           rootDirectory={isHomeReady ? homeDirectory : null}
@@ -284,16 +318,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   );
 
   const desktopContent = (
-    <ScrollableOverlay
-      outerClassName="flex-1 min-h-0 overflow-hidden"
-      className="directory-dialog-body sm:px-0 sm:pb-0 flex flex-col gap-3"
-    >
+    <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-3">
       {pathInputSection}
-      <div className="flex items-center justify-end">
-        {showHiddenToggle}
-      </div>
       {treeSection}
-    </ScrollableOverlay>
+    </div>
   );
 
   const renderActionButtons = () => (
@@ -345,7 +373,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         {dialogHeader}
         {desktopContent}
         <DialogFooter
-          className="sticky bottom-0 flex w-full flex-shrink-0 flex-row gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-3"
+          className="sticky bottom-0 flex w-full flex-shrink-0 flex-row gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-4 sm:pb-0"
         >
           {renderActionButtons()}
         </DialogFooter>

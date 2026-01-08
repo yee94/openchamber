@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Autocomplete: added scope badges for commands/agents/skills.
 - Compact: changed /summarize command to be /compact and use sdk for compaction.
 - MCP: added ability to dynamically enabled/disabled configured MCP.
+- Web: refactored project adding UI with autocomplete.
 
 
 ## [1.4.4] - 2026-01-08

@@ -8,9 +8,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiCloseLine, RiFolder6Line, RiPushpin2Line, RiPushpinLine, RiStarLine } from '@remixicon/react';
+import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiCloseLine, RiFolder6Line, RiPushpin2Line, RiPushpinLine } from '@remixicon/react';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useDeviceInfo } from '@/lib/device';
 import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import type { DesktopSettings } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -54,6 +55,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   alwaysShowActions = false,
 }) => {
   const desktopRuntime = React.useMemo(() => isDesktopRuntime(), []);
+  const { isMobile } = useDeviceInfo();
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = React.useState(true);
@@ -314,10 +316,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     });
   }, [effectiveRoot, isPathWithinHome, stripTrailingSlashes]);
 
+  // Reload directories when showHidden changes, but keep expanded state
   React.useEffect(() => {
     if (previousShowHidden.current !== showHidden) {
       previousShowHidden.current = showHidden;
-      setExpandedPaths(new Set());
+      // Silently reload without clearing state - loadInitialDirectories will be called
+      // via its dependency on loadDirectory which depends on showHidden
     }
   }, [showHidden]);
 
@@ -434,6 +438,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     }
   }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady]);
 
+  const hasLoadedOnce = React.useRef(false);
+
   const loadInitialDirectories = React.useCallback(async () => {
     if (!rootReady || !effectiveRoot) {
       setIsLoading(true);
@@ -441,10 +447,14 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       return;
     }
 
-    setIsLoading(true);
+    // Only show loading on initial load, not on refreshes (e.g., showHidden toggle)
+    if (!hasLoadedOnce.current) {
+      setIsLoading(true);
+    }
     try {
       const homeContents = await loadDirectory(effectiveRoot);
       setDirectories(homeContents);
+      hasLoadedOnce.current = true;
     } catch { /* ignored */ } finally {
       setIsLoading(false);
     }
@@ -616,16 +626,16 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               e.stopPropagation();
               toggleExpanded(item);
             }}
-            className="p-0.5 hover:bg-accent rounded"
+            className={cn("hover:bg-accent rounded", isMobile ? "p-0.5" : "p-0.5")}
           >
             {isExpanded ? (
-              <RiArrowDownSLine className="h-3 w-3" />
+              <RiArrowDownSLine className={isMobile ? "h-3.5 w-3.5" : "h-3 w-3"} />
             ) : (
-              <RiArrowRightSLine className="h-3 w-3" />
+              <RiArrowRightSLine className={isMobile ? "h-3.5 w-3.5" : "h-3 w-3"} />
             )}
           </button>
         )}
-        {!hasChildren && <div className="w-4" />}
+        {!hasChildren && <div className={isMobile ? "w-4.5" : "w-4"} />}
 
         <button
           onClick={(e) => {
@@ -642,28 +652,22 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             }
           }}
           className={cn(
-            'flex items-center gap-1.5 flex-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+            'flex items-center flex-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+            isMobile ? 'gap-1.5' : 'gap-1.5',
             isInlineVariant ? (isSelected ? 'text-primary' : 'text-foreground') : 'text-foreground'
           )}
         >
-          {isExpanded ? (
-            <RiFolder6Line
-              className={cn(
-                'h-3.5 w-3.5 text-muted-foreground',
-                isInlineVariant && isSelected && 'text-primary'
-              )}
-            />
-          ) : (
-            <RiFolder6Line
-              className={cn(
-                'h-3.5 w-3.5 text-muted-foreground',
-                isInlineVariant && isSelected && 'text-primary'
-              )}
-            />
-          )}
+          <RiFolder6Line
+            className={cn(
+              'text-muted-foreground flex-shrink-0',
+              isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5',
+              isInlineVariant && isSelected && 'text-primary'
+            )}
+          />
           <span
             className={cn(
-              'typography-ui-label font-medium truncate',
+              'font-medium truncate',
+              isMobile ? 'typography-ui-label' : 'typography-ui-label',
               isInlineVariant && isSelected ? 'text-primary' : 'text-foreground'
             )}
           >
@@ -677,12 +681,13 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             startCreatingDirectory(item);
           }}
           className={cn(
-            "p-1 hover:bg-accent rounded transition-opacity",
-            alwaysShowActions ? "opacity-70" : "opacity-0 group-hover:opacity-100"
+            "hover:bg-accent rounded transition-opacity",
+            isMobile ? "p-1.5" : "p-1",
+            alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
           )}
           title="Create new directory"
         >
-          <RiAddLine className="h-3 w-3 text-muted-foreground" />
+          <RiAddLine className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
         </button>
 
         <button
@@ -691,15 +696,16 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             togglePin(item.path);
           }}
           className={cn(
-            "p-1 hover:bg-accent rounded transition-opacity",
-            alwaysShowActions ? "opacity-70" : "opacity-0 group-hover:opacity-100"
+            "hover:bg-accent rounded transition-opacity",
+            isMobile ? "p-1.5" : "p-1",
+            alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
           )}
           title={isPinned ? "Unpin directory" : "Pin directory"}
         >
           {isPinned ? (
-            <RiPushpin2Line className="h-3 w-3 text-primary" />
+            <RiPushpin2Line className={cn("text-primary", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
           ) : (
-            <RiPushpinLine className="h-3 w-3 text-muted-foreground" />
+            <RiPushpinLine className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
           )}
         </button>
       </>
@@ -710,10 +716,13 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <div key={item.path}>
           <div
             className={cn(
-              'group flex items-center gap-1 rounded px-2 py-1.5 text-left hover:bg-accent/40',
-              isSelected ? 'text-primary' : 'text-foreground'
+              'group flex items-center gap-1 rounded-lg mx-1 text-left transition-colors',
+              isMobile ? 'px-1.5 py-1' : 'px-2 py-1.5',
+              isSelected 
+                ? 'bg-primary/10 text-primary' 
+                : 'hover:bg-accent/50 text-foreground'
             )}
-            style={{ paddingLeft: `${level * 12 + 8}px` }}
+            style={{ paddingLeft: `${level * (isMobile ? 12 : 14) + (isMobile ? 4 : 6)}px` }}
           >
             {rowContent}
           </div>
@@ -721,8 +730,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             <>
               {creatingInPath === item.path && (
                 <div
-                  className="flex items-center gap-1 px-2 py-1.5"
-                  style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+                  className="flex items-center gap-1 mx-1 px-2 py-1.5"
+                  style={{ paddingLeft: `${(level + 1) * 14 + 6}px` }}
                 >
                   <div className="w-4" />
                   <RiFolder6Line className="h-3.5 w-3.5 text-muted-foreground" />
@@ -872,7 +881,11 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <div
           key={path}
           className={cn(
-            'group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/40'
+            'group flex items-center gap-2 mx-1 rounded-lg transition-colors',
+            isMobile ? 'px-1.5 py-1' : 'px-2 py-1.5',
+            isSelected 
+              ? 'bg-primary/10' 
+              : 'hover:bg-accent/50'
           )}
         >
           <button
@@ -884,36 +897,38 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               }
             }}
             className={cn(
-              'flex flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+              'flex flex-1 items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded min-w-0',
               isSelected ? 'text-primary' : 'text-foreground'
             )}
           >
             <RiFolder6Line
               className={cn(
-                'h-3.5 w-3.5 text-muted-foreground',
-                isSelected && 'text-primary'
+                'flex-shrink-0',
+                isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5',
+                isSelected ? 'text-primary' : 'text-muted-foreground'
               )}
             />
-            <div className="flex-1 min-w-0">
-              <div
-                className={cn(
-                  'typography-ui-label font-medium truncate',
-                  isSelected ? 'text-primary' : 'text-foreground'
-                )}
-              >
-                {name}
-              </div>
-              <div className="typography-meta text-muted-foreground truncate">
-                {formatPathForDisplay(path, homeDirectory)}
-              </div>
-            </div>
+            <span
+              className={cn(
+                'typography-ui-label font-medium truncate flex-shrink-0',
+                isSelected ? 'text-primary' : 'text-foreground'
+              )}
+            >
+              {name}
+            </span>
+            <span className="typography-meta text-muted-foreground/60 truncate">
+              {formatPathForDisplay(path, homeDirectory)}
+            </span>
           </button>
           <button
             onClick={() => togglePin(path)}
-            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
+            className={cn(
+              "hover:bg-accent rounded-md transition-opacity",
+              isMobile ? "p-1.5 opacity-60" : "p-1 opacity-0 group-hover:opacity-100"
+            )}
             title="Unpin directory"
           >
-            <RiPushpin2Line className="h-3 w-3 text-primary" />
+            <RiPushpin2Line className={cn("text-primary", isMobile ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} />
           </button>
         </div>
       );
@@ -969,29 +984,33 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               <button
                 type="button"
                 onClick={() => setIsPinnedExpanded(prev => !prev)}
-                className="flex w-full items-center gap-1.5 px-2 py-1.5 typography-meta font-semibold text-muted-foreground hover:bg-accent/30 rounded transition-colors"
+                className={cn(
+                  "flex w-full items-center gap-1.5 typography-meta font-medium text-muted-foreground/80 hover:bg-accent/30 rounded transition-colors uppercase tracking-wide",
+                  isMobile ? "px-1.5 py-1" : "px-2 py-1.5"
+                )}
               >
                 {isPinnedExpanded ? (
-                  <RiArrowDownSLine className="h-3.5 w-3.5" />
+                  <RiArrowDownSLine className={isMobile ? "h-3.5 w-3.5" : "h-3 w-3"} />
                 ) : (
-                  <RiArrowRightSLine className="h-3.5 w-3.5" />
+                  <RiArrowRightSLine className={isMobile ? "h-3.5 w-3.5" : "h-3 w-3"} />
                 )}
-                <RiStarLine className="h-3.5 w-3.5" />
                 <span>Pinned</span>
-                <span className="ml-auto typography-micro text-muted-foreground/70">
+                <span className="ml-auto typography-micro text-muted-foreground/60 normal-case tracking-normal">
                   {pinnedDirectories.length}
                 </span>
               </button>
               {isPinnedExpanded && pinnedDirectories.map(({ name, path }) => renderPinnedRow(name, path))}
               {variant === 'dropdown' && <DropdownMenuSeparator />}
               {variant === 'inline' && isPinnedExpanded && (
-                <div className="mx-2 my-1.5 border-t border-border/30" />
+                <div className="mx-3 my-2 border-t border-border/40" />
               )}
             </>
           )}
 
-          <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground flex items-center gap-1.5">
-            <RiFolder6Line className="h-3.5 w-3.5" />
+          <div className={cn(
+            "typography-meta font-medium text-muted-foreground/80 flex items-center gap-1.5 uppercase tracking-wide",
+            isMobile ? "px-1.5 py-1" : "px-2 py-1.5"
+          )}>
             Browse
           </div>
 
@@ -1015,8 +1034,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   if (variant === 'inline') {
     return (
-      <div className={cn('overflow-hidden rounded-xl border border-border/40 bg-sidebar/70', className)}>
-        <ScrollableOverlay outerClassName="max-h-full" className="w-full">
+      <div className={cn('overflow-hidden flex flex-col', className)}>
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="w-full py-1">
           {directoryContent}
         </ScrollableOverlay>
       </div>
