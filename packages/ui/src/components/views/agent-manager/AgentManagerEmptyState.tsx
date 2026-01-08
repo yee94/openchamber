@@ -108,7 +108,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
     if (markerIndex > 0) return normalized.slice(0, markerIndex);
     if (normalized.endsWith('/.openchamber')) return normalized.slice(0, normalized.length - '/.openchamber'.length);
     return normalized;
-  }, [activeProjectId, projects, currentDirectory, vscodeWorkspaceFolder]);
+  }, [activeProjectId, projects, currentDirectory, vscodeWorkspaceFolder, isVSCodeRuntime]);
 
   // Load setup commands from config
   React.useEffect(() => {

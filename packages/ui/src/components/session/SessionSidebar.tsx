@@ -57,6 +57,7 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
@@ -376,6 +377,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
     return typeof window.opencodeDesktop !== 'undefined';
   });
+
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   React.useEffect(() => {
     try {
@@ -913,7 +916,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
-      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? [];
+      // In VS Code, only show sessions from the main project directory (skip worktrees)
+      const worktreesForProject = isVSCode ? [] : (availableWorktreesByProject.get(project.normalizedPath) ?? []);
       const directories = [
         project.normalizedPath,
         ...worktreesForProject
@@ -937,7 +941,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return collected;
     },
-    [availableWorktreesByProject, getSessionsByDirectory, sessionsByDirectory],
+    [availableWorktreesByProject, getSessionsByDirectory, sessionsByDirectory, isVSCode],
   );
 
   const projectSections = React.useMemo(() => {
