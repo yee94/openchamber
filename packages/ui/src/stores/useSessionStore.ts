@@ -290,7 +290,7 @@ export const useSessionStore = create<SessionStore>()(
                     get().evictLeastRecentlyUsed();
                 },
                 loadMessages: (sessionId: string) => useMessageStore.getState().loadMessages(sessionId),
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => {
                     const draft = get().newSessionDraft;
                     const trimmedAgent = typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined;
 
@@ -340,15 +340,25 @@ export const useSessionStore = create<SessionStore>()(
                                 // ignored
                             }
 
-                            if (draftProviderId && draftModelId) {
-                                try {
-                                    useContextStore
-                                        .getState()
-                                        .saveAgentModelForSession(created.id, effectiveDraftAgent, draftProviderId, draftModelId);
-                                } catch {
-                                    // ignored
+                                if (draftProviderId && draftModelId) {
+                                    try {
+                                        useContextStore
+                                            .getState()
+                                            .saveAgentModelForSession(created.id, effectiveDraftAgent, draftProviderId, draftModelId);
+                                    } catch {
+                                        // ignored
+                                    }
+
+                                    if (variant !== undefined) {
+                                        try {
+                                            useContextStore
+                                                .getState()
+                                                .saveAgentModelVariantForSession(created.id, effectiveDraftAgent, draftProviderId, draftModelId, variant);
+                                        } catch {
+                                            // ignored
+                                        }
+                                    }
                                 }
-                            }
                         }
 
                         try {
@@ -365,7 +375,7 @@ export const useSessionStore = create<SessionStore>()(
                         try {
                             return await useMessageStore
                                 .getState()
-                                .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, additionalParts);
+                                .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, additionalParts, variant);
                         } catch (error) {
                             setIdlePhase(created.id);
                             throw error;
@@ -385,14 +395,24 @@ export const useSessionStore = create<SessionStore>()(
                         } catch {
                             // ignored
                         }
-                    }
 
+                        if (variant !== undefined) {
+                            try {
+                                useContextStore
+                                    .getState()
+                                    .saveAgentModelVariantForSession(currentSessionId, effectiveAgent, providerID, modelID, variant);
+                            } catch {
+                                // ignored
+                            }
+                        }
+                    }
+ 
                     if (currentSessionId) {
                         setBusyPhase(currentSessionId);
                     }
 
                     try {
-                        return await useMessageStore.getState().sendMessage(content, providerID, modelID, effectiveAgent, currentSessionId || undefined, attachments, agentMentionName, additionalParts);
+                        return await useMessageStore.getState().sendMessage(content, providerID, modelID, effectiveAgent, currentSessionId || undefined, attachments, agentMentionName, additionalParts, variant);
                     } catch (error) {
                         if (currentSessionId) {
                             setIdlePhase(currentSessionId);
@@ -473,7 +493,9 @@ export const useSessionStore = create<SessionStore>()(
                 getSessionAgentSelection: (sessionId: string) => useContextStore.getState().getSessionAgentSelection(sessionId),
                 saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => useContextStore.getState().saveAgentModelForSession(sessionId, agentName, providerId, modelId),
                 getAgentModelForSession: (sessionId: string, agentName: string) => useContextStore.getState().getAgentModelForSession(sessionId, agentName),
-                analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: Record<string, unknown>[]) => {
+                saveAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, variant: string | undefined) => useContextStore.getState().saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, variant),
+                getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => useContextStore.getState().getAgentModelVariantForSession(sessionId, agentName, providerId, modelId),
+                analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: Record<string, unknown>[]) => { 
                     const messages = useMessageStore.getState().messages;
                     return useContextStore.getState().analyzeAndSaveExternalSessionChoices(sessionId, agents, messages);
                 },

@@ -10,10 +10,11 @@ interface MessageHeaderProps {
     providerID: string | null;
     agentName: string | undefined;
     modelName: string | undefined;
+    variant?: string;
     isDarkTheme: boolean;
 }
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, variant, isDarkTheme }) => {
     const { src: logoSrc, onError: handleLogoError, hasLogo } = useProviderLogo(providerID);
 
     return (
@@ -65,6 +66,25 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                     )}
                                 >
                                     <span className="font-medium">{agentName}</span>
+                                </div>
+                            )}
+                            {!isUser && variant && (
+                                <div
+                                    className={cn(
+                                        'flex items-center gap-1 px-1.5 py-0 rounded',
+                                        'agent-badge typography-meta',
+                                        variant === 'Default' ? undefined : 'agent-info'
+                                    )}
+                                    style={
+                                        variant === 'Default'
+                                            ? ({
+                                                  '--agent-color': 'var(--muted-foreground)',
+                                                  '--agent-color-bg': 'var(--muted-foreground)',
+                                              } as React.CSSProperties)
+                                            : undefined
+                                    }
+                                >
+                                    <span className="font-medium">{variant.length > 0 ? variant[0].toLowerCase() + variant.slice(1) : variant}</span>
                                 </div>
                             )}
                         </div>

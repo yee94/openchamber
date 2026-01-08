@@ -20,9 +20,10 @@ import { useContextStore } from "./contextStore";
 
 // Helper function to clean up pending user message metadata
 const cleanupPendingUserMessageMeta = (
-    currentPending: Map<string, { mode?: string; providerID?: string; modelID?: string }>,
+    currentPending: Map<string, { mode?: string; providerID?: string; modelID?: string; variant?: string }>,
+
     sessionId: string
-): Map<string, { mode?: string; providerID?: string; modelID?: string }> => {
+): Map<string, { mode?: string; providerID?: string; modelID?: string; variant?: string }> => {
     const nextPending = new Map(currentPending);
     nextPending.delete(sessionId);
     return nextPending;
@@ -338,12 +339,12 @@ interface MessageState {
     sessionCompactionUntil: Map<string, number>;
     sessionAbortFlags: Map<string, SessionAbortRecord>;
     pendingAssistantHeaderSessions: Set<string>;
-    pendingUserMessageMetaBySession: Map<string, { mode?: string; providerID?: string; modelID?: string }>;
+    pendingUserMessageMetaBySession: Map<string, { mode?: string; providerID?: string; modelID?: string; variant?: string }>;
 }
 
 interface MessageActions {
     loadMessages: (sessionId: string) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -546,7 +547,7 @@ export const useMessageStore = create<MessageStore>()(
                         });
                 },
 
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
@@ -663,6 +664,7 @@ export const useMessageStore = create<MessageStore>()(
                                         mode: typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined,
                                         providerID,
                                         modelID,
+                                        variant: typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined,
                                     });
                                     return { pendingAssistantHeaderSessions: next, pendingUserMessageMetaBySession: nextUserMeta };
                                 });
@@ -684,6 +686,7 @@ export const useMessageStore = create<MessageStore>()(
                                     modelID,
                                     text: effectiveContent,
                                     agent,
+                                    variant,
                                     files: filePayloads.length > 0 ? filePayloads : undefined,
                                     additionalParts: additionalPartsPayload,
                                     agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,

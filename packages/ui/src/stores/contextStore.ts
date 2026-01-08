@@ -24,6 +24,9 @@ interface ContextState {
 
     sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>;
 
+    // sessionId → agentName → "providerId/modelId" → variant
+    sessionAgentModelVariantSelections: Map<string, Map<string, Map<string, string>>>;
+ 
     currentAgentContext: Map<string, string>;
 
     sessionContextUsage: Map<string, ContextUsage>;
@@ -42,7 +45,11 @@ interface ContextActions {
     saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void;
     getAgentModelForSession: (sessionId: string, agentName: string) => { providerId: string; modelId: string } | null;
 
+    saveAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, variant: string | undefined) => void;
+    getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | undefined;
+ 
     analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: any[], messages: Map<string, { info: any; parts: any[] }[]>) => Promise<Map<string, { providerId: string; modelId: string; timestamp: number }>>;
+
 
     getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => ContextUsage | null;
 
@@ -71,6 +78,7 @@ export const useContextStore = create<ContextStore>()(
                 sessionModelSelections: new Map(),
                 sessionAgentSelections: new Map(),
                 sessionAgentModelSelections: new Map(),
+                sessionAgentModelVariantSelections: new Map(),
                 currentAgentContext: new Map(),
                 sessionContextUsage: new Map(),
                 sessionAgentEditModes: new Map(),
@@ -129,8 +137,62 @@ export const useContextStore = create<ContextStore>()(
                     return agentMap.get(agentName) || null;
                 },
 
+                saveAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, variant: string | undefined) => {
+                    set((state) => {
+                        const newSelections = new Map(state.sessionAgentModelVariantSelections);
+
+                        let agentMap = newSelections.get(sessionId);
+                        if (!agentMap) {
+                            agentMap = new Map();
+                        } else {
+                            agentMap = new Map(agentMap);
+                        }
+
+                        let modelMap = agentMap.get(agentName);
+                        if (!modelMap) {
+                            modelMap = new Map();
+                        } else {
+                            modelMap = new Map(modelMap);
+                        }
+
+                        const modelKey = `${providerId}/${modelId}`;
+
+                        if (variant === undefined) {
+                            modelMap.delete(modelKey);
+
+                            if (modelMap.size === 0) {
+                                agentMap.delete(agentName);
+
+                                if (agentMap.size === 0) {
+                                    newSelections.delete(sessionId);
+                                } else {
+                                    newSelections.set(sessionId, agentMap);
+                                }
+                            } else {
+                                agentMap.set(agentName, modelMap);
+                                newSelections.set(sessionId, agentMap);
+                            }
+                        } else {
+                            modelMap.set(modelKey, variant);
+                            agentMap.set(agentName, modelMap);
+                            newSelections.set(sessionId, agentMap);
+                        }
+
+                        return { sessionAgentModelVariantSelections: newSelections };
+                    });
+                },
+
+                getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => {
+                    const { sessionAgentModelVariantSelections } = get();
+                    const agentMap = sessionAgentModelVariantSelections.get(sessionId);
+                    if (!agentMap) return undefined;
+                    const modelMap = agentMap.get(agentName);
+                    if (!modelMap) return undefined;
+                    return modelMap.get(`${providerId}/${modelId}`);
+                },
+ 
                 analyzeAndSaveExternalSessionChoices: async (sessionId: string, agents: any[], messages: Map<string, { info: any; parts: any[] }[]>) => {
-                    const { saveAgentModelForSession } = get();
+                    const { saveAgentModelForSession, saveAgentModelVariantForSession } = get();
 
                     const agentLastChoices = new Map<
                         string,
@@ -212,6 +274,14 @@ export const useContextStore = create<ContextStore>()(
                             const agentName = extractAgentFromMessage(infoAny, assistantMessages.indexOf(message));
 
                             if (agentName && agents.find((a) => a.name === agentName)) {
+                                const resolvedVariant = typeof infoAny.variant === 'string' && infoAny.variant.trim().length > 0
+                                    ? infoAny.variant
+                                    : undefined;
+
+                                if (resolvedVariant) {
+                                    saveAgentModelVariantForSession(sessionId, agentName, infoAny.providerID, infoAny.modelID, resolvedVariant);
+                                }
+
                                 const choice = {
                                     providerId: infoAny.providerID,
                                     modelId: infoAny.modelID,
@@ -474,6 +544,10 @@ export const useContextStore = create<ContextStore>()(
                     sessionModelSelections: Array.from(state.sessionModelSelections.entries()),
                     sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),
                     sessionAgentModelSelections: Array.from(state.sessionAgentModelSelections.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]),
+                    sessionAgentModelVariantSelections: Array.from(state.sessionAgentModelVariantSelections.entries()).map(([sessionId, agentMap]) => [
+                        sessionId,
+                        Array.from(agentMap.entries()).map(([agentName, modelMap]) => [agentName, Array.from(modelMap.entries())]),
+                    ]),
                     currentAgentContext: Array.from(state.currentAgentContext.entries()),
                     sessionContextUsage: Array.from(state.sessionContextUsage.entries()),
                     sessionAgentEditModes: Array.from(state.sessionAgentEditModes.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]),
@@ -487,6 +561,17 @@ export const useContextStore = create<ContextStore>()(
                         });
                     }
 
+                    const agentModelVariantSelections = new Map();
+                    if (persistedState?.sessionAgentModelVariantSelections) {
+                        persistedState.sessionAgentModelVariantSelections.forEach(([sessionId, agentArray]: [string, any[]]) => {
+                            const agentMap = new Map();
+                            agentArray.forEach(([agentName, modelArray]: [string, any[]]) => {
+                                agentMap.set(agentName, new Map(modelArray));
+                            });
+                            agentModelVariantSelections.set(sessionId, agentMap);
+                        });
+                    }
+ 
                     const agentEditModes = new Map();
                     if (persistedState?.sessionAgentEditModes) {
                         persistedState.sessionAgentEditModes.forEach(([sessionId, agentArray]: [string, any[]]) => {
@@ -500,6 +585,7 @@ export const useContextStore = create<ContextStore>()(
                         sessionModelSelections: new Map(persistedState?.sessionModelSelections || []),
                         sessionAgentSelections: new Map(persistedState?.sessionAgentSelections || []),
                         sessionAgentModelSelections: agentModelSelections,
+                        sessionAgentModelVariantSelections: agentModelVariantSelections,
                         currentAgentContext: new Map(persistedState?.currentAgentContext || []),
                         sessionContextUsage: new Map(persistedState?.sessionContextUsage || []),
                         sessionAgentEditModes: agentEditModes,

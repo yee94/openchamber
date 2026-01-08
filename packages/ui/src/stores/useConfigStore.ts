@@ -345,6 +345,7 @@ interface ConfigStore {
     agents: Agent[];
     currentProviderId: string;
     currentModelId: string;
+    currentVariant: string | undefined;
     currentAgentName: string | undefined;
     selectedProviderId: string;
     agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
@@ -363,6 +364,9 @@ interface ConfigStore {
     loadAgents: (options?: { directory?: string | null }) => Promise<boolean>;
     setProvider: (providerId: string) => void;
     setModel: (modelId: string) => void;
+    setCurrentVariant: (variant: string | undefined) => void;
+    cycleCurrentVariant: () => void;
+    getCurrentModelVariants: () => string[];
     setAgent: (agentName: string | undefined) => void;
     setSelectedProvider: (providerId: string) => void;
     setSettingsDefaultModel: (model: string | undefined) => void;
@@ -399,6 +403,7 @@ export const useConfigStore = create<ConfigStore>()(
                 agents: [],
                 currentProviderId: "",
                 currentModelId: "",
+                currentVariant: undefined,
                 currentAgentName: undefined,
                 selectedProviderId: "",
                 agentModelSelections: {},
@@ -612,12 +617,12 @@ export const useConfigStore = create<ConfigStore>()(
                             agentModelSelections: state.agentModelSelections,
                             defaultProviders: state.defaultProviders,
                         };
-
+ 
                         const nextSnapshot: DirectoryScopedConfig = {
                             ...baseSnapshot,
                             currentModelId: modelId,
                         };
-
+ 
                         return {
                             currentModelId: modelId,
                             directoryScoped: {
@@ -628,6 +633,46 @@ export const useConfigStore = create<ConfigStore>()(
                     });
                 },
 
+                setCurrentVariant: (variant: string | undefined) => {
+                    set((state) => {
+                        if (state.currentVariant === variant) {
+                            return state;
+                        }
+                        return { currentVariant: variant };
+                    });
+                },
+
+                getCurrentModelVariants: () => {
+                    const model = get().getCurrentModel();
+                    const variants = (model as { variants?: Record<string, unknown> } | undefined)?.variants;
+                    if (!variants) {
+                        return [];
+                    }
+                    return Object.keys(variants);
+                },
+
+                cycleCurrentVariant: () => {
+                    const variantKeys = get().getCurrentModelVariants();
+                    if (variantKeys.length === 0) {
+                        return;
+                    }
+
+                    const current = get().currentVariant;
+                    if (!current) {
+                        set((state) => (state.currentVariant === variantKeys[0] ? state : { currentVariant: variantKeys[0] }));
+                        return;
+                    }
+ 
+                    const index = variantKeys.indexOf(current);
+                    if (index === -1 || index === variantKeys.length - 1) {
+                        set((state) => (state.currentVariant === undefined ? state : { currentVariant: undefined }));
+                        return;
+                    }
+
+                    const nextVariant = variantKeys[index + 1];
+                    set((state) => (state.currentVariant === nextVariant ? state : { currentVariant: nextVariant }));
+                },
+ 
                 setSelectedProvider: (providerId: string) => {
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;

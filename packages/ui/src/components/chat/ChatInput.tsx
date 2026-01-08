@@ -145,7 +145,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
     const pendingInputText = useSessionStore((state) => state.pendingInputText);
 
-    const { currentProviderId, currentModelId, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
+    const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen } = useUIStore();
     const { working } = useAssistantStatus();
@@ -473,7 +473,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             currentAgentName, 
             primaryAttachments, 
             agentMentionName,
-            additionalParts.length > 0 ? additionalParts : undefined
+            additionalParts.length > 0 ? additionalParts : undefined,
+            currentVariant
         ).catch((error: unknown) => {
                 const rawMessage =
                     error instanceof Error

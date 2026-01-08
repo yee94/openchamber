@@ -530,6 +530,7 @@ class OpencodeService {
     text: string;
     prefaceText?: string;
     agent?: string;
+    variant?: string;
     files?: Array<{
       type: 'file';
       mime: string;
@@ -638,6 +639,7 @@ class OpencodeService {
         modelID: params.modelID
       },
       agent: params.agent,
+      variant: params.variant,
       parts
     });
 

@@ -165,18 +165,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const mode = getMessageInfoProp(previousMessage.info, 'mode');
         const providerID = getMessageInfoProp(previousMessage.info, 'providerID');
         const modelID = getMessageInfoProp(previousMessage.info, 'modelID');
+        const variant = getMessageInfoProp(previousMessage.info, 'variant');
         const resolvedAgent = typeof mode === 'string' && mode.trim().length > 0 ? mode : undefined;
         const resolvedProvider = typeof providerID === 'string' && providerID.trim().length > 0 ? providerID : undefined;
         const resolvedModel = typeof modelID === 'string' && modelID.trim().length > 0 ? modelID : undefined;
-
-        if (!resolvedAgent && !resolvedProvider && !resolvedModel) {
+        const resolvedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined;
+ 
+        if (!resolvedAgent && !resolvedProvider && !resolvedModel && !resolvedVariant) {
             return null;
         }
-
+ 
         return {
             agentName: resolvedAgent,
             providerId: resolvedProvider,
             modelId: resolvedModel,
+            variant: resolvedVariant,
         };
     }, [isUser, previousMessage]);
 
@@ -267,6 +270,23 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return undefined;
     }, [isUser, providerID, modelID, providers]);
 
+    const modelHasVariants = React.useMemo(() => {
+        if (isUser) return false;
+        if (!providerID || !modelID) return false;
+
+        const provider = providers.find((p) => p.id === providerID);
+        if (!provider?.models || !Array.isArray(provider.models)) {
+            return false;
+        }
+
+        const model = provider.models.find((m: Record<string, unknown>) => (m as Record<string, unknown>).id === modelID) as
+            | { variants?: Record<string, unknown> }
+            | undefined;
+
+        const variants = model?.variants;
+        return Boolean(variants && Object.keys(variants).length > 0);
+    }, [isUser, modelID, providerID, providers]);
+ 
     const displayAgentName = useStickyDisplayValue<string>(agentName);
     const displayProviderIDValue = useStickyDisplayValue<string>(providerID ?? undefined);
     const displayModelName = useStickyDisplayValue<string>(modelName);
@@ -508,6 +528,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return typeof body === 'string' && body.trim().length > 0 ? body : undefined;
     });
 
+    const variantFromTurnStore = useMessageStore((state) => {
+        if (!userMessageIdForTurn) return undefined;
+        const sessionId = message.info.sessionID;
+        if (!sessionId) return undefined;
+        const sessionMessages = state.messages.get(sessionId);
+        if (!sessionMessages) return undefined;
+        const userMsg = sessionMessages.find((entry) => entry.info?.id === userMessageIdForTurn);
+        if (!userMsg) return undefined;
+        const variant = (userMsg.info as { variant?: unknown }).variant;
+        return typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined;
+    });
+
+    const headerVariantRaw = !isUser ? (variantFromTurnStore ?? previousUserMetadata?.variant) : undefined;
+
+    const headerVariant = !isUser && modelHasVariants ? (headerVariantRaw ?? 'Default') : undefined;
+ 
     const assistantSummaryCandidate =
         typeof turnGroupingContext?.summaryBody === 'string' && turnGroupingContext.summaryBody.trim().length > 0
             ? turnGroupingContext.summaryBody
@@ -809,6 +845,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     providerID={headerProviderID}
                                     agentName={headerAgentName}
                                     modelName={headerModelName}
+                                    variant={headerVariant}
                                     isDarkTheme={isDarkTheme}
                                 />
                             )}
