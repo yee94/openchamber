@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Shortcuts: Switched agent cycling shortcut from TAB to Shift + TAB.
 - Skills: added autocomplete for skills on "/" when it is not the first character in input.
 - Autocomplete: added scope badges for commands/agents/skills.
+- Compact: changed /summarize command to be /compact and use sdk for compaction.
 
 
 ## [1.4.4] - 2026-01-08

@@ -98,7 +98,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
               ]
             : []
           ),
-          { name: 'summarize', description: 'Generate a summary of the current session', isBuiltIn: true },
+          { name: 'compact', description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
         ];
 
         const commandMap = new Map<string, CommandInfo>();
@@ -142,7 +142,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
               ]
             : []
           ),
-          { name: 'summarize', description: 'Generate a summary of the current session', isBuiltIn: true },
+          { name: 'compact', description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
         ];
 
         const filtered = (searchQuery
@@ -215,7 +215,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         return <RiArrowGoForwardLine className="h-3.5 w-3.5 text-orange-500" />;
       case 'timeline':
         return <RiTimeLine className="h-3.5 w-3.5 text-blue-500" />;
-      case 'summarize':
+      case 'compact':
         return <RiScissorsLine className="h-3.5 w-3.5 text-purple-500" />;
       case 'test':
       case 'build':

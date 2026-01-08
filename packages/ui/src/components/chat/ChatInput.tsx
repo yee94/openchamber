@@ -458,9 +458,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 setMessage('');
                 return; // Don't send to assistant
             }
-            // Existing: /summarize command scroll
-            else if (commandName === 'summarize') {
-                scrollToBottom?.({ instant: true, force: true });
+            // /compact - call SDK summarize endpoint
+            else if (commandName === 'compact' && currentSessionId) {
+                try {
+                    const { opencodeClient } = await import('@/lib/opencode/client');
+                    const directory = opencodeClient.getDirectory();
+                    const response = await opencodeClient.getApiClient().session.summarize({
+                        sessionID: currentSessionId,
+                        directory: directory || undefined,
+                        providerID: currentProviderId,
+                        modelID: currentModelId,
+                    });
+                    if (response.error) {
+                        throw new Error('Failed to compact session');
+                    }
+                    scrollToBottom?.({ instant: true, force: true });
+                } catch (error) {
+                    console.error('Failed to compact session:', error);
+                    toast.error('Failed to compact session');
+                }
+                setMessage('');
+                return; // Don't send to assistant
             }
         }
 

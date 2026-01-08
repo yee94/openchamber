@@ -144,7 +144,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return message.parts.map((part) => {
             const rawPart = part as Record<string, unknown>;
             if (rawPart.type === 'compaction') {
-                return { type: 'text', text: '/summarize' } as Part;
+                return { type: 'text', text: '/compact' } as Part;
             }
             return part;
         });
