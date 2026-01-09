@@ -19,6 +19,7 @@ export const ChatContainer: React.FC = () => {
         currentSessionId,
         messages,
         permissions,
+        questions,
         streamingMessageIds,
         isLoading,
         loadMessages,
@@ -63,6 +64,14 @@ export const ChatContainer: React.FC = () => {
         return currentSessionId ? permissions.get(currentSessionId) || [] : [];
     }, [currentSessionId, permissions]);
 
+    const sessionQuestions = React.useMemo(() => {
+        return currentSessionId ? questions.get(currentSessionId) || [] : [];
+    }, [currentSessionId, questions]);
+
+    const sessionBlockingCards = React.useMemo(() => {
+        return [...sessionPermissions, ...sessionQuestions];
+    }, [sessionPermissions, sessionQuestions]);
+
     const {
         scrollRef,
         handleMessageContentChange,
@@ -83,7 +92,7 @@ export const ChatContainer: React.FC = () => {
         isSyncing,
         isMobile,
         messageStreamStates,
-        sessionPermissions,
+        sessionPermissions: sessionBlockingCards,
         trimToViewportWindow,
         sessionActivityPhase,
     });
@@ -284,6 +293,7 @@ export const ChatContainer: React.FC = () => {
                             <MessageList
                                 messages={sessionMessages}
                                 permissions={sessionPermissions}
+                                questions={sessionQuestions}
                                 onMessageContentChange={handleMessageContentChange}
                                 getAnimationHandlers={getAnimationHandlers}
                                 hasMoreAbove={hasMoreAbove}

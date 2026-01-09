@@ -229,6 +229,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             todowrite: 'updating todos',
             todoread: 'reading todos',
             skill: 'learning skill',
+            question: 'asking question',
         };
 
         const WORKING_PHRASES = [

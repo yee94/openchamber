@@ -3,7 +3,9 @@ import type { Message, Part } from '@opencode-ai/sdk/v2';
 
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
+import { QuestionCard } from './QuestionCard';
 import type { PermissionRequest } from '@/types/permission';
+import type { QuestionRequest } from '@/types/question';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
 import { useTurnGrouping } from './hooks/useTurnGrouping';
@@ -11,6 +13,7 @@ import { useTurnGrouping } from './hooks/useTurnGrouping';
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
     permissions: PermissionRequest[];
+    questions: QuestionRequest[];
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     hasMoreAbove: boolean;
@@ -23,6 +26,7 @@ interface MessageListProps {
 const MessageList: React.FC<MessageListProps> = ({
     messages,
     permissions,
+    questions,
     onMessageContentChange,
     getAnimationHandlers,
     hasMoreAbove,
@@ -32,11 +36,11 @@ const MessageList: React.FC<MessageListProps> = ({
     pendingAnchorId,
 }) => {
     React.useEffect(() => {
-        if (permissions.length === 0) {
+        if (permissions.length === 0 && questions.length === 0) {
             return;
         }
         onMessageContentChange('permission');
-    }, [permissions, onMessageContentChange]);
+    }, [permissions, questions, onMessageContentChange]);
 
     const displayMessages = React.useMemo(() => {
         const seenIds = new Set<string>();
@@ -96,8 +100,11 @@ const MessageList: React.FC<MessageListProps> = ({
 
             </div>
 
-            {permissions.length > 0 && (
+            {(questions.length > 0 || permissions.length > 0) && (
                 <div>
+                    {questions.map((question) => (
+                        <QuestionCard key={question.id} question={question} />
+                    ))}
                     {permissions.map((permission) => (
                         <PermissionCard key={permission.id} permission={permission} />
                     ))}

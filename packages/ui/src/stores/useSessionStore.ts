@@ -3,6 +3,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
+import type { QuestionRequest } from "@/types/question";
 import type { SessionStore, AttachedFile, EditPermissionMode } from "./types/sessionTypes";
 import { ACTIVE_SESSION_WINDOW, MEMORY_LIMITS } from "./types/sessionTypes";
 
@@ -11,6 +12,7 @@ import { useMessageStore } from "./messageStore";
 import { useFileStore } from "./fileStore";
 import { useContextStore } from "./contextStore";
 import { usePermissionStore } from "./permissionStore";
+import { useQuestionStore } from "./questionStore";
 import { opencodeClient } from "@/lib/opencode/client";
 import { useDirectoryStore } from "./useDirectoryStore";
 import { useConfigStore } from "./useConfigStore";
@@ -76,6 +78,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionCompactionUntil: new Map(),
             sessionAbortFlags: new Map(),
             permissions: new Map(),
+            questions: new Map(),
             attachedFiles: [],
             isLoading: false,
             error: null,
@@ -461,6 +464,12 @@ export const useSessionStore = create<SessionStore>()(
                     return usePermissionStore.getState().addPermission(permission, contextData);
                 },
                 respondToPermission: (sessionId: string, requestId: string, response: PermissionResponse) => usePermissionStore.getState().respondToPermission(sessionId, requestId, response),
+
+                addQuestion: (question: QuestionRequest) => useQuestionStore.getState().addQuestion(question),
+                dismissQuestion: (sessionId: string, requestId: string) => useQuestionStore.getState().dismissQuestion(sessionId, requestId),
+                respondToQuestion: (sessionId: string, requestId: string, answers: string[] | string[][]) => useQuestionStore.getState().respondToQuestion(sessionId, requestId, answers),
+                rejectQuestion: (sessionId: string, requestId: string) => useQuestionStore.getState().rejectQuestion(sessionId, requestId),
+
                 clearError: () => useSessionManagementStore.getState().clearError(),
                 getSessionsByDirectory: (directory: string) => useSessionManagementStore.getState().getSessionsByDirectory(directory),
                 getDirectoryForSession: (sessionId: string) => useSessionManagementStore.getState().getDirectoryForSession(sessionId),
@@ -876,6 +885,16 @@ usePermissionStore.subscribe((state, prevState) => {
     });
 });
 
+useQuestionStore.subscribe((state, prevState) => {
+    if (state.questions === prevState.questions) {
+        return;
+    }
+
+    useSessionStore.setState({
+        questions: state.questions,
+    });
+});
+
 useDirectoryStore.subscribe((state, prevState) => {
     const nextDirectory = normalizePath(state.currentDirectory ?? null);
     const prevDirectory = normalizePath(prevState.currentDirectory ?? null);
@@ -924,6 +943,7 @@ useSessionStore.setState({
     lastUsedProvider: useMessageStore.getState().lastUsedProvider,
     isSyncing: useMessageStore.getState().isSyncing,
     permissions: usePermissionStore.getState().permissions,
+    questions: useQuestionStore.getState().questions,
     attachedFiles: useFileStore.getState().attachedFiles,
     sessionModelSelections: useContextStore.getState().sessionModelSelections,
     sessionAgentSelections: useContextStore.getState().sessionAgentSelections,

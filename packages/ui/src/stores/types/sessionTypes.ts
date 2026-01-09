@@ -1,5 +1,6 @@
 import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
+import type { QuestionRequest } from "@/types/question";
 
 export interface AttachedFile {
     id: string;
@@ -78,6 +79,7 @@ export interface SessionStore {
     messageStreamStates: Map<string, MessageStreamLifecycle>;
     sessionCompactionUntil: Map<string, number>;
     permissions: Map<string, PermissionRequest[]>;
+    questions: Map<string, QuestionRequest[]>;
     sessionAbortFlags: Map<string, { timestamp: number; acknowledged: boolean }>;
     attachedFiles: AttachedFile[];
     abortPromptSessionId: string | null;
@@ -143,6 +145,12 @@ export interface SessionStore {
     updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => void;
     addPermission: (permission: PermissionRequest) => void;
     respondToPermission: (sessionId: string, requestId: string, response: PermissionResponse) => Promise<void>;
+
+    addQuestion: (question: QuestionRequest) => void;
+    dismissQuestion: (sessionId: string, requestId: string) => void;
+    respondToQuestion: (sessionId: string, requestId: string, answers: string[] | string[][]) => Promise<void>;
+    rejectQuestion: (sessionId: string, requestId: string) => Promise<void>;
+
     clearError: () => void;
     getSessionsByDirectory: (directory: string) => Session[];
     getDirectoryForSession: (sessionId: string) => string | null;

@@ -156,6 +156,14 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
      inputFields: [
        { key: 'name', label: 'Skill Name', type: 'text' }
      ]
+   },
+   question: {
+     displayName: 'Question',
+     category: 'ai',
+     outputLanguage: 'text',
+     inputFields: [
+       { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
+     ]
    }
  };
 

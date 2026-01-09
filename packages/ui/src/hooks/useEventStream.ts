@@ -7,6 +7,8 @@ import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import type { Part, Session, Message } from '@opencode-ai/sdk/v2';
 import type { PermissionRequest } from '@/types/permission';
+import type { QuestionRequest } from '@/types/question';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
@@ -90,6 +92,8 @@ export const useEventStream = () => {
     updateMessageInfo,
     updateSessionCompaction,
     addPermission,
+    addQuestion,
+    dismissQuestion,
     currentSessionId,
     applySessionMetadata,
     sessions,
@@ -149,12 +153,34 @@ export const useEventStream = () => {
       }
     };
 
+    const bootstrapPendingQuestions = async () => {
+      try {
+        const projects = useProjectsStore.getState().projects;
+        const projectDirs = projects.map((project) => project.path);
+        const sessionDirs = sessions.map((session) => (session as { directory?: string | null }).directory);
+
+        const directories = [effectiveDirectory, ...projectDirs, ...sessionDirs];
+
+        const pending = await opencodeClient.listPendingQuestions({ directories });
+        if (cancelled || pending.length === 0) {
+          return;
+        }
+
+        pending.forEach((request) => {
+          addQuestion(request as unknown as QuestionRequest);
+        });
+      } catch {
+        // ignored
+      }
+    };
+
     void bootstrapPendingPermissions();
+    void bootstrapPendingQuestions();
 
     return () => {
       cancelled = true;
     };
-  }, [addPermission]);
+  }, [addPermission, addQuestion, effectiveDirectory, sessions]);
 
   const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
     if (typeof value !== 'string') return null;
@@ -280,6 +306,7 @@ export const useEventStream = () => {
   const resyncInFlightRef = React.useRef<Promise<void> | null>(null);
   const lastResyncAtRef = React.useRef(0);
   const permissionToastShownRef = React.useRef<Set<string>>(new Set());
+  const questionToastShownRef = React.useRef<Set<string>>(new Set());
 
   const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
     if (typeof document === 'undefined') return 'visible';
@@ -1134,6 +1161,65 @@ export const useEventStream = () => {
       case 'permission.replied':
         break;
 
+      case 'question.asked': {
+        if (!('sessionID' in props) || typeof props.sessionID !== 'string') {
+          break;
+        }
+
+        const request = props as unknown as QuestionRequest;
+        addQuestion(request);
+
+        const toastKey = `${request.sessionID}:${request.id}`;
+        if (!questionToastShownRef.current.has(toastKey)) {
+          setTimeout(() => {
+            const current = currentSessionIdRef.current;
+            if (current === request.sessionID) {
+              return;
+            }
+
+            const pending = useSessionStore
+              .getState()
+              .questions
+              .get(request.sessionID)
+              ?.some((entry) => entry.id === request.id);
+
+            if (!pending) {
+              return;
+            }
+
+            questionToastShownRef.current.add(toastKey);
+
+            const sessionTitle =
+              useSessionStore.getState().sessions.find((s) => s.id === request.sessionID)?.title ||
+              'Session';
+
+            import('sonner').then(({ toast }) => {
+              toast.info('Input needed', {
+                description: sessionTitle,
+                action: {
+                  label: 'Open',
+                  onClick: () => {
+                    useUIStore.getState().setActiveMainTab('chat');
+                    void useSessionStore.getState().setCurrentSession(request.sessionID);
+                  },
+                },
+              });
+            });
+          }, 0);
+        }
+
+        break;
+      }
+
+      case 'question.replied': {
+        const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
+        const requestId = typeof props.requestID === 'string' ? props.requestID : null;
+        if (sessionId && requestId) {
+          dismissQuestion(sessionId, requestId);
+        }
+        break;
+      }
+
       case 'todo.updated': {
         const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
         const todos = Array.isArray(props.todos) ? props.todos : null;
@@ -1152,6 +1238,8 @@ export const useEventStream = () => {
     completeStreamingMessage,
     updateMessageInfo,
     addPermission,
+    addQuestion,
+    dismissQuestion,
     checkConnection,
     requestSessionMetadataRefresh,
     updateSessionCompaction,

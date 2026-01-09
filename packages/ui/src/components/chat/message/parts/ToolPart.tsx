@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -86,6 +86,9 @@ export const getToolIcon = (toolName: string) => {
     if (tool === 'skill') {
         return <RiBookLine className={iconClass} />;
     }
+    if (tool === 'question') {
+        return <RiSurveyLine className={iconClass} />;
+    }
     if (tool.startsWith('git')) {
         return <RiGitBranchLine className={iconClass} />;
     }
@@ -147,10 +150,37 @@ const getRelativePath = (absolutePath: string, currentDirectory: string, isMobil
     return absolutePath;
 };
 
+// Parse question tool output: "User has answered your questions: "Q1"="A1", "Q2"="A2". You can now..."
+const parseQuestionOutput = (output: string): Array<{ question: string; answer: string }> | null => {
+    const match = output.match(/^User has answered your questions:\s*(.+?)\.\s*You can now/s);
+    if (!match) return null;
+
+    const pairs: Array<{ question: string; answer: string }> = [];
+    const content = match[1];
+
+    // Match "question"="answer" pairs, handling multiline answers
+    const pairRegex = /"([^"]+)"="([^"]*(?:[^"\\]|\\.)*)"/g;
+    let pairMatch;
+    while ((pairMatch = pairRegex.exec(content)) !== null) {
+        pairs.push({
+            question: pairMatch[1],
+            answer: pairMatch[2],
+        });
+    }
+
+    return pairs.length > 0 ? pairs : null;
+};
+
 const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile: boolean, currentDirectory: string): string => {
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
     const input = stateWithData.input;
+
+    // Question tool: show "Asked N question(s)"
+    if (part.tool === 'question' && input?.questions && Array.isArray(input.questions)) {
+        const count = input.questions.length;
+        return `Asked ${count} question${count !== 1 ? 's' : ''}`;
+    }
 
     if ((part.tool === 'edit' || part.tool === 'multiedit') && input) {
         const filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
@@ -593,6 +623,43 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
     );
 
     const renderResultContent = () => {
+        // Question tool: show parsed Q&A summary
+        if (part.tool === 'question') {
+            if (state.status === 'completed' && hasStringOutput) {
+                const parsedQA = parseQuestionOutput(outputString);
+                if (parsedQA && parsedQA.length > 0) {
+                    return renderScrollableBlock(
+                        <div className="space-y-2">
+                            {parsedQA.map((qa, index) => (
+                                <div key={index} className="space-y-0.5">
+                                    <div className="typography-micro text-muted-foreground">{qa.question}</div>
+                                    <div className="typography-meta text-foreground whitespace-pre-wrap">{qa.answer}</div>
+                                </div>
+                            ))}
+                        </div>,
+                        { maxHeightClass: 'max-h-[40vh]' }
+                    );
+                }
+            }
+
+            if (state.status === 'error' && 'error' in state) {
+                return (
+                    <div>
+                        <div className="typography-meta font-medium text-muted-foreground mb-1">Error:</div>
+                        <div className="typography-meta p-2 rounded-xl border" style={{
+                            backgroundColor: 'var(--status-error-background)',
+                            color: 'var(--status-error)',
+                            borderColor: 'var(--status-error-border)',
+                        }}>
+                            {state.error}
+                        </div>
+                    </div>
+                );
+            }
+
+            return <div className="typography-meta text-muted-foreground">Awaiting response...</div>;
+        }
+
         if (part.tool === 'todowrite' || part.tool === 'todoread') {
             if (state.status === 'completed' && hasStringOutput) {
                 const todoContent = renderTodoOutput(outputString, { unstyled: true });
@@ -796,7 +863,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                 hasNextTool ? 'before:bottom-[-0.6rem]' : 'before:bottom-0'
             )}
         >
-            {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
+            {(part.tool === 'todowrite' || part.tool === 'todoread' || part.tool === 'question') ? (
                 renderResultContent()
             ) : (
                 <>

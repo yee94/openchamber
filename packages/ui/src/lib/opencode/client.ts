@@ -14,6 +14,7 @@ import type {
   Event,
 } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest } from "@/types/permission";
+import type { QuestionRequest } from "@/types/question";
 type StreamEvent<TData> = {
   data: TData;
   event?: string;
@@ -780,6 +781,80 @@ class OpencodeService {
     } catch {
       return [];
     }
+  }
+
+  // Questions ("ask" tool)
+  async replyToQuestion(requestId: string, answers: string[] | string[][]): Promise<boolean> {
+    const normalizedAnswers: string[][] = (() => {
+      if (!Array.isArray(answers) || answers.length === 0) {
+        return [];
+      }
+      if (Array.isArray(answers[0])) {
+        return answers as string[][];
+      }
+      return [answers as string[]];
+    })();
+
+    const result = await this.client.question.reply({
+      requestID: requestId,
+      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
+      answers: normalizedAnswers,
+    });
+    return result.data || false;
+  }
+
+  async rejectQuestion(requestId: string): Promise<boolean> {
+    const result = await this.client.question.reject({
+      requestID: requestId,
+      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
+    });
+    return result.data || false;
+  }
+
+  async listPendingQuestions(options?: { directories?: Array<string | null | undefined> }): Promise<QuestionRequest[]> {
+    const fetches: Array<Promise<QuestionRequest[]>> = [];
+
+    const fetchForDirectory = async (directory?: string | null): Promise<QuestionRequest[]> => {
+      try {
+        const trimmed = typeof directory === 'string' ? directory.trim() : '';
+        const result = await this.client.question.list(trimmed ? { directory: trimmed } : undefined);
+        return (result.data || []) as unknown as QuestionRequest[];
+      } catch {
+        return [];
+      }
+    };
+
+    // Try unscoped first (server may return global pending items).
+    fetches.push(fetchForDirectory(null));
+
+    const uniqueDirectories = new Set<string>();
+    for (const entry of options?.directories ?? []) {
+      const normalized = this.normalizeCandidatePath(entry ?? null);
+      if (normalized) {
+        uniqueDirectories.add(normalized);
+      }
+    }
+
+    for (const directory of uniqueDirectories) {
+      fetches.push(fetchForDirectory(directory));
+    }
+
+    const results = await Promise.all(fetches);
+    const merged: QuestionRequest[] = [];
+    const seenIds = new Set<string>();
+
+    for (const list of results) {
+      for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const id = (item as { id?: unknown }).id;
+        if (typeof id !== 'string' || id.length === 0) continue;
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+        merged.push(item);
+      }
+    }
+
+    return merged;
   }
 
   // Configuration
