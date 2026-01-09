@@ -34,6 +34,7 @@ export interface OpenCodeManager {
   getStatus(): ConnectionStatus;
   getApiUrl(): string | null;
   getWorkingDirectory(): string;
+  isCliAvailable(): boolean;
   getDebugInfo(): OpenCodeDebugInfo;
   onStatusChange(callback: (status: ConnectionStatus, error?: string) => void): vscode.Disposable;
 }
@@ -45,6 +46,29 @@ function resolvePortFromUrl(url: string): number | null {
   } catch {
     return null;
   }
+}
+
+async function waitForReady(url: string, timeoutMs = 5000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const controller = new AbortController();
+      // Increase per-request timeout to 3s to allow for cold start latency without aborting
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${url.replace(/\/+$/, '')}/config`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (res.ok) return true;
+    } catch {
+      // ignore
+    }
+    // Retry faster
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
 }
 
 function inferApiPrefixFromUrl(url: string): string {
@@ -77,6 +101,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   let detectedPort: number | null = null;
   let apiPrefix: string = '';
   let apiPrefixDetected = false;
+  let cliMissing = false;
 
   const config = vscode.workspace.getConfiguration('openchamber');
   const configuredApiUrl = config.get<string>('apiUrl') || '';
@@ -133,6 +158,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     }
 
     setStatus('connecting');
+    cliMissing = false; // Reset assumption on retry
 
     detectedPort = null;
     apiPrefix = '';
@@ -149,10 +175,22 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       });
 
       if (server && server.url) {
-        detectedPort = resolvePortFromUrl(server.url);
-        apiPrefix = inferApiPrefixFromUrl(server.url);
-        apiPrefixDetected = apiPrefix.length > 0;
-        setStatus('connected');
+        // Wait for actual HTTP readiness (stdout "listening" isn't always enough on Windows)
+        if (await waitForReady(server.url, 10000)) {
+          detectedPort = resolvePortFromUrl(server.url);
+          apiPrefix = inferApiPrefixFromUrl(server.url);
+          apiPrefixDetected = apiPrefix.length > 0;
+          setStatus('connected');
+        } else {
+          // Cleanup zombie process if health check fails
+          try {
+            server.close();
+          } catch {
+            // ignore
+          }
+          server = null;
+          throw new Error('Server started but health check failed');
+        }
       } else {
         throw new Error('Server started but URL is missing');
       }
@@ -161,6 +199,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       
       // Check for ENOENT or generic spawn failure which implies CLI missing
       if (message.includes('ENOENT') || message.includes('spawn opencode')) {
+        cliMissing = true;
         setStatus('error', 'OpenCode CLI not found. Install it or ensure it\'s in PATH.');
         vscode.window.showErrorMessage(
           'OpenCode CLI not found. Please install it or ensure it\'s in PATH.',
@@ -220,12 +259,13 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     getStatus: () => status,
     getApiUrl,
     getWorkingDirectory: () => workingDirectory,
+    isCliAvailable: () => !cliMissing,
     getDebugInfo: () => ({
       mode: useConfiguredUrl && configuredApiUrl ? 'external' : 'managed',
       status,
       lastError,
       workingDirectory,
-      cliAvailable: status !== 'error' || (lastError ? !lastError.includes('CLI not found') : true), // Infer availability from status
+      cliAvailable: !cliMissing,
       cliPath: null,
       configuredApiUrl: useConfiguredUrl && configuredApiUrl ? configuredApiUrl.replace(/\/+$/, '') : null,
       configuredPort,
