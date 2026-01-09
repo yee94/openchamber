@@ -1,7 +1,7 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
@@ -9,12 +9,12 @@ import os from 'os';
 import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
+import { createOpencodeServer } from '@opencode-ai/sdk/server';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_PORT = 3000;
-const DEFAULT_OPENCODE_PORT = 0;
 const HEALTH_CHECK_INTERVAL = 30000;
 const SHUTDOWN_TIMEOUT = 10000;
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
@@ -848,7 +848,6 @@ let openCodeApiDetectionTimer = null;
 let isDetectingApiPrefix = false;
 let openCodeApiDetectionPromise = null;
 let lastOpenCodeError = null;
-let openCodePortWaiters = [];
 let isOpenCodeReady = false;
 let openCodeNotReadySince = 0;
 let exitOnShutdown = true;
@@ -890,12 +889,7 @@ async function isOpenCodeProcessHealthy() {
     return false;
   }
 
-  // Check if process is still running
-  if (openCodeProcess.exitCode !== null || openCodeProcess.signalCode !== null) {
-    return false;
-  }
-
-  // Health check via HTTP
+  // Health check via HTTP since SDK object doesn't expose exitCode
   try {
     const response = await fetch(`http://127.0.0.1:${openCodePort}/session`, {
       method: 'GET',
@@ -905,105 +899,6 @@ async function isOpenCodeProcessHealthy() {
   } catch {
     return false;
   }
-}
-
-const OPENCODE_BINARY_ENV =
-  process.env.OPENCODE_BINARY ||
-  process.env.OPENCHAMBER_BINARY ||
-  process.env.OPENCODE_PATH ||
-  process.env.OPENCHAMBER_OPENCODE_PATH ||
-  null;
-
-function buildAugmentedPath() {
-  const augmented = new Set();
-
-  const loginShellPath = getLoginShellPath();
-  if (loginShellPath) {
-    for (const segment of loginShellPath.split(path.delimiter)) {
-      if (segment) {
-        augmented.add(segment);
-      }
-    }
-  }
-
-  const current = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  for (const segment of current) {
-    augmented.add(segment);
-  }
-
-  return Array.from(augmented).join(path.delimiter);
-}
-
-function getLoginShellPath() {
-  if (process.platform === 'win32') {
-    return null;
-  }
-
-  const shell = process.env.SHELL || '/bin/zsh';
-  const shellName = path.basename(shell);
-
-  // Nushell requires different flag syntax and PATH access
-  const isNushell = shellName === 'nu' || shellName === 'nushell';
-  const args = isNushell
-    ? ['-l', '-i', '-c', '$env.PATH | str join (char esep)']
-    : ['-lic', 'echo -n "$PATH"'];
-
-  try {
-    const result = spawnSync(shell, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    if (result.status === 0 && typeof result.stdout === 'string') {
-      const value = result.stdout.trim();
-      if (value) {
-        return value;
-      }
-    } else if (result.stderr) {
-      console.warn(`Failed to read PATH from login shell (${shell}): ${result.stderr}`);
-    }
-  } catch (error) {
-    console.warn(`Error executing login shell (${shell}) for PATH detection: ${error.message}`);
-  }
-  return null;
-}
-
-function resolveBinaryFromPath(binaryName, searchPath) {
-  if (!binaryName) {
-    return null;
-  }
-  if (path.isAbsolute(binaryName)) {
-    return fs.existsSync(binaryName) ? binaryName : null;
-  }
-  const directories = searchPath.split(path.delimiter).filter(Boolean);
-  for (const directory of directories) {
-    try {
-      const candidate = path.join(directory, binaryName);
-      if (fs.existsSync(candidate)) {
-        const stats = fs.statSync(candidate);
-        if (stats.isFile()) {
-          return candidate;
-        }
-      }
-    } catch {
-      // Ignore resolution errors, continue searching
-    }
-  }
-  return null;
-}
-
-function getOpencodeSpawnConfig() {
-  const envPath = buildAugmentedPath();
-  const resolvedEnv = { ...process.env, PATH: envPath };
-
-  if (OPENCODE_BINARY_ENV) {
-    const explicit = resolveBinaryFromPath(OPENCODE_BINARY_ENV, envPath);
-    if (explicit) {
-      console.log(`Using OpenCode binary from OPENCODE_BINARY: ${explicit}`);
-      return { command: explicit, env: resolvedEnv };
-    }
-    console.warn(
-      `OPENCODE_BINARY path "${OPENCODE_BINARY_ENV}" not found. Falling back to search.`
-    );
-  }
-
-  return { command: 'opencode', env: resolvedEnv };
 }
 
 const ENV_CONFIGURED_OPENCODE_PORT = (() => {
@@ -1048,38 +943,6 @@ function setOpenCodePort(port) {
   }
 
   lastOpenCodeError = null;
-
-  if (openCodePortWaiters.length > 0) {
-    const waiters = openCodePortWaiters;
-    openCodePortWaiters = [];
-    for (const notify of waiters) {
-      try {
-        notify(numericPort);
-      } catch (error) {
-        console.warn('Failed to notify OpenCode port waiter:', error);
-      }
-    }
-  }
-}
-
-async function waitForOpenCodePort(timeoutMs = 15000) {
-  if (openCodePort !== null) {
-    return openCodePort;
-  }
-
-  return new Promise((resolve, reject) => {
-    const onPortDetected = (port) => {
-      clearTimeout(timeout);
-      resolve(port);
-    };
-
-    const timeout = setTimeout(() => {
-      openCodePortWaiters = openCodePortWaiters.filter((cb) => cb !== onPortDetected);
-      reject(new Error('Timed out waiting for OpenCode port'));
-    }, timeoutMs);
-
-    openCodePortWaiters.push(onPortDetected);
-  });
 }
 
 const API_PREFIX_CANDIDATES = ['', '/api']; // Simplified - only check root and /api
@@ -1116,51 +979,6 @@ function setDetectedOpenCodeApiPrefix(prefix) {
       openCodeApiDetectionTimer = null;
     }
     console.log(`Detected OpenCode API prefix: ${normalized || '(root)'}`);
-  }
-}
-
-function detectPortFromLogMessage(message) {
-  if (openCodePort && ENV_CONFIGURED_OPENCODE_PORT) {
-    return;
-  }
-
-  const regex = /https?:\/\/[^:\s]+:(\d+)/gi;
-  let match;
-  while ((match = regex.exec(message)) !== null) {
-    const port = parseInt(match[1], 10);
-    if (Number.isFinite(port) && port > 0) {
-      setOpenCodePort(port);
-      return;
-    }
-  }
-
-  const fallbackMatch = /(?:^|\s)(?:127\.0\.0\.1|localhost):(\d+)/i.exec(message);
-  if (fallbackMatch) {
-    const port = parseInt(fallbackMatch[1], 10);
-    if (Number.isFinite(port) && port > 0) {
-      setOpenCodePort(port);
-    }
-  }
-}
-
-function detectPrefixFromLogMessage(message) {
-  if (!openCodePort) {
-    return;
-  }
-
-  const urlRegex = /https?:\/\/[^:\s]+:(\d+)(\/[^\s"']*)?/gi;
-  let match;
-
-  while ((match = urlRegex.exec(message)) !== null) {
-    const portMatch = parseInt(match[1], 10);
-    if (portMatch !== openCodePort) {
-      continue;
-    }
-
-    const path = match[2] || '';
-    const normalized = normalizeApiPrefix(path);
-    setDetectedOpenCodeApiPrefix(normalized);
-    return;
   }
 }
 
@@ -1495,136 +1313,48 @@ function parseArgs(argv = process.argv.slice(2)) {
 }
 
 async function startOpenCode() {
-  const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? DEFAULT_OPENCODE_PORT;
+  const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? 0;
   console.log(
-    desiredPort
+    desiredPort > 0
       ? `Starting OpenCode on requested port ${desiredPort}...`
       : 'Starting OpenCode with dynamic port assignment...'
   );
-  console.log(`Starting OpenCode in working directory: ${openCodeWorkingDirectory}`);
+  // Note: SDK starts in current process CWD. openCodeWorkingDirectory is tracked but not used for spawn in SDK.
 
-  const { command, env } = getOpencodeSpawnConfig();
-  const args = ['serve', '--port', desiredPort.toString()];
-  console.log(`Launching OpenCode via "${command}" with args ${args.join(' ')}`);
+  try {
+    const serverInstance = await createOpencodeServer({
+      hostname: '127.0.0.1',
+      port: desiredPort,
+      timeout: 30000,
+      env: {
+        ...process.env,
+        // Pass minimal config to avoid pollution, but inherit PATH etc
+      }
+    });
 
-  const child = spawn(command, args, {
-    stdio: 'pipe',
-    env,
-    cwd: openCodeWorkingDirectory
-  });
-  isOpenCodeReady = false;
-  openCodeNotReadySince = Date.now();
-
-  let firstSignalResolver;
-  const firstSignalPromise = new Promise((resolve) => {
-    firstSignalResolver = resolve;
-  });
-  let firstSignalSettled = false;
-  const settleFirstSignal = () => {
-    if (firstSignalSettled) {
-      return;
+    if (!serverInstance || !serverInstance.url) {
+      throw new Error('OpenCode server started but URL is missing');
     }
-    firstSignalSettled = true;
-    clearTimeout(firstSignalTimer);
-    child.stdout.off('data', settleFirstSignal);
-    child.stderr.off('data', settleFirstSignal);
-    child.off('exit', settleFirstSignal);
-    if (firstSignalResolver) {
-      firstSignalResolver();
-    }
-  };
-  const firstSignalTimer = setTimeout(settleFirstSignal, 750);
 
-  child.stdout.once('data', settleFirstSignal);
-  child.stderr.once('data', settleFirstSignal);
-  child.once('exit', settleFirstSignal);
+    const url = new URL(serverInstance.url);
+    const port = parseInt(url.port, 10);
+    const prefix = normalizeApiPrefix(url.pathname);
 
-  child.stdout.on('data', (data) => {
-    const text = data.toString();
-    console.log(`OpenCode: ${text.trim()}`);
-    detectPortFromLogMessage(text);
-    detectPrefixFromLogMessage(text);
-    settleFirstSignal();
-  });
+    setOpenCodePort(port);
+    setDetectedOpenCodeApiPrefix(prefix); // SDK URL typically includes the prefix if any
 
-  child.stderr.on('data', (data) => {
-    const text = data.toString();
-    lastOpenCodeError = text.trim();
-    console.error(`OpenCode Error: ${lastOpenCodeError}`);
-    detectPortFromLogMessage(text);
-    detectPrefixFromLogMessage(text);
-    settleFirstSignal();
-  });
+    isOpenCodeReady = true;
+    lastOpenCodeError = null;
+    openCodeNotReadySince = 0;
 
-  let startupError = await new Promise((resolve, reject) => {
-    const onSpawn = () => {
-      setOpenCodePort(desiredPort);
-      child.off('error', onError);
-      resolve(null);
-    };
-    const onError = (error) => {
-      child.off('spawn', onSpawn);
-      reject(error);
-    };
-
-    child.once('spawn', onSpawn);
-    child.once('error', onError);
-  }).catch((error) => {
+    return serverInstance;
+  } catch (error) {
     lastOpenCodeError = error.message;
     openCodePort = null;
     syncToHmrState();
-    settleFirstSignal();
-    return error;
-  });
-
-  if (startupError) {
-    if (startupError.code === 'ENOENT') {
-      const enhanced = new Error(
-        `Failed to start OpenCode – executable "${command}" not found. ` +
-        'Set OPENCODE_BINARY to the full path of the opencode CLI or ensure it is on PATH.'
-      );
-      enhanced.code = startupError.code;
-      startupError = enhanced;
-    }
-    throw startupError;
+    console.error(`Failed to start OpenCode: ${error.message}`);
+    throw error;
   }
-
-  child.on('exit', (code, signal) => {
-    lastOpenCodeError = `OpenCode exited with code ${code}, signal ${signal ?? 'null'}`;
-    isOpenCodeReady = false;
-    openCodeNotReadySince = Date.now();
-
-    if (!isShuttingDown && !isRestartingOpenCode) {
-      console.log(`OpenCode process exited with code ${code}, signal ${signal}`);
-
-      setTimeout(() => {
-        restartOpenCode().catch((err) => {
-          console.error('Failed to restart OpenCode after exit:', err);
-        });
-      }, 5000);
-    } else if (isRestartingOpenCode) {
-      console.log('OpenCode exit during controlled restart, not triggering auto-restart');
-    }
-  });
-
-  child.on('error', (error) => {
-    lastOpenCodeError = error.message;
-    isOpenCodeReady = false;
-    openCodeNotReadySince = Date.now();
-    console.error(`OpenCode process error: ${error.message}`);
-    if (!isShuttingDown) {
-
-      setTimeout(() => {
-        restartOpenCode().catch((err) => {
-          console.error('Failed to restart OpenCode after error:', err);
-        });
-      }, 5000);
-    }
-  });
-
-  await firstSignalPromise;
-
-  return child;
 }
 
 async function restartOpenCode() {
@@ -1641,60 +1371,16 @@ async function restartOpenCode() {
     console.log('Restarting OpenCode process...');
 
     if (openCodeProcess) {
-      console.log('Waiting for OpenCode process to terminate...');
-      const processToTerminate = openCodeProcess;
-      let forcedTermination = false;
-
-      if (processToTerminate.exitCode === null && processToTerminate.signalCode === null) {
-        processToTerminate.kill('SIGTERM');
-
-        await new Promise((resolve) => {
-          let resolved = false;
-
-          const cleanup = () => {
-            processToTerminate.off('exit', onExit);
-            clearTimeout(forceKillTimer);
-            clearTimeout(hardStopTimer);
-            if (!resolved) {
-              resolved = true;
-              resolve();
-            }
-          };
-
-          const onExit = () => {
-            cleanup();
-          };
-
-          const forceKillTimer = setTimeout(() => {
-            if (resolved) {
-              return;
-            }
-            forcedTermination = true;
-            console.warn('OpenCode process did not exit after SIGTERM, sending SIGKILL');
-            processToTerminate.kill('SIGKILL');
-          }, 3000);
-
-          const hardStopTimer = setTimeout(() => {
-            if (resolved) {
-              return;
-            }
-            console.warn('OpenCode process unresponsive after SIGKILL, continuing restart');
-            cleanup();
-          }, 5000);
-
-          processToTerminate.once('exit', onExit);
-        });
-
-        if (forcedTermination) {
-          console.log('OpenCode process terminated forcefully during restart');
-        }
-      } else {
-        console.log('OpenCode process already stopped before restart command');
+      console.log('Stopping existing OpenCode process...');
+      try {
+        openCodeProcess.close();
+      } catch (error) {
+        console.warn('Error closing OpenCode process:', error);
       }
-
       openCodeProcess = null;
       syncToHmrState();
-
+      
+      // Brief delay to allow port release
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
@@ -1705,6 +1391,8 @@ async function restartOpenCode() {
       openCodePort = null;
       syncToHmrState();
     }
+    
+    // Reset detection state
     openCodeApiPrefixDetected = false;
     if (openCodeApiDetectionTimer) {
       clearTimeout(openCodeApiDetectionTimer);
@@ -1716,13 +1404,10 @@ async function restartOpenCode() {
     openCodeProcess = await startOpenCode();
     syncToHmrState();
 
-    if (!ENV_CONFIGURED_OPENCODE_PORT) {
-      await waitForOpenCodePort();
-    }
-
     if (expressApp) {
       setupProxy(expressApp);
-      scheduleOpenCodeApiDetection();
+      // Ensure prefix is set correctly (SDK usually handles this, but just in case)
+      ensureOpenCodeApiPrefix();
     }
   })();
 
