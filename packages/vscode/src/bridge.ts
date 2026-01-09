@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
-import { buildAugmentedPath, type OpenCodeManager } from './opencode';
+import { type OpenCodeManager } from './opencode';
 import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE } from './opencodeConfig';
 import { removeProviderAuth } from './opencodeAuth';
 import * as gitService from './gitService';
@@ -604,7 +604,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
           const augmentedEnv = {
             ...process.env,
-            PATH: buildAugmentedPath(),
+            PATH: process.env.PATH,
           };
 
           const results: Array<{

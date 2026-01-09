@@ -385,15 +385,17 @@ export async function activate(context: vscode.ExtensionContext) {
         `Platform: ${process.platform} ${process.arch}`,
         `Workspace folders: ${workspaceFolders.length}${workspaceFolders.length ? ` (${workspaceFolders.join(', ')})` : ''}`,
         `Status: ${openCodeManager?.getStatus() ?? 'unknown'}`,
-        `CLI available: ${openCodeManager?.isCliAvailable() ?? false}`,
         `Working directory: ${openCodeManager?.getWorkingDirectory() ?? ''}`,
         `API URL (configured): ${configuredApiUrl || '(none)'}`,
         `API URL (resolved): ${openCodeManager?.getApiUrl() ?? '(none)'}`,
         debug
+          ? `OpenCode server URL: ${debug.serverUrl ?? '(none)'}`
+          : `OpenCode server URL: (unknown)`,
+        debug
           ? `OpenCode mode: ${debug.mode} (starts=${debug.startCount}, restarts=${debug.restartCount})`
           : `OpenCode mode: (unknown)`,
         debug
-          ? `OpenCode CLI path: ${debug.cliPath || '(not found)'}`
+          ? `OpenCode CLI path: ${debug.cliPath || '(not found - SDK manages process)'}`
           : `OpenCode CLI path: (unknown)`,
         debug
           ? `OpenCode detected port: ${debug.detectedPort ?? '(none)'}`
