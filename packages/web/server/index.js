@@ -2643,6 +2643,7 @@ async function main(options = {}) {
   const { parseSkillRepoSource } = await import('./lib/skills-catalog/source.js');
   const { scanSkillsRepository } = await import('./lib/skills-catalog/scan.js');
   const { installSkillsFromRepository } = await import('./lib/skills-catalog/install.js');
+  const { scanClawdHub, installSkillsFromClawdHub, isClawdHubSource } = await import('./lib/skills-catalog/clawdhub/index.js');
   const { getProfiles, getProfile } = await import('./lib/git-identity-storage.js');
 
   const listGitIdentitiesForResponse = () => {
@@ -2699,6 +2700,37 @@ async function main(options = {}) {
       const itemsBySource = {};
 
       for (const src of sources) {
+        // Handle ClawdHub sources separately (API-based, not git-based)
+        if (src.sourceType === 'clawdhub' || isClawdHubSource(src.source)) {
+          const cacheKey = 'clawdhub:registry';
+          let scanResult = !refresh ? getCachedScan(cacheKey) : null;
+
+          if (!scanResult) {
+            const scanned = await scanClawdHub();
+            if (!scanned.ok) {
+              itemsBySource[src.id] = [];
+              continue;
+            }
+            scanResult = scanned;
+            setCachedScan(cacheKey, scanResult);
+          }
+
+          const items = (scanResult.items || []).map((item) => {
+            const installed = installedByName.get(item.skillName);
+            return {
+              ...item,
+              sourceId: src.id,
+              installed: installed
+                ? { isInstalled: true, scope: installed.scope }
+                : { isInstalled: false },
+            };
+          });
+
+          itemsBySource[src.id] = items;
+          continue;
+        }
+
+        // Handle GitHub sources (git clone based)
         const parsed = parseSkillRepoSource(src.source);
         if (!parsed.ok) {
           itemsBySource[src.id] = [];
@@ -2808,6 +2840,29 @@ async function main(options = {}) {
         }
         workingDirectory = resolved.directory;
       }
+
+      // Handle ClawdHub sources (ZIP download based)
+      if (isClawdHubSource(source)) {
+        const result = await installSkillsFromClawdHub({
+          scope,
+          workingDirectory,
+          userSkillDir: SKILL_DIR,
+          selections,
+          conflictPolicy,
+          conflictDecisions,
+        });
+
+        if (!result.ok) {
+          if (result.error?.kind === 'conflicts') {
+            return res.status(409).json({ ok: false, error: result.error });
+          }
+          return res.status(400).json({ ok: false, error: result.error });
+        }
+
+        return res.json({ ok: true, installed: result.installed || [], skipped: result.skipped || [] });
+      }
+
+      // Handle GitHub sources (git clone based)
       const identity = resolveGitIdentity(gitIdentityId);
 
       const result = await installSkillsFromRepository({

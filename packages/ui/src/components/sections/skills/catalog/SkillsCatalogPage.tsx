@@ -11,7 +11,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 
-import { RiAddLine, RiDeleteBinLine, RiRefreshLine } from '@remixicon/react';
+import { RiAddLine, RiDeleteBinLine, RiRefreshLine, RiDownloadLine, RiStarLine } from '@remixicon/react';
 
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import type { SkillsCatalogItem } from '@/lib/api/types';
@@ -254,6 +254,24 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                     ) : (
                       <div className="typography-micro text-muted-foreground mt-0.5">No description provided</div>
                     )}
+                    {item.clawdhub ? (
+                      <div className="typography-micro text-muted-foreground mt-1 flex items-center gap-3">
+                        {item.clawdhub.owner ? (
+                          <span>by {item.clawdhub.owner}</span>
+                        ) : null}
+                        <span className="flex items-center gap-1">
+                          <RiDownloadLine className="h-3 w-3" />
+                          {item.clawdhub.downloads?.toLocaleString() ?? 0}
+                        </span>
+                        {(item.clawdhub.stars ?? 0) > 0 ? (
+                          <span className="flex items-center gap-1">
+                            <RiStarLine className="h-3 w-3" />
+                            {item.clawdhub.stars}
+                          </span>
+                        ) : null}
+                        <span>v{item.clawdhub.version}</span>
+                      </div>
+                    ) : null}
                     {item.warnings?.length ? (
                       <div className="typography-micro text-muted-foreground mt-1">{item.warnings.join(' · ')}</div>
                     ) : null}

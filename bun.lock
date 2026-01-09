@@ -74,7 +74,7 @@
     },
     "packages/desktop": {
       "name": "@openchamber/desktop",
-      "version": "1.4.5",
+      "version": "1.4.6",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@tauri-apps/plugin-notification": "^2.3.3",
@@ -97,7 +97,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.4.5",
+      "version": "1.4.6",
       "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -169,16 +169,18 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.4.5",
+      "version": "1.4.6",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@opencode-ai/sdk": "^1.1.8",
+        "adm-zip": "^0.5.16",
         "jsonc-parser": "^3.3.1",
         "react": "^19.1.1",
         "react-dom": "^19.1.1",
         "yaml": "^2.8.1",
       },
       "devDependencies": {
+        "@types/adm-zip": "^0.5.7",
         "@types/vscode": "^1.85.0",
         "@vitejs/plugin-react": "^5.0.0",
         "@vscode/vsce": "^3.2.1",
@@ -190,7 +192,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.4.5",
+      "version": "1.4.6",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
@@ -210,6 +212,7 @@
         "@radix-ui/react-tooltip": "^1.2.8",
         "@remixicon/react": "^4.7.0",
         "@types/react-syntax-highlighter": "^15.5.13",
+        "adm-zip": "^0.5.16",
         "bun-pty": "^0.4.5",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -236,6 +239,7 @@
       "devDependencies": {
         "@eslint/js": "^9.33.0",
         "@tailwindcss/postcss": "^4.0.0",
+        "@types/adm-zip": "^0.5.7",
         "@types/node": "^24.3.1",
         "@types/react": "^19.1.10",
         "@types/react-dom": "^19.1.7",
@@ -811,6 +815,8 @@
 
     "@tootallnate/once": ["@tootallnate/once@2.0.0", "", {}, "sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A=="],
 
+    "@types/adm-zip": ["@types/adm-zip@0.5.7", "", { "dependencies": { "@types/node": "*" } }, "sha512-DNEs/QvmyRLurdQPChqq0Md4zGvPwHerAJYWk9l2jCbD1VPpnzRJorOdiq4zsw09NFbYnhfsoEhWtxIzXpn2yw=="],
+
     "@types/babel__core": ["@types/babel__core@7.20.5", "", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 
     "@types/babel__generator": ["@types/babel__generator@7.27.0", "", { "dependencies": { "@babel/types": "^7.0.0" } }, "sha512-ufFd2Xi92OAVPYsy+P4n7/U7e68fex0+Ee8gSG9KX7eo084CWiQ4sdxktvdl0bOPupXtVJPY19zk6EwWqUQ8lg=="],
@@ -992,6 +998,8 @@
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 
     "acorn-jsx": ["acorn-jsx@5.3.2", "", { "peerDependencies": { "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0" } }, "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ=="],
+
+    "adm-zip": ["adm-zip@0.5.16", "", {}, "sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ=="],
 
     "agent-base": ["agent-base@6.0.2", "", { "dependencies": { "debug": "4" } }, "sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ=="],
 

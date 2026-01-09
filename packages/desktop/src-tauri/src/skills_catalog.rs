@@ -46,6 +46,21 @@ pub struct SkillsCatalogInstalledBadge {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ClawdHubSkillMetadata {
+    pub slug: String,
+    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stars: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SkillsCatalogItem {
     pub source_id: String,
     pub repo_source: String,
@@ -63,6 +78,8 @@ pub struct SkillsCatalogItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warnings: Option<Vec<String>>,
     pub installed: SkillsCatalogInstalledBadge,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clawdhub: Option<ClawdHubSkillMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -701,6 +718,180 @@ fn cache_key(normalized_repo: &str, subpath: Option<&str>, identity_id: Option<&
     )
 }
 
+// ============== ClawdHub API ==============
+
+const CLAWDHUB_API_BASE: &str = "https://clawdhub.com/api/v1";
+
+fn is_clawdhub_source(source: &str) -> bool {
+    source.starts_with("clawdhub:")
+}
+
+#[derive(Debug, Deserialize)]
+struct ClawdHubSkillOwner {
+    handle: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClawdHubSkillStats {
+    downloads: Option<u64>,
+    stars: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClawdHubSkillTags {
+    latest: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClawdHubSkillVersion {
+    version: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClawdHubSkillListItem {
+    slug: String,
+    display_name: Option<String>,
+    summary: Option<String>,
+    tags: Option<ClawdHubSkillTags>,
+    latest_version: Option<ClawdHubSkillVersion>,
+    stats: Option<ClawdHubSkillStats>,
+    owner: Option<ClawdHubSkillOwner>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClawdHubSkillsResponse {
+    items: Vec<ClawdHubSkillListItem>,
+    next_cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClawdHubSkillInfoResponse {
+    skill: Option<ClawdHubSkillInfoSkill>,
+    latest_version: Option<ClawdHubSkillVersion>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClawdHubSkillInfoSkill {
+    tags: Option<ClawdHubSkillTags>,
+}
+
+async fn scan_clawdhub() -> Result<Vec<SkillsCatalogItem>> {
+    let client = reqwest::Client::builder()
+        .user_agent("OpenChamber-Desktop/1.0")
+        .timeout(Duration::from_secs(30))
+        .build()?;
+
+    let mut all_items = Vec::new();
+    let mut cursor: Option<String> = None;
+    let max_pages = 20;
+
+    for _ in 0..max_pages {
+        let url = match &cursor {
+            Some(c) => format!("{}{}?cursor={}", CLAWDHUB_API_BASE, "/skills", urlencoding::encode(c)),
+            None => format!("{}/skills", CLAWDHUB_API_BASE),
+        };
+
+        let response = client.get(&url).send().await?;
+        if !response.status().is_success() {
+            return Err(anyhow!("ClawdHub API error: {}", response.status()));
+        }
+
+        let data: ClawdHubSkillsResponse = response.json().await?;
+
+        for item in data.items {
+            let latest_version = item
+                .tags
+                .as_ref()
+                .and_then(|t| t.latest.clone())
+                .or_else(|| item.latest_version.as_ref().and_then(|v| v.version.clone()))
+                .unwrap_or_else(|| "1.0.0".to_string());
+
+            all_items.push(SkillsCatalogItem {
+                source_id: "clawdhub".to_string(),
+                repo_source: "clawdhub:registry".to_string(),
+                repo_subpath: None,
+                git_identity_id: None,
+                skill_dir: item.slug.clone(),
+                skill_name: item.slug.clone(),
+                frontmatter_name: item.display_name.clone(),
+                description: item.summary,
+                installable: true,
+                warnings: None,
+                installed: SkillsCatalogInstalledBadge {
+                    is_installed: false,
+                    scope: None,
+                },
+                clawdhub: Some(ClawdHubSkillMetadata {
+                    slug: item.slug,
+                    version: latest_version,
+                    display_name: item.display_name,
+                    owner: item.owner.and_then(|o| o.handle),
+                    downloads: item.stats.as_ref().and_then(|s| s.downloads),
+                    stars: item.stats.as_ref().and_then(|s| s.stars),
+                }),
+            });
+        }
+
+        match data.next_cursor {
+            Some(c) => cursor = Some(c),
+            None => break,
+        }
+
+        // Rate limiting
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // Sort by downloads (most popular first)
+    all_items.sort_by(|a, b| {
+        let a_downloads = a.clawdhub.as_ref().and_then(|c| c.downloads).unwrap_or(0);
+        let b_downloads = b.clawdhub.as_ref().and_then(|c| c.downloads).unwrap_or(0);
+        b_downloads.cmp(&a_downloads)
+    });
+
+    Ok(all_items)
+}
+
+async fn download_clawdhub_skill(slug: &str, version: &str) -> Result<Vec<u8>> {
+    let client = reqwest::Client::builder()
+        .user_agent("OpenChamber-Desktop/1.0")
+        .timeout(Duration::from_secs(60))
+        .build()?;
+
+    let url = format!(
+        "{}/download?slug={}&version={}",
+        CLAWDHUB_API_BASE,
+        urlencoding::encode(slug),
+        urlencoding::encode(version)
+    );
+
+    let response = client.get(&url).send().await?;
+    if !response.status().is_success() {
+        return Err(anyhow!("ClawdHub download error: {}", response.status()));
+    }
+
+    Ok(response.bytes().await?.to_vec())
+}
+
+async fn fetch_clawdhub_skill_info(slug: &str) -> Result<ClawdHubSkillInfoResponse> {
+    let client = reqwest::Client::builder()
+        .user_agent("OpenChamber-Desktop/1.0")
+        .timeout(Duration::from_secs(15))
+        .build()?;
+
+    let url = format!("{}/skills/{}", CLAWDHUB_API_BASE, urlencoding::encode(slug));
+    let response = client.get(&url).send().await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("ClawdHub skill info error: {}", response.status()));
+    }
+
+    Ok(response.json().await?)
+}
+
 fn load_custom_catalog_sources() -> Vec<SkillsCatalogSource> {
     let settings_path = dirs::home_dir().map(|mut home| {
         home.push(".config");
@@ -786,14 +977,24 @@ fn load_custom_catalog_sources() -> Vec<SkillsCatalogSource> {
 }
 
 pub async fn get_curated_sources() -> Vec<SkillsCatalogSource> {
-    let mut sources = vec![SkillsCatalogSource {
-        id: "anthropic".to_string(),
-        label: "Anthropic".to_string(),
-        description: Some("Anthropic’s public skills repository".to_string()),
-        source: "anthropics/skills".to_string(),
-        default_subpath: Some("skills".to_string()),
-        git_identity_id: None,
-    }];
+    let mut sources = vec![
+        SkillsCatalogSource {
+            id: "anthropic".to_string(),
+            label: "Anthropic".to_string(),
+            description: Some("Anthropic's public skills repository".to_string()),
+            source: "anthropics/skills".to_string(),
+            default_subpath: Some("skills".to_string()),
+            git_identity_id: None,
+        },
+        SkillsCatalogSource {
+            id: "clawdhub".to_string(),
+            label: "ClawdHub".to_string(),
+            description: Some("Community skill registry with vector search".to_string()),
+            source: "clawdhub:registry".to_string(),
+            default_subpath: None,
+            git_identity_id: None,
+        },
+    ];
 
     sources.extend(load_custom_catalog_sources());
     sources
@@ -811,6 +1012,69 @@ pub async fn get_catalog(working_directory: &Path, refresh: bool) -> SkillsCatal
     let mut items_by_source: HashMap<String, Vec<SkillsCatalogItem>> = HashMap::new();
 
     for src in &sources {
+        // Handle ClawdHub sources separately (API-based, not git-based)
+        if is_clawdhub_source(&src.source) {
+            let key = "clawdhub:registry".to_string();
+
+            let maybe_cached = if refresh {
+                None
+            } else {
+                let cache = CATALOG_CACHE.lock().await;
+                cache.get(&key).cloned()
+            };
+
+            let cached_items = maybe_cached.and_then(|entry| {
+                if entry.created_at.elapsed() < CACHE_TTL {
+                    Some(entry.items)
+                } else {
+                    None
+                }
+            });
+
+            let scanned_items = if let Some(items) = cached_items {
+                items
+            } else {
+                let items = match scan_clawdhub().await {
+                    Ok(items) => items,
+                    Err(_) => {
+                        items_by_source.insert(src.id.clone(), vec![]);
+                        continue;
+                    }
+                };
+
+                let mut cache = CATALOG_CACHE.lock().await;
+                cache.insert(
+                    key,
+                    CacheEntry {
+                        created_at: Instant::now(),
+                        items: items.clone(),
+                    },
+                );
+
+                items
+            };
+
+            // Update installed badges
+            let enriched: Vec<SkillsCatalogItem> = scanned_items
+                .into_iter()
+                .map(|mut item| {
+                    let installed = installed_by_name.get(&item.skill_name);
+                    item.installed = SkillsCatalogInstalledBadge {
+                        is_installed: installed.is_some(),
+                        scope: installed.map(|s| match s.scope {
+                            opencode_config::Scope::User => "user".to_string(),
+                            opencode_config::Scope::Project => "project".to_string(),
+                        }),
+                    };
+                    item
+                })
+                .collect();
+
+            items_by_source.insert(src.id.clone(), enriched);
+            continue;
+        }
+
+        // Handle GitHub sources (git clone based)
         let parsed = match parse_repo_source(&src.source, None) {
             Ok(p) => p,
             Err(_) => {
@@ -899,6 +1163,7 @@ pub async fn get_catalog(working_directory: &Path, refresh: bool) -> SkillsCatal
                             opencode_config::Scope::Project => "project".to_string(),
                         }),
                     },
+                    clawdhub: None,
                 });
             }
 
@@ -989,6 +1254,7 @@ pub async fn scan_repository(req: SkillsScanRequest) -> SkillsRepoScanResponse {
                         is_installed: false,
                         scope: None,
                     },
+                    clawdhub: None,
                 });
             }
             items.sort_by(|a, b| a.skill_name.cmp(&b.skill_name));
@@ -1021,8 +1287,16 @@ pub async fn scan_repository(req: SkillsScanRequest) -> SkillsRepoScanResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ClawdHubInstallMeta {
+    pub slug: String,
+    pub version: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SkillsInstallSelection {
     pub skill_dir: String,
+    pub clawdhub: Option<ClawdHubInstallMeta>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1123,10 +1397,269 @@ async fn copy_dir_no_symlinks(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+async fn install_skills_from_clawdhub(
+    working_directory: &Path,
+    req: &SkillsInstallRequest,
+) -> SkillsInstallResponse {
+    let mut installed = vec![];
+    let mut skipped = vec![];
+
+    let _user_dir = match user_skill_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            return SkillsInstallResponse {
+                ok: false,
+                installed: None,
+                skipped: None,
+                error: Some(simple_error("unknown", &e.to_string())),
+            };
+        }
+    };
+
+    // Check for conflicts first
+    let mut conflicts = vec![];
+    for sel in &req.selections {
+        let slug = sel.clawdhub.as_ref().map(|c| c.slug.as_str()).unwrap_or(&sel.skill_dir);
+        if !validate_skill_name(slug) {
+            continue;
+        }
+
+        let target = match target_skill_dir(&req.scope, working_directory, slug) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        if target.exists() {
+            let decision = req
+                .conflict_decisions
+                .as_ref()
+                .and_then(|m| m.get(slug))
+                .map(|s| s.as_str());
+
+            let auto = req.conflict_policy.as_deref().unwrap_or("prompt");
+
+            if decision.is_none() && auto != "skipAll" && auto != "overwriteAll" {
+                conflicts.push(SkillConflict {
+                    skill_name: slug.to_string(),
+                    scope: req.scope.clone(),
+                });
+            }
+        }
+    }
+
+    if !conflicts.is_empty() {
+        return SkillsInstallResponse {
+            ok: false,
+            installed: None,
+            skipped: None,
+            error: Some(conflicts_error(conflicts)),
+        };
+    }
+
+    for sel in &req.selections {
+        let slug = sel.clawdhub.as_ref().map(|c| c.slug.as_str()).unwrap_or(&sel.skill_dir);
+        let mut version = sel.clawdhub.as_ref().map(|c| c.version.as_str()).unwrap_or("latest").to_string();
+
+        if !validate_skill_name(slug) {
+            skipped.push(SkippedSkill {
+                skill_name: slug.to_string(),
+                reason: "Invalid skill name".to_string(),
+            });
+            continue;
+        }
+
+        // Resolve 'latest' version
+        if version == "latest" {
+            if let Ok(info) = fetch_clawdhub_skill_info(slug).await {
+                version = info
+                    .skill
+                    .and_then(|s| s.tags)
+                    .and_then(|t| t.latest)
+                    .or_else(|| info.latest_version.and_then(|v| v.version))
+                    .unwrap_or_else(|| "latest".to_string());
+            }
+        }
+
+        let target_dir = match target_skill_dir(&req.scope, working_directory, slug) {
+            Ok(p) => p,
+            Err(e) => {
+                skipped.push(SkippedSkill {
+                    skill_name: slug.to_string(),
+                    reason: e.to_string(),
+                });
+                continue;
+            }
+        };
+
+        let exists = target_dir.exists();
+        let mut decision = req
+            .conflict_decisions
+            .as_ref()
+            .and_then(|m| m.get(slug))
+            .cloned();
+
+        let auto = req.conflict_policy.as_deref().unwrap_or("prompt");
+
+        if decision.is_none() {
+            if exists && auto == "skipAll" {
+                decision = Some("skip".to_string());
+            }
+            if exists && auto == "overwriteAll" {
+                decision = Some("overwrite".to_string());
+            }
+            if !exists {
+                decision = Some("overwrite".to_string());
+            }
+        }
+
+        if exists && decision.as_deref() == Some("skip") {
+            skipped.push(SkippedSkill {
+                skill_name: slug.to_string(),
+                reason: "Already installed (skipped)".to_string(),
+            });
+            continue;
+        }
+
+        if exists && decision.as_deref() == Some("overwrite") {
+            let _ = tokio::fs::remove_dir_all(&target_dir).await;
+        }
+
+        // Download and extract
+        match download_clawdhub_skill(slug, &version).await {
+            Ok(zip_data) => {
+                let temp_dir = std::env::temp_dir().join(format!("clawdhub-{}-{}", slug, Uuid::new_v4()));
+                let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+
+                // Extract ZIP using the zip crate
+                let cursor = std::io::Cursor::new(&zip_data);
+                let mut archive = match zip::ZipArchive::new(cursor) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        skipped.push(SkippedSkill {
+                            skill_name: slug.to_string(),
+                            reason: format!("Failed to open ZIP: {}", e),
+                        });
+                        continue;
+                    }
+                };
+
+                if let Err(e) = std::fs::create_dir_all(&temp_dir) {
+                    skipped.push(SkippedSkill {
+                        skill_name: slug.to_string(),
+                        reason: format!("Failed to create temp dir: {}", e),
+                    });
+                    continue;
+                }
+
+                let mut extract_ok = true;
+                for i in 0..archive.len() {
+                    let mut file = match archive.by_index(i) {
+                        Ok(f) => f,
+                        Err(e) => {
+                            skipped.push(SkippedSkill {
+                                skill_name: slug.to_string(),
+                                reason: format!("Failed to read ZIP entry: {}", e),
+                            });
+                            extract_ok = false;
+                            break;
+                        }
+                    };
+
+                    let outpath = temp_dir.join(file.name());
+
+                    if file.name().ends_with('/') {
+                        let _ = std::fs::create_dir_all(&outpath);
+                    } else {
+                        if let Some(p) = outpath.parent() {
+                            let _ = std::fs::create_dir_all(p);
+                        }
+                        let mut outfile = match std::fs::File::create(&outpath) {
+                            Ok(f) => f,
+                            Err(e) => {
+                                skipped.push(SkippedSkill {
+                                    skill_name: slug.to_string(),
+                                    reason: format!("Failed to create file: {}", e),
+                                });
+                                extract_ok = false;
+                                break;
+                            }
+                        };
+                        if let Err(e) = std::io::copy(&mut file, &mut outfile) {
+                            skipped.push(SkippedSkill {
+                                skill_name: slug.to_string(),
+                                reason: format!("Failed to write file: {}", e),
+                            });
+                            extract_ok = false;
+                            break;
+                        }
+                    }
+                }
+
+                if !extract_ok {
+                    let _ = std::fs::remove_dir_all(&temp_dir);
+                    continue;
+                }
+
+                // Verify SKILL.md exists
+                let skill_md_path = temp_dir.join("SKILL.md");
+                if !skill_md_path.exists() {
+                    skipped.push(SkippedSkill {
+                        skill_name: slug.to_string(),
+                        reason: "SKILL.md not found in downloaded package".to_string(),
+                    });
+                    let _ = std::fs::remove_dir_all(&temp_dir);
+                    continue;
+                }
+
+                // Move to target directory
+                if let Some(parent) = target_dir.parent() {
+                    let _ = tokio::fs::create_dir_all(parent).await;
+                }
+
+                if let Err(e) = tokio::fs::rename(&temp_dir, &target_dir).await {
+                    // If rename fails (cross-device), try copy
+                    if let Err(e2) = copy_dir_no_symlinks(&temp_dir, &target_dir).await {
+                        skipped.push(SkippedSkill {
+                            skill_name: slug.to_string(),
+                            reason: format!("Failed to move files: {} / {}", e, e2),
+                        });
+                        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+                        continue;
+                    }
+                    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+                }
+
+                installed.push(InstalledSkill {
+                    skill_name: slug.to_string(),
+                    scope: req.scope.clone(),
+                });
+            }
+            Err(e) => {
+                skipped.push(SkippedSkill {
+                    skill_name: slug.to_string(),
+                    reason: format!("Failed to download: {}", e),
+                });
+            }
+        }
+    }
+
+    SkillsInstallResponse {
+        ok: true,
+        installed: Some(installed),
+        skipped: Some(skipped),
+        error: None,
+    }
+}
+
 pub async fn install_skills(
     working_directory: &Path,
     req: SkillsInstallRequest,
 ) -> SkillsInstallResponse {
+    // Handle ClawdHub sources separately
+    if is_clawdhub_source(&req.source) {
+        return install_skills_from_clawdhub(working_directory, &req).await;
+    }
+
     let ssh_key = resolve_identity_ssh_key(req.git_identity_id.as_deref());
 
     let selections: Vec<String> = req

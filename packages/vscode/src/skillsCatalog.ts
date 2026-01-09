@@ -4,6 +4,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import yaml from 'yaml';
+import AdmZip from 'adm-zip';
 
 import { discoverSkills } from './opencodeConfig';
 
@@ -32,6 +33,15 @@ type SkillFrontmatter = {
   [key: string]: unknown;
 };
 
+export type ClawdHubSkillMetadata = {
+  slug: string;
+  version: string;
+  displayName?: string;
+  owner?: string;
+  downloads?: number;
+  stars?: number;
+};
+
 export type SkillsCatalogItem = {
   repoSource: string;
   repoSubpath?: string;
@@ -41,6 +51,7 @@ export type SkillsCatalogItem = {
   description?: string;
   installable: boolean;
   warnings?: string[];
+  clawdhub?: ClawdHubSkillMetadata;
 };
 
 type SkillsCatalogItemWithBadge = SkillsCatalogItem & {
@@ -68,11 +79,266 @@ export const CURATED_SOURCES: CuratedSource[] = [
   {
     id: 'anthropic',
     label: 'Anthropic',
-    description: "Anthropic’s public skills repository",
+    description: "Anthropic's public skills repository",
     source: 'anthropics/skills',
     defaultSubpath: 'skills',
   },
+  {
+    id: 'clawdhub',
+    label: 'ClawdHub',
+    description: 'Community skill registry with vector search',
+    source: 'clawdhub:registry',
+  },
 ];
+
+// ============== ClawdHub API ==============
+
+const CLAWDHUB_API_BASE = 'https://clawdhub.com/api/v1';
+const CLAWDHUB_RATE_LIMIT_MS = 100;
+let clawdhubLastRequest = 0;
+
+function isClawdHubSource(source: string): boolean {
+  return typeof source === 'string' && source.startsWith('clawdhub:');
+}
+
+async function clawdhubFetch(url: string, options?: RequestInit): Promise<Response> {
+  const now = Date.now();
+  const elapsed = now - clawdhubLastRequest;
+  if (elapsed < CLAWDHUB_RATE_LIMIT_MS) {
+    await new Promise((resolve) => setTimeout(resolve, CLAWDHUB_RATE_LIMIT_MS - elapsed));
+  }
+  clawdhubLastRequest = Date.now();
+
+  return fetch(url, {
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'OpenChamber-VSCode/1.0',
+      ...options?.headers,
+    },
+  });
+}
+
+type ClawdHubSkillListItem = {
+  slug: string;
+  displayName?: string;
+  summary?: string;
+  tags?: { latest?: string };
+  latestVersion?: { version?: string };
+  stats?: { downloads?: number; stars?: number };
+  owner?: { handle?: string };
+};
+
+type ClawdHubSkillsResponse = {
+  items: ClawdHubSkillListItem[];
+  nextCursor?: string;
+};
+
+async function scanClawdHub(): Promise<SkillsRepoScanResult> {
+  try {
+    const allItems: SkillsCatalogItem[] = [];
+    let cursor: string | null = null;
+    const maxPages = 20;
+
+    for (let page = 0; page < maxPages; page++) {
+      const url = cursor
+        ? `${CLAWDHUB_API_BASE}/skills?cursor=${encodeURIComponent(cursor)}`
+        : `${CLAWDHUB_API_BASE}/skills`;
+
+      const response = await clawdhubFetch(url);
+      if (!response.ok) {
+        throw new Error(`ClawdHub API error: ${response.status}`);
+      }
+
+      const data = (await response.json()) as ClawdHubSkillsResponse;
+
+      for (const item of data.items || []) {
+        const latestVersion = item.tags?.latest || item.latestVersion?.version || '1.0.0';
+
+        allItems.push({
+          repoSource: 'clawdhub:registry',
+          skillDir: item.slug,
+          skillName: item.slug,
+          frontmatterName: item.displayName || item.slug,
+          description: item.summary || undefined,
+          installable: true,
+          clawdhub: {
+            slug: item.slug,
+            version: latestVersion,
+            displayName: item.displayName,
+            owner: item.owner?.handle,
+            downloads: item.stats?.downloads || 0,
+            stars: item.stats?.stars || 0,
+          },
+        });
+      }
+
+      if (!data.nextCursor) break;
+      cursor = data.nextCursor;
+    }
+
+    // Sort by downloads (most popular first)
+    allItems.sort((a, b) => (b.clawdhub?.downloads || 0) - (a.clawdhub?.downloads || 0));
+
+    return { ok: true, items: allItems };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        kind: 'networkError',
+        message: error instanceof Error ? error.message : 'Failed to fetch skills from ClawdHub',
+      },
+    };
+  }
+}
+
+async function downloadClawdHubSkill(slug: string, version: string): Promise<Buffer> {
+  const url = `${CLAWDHUB_API_BASE}/download?slug=${encodeURIComponent(slug)}&version=${encodeURIComponent(version)}`;
+  const response = await clawdhubFetch(url, { headers: { Accept: 'application/zip' } });
+
+  if (!response.ok) {
+    throw new Error(`ClawdHub download error: ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+type ClawdHubSkillInfoResponse = {
+  skill?: { tags?: { latest?: string } };
+  latestVersion?: { version?: string };
+};
+
+async function fetchClawdHubSkillInfo(slug: string): Promise<ClawdHubSkillInfoResponse> {
+  const url = `${CLAWDHUB_API_BASE}/skills/${encodeURIComponent(slug)}`;
+  const response = await clawdhubFetch(url);
+
+  if (!response.ok) {
+    throw new Error(`ClawdHub skill error: ${response.status}`);
+  }
+
+  return response.json() as Promise<ClawdHubSkillInfoResponse>;
+}
+
+export async function installSkillsFromClawdHub(options: {
+  scope: SkillScope;
+  workingDirectory?: string;
+  selections: Array<{ skillDir: string; clawdhub?: { slug: string; version: string } }>;
+  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
+  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
+}): Promise<SkillsInstallResult> {
+  if (options.scope === 'project' && !options.workingDirectory) {
+    return { ok: false, error: { kind: 'invalidSource', message: 'Project installs require a directory parameter' } };
+  }
+
+  const userSkillDir = getUserSkillBaseDir();
+  const requestedSkills = options.selections || [];
+
+  if (requestedSkills.length === 0) {
+    return { ok: false, error: { kind: 'invalidSource', message: 'No skills selected for installation' } };
+  }
+
+  // Check for conflicts
+  const conflicts: Array<{ skillName: string; scope: SkillScope }> = [];
+  for (const sel of requestedSkills) {
+    const slug = sel.clawdhub?.slug || sel.skillDir;
+    if (!validateSkillName(slug)) continue;
+
+    const targetDir = options.scope === 'user'
+      ? path.join(userSkillDir, slug)
+      : path.join(options.workingDirectory as string, '.opencode', 'skill', slug);
+
+    if (fs.existsSync(targetDir)) {
+      const decision = options.conflictDecisions?.[slug];
+      const hasAutoPolicy = options.conflictPolicy === 'skipAll' || options.conflictPolicy === 'overwriteAll';
+      if (!decision && !hasAutoPolicy) {
+        conflicts.push({ skillName: slug, scope: options.scope });
+      }
+    }
+  }
+
+  if (conflicts.length > 0) {
+    return { ok: false, error: { kind: 'conflicts', message: 'Some skills already exist in the selected scope', conflicts } };
+  }
+
+  const installed: Array<{ skillName: string; scope: SkillScope }> = [];
+  const skipped: Array<{ skillName: string; reason: string }> = [];
+
+  for (const sel of requestedSkills) {
+    const slug = sel.clawdhub?.slug || sel.skillDir;
+    let version = sel.clawdhub?.version || 'latest';
+
+    if (!validateSkillName(slug)) {
+      skipped.push({ skillName: slug, reason: 'Invalid skill name' });
+      continue;
+    }
+
+    try {
+      // Resolve 'latest' version
+      if (version === 'latest') {
+        try {
+          const info = await fetchClawdHubSkillInfo(slug);
+          version = info.skill?.tags?.latest || info.latestVersion?.version || version;
+        } catch {
+          // Fall back to 'latest'
+        }
+      }
+
+      const targetDir = options.scope === 'user'
+        ? path.join(userSkillDir, slug)
+        : path.join(options.workingDirectory as string, '.opencode', 'skill', slug);
+
+      const exists = fs.existsSync(targetDir);
+      let decision = options.conflictDecisions?.[slug] || null;
+      if (!decision) {
+        if (exists && options.conflictPolicy === 'skipAll') decision = 'skip';
+        if (exists && options.conflictPolicy === 'overwriteAll') decision = 'overwrite';
+        if (!exists) decision = 'overwrite';
+      }
+
+      if (exists && decision === 'skip') {
+        skipped.push({ skillName: slug, reason: 'Already installed (skipped)' });
+        continue;
+      }
+
+      if (exists && decision === 'overwrite') {
+        await safeRm(targetDir);
+      }
+
+      // Download and extract
+      const zipBuffer = await downloadClawdHubSkill(slug, version);
+      const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `clawdhub-${slug}-`));
+
+      try {
+        const zip = new AdmZip(zipBuffer);
+        zip.extractAllTo(tempDir, true);
+
+        // Verify SKILL.md exists
+        const skillMdPath = path.join(tempDir, 'SKILL.md');
+        if (!fs.existsSync(skillMdPath)) {
+          skipped.push({ skillName: slug, reason: 'SKILL.md not found in downloaded package' });
+          continue;
+        }
+
+        // Move to target directory
+        await fs.promises.mkdir(path.dirname(targetDir), { recursive: true });
+        await fs.promises.rename(tempDir, targetDir);
+
+        installed.push({ skillName: slug, scope: options.scope });
+      } catch (extractError) {
+        await safeRm(tempDir);
+        throw extractError;
+      }
+    } catch (error) {
+      skipped.push({
+        skillName: slug,
+        reason: error instanceof Error ? error.message : 'Failed to download or extract skill',
+      });
+    }
+  }
+
+  return { ok: true, installed, skipped };
+}
 
 function validateSkillName(skillName: string): boolean {
   if (skillName.length < 1 || skillName.length > 64) return false;
@@ -544,6 +810,40 @@ export async function getSkillsCatalog(
   const itemsBySource: Record<string, SkillsCatalogItemWithBadge[]> = {};
 
   for (const src of sources) {
+    // Handle ClawdHub sources separately (API-based, not git-based)
+    if (isClawdHubSource(src.source)) {
+      const cacheKey = 'clawdhub:registry';
+      let cached = !refresh ? catalogCache.get(cacheKey) : null;
+      if (cached && Date.now() >= cached.expiresAt) {
+        catalogCache.delete(cacheKey);
+        cached = null;
+      }
+
+      let items: SkillsCatalogItem[] = [];
+      if (cached) {
+        items = cached.items;
+      } else {
+        const scanned = await scanClawdHub();
+        if (!scanned.ok) {
+          itemsBySource[src.id] = [];
+          continue;
+        }
+        items = scanned.items || [];
+        catalogCache.set(cacheKey, { expiresAt: Date.now() + CATALOG_TTL_MS, items });
+      }
+
+      itemsBySource[src.id] = items.map((item) => {
+        const installed = installedByName.get(item.skillName);
+        return {
+          sourceId: src.id,
+          ...item,
+          installed: installed ? { isInstalled: true, scope: installed.scope } : { isInstalled: false },
+        };
+      });
+      continue;
+    }
+
+    // Handle GitHub sources (git clone based)
     const parsed = parseSkillRepoSource(src.source);
     if (!parsed.ok) {
       itemsBySource[src.id] = [];
@@ -584,3 +884,5 @@ export async function getSkillsCatalog(
 
   return { ok: true as const, sources, itemsBySource };
 }
+
+export { isClawdHubSource };

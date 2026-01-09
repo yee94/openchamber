@@ -456,17 +456,32 @@ export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
 
 export type SkillsCatalogSourceId = string;
 
+export type SkillsCatalogSourceType = 'github' | 'clawdhub';
+
 export interface SkillsCatalogSource {
   id: SkillsCatalogSourceId;
   label: string;
   description?: string;
   source: string;
   defaultSubpath?: string;
+  sourceType?: SkillsCatalogSourceType;
 }
 
 export interface SkillsCatalogItemInstalledBadge {
   isInstalled: boolean;
   scope?: 'user' | 'project';
+}
+
+export interface ClawdHubSkillMetadata {
+  slug: string;
+  version: string;
+  displayName?: string;
+  owner?: string;
+  downloads?: number;
+  stars?: number;
+  versionsCount?: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface SkillsCatalogItem {
@@ -481,6 +496,8 @@ export interface SkillsCatalogItem {
   installable: boolean;
   warnings?: string[];
   installed?: SkillsCatalogItemInstalledBadge;
+  /** ClawdHub-specific metadata (present only for ClawdHub sources) */
+  clawdhub?: ClawdHubSkillMetadata;
 }
 
 export interface SkillsCatalogResponse {
@@ -511,6 +528,11 @@ export interface SkillsRepoScanResponse {
 
 export interface SkillsInstallSelection {
   skillDir: string;
+  /** ClawdHub-specific metadata for installation */
+  clawdhub?: {
+    slug: string;
+    version: string;
+  };
 }
 
 export interface SkillsInstallRequest {
