@@ -947,6 +947,27 @@ function setOpenCodePort(port) {
 
 const API_PREFIX_CANDIDATES = ['', '/api']; // Simplified - only check root and /api
 
+async function waitForReady(url, timeoutMs = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${url.replace(/\/+$/, '')}/config`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (res.ok) return true;
+    } catch {
+      // ignore
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
+}
+
 function normalizeApiPrefix(prefix) {
   if (!prefix) {
     return '';
@@ -1340,14 +1361,23 @@ async function startOpenCode() {
     const port = parseInt(url.port, 10);
     const prefix = normalizeApiPrefix(url.pathname);
 
-    setOpenCodePort(port);
-    setDetectedOpenCodeApiPrefix(prefix); // SDK URL typically includes the prefix if any
+    if (await waitForReady(serverInstance.url, 10000)) {
+      setOpenCodePort(port);
+      setDetectedOpenCodeApiPrefix(prefix); // SDK URL typically includes the prefix if any
 
-    isOpenCodeReady = true;
-    lastOpenCodeError = null;
-    openCodeNotReadySince = 0;
+      isOpenCodeReady = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
 
-    return serverInstance;
+      return serverInstance;
+    } else {
+      try {
+        serverInstance.close();
+      } catch {
+        // ignore
+      }
+      throw new Error('Server started but health check failed (timeout)');
+    }
   } catch (error) {
     lastOpenCodeError = error.message;
     openCodePort = null;
