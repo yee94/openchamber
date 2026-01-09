@@ -4,7 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- VSCode: switch opencode api management to SDK
+## [1.4.6] - 2026-01-09
+
+- VSCode/Web: switch opencode cli management to SDK.
+- Input: removed auto-complete and auto-correction.
+- Shortcuts: switched agent cycling shortcut from Shift + TAB to TAB again.
+- Chat: added question tool support with a rich UI for interaction.
 
 
 ## [1.4.5] - 2026-01-08
