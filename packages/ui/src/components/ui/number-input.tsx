@@ -144,6 +144,10 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           onBlur={handleBlur}
           onKeyDown={handleKeyDownInternal}
           disabled={disabled}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
           className={cn(
             "h-full w-14 bg-transparent px-1.5 text-center typography-ui-label text-foreground",
             "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground",
