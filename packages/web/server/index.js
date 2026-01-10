@@ -1,7 +1,7 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
@@ -943,6 +943,54 @@ function setOpenCodePort(port) {
   }
 
   lastOpenCodeError = null;
+}
+
+function getLoginShellPath() {
+  if (process.platform === 'win32') {
+    return null;
+  }
+
+  const shell = process.env.SHELL || '/bin/zsh';
+  const shellName = path.basename(shell);
+
+  // Nushell requires different flag syntax and PATH access
+  const isNushell = shellName === 'nu' || shellName === 'nushell';
+  const args = isNushell
+    ? ['-l', '-i', '-c', '$env.PATH | str join (char esep)']
+    : ['-lic', 'echo -n "$PATH"'];
+
+  try {
+    const result = spawnSync(shell, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (result.status === 0 && typeof result.stdout === 'string') {
+      const value = result.stdout.trim();
+      if (value) {
+        return value;
+      }
+    }
+  } catch (error) {
+    // ignore
+  }
+  return null;
+}
+
+function buildAugmentedPath() {
+  const augmented = new Set();
+
+  const loginShellPath = getLoginShellPath();
+  if (loginShellPath) {
+    for (const segment of loginShellPath.split(path.delimiter)) {
+      if (segment) {
+        augmented.add(segment);
+      }
+    }
+  }
+
+  const current = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  for (const segment of current) {
+    augmented.add(segment);
+  }
+
+  return Array.from(augmented).join(path.delimiter);
 }
 
 const API_PREFIX_CANDIDATES = ['', '/api']; // Simplified - only check root and /api

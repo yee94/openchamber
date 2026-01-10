@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Skills: added ClawdHub integration as built-in market for skills.
+- Web: fixed issues in terminal
+
+
 ## [1.4.6] - 2026-01-09
 
 - VSCode/Web: switch opencode cli management to SDK.
