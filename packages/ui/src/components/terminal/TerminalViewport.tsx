@@ -773,7 +773,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     return (
       <div
         ref={containerRef}
-        className={cn('relative h-full w-full', className)}
+        className={cn('relative h-full w-full terminal-viewport-container', className)}
         style={{ backgroundColor: theme.background }}
         onClick={(event) => {
           if (enableTouchScroll) {
@@ -799,10 +799,14 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
               top: 0,
               width: 1,
               height: 1,
-              opacity: 0.001,
+              opacity: 0,
               zIndex: 1,
               background: 'transparent',
               color: 'transparent',
+              caretColor: 'transparent',
+              resize: 'none',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
               border: 'none',
               padding: 0,
               margin: 0,
