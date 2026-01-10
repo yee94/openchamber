@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-01-10
+
 - Skills: added ClawdHub integration as built-in market for skills.
 - Web: fixed issues in terminal
 
