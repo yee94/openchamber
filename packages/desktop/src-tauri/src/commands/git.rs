@@ -2089,13 +2089,30 @@ Diff summary:
 {}"#,
         diff_summaries
     );
+ 
+    let settings = state.settings().load().await.unwrap_or(serde_json::Value::Null);
+    let raw_model = settings.get("commitMessageModel")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let model_candidate = raw_model
+        .split('/')
+        .last()
+        .unwrap_or(raw_model)
+        .trim();
+
+    let model = if model_candidate.is_empty() {
+        "big-pickle"
+    } else {
+        model_candidate
+    };
 
     // 3. Call API
     let client = Client::new();
     let res = client
         .post("https://opencode.ai/zen/v1/chat/completions")
         .json(&serde_json::json!({
-            "model": "big-pickle",
+            "model": model,
             "messages": [{ "role": "user", "content": prompt }],
             "max_tokens": 3000,
             "stream": false,
