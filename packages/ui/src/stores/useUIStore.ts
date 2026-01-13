@@ -54,6 +54,7 @@ interface UIStore {
   diffWrapLines: boolean;
   isTimelineDialogOpen: boolean;
   nativeNotificationsEnabled: boolean;
+  notificationMode: 'always' | 'hidden-only';
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
@@ -97,6 +98,7 @@ interface UIStore {
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
+  setNotificationMode: (mode: 'always' | 'hidden-only') => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
@@ -141,6 +143,7 @@ export const useUIStore = create<UIStore>()(
         diffWrapLines: false,
         isTimelineDialogOpen: false,
         nativeNotificationsEnabled: false,
+        notificationMode: 'hidden-only',
 
         setTheme: (theme) => {
           set({ theme });
@@ -472,6 +475,10 @@ export const useUIStore = create<UIStore>()(
         setNativeNotificationsEnabled: (value) => {
           set({ nativeNotificationsEnabled: value });
         },
+
+        setNotificationMode: (mode) => {
+          set({ notificationMode: mode });
+        },
       }),
       {
         name: 'ui-store',
@@ -497,6 +504,7 @@ export const useUIStore = create<UIStore>()(
           diffLayoutPreference: state.diffLayoutPreference,
           diffWrapLines: state.diffWrapLines,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
+          notificationMode: state.notificationMode,
         })
       }
     ),

@@ -23,7 +23,6 @@ import {
     formatEditOutput,
     detectLanguageFromOutput,
     formatInputForDisplay,
-    hasLspDiagnostics,
 } from '../toolRenderers';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
@@ -756,7 +755,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
             );
         }
 
-        if ((part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && diffContent) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && diffContent) {
+        if ((part.tool === 'edit' || part.tool === 'multiedit') && diffContent) {
             return renderScrollableBlock(
                 <DiffPreview diff={diffContent} syntaxTheme={syntaxTheme} input={input} />,
                 { className: 'p-1' }

@@ -16,6 +16,7 @@ interface SectionGroup {
   id: OpenChamberSection;
   label: string;
   items: string[];
+  webOnly?: boolean;
 }
 
 const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
@@ -43,6 +44,7 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'notifications',
     label: 'Notifications',
     items: ['Native'],
+    webOnly: true,
   },
 ];
 
@@ -59,11 +61,16 @@ export const OpenChamberSidebar: React.FC<OpenChamberSidebarProps> = ({
   });
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const isWeb = React.useMemo(() => isWebRuntime(), []);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
   }, []);
+
+  const visibleSections = React.useMemo(() => {
+    return OPENCHAMBER_SECTION_GROUPS.filter((group) => !group.webOnly || isWeb);
+  }, [isWeb]);
 
   // Desktop app: transparent for blur effect
   // VS Code: bg-background (same as page content)
@@ -77,7 +84,7 @@ export const OpenChamberSidebar: React.FC<OpenChamberSidebarProps> = ({
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
-        {OPENCHAMBER_SECTION_GROUPS.map((group) => {
+        {visibleSections.map((group) => {
           const isSelected = selectedSection === group.id;
           return (
             <div

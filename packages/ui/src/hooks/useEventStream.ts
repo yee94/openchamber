@@ -138,6 +138,7 @@ export const useEventStream = () => {
 
   const { checkConnection } = useConfigStore();
   const nativeNotificationsEnabled = useUIStore((state) => state.nativeNotificationsEnabled);
+  const notificationMode = useUIStore((state) => state.notificationMode);
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const activeSessionDirectory = React.useMemo(() => {
@@ -1050,21 +1051,25 @@ export const useEventStream = () => {
 
 	          // Only notify when entire message is finished (finish === 'stop')
 	          if (finish === 'stop' && isWebRuntime() && nativeNotificationsEnabled) {
-	            const notifiedMessages = notifiedMessagesRef.current;
+	            const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
 
-	            if (!notifiedMessages.has(messageId)) {
-	              notifiedMessages.add(messageId);
+	            if (shouldNotify) {
+	              const notifiedMessages = notifiedMessagesRef.current;
 
-	              const runtimeAPIs = getRegisteredRuntimeAPIs();
+	              if (!notifiedMessages.has(messageId)) {
+	                notifiedMessages.add(messageId);
 
-	              if (runtimeAPIs?.notifications) {
-	                const rawMode = (messageExt as { mode?: string }).mode || 'agent';
-	                const rawModel = (messageExt as { modelID?: string }).modelID || 'assistant';
+	                const runtimeAPIs = getRegisteredRuntimeAPIs();
 
-	                const title = `${rawMode.charAt(0).toUpperCase() + rawMode.slice(1)} agent is ready`;
-	                const body = `${formatModelID(rawModel)} completed the task`;
+	                if (runtimeAPIs?.notifications) {
+	                  const rawMode = (messageExt as { mode?: string }).mode || 'agent';
+	                  const rawModel = (messageExt as { modelID?: string }).modelID || 'assistant';
 
-	                void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag: messageId });
+	                  const title = `${rawMode.charAt(0).toUpperCase() + rawMode.slice(1)} agent is ready`;
+	                  const body = `${formatModelID(rawModel)} completed the task`;
+
+	                  void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag: messageId });
+	                }
 	              }
 	            }
 	          }
@@ -1290,6 +1295,7 @@ export const useEventStream = () => {
   }, [
     currentSessionId,
     nativeNotificationsEnabled,
+    notificationMode,
     addStreamingPart,
     completeStreamingMessage,
     updateMessageInfo,
