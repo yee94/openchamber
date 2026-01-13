@@ -1886,11 +1886,11 @@ function startHealthMonitoring() {
   }
 
   healthCheckInterval = setInterval(async () => {
-    if (!openCodeProcess || isShuttingDown) return;
+    if (!openCodeProcess || isShuttingDown || isRestartingOpenCode) return;
 
     try {
-
-      if (openCodeProcess.exitCode !== null) {
+      const healthy = await isOpenCodeProcessHealthy();
+      if (!healthy) {
         console.log('OpenCode process not running, restarting...');
         await restartOpenCode();
       }
@@ -1976,7 +1976,7 @@ async function main(options = {}) {
       status: 'ok',
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
-      openCodeRunning: Boolean(openCodeProcess && openCodeProcess.exitCode === null),
+      openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
       openCodeApiPrefix,
       openCodeApiPrefixDetected,
       isOpenCodeReady,
