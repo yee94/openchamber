@@ -969,6 +969,22 @@ function setOpenCodePort(port) {
   lastOpenCodeError = null;
 }
 
+async function waitForOpenCodePort(timeoutMs = 15000) {
+  if (openCodePort !== null) {
+    return openCodePort;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    if (openCodePort !== null) {
+      return openCodePort;
+    }
+  }
+
+  throw new Error('Timed out waiting for OpenCode port');
+}
+
 function getLoginShellPath() {
   if (process.platform === 'win32') {
     return null;
