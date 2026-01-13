@@ -856,6 +856,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 isUser={isUser}
                                 isMessageCompleted={isMessageCompleted}
                                 messageFinish={messageFinish}
+                                messageCompletedAt={messageCompletedAt ?? undefined}
                                 syntaxTheme={syntaxTheme}
                                 isMobile={isMobile}
                                 hasTouchInput={hasTouchInput}

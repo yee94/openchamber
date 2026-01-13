@@ -51,6 +51,7 @@ export interface TurnGroupingContext {
     hasTools: boolean;
     hasReasoning: boolean;
     diffStats?: TurnDiffStats;
+    userMessageCreatedAt?: number;
 
     isWorking: boolean;
     isGroupExpanded: boolean;
@@ -488,6 +489,9 @@ export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingRe
             const uiState = getOrCreateTurnState(turn.turnId);
             const isTurnWorking = sessionIsWorking && lastTurnId === turn.turnId;
 
+            const userTimeInfo = turn.userMessage.info.time as { created?: number } | undefined;
+            const userMessageCreatedAt = typeof userTimeInfo?.created === 'number' ? userTimeInfo.created : undefined;
+
             return {
                 turnId: turn.turnId,
                 isFirstAssistantInTurn,
@@ -499,6 +503,7 @@ export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingRe
                 hasTools,
                 hasReasoning,
                 diffStats,
+                userMessageCreatedAt,
                 isWorking: isTurnWorking,
                 isGroupExpanded: uiState.isExpanded,
                 previewedPartIds: uiState.previewedPartIds,

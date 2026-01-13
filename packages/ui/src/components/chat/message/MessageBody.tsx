@@ -16,7 +16,7 @@ import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine } from '@remixicon/react';
+import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine } from '@remixicon/react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -26,6 +26,16 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executionMeta';
+
+const formatTurnDuration = (durationMs: number): string => {
+    const totalSeconds = durationMs / 1000;
+    if (totalSeconds < 60) {
+        return `${totalSeconds.toFixed(1)}s`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.round(totalSeconds % 60);
+    return `${minutes}m ${seconds}s`;
+};
 
 
 const useMigrationTimer = (
@@ -110,6 +120,7 @@ interface MessageBodyProps {
     isUser: boolean;
     isMessageCompleted: boolean;
     messageFinish?: string;
+    messageCompletedAt?: number;
 
     syntaxTheme: { [key: string]: React.CSSProperties };
 
@@ -327,6 +338,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     parts,
     isMessageCompleted,
     messageFinish,
+    messageCompletedAt,
 
     syntaxTheme,
     isMobile,
@@ -1099,6 +1111,14 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const shouldShowFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
     const [isSummaryHovered, setIsSummaryHovered] = React.useState(false);
 
+    const turnDurationText = React.useMemo(() => {
+        if (!isLastAssistantInTurn || !hasStopFinish) return undefined;
+        const userCreatedAt = turnGroupingContext?.userMessageCreatedAt;
+        if (typeof userCreatedAt !== 'number' || typeof messageCompletedAt !== 'number') return undefined;
+        if (messageCompletedAt <= userCreatedAt) return undefined;
+        return formatTurnDuration(messageCompletedAt - userCreatedAt);
+    }, [isLastAssistantInTurn, hasStopFinish, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
+
     const footerButtons = (
          <>
               <Tooltip delayDuration={1000}>
@@ -1208,13 +1228,21 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             >
                                 <SimpleMarkdownRenderer content={summaryBody} />
                                 {shouldShowFooter && (
-                                    <div
-                                        className={cn(
-                                            "mt-2 mb-1 flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-opacity duration-150 focus-within:opacity-100 focus-within:pointer-events-auto",
-                                            isSummaryHovered && "opacity-100 pointer-events-auto",
-                                        )}
-                                    >
-                                        {footerButtons}
+                                    <div className="mt-2 mb-1 flex items-center justify-between gap-2">
+                                        {turnDurationText ? (
+                                            <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
+                                                <RiHourglassLine className="h-3.5 w-3.5" />
+                                                {turnDurationText}
+                                            </span>
+                                        ) : <span />}
+                                        <div
+                                            className={cn(
+                                                "flex items-center gap-2 opacity-0 pointer-events-none transition-opacity duration-150 focus-within:opacity-100 focus-within:pointer-events-auto",
+                                                isSummaryHovered && "opacity-100 pointer-events-auto",
+                                            )}
+                                        >
+                                            {footerButtons}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1223,8 +1251,16 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                 </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
                 {!showSummaryBody && shouldShowFooter && (
-                    <div className="mt-2 mb-1 flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
-                        {footerButtons}
+                    <div className="mt-2 mb-1 flex items-center justify-between gap-2">
+                        {turnDurationText ? (
+                            <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
+                                <RiHourglassLine className="h-3.5 w-3.5" />
+                                {turnDurationText}
+                            </span>
+                        ) : <span />}
+                        <div className="flex items-center gap-2 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                            {footerButtons}
+                        </div>
                     </div>
                 )}
 
