@@ -2,6 +2,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import net from 'net';
 import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
@@ -313,6 +314,39 @@ async function checkOpenCodeCLI() {
   process.exit(1);
 }
 
+async function isPortAvailable(port) {
+  return await new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', () => resolve(false));
+    server.listen({ port, host: '127.0.0.1' }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function resolveAvailablePort(desiredPort) {
+  const startPort = Number.isFinite(desiredPort) ? Math.trunc(desiredPort) : DEFAULT_PORT;
+  // Only auto-pick when user didn't explicitly choose a port.
+  if (process.argv.includes('--port') || process.argv.includes('-p')) {
+    return startPort;
+  }
+
+  // If default is busy, probe upward a bit.
+  if (await isPortAvailable(startPort)) {
+    return startPort;
+  }
+
+  for (let port = startPort + 1; port <= startPort + 50; port++) {
+    if (await isPortAvailable(port)) {
+      console.warn(`Port ${startPort} in use; using ${port}`);
+      return port;
+    }
+  }
+
+  return startPort;
+}
+
 async function getPidFilePath(port) {
   const os = await import('os');
   const tmpDir = os.tmpdir();
@@ -411,6 +445,7 @@ function isProcessRunning(pid) {
 
 const commands = {
   async serve(options) {
+    options.port = await resolveAvailablePort(options.port);
     const pidFilePath = await getPidFilePath(options.port);
     const instanceFilePath = await getInstanceFilePath(options.port);
 
