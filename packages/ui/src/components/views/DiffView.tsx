@@ -5,6 +5,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitStore, useGitStatus, useIsGitRepo, useGitFileCount } from '@/stores/useGitStore';
+import { cn } from '@/lib/utils';
 import type { GitStatus } from '@/lib/api/types';
 import {
     DropdownMenu,
@@ -15,6 +16,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { getLanguageFromExtension, isImageFile } from '@/lib/toolHelpers';
@@ -240,21 +242,13 @@ interface FileListProps {
     changedFiles: FileEntry[];
     selectedFile: string | null;
     onSelectFile: (path: string) => void;
-    isCompact: boolean;
 }
 
 const FileList = React.memo<FileListProps>(({
     changedFiles,
     selectedFile,
     onSelectFile,
-    isCompact,
 }) => {
-    const getLabel = React.useCallback((path: string) => {
-        if (!isCompact) return path;
-        const lastSlash = path.lastIndexOf('/');
-        return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
-    }, [isCompact]);
-
     if (changedFiles.length === 0) return null;
 
     return (
@@ -269,11 +263,12 @@ const FileList = React.memo<FileListProps>(({
                             <button
                                 type="button"
                                 onClick={() => onSelectFile(file.path)}
-                                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${
+                                className={cn(
+                                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
                                     isActive
                                         ? 'bg-accent/70 text-foreground'
                                         : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-                                }`}
+                                )}
                             >
                                 <span
                                     className="typography-micro font-semibold w-4 text-center uppercase"
@@ -285,9 +280,10 @@ const FileList = React.memo<FileListProps>(({
                                 </span>
                                 <span
                                     className="min-w-0 flex-1 truncate typography-meta"
+                                    style={{ direction: 'rtl', textAlign: 'left' }}
                                     title={file.path}
                                 >
-                                    {getLabel(file.path)}
+                                    {file.path}
                                 </span>
                                 {formatDiffTotals(file.insertions, file.deletions)}
                             </button>
@@ -701,50 +697,64 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
             <Collapsible
                 open={isExpanded}
                 onOpenChange={handleOpenChange}
-                className="rounded-xl border border-border/60 bg-background/70 overflow-hidden"
+                className="group/collapsible"
             >
-                <CollapsibleTrigger
-                    onClick={handleSelect}
-                    className={`group gap-2 ${isSelected ? 'bg-accent/60' : ''}`}
-                >
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="flex size-5 items-center justify-center text-muted-foreground">
-                            {isExpanded ? (
-                                <RiArrowDownSLine className="size-4" />
-                            ) : (
-                                <RiArrowRightSLine className="size-4" />
-                            )}
-                        </span>
-                        <span
-                            className="typography-micro font-semibold w-4 text-center uppercase"
-                            style={{ color: descriptor.color }}
-                            title={descriptor.description}
-                            aria-label={descriptor.description}
-                        >
-                            {descriptor.code}
-                        </span>
-                        <span
-                            className="min-w-0 flex-1 truncate typography-ui-label"
-                            title={file.path}
-                        >
-                            {file.path}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {formatDiffTotals(file.insertions, file.deletions)}
-                        <DiffViewToggle
-                            mode={renderSideBySide ? 'side-by-side' : 'unified'}
-                            onModeChange={(mode: DiffViewMode) => {
-                                const nextLayout: 'inline' | 'side-by-side' =
-                                    mode === 'side-by-side' ? 'side-by-side' : 'inline';
-                                setDiffFileLayout(file.path, nextLayout);
-                            }}
-                            className="opacity-70"
-                        />
-                    </div>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="border-t border-border/60 bg-background">
-                    <div className="relative">
+                <div className="sticky top-0 z-10 bg-background">
+                    <CollapsibleTrigger
+                        onClick={handleSelect}
+                        className={cn(
+                            'relative flex w-full items-center gap-2 px-3 py-1.5 transition-colors rounded-t-xl border border-border/60 overflow-hidden',
+                            'bg-background hover:bg-background',
+                            isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
+                            isSelected
+                                ? 'text-primary'
+                                : 'text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        <div className={cn(
+                            'absolute inset-0 pointer-events-none transition-colors',
+                            isSelected ? 'bg-primary/10' : 'group-hover:bg-accent/40'
+                        )} />
+                        <div className="relative flex min-w-0 flex-1 items-center gap-2">
+                            <span className="flex size-5 items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
+                                {isExpanded ? (
+                                    <RiArrowDownSLine className="size-4" />
+                                ) : (
+                                    <RiArrowRightSLine className="size-4" />
+                                )}
+                            </span>
+                            <span
+                                className="typography-micro font-semibold w-4 text-center uppercase"
+                                style={{ color: descriptor.color }}
+                                title={descriptor.description}
+                                aria-label={descriptor.description}
+                            >
+                                {descriptor.code}
+                            </span>
+                            <span
+                                className="min-w-0 flex-1 truncate typography-ui-label"
+                                style={{ direction: 'rtl', textAlign: 'left' }}
+                                title={file.path}
+                            >
+                                {file.path}
+                            </span>
+                        </div>
+                        <div className="relative flex items-center gap-2">
+                            {formatDiffTotals(file.insertions, file.deletions)}
+                            <DiffViewToggle
+                                mode={renderSideBySide ? 'side-by-side' : 'unified'}
+                                onModeChange={(mode: DiffViewMode) => {
+                                    const nextLayout: 'inline' | 'side-by-side' =
+                                        mode === 'side-by-side' ? 'side-by-side' : 'inline';
+                                    setDiffFileLayout(file.path, nextLayout);
+                                }}
+                                className="opacity-70"
+                            />
+                        </div>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent>
+                    <div className="relative border border-t-0 border-border/60 bg-background rounded-b-xl overflow-hidden">
                         {diffLoadError ? (
                             <div className="flex flex-col items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
                                 <div className="typography-ui-label font-semibold text-foreground">
@@ -1065,7 +1075,7 @@ export const DiffView: React.FC = () => {
             <div className="flex flex-1 min-h-0 gap-3 px-3 pb-3 pt-2">
                 {showFileSidebar && (
                     <section className="hidden lg:flex w-72 flex-col rounded-xl border border-border/60 bg-background/70 overflow-hidden">
-                        <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
+                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40">
                             <span className="typography-ui-header font-semibold text-foreground">Files</span>
                             <span className="typography-meta text-muted-foreground">{changedFiles.length}</span>
                         </div>
@@ -1073,7 +1083,6 @@ export const DiffView: React.FC = () => {
                             changedFiles={changedFiles}
                             selectedFile={selectedFile}
                             onSelectFile={handleSelectFileAndScroll}
-                            isCompact={screenWidth < 1280}
                         />
                     </section>
                 )}
@@ -1082,7 +1091,7 @@ export const DiffView: React.FC = () => {
                     outerClassName="flex-1 min-h-0"
                     className="pr-2"
                 >
-                    <div className="flex flex-col gap-3 py-1">
+                    <div className="flex flex-col gap-3">
                         {changedFiles.map((file) => (
                             <MultiFileDiffEntry
                                 key={file.path}
@@ -1207,18 +1216,18 @@ export const DiffView: React.FC = () => {
                 )}
                 <div className="flex-1" />
                 {selectedFileEntry && (
-                    <button
-                        type="button"
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setDiffWrapLines(!diffWrapLinesStore)}
-                        className={`flex items-center justify-center size-5 rounded-sm transition-opacity ${
-                            diffWrapLines
-                                ? 'text-foreground opacity-100'
-                                : 'text-muted-foreground opacity-60 hover:opacity-100'
-                        }`}
+                        className={cn(
+                            'h-5 w-5 p-0 transition-opacity',
+                            diffWrapLines ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
+                        )}
                         title={diffWrapLines ? 'Disable line wrap' : 'Enable line wrap'}
                     >
                         <RiTextWrap className="size-4" />
-                    </button>
+                    </Button>
                 )}
                 {selectedFileEntry && currentLayoutForSelectedFile && (
                     <DiffViewToggle
