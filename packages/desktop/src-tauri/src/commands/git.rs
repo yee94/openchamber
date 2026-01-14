@@ -2030,6 +2030,27 @@ pub async fn get_current_git_identity(
 }
 
 #[tauri::command]
+pub async fn has_local_identity(
+    directory: String,
+    state: State<'_, DesktopRuntime>,
+) -> Result<bool, String> {
+    let root = validate_git_path(&directory, state.settings())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let user_name = run_git(&["config", "--local", "--get", "user.name"], &root)
+        .await
+        .ok()
+        .filter(|s| !s.is_empty());
+    let user_email = run_git(&["config", "--local", "--get", "user.email"], &root)
+        .await
+        .ok()
+        .filter(|s| !s.is_empty());
+
+    Ok(user_name.is_some() || user_email.is_some())
+}
+
+#[tauri::command]
 pub async fn get_global_git_identity() -> Result<GitIdentitySummary, String> {
     let user_name = tokio::process::Command::new("git")
         .args(["config", "--global", "user.name"])

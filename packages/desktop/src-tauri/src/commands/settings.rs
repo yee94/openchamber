@@ -257,6 +257,14 @@ fn sanitize_settings_update(payload: &Value) -> Value {
                 result_obj.insert("defaultAgent".to_string(), json!(trimmed));
             }
         }
+        if let Some(Value::String(s)) = obj.get("defaultGitIdentityId") {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                result_obj.insert("defaultGitIdentityId".to_string(), Value::Null);
+            } else {
+                result_obj.insert("defaultGitIdentityId".to_string(), json!(trimmed));
+            }
+        }
         if let Some(Value::String(s)) = obj.get("commitMessageModel") {
             let trimmed = s.trim();
             if trimmed.is_empty() {

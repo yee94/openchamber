@@ -51,6 +51,7 @@ interface GitIdentitiesSidebarProps {
 export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onItemSelect }) => {
   const {
     selectedProfileId,
+    defaultGitIdentityId,
     profiles,
     globalIdentity,
     setSelectedProfile,
@@ -58,6 +59,8 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
     loadProfiles,
     loadGlobalIdentity,
     loadDiscoveredCredentials,
+    loadDefaultGitIdentityId,
+    setDefaultGitIdentityId,
     getUnimportedCredentials,
   } = useGitIdentitiesStore();
 
@@ -82,7 +85,8 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
     loadProfiles();
     loadGlobalIdentity();
     loadDiscoveredCredentials();
-  }, [loadProfiles, loadGlobalIdentity, loadDiscoveredCredentials]);
+    loadDefaultGitIdentityId();
+  }, [loadProfiles, loadGlobalIdentity, loadDiscoveredCredentials, loadDefaultGitIdentityId]);
 
   const handleImportCredential = (credential: DiscoveredGitCredential) => {
     // Set a special "import" selection that carries the credential data
@@ -119,6 +123,16 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
     }
   };
 
+  const handleToggleDefault = async (profileId: string) => {
+    const next = defaultGitIdentityId === profileId ? null : profileId;
+    const ok = await setDefaultGitIdentityId(next);
+    if (!ok) {
+      toast.error('Failed to update default identity');
+      return;
+    }
+    toast.success(next ? 'Default identity updated' : 'Default identity unset');
+  };
+
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
       <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
@@ -146,6 +160,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
               <ProfileListItem
                 profile={globalIdentity}
                 isSelected={selectedProfileId === 'global'}
+                isDefault={defaultGitIdentityId === 'global'}
                 onSelect={() => {
                   setSelectedProfile('global');
                   onItemSelect?.();
@@ -153,6 +168,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
                     setSidebarOpen(false);
                   }
                 }}
+                onToggleDefault={() => handleToggleDefault('global')}
                 onDelete={undefined}
                 isReadOnly
               />
@@ -179,6 +195,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
                   key={profile.id}
                   profile={profile}
                   isSelected={selectedProfileId === profile.id}
+                  isDefault={defaultGitIdentityId === profile.id}
                   onSelect={() => {
                     setSelectedProfile(profile.id);
                     onItemSelect?.();
@@ -186,6 +203,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
                       setSidebarOpen(false);
                     }
                   }}
+                  onToggleDefault={() => handleToggleDefault(profile.id)}
                   onDelete={() => handleDeleteProfile(profile)}
                 />
               ))}
@@ -218,7 +236,9 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
 interface ProfileListItemProps {
   profile: GitIdentityProfile;
   isSelected: boolean;
+  isDefault?: boolean;
   onSelect: () => void;
+  onToggleDefault?: () => void | Promise<void>;
   onDelete?: () => void;
   isReadOnly?: boolean;
 }
@@ -226,7 +246,9 @@ interface ProfileListItemProps {
 const ProfileListItem: React.FC<ProfileListItemProps> = ({
   profile,
   isSelected,
+  isDefault = false,
   onSelect,
+  onToggleDefault,
   onDelete,
   isReadOnly = false,
 }) => {
@@ -258,6 +280,11 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
             <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
               {authType}
             </span>
+            {isDefault && (
+              <span className="typography-micro text-primary bg-primary/12 px-1 rounded flex-shrink-0 leading-none pb-px border border-primary/25">
+                default
+              </span>
+            )}
           </div>
 
           <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
@@ -265,7 +292,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
           </div>
         </button>
 
-        {!isReadOnly && onDelete && (
+        {(onToggleDefault || (!isReadOnly && onDelete)) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -276,17 +303,29 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
                 <RiMore2Line className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-fit min-w-20">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="text-destructive focus:text-destructive"
-              >
-                <RiDeleteBinLine className="h-4 w-4 mr-px" />
-                Delete
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-fit min-w-28">
+              {onToggleDefault && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void onToggleDefault();
+                  }}
+                >
+                  {isDefault ? 'Unset default' : 'Set as default'}
+                </DropdownMenuItem>
+              )}
+              {!isReadOnly && onDelete && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <RiDeleteBinLine className="h-4 w-4 mr-px" />
+                  Delete
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

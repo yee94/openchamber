@@ -218,6 +218,14 @@ export const createDesktopGitAPI = (): GitAPI => ({
     }
   },
 
+  async hasLocalIdentity(directory: string): Promise<boolean> {
+    try {
+      return await safeGitInvoke<boolean>('has_local_identity', { directory });
+    } catch {
+      return false;
+    }
+  },
+
   async setGitIdentity(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile }> {
     const profile = await safeGitInvoke<GitIdentityProfile>('set_git_identity', { directory, profileId });
     return { success: true, profile };

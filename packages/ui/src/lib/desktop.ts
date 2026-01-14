@@ -56,6 +56,7 @@ export type DesktopSettings = {
   defaultModel?: string; // format: "provider/model"
   defaultVariant?: string;
   defaultAgent?: string;
+  defaultGitIdentityId?: string; // ''/undefined = unset, 'global' or profile id
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   commitMessageModel?: string; // format: "provider/model"

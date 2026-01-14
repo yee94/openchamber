@@ -25,6 +25,7 @@ import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/des
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { DesktopSettings, SkillCatalogConfig } from '@/lib/desktop';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 
 const generateCatalogId = () => `custom:${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -81,6 +82,8 @@ interface AddCatalogDialogProps {
 
 export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpenChange }) => {
   const { scanRepo, loadCatalog, isScanning } = useSkillsCatalogStore();
+  const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId);
+  const loadDefaultGitIdentityId = useGitIdentitiesStore((s) => s.loadDefaultGitIdentityId);
 
   const [label, setLabel] = React.useState('');
   const [source, setSource] = React.useState('');
@@ -104,13 +107,14 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
     setScanOk(false);
     setIdentityOptions([]);
     setGitIdentityId(null);
+    void loadDefaultGitIdentityId();
 
     void (async () => {
       const settings = await loadSettings();
       const catalogs = Array.isArray(settings?.skillCatalogs) ? settings?.skillCatalogs : [];
       setExistingCatalogs(catalogs || []);
     })();
-  }, [open]);
+  }, [open, loadDefaultGitIdentityId]);
 
   const isDuplicate = React.useMemo(() => {
     const normalizedSource = source.trim();
@@ -153,7 +157,13 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
         const ids = (result.error.identities || []) as IdentityOption[];
         setIdentityOptions(ids);
         if (!gitIdentityId && ids.length > 0) {
-          setGitIdentityId(ids[0].id);
+          const preferred =
+            defaultGitIdentityId &&
+            defaultGitIdentityId !== 'global' &&
+            ids.some((i) => i.id === defaultGitIdentityId)
+              ? defaultGitIdentityId
+              : ids[0].id;
+          setGitIdentityId(preferred);
         }
         toast.error('Authentication required. Select a Git identity and scan again.');
         return;

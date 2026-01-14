@@ -605,6 +605,10 @@ const sanitizeSettingsUpdate = (payload) => {
     const trimmed = candidate.defaultAgent.trim();
     result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
   }
+  if (typeof candidate.defaultGitIdentityId === 'string') {
+    const trimmed = candidate.defaultGitIdentityId.trim();
+    result.defaultGitIdentityId = trimmed.length > 0 ? trimmed : undefined;
+  }
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
   }
@@ -3363,6 +3367,22 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to get current git identity:', error);
       res.status(500).json({ error: 'Failed to get current git identity' });
+    }
+  });
+
+  app.get('/api/git/has-local-identity', async (req, res) => {
+    const { hasLocalIdentity } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const hasLocal = await hasLocalIdentity(directory);
+      res.json({ hasLocalIdentity: hasLocal });
+    } catch (error) {
+      console.error('Failed to check local git identity:', error);
+      res.status(500).json({ error: 'Failed to check local git identity' });
     }
   });
 

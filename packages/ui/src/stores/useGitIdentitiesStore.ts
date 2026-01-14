@@ -10,6 +10,9 @@ import {
   discoverGitCredentials,
   getGlobalGitIdentity
 } from "@/lib/gitApi";
+import { getDesktopSettings, isDesktopRuntime } from "@/lib/desktop";
+import { updateDesktopSettings } from "@/lib/persistence";
+import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
 
 export type GitIdentityAuthType = 'ssh' | 'token';
 
@@ -33,6 +36,7 @@ export interface DiscoveredGitCredential {
 interface GitIdentitiesStore {
 
   selectedProfileId: string | null;
+  defaultGitIdentityId: string | null; // null = unset, 'global' = system, profile id = custom
   profiles: GitIdentityProfile[];
   globalIdentity: GitIdentityProfile | null;
   discoveredCredentials: DiscoveredGitCredential[];
@@ -42,6 +46,9 @@ interface GitIdentitiesStore {
   loadProfiles: () => Promise<boolean>;
   loadGlobalIdentity: () => Promise<boolean>;
   loadDiscoveredCredentials: () => Promise<boolean>;
+  loadDefaultGitIdentityId: () => Promise<boolean>;
+  setDefaultGitIdentityId: (id: string | null) => Promise<boolean>;
+
   createProfile: (profile: Omit<GitIdentityProfile, 'id'> & { id?: string }) => Promise<boolean>;
   updateProfile: (id: string, updates: Partial<GitIdentityProfile>) => Promise<boolean>;
   deleteProfile: (id: string) => Promise<boolean>;
@@ -61,6 +68,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
       (set, get) => ({
 
         selectedProfileId: null,
+        defaultGitIdentityId: null,
         profiles: [],
         globalIdentity: null,
         discoveredCredentials: [],
@@ -121,6 +129,70 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           } catch (error) {
             console.error("Failed to discover git credentials:", error);
             set({ discoveredCredentials: [] });
+            return false;
+          }
+        },
+
+        loadDefaultGitIdentityId: async () => {
+          const normalize = (value: unknown): string | null => {
+            if (typeof value !== 'string') {
+              return null;
+            }
+            const trimmed = value.trim();
+            return trimmed.length > 0 ? trimmed : null;
+          };
+
+          try {
+            let defaultId: string | null = null;
+
+            if (isDesktopRuntime()) {
+              const settings = await getDesktopSettings();
+              defaultId = normalize((settings as { defaultGitIdentityId?: unknown } | null | undefined)?.defaultGitIdentityId);
+            } else {
+              const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
+              if (runtimeSettings) {
+                try {
+                  const result = await runtimeSettings.load();
+                  const settings = (result?.settings || {}) as Record<string, unknown>;
+                  defaultId = normalize(settings.defaultGitIdentityId);
+                } catch {
+                  // fall through
+                }
+              }
+
+              if (defaultId === null) {
+                try {
+                  const response = await fetch('/api/config/settings', {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' },
+                  });
+                  if (response.ok) {
+                    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+                    defaultId = normalize(data?.defaultGitIdentityId);
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }
+
+            set({ defaultGitIdentityId: defaultId });
+            return true;
+          } catch (error) {
+            console.error('Failed to load default git identity setting:', error);
+            return false;
+          }
+        },
+
+        setDefaultGitIdentityId: async (id) => {
+          try {
+            const trimmed = typeof id === 'string' ? id.trim() : '';
+            const value = trimmed.length > 0 ? trimmed : '';
+            await updateDesktopSettings({ defaultGitIdentityId: value });
+            set({ defaultGitIdentityId: value.length > 0 ? value : null });
+            return true;
+          } catch (error) {
+            console.error('Failed to save default git identity setting:', error);
             return false;
           }
         },

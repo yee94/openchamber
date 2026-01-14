@@ -82,7 +82,7 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
   delete restChanges.lastDirectory;
 
   // Normalize empty-string clears to key removal (match web/desktop behavior)
-  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent']) {
+  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent', 'defaultGitIdentityId']) {
     const value = restChanges[key];
     if (typeof value === 'string' && value.trim().length === 0) {
       delete restChanges[key];

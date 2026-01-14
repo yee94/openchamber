@@ -516,6 +516,18 @@ export async function getCurrentGitIdentity(directory: string): Promise<GitIdent
   };
 }
 
+export async function hasLocalIdentity(directory: string): Promise<boolean> {
+  if (!directory) {
+    return false;
+  }
+  const response = await fetch(buildUrl(`${API_BASE}/has-local-identity`, directory));
+  if (!response.ok) {
+    throw new Error(`Failed to check local identity: ${response.statusText}`);
+  }
+  const data = await response.json().catch(() => null);
+  return data?.hasLocalIdentity === true;
+}
+
 export async function getGlobalGitIdentity(): Promise<GitIdentitySummary | null> {
   const response = await fetch(buildUrl(`${API_BASE}/global-identity`, undefined));
   if (!response.ok) {

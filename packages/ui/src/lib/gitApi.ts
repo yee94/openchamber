@@ -239,6 +239,12 @@ export async function getCurrentGitIdentity(directory: string): Promise<import('
   return gitHttp.getCurrentGitIdentity(directory);
 }
 
+export async function hasLocalIdentity(directory: string): Promise<boolean> {
+  const runtime = getRuntimeGit();
+  if (runtime?.hasLocalIdentity) return runtime.hasLocalIdentity(directory);
+  return gitHttp.hasLocalIdentity(directory);
+}
+
 export async function setGitIdentity(
   directory: string,
   profileId: string

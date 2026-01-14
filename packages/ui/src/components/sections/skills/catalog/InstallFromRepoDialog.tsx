@@ -25,6 +25,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import type { SkillsCatalogItem } from '@/lib/api/types';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { InstallConflictsDialog, type ConflictDecision, type SkillConflict } from './InstallConflictsDialog';
 
 interface InstallFromRepoDialogProps {
@@ -37,6 +38,8 @@ type IdentityOption = { id: string; name: string };
 export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ open, onOpenChange }) => {
   const { scanRepo, installSkills, isScanning, isInstalling } = useSkillsCatalogStore();
   const installedSkills = useSkillsStore((s) => s.skills);
+  const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId);
+  const loadDefaultGitIdentityId = useGitIdentitiesStore((s) => s.loadDefaultGitIdentityId);
 
   const [source, setSource] = React.useState('');
   const [subpath, setSubpath] = React.useState('');
@@ -69,10 +72,13 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
     setSearch('');
     setIdentities([]);
     setGitIdentityId(null);
+    void loadDefaultGitIdentityId();
+
     setConflictsOpen(false);
+
     setConflicts([]);
     setBaseInstallRequest(null);
-  }, [open]);
+  }, [open, loadDefaultGitIdentityId]);
 
   const installedByName = React.useMemo(() => {
     const map = new Map<string, { scope: 'user' | 'project' }>();
@@ -127,7 +133,13 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
         const ids = (result.error.identities || []) as IdentityOption[];
         setIdentities(ids);
         if (!gitIdentityId && ids.length > 0) {
-          setGitIdentityId(ids[0].id);
+          const preferred =
+            defaultGitIdentityId &&
+            defaultGitIdentityId !== 'global' &&
+            ids.some((i) => i.id === defaultGitIdentityId)
+              ? defaultGitIdentityId
+              : ids[0].id;
+          setGitIdentityId(preferred);
         }
         toast.error('Authentication required. Select a Git identity and try scanning again.');
         return;
@@ -195,7 +207,13 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
       const ids = (result.error.identities || []) as IdentityOption[];
       setIdentities(ids);
       if (!gitIdentityId && ids.length > 0) {
-        setGitIdentityId(ids[0].id);
+        const preferred =
+          defaultGitIdentityId &&
+          defaultGitIdentityId !== 'global' &&
+          ids.some((i) => i.id === defaultGitIdentityId)
+            ? defaultGitIdentityId
+            : ids[0].id;
+        setGitIdentityId(preferred);
       }
       toast.error('Authentication required. Select a Git identity and try installing again.');
       return;

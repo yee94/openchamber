@@ -160,6 +160,18 @@ export async function getCurrentIdentity(directory) {
   }
 }
 
+export async function hasLocalIdentity(directory) {
+  const git = simpleGit(normalizeDirectoryPath(directory));
+
+  try {
+    const localName = await git.getConfig('user.name', 'local').catch(() => null);
+    const localEmail = await git.getConfig('user.email', 'local').catch(() => null);
+    return Boolean(localName?.value || localEmail?.value);
+  } catch {
+    return false;
+  }
+}
+
 export async function setLocalIdentity(directory, profile) {
   const git = simpleGit(normalizeDirectoryPath(directory));
 

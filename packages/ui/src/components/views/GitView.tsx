@@ -60,7 +60,7 @@ export const GitView: React.FC = () => {
     ? worktreeMap.get(currentSessionId) ?? undefined
     : undefined;
 
-  const { profiles, globalIdentity, loadProfiles, loadGlobalIdentity } =
+  const { profiles, globalIdentity, defaultGitIdentityId, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId } =
     useGitIdentitiesStore();
 
   const isGitRepo = useIsGitRepo(currentDirectory ?? null);
@@ -94,6 +94,21 @@ export const GitView: React.FC = () => {
   const [logMaxCountLocal, setLogMaxCountLocal] = React.useState<number>(25);
   const [isSettingIdentity, setIsSettingIdentity] = React.useState(false);
   const { triggerFireworks } = useFireworksCelebration();
+
+  const autoAppliedDefaultRef = React.useRef<Map<string, string>>(new Map());
+  const identityApplyCountRef = React.useRef(0);
+
+  const beginIdentityApply = React.useCallback(() => {
+    identityApplyCountRef.current += 1;
+    setIsSettingIdentity(true);
+  }, []);
+
+  const endIdentityApply = React.useCallback(() => {
+    identityApplyCountRef.current = Math.max(0, identityApplyCountRef.current - 1);
+    if (identityApplyCountRef.current === 0) {
+      setIsSettingIdentity(false);
+    }
+  }, []);
 
   const [selectedPaths, setSelectedPaths] = React.useState<Set<string>>(
     () => new Set(initialSnapshot?.selectedPaths ?? [])
@@ -187,7 +202,8 @@ export const GitView: React.FC = () => {
   React.useEffect(() => {
     loadProfiles();
     loadGlobalIdentity();
-  }, [loadProfiles, loadGlobalIdentity]);
+    loadDefaultGitIdentityId();
+  }, [loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId]);
 
   React.useEffect(() => {
     if (!currentDirectory || !git?.getRemoteUrl) {
@@ -237,6 +253,45 @@ export const GitView: React.FC = () => {
     if (!currentDirectory) return;
     await fetchIdentity(currentDirectory, git);
   }, [currentDirectory, git, fetchIdentity]);
+
+  React.useEffect(() => {
+    if (!currentDirectory) return;
+    if (!git?.hasLocalIdentity) return;
+    if (isGitRepo !== true) return;
+
+    const defaultId = typeof defaultGitIdentityId === 'string' ? defaultGitIdentityId.trim() : '';
+    if (!defaultId || defaultId === 'global') return;
+
+    const previousAttempt = autoAppliedDefaultRef.current.get(currentDirectory);
+    if (previousAttempt === defaultId) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const hasLocal = await git.hasLocalIdentity!(currentDirectory);
+        if (cancelled) return;
+        if (hasLocal) return;
+
+        beginIdentityApply();
+        await git.setGitIdentity(currentDirectory, defaultId);
+        autoAppliedDefaultRef.current.set(currentDirectory, defaultId);
+        await refreshIdentity();
+      } catch (error) {
+        console.warn('Failed to auto-apply default git identity:', error);
+      } finally {
+        if (!cancelled) {
+          endIdentityApply();
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [beginIdentityApply, currentDirectory, defaultGitIdentityId, endIdentityApply, git, isGitRepo, refreshIdentity]);
 
   const changeEntries = React.useMemo(() => {
     if (!status) return [];
@@ -470,7 +525,7 @@ export const GitView: React.FC = () => {
 
   const handleApplyIdentity = async (profile: GitIdentityProfile) => {
     if (!currentDirectory) return;
-    setIsSettingIdentity(true);
+    beginIdentityApply();
 
     try {
       await git.setGitIdentity(currentDirectory, profile.id);
@@ -480,7 +535,7 @@ export const GitView: React.FC = () => {
       const message = err instanceof Error ? err.message : 'Failed to apply git identity';
       toast.error(message);
     } finally {
-      setIsSettingIdentity(false);
+      endIdentityApply();
     }
   };
 
