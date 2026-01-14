@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-01-14
+
 - Git Identities: added token-based authentication support with ~/.git-credentials discovery and import.
 - Settings: consolidated Git settings and added opencode zen model selection for commit generation (thanks to @nelsonpires).
 - Web Notifications: added configurable native web notifications for assistant completion (thanks to @vio1ator).
