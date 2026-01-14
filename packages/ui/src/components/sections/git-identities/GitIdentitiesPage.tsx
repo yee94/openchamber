@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useGitIdentitiesStore, type GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
+import { useGitIdentitiesStore, type GitIdentityProfile, type GitIdentityAuthType } from '@/stores/useGitIdentitiesStore';
 import {
   RiUser3Line,
   RiSaveLine,
@@ -12,7 +12,9 @@ import {
   RiHomeLine,
   RiGraduationCapLine,
   RiCodeLine,
-  RiInformationLine
+  RiInformationLine,
+  RiKeyLine,
+  RiLock2Line
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -43,44 +45,76 @@ export const GitIdentitiesPage: React.FC = () => {
     deleteProfile,
   } = useGitIdentitiesStore();
 
+  // Parse import: prefix for credential import flow
+  const importData = React.useMemo(() => {
+    if (selectedProfileId?.startsWith('import:')) {
+      const [, host, username] = selectedProfileId.split(':');
+      return { host, username };
+    }
+    return null;
+  }, [selectedProfileId]);
+
   const selectedProfile = React.useMemo(() =>
-    selectedProfileId && selectedProfileId !== 'new' ? getProfileById(selectedProfileId) : null,
-    [selectedProfileId, getProfileById]
+    selectedProfileId && selectedProfileId !== 'new' && !importData ? getProfileById(selectedProfileId) : null,
+    [selectedProfileId, getProfileById, importData]
   );
-  const isNewProfile = selectedProfileId === 'new';
+  const isNewProfile = selectedProfileId === 'new' || importData !== null;
   const isGlobalProfile = selectedProfileId === 'global';
 
   const [name, setName] = React.useState('');
   const [userName, setUserName] = React.useState('');
   const [userEmail, setUserEmail] = React.useState('');
+  const [authType, setAuthType] = React.useState<GitIdentityAuthType>('ssh');
   const [sshKey, setSshKey] = React.useState('');
+  const [host, setHost] = React.useState('');
   const [color, setColor] = React.useState('keyword');
   const [icon, setIcon] = React.useState('branch');
   const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
-    if (isNewProfile) {
-
+    if (importData) {
+      // Pre-fill from imported credential
+      // For repo-specific hosts like "github.com/user/repo", use just "repo" as name
+      const parts = importData.host.split('/');
+      const displayName = parts.length >= 3 ? parts[parts.length - 1] : importData.host;
+      
+      setName(displayName);
+      setUserName(importData.username);
+      setUserEmail('');
+      setAuthType('token');
+      setSshKey('');
+      setHost(importData.host);
+      setColor('string'); // cyan for token-based
+      setIcon('code');
+    } else if (isNewProfile) {
       setName('');
       setUserName('');
       setUserEmail('');
+      setAuthType('ssh');
       setSshKey('');
+      setHost('');
       setColor('keyword');
       setIcon('branch');
     } else if (selectedProfile) {
-
       setName(selectedProfile.name);
       setUserName(selectedProfile.userName);
       setUserEmail(selectedProfile.userEmail);
+      setAuthType(selectedProfile.authType || 'ssh');
       setSshKey(selectedProfile.sshKey || '');
+      setHost(selectedProfile.host || '');
       setColor(selectedProfile.color || 'keyword');
       setIcon(selectedProfile.icon || 'branch');
     }
-  }, [selectedProfile, isNewProfile, selectedProfileId]);
+  }, [selectedProfile, isNewProfile, selectedProfileId, importData]);
 
   const handleSave = async () => {
     if (!userName.trim() || !userEmail.trim()) {
       toast.error('User name and email are required');
+      return;
+    }
+
+    if (authType === 'token' && !host.trim()) {
+      toast.error('Host is required for token-based authentication');
       return;
     }
 
@@ -91,7 +125,9 @@ export const GitIdentitiesPage: React.FC = () => {
         name: name.trim() || userName.trim(),
         userName: userName.trim(),
         userEmail: userEmail.trim(),
-        sshKey: sshKey.trim() || null,
+        authType,
+        sshKey: authType === 'ssh' ? (sshKey.trim() || null) : null,
+        host: authType === 'token' ? (host.trim() || null) : null,
         color,
         icon,
       };
@@ -161,10 +197,12 @@ export const GitIdentitiesPage: React.FC = () => {
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">
-            {isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Identity' : name || 'Edit Profile'}
+            {importData ? 'Import Credential' : isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Identity' : name || 'Edit Profile'}
           </h1>
           <p className="typography-body text-muted-foreground mt-1">
-            {isNewProfile
+            {importData
+              ? `Import token credential for ${importData.host} - please fill in your email address`
+              : isNewProfile
               ? 'Create a new Git identity profile for your repositories'
               : isGlobalProfile
               ? 'System-wide Git identity from global configuration (read-only)'
@@ -315,6 +353,54 @@ export const GitIdentitiesPage: React.FC = () => {
             </p>
           </div>
 
+          {/* Auth Type Selector */}
+          {!isGlobalProfile && (
+            <div className="space-y-2">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
+                Authentication Type
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    SSH: Uses SSH key for authentication<br/>
+                    Token: Uses personal access token from ~/.git-credentials
+                  </TooltipContent>
+                </Tooltip>
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAuthType('ssh')}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all',
+                    authType === 'ssh'
+                      ? 'border-primary bg-accent'
+                      : 'border-border hover:border-primary/50'
+                  )}
+                >
+                  <RiLock2Line className="w-4 h-4" />
+                  <span className="typography-ui-label">SSH Key</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthType('token')}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all',
+                    authType === 'token'
+                      ? 'border-primary bg-accent'
+                      : 'border-border hover:border-primary/50'
+                  )}
+                >
+                  <RiKeyLine className="w-4 h-4" />
+                  <span className="typography-ui-label">Token (HTTPS)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SSH Key Path - only for SSH auth type */}
+          {authType === 'ssh' && (
             <div className="space-y-2">
               <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
                 SSH Key Path
@@ -324,22 +410,51 @@ export const GitIdentitiesPage: React.FC = () => {
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Path to SSH private key used for Git authentication.<br/>
-                    This key will be used for HTTPS and SSH Git operations.<br/>
+                    This key will be used for SSH Git operations.<br/>
                     Common paths: ~/.ssh/id_rsa, ~/.ssh/id_ed25519
                   </TooltipContent>
                 </Tooltip>
               </label>
-            <Input
-              value={sshKey}
-              onChange={(e) => setSshKey(e.target.value)}
-              placeholder="/Users/username/.ssh/id_rsa"
-              readOnly={isGlobalProfile}
-              disabled={isGlobalProfile}
-            />
-            <p className="typography-meta text-muted-foreground">
-              Path to SSH private key for authentication (optional)
-            </p>
-          </div>
+              <Input
+                value={sshKey}
+                onChange={(e) => setSshKey(e.target.value)}
+                placeholder="/Users/username/.ssh/id_rsa"
+                readOnly={isGlobalProfile}
+                disabled={isGlobalProfile}
+              />
+              <p className="typography-meta text-muted-foreground">
+                Path to SSH private key for authentication (optional)
+              </p>
+            </div>
+          )}
+
+          {/* Host - only for Token auth type */}
+          {authType === 'token' && !isGlobalProfile && (
+            <div className="space-y-2">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
+                Host {<span className="text-destructive">*</span>}
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    The Git host this credential applies to.<br/>
+                    Token will be read from ~/.git-credentials for this host.<br/>
+                    Examples: github.com, gitlab.com
+                  </TooltipContent>
+                </Tooltip>
+              </label>
+              <Input
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                placeholder="github.com"
+                required
+              />
+              <p className="typography-meta text-muted-foreground">
+                Git host for token authentication (from ~/.git-credentials)
+              </p>
+            </div>
+          )}
 
         {}
         {!isGlobalProfile && (

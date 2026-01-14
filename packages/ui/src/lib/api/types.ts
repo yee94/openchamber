@@ -168,14 +168,23 @@ export interface GitPullResult {
   deletions: number;
 }
 
+export type GitIdentityAuthType = 'ssh' | 'token';
+
 export interface GitIdentityProfile {
   id: string;
   name: string;
   userName: string;
   userEmail: string;
+  authType?: GitIdentityAuthType;
   sshKey?: string | null;
+  host?: string | null;
   color?: string | null;
   icon?: string | null;
+}
+
+export interface DiscoveredGitCredential {
+  host: string;
+  username: string;
 }
 
 export interface GitIdentitySummary {
@@ -290,6 +299,9 @@ export interface GitAPI {
   createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile>;
   updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile>;
   deleteGitIdentity(id: string): Promise<void>;
+  discoverGitCredentials?(): Promise<DiscoveredGitCredential[]>;
+  getGlobalGitIdentity?(): Promise<GitIdentitySummary | null>;
+  getRemoteUrl?(directory: string, remote?: string): Promise<string | null>;
 }
 
 export interface FileListEntry {

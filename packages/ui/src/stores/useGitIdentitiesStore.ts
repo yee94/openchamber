@@ -7,17 +7,27 @@ import {
   createGitIdentity,
   updateGitIdentity,
   deleteGitIdentity,
-  getCurrentGitIdentity
+  discoverGitCredentials,
+  getGlobalGitIdentity
 } from "@/lib/gitApi";
+
+export type GitIdentityAuthType = 'ssh' | 'token';
 
 export interface GitIdentityProfile {
   id: string;
   name: string;
   userName: string;
   userEmail: string;
+  authType?: GitIdentityAuthType;
   sshKey?: string | null;
+  host?: string | null;
   color?: string | null;
   icon?: string | null;
+}
+
+export interface DiscoveredGitCredential {
+  host: string;
+  username: string;
 }
 
 interface GitIdentitiesStore {
@@ -25,15 +35,18 @@ interface GitIdentitiesStore {
   selectedProfileId: string | null;
   profiles: GitIdentityProfile[];
   globalIdentity: GitIdentityProfile | null;
+  discoveredCredentials: DiscoveredGitCredential[];
   isLoading: boolean;
 
   setSelectedProfile: (id: string | null) => void;
   loadProfiles: () => Promise<boolean>;
   loadGlobalIdentity: () => Promise<boolean>;
+  loadDiscoveredCredentials: () => Promise<boolean>;
   createProfile: (profile: Omit<GitIdentityProfile, 'id'> & { id?: string }) => Promise<boolean>;
   updateProfile: (id: string, updates: Partial<GitIdentityProfile>) => Promise<boolean>;
   deleteProfile: (id: string) => Promise<boolean>;
   getProfileById: (id: string) => GitIdentityProfile | undefined;
+  getUnimportedCredentials: () => DiscoveredGitCredential[];
 }
 
 declare global {
@@ -50,6 +63,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         selectedProfileId: null,
         profiles: [],
         globalIdentity: null,
+        discoveredCredentials: [],
         isLoading: false,
 
         setSelectedProfile: (id: string | null) => {
@@ -73,7 +87,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         loadGlobalIdentity: async () => {
           try {
-            const data = await getCurrentGitIdentity('');
+            const data = await getGlobalGitIdentity();
 
             if (data && data.userName && data.userEmail) {
               const globalProfile: GitIdentityProfile = {
@@ -81,6 +95,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
                 name: 'Global Identity',
                 userName: data.userName,
                 userEmail: data.userEmail,
+                authType: data.sshCommand ? 'ssh' : undefined,
                 sshKey: data.sshCommand ? data.sshCommand.replace('ssh -i ', '') : null,
                 color: 'info',
                 icon: 'house'
@@ -94,6 +109,18 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           } catch (error) {
             console.error("Failed to load global git identity:", error);
             set({ globalIdentity: null });
+            return false;
+          }
+        },
+
+        loadDiscoveredCredentials: async () => {
+          try {
+            const credentials = await discoverGitCredentials();
+            set({ discoveredCredentials: credentials });
+            return true;
+          } catch (error) {
+            console.error("Failed to discover git credentials:", error);
+            set({ discoveredCredentials: [] });
             return false;
           }
         },
@@ -159,6 +186,16 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
             return globalIdentity || undefined;
           }
           return profiles.find((p) => p.id === id);
+        },
+
+        getUnimportedCredentials: () => {
+          const { profiles, discoveredCredentials } = get();
+          // Filter out credentials that have already been imported as token-based profiles
+          return discoveredCredentials.filter(cred => {
+            return !profiles.some(p => 
+              p.authType === 'token' && p.host === cred.host
+            );
+          });
         },
       }),
       {

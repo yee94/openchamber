@@ -117,6 +117,17 @@ export async function getGlobalIdentity() {
   }
 }
 
+export async function getRemoteUrl(directory, remoteName = 'origin') {
+  const git = simpleGit(normalizeDirectoryPath(directory));
+
+  try {
+    const url = await git.remote(['get-url', remoteName]);
+    return url?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getCurrentIdentity(directory) {
   const git = simpleGit(normalizeDirectoryPath(directory));
 
@@ -157,13 +168,28 @@ export async function setLocalIdentity(directory, profile) {
     await git.addConfig('user.name', profile.userName, false, 'local');
     await git.addConfig('user.email', profile.userEmail, false, 'local');
 
-    if (profile.sshKey) {
+    const authType = profile.authType || 'ssh';
+
+    if (authType === 'ssh' && profile.sshKey) {
       await git.addConfig(
         'core.sshCommand',
         `ssh -i ${profile.sshKey}`,
         false,
         'local'
       );
+      // Clear credential helper if previously set for token auth
+      await git.raw(['config', '--local', '--unset', 'credential.helper']).catch(() => {});
+    } else if (authType === 'token' && profile.host) {
+      // For token auth, configure git to use the store credential helper
+      // which reads from ~/.git-credentials
+      await git.addConfig(
+        'credential.helper',
+        'store',
+        false,
+        'local'
+      );
+      // Clear SSH command if previously set
+      await git.raw(['config', '--local', '--unset', 'core.sshCommand']).catch(() => {});
     }
 
     return true;

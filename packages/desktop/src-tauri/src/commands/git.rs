@@ -187,9 +187,18 @@ pub struct GitIdentityProfile {
     pub name: String,
     pub user_name: String,
     pub user_email: String,
+    pub auth_type: Option<String>,
     pub ssh_key: Option<String>,
+    pub host: Option<String>,
     pub color: Option<String>,
     pub icon: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredGitCredential {
+    pub host: String,
+    pub username: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1985,6 +1994,22 @@ pub async fn delete_git_identity(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn get_remote_url(
+    directory: String,
+    remote: Option<String>,
+    state: State<'_, DesktopRuntime>,
+) -> Result<Option<String>, String> {
+    let root = validate_git_path(&directory, state.settings())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let remote_name = remote.unwrap_or_else(|| "origin".to_string());
+    let url = run_git(&["remote", "get-url", &remote_name], &root).await.ok();
+
+    Ok(url.filter(|s| !s.is_empty()))
+}
+
+#[tauri::command]
 pub async fn get_current_git_identity(
     directory: String,
     state: State<'_, DesktopRuntime>,
@@ -2001,6 +2026,43 @@ pub async fn get_current_git_identity(
         user_name: user_name.filter(|s| !s.is_empty()),
         user_email: user_email.filter(|s| !s.is_empty()),
         ssh_command: ssh_command.filter(|s| !s.is_empty()),
+    })
+}
+
+#[tauri::command]
+pub async fn get_global_git_identity() -> Result<GitIdentitySummary, String> {
+    // Run git config --global commands without a specific directory
+    let user_name = tokio::process::Command::new("git")
+        .args(["config", "--global", "user.name"])
+        .output()
+        .await
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let user_email = tokio::process::Command::new("git")
+        .args(["config", "--global", "user.email"])
+        .output()
+        .await
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let ssh_command = tokio::process::Command::new("git")
+        .args(["config", "--global", "core.sshCommand"])
+        .output()
+        .await
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    Ok(GitIdentitySummary {
+        user_name,
+        user_email,
+        ssh_command,
     })
 }
 
@@ -2033,16 +2095,77 @@ pub async fn set_git_identity(
     .await
     .map_err(|e| e.to_string())?;
 
-    if let Some(key) = &profile.ssh_key {
-        let cmd = format!("ssh -i {}", key);
-        run_git(&["config", "--local", "core.sshCommand", &cmd], &root)
+    let auth_type = profile.auth_type.as_deref().unwrap_or("ssh");
+
+    if auth_type == "ssh" {
+        if let Some(key) = &profile.ssh_key {
+            let cmd = format!("ssh -i {}", key);
+            run_git(&["config", "--local", "core.sshCommand", &cmd], &root)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        // Clear credential helper if previously set for token auth
+        let _ = run_git(&["config", "--local", "--unset", "credential.helper"], &root).await;
+    } else if auth_type == "token" && profile.host.is_some() {
+        // For token auth, configure git to use the store credential helper
+        // which reads from ~/.git-credentials
+        run_git(&["config", "--local", "credential.helper", "store"], &root)
             .await
             .map_err(|e| e.to_string())?;
+        // Clear SSH command if previously set
+        let _ = run_git(&["config", "--local", "--unset", "core.sshCommand"], &root).await;
     } else {
         let _ = run_git(&["config", "--local", "--unset", "core.sshCommand"], &root).await;
     }
 
     Ok(profile)
+}
+
+#[tauri::command]
+pub async fn discover_git_credentials() -> Result<Vec<DiscoveredGitCredential>, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Could not find home directory".to_string())?;
+    let credentials_path = home.join(".git-credentials");
+
+    if !credentials_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = fs::read_to_string(&credentials_path)
+        .await
+        .map_err(|e| format!("Failed to read .git-credentials: {}", e))?;
+
+    let mut credentials = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Parse URL format: https://username:token@host/path
+        if let Ok(url) = url::Url::parse(trimmed) {
+            let hostname = url.host_str().unwrap_or("").to_string();
+            let path = url.path();
+            // Include path for repo-specific tokens (e.g., github.com/user/repo)
+            let host = if path.is_empty() || path == "/" {
+                hostname
+            } else {
+                format!("{}{}", hostname, path)
+            };
+            let username = url.username().to_string();
+
+            if !host.is_empty() && !username.is_empty() {
+                // Avoid duplicates
+                let exists = credentials
+                    .iter()
+                    .any(|c: &DiscoveredGitCredential| c.host == host && c.username == username);
+                if !exists {
+                    credentials.push(DiscoveredGitCredential { host, username });
+                }
+            }
+        }
+    }
+
+    Ok(credentials)
 }
 
 #[tauri::command]

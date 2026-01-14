@@ -108,6 +108,7 @@ export const GitView: React.FC = () => {
   const [expandedCommitHashes, setExpandedCommitHashes] = React.useState<Set<string>>(new Set());
   const [commitFilesMap, setCommitFilesMap] = React.useState<Map<string, CommitFileEntry[]>>(new Map());
   const [loadingCommitHashes, setLoadingCommitHashes] = React.useState<Set<string>>(new Set());
+  const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
 
   const handleCopyCommitHash = React.useCallback((hash: string) => {
     navigator.clipboard
@@ -187,6 +188,15 @@ export const GitView: React.FC = () => {
     loadProfiles();
     loadGlobalIdentity();
   }, [loadProfiles, loadGlobalIdentity]);
+
+  // Fetch remote URL for filtering token-based identities
+  React.useEffect(() => {
+    if (!currentDirectory || !git?.getRemoteUrl) {
+      setRemoteUrl(null);
+      return;
+    }
+    git.getRemoteUrl(currentDirectory).then(setRemoteUrl).catch(() => setRemoteUrl(null));
+  }, [currentDirectory, git]);
 
   React.useEffect(() => {
     if (currentDirectory) {
@@ -495,11 +505,55 @@ export const GitView: React.FC = () => {
     if (globalIdentity) {
       unique.set(globalIdentity.id, globalIdentity);
     }
+    
+    // Parse repo host/path from remote URL for filtering token identities
+    // e.g., "git@github.com:user/repo.git" or "https://github.com/user/repo.git"
+    let repoHostPath: string | null = null;
+    if (remoteUrl) {
+      try {
+        let normalized = remoteUrl.trim();
+        // Handle SSH format: git@github.com:user/repo.git -> https://github.com/user/repo.git
+        if (normalized.startsWith('git@')) {
+          normalized = 'https://' + normalized.slice(4).replace(':', '/');
+        }
+        // Remove .git suffix
+        if (normalized.endsWith('.git')) {
+          normalized = normalized.slice(0, -4);
+        }
+        const url = new URL(normalized);
+        repoHostPath = url.hostname + url.pathname;
+      } catch {
+        // ignore parse errors
+      }
+    }
+    
     for (const profile of profiles) {
-      unique.set(profile.id, profile);
+      // SSH identities always shown
+      if (profile.authType !== 'token') {
+        unique.set(profile.id, profile);
+        continue;
+      }
+      
+      // Token identities: filter by host match
+      const profileHost = profile.host;
+      if (!profileHost) {
+        unique.set(profile.id, profile);
+        continue;
+      }
+      
+      // Host-only token (e.g., "github.com") - always show
+      if (!profileHost.includes('/')) {
+        unique.set(profile.id, profile);
+        continue;
+      }
+      
+      // Repo-specific token - only show if matches current repo
+      if (repoHostPath && repoHostPath === profileHost) {
+        unique.set(profile.id, profile);
+      }
     }
     return Array.from(unique.values());
-  }, [profiles, globalIdentity]);
+  }, [profiles, globalIdentity, remoteUrl]);
 
   const activeIdentityProfile = React.useMemo((): GitIdentityProfile | null => {
     if (currentIdentity?.userName && currentIdentity?.userEmail) {

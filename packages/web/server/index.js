@@ -3305,6 +3305,17 @@ async function main(options = {}) {
     }
   });
 
+  app.get('/api/git/discover-credentials', async (req, res) => {
+    try {
+      const { discoverGitCredentials } = await import('./lib/git-credentials.js');
+      const credentials = discoverGitCredentials();
+      res.json(credentials);
+    } catch (error) {
+      console.error('Failed to discover git credentials:', error);
+      res.status(500).json({ error: 'Failed to discover git credentials' });
+    }
+  });
+
   app.get('/api/git/check', async (req, res) => {
     const { isGitRepository } = await getGitLibraries();
     try {
@@ -3318,6 +3329,23 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to check git repository:', error);
       res.status(500).json({ error: 'Failed to check git repository' });
+    }
+  });
+
+  app.get('/api/git/remote-url', async (req, res) => {
+    const { getRemoteUrl } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+      const remote = req.query.remote || 'origin';
+
+      const url = await getRemoteUrl(directory, remote);
+      res.json({ url });
+    } catch (error) {
+      console.error('Failed to get remote url:', error);
+      res.status(500).json({ error: 'Failed to get remote url' });
     }
   });
 

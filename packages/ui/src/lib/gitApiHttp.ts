@@ -22,6 +22,7 @@ import type {
   GitCommitFilesResponse,
   GitIdentityProfile,
   GitIdentitySummary,
+  DiscoveredGitCredential,
 } from './api/types';
 
 declare global {
@@ -515,6 +516,22 @@ export async function getCurrentGitIdentity(directory: string): Promise<GitIdent
   };
 }
 
+export async function getGlobalGitIdentity(): Promise<GitIdentitySummary | null> {
+  const response = await fetch(buildUrl(`${API_BASE}/global-identity`, undefined));
+  if (!response.ok) {
+    throw new Error(`Failed to get global git identity: ${response.statusText}`);
+  }
+  const data = await response.json();
+  if (!data || (!data.userName && !data.userEmail)) {
+    return null;
+  }
+  return {
+    userName: data.userName ?? null,
+    userEmail: data.userEmail ?? null,
+    sshCommand: data.sshCommand ?? null,
+  };
+}
+
 export async function setGitIdentity(
   directory: string,
   profileId: string
@@ -529,4 +546,24 @@ export async function setGitIdentity(
     throw new Error(error.error || 'Failed to set git identity');
   }
   return response.json();
+}
+
+export async function discoverGitCredentials(): Promise<DiscoveredGitCredential[]> {
+  const response = await fetch(buildUrl(`${API_BASE}/discover-credentials`, undefined));
+  if (!response.ok) {
+    throw new Error(`Failed to discover git credentials: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function getRemoteUrl(directory: string, remote?: string): Promise<string | null> {
+  if (!directory) {
+    return null;
+  }
+  const response = await fetch(buildUrl(`${API_BASE}/remote-url`, directory, { remote }));
+  if (!response.ok) {
+    return null;
+  }
+  const data = await response.json();
+  return data.url ?? null;
 }

@@ -17,6 +17,7 @@ import {
   RiGraduationCapLine,
   RiCodeLine,
   RiHeartLine,
+  RiDownloadLine,
 } from '@remixicon/react';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -24,7 +25,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { cn } from '@/lib/utils';
-import type { GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
+import type { GitIdentityProfile, DiscoveredGitCredential } from '@/stores/useGitIdentitiesStore';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   branch: RiGitBranchLine,
@@ -56,6 +57,8 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
     deleteProfile,
     loadProfiles,
     loadGlobalIdentity,
+    loadDiscoveredCredentials,
+    getUnimportedCredentials,
   } = useGitIdentitiesStore();
 
   const { setSidebarOpen } = useUIStore();
@@ -73,10 +76,23 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
     setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
   }, []);
 
+  const unimportedCredentials = getUnimportedCredentials();
+
   React.useEffect(() => {
     loadProfiles();
     loadGlobalIdentity();
-  }, [loadProfiles, loadGlobalIdentity]);
+    loadDiscoveredCredentials();
+  }, [loadProfiles, loadGlobalIdentity, loadDiscoveredCredentials]);
+
+  const handleImportCredential = (credential: DiscoveredGitCredential) => {
+    // Set a special "import" selection that carries the credential data
+    // The form will read this and pre-fill fields
+    setSelectedProfile(`import:${credential.host}:${credential.username}`);
+    onItemSelect?.();
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
 
   const bgClass = isDesktopRuntime
     ? 'bg-transparent'
@@ -150,7 +166,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
             </div>
           )}
 
-           {profiles.length === 0 && !globalIdentity ? (
+           {profiles.length === 0 && !globalIdentity && unimportedCredentials.length === 0 ? (
              <div className="py-12 px-4 text-center text-muted-foreground">
                <RiGitBranchLine className="mx-auto mb-3 h-10 w-10 opacity-50" />
                <p className="typography-ui-label font-medium">No profiles configured</p>
@@ -171,6 +187,25 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
                     }
                   }}
                   onDelete={() => handleDeleteProfile(profile)}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Discovered Credentials Section */}
+          {unimportedCredentials.length > 0 && (
+            <>
+              <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Discovered Credentials
+              </div>
+              <p className="px-2 pb-2 typography-micro text-muted-foreground/60">
+                Found in ~/.git-credentials
+              </p>
+              {unimportedCredentials.map((cred) => (
+                <DiscoveredCredentialItem
+                  key={`${cred.host}-${cred.username}`}
+                  credential={cred}
+                  onImport={() => handleImportCredential(cred)}
                 />
               ))}
             </>
@@ -197,6 +232,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
 }) => {
   const IconComponent = ICON_MAP[profile.icon || 'branch'] || RiGitBranchLine;
   const iconColor = COLOR_MAP[profile.color || ''];
+  const authType = profile.authType || 'ssh';
 
   return (
     <div
@@ -211,18 +247,21 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
           className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           tabIndex={0}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <IconComponent
               className="w-4 h-4 flex-shrink-0"
               style={{ color: iconColor }}
             />
-            <span className="typography-ui-label font-normal truncate flex-1 text-foreground">
+            <span className="typography-ui-label font-normal truncate text-foreground">
               {profile.name}
+            </span>
+            <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+              {authType}
             </span>
           </div>
 
           <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-            {profile.userEmail}
+            {authType === 'token' && profile.host ? profile.host : profile.userEmail}
           </div>
         </button>
 
@@ -251,6 +290,60 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+      </div>
+    </div>
+  );
+};
+
+interface DiscoveredCredentialItemProps {
+  credential: DiscoveredGitCredential;
+  onImport: () => void;
+}
+
+/**
+ * Get display name for a credential host.
+ * For repo-specific hosts like "github.com/user/repo", returns just "repo".
+ * For host-only like "github.com", returns "github.com".
+ */
+const getCredentialDisplayName = (host: string): string => {
+  const parts = host.split('/');
+  if (parts.length >= 3) {
+    // repo-specific: github.com/user/repo -> repo
+    return parts[parts.length - 1];
+  }
+  // host-only: github.com
+  return host;
+};
+
+const DiscoveredCredentialItem: React.FC<DiscoveredCredentialItemProps> = ({
+  credential,
+  onImport,
+}) => {
+  const displayName = getCredentialDisplayName(credential.host);
+  const isRepoSpecific = credential.host.includes('/');
+
+  return (
+    <div className="group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 hover:dark:bg-accent/40 hover:bg-primary/6">
+      <div className="flex min-w-0 flex-1 items-center">
+        <div className="flex min-w-0 flex-1 flex-col gap-0">
+          <div className="flex items-center gap-1.5">
+            <span className="typography-ui-label font-normal truncate text-foreground">
+              {displayName}
+            </span>
+          </div>
+          <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
+            {isRepoSpecific ? credential.host : credential.username}
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onImport}
+          className="h-6 px-2 text-xs gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+        >
+          <RiDownloadLine className="h-3 w-3" />
+          Import
+        </Button>
       </div>
     </div>
   );

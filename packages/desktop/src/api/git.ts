@@ -21,7 +21,8 @@ import type {
   GitLogResponse,
   GitCommitFilesResponse,
   GitIdentitySummary,
-  GitIdentityProfile
+  GitIdentityProfile,
+  DiscoveredGitCredential
 } from '@openchamber/ui/lib/api/types';
 
 async function safeGitInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -236,5 +237,25 @@ export const createDesktopGitAPI = (): GitAPI => ({
 
   async deleteGitIdentity(id: string): Promise<void> {
     return safeGitInvoke<void>('delete_git_identity', { id });
+  },
+
+  async discoverGitCredentials(): Promise<DiscoveredGitCredential[]> {
+    return safeGitInvoke<DiscoveredGitCredential[]>('discover_git_credentials');
+  },
+
+  async getGlobalGitIdentity(): Promise<GitIdentitySummary | null> {
+    try {
+      return await safeGitInvoke<GitIdentitySummary>('get_global_git_identity');
+    } catch {
+      return null;
+    }
+  },
+
+  async getRemoteUrl(directory: string, remote?: string): Promise<string | null> {
+    try {
+      return await safeGitInvoke<string | null>('get_remote_url', { directory, remote });
+    } catch {
+      return null;
+    }
   },
 });

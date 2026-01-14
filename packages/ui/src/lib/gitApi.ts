@@ -13,6 +13,7 @@ export type {
   GitPushResult,
   GitPullResult,
   GitIdentityProfile,
+  GitIdentityAuthType,
   GitIdentitySummary,
   GitLogEntry,
   GitLogResponse,
@@ -21,6 +22,7 @@ export type {
   GitRemoveWorktreePayload,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
+  DiscoveredGitCredential,
 } from './api/types';
 
 declare global {
@@ -244,4 +246,22 @@ export async function setGitIdentity(
   const runtime = getRuntimeGit();
   if (runtime) return runtime.setGitIdentity(directory, profileId);
   return gitHttp.setGitIdentity(directory, profileId);
+}
+
+export async function discoverGitCredentials(): Promise<import('./api/types').DiscoveredGitCredential[]> {
+  const runtime = getRuntimeGit();
+  if (runtime?.discoverGitCredentials) return runtime.discoverGitCredentials();
+  return gitHttp.discoverGitCredentials();
+}
+
+export async function getGlobalGitIdentity(): Promise<import('./api/types').GitIdentitySummary | null> {
+  const runtime = getRuntimeGit();
+  if (runtime?.getGlobalGitIdentity) return runtime.getGlobalGitIdentity();
+  return gitHttp.getGlobalGitIdentity();
+}
+
+export async function getRemoteUrl(directory: string, remote?: string): Promise<string | null> {
+  const runtime = getRuntimeGit();
+  if (runtime?.getRemoteUrl) return runtime.getRemoteUrl(directory, remote);
+  return gitHttp.getRemoteUrl(directory, remote);
 }

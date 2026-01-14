@@ -32,11 +32,11 @@ use commands::files::{create_directory, exec_commands, list_directory, read_file
 use commands::git::{
     add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit, rename_branch,
     create_git_identity, delete_git_branch, delete_git_identity, delete_remote_branch,
-    ensure_openchamber_ignored, generate_commit_message, get_commit_files,
+    discover_git_credentials, ensure_openchamber_ignored, generate_commit_message, get_commit_files,
     get_current_git_identity, get_git_branches, get_git_diff, get_git_file_diff,
-    get_git_identities, get_git_log, get_git_status, git_fetch, git_pull, git_push,
-    is_linked_worktree, list_git_worktrees, remove_git_worktree, revert_git_file, set_git_identity,
-    update_git_identity,
+    get_git_identities, get_git_log, get_git_status, get_global_git_identity, get_remote_url,
+    git_fetch, git_pull, git_push, is_linked_worktree, list_git_worktrees, remove_git_worktree,
+    revert_git_file, set_git_identity, update_git_identity,
 };
 use commands::logs::fetch_desktop_logs;
 
@@ -871,7 +871,10 @@ fn main() {
             update_git_identity,
             delete_git_identity,
             get_current_git_identity,
+            get_global_git_identity,
+            get_remote_url,
             set_git_identity,
+            discover_git_credentials,
             generate_commit_message,
             create_terminal_session,
             send_terminal_input,

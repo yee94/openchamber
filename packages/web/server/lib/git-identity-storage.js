@@ -66,7 +66,9 @@ export function createProfile(profileData) {
     name: profileData.name || profileData.userName,
     userName: profileData.userName,
     userEmail: profileData.userEmail,
+    authType: profileData.authType || 'ssh',
     sshKey: profileData.sshKey || null,
+    host: profileData.host || null,
     color: profileData.color || 'keyword',
     icon: profileData.icon || 'branch'
   };

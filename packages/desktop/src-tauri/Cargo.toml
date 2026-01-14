@@ -45,6 +45,7 @@ tauri-plugin-log = "2.7.1"
 tauri-plugin-shell = "2.3.3"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "process", "signal", "sync", "time", "fs"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
+url = "2.5"
 uuid = { version = "1.18.1", features = ["v4"] }
 tokio-util = { version = "0.7", features = ["io"] }
 tauri-plugin-notification = "2.3.3"

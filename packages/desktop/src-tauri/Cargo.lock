@@ -2977,7 +2977,7 @@ dependencies = [
 
 [[package]]
 name = "openchamber-desktop"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "anyhow",
  "axum",
@@ -3013,6 +3013,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower-http 0.5.2",
+ "url",
  "urlencoding",
  "uuid",
  "window-vibrancy 0.7.1",
