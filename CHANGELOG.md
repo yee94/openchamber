@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-01-14
+
+- VSCode: added session editor panel to view sessions alongside files.
+- VSCode: improved server connection reliability with multiple URL candidate support.
+- Diff: added stacked/inline diff mode toggle in settings with sidebar file navigation (thanks to @nelsonpires).
+- Mobile: fixed iOS keyboard safe area padding for home indicator bar (thanks to @Jovines).
+- Upload: increased attachment size limit to 50MB with automatic image compression to 2048px for large files.
+
+
 ## [1.4.8] - 2026-01-14
 
 - Git Identities: added token-based authentication support with ~/.git-credentials discovery and import.
