@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Git Identities: added “default identity” setting with a one-click set/unset; automatically applies default identity in Git view for repos without a local identity, and uses it as the preferred identity for skills catalog auth flows.
+
+
 ## [1.4.9] - 2026-01-14
 
 - VSCode: added session editor panel to view sessions alongside files.
