@@ -3,17 +3,18 @@ description: Draft user-facing CHANGELOG.md entries for [Unreleased]
 agent: build
 ---
 
-You are updating @CHANGELOG.md.
+You are updating @CHANGELOG.md and @packages/vscode/CHANGELOG.md.
 
 Goal: write user-facing bullet points for the `## [Unreleased]` section that summarize the changes since the latest git tag up to `HEAD`.
 
 Style rules:
 - Match the writing style of the existing changelog (tone + level of detail).
 - User-facing and benefit-oriented; avoid internal component names unless users see them (ex: "VS Code extension", "Desktop app", "Web app").
+- For @packages/vscode/CHANGELOG.md: Craft entries specifically for the VS Code extension. Exclude features or fixes specific to the Desktop app, Web app, or Mobile/PWA. Focus on core UI improvements and VS Code integration. Do NOT use "VSCode:" or "VS Code:" prefixes in this file.
 - Prefer 5-9 bullets; group by platform only if it reads better.
 - No new release header; only update the `[Unreleased]` bullets.
 - Don't include implementation notes, commit hashes, or file paths in the changelog text.
-- Use area prefixes when helpful for grouping (e.g., "Chat:", "VSCode:", "Settings:", "Git:", "Terminal:", "Mobile:", "UI:").
+- Use area prefixes when helpful for grouping in the main @CHANGELOG.md (e.g., "Chat:", "VSCode:", "Settings:", "Git:", "Terminal:", "Mobile:", "UI:").
 - Credit contributors inline using "(thanks to @username)" at the end of the bullet. Find contributor usernames from commit authors or PR metadata when available.
 
 Determine the base version:
@@ -31,5 +32,6 @@ Additional hints (optional, use only if needed):
 - If changes are mostly internal refactors, summarize them as reliability/performance improvements.
 
 Now:
-1) Propose the new `[Unreleased]` bullet list.
-2) Edit @CHANGELOG.md to update only the `[Unreleased]` section.
+1) Propose the new `[Unreleased]` bullet list for the main @CHANGELOG.md.
+2) Propose the VS Code-specific `[Unreleased]` list for @packages/vscode/CHANGELOG.md.
+3) Edit both files to update their respective `[Unreleased]` sections.
