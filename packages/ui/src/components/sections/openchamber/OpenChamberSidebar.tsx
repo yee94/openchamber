@@ -17,6 +17,7 @@ interface SectionGroup {
   label: string;
   items: string[];
   webOnly?: boolean;
+  hideInVSCode?: boolean;
 }
 
 const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
@@ -39,6 +40,7 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'git',
     label: 'Git',
     items: ['Commit Messages', 'Worktree'],
+    hideInVSCode: true,
   },
   {
     id: 'notifications',
@@ -69,8 +71,12 @@ export const OpenChamberSidebar: React.FC<OpenChamberSidebarProps> = ({
   }, []);
 
   const visibleSections = React.useMemo(() => {
-    return OPENCHAMBER_SECTION_GROUPS.filter((group) => !group.webOnly || isWeb);
-  }, [isWeb]);
+    return OPENCHAMBER_SECTION_GROUPS.filter((group) => {
+      if (group.webOnly && !isWeb) return false;
+      if (group.hideInVSCode && isVSCode) return false;
+      return true;
+    });
+  }, [isWeb, isVSCode]);
 
   // Desktop app: transparent for blur effect
   // VS Code: bg-background (same as page content)

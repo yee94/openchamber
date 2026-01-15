@@ -1,3 +1,15 @@
+## [Unreleased]
+
+- Improved OpenCode server management to ensure it initializes within the workspace directory.
+- Enhanced extension startup with context-aware readiness checks for the current workspace.
+- Session tabs: fixed opening new session in editor tab; title bar button now opens new session tab, sidebar button opens current or new session.
+- Layout: added responsive expanded layout showing sessions sidebar + chat side-by-side when extension is wide enough (≥700px).
+- Layout: extension now opens to sessions list instead of new session draft.
+- Layout: compact header with reduced padding for better space efficiency.
+- Settings: hidden Git Identities tab, Git section, and Diff view settings (not applicable to VS Code).
+- Settings: hidden project switcher dropdown (VS Code uses workspace).
+- Shortcuts: disabled worktree session creation (Ctrl+Shift+N now opens standard session).
+
 ## [1.4.9] - 2026-01-14
 
 - Added session editor panel to view sessions alongside files.

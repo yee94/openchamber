@@ -7,6 +7,7 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { hasModifier } from '@/lib/utils';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 export const useKeyboardShortcuts = () => {
   const { openNewSessionDraft, abortCurrentOperation, armAbortPrompt, clearAbortPrompt, currentSessionId } = useSessionStore();
@@ -83,10 +84,12 @@ export const useKeyboardShortcuts = () => {
       if (hasModifier(e) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         
+        const isVSCode = isVSCodeRuntime();
         const autoWorktree = useConfigStore.getState().settingsAutoCreateWorktree;
         // If autoWorktree is true: Cmd+N -> Worktree, Cmd+Shift+N -> Standard
         // If autoWorktree is false: Cmd+N -> Standard, Cmd+Shift+N -> Worktree
-        const shouldCreateWorktree = autoWorktree ? !e.shiftKey : e.shiftKey;
+        // VS Code: always open standard session (no worktree support)
+        const shouldCreateWorktree = isVSCode ? false : (autoWorktree ? !e.shiftKey : e.shiftKey);
 
         if (shouldCreateWorktree) {
           // Create new session with auto-generated worktree

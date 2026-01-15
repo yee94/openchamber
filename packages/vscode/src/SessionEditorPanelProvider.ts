@@ -25,6 +25,12 @@ export class SessionEditorPanelProvider {
     private readonly _openCodeManager?: OpenCodeManager
   ) {}
 
+  public createOrShowNewSession(): void {
+    // Generate unique panel ID for new session drafts
+    const panelId = `new_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    this._createPanel(panelId, 'New Session', null);
+  }
+
   public createOrShow(sessionId: string, title?: string): void {
     if (!sessionId || typeof sessionId !== 'string') {
       return;
@@ -39,11 +45,15 @@ export class SessionEditorPanelProvider {
       return;
     }
 
+    this._createPanel(sessionId, sessionTitle, sessionId);
+  }
+
+  private _createPanel(panelId: string, title: string, initialSessionId: string | null): void {
     const distUri = vscode.Uri.joinPath(this._extensionUri, 'dist');
 
     const panel = vscode.window.createWebviewPanel(
       SessionEditorPanelProvider.viewType,
-      sessionTitle,
+      title,
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
@@ -63,15 +73,15 @@ export class SessionEditorPanelProvider {
       sseHeartbeats: new Map(),
     };
 
-    this._panels.set(sessionId, state);
+    this._panels.set(panelId, state);
 
-    panel.webview.html = this._getHtmlForWebview(panel.webview, sessionId);
+    panel.webview.html = this._getHtmlForWebview(panel.webview, initialSessionId);
 
     void this.updateTheme(vscode.window.activeColorTheme.kind);
     this._sendCachedStateToPanel(state);
 
     panel.onDidDispose(() => {
-      this._disposePanel(sessionId);
+      this._disposePanel(panelId);
     }, null, this._context.subscriptions);
 
     panel.webview.onDidReceiveMessage(async (message: BridgeRequest) => {
@@ -354,7 +364,7 @@ export class SessionEditorPanelProvider {
     return { id, type, success: true, data: { stopped: true } };
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview, sessionId: string) {
+  private _getHtmlForWebview(webview: vscode.Webview, sessionId: string | null) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
     const initialStatus = this._cachedStatus;
     const cliAvailable = this._openCodeManager?.isCliAvailable() ?? false;
@@ -366,7 +376,7 @@ export class SessionEditorPanelProvider {
       initialStatus,
       cliAvailable,
       panelType: 'chat',
-      initialSessionId: sessionId,
+      initialSessionId: sessionId ?? undefined,
       viewMode: 'editor',
     });
   }

@@ -4,7 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Git Identities: added “default identity” setting with a one-click set/unset; automatically applies default identity in Git view for repos without a local identity, and uses it as the preferred identity for skills catalog auth flows.
+- UI: added a new Files tab to browse workspace files directly from the interface.
+- Diff: enhanced the diff viewer with mobile support and the ability to ask the agent for comments on changes.
+- Git Identities: added "default identity" setting with one-click set/unset and automatic local identity detection.
+- VSCode: improved server management to ensure it initializes within the workspace directory with context-aware readiness checks.
+- VSCode: added responsive layout with sessions sidebar + chat side-by-side when wide, compact header, and streamlined settings.
+- Web: the server now automatically resolves and uses an available port if the default is occupied.
 
 
 ## [1.4.9] - 2026-01-14

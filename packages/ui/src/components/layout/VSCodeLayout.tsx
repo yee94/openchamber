@@ -11,6 +11,10 @@ import { RiAddLine, RiArrowLeftLine, RiRobot2Line, RiSettings3Line } from '@remi
 
 // Width threshold for mobile vs desktop layout in settings
 const MOBILE_WIDTH_THRESHOLD = 550;
+// Width threshold for expanded layout (sidebar + chat side by side)
+const EXPANDED_LAYOUT_THRESHOLD = 700;
+// Sessions sidebar width in expanded layout
+const SESSIONS_SIDEBAR_WIDTH = 280;
 
 type VSCodeView = 'sessions' | 'chat' | 'settings';
 
@@ -38,7 +42,7 @@ export const VSCodeLayout: React.FC = () => {
 
   const hasAppliedInitialSession = React.useRef(false);
 
-  const [currentView, setCurrentView] = React.useState<VSCodeView>('chat');
+  const [currentView, setCurrentView] = React.useState<VSCodeView>('sessions');
   const [containerWidth, setContainerWidth] = React.useState<number>(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -83,16 +87,16 @@ export const VSCodeLayout: React.FC = () => {
     void vscodeApi.executeCommand('openchamber.setActiveSession', currentSessionId, activeSessionTitle);
   }, [activeSessionTitle, currentSessionId, runtimeApis.vscode]);
 
-  // If the active session disappears (e.g., deleted), show a new chat view
+  // If the active session disappears (e.g., deleted), go back to sessions list
   React.useEffect(() => {
     if (viewMode === 'editor') {
       return;
     }
 
-    if (!currentSessionId && !newSessionDraftOpen) {
-      openNewSessionDraft();
+    if (!currentSessionId && !newSessionDraftOpen && currentView === 'chat') {
+      setCurrentView('sessions');
     }
-  }, [currentSessionId, newSessionDraftOpen, openNewSessionDraft, viewMode]);
+  }, [currentSessionId, newSessionDraftOpen, currentView, viewMode]);
 
   const handleBackToSessions = React.useCallback(() => {
     setCurrentView('sessions');
@@ -199,19 +203,24 @@ export const VSCodeLayout: React.FC = () => {
     if (hasAppliedInitialSession.current) {
       return;
     }
-    if (!initialSessionId) {
-      return;
-    }
     if (!hasInitializedOnce || connectionStatus !== 'connected') {
       return;
     }
+
+    // No initialSessionId means open a new session draft
+    if (!initialSessionId) {
+      hasAppliedInitialSession.current = true;
+      openNewSessionDraft();
+      return;
+    }
+
     if (!sessions.some((session) => session.id === initialSessionId)) {
       return;
     }
 
     hasAppliedInitialSession.current = true;
     void useSessionStore.getState().setCurrentSession(initialSessionId);
-  }, [connectionStatus, hasInitializedOnce, initialSessionId, sessions, viewMode]);
+  }, [connectionStatus, hasInitializedOnce, initialSessionId, openNewSessionDraft, sessions, viewMode]);
 
   // Hydrate messages when viewing chat
   React.useEffect(() => {
@@ -254,10 +263,20 @@ export const VSCodeLayout: React.FC = () => {
   }, []);
 
   const usesMobileLayout = containerWidth > 0 && containerWidth < MOBILE_WIDTH_THRESHOLD;
+  const usesExpandedLayout = containerWidth >= EXPANDED_LAYOUT_THRESHOLD;
+
+  // In expanded layout, always show chat (with sidebar alongside)
+  // Navigate to chat automatically when expanded layout is enabled and we're on sessions view
+  React.useEffect(() => {
+    if (usesExpandedLayout && currentView === 'sessions' && viewMode === 'sidebar') {
+      setCurrentView('chat');
+    }
+  }, [usesExpandedLayout, currentView, viewMode]);
 
   return (
     <div ref={containerRef} className="h-full w-full bg-background text-foreground flex flex-col">
       {viewMode === 'editor' ? (
+        // Editor mode: just chat, no sidebar
         <div className="flex flex-col h-full">
           <VSCodeHeader
             title={sessions.find((session) => session.id === currentSessionId)?.title || 'Chat'}
@@ -270,7 +289,45 @@ export const VSCodeLayout: React.FC = () => {
             </ErrorBoundary>
           </div>
         </div>
+      ) : currentView === 'settings' ? (
+        // Settings view
+        <SettingsView
+          onClose={() => setCurrentView(usesExpandedLayout ? 'chat' : 'sessions')}
+          forceMobile={usesMobileLayout}
+        />
+      ) : usesExpandedLayout ? (
+        // Expanded layout: sessions sidebar + chat side by side
+        <div className="flex h-full">
+          {/* Sessions sidebar */}
+          <div 
+            className="h-full border-r border-border overflow-hidden flex-shrink-0"
+            style={{ width: SESSIONS_SIDEBAR_WIDTH }}
+          >
+            <SessionSidebar
+              mobileVariant
+              allowReselect
+              hideDirectoryControls
+              showOnlyMainWorkspace
+            />
+          </div>
+          {/* Chat content */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <VSCodeHeader
+              title={newSessionDraftOpen && !currentSessionId
+                ? 'New session'
+                : sessions.find((session) => session.id === currentSessionId)?.title || 'Chat'}
+              showMcp
+              showContextUsage
+            />
+            <div className="flex-1 overflow-hidden">
+              <ErrorBoundary>
+                <ChatView />
+              </ErrorBoundary>
+            </div>
+          </div>
+        </div>
       ) : currentView === 'sessions' ? (
+        // Compact layout: sessions list (drill-down)
         <div className="flex flex-col h-full">
           <VSCodeHeader
             title="Sessions"
@@ -285,12 +342,8 @@ export const VSCodeLayout: React.FC = () => {
             />
           </div>
         </div>
-      ) : currentView === 'settings' ? (
-        <SettingsView
-          onClose={() => setCurrentView('sessions')}
-          forceMobile={usesMobileLayout}
-        />
       ) : (
+        // Compact layout: chat view (drill-down)
         <div className="flex flex-col h-full">
           <VSCodeHeader
             title={newSessionDraftOpen && !currentSessionId
@@ -336,17 +389,17 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   const contextUsage = getContextUsage(contextLimit, outputLimit);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background shrink-0">
+    <div className="flex items-center gap-1.5 pl-1 pr-2 py-1 border-b border-border bg-background shrink-0">
       {showBack && onBack && (
         <button
           onClick={onBack}
-          className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Back to sessions"
         >
           <RiArrowLeftLine className="h-5 w-5" />
         </button>
       )}
-      <h1 className="text-sm font-medium truncate flex-1 h-9 w-9 items-center justify-center p-2" title={title}>{title}</h1>
+      <h1 className="text-sm font-medium truncate flex-1" title={title}>{title}</h1>
       {onNewSession && (
         <button
           onClick={onNewSession}

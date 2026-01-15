@@ -94,6 +94,21 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "openchamber.openNewSessionInEditor",
+        "category": "OpenChamber",
+        "title": "Open New Session in Editor",
+        "icon": {
+          "light": "assets/icon.svg",
+          "dark": "assets/icon-titlebar.svg"
+        }
+      },
+      {
+        "command": "openchamber.openCurrentOrNewSessionInEditor",
+        "category": "OpenChamber",
+        "title": "Open Session in Editor",
+        "icon": "$(link-external)"
+      },
+      {
         "command": "openchamber.addToContext",
         "category": "OpenChamber",
         "title": "Add to Context"
@@ -136,7 +151,7 @@
       ],
       "editor/title": [
         {
-          "command": "openchamber.openSidebar",
+          "command": "openchamber.openNewSessionInEditor",
           "group": "navigation@1"
         }
       ],
@@ -147,7 +162,7 @@
           "group": "navigation@1"
         },
         {
-          "command": "openchamber.openActiveSessionInEditor",
+          "command": "openchamber.openCurrentOrNewSessionInEditor",
           "when": "view == openchamber.chatView",
           "group": "navigation@2"
         },

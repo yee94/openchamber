@@ -310,7 +310,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 </div>
             )}
 
-            {shouldShow('diffLayout') && !isMobile && (
+            {shouldShow('diffLayout') && !isMobile && !isVSCodeRuntime() && (
                 <div className="space-y-6">
                     <div className="space-y-1">
                         <h3 className="typography-ui-header font-semibold text-foreground">

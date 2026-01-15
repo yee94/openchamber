@@ -199,6 +199,22 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('openchamber.openNewSessionInEditor', () => {
+      sessionEditorProvider?.createOrShowNewSession();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openchamber.openCurrentOrNewSessionInEditor', () => {
+      if (activeSessionId) {
+        sessionEditorProvider?.createOrShow(activeSessionId, activeSessionTitle ?? undefined);
+      } else {
+        sessionEditorProvider?.createOrShowNewSession();
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('openchamber.restartApi', async () => {
       try {
         await openCodeManager?.restart();

@@ -32,12 +32,16 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
-const SETTINGS_SECTIONS = (() => {
-  const filtered = SIDEBAR_SECTIONS.filter(section => section.id !== 'sessions');
+const getSettingsSections = (isVSCode: boolean) => {
+  let filtered = SIDEBAR_SECTIONS.filter(section => section.id !== 'sessions');
+  // Hide Git Identities tab for VS Code
+  if (isVSCode) {
+    filtered = filtered.filter(section => section.id !== 'git-identities');
+  }
   const settingsSection = filtered.find(s => s.id === 'settings');
   const otherSections = filtered.filter(s => s.id !== 'settings');
   return settingsSection ? [settingsSection, ...otherSections] : filtered;
-})();
+};
 
 // Same constraints as main sidebar
 const SETTINGS_SIDEBAR_MIN_WIDTH = 200;
@@ -88,6 +92,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   }, []);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+
+  const settingsSections = React.useMemo(() => getSettingsSections(isVSCode), [isVSCode]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -143,7 +149,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return formatProjectLabel(rawLabel);
   }, [activeProject, formatProjectLabel]);
 
-  const showProjectSwitcher = sortedProjects.length > 0;
+  const showProjectSwitcher = sortedProjects.length > 0 && !isVSCode;
 
   const showTabLabels = containerWidth === 0 || containerWidth >= TAB_LABELS_MIN_WIDTH;
 
@@ -352,7 +358,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         <div className={cn('flex items-center', isMobile ? 'gap-1' : 'h-full')}>
           {/* Leading divider before first tab - only on Mac desktop */}
           {!isMobile && showLeadingDivider && <div className="h-full w-px bg-border" aria-hidden="true" />}
-          {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => {
+          {settingsSections.map(({ id, label, icon: Icon }) => {
             const isActive = activeTab === id;
             const PhosphorIcon = Icon as React.ComponentType<{ className?: string; weight?: string }>;
 
