@@ -44,6 +44,7 @@ pub fn spawn_assistant_notifications(
 
         let mut shutdown_rx = runtime.subscribe_shutdown();
         let notified_messages = Mutex::new(HashSet::<String>::new());
+        let notified_questions = Mutex::new(HashSet::<String>::new());
 
         loop {
             tokio::select! {
@@ -52,7 +53,7 @@ pub fn spawn_assistant_notifications(
                     break;
                 }
                 _ = async {
-                    if let Err(err) = run_once(&app, &runtime, &client, &notified_messages).await {
+                    if let Err(err) = run_once(&app, &runtime, &client, &notified_messages, &notified_questions).await {
                         warn!("[desktop:notify] SSE loop error: {err:?}");
                     }
                     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -67,6 +68,7 @@ async fn run_once(
     runtime: &DesktopRuntime,
     client: &Client,
     notified_messages: &Mutex<HashSet<String>>,
+    notified_questions: &Mutex<HashSet<String>>,
 ) -> Result<()> {
     let opencode = runtime.opencode_manager();
 
@@ -119,7 +121,7 @@ async fn run_once(
             data_lines.clear();
 
             match parse_event_envelope(&raw) {
-                Ok(event) => handle_event(app, event, notified_messages).await,
+                Ok(event) => handle_event(app, event, notified_messages, notified_questions).await,
                 Err(err) => {
                     warn!("[desktop:notify] Failed to parse SSE data: {err}; raw={raw}");
                 }
@@ -244,12 +246,67 @@ async fn handle_event(
     app: &AppHandle,
     event: EventEnvelope,
     notified_messages: &Mutex<HashSet<String>>,
+    notified_questions: &Mutex<HashSet<String>>,
 ) {
-    if event.event_type.as_str() != "message.updated" {
-        return;
+    match event.event_type.as_str() {
+        "message.updated" => {
+            handle_message_updated(app, &event.properties, notified_messages).await;
+        }
+        "question.asked" => {
+            handle_question_asked(app, &event.properties, notified_questions).await;
+        }
+        _ => {}
+    }
+}
+
+async fn handle_question_asked(
+    app: &AppHandle,
+    properties: &Value,
+    notified_questions: &Mutex<HashSet<String>>,
+) {
+    let session_id = properties.get("sessionID").and_then(Value::as_str);
+    let question_id = properties.get("id").and_then(Value::as_str);
+
+    let (session_id, question_id) = match (session_id, question_id) {
+        (Some(s), Some(q)) => (s, q),
+        _ => return,
+    };
+
+    let key = format!("{}:{}", session_id, question_id);
+    {
+        let mut notified = notified_questions.lock().await;
+        if notified.contains(&key) {
+            return;
+        }
+        notified.insert(key);
     }
 
-    let Some(info) = event.properties.get("info") else {
+    let should_notify = app
+        .get_webview_window("main")
+        .map(|window| {
+            let focused = window.is_focused().unwrap_or(false);
+            let minimized = window.is_minimized().unwrap_or(false);
+            !focused || minimized
+        })
+        .unwrap_or(true);
+
+    if should_notify {
+        let _ = app
+            .notification()
+            .builder()
+            .title("Input needed")
+            .body("Agent is waiting for your response")
+            .sound("Glass")
+            .show();
+    }
+}
+
+async fn handle_message_updated(
+    app: &AppHandle,
+    properties: &Value,
+    notified_messages: &Mutex<HashSet<String>>,
+) {
+    let Some(info) = properties.get("info") else {
         return;
     };
 

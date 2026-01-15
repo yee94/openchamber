@@ -342,6 +342,7 @@ export const useEventStream = () => {
   const permissionToastShownRef = React.useRef<Set<string>>(new Set());
   const questionToastShownRef = React.useRef<Set<string>>(new Set());
   const notifiedMessagesRef = React.useRef<Set<string>>(new Set());
+  const notifiedQuestionsRef = React.useRef<Set<string>>(new Set());
 
   const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
     if (typeof document === 'undefined') return 'visible';
@@ -1230,6 +1231,30 @@ export const useEventStream = () => {
         addQuestion(request);
 
         const toastKey = `${request.sessionID}:${request.id}`;
+
+        // Native notification for web runtime (same conditions as completion notifications)
+        if (isWebRuntime() && nativeNotificationsEnabled) {
+          const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
+
+          if (shouldNotify) {
+            const notifiedQuestions = notifiedQuestionsRef.current;
+
+            if (!notifiedQuestions.has(toastKey)) {
+              notifiedQuestions.add(toastKey);
+
+              const runtimeAPIs = getRegisteredRuntimeAPIs();
+
+              if (runtimeAPIs?.notifications) {
+                void runtimeAPIs.notifications.notifyAgentCompletion({
+                  title: 'Input needed',
+                  body: 'Agent is waiting for your response',
+                  tag: toastKey,
+                });
+              }
+            }
+          }
+        }
+
         if (!questionToastShownRef.current.has(toastKey)) {
           setTimeout(() => {
             const current = currentSessionIdRef.current;
@@ -1721,6 +1746,7 @@ export const useEventStream = () => {
       messageCache.clear();
       // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value at cleanup time
       notifiedMessagesRef.current.clear();
+      notifiedQuestionsRef.current.clear();
 
       pendingResumeRef.current = false;
       visibilityStateRef.current = resolveVisibilityState();
