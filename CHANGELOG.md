@@ -4,11 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-01-16
+
 - UI: added a new Files tab to browse workspace files directly from the interface.
 - Diff: enhanced the diff viewer with mobile support and the ability to ask the agent for comments on changes.
 - Git Identities: added "default identity" setting with one-click set/unset and automatic local identity detection.
 - VSCode: improved server management to ensure it initializes within the workspace directory with context-aware readiness checks.
 - VSCode: added responsive layout with sessions sidebar + chat side-by-side when wide, compact header, and streamlined settings.
+- Web/VSCode: fixed orphaned OpenCode processes not being cleaned up on restart or exit.
 - Web: the server now automatically resolves and uses an available port if the default is occupied.
 - Stability: fixed heartbeat race condition causing session stalls during long tasks (thanks to @tybradle).
 - Desktop: fixed commands for worktree setup access to PATH.

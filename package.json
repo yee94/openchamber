@@ -1,6 +1,6 @@
 {
   "name": "openchamber-monorepo",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "OpenChamber monorepo workspace for web, ui, and desktop runtimes",
   "private": true,
   "type": "module",
