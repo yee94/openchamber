@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - VSCode: improved server management to ensure it initializes within the workspace directory with context-aware readiness checks.
 - VSCode: added responsive layout with sessions sidebar + chat side-by-side when wide, compact header, and streamlined settings.
 - Web: the server now automatically resolves and uses an available port if the default is occupied.
+- Stability: fixed heartbeat race condition causing session stalls during long tasks (thanks to @tybradle).
+- Desktop: fixed commands for worktree setup access to PATH.
 
 
 ## [1.4.9] - 2026-01-14

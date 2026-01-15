@@ -2,9 +2,10 @@ use crate::path_utils::expand_tilde_path;
 use crate::{DesktopRuntime, SettingsStore};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     process::Command,
+    sync::OnceLock,
     time::UNIX_EPOCH,
 };
 use tokio::fs;
@@ -848,6 +849,126 @@ pub async fn write_file(
     })
 }
 
+static CACHED_LOGIN_SHELL_PATH: OnceLock<Option<String>> = OnceLock::new();
+
+#[cfg(target_os = "macos")]
+fn get_user_shell() -> Option<String> {
+    let username =
+        dirs::home_dir().and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))?;
+
+    let output = Command::new("dscl")
+        .args([".", "-read", &format!("/Users/{}", username), "UserShell"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout.split(':').nth(1).map(|s| s.trim().to_string())
+    } else {
+        None
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn get_user_shell() -> Option<String> {
+    std::env::var("SHELL").ok()
+}
+
+#[cfg(not(unix))]
+fn get_user_shell() -> Option<String> {
+    None
+}
+
+fn build_shell_path_command(shell: &str) -> Vec<String> {
+    let shell_name = std::path::Path::new(shell)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("sh");
+
+    match shell_name {
+        "nu" | "nushell" => vec![
+            "-l".to_string(),
+            "-i".to_string(),
+            "-c".to_string(),
+            "echo $\"__PATH__=($env.PATH | str join (char esep))\"".to_string(),
+        ],
+        "bash" => vec![
+            "-lic".to_string(),
+            "source ~/.bashrc 2>/dev/null; echo \"__PATH__=$PATH\"".to_string(),
+        ],
+        "fish" => vec![
+            "-lic".to_string(),
+            "echo \"__PATH__=$PATH\"".to_string(),
+        ],
+        _ => vec![
+            "-lic".to_string(),
+            "echo \"__PATH__=$PATH\"".to_string(),
+        ],
+    }
+}
+
+fn detect_login_shell_path() -> Option<String> {
+    #[cfg(not(unix))]
+    {
+        None
+    }
+    #[cfg(unix)]
+    {
+        let shell = get_user_shell().unwrap_or_else(|| "/bin/zsh".into());
+        let args = build_shell_path_command(&shell);
+
+        let output = match Command::new(&shell).args(&args).output() {
+            Ok(o) => o,
+            Err(_) => return None,
+        };
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if let Some(path) = line.strip_prefix("__PATH__=") {
+                if !path.is_empty() {
+                    return Some(path.to_string());
+                }
+            }
+        }
+        None
+    }
+}
+
+fn get_cached_login_shell_path() -> Option<&'static String> {
+    CACHED_LOGIN_SHELL_PATH
+        .get_or_init(detect_login_shell_path)
+        .as_ref()
+}
+
+fn merge_paths(login_path: &str, current: &str) -> String {
+    let mut segments = Vec::new();
+    let mut seen = HashSet::new();
+
+    for part in login_path.split(':').chain(current.split(':')) {
+        if !part.is_empty() && !seen.contains(part) {
+            seen.insert(part.to_string());
+            segments.push(part);
+        }
+    }
+
+    segments.join(":")
+}
+
+fn build_augmented_env() -> HashMap<String, String> {
+    let mut env: HashMap<String, String> = std::env::vars().collect();
+
+    if let Some(login_path) = get_cached_login_shell_path() {
+        let current = env.get("PATH").cloned().unwrap_or_default();
+        env.insert("PATH".to_string(), merge_paths(login_path, &current));
+    }
+
+    env
+}
+
 #[tauri::command]
 pub async fn exec_commands(
     commands: Vec<String>,
@@ -886,6 +1007,8 @@ pub async fn exec_commands(
 
     let shell_flag = if cfg!(windows) { "/c" } else { "-c" };
 
+    let augmented_env = build_augmented_env();
+
     let mut results = Vec::new();
 
     for cmd in commands {
@@ -905,6 +1028,7 @@ pub async fn exec_commands(
         let cwd_clone = resolved_cwd.clone();
         let shell_clone = shell.clone();
         let cmd_clone = cmd_trimmed.to_string();
+        let env_clone = augmented_env.clone();
 
         // Run command synchronously in blocking task
         let result = tokio::task::spawn_blocking(move || {
@@ -912,6 +1036,7 @@ pub async fn exec_commands(
                 .arg(shell_flag)
                 .arg(&cmd_clone)
                 .current_dir(&cwd_clone)
+                .envs(&env_clone)
                 .output()
             {
                 Ok(output) => CommandResult {
