@@ -1746,6 +1746,7 @@ export const useEventStream = () => {
       messageCache.clear();
       // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value at cleanup time
       notifiedMessagesRef.current.clear();
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value at cleanup time
       notifiedQuestionsRef.current.clear();
 
       pendingResumeRef.current = false;

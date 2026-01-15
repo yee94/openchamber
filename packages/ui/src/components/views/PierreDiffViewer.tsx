@@ -131,7 +131,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   wrapLines = false,
   layout = 'fill',
 }) => {
-  const isInlineLayout = layout === 'inline';
   const { isMobile } = useDeviceInfo();
   const { inputBarOffset, isKeyboardOpen } = useUIStore();
   

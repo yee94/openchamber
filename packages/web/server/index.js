@@ -1429,6 +1429,20 @@ function parseArgs(argv = process.argv.slice(2)) {
   return options;
 }
 
+function killProcessOnPort(port) {
+  if (!port) return;
+  try {
+    // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
+    // Kill any process listening on our port to clean up orphaned children.
+    spawnSync('sh', ['-c', `lsof -ti:${port} | xargs kill -9 2>/dev/null || true`], {
+      stdio: 'ignore',
+      timeout: 5000
+    });
+  } catch {
+    // Ignore - process may already be dead
+  }
+}
+
 async function startOpenCode() {
   const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? 0;
   console.log(
@@ -1496,6 +1510,8 @@ async function restartOpenCode() {
     openCodeNotReadySince = Date.now();
     console.log('Restarting OpenCode process...');
 
+    const portToKill = openCodePort;
+
     if (openCodeProcess) {
       console.log('Stopping existing OpenCode process...');
       try {
@@ -1505,10 +1521,12 @@ async function restartOpenCode() {
       }
       openCodeProcess = null;
       syncToHmrState();
-      
-      // Brief delay to allow port release
-      await new Promise((resolve) => setTimeout(resolve, 250));
     }
+
+    killProcessOnPort(portToKill);
+      
+    // Brief delay to allow port release
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
     if (ENV_CONFIGURED_OPENCODE_PORT) {
       console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
@@ -1917,6 +1935,8 @@ async function gracefulShutdown(options = {}) {
     clearInterval(healthCheckInterval);
   }
 
+  const portToKill = openCodePort;
+
   if (openCodeProcess) {
     console.log('Stopping OpenCode process...');
     try {
@@ -1926,6 +1946,8 @@ async function gracefulShutdown(options = {}) {
     }
     openCodeProcess = null;
   }
+
+  killProcessOnPort(portToKill);
 
   if (server) {
     await Promise.race([

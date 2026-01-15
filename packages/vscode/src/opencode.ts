@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
+import { execSync } from 'child_process';
 import { createOpencodeServer } from '@opencode-ai/sdk/server';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
@@ -146,6 +147,8 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   let apiPrefixDetected = false;
   let cliMissing = false;
 
+  let pendingOperation: Promise<void> | null = null;
+
   const config = vscode.workspace.getConfiguration('openchamber');
   const configuredApiUrl = config.get<string>('apiUrl') || '';
   const useConfiguredUrl = configuredApiUrl && configuredApiUrl.trim().length > 0;
@@ -189,7 +192,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     return null;
   };
 
-  async function start(workdir?: string): Promise<void> {
+  async function startInternal(workdir?: string): Promise<void> {
     startCount += 1;
     lastStartAt = Date.now();
 
@@ -203,8 +206,16 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       return;
     }
 
+    // If server already running, don't spawn another
+    if (server) {
+      if (status !== 'connected') {
+        setStatus('connected');
+      }
+      return;
+    }
+
     setStatus('connecting');
-    cliMissing = false; // Reset assumption on retry
+    cliMissing = false;
 
     detectedPort = null;
     apiPrefix = '';
@@ -219,7 +230,6 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       const originalCwd = process.cwd();
       try {
         process.chdir(workingDirectory);
-        // Let the SDK/OS choose a random available port (port: 0)
         server = await createOpencodeServer({
           hostname: '127.0.0.1',
           port: 0,
@@ -276,7 +286,9 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     }
   }
 
-  async function stop(): Promise<void> {
+  async function stopInternal(): Promise<void> {
+    const portToKill = detectedPort;
+    
     if (server) {
       try {
         server.close();
@@ -286,17 +298,72 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       server = null;
     }
 
+    // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
+    // Kill any process listening on our port to clean up orphaned children.
+    if (portToKill) {
+      try {
+        execSync(`lsof -ti:${portToKill} | xargs kill -9 2>/dev/null || true`, { 
+          stdio: 'ignore',
+          timeout: 5000 
+        });
+      } catch {
+        // Ignore - process may already be dead
+      }
+    }
 
     managedApiUrlOverride = null;
     detectedPort = null;
     setStatus('disconnected');
   }
 
-  async function restart(): Promise<void> {
+  async function restartInternal(): Promise<void> {
     restartCount += 1;
-    await stop();
+    await stopInternal();
     await new Promise(r => setTimeout(r, 250));
-    await start();
+    await startInternal();
+  }
+
+  async function start(workdir?: string): Promise<void> {
+    if (pendingOperation) {
+      await pendingOperation;
+      if (server) {
+        return;
+      }
+    }
+    pendingOperation = startInternal(workdir);
+    try {
+      await pendingOperation;
+    } finally {
+      pendingOperation = null;
+    }
+  }
+
+  async function stop(): Promise<void> {
+    if (pendingOperation) {
+      await pendingOperation;
+    }
+    // Check if already stopped
+    if (!server) {
+      return;
+    }
+    pendingOperation = stopInternal();
+    try {
+      await pendingOperation;
+    } finally {
+      pendingOperation = null;
+    }
+  }
+
+  async function restart(): Promise<void> {
+    if (pendingOperation) {
+      await pendingOperation;
+    }
+    pendingOperation = restartInternal();
+    try {
+      await pendingOperation;
+    } finally {
+      pendingOperation = null;
+    }
   }
 
   async function setWorkingDirectory(newPath: string): Promise<{ success: boolean; restarted: boolean; path: string }> {
