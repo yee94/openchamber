@@ -1214,7 +1214,8 @@ function parseArgs(argv = process.argv.slice(2)) {
     process.env.OPENCODE_UI_PASSWORD ||
     null;
   const envCfTunnel = process.env.OPENCHAMBER_TRY_CF_TUNNEL === 'true';
-  const options = { port: DEFAULT_PORT, uiPassword: envPassword, tryCfTunnel: envCfTunnel };
+  const envRemoteUrl = process.env.OPENCODE_REMOTE_URL || null;
+  const options = { port: DEFAULT_PORT, uiPassword: envPassword, tryCfTunnel: envCfTunnel, remoteUrl: envRemoteUrl };
 
   const consumeValue = (currentIndex, inlineValue) => {
     if (typeof inlineValue === 'string') {
@@ -1254,6 +1255,13 @@ function parseArgs(argv = process.argv.slice(2)) {
 
     if (optionName === 'try-cf-tunnel') {
       options.tryCfTunnel = true;
+      continue;
+    }
+
+    if (optionName === 'remote-url') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.remoteUrl = typeof value === 'string' && value.length > 0 ? value : null;
       continue;
     }
   }
@@ -1656,14 +1664,20 @@ function setupProxy(app) {
     next();
   });
 
+  const remoteOrigin = process.env.__OPENCODE_REMOTE_ORIGIN || null;
+  const getProxyTarget = () => {
+    if (remoteOrigin) {
+      return remoteOrigin;
+    }
+    if (!openCodePort) {
+      return 'http://127.0.0.1:0';
+    }
+    return `http://localhost:${openCodePort}`;
+  };
+
   const proxyMiddleware = createProxyMiddleware({
-    target: openCodePort ? `http://localhost:${openCodePort}` : 'http://127.0.0.1:0',
-    router: () => {
-      if (!openCodePort) {
-        return 'http://127.0.0.1:0';
-      }
-      return `http://localhost:${openCodePort}`;
-    },
+    target: getProxyTarget(),
+    router: getProxyTarget,
     changeOrigin: true,
     pathRewrite: (path) => {
       if (!path.startsWith('/api')) {
@@ -1796,6 +1810,7 @@ async function main(options = {}) {
   const tryCfTunnel = options.tryCfTunnel === true;
   const attachSignals = options.attachSignals !== false;
   const onTunnelReady = typeof options.onTunnelReady === 'function' ? options.onTunnelReady : null;
+  const remoteUrl = typeof options.remoteUrl === 'string' && options.remoteUrl.length > 0 ? options.remoteUrl : null;
   if (typeof options.exitOnShutdown === 'boolean') {
     exitOnShutdown = options.exitOnShutdown;
   }
@@ -4697,34 +4712,58 @@ async function main(options = {}) {
 
 
   try {
-    // Check if we can reuse an existing OpenCode process from a previous HMR cycle
-    syncFromHmrState();
-    if (await isOpenCodeProcessHealthy()) {
-      console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
+    if (remoteUrl) {
+      console.log(`Using remote OpenCode instance at: ${remoteUrl}`);
+      try {
+        const parsedUrl = new URL(remoteUrl);
+        const remotePort = parseInt(parsedUrl.port, 10) || (parsedUrl.protocol === 'https:' ? 443 : 80);
+        const remotePrefix = normalizeApiPrefix(parsedUrl.pathname);
+        
+        openCodePort = remotePort;
+        syncToHmrState();
+        
+        // Remote origin is used by setupProxy to route requests to remote OpenCode
+        process.env.__OPENCODE_REMOTE_ORIGIN = `${parsedUrl.protocol}//${parsedUrl.host}`;
+        
+        setDetectedOpenCodeApiPrefix(remotePrefix);
+        isOpenCodeReady = true;
+        lastOpenCodeError = null;
+        openCodeNotReadySince = 0;
+        
+        console.log(`Remote OpenCode configured - port: ${remotePort}, prefix: ${remotePrefix || '(root)'}`);
+      } catch (urlError) {
+        throw new Error(`Invalid remote URL "${remoteUrl}": ${urlError.message}`);
+      }
     } else {
-      // No healthy process, start fresh
-      if (ENV_CONFIGURED_OPENCODE_PORT) {
-        console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
-        setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+      syncFromHmrState();
+      if (await isOpenCodeProcessHealthy()) {
+        console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
       } else {
-        openCodePort = null;
+        if (ENV_CONFIGURED_OPENCODE_PORT) {
+          console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
+          setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+        } else {
+          openCodePort = null;
+          syncToHmrState();
+        }
+
+        lastOpenCodeError = null;
+        openCodeProcess = await startOpenCode();
         syncToHmrState();
       }
-
-      lastOpenCodeError = null;
-      openCodeProcess = await startOpenCode();
-      syncToHmrState();
-    }
-    await waitForOpenCodePort();
-    try {
-      await waitForOpenCodeReady();
-    } catch (error) {
-      console.error(`OpenCode readiness check failed: ${error.message}`);
-      scheduleOpenCodeApiDetection();
+      await waitForOpenCodePort();
+      try {
+        await waitForOpenCodeReady();
+      } catch (error) {
+        console.error(`OpenCode readiness check failed: ${error.message}`);
+        scheduleOpenCodeApiDetection();
+      }
     }
     setupProxy(app);
-    scheduleOpenCodeApiDetection();
-    startHealthMonitoring();
+    if (!remoteUrl) {
+      scheduleOpenCodeApiDetection();
+      startHealthMonitoring();
+    }
   } catch (error) {
     console.error(`Failed to start OpenCode: ${error.message}`);
     console.log('Continuing without OpenCode integration...');
@@ -4832,7 +4871,8 @@ if (isCliExecution) {
     tryCfTunnel: cliOptions.tryCfTunnel,
     attachSignals: true,
     exitOnShutdown: true,
-    uiPassword: cliOptions.uiPassword
+    uiPassword: cliOptions.uiPassword,
+    remoteUrl: cliOptions.remoteUrl
   }).catch(error => {
     console.error('Failed to start server:', error);
     process.exit(1);
