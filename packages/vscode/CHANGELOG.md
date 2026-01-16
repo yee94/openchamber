@@ -1,3 +1,8 @@
+## [1.5.1] - 2026-01-16
+
+- No notable changes
+
+
 ## [1.5.0] - 2026-01-16
 
 - Improved OpenCode server management to ensure it initializes within the workspace directory.
