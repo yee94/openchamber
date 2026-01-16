@@ -72,12 +72,12 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
       if (!candidates.includes(v)) candidates.push(v);
     };
 
-    // Prefer SDK-provided url first.
-    add(normalized);
-    // Newer OpenCode servers may mount HTTP API under /api.
-    add(`${origin}/api`);
-    // Fallback to plain origin (in case SDK url includes path not accepted).
+    const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+    // Prefer plain origin. Only keep SDK url when already root.
     add(origin);
+    if (normalizedPath === '' || normalizedPath === '/') {
+      add(normalized);
+    }
 
     return candidates;
   } catch {
@@ -85,7 +85,7 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
   }
 }
 
-async function waitForReady(serverUrl: string, timeoutMs = 5000, workingDirectory = ''): Promise<ReadyResult> {
+async function waitForReady(serverUrl: string, timeoutMs = 15000, workingDirectory = ''): Promise<ReadyResult> {
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
   let attempts = 0;
@@ -95,13 +95,10 @@ async function waitForReady(serverUrl: string, timeoutMs = 5000, workingDirector
       attempts += 1;
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1500);
+        const timeout = setTimeout(() => controller.abort(), 3000);
 
         // Keep using /config since the UI proxies to it (via /api -> strip prefix).
         const url = new URL(`${baseUrl}/config`);
-        if (workingDirectory) {
-          url.searchParams.set('directory', workingDirectory);
-        }
         const res = await fetch(url.toString(), {
           method: 'GET',
           headers: { Accept: 'application/json' },
