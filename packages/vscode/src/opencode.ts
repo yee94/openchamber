@@ -302,10 +302,21 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     // Kill any process listening on our port to clean up orphaned children.
     if (portToKill) {
       try {
-        execSync(`lsof -ti:${portToKill} | xargs kill -9 2>/dev/null || true`, { 
-          stdio: 'ignore',
+        const lsofOutput = execSync(`lsof -ti:${portToKill} 2>/dev/null || true`, { 
+          encoding: 'utf8',
           timeout: 5000 
         });
+        const myPid = process.pid;
+        for (const pidStr of lsofOutput.split(/\s+/)) {
+          const pid = parseInt(pidStr.trim(), 10);
+          if (pid && pid !== myPid) {
+            try {
+              execSync(`kill -9 ${pid} 2>/dev/null || true`, { stdio: 'ignore', timeout: 2000 });
+            } catch {
+              // Ignore
+            }
+          }
+        }
       } catch {
         // Ignore - process may already be dead
       }

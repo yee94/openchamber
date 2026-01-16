@@ -526,9 +526,23 @@ fn kill_process_on_port(port: Option<u16>) {
     #[cfg(unix)]
     {
         use std::process::Command;
-        let _ = Command::new("sh")
-            .args(["-c", &format!("lsof -ti:{} | xargs kill -9 2>/dev/null || true", port)])
-            .output();
+        // First get PIDs, then kill them separately to avoid xargs issues
+        if let Ok(output) = Command::new("lsof")
+            .args(["-ti", &format!(":{}", port)])
+            .output()
+        {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.split_whitespace() {
+                if let Ok(pid_num) = pid.trim().parse::<i32>() {
+                    // Don't kill our own process
+                    if pid_num != std::process::id() as i32 {
+                        let _ = Command::new("kill")
+                            .args(["-9", &pid_num.to_string()])
+                            .output();
+                    }
+                }
+            }
+        }
     }
 }
 

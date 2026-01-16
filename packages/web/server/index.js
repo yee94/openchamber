@@ -1434,10 +1434,19 @@ function killProcessOnPort(port) {
   try {
     // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
     // Kill any process listening on our port to clean up orphaned children.
-    spawnSync('sh', ['-c', `lsof -ti:${port} | xargs kill -9 2>/dev/null || true`], {
-      stdio: 'ignore',
-      timeout: 5000
-    });
+    const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', timeout: 5000 });
+    const output = result.stdout || '';
+    const myPid = process.pid;
+    for (const pidStr of output.split(/\s+/)) {
+      const pid = parseInt(pidStr.trim(), 10);
+      if (pid && pid !== myPid) {
+        try {
+          spawnSync('kill', ['-9', String(pid)], { stdio: 'ignore', timeout: 2000 });
+        } catch {
+          // Ignore
+        }
+      }
+    }
   } catch {
     // Ignore - process may already be dead
   }
