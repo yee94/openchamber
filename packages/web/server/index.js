@@ -875,10 +875,8 @@ let expressApp = null;
 let currentRestartPromise = null;
 let isRestartingOpenCode = false;
 let openCodeApiPrefix = '';
-let openCodeApiPrefixDetected = false;
+let openCodeApiPrefixDetected = true;
 let openCodeApiDetectionTimer = null;
-let isDetectingApiPrefix = false;
-let openCodeApiDetectionPromise = null;
 let lastOpenCodeError = null;
 let isOpenCodeReady = false;
 let openCodeNotReadySince = 0;
@@ -949,10 +947,8 @@ const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
 
-if (ENV_CONFIGURED_API_PREFIX) {
-  openCodeApiPrefix = ENV_CONFIGURED_API_PREFIX;
-  openCodeApiPrefixDetected = true;
-  console.log(`Using OpenCode API prefix from environment: ${openCodeApiPrefix}`);
+if (ENV_CONFIGURED_API_PREFIX && ENV_CONFIGURED_API_PREFIX !== '') {
+  console.warn('Ignoring configured OpenCode API prefix; API runs at root.');
 }
 
 function setOpenCodePort(port) {
@@ -1041,7 +1037,7 @@ function buildAugmentedPath() {
   return Array.from(augmented).join(path.delimiter);
 }
 
-const API_PREFIX_CANDIDATES = ['', '/api']; // Simplified - only check root and /api
+const API_PREFIX_CANDIDATES = [''];
 
 async function waitForReady(url, timeoutMs = 10000) {
   const start = Date.now();
@@ -1086,36 +1082,17 @@ function normalizeApiPrefix(prefix) {
   return withLeading.endsWith('/') ? withLeading.slice(0, -1) : withLeading;
 }
 
-function setDetectedOpenCodeApiPrefix(prefix) {
-  const normalized = normalizeApiPrefix(prefix);
-  if (!openCodeApiPrefixDetected || openCodeApiPrefix !== normalized) {
-    openCodeApiPrefix = normalized;
-    openCodeApiPrefixDetected = true;
-    if (openCodeApiDetectionTimer) {
-      clearTimeout(openCodeApiDetectionTimer);
-      openCodeApiDetectionTimer = null;
-    }
-    console.log(`Detected OpenCode API prefix: ${normalized || '(root)'}`);
+function setDetectedOpenCodeApiPrefix() {
+  openCodeApiPrefix = '';
+  openCodeApiPrefixDetected = true;
+  if (openCodeApiDetectionTimer) {
+    clearTimeout(openCodeApiDetectionTimer);
+    openCodeApiDetectionTimer = null;
   }
 }
 
 function getCandidateApiPrefixes() {
-  if (openCodeApiPrefixDetected) {
-    return [openCodeApiPrefix];
-  }
-
-  const candidates = [];
-  if (openCodeApiPrefix && !candidates.includes(openCodeApiPrefix)) {
-    candidates.push(openCodeApiPrefix);
-  }
-
-  for (const candidate of API_PREFIX_CANDIDATES) {
-    if (!candidates.includes(candidate)) {
-      candidates.push(candidate);
-    }
-  }
-
-  return candidates;
+  return API_PREFIX_CANDIDATES;
 }
 
 function buildOpenCodeUrl(path, prefixOverride) {
@@ -1123,9 +1100,7 @@ function buildOpenCodeUrl(path, prefixOverride) {
     throw new Error('OpenCode port is not available');
   }
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const prefix = normalizeApiPrefix(
-    prefixOverride !== undefined ? prefixOverride : openCodeApiPrefixDetected ? openCodeApiPrefix : ''
-  );
+  const prefix = normalizeApiPrefix(prefixOverride !== undefined ? prefixOverride : '');
   const fullPath = `${prefix}${normalizedPath}`;
   return `http://localhost:${openCodePort}${fullPath}`;
 }
@@ -1214,165 +1189,22 @@ function writeSseEvent(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function extractApiPrefixFromUrl(urlString, expectedSuffix) {
-  if (!urlString) {
-    return null;
-  }
-  try {
-    const parsed = new URL(urlString);
-    const pathname = parsed.pathname || '';
-    if (expectedSuffix && pathname.endsWith(expectedSuffix)) {
-      const prefix = pathname.slice(0, pathname.length - expectedSuffix.length);
-      return normalizeApiPrefix(prefix);
-    }
-  } catch (error) {
-    console.warn(`Failed to parse OpenCode URL "${urlString}": ${error.message}`);
-  }
-  return null;
+function extractApiPrefixFromUrl() {
+  return '';
 }
 
-async function tryDetectOpenCodeApiPrefix() {
-  if (!openCodePort) {
-    return false;
-  }
-
-  const docPrefix = await detectPrefixFromDocumentation();
-  if (docPrefix !== null) {
-    setDetectedOpenCodeApiPrefix(docPrefix);
-    return true;
-  }
-
-  const candidates = getCandidateApiPrefixes();
-
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(buildOpenCodeUrl('/config', candidate), {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      });
-
-      if (response.ok) {
-        await response.json().catch(() => null);
-        setDetectedOpenCodeApiPrefix(candidate);
-        return true;
-      }
-    } catch (error) {
-
-    }
-  }
-
-  return false;
+function detectOpenCodeApiPrefix() {
+  openCodeApiPrefixDetected = true;
+  openCodeApiPrefix = '';
+  return true;
 }
 
-async function detectOpenCodeApiPrefix() {
-  if (openCodeApiPrefixDetected) {
-    return true;
-  }
-
-  if (!openCodePort) {
-    return false;
-  }
-
-  if (isDetectingApiPrefix) {
-    try {
-      await openCodeApiDetectionPromise;
-    } catch (error) {
-
-    }
-    return openCodeApiPrefixDetected;
-  }
-
-  isDetectingApiPrefix = true;
-  openCodeApiDetectionPromise = (async () => {
-    const success = await tryDetectOpenCodeApiPrefix();
-    if (!success) {
-      console.warn('Failed to detect OpenCode API prefix via documentation or known candidates');
-    }
-    return success;
-  })();
-
-  try {
-    const result = await openCodeApiDetectionPromise;
-    return result;
-  } finally {
-    isDetectingApiPrefix = false;
-    openCodeApiDetectionPromise = null;
-  }
+function ensureOpenCodeApiPrefix() {
+  return detectOpenCodeApiPrefix();
 }
 
-async function ensureOpenCodeApiPrefix() {
-  if (openCodeApiPrefixDetected) {
-    return true;
-  }
-
-  const result = await detectOpenCodeApiPrefix();
-  if (!result) {
-    scheduleOpenCodeApiDetection();
-  }
-  return result;
-}
-
-function scheduleOpenCodeApiDetection(delayMs = 500) {
-  if (openCodeApiPrefixDetected) {
-    return;
-  }
-
-  if (openCodeApiDetectionTimer) {
-    clearTimeout(openCodeApiDetectionTimer);
-  }
-
-  openCodeApiDetectionTimer = setTimeout(async () => {
-    openCodeApiDetectionTimer = null;
-    const success = await detectOpenCodeApiPrefix();
-    if (!success) {
-      const nextDelay = Math.min(delayMs * 2, 8000);
-      scheduleOpenCodeApiDetection(nextDelay);
-    }
-  }, delayMs);
-}
-
-const OPENAPI_DOC_PATHS = ['/doc'];
-
-function extractPrefixFromOpenApiDocument(content) {
-
-  const globalMatch = content.match(/__OPENCODE_API_BASE__\s*=\s*['"]([^'"]+)['"]/);
-  if (globalMatch && globalMatch[1]) {
-    return normalizeApiPrefix(globalMatch[1]);
-  }
-  return null;
-}
-
-async function detectPrefixFromDocumentation() {
-  if (!openCodePort) {
-    return null;
-  }
-
-  const prefixesToTry = [...new Set(['', ...API_PREFIX_CANDIDATES])];
-
-  for (const prefix of prefixesToTry) {
-    for (const docPath of OPENAPI_DOC_PATHS) {
-      try {
-        const response = await fetch(buildOpenCodeUrl(docPath, prefix), {
-          method: 'GET',
-          headers: { Accept: '*/*' }
-        });
-
-        if (!response.ok) {
-          continue;
-        }
-
-        const text = await response.text();
-        const extracted = extractPrefixFromOpenApiDocument(text);
-        if (extracted !== null) {
-          return extracted;
-        }
-      } catch (error) {
-
-      }
-    }
-  }
-
-  return null;
+function scheduleOpenCodeApiDetection() {
+  return;
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
@@ -1545,13 +1377,12 @@ async function restartOpenCode() {
       syncToHmrState();
     }
     
-    // Reset detection state
-    openCodeApiPrefixDetected = false;
+    openCodeApiPrefixDetected = true;
+    openCodeApiPrefix = '';
     if (openCodeApiDetectionTimer) {
       clearTimeout(openCodeApiDetectionTimer);
       openCodeApiDetectionTimer = null;
     }
-    openCodeApiDetectionPromise = null;
 
     lastOpenCodeError = null;
     openCodeProcess = await startOpenCode();
@@ -1573,7 +1404,8 @@ async function restartOpenCode() {
       openCodePort = null;
       syncToHmrState();
     }
-    openCodeApiPrefixDetected = false;
+    openCodeApiPrefixDetected = true;
+    openCodeApiPrefix = '';
     throw error;
   } finally {
     currentRestartPromise = null;
@@ -1590,74 +1422,51 @@ async function waitForOpenCodeReady(timeoutMs = 20000, intervalMs = 400) {
   let lastError = null;
 
   while (Date.now() < deadline) {
-    const prefixes = getCandidateApiPrefixes();
-
-    for (const prefix of prefixes) {
-      try {
-        const normalizedPrefix = normalizeApiPrefix(prefix);
-
-        const configPromise = fetch(buildOpenCodeUrl('/config', normalizedPrefix), {
+    try {
+      const [configResult, agentResult] = await Promise.all([
+        fetch(buildOpenCodeUrl('/config', ''), {
           method: 'GET',
           headers: { Accept: 'application/json' }
-        }).catch((error) => error);
-
-        const agentPromise = fetch(buildOpenCodeUrl('/agent', normalizedPrefix), {
+        }).catch((error) => error),
+        fetch(buildOpenCodeUrl('/agent', ''), {
           method: 'GET',
           headers: { Accept: 'application/json' }
-        }).catch((error) => error);
+        }).catch((error) => error)
+      ]);
 
-        const [configResult, agentResult] = await Promise.all([configPromise, agentPromise]);
-
-        if (configResult instanceof Error) {
-          lastError = configResult;
-          continue;
-        }
-
-        if (!configResult.ok) {
-          if (configResult.status === 404 && !openCodeApiPrefixDetected && normalizedPrefix === '') {
-            lastError = new Error('OpenCode config endpoint returned 404 on root prefix');
-          } else {
-            lastError = new Error(`OpenCode config endpoint responded with status ${configResult.status}`);
-          }
-          continue;
-        }
-
-        await configResult.json().catch(() => null);
-        const detectedPrefix = extractApiPrefixFromUrl(configResult.url, '/config');
-        if (detectedPrefix !== null) {
-          setDetectedOpenCodeApiPrefix(detectedPrefix);
-        } else if (normalizedPrefix) {
-          setDetectedOpenCodeApiPrefix(normalizedPrefix);
-        }
-
-        if (agentResult instanceof Error) {
-          lastError = agentResult;
-          continue;
-        }
-
-        if (!agentResult.ok) {
-          lastError = new Error(`Agent endpoint responded with status ${agentResult.status}`);
-          continue;
-        }
-
-        await agentResult.json().catch(() => []);
-
-        const effectivePrefix = detectedPrefix !== null ? detectedPrefix : normalizedPrefix;
-        if (detectedPrefix === null) {
-          const agentPrefix = extractApiPrefixFromUrl(agentResult.url, '/agent');
-          if (agentPrefix !== null) {
-            setDetectedOpenCodeApiPrefix(agentPrefix);
-          } else if (normalizedPrefix) {
-            setDetectedOpenCodeApiPrefix(normalizedPrefix);
-          }
-        }
-
-        isOpenCodeReady = true;
-        lastOpenCodeError = null;
-        return;
-      } catch (error) {
-        lastError = error;
+      if (configResult instanceof Error) {
+        lastError = configResult;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
       }
+
+      if (!configResult.ok) {
+        lastError = new Error(`OpenCode config endpoint responded with status ${configResult.status}`);
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      await configResult.json().catch(() => null);
+
+      if (agentResult instanceof Error) {
+        lastError = agentResult;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      if (!agentResult.ok) {
+        lastError = new Error(`Agent endpoint responded with status ${agentResult.status}`);
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      await agentResult.json().catch(() => []);
+
+      isOpenCodeReady = true;
+      lastOpenCodeError = null;
+      return;
+    } catch (error) {
+      lastError = error;
     }
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -1829,12 +1638,8 @@ function setupProxy(app) {
     next();
   });
 
-  app.use('/api', async (req, res, next) => {
-    try {
-      await ensureOpenCodeApiPrefix();
-    } catch (error) {
-      console.warn(`OpenCode API prefix detection failed for ${req.method} ${req.path}: ${error.message}`);
-    }
+  app.use('/api', (_req, _res, next) => {
+    ensureOpenCodeApiPrefix();
     next();
   });
 
@@ -1867,11 +1672,7 @@ function setupProxy(app) {
 
       const suffix = path.slice(4) || '/';
 
-      if (!openCodeApiPrefixDetected || openCodeApiPrefix === '') {
-        return suffix;
-      }
-
-      return `${openCodeApiPrefix}${suffix}`;
+      return suffix;
     },
     ws: true,
     onError: (err, req, res) => {
@@ -1903,9 +1704,7 @@ function setupProxy(app) {
         proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
       }
 
-      if (proxyRes.statusCode === 404 && !openCodeApiPrefixDetected) {
-        scheduleOpenCodeApiDetection();
-      }
+
     }
   });
 
@@ -2013,8 +1812,8 @@ async function main(options = {}) {
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
       openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
-      openCodeApiPrefix,
-      openCodeApiPrefixDetected,
+      openCodeApiPrefix: '',
+      openCodeApiPrefixDetected: true,
       isOpenCodeReady,
       lastOpenCodeError
     });
@@ -2213,18 +2012,9 @@ async function main(options = {}) {
   });
 
   app.get('/api/global/event', async (req, res) => {
-    if (!openCodeApiPrefixDetected) {
-      try {
-        await detectOpenCodeApiPrefix();
-      } catch {
-        // ignore detection failures
-      }
-    }
-
     let targetUrl;
     try {
-      const prefix = openCodeApiPrefixDetected ? openCodeApiPrefix : '';
-      targetUrl = new URL(buildOpenCodeUrl('/global/event', prefix));
+      targetUrl = new URL(buildOpenCodeUrl('/global/event', ''));
     } catch (error) {
       return res.status(503).json({ error: 'OpenCode service unavailable' });
     }
@@ -2330,18 +2120,9 @@ async function main(options = {}) {
   });
 
   app.get('/api/event', async (req, res) => {
-    if (!openCodeApiPrefixDetected) {
-      try {
-        await detectOpenCodeApiPrefix();
-      } catch {
-        // ignore detection failures
-      }
-    }
-
     let targetUrl;
     try {
-      const prefix = openCodeApiPrefixDetected ? openCodeApiPrefix : '';
-      targetUrl = new URL(buildOpenCodeUrl('/event', prefix));
+      targetUrl = new URL(buildOpenCodeUrl('/event', ''));
     } catch (error) {
       return res.status(503).json({ error: 'OpenCode service unavailable' });
     }
