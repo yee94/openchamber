@@ -335,6 +335,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
+  const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
 
@@ -1100,6 +1101,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               isMissingDirectory ? 'opacity-75' : '',
               depth > 0 && 'pl-[20px]',
             )}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setOpenMenuSessionId(session.id);
+            }}
           >
             <div className="flex min-w-0 flex-1 items-center">
               <button
@@ -1199,7 +1204,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
               <div className="flex items-center gap-1.5 self-stretch">
                 {streamingIndicator}
-                <DropdownMenu>
+                <DropdownMenu
+                  open={openMenuSessionId === session.id}
+                  onOpenChange={(open) => setOpenMenuSessionId(open ? session.id : null)}
+                >
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
@@ -1320,6 +1328,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       setActiveMainTab,
       setSessionSwitcherOpen,
       openNewSessionDraft,
+      openMenuSessionId,
     ],
   );
 
