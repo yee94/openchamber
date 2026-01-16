@@ -134,6 +134,7 @@ interface SortableProjectItemProps {
   onToggle: () => void;
   onHoverChange: (hovered: boolean) => void;
   onNewSession: () => void;
+  onNewWorktreeSession?: () => void;
   onOpenMultiRunLauncher: () => void;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
@@ -155,6 +156,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onToggle,
   onHoverChange,
   onNewSession,
+  onNewWorktreeSession,
   onOpenMultiRunLauncher,
   onClose,
   sentinelRef,
@@ -253,18 +255,47 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* New session button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNewSession();
-            }}
-            className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            aria-label="New session"
-          >
-            <RiAddLine className="h-4 w-4" />
-          </button>
+          {isRepo && onNewWorktreeSession && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNewWorktreeSession();
+                  }}
+                  className={cn(
+                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                    mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
+                  )}
+                  aria-label="New session in worktree"
+                >
+                  <RiGitBranchLine className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                <p>New session in worktree</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNewSession();
+                }}
+                className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                aria-label="New session"
+              >
+                <RiAddLine className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              <p>New session</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -1548,6 +1579,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       } else {
                         openNewSessionDraft({ directoryOverride: project.normalizedPath });
                       }
+                    }}
+                    onNewWorktreeSession={() => {
+                      if (projectKey !== activeProjectId) {
+                        setActiveProject(projectKey);
+                      }
+                      setActiveMainTab('chat');
+                      if (mobileVariant) {
+                        setSessionSwitcherOpen(false);
+                      }
+                      createWorktreeSession();
                     }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
