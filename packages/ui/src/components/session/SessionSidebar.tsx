@@ -27,6 +27,7 @@ import {
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { GridLoader } from '@/components/ui/grid-loader';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -1117,12 +1118,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               >
                 {}
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span
-                    className={cn(
-                      'truncate typography-ui-label font-normal text-foreground',
-                      isStreaming && 'animate-pulse [animation-duration:1.8s]'
-                    )}
-                  >
+                  {isStreaming ? (
+                    <GridLoader size="xs" className="text-primary flex-shrink-0" />
+                  ) : null}
+                  <span className="truncate typography-ui-label font-normal text-foreground">
                     {sessionTitle}
                   </span>
 

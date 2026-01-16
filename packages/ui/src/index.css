@@ -1546,3 +1546,18 @@ html:not(.dark) .chat-scroll {
 .fonts-loaded .terminal-viewport-container {
   font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
 }
+
+@keyframes grid-pulse {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-grid-pulse {
+  animation: grid-pulse 1.2s ease-in-out infinite;
+}
