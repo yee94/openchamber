@@ -451,13 +451,20 @@ impl OpenCodeManager {
     }
 
     async fn graceful_stop(&self) -> Result<()> {
+        let port_to_kill = self.current_port();
+
         let mut guard = self.child.lock().await;
         let Some(mut child) = guard.take() else {
+            // No child, but still kill by port in case of orphaned processes
+            drop(guard);
+            kill_process_on_port(port_to_kill);
             return Ok(());
         };
 
         if child.try_wait()?.is_some() {
-            // Already exited
+            // Already exited, but still clean up by port
+            drop(guard);
+            kill_process_on_port(port_to_kill);
             return Ok(());
         }
 
@@ -482,6 +489,8 @@ impl OpenCodeManager {
         match timeout(Duration::from_secs(3), child.wait()).await {
             Ok(_) => {
                 info!("[desktop:opencode] exited gracefully");
+                drop(guard);
+                kill_process_on_port(port_to_kill);
                 return Ok(());
             }
             Err(_) => {
@@ -501,7 +510,25 @@ impl OpenCodeManager {
             }
         }
 
+        drop(guard);
+        kill_process_on_port(port_to_kill);
+
         Ok(())
+    }
+}
+
+fn kill_process_on_port(port: Option<u16>) {
+    let Some(port) = port else { return };
+
+    // Kill any process listening on our port to clean up orphaned children.
+    // The opencode CLI is a Node wrapper that spawns the actual binary as a child.
+    // Killing the wrapper doesn't kill the child, so we kill by port.
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        let _ = Command::new("sh")
+            .args(["-c", &format!("lsof -ti:{} | xargs kill -9 2>/dev/null || true", port)])
+            .output();
     }
 }
 

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Desktop: fixed orphaned OpenCode processes not being cleaned up on restart or exit.
+
+
 ## [1.5.0] - 2026-01-16
 
 - UI: added a new Files tab to browse workspace files directly from the interface.
