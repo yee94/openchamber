@@ -1146,7 +1146,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
                 className={cn(
-                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground',
+                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
                 )}
               >
                 {}
