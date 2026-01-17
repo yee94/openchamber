@@ -385,8 +385,11 @@ export const useMessageStore = create<MessageStore>()(
                 pendingAssistantHeaderSessions: new Set(),
                 pendingUserMessageMetaBySession: new Map(),
 
-                loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
-                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
+                loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.HISTORICAL_MESSAGES) => {
+                        const isStreaming = get().sessionMemoryState.get(sessionId)?.isStreaming;
+                        const targetLimit = isStreaming ? MEMORY_LIMITS.VIEWPORT_MESSAGES : limit;
+                        const fetchLimit = isStreaming ? undefined : targetLimit + MEMORY_LIMITS.FETCH_BUFFER;
+                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId, fetchLimit));
 
                         // Filter out reverted messages first
                         const revertMessageId = getSessionRevertMessageId(sessionId);
@@ -401,7 +404,7 @@ export const useMessageStore = create<MessageStore>()(
                                   return isIdNewer(messageId, watermark);
                               })
                             : messagesWithoutReverted;
-                        const messagesToKeep = afterWatermark.slice(-limit);
+                        const messagesToKeep = afterWatermark.slice(-targetLimit);
 
                         set((state) => {
                             const newMessages = new Map(state.messages);
@@ -2418,28 +2421,28 @@ export const useMessageStore = create<MessageStore>()(
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
 
                         if (direction === "up" && currentMessages.length > 0) {
-
+                            const dedupedMessages = dedupeMessagesById(allMessages);
                             const firstCurrentMessage = currentMessages[0];
-                            const indexInAll = allMessages.findIndex((m) => m.info.id === firstCurrentMessage.info.id);
+                            const indexInAll = dedupedMessages.findIndex((message) => message.info.id === firstCurrentMessage.info.id);
 
                             if (indexInAll > 0) {
-
                                 const loadCount = Math.min(MEMORY_LIMITS.VIEWPORT_MESSAGES, indexInAll);
-                                const newMessages = allMessages.slice(indexInAll - loadCount, indexInAll);
+                                const newMessages = dedupedMessages.slice(indexInAll - loadCount, indexInAll);
 
                                 set((state) => {
                                     const updatedMessages = [...newMessages, ...currentMessages];
-                                    const dedupedMessages = dedupeMessagesById(updatedMessages);
-                                    const newMessagesMap = new Map(state.messages);
-                                    newMessagesMap.set(sessionId, dedupedMessages);
+                                    const mergedMessages = dedupeMessagesById(updatedMessages);
+                                    const addedCount = Math.max(0, mergedMessages.length - currentMessages.length);
 
-                                    const addedCount = Math.max(0, dedupedMessages.length - currentMessages.length);
+                                    const newMessagesMap = new Map(state.messages);
+                                    newMessagesMap.set(sessionId, mergedMessages);
+
                                     const newMemoryState = new Map(state.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
                                         ...memoryState,
                                         viewportAnchor: memoryState.viewportAnchor + addedCount,
                                         hasMoreAbove: indexInAll - loadCount > 0,
-                                        totalAvailableMessages: allMessages.length,
+                                        totalAvailableMessages: dedupedMessages.length,
                                     });
 
                                     return {
@@ -2448,12 +2451,12 @@ export const useMessageStore = create<MessageStore>()(
                                     };
                                 });
                             } else if (indexInAll === 0) {
-
                                 set((state) => {
                                     const newMemoryState = new Map(state.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
                                         ...memoryState,
                                         hasMoreAbove: false,
+                                        totalAvailableMessages: dedupedMessages.length,
                                     });
                                     return { sessionMemoryState: newMemoryState };
                                 });

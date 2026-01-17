@@ -354,10 +354,11 @@ class OpencodeService {
     return response.data;
   }
 
-  async getSessionMessages(id: string): Promise<{ info: Message; parts: Part[] }[]> {
+  async getSessionMessages(id: string, limit?: number): Promise<{ info: Message; parts: Part[] }[]> {
     const response = await this.client.session.messages({
       sessionID: id,
-      ...(this.currentDirectory ? { directory: this.currentDirectory } : {})
+      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
+      ...(typeof limit === 'number' ? { limit } : {}),
     });
     return response.data || [];
   }

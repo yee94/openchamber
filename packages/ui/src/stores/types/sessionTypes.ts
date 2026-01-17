@@ -54,6 +54,8 @@ export interface SessionContextUsage {
 export const MEMORY_LIMITS = {
     MAX_SESSIONS: 3,
     VIEWPORT_MESSAGES: 120,
+    HISTORICAL_MESSAGES: 90,
+    FETCH_BUFFER: 20,
     STREAMING_BUFFER: Infinity,
     BACKGROUND_STREAMING_BUFFER: 120,
     ZOMBIE_TIMEOUT: 10 * 60 * 1000,
