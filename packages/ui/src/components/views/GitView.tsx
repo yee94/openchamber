@@ -49,6 +49,67 @@ type GitViewSnapshot = {
   commitMessage: string;
 };
 
+type GitmojiEntry = {
+  emoji: string;
+  code: string;
+  description: string;
+};
+
+type GitmojiCachePayload = {
+  gitmojis: GitmojiEntry[];
+  fetchedAt: number;
+  version: string;
+};
+
+const GITMOJI_CACHE_KEY = 'gitmojiCache';
+const GITMOJI_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const GITMOJI_CACHE_VERSION = '1';
+const GITMOJI_SOURCE_URL =
+  'https://raw.githubusercontent.com/carloscuesta/gitmoji/master/packages/gitmojis/src/gitmojis.json';
+
+const isGitmojiEntry = (value: unknown): value is GitmojiEntry => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.emoji === 'string' &&
+    typeof candidate.code === 'string' &&
+    typeof candidate.description === 'string'
+  );
+};
+
+const readGitmojiCache = (): GitmojiCachePayload | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(GITMOJI_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<GitmojiCachePayload>;
+    if (!parsed || parsed.version !== GITMOJI_CACHE_VERSION || typeof parsed.fetchedAt !== 'number') {
+      return null;
+    }
+    if (!Array.isArray(parsed.gitmojis)) return null;
+    const gitmojis = parsed.gitmojis.filter(isGitmojiEntry);
+    return { gitmojis, fetchedAt: parsed.fetchedAt, version: parsed.version };
+  } catch {
+    return null;
+  }
+};
+
+const writeGitmojiCache = (gitmojis: GitmojiEntry[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload: GitmojiCachePayload = {
+      gitmojis,
+      fetchedAt: Date.now(),
+      version: GITMOJI_CACHE_VERSION,
+    };
+    localStorage.setItem(GITMOJI_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+  }
+};
+
+const isGitmojiCacheFresh = (payload: GitmojiCachePayload) =>
+  Date.now() - payload.fetchedAt < GITMOJI_CACHE_TTL_MS;
+
 let gitViewSnapshot: GitViewSnapshot | null = null;
 
 const useEffectiveDirectory = () => {
@@ -142,7 +203,7 @@ export const GitView: React.FC = () => {
   const [commitFilesMap, setCommitFilesMap] = React.useState<Map<string, CommitFileEntry[]>>(new Map());
   const [loadingCommitHashes, setLoadingCommitHashes] = React.useState<Set<string>>(new Set());
   const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
-  const [gitmojiEmojis, setGitmojiEmojis] = React.useState<Array<{ emoji: string; code: string; description: string }>>([]);
+  const [gitmojiEmojis, setGitmojiEmojis] = React.useState<GitmojiEntry[]>([]);
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
 
   const handleCopyCommitHash = React.useCallback((hash: string) => {
@@ -243,15 +304,27 @@ export const GitView: React.FC = () => {
 
     let cancelled = false;
 
+    const cached = readGitmojiCache();
+    if (cached) {
+      setGitmojiEmojis(cached.gitmojis);
+      if (isGitmojiCacheFresh(cached)) {
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+
     const loadGitmojis = async () => {
       try {
-        const response = await fetch('https://raw.githubusercontent.com/carloscuesta/gitmoji/master/packages/gitmojis/src/gitmojis.json');
+        const response = await fetch(GITMOJI_SOURCE_URL);
         if (!response.ok) {
           throw new Error(`Failed to load gitmojis: ${response.statusText}`);
         }
-        const payload = (await response.json()) as { gitmojis?: Array<{ emoji: string; code: string; description: string }> };
+        const payload = (await response.json()) as { gitmojis?: GitmojiEntry[] };
+        const gitmojis = Array.isArray(payload.gitmojis) ? payload.gitmojis.filter(isGitmojiEntry) : [];
         if (!cancelled) {
-          setGitmojiEmojis(payload.gitmojis ?? []);
+          setGitmojiEmojis(gitmojis);
+          writeGitmojiCache(gitmojis);
         }
       } catch (error) {
         if (!cancelled) {
@@ -260,7 +333,7 @@ export const GitView: React.FC = () => {
       }
     };
 
-    loadGitmojis();
+    void loadGitmojis();
 
     return () => {
       cancelled = true;
