@@ -139,6 +139,7 @@ interface SortableProjectItemProps {
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
   children?: React.ReactNode;
+  settingsAutoCreateWorktree: boolean;
 }
 
 const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
@@ -161,6 +162,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onClose,
   sentinelRef,
   children,
+  settingsAutoCreateWorktree,
 }) => {
   const {
     attributes,
@@ -255,7 +257,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {isRepo && onNewWorktreeSession && (
+          {isRepo && onNewWorktreeSession && !settingsAutoCreateWorktree && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -1598,6 +1600,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     }}
                     onClose={() => removeProject(projectKey)}
                     sentinelRef={(el) => { projectHeaderSentinelRefs.current.set(projectKey, el); }}
+                    settingsAutoCreateWorktree={settingsAutoCreateWorktree}
                   >
                     {!isCollapsed ? (
                       <div className="space-y-[0.6rem] py-1 pl-1">
