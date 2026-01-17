@@ -39,7 +39,9 @@ import {
   RiFileCopyLine,
   RiFolderAddLine,
   RiGitBranchLine,
+  RiGitRepositoryLine,
   RiLinkUnlinkM,
+
   RiMore2Line,
   RiPencilAiLine,
   RiShare2Line,
@@ -59,6 +61,7 @@ import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { BranchPickerDialog } from './BranchPickerDialog';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
@@ -135,6 +138,7 @@ interface SortableProjectItemProps {
   onHoverChange: (hovered: boolean) => void;
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
+  onOpenBranchPicker?: () => void;
   onOpenMultiRunLauncher: () => void;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
@@ -158,6 +162,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onHoverChange,
   onNewSession,
   onNewWorktreeSession,
+  onOpenBranchPicker,
   onOpenMultiRunLauncher,
   onClose,
   sentinelRef,
@@ -257,7 +262,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {isRepo && onNewWorktreeSession && !settingsAutoCreateWorktree && (
+          {isRepo && !hideDirectoryControls && onNewWorktreeSession && !settingsAutoCreateWorktree && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -267,7 +272,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     onNewWorktreeSession();
                   }}
                   className={cn(
-                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground flex-shrink-0',
                     mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
                   )}
                   aria-label="New session in worktree"
@@ -277,6 +282,29 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
                 <p>New session in worktree</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {isRepo && !hideDirectoryControls && onOpenBranchPicker && (
+            <Tooltip delayDuration={700}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenBranchPicker();
+                  }}
+                  className={cn(
+                    'inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
+                    mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
+                  )}
+                  aria-label="Browse branches"
+                >
+                  <RiGitRepositoryLine className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                <p>Browse branches</p>
               </TooltipContent>
             </Tooltip>
           )}
@@ -367,6 +395,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
+  const [branchPickerOpen, setBranchPickerOpen] = React.useState(false);
   const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
@@ -1592,6 +1621,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       createWorktreeSession();
                     }}
+                    onOpenBranchPicker={() => setBranchPickerOpen(true)}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
@@ -1627,6 +1657,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         )}
       </ScrollableOverlay>
 
+      <BranchPickerDialog
+        open={branchPickerOpen}
+        onOpenChange={setBranchPickerOpen}
+        projects={normalizedProjects}
+        activeProjectId={activeProjectId}
+      />
     </div>
   );
 };
