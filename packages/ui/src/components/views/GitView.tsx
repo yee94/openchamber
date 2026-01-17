@@ -104,6 +104,7 @@ const writeGitmojiCache = (gitmojis: GitmojiEntry[]) => {
     };
     localStorage.setItem(GITMOJI_CACHE_KEY, JSON.stringify(payload));
   } catch {
+    return;
   }
 };
 

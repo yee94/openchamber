@@ -85,7 +85,7 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
   }
 }
 
-async function waitForReady(serverUrl: string, timeoutMs = 15000, workingDirectory = ''): Promise<ReadyResult> {
+async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<ReadyResult> {
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
   let attempts = 0;
@@ -118,10 +118,6 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000, workingDirecto
   }
 
   return { ok: false, elapsedMs: Date.now() - start, attempts };
-}
-
-function inferApiPrefixFromUrl(): string {
-  return '';
 }
 
 export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCodeManager {
@@ -248,7 +244,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
       if (server && server.url) {
         // Validate readiness for the current workspace context.
-        const ready = await waitForReady(server.url, 10000, workingDirectory);
+        const ready = await waitForReady(server.url, 10000);
         lastReadyElapsedMs = ready.elapsedMs;
         lastReadyAttempts = ready.attempts;
         if (ready.ok) {
@@ -382,7 +378,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   }
 
   async function setWorkingDirectory(newPath: string): Promise<{ success: boolean; restarted: boolean; path: string }> {
-    const target = typeof newPath === 'string' && newPath.trim().length > 0 ? newPath.trim() : workspaceDirectory();
+    void newPath;
     const workspacePath = workspaceDirectory();
     const nextDirectory = workspacePath;
 

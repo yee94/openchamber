@@ -1,3 +1,10 @@
+## [1.5.2] - 2026-01-17
+
+- Chat: optimized message loading for opening sessions.
+- Layout: tuned responsive breakpoint and server readiness timeout for steadier startup.
+- Reliability: improved OpenCode process cleanup to reduce orphaned servers.
+
+
 ## [1.5.1] - 2026-01-16
 
 - No notable changes

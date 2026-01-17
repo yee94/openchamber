@@ -4,10 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-01-17
+
+- Sessions: added branch picker dialog to start new worktree sessions from local branches (thanks to @nilskroe).
+- Sessions: added project header worktree button, active-session loader, and right-click context menu in the sessions sidebar (thanks to @nilskroe).
+- Sessions: improved worktree delete dialog with linked session details, dirty-change warnings, and optional remote branch removal.
+- Git: added gitmoji picker in commit message composer with cached emoji list (thanks to @TaylorBeeston).
+- Chat: optimized message loading for opening sessions.
+- UI: added one-click diagnostics copy in the About dialog.
+- VSCode: tuned layout breakpoint and server readiness timeout for steadier startup.
+- Reliability: improved OpenCode process cleanup to reduce orphaned servers.
+
+
 ## [1.5.1] - 2026-01-16
 
 - Desktop: fixed orphaned OpenCode processes not being cleaned up on restart or exit.
 - Opencode: fixed issue with reloading configuration was killing the app
+
 
 ## [1.5.0] - 2026-01-16
 
