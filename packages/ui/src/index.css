@@ -46,6 +46,10 @@ textarea[data-chat-input="true"]:hover {
   box-shadow: none;
 }
 
+.oc-cm-selected-line {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
 :root.vscode-runtime textarea[data-chat-input="true"]::placeholder {
   color: color-mix(in srgb, var(--vscode-input-placeholderForeground, var(--muted-foreground)) 65%, transparent);
 }

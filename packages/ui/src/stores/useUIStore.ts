@@ -5,6 +5,8 @@ import { getSafeStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
 
 export type MainTab = 'chat' | 'git' | 'diff' | 'terminal' | 'files';
+
+export type MainTabGuard = (nextTab: MainTab) => boolean;
 export type EventStreamStatus =
   | 'idle'
   | 'connecting'
@@ -24,6 +26,7 @@ interface UIStore {
   hasManuallyResizedLeftSidebar: boolean;
   isSessionSwitcherOpen: boolean;
   activeMainTab: MainTab;
+  mainTabGuard: MainTabGuard | null;
   pendingDiffFile: string | null;
   isMobile: boolean;
   isKeyboardOpen: boolean;
@@ -64,6 +67,7 @@ interface UIStore {
   setSidebarWidth: (width: number) => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   setActiveMainTab: (tab: MainTab) => void;
+  setMainTabGuard: (guard: MainTabGuard | null) => void;
   setPendingDiffFile: (filePath: string | null) => void;
   navigateToDiff: (filePath: string) => void;
   consumePendingDiffFile: () => string | null;
@@ -120,6 +124,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedLeftSidebar: false,
         isSessionSwitcherOpen: false,
         activeMainTab: 'chat',
+        mainTabGuard: null,
         pendingDiffFile: null,
         isMobile: false,
         isKeyboardOpen: false,
@@ -195,7 +200,15 @@ export const useUIStore = create<UIStore>()(
           set({ isSessionSwitcherOpen: open });
         },
 
+        setMainTabGuard: (guard) => {
+          set({ mainTabGuard: guard });
+        },
+
         setActiveMainTab: (tab) => {
+          const guard = get().mainTabGuard;
+          if (guard && !guard(tab)) {
+            return;
+          }
           set({ activeMainTab: tab });
         },
 
@@ -204,6 +217,10 @@ export const useUIStore = create<UIStore>()(
         },
 
         navigateToDiff: (filePath) => {
+          const guard = get().mainTabGuard;
+          if (guard && !guard('diff')) {
+            return;
+          }
           set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
         },
 
