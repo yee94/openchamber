@@ -300,6 +300,38 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             }
         }
 
+        // Memory limit fields
+        if let Some(Value::Number(n)) = obj.get("memoryLimitHistorical") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(10).min(500);
+                result_obj.insert("memoryLimitHistorical".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("memoryLimitViewport") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(20).min(500);
+                result_obj.insert("memoryLimitViewport".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("memoryLimitActiveSession") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(30).min(1000);
+                result_obj.insert("memoryLimitActiveSession".to_string(), json!(clamped));
+            }
+        }
+
         // Array fields
         if let Some(arr) = obj.get("approvedDirectories") {
             result_obj.insert(

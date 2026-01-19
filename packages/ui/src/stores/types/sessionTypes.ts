@@ -51,7 +51,8 @@ export interface SessionContextUsage {
     lastMessageId?: string;
 }
 
-export const MEMORY_LIMITS = {
+// Default memory limits (can be overridden via settings)
+export const DEFAULT_MEMORY_LIMITS = {
     MAX_SESSIONS: 3,
     VIEWPORT_MESSAGES: 120,
     HISTORICAL_MESSAGES: 90,
@@ -61,7 +62,35 @@ export const MEMORY_LIMITS = {
     ZOMBIE_TIMEOUT: 10 * 60 * 1000,
 } as const;
 
-export const ACTIVE_SESSION_WINDOW = 180;
+export const DEFAULT_ACTIVE_SESSION_WINDOW = 180;
+
+// Dynamic memory limits accessor - reads directly from UI store.
+// NOTE: do not use require() here (breaks in browser/desktop runtime bundles).
+import { useUIStore } from "../useUIStore";
+
+export const getMemoryLimits = () => {
+    const state = useUIStore.getState?.();
+    if (!state) {
+        return DEFAULT_MEMORY_LIMITS;
+    }
+    return {
+        ...DEFAULT_MEMORY_LIMITS,
+        HISTORICAL_MESSAGES: state.memoryLimitHistorical ?? DEFAULT_MEMORY_LIMITS.HISTORICAL_MESSAGES,
+        VIEWPORT_MESSAGES: state.memoryLimitViewport ?? DEFAULT_MEMORY_LIMITS.VIEWPORT_MESSAGES,
+    };
+};
+
+export const getActiveSessionWindow = () => {
+    const state = useUIStore.getState?.();
+    if (!state) {
+        return DEFAULT_ACTIVE_SESSION_WINDOW;
+    }
+    return state.memoryLimitActiveSession ?? DEFAULT_ACTIVE_SESSION_WINDOW;
+};
+
+// Legacy exports for backward compatibility (use getMemoryLimits() for dynamic values)
+export const MEMORY_LIMITS = DEFAULT_MEMORY_LIMITS;
+export const ACTIVE_SESSION_WINDOW = DEFAULT_ACTIVE_SESSION_WINDOW;
 
 export type NewSessionDraftState = {
     open: boolean;

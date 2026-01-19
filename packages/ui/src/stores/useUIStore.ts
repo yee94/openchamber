@@ -43,6 +43,9 @@ interface UIStore {
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   autoDeleteLastRunAt: number | null;
+  memoryLimitHistorical: number;
+  memoryLimitViewport: number;
+  memoryLimitActiveSession: number;
 
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
@@ -87,6 +90,9 @@ interface UIStore {
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
+  setMemoryLimitHistorical: (value: number) => void;
+  setMemoryLimitViewport: (value: number) => void;
+  setMemoryLimitActiveSession: (value: number) => void;
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
   setPadding: (size: number) => void;
@@ -141,6 +147,9 @@ export const useUIStore = create<UIStore>()(
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
+        memoryLimitHistorical: 90,
+        memoryLimitViewport: 120,
+        memoryLimitActiveSession: 180,
         toolCallExpansion: 'collapsed',
         fontSize: 100,
         padding: 100,
@@ -294,6 +303,21 @@ export const useUIStore = create<UIStore>()(
 
         setAutoDeleteLastRunAt: (timestamp) => {
           set({ autoDeleteLastRunAt: timestamp });
+        },
+
+        setMemoryLimitHistorical: (value) => {
+          const clamped = Math.max(10, Math.min(500, Math.round(value)));
+          set({ memoryLimitHistorical: clamped });
+        },
+
+        setMemoryLimitViewport: (value) => {
+          const clamped = Math.max(20, Math.min(500, Math.round(value)));
+          set({ memoryLimitViewport: clamped });
+        },
+
+        setMemoryLimitActiveSession: (value) => {
+          const clamped = Math.max(30, Math.min(1000, Math.round(value)));
+          set({ memoryLimitActiveSession: clamped });
         },
 
         setToolCallExpansion: (value) => {
@@ -527,6 +551,9 @@ export const useUIStore = create<UIStore>()(
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,
+          memoryLimitHistorical: state.memoryLimitHistorical,
+          memoryLimitViewport: state.memoryLimitViewport,
+          memoryLimitActiveSession: state.memoryLimitActiveSession,
           toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,
           padding: state.padding,

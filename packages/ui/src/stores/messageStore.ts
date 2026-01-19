@@ -5,7 +5,7 @@ import type { Message, Part } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { isExecutionForkMetaText } from "@/lib/messages/executionMeta";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
-import { MEMORY_LIMITS } from "./types/sessionTypes";
+import { MEMORY_LIMITS, getMemoryLimits } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
     removeLifecycleEntries,
@@ -385,10 +385,12 @@ export const useMessageStore = create<MessageStore>()(
                 pendingAssistantHeaderSessions: new Set(),
                 pendingUserMessageMetaBySession: new Map(),
 
-                loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.HISTORICAL_MESSAGES) => {
+                loadMessages: async (sessionId: string, limit?: number) => {
+                        const memLimits = getMemoryLimits();
+                        const effectiveLimit = limit ?? memLimits.HISTORICAL_MESSAGES;
                         const isStreaming = get().sessionMemoryState.get(sessionId)?.isStreaming;
-                        const targetLimit = isStreaming ? MEMORY_LIMITS.VIEWPORT_MESSAGES : limit;
-                        const fetchLimit = isStreaming ? undefined : targetLimit + MEMORY_LIMITS.FETCH_BUFFER;
+                        const targetLimit = isStreaming ? memLimits.VIEWPORT_MESSAGES : effectiveLimit;
+                        const fetchLimit = isStreaming ? undefined : targetLimit + memLimits.FETCH_BUFFER;
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId, fetchLimit));
 
                         // Filter out reverted messages first
@@ -2227,10 +2229,11 @@ export const useMessageStore = create<MessageStore>()(
                     };
                 },
 
-                trimToViewportWindow: (sessionId: string, targetSize: number = MEMORY_LIMITS.VIEWPORT_MESSAGES, currentSessionId?: string) => {
+                trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => {
+                    const effectiveTargetSize = targetSize ?? getMemoryLimits().VIEWPORT_MESSAGES;
                     const state = get();
                     const sessionMessages = state.messages.get(sessionId);
-                    if (!sessionMessages || sessionMessages.length <= targetSize) {
+                    if (!sessionMessages || sessionMessages.length <= effectiveTargetSize) {
                         return;
                     }
 
@@ -2246,11 +2249,11 @@ export const useMessageStore = create<MessageStore>()(
                     }
 
                     const anchor = memoryState.viewportAnchor || sessionMessages.length - 1;
-                    let start = Math.max(0, anchor - Math.floor(targetSize / 2));
-                    const end = Math.min(sessionMessages.length, start + targetSize);
+                    let start = Math.max(0, anchor - Math.floor(effectiveTargetSize / 2));
+                    const end = Math.min(sessionMessages.length, start + effectiveTargetSize);
 
-                    if (end === sessionMessages.length && end - start < targetSize) {
-                        start = Math.max(0, end - targetSize);
+                    if (end === sessionMessages.length && end - start < effectiveTargetSize) {
+                        start = Math.max(0, end - effectiveTargetSize);
                     }
 
                     const trimmedMessages = sessionMessages.slice(start, end);

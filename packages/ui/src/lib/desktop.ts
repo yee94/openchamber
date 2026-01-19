@@ -61,6 +61,11 @@ export type DesktopSettings = {
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
 
+  // Memory limits for message viewport management
+  memoryLimitHistorical?: number;   // Default fetch limit when loading/syncing (default: 90)
+  memoryLimitViewport?: number;     // Trim target when leaving session (default: 120)
+  memoryLimitActiveSession?: number; // Trim target for active session (default: 180)
+
   // User-added skills catalogs (persisted to ~/.config/openchamber/settings.json)
   skillCatalogs?: SkillCatalogConfig[];
 };

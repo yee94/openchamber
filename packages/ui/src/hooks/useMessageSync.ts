@@ -1,7 +1,7 @@
 import React from 'react';
 import type { AssistantMessage, Message, Part } from '@opencode-ai/sdk/v2';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { MEMORY_LIMITS } from '@/stores/types/sessionTypes';
+import { getMemoryLimits } from '@/stores/types/sessionTypes';
 import { opencodeClient } from '@/lib/opencode/client';
 import { readSessionCursor } from '@/lib/messageCursorPersistence';
 import { extractTextFromPart } from '@/stores/utils/messageUtils';
@@ -126,8 +126,9 @@ export const useMessageSync = () => {
       const currentMessages = (messages.get(currentSessionId) || []) as SessionMessageRecord[];
 
       const memoryState = useSessionStore.getState().sessionMemoryState.get(currentSessionId);
-      const targetLimit = memoryState?.isStreaming ? MEMORY_LIMITS.VIEWPORT_MESSAGES : MEMORY_LIMITS.HISTORICAL_MESSAGES;
-      const fetchLimit = targetLimit + MEMORY_LIMITS.FETCH_BUFFER;
+      const memLimits = getMemoryLimits();
+      const targetLimit = memoryState?.isStreaming ? memLimits.VIEWPORT_MESSAGES : memLimits.HISTORICAL_MESSAGES;
+      const fetchLimit = targetLimit + memLimits.FETCH_BUFFER;
       const latestMessages = (await opencodeClient.getSessionMessages(currentSessionId, fetchLimit)) as SessionMessageRecord[];
       const cursorRecord = await readSessionCursor(currentSessionId);
 

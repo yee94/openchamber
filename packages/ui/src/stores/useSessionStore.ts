@@ -5,7 +5,7 @@ import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
 import type { SessionStore, AttachedFile, EditPermissionMode } from "./types/sessionTypes";
-import { ACTIVE_SESSION_WINDOW, MEMORY_LIMITS } from "./types/sessionTypes";
+import { getActiveSessionWindow, getMemoryLimits } from "./types/sessionTypes";
 
 import { useSessionStore as useSessionManagementStore } from "./sessionStore";
 import { useMessageStore } from "./messageStore";
@@ -273,7 +273,7 @@ export const useSessionStore = create<SessionStore>()(
                                 get().updateViewportAnchor(previousSessionId, previousMessages.length - 1);
                             }
 
-                            get().trimToViewportWindow(previousSessionId, MEMORY_LIMITS.VIEWPORT_MESSAGES);
+                            get().trimToViewportWindow(previousSessionId, getMemoryLimits().VIEWPORT_MESSAGES);
                         }
                     }
 
@@ -287,7 +287,7 @@ export const useSessionStore = create<SessionStore>()(
                             await get().loadMessages(id);
                         }
 
-                        get().trimToViewportWindow(id, ACTIVE_SESSION_WINDOW);
+                        get().trimToViewportWindow(id, getActiveSessionWindow());
 
                         // Analyze session messages to extract agent/model/variant choices
                         // This ensures context is available even when ModelControls isn't mounted

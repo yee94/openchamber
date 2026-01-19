@@ -2,6 +2,7 @@ import React from 'react';
 import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
+import { MemoryLimitsSettings } from './MemoryLimitsSettings';
 import { DefaultsSettings } from './DefaultsSettings';
 import { GitSettings } from './GitSettings';
 import { WorktreeSectionContent } from './WorktreeSectionContent';
@@ -83,13 +84,16 @@ const ChatSectionContent: React.FC = () => {
     return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'reasoning', 'queueMode']} />;
 };
 
-// Sessions section: Default model & agent, Session retention
+// Sessions section: Default model & agent, Session retention, Memory limits
 const SessionsSectionContent: React.FC = () => {
     return (
         <div className="space-y-6">
             <DefaultsSettings />
             <div className="border-t border-border/40 pt-6">
                 <SessionRetentionSettings />
+            </div>
+            <div className="border-t border-border/40 pt-6">
+                <MemoryLimitsSettings />
             </div>
         </div>
     );
