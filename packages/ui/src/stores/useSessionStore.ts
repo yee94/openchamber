@@ -506,6 +506,11 @@ export const useSessionStore = create<SessionStore>()(
                 getActiveTurnAnchor: (sessionId: string) => useMessageStore.getState().getActiveTurnAnchor(sessionId),
                 trimToViewportWindow: (sessionId: string, targetSize?: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
+                    // Skip trimming for sessions in active phase (busy/cooldown) to preserve anchor/spacer
+                    const phase = get().sessionActivityPhase?.get(sessionId);
+                    if (phase === 'busy' || phase === 'cooldown') {
+                        return;
+                    }
                     return useMessageStore.getState().trimToViewportWindow(sessionId, targetSize, currentSessionId || undefined);
                 },
                 evictLeastRecentlyUsed: () => {
