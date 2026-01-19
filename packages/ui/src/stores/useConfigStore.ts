@@ -25,7 +25,6 @@ interface OpenChamberDefaults {
     defaultVariant?: string;
     defaultAgent?: string;
     autoCreateWorktree?: boolean;
-    commitMessageModel?: string;
     gitmojiEnabled?: boolean;
 }
 
@@ -39,7 +38,6 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                 defaultVariant: settings?.defaultVariant,
                 defaultAgent: settings?.defaultAgent,
                 autoCreateWorktree: settings?.autoCreateWorktree,
-                commitMessageModel: settings?.commitMessageModel,
                 gitmojiEnabled: settings?.gitmojiEnabled,
             };
         }
@@ -54,7 +52,6 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                     const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
                     const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
                     const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
-                    const commitMessageModel = typeof data?.commitMessageModel === 'string' ? data.commitMessageModel.trim() : '';
                     const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
 
                     return {
@@ -62,7 +59,6 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                         defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
                         defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
                         autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
-                        commitMessageModel: commitMessageModel.length > 0 ? commitMessageModel : undefined,
                         gitmojiEnabled,
                     };
                 }
@@ -83,7 +79,6 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
         const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
         const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
-        const commitMessageModel = typeof data?.commitMessageModel === 'string' ? data.commitMessageModel.trim() : '';
         const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
 
         return {
@@ -91,7 +86,6 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
             defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
             autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
-            commitMessageModel: commitMessageModel.length > 0 ? commitMessageModel : undefined,
             gitmojiEnabled,
         };
     } catch {
@@ -384,7 +378,6 @@ interface ConfigStore {
     settingsDefaultVariant: string | undefined;
     settingsDefaultAgent: string | undefined;
     settingsAutoCreateWorktree: boolean;
-    settingsCommitMessageModel: string | undefined; // format: "provider/model"
     settingsGitmojiEnabled: boolean;
 
     activateDirectory: (directory: string | null | undefined) => Promise<void>;
@@ -402,7 +395,6 @@ interface ConfigStore {
     setSettingsDefaultVariant: (variant: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
-    setSettingsCommitMessageModel: (model: string | undefined) => void;
     setSettingsGitmojiEnabled: (enabled: boolean) => void;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
     getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
@@ -447,7 +439,6 @@ export const useConfigStore = create<ConfigStore>()(
                 settingsDefaultVariant: undefined,
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
-                settingsCommitMessageModel: undefined,
                 settingsGitmojiEnabled: false,
 
                 activateDirectory: async (directory) => {
@@ -892,7 +883,6 @@ export const useConfigStore = create<ConfigStore>()(
                                     settingsDefaultVariant: openChamberDefaults.defaultVariant,
                                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
                                     settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
-                                    settingsCommitMessageModel: openChamberDefaults.commitMessageModel,
                                     settingsGitmojiEnabled: openChamberDefaults.gitmojiEnabled ?? false,
                                     directoryScoped: {
                                         ...state.directoryScoped,
@@ -1314,10 +1304,6 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ settingsAutoCreateWorktree: enabled });
                 },
 
-                setSettingsCommitMessageModel: (model) => {
-                    set({ settingsCommitMessageModel: model });
-                },
-
                 setSettingsGitmojiEnabled: (enabled: boolean) => {
                     set({ settingsGitmojiEnabled: enabled });
                 },
@@ -1427,7 +1413,6 @@ export const useConfigStore = create<ConfigStore>()(
                     settingsDefaultVariant: state.settingsDefaultVariant,
                     settingsDefaultAgent: state.settingsDefaultAgent,
                     settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
-                    settingsCommitMessageModel: state.settingsCommitMessageModel,
                     settingsGitmojiEnabled: state.settingsGitmojiEnabled,
                 }),
              },

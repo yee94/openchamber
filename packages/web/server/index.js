@@ -285,6 +285,31 @@ const stripJsonMarkdownWrapper = (value) => {
   return trimmed;
 };
 
+const extractJsonObject = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const source = value.trim();
+  if (!source) {
+    return null;
+  }
+  let start = source.indexOf('{');
+  while (start !== -1) {
+    let end = source.indexOf('}', start + 1);
+    while (end !== -1) {
+      const candidate = source.slice(start, end + 1);
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        end = source.indexOf('}', end + 1);
+      }
+    }
+    start = source.indexOf('{', start + 1);
+  }
+  return null;
+};
+
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'openchamber');
@@ -613,10 +638,6 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
   }
-  if (typeof candidate.commitMessageModel === 'string') {
-    const trimmed = candidate.commitMessageModel.trim();
-    result.commitMessageModel = trimmed.length > 0 ? trimmed : undefined;
-  }
   if (typeof candidate.gitmojiEnabled === 'boolean') {
     result.gitmojiEnabled = candidate.gitmojiEnabled;
   }
@@ -847,7 +868,7 @@ const persistSettings = async (changes) => {
     console.log(`[persistSettings] Successfully saved ${next.projects?.length || 0} projects to disk`);
     return formatSettingsResponse(next);
   });
-  
+
   return persistSettingsLock;
 };
 
@@ -1377,7 +1398,7 @@ async function restartOpenCode() {
     }
 
     killProcessOnPort(portToKill);
-      
+
     // Brief delay to allow port release
     await new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -1388,7 +1409,7 @@ async function restartOpenCode() {
       openCodePort = null;
       syncToHmrState();
     }
-    
+
     openCodeApiPrefixDetected = true;
     openCodeApiPrefix = '';
     if (openCodeApiDetectionTimer) {
@@ -2523,7 +2544,7 @@ async function main(options = {}) {
   });
 
   // ============== SKILL ENDPOINTS ==============
-  
+
   const {
     getSkillSources,
     discoverSkills,
@@ -2545,7 +2566,7 @@ async function main(options = {}) {
         return res.status(400).json({ error });
       }
       const skills = discoverSkills(directory);
-      
+
       // Enrich with full sources info
       const enrichedSkills = skills.map(skill => {
         const sources = getSkillSources(skill.name, directory);
@@ -2554,7 +2575,7 @@ async function main(options = {}) {
           sources
         };
       });
-      
+
       res.json({ skills: enrichedSkills });
     } catch (error) {
       console.error('Failed to list skills:', error);
@@ -2860,17 +2881,17 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      
+
       const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
-      
+
       const content = readSkillSupportingFile(sources.md.dir, filePath);
       if (content === null) {
         return res.status(404).json({ error: 'File not found' });
       }
-      
+
       res.json({ path: filePath, content });
     } catch (error) {
       console.error('Failed to read skill file:', error);
@@ -2942,14 +2963,14 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      
+
       const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
-      
+
       writeSkillSupportingFile(sources.md.dir, filePath, content || '');
-      
+
       res.json({
         success: true,
         message: `File ${filePath} saved successfully`,
@@ -2969,14 +2990,14 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      
+
       const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
-      
+
       deleteSkillSupportingFile(sources.md.dir, filePath);
-      
+
       res.json({
         success: true,
         message: `File ${filePath} deleted successfully`,
@@ -3378,26 +3399,19 @@ async function main(options = {}) {
         .join('\n\n');
 
       const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} (ONLY the JSON in response, no markdown wrappers or anything except JSON) with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
- 
-      const settings = await readSettingsFromDiskMigrated();
-      const rawModel = typeof settings.commitMessageModel === 'string' ? settings.commitMessageModel.trim() : '';
-      const model = (() => {
-        if (!rawModel) return 'big-pickle';
-        const parts = rawModel.split('/').filter(Boolean);
-        const candidate = parts.length > 1 ? parts[parts.length - 1] : parts[0];
-        return candidate || 'big-pickle';
-      })();
+
+      const model = 'gpt-5-nano';
 
       const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;
       try {
-        response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+        response = await fetch('https://opencode.ai/zen/v1/responses', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model,
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: 3000,
+            input: [{ role: 'user', content: prompt }],
+            max_output_tokens: 1000,
             stream: false,
             reasoning: {
               effort: 'low'
@@ -3416,14 +3430,15 @@ async function main(options = {}) {
       }
 
       const data = await response.json();
-      const raw = data?.choices?.[0]?.message?.content?.trim();
+      const raw = data?.output?.find((item) => item?.type === 'message')?.content?.find((item) => item?.type === 'output_text')?.text?.trim();
 
       if (!raw) {
         return res.status(502).json({ error: 'No commit message returned by generator' });
       }
 
       const cleanedJson = stripJsonMarkdownWrapper(raw);
-      const candidates = [cleanedJson, raw].filter((candidate, index, array) => {
+      const extractedJson = extractJsonObject(cleanedJson) || extractJsonObject(raw);
+      const candidates = [cleanedJson, extractedJson, raw].filter((candidate, index, array) => {
         return candidate && array.indexOf(candidate) === index;
       });
 
@@ -4210,14 +4225,14 @@ async function main(options = {}) {
       }
 
       const dirents = await fsPromises.readdir(resolvedPath, { withFileTypes: true });
-      
+
       // Get gitignored paths if requested
       let ignoredPaths = new Set();
       if (respectGitignore) {
         try {
           // Get all entry paths to check (relative to resolvedPath for git check-ignore)
           const pathsToCheck = dirents.map((d) => d.name);
-          
+
           if (pathsToCheck.length > 0) {
             try {
               // Use git check-ignore with paths as arguments
@@ -4227,13 +4242,13 @@ async function main(options = {}) {
                   cwd: resolvedPath,
                   stdio: ['ignore', 'pipe', 'pipe'],
                 });
-                
+
                 let stdout = '';
                 child.stdout.on('data', (data) => { stdout += data.toString(); });
                 child.on('close', () => resolve(stdout));
                 child.on('error', () => resolve(''));
               });
-              
+
               result.split('\n').filter(Boolean).forEach((name) => {
                 const fullPath = path.join(resolvedPath, name.trim());
                 ignoredPaths.add(fullPath);
@@ -4246,16 +4261,16 @@ async function main(options = {}) {
           // If git is not available, continue without gitignore filtering
         }
       }
-      
+
       const entries = await Promise.all(
         dirents.map(async (dirent) => {
           const entryPath = path.join(resolvedPath, dirent.name);
-          
+
           // Skip gitignored entries
           if (respectGitignore && ignoredPaths.has(entryPath)) {
             return null;
           }
-          
+
           let isDirectory = dirent.isDirectory();
           const isSymbolicLink = dirent.isSymbolicLink();
 

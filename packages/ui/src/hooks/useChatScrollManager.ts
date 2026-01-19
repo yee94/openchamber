@@ -374,7 +374,7 @@ export const useChatScrollManager = ({
                     ? (container.querySelector(`[data-message-id="${persistedAnchor.anchorId}"]`) as HTMLElement | null)
                     : null;
                 const messageHeight = anchorElement?.offsetHeight ?? 0;
-                const restoredSpacerHeight = Math.max(0, persistedAnchor.spacerHeight - messageHeight);
+                const restoredSpacerHeight = Math.max(0, persistedAnchor.spacerHeight - (messageHeight - 50));
 
                 flushSync(() => {
                     setAnchorId(persistedAnchor.anchorId);

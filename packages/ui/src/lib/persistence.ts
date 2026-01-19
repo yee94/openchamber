@@ -47,11 +47,6 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   } else {
     localStorage.removeItem('pinnedDirectories');
   }
-  if (settings.commitMessageModel) {
-    localStorage.setItem('commitMessageModel', settings.commitMessageModel);
-  } else {
-    localStorage.removeItem('commitMessageModel');
-  }
   if (typeof settings.gitmojiEnabled === 'boolean') {
     localStorage.setItem('gitmojiEnabled', String(settings.gitmojiEnabled));
   } else {
@@ -270,9 +265,6 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
-  }
-  if (typeof candidate.commitMessageModel === 'string' && candidate.commitMessageModel.length > 0) {
-    result.commitMessageModel = candidate.commitMessageModel;
   }
   if (typeof candidate.gitmojiEnabled === 'boolean') {
     result.gitmojiEnabled = candidate.gitmojiEnabled;
