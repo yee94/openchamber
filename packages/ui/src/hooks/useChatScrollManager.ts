@@ -69,6 +69,10 @@ const ANCHOR_TARGET_OFFSET = 8;
 const DEFAULT_SCROLL_BUTTON_THRESHOLD = 40;
 const NEW_USER_ANCHOR_WINDOW_MS = 20_000;
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
+// After we set an anchor/spacer, ignore incidental scroll events for a bit.
+const ANCHOR_CLEAR_GRACE_MS = 1200;
+// Require recent direct user input (wheel/touch) to treat scroll as intentional.
+const DIRECT_SCROLL_INTENT_WINDOW_MS = 250;
 
 const getMessageId = (message: ChatMessageRecord): string | null => {
     const info = message.info;
@@ -117,6 +121,8 @@ export const useChatScrollManager = ({
     const lastSessionIdRef = React.useRef<string | null>(null);
     const currentSessionIdRef = React.useRef<string | null>(currentSessionId ?? null);
     const suppressUserScrollUntilRef = React.useRef<number>(0);
+    const anchorClearIgnoreUntilRef = React.useRef<number>(0);
+    const lastDirectScrollIntentAtRef = React.useRef<number>(0);
     const previousMessageIdsRef = React.useRef<Set<string>>(new Set());
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const spacerHeightRef = React.useRef(0);
@@ -238,6 +244,9 @@ export const useChatScrollManager = ({
         }
         lastScrolledAnchorIdRef.current = messageId;
 
+        // Give the UI a grace window so incidental scroll/layout events don't clear the anchor.
+        anchorClearIgnoreUntilRef.current = Date.now() + ANCHOR_CLEAR_GRACE_MS;
+
         setPendingAnchorId(messageId);
         const expectedSessionId = currentSessionIdRef.current;
 
@@ -303,18 +312,25 @@ export const useChatScrollManager = ({
             return;
         }
 
-        const isProgrammatic = Date.now() < suppressUserScrollUntilRef.current || pendingAnchorId !== null;
+        const now = Date.now();
+        const isProgrammatic = now < suppressUserScrollUntilRef.current || pendingAnchorId !== null;
 
-        if (event?.isTrusted && !isProgrammatic) {
+        const hasDirectIntent = now - lastDirectScrollIntentAtRef.current <= DIRECT_SCROLL_INTENT_WINDOW_MS;
+
+        if (event?.isTrusted && !isProgrammatic && hasDirectIntent) {
             userScrollOverrideRef.current = true;
         }
 
         scrollEngine.handleScroll();
         updateScrollButtonVisibility();
 
+        const shouldIgnoreAnchorClear = now < anchorClearIgnoreUntilRef.current;
+
         if (
             event?.isTrusted &&
             !isProgrammatic &&
+            !shouldIgnoreAnchorClear &&
+            hasDirectIntent &&
             currentPhase === 'idle' &&
             anchorIdRef.current !== null &&
             spacerHeightRef.current > 0 &&
@@ -343,10 +359,18 @@ export const useChatScrollManager = ({
         const container = scrollRef.current;
         if (!container) return;
 
+        const markDirectIntent = () => {
+            lastDirectScrollIntentAtRef.current = Date.now();
+        };
+
         container.addEventListener('scroll', handleScrollEvent as EventListener, { passive: true });
+        container.addEventListener('wheel', markDirectIntent as EventListener, { passive: true });
+        container.addEventListener('touchmove', markDirectIntent as EventListener, { passive: true });
 
         return () => {
             container.removeEventListener('scroll', handleScrollEvent as EventListener);
+            container.removeEventListener('wheel', markDirectIntent as EventListener);
+            container.removeEventListener('touchmove', markDirectIntent as EventListener);
         };
     }, [handleScrollEvent]);
 
