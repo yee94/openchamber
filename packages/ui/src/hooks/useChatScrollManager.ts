@@ -73,6 +73,7 @@ const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
 const ANCHOR_CLEAR_GRACE_MS = 1200;
 // Require recent direct user input (wheel/touch) to treat scroll as intentional.
 const DIRECT_SCROLL_INTENT_WINDOW_MS = 250;
+const ANCHOR_CLEAR_TOLERANCE_PX = 24;
 
 const getMessageId = (message: ChatMessageRecord): string | null => {
     const info = message.info;
@@ -128,7 +129,7 @@ export const useChatScrollManager = ({
     const spacerHeightRef = React.useRef(0);
 
     const anchorIdRef = React.useRef<string | null>(null);
-    const pendingRestoreAnchorRef = React.useRef<{ sessionId: string; anchorId: string } | null>(null);
+    const pendingRestoreAnchorRef = React.useRef<{ sessionId: string; anchorId: string; startedAt: number } | null>(null);
 
     const userScrollOverrideRef = React.useRef<boolean>(false);
 
@@ -149,16 +150,23 @@ export const useChatScrollManager = ({
         }
     }, []);
 
-    const isSpacerOutOfViewport = React.useCallback((): boolean => {
-        const container = scrollRef.current;
-        const currentSpacerHeight = spacerHeightRef.current;
-        if (!container || currentSpacerHeight <= 0) return true;
-
-        const spacerStartPosition = container.scrollHeight - currentSpacerHeight;
-        const viewportBottom = container.scrollTop + container.clientHeight;
-
-        return viewportBottom < spacerStartPosition;
+    const calculateAnchorPosition = React.useCallback((anchorElement: HTMLElement): number => {
+        const messageTop = anchorElement.offsetTop;
+        return messageTop - ANCHOR_TARGET_OFFSET;
     }, []);
+
+    const isAnchorStillPinned = React.useCallback((): boolean => {
+        const container = scrollRef.current;
+        const anchorId = anchorIdRef.current;
+        if (!container || !anchorId) return false;
+
+        const anchorElement = container.querySelector(`[data-message-id="${anchorId}"]`) as HTMLElement | null;
+        if (!anchorElement) return false;
+
+        const expectedTop = calculateAnchorPosition(anchorElement);
+        const distance = Math.abs(container.scrollTop - expectedTop);
+        return distance <= ANCHOR_CLEAR_TOLERANCE_PX;
+    }, [calculateAnchorPosition]);
 
     const clearActiveTurnAnchor = React.useCallback((sessionId: string) => {
         anchorIdRef.current = null;
@@ -171,11 +179,6 @@ export const useChatScrollManager = ({
 
     const markProgrammaticScroll = React.useCallback(() => {
         suppressUserScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_SUPPRESS_MS;
-    }, []);
-
-    const calculateAnchorPosition = React.useCallback((anchorElement: HTMLElement): number => {
-        const messageTop = anchorElement.offsetTop;
-        return messageTop - ANCHOR_TARGET_OFFSET;
     }, []);
 
     const updateScrollButtonVisibility = React.useCallback(() => {
@@ -334,7 +337,9 @@ export const useChatScrollManager = ({
             currentPhase === 'idle' &&
             anchorIdRef.current !== null &&
             spacerHeightRef.current > 0 &&
-            isSpacerOutOfViewport()
+            // Only clear when the user actually scrolls away from the pinned anchor.
+            // (Spacer being out of viewport is expected while anchored.)
+            !isAnchorStillPinned()
         ) {
             clearActiveTurnAnchor(currentSessionId);
         }
@@ -347,7 +352,7 @@ export const useChatScrollManager = ({
         clearActiveTurnAnchor,
         currentPhase,
         currentSessionId,
-        isSpacerOutOfViewport,
+        isAnchorStillPinned,
         pendingAnchorId,
         scrollEngine,
         sessionMessages.length,
@@ -405,7 +410,7 @@ export const useChatScrollManager = ({
                     updateSpacerHeight(restoredSpacerHeight);
                 });
 
-                pendingRestoreAnchorRef.current = { sessionId: currentSessionId, anchorId: persistedAnchor.anchorId };
+                pendingRestoreAnchorRef.current = { sessionId: currentSessionId, anchorId: persistedAnchor.anchorId, startedAt: Date.now() };
             } else {
                 lastScrolledAnchorIdRef.current = null;
                 anchorIdRef.current = null;
@@ -460,14 +465,16 @@ export const useChatScrollManager = ({
         const container = scrollRef.current;
         if (!container) return;
 
-        const anchorInList = sessionMessages.some((message) => getMessageId(message) === pending.anchorId);
-        if (!anchorInList) {
+        const anchorElement = container.querySelector(`[data-message-id="${pending.anchorId}"]`) as HTMLElement | null;
+        if (!anchorElement) {
+            // When the anchor is created from a just-sent user message, the persisted anchor can
+            // show up before the message is in the rendered list. Give it a short window.
+            if (Date.now() - pending.startedAt < 1200) {
+                return;
+            }
             clearActiveTurnAnchor(currentSessionId);
             return;
         }
-
-        const anchorElement = container.querySelector(`[data-message-id="${pending.anchorId}"]`) as HTMLElement | null;
-        if (!anchorElement) return;
 
         const targetScrollTop = calculateAnchorPosition(anchorElement);
         markProgrammaticScroll();
