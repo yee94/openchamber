@@ -11,13 +11,16 @@ import { sendBridgeMessage, sendBridgeMessageWithOptions } from './bridge';
 const normalizePath = (value: string): string => value.replace(/\\/g, '/');
 
 export const createVSCodeFilesAPI = (): FilesAPI => ({
-  async listDirectory(path: string): Promise<DirectoryListResult> {
+  async listDirectory(path: string, options?: { respectGitignore?: boolean }): Promise<DirectoryListResult> {
     const target = normalizePath(path);
     const data = await sendBridgeMessage<{
       directory?: string;
       path?: string;
       entries: Array<{ name: string; path: string; isDirectory: boolean }>;
-    }>('api:fs:list', { path: target });
+    }>('api:fs:list', {
+      path: target,
+      respectGitignore: options?.respectGitignore,
+    });
 
     const directory = normalizePath(data?.directory || data?.path || target);
     const entries = Array.isArray(data?.entries) ? data.entries : [];
@@ -36,6 +39,8 @@ export const createVSCodeFilesAPI = (): FilesAPI => ({
       directory: normalizePath(payload.directory),
       query: payload.query,
       limit: payload.maxResults,
+      includeHidden: payload.includeHidden,
+      respectGitignore: payload.respectGitignore,
     });
 
     const files = Array.isArray(data?.files) ? data.files : [];

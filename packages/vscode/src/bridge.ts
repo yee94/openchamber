@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
+import { spawn } from 'child_process';
 import { type OpenCodeManager } from './opencode';
 import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE } from './opencodeConfig';
 import { removeProviderAuth } from './opencodeAuth';
@@ -96,6 +97,53 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
 
 const normalizeFsPath = (value: string) => value.replace(/\\/g, '/');
 
+const execGit = async (args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> => (
+  new Promise((resolve) => {
+    const proc = spawn('git', args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      resolve({ stdout, stderr, exitCode: code ?? 0 });
+    });
+
+    proc.on('error', (error) => {
+      resolve({ stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 });
+    });
+  })
+);
+
+const gitCheckIgnoreNames = async (cwd: string, names: string[]): Promise<Set<string>> => {
+  if (names.length === 0) {
+    return new Set();
+  }
+
+  const result = await execGit(['check-ignore', '--', ...names], cwd);
+  if (result.exitCode !== 0 || !result.stdout) {
+    return new Set();
+  }
+
+  return new Set(
+    result.stdout
+      .split('\n')
+      .map((name: string) => name.trim())
+      .filter(Boolean)
+  );
+};
+
 const expandTildePath = (value: string) => {
   const trimmed = (value || '').trim();
   if (!trimmed) {
@@ -147,11 +195,11 @@ const FILE_SEARCH_EXCLUDED_DIRS = new Set([
   'logs',
 ]);
 
-const shouldSkipSearchDirectory = (name: string) => {
+const shouldSkipSearchDirectory = (name: string, includeHidden: boolean) => {
   if (!name) {
     return false;
   }
-  if (name.startsWith('.')) {
+  if (!includeHidden && name.startsWith('.')) {
     return true;
   }
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
@@ -228,7 +276,13 @@ const fuzzyMatchScore = (query: string, candidate: string): number | null => {
   return score;
 };
 
-const searchFilesystemFiles = async (rootPath: string, query: string, limit: number) => {
+const searchFilesystemFiles = async (
+  rootPath: string,
+  query: string,
+  limit: number,
+  includeHidden: boolean,
+  respectGitignore: boolean
+) => {
   const normalizedQuery = (query || '').trim().toLowerCase();
   const matchAll = normalizedQuery.length === 0;
 
@@ -250,8 +304,16 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
       const currentDir = batch[index];
       const dirents = dirLists[index];
 
+      const ignoredNames = respectGitignore
+        ? await gitCheckIgnoreNames(normalizeFsPath(currentDir.fsPath), dirents.map(([name]) => name))
+        : new Set<string>();
+
       for (const [entryName, entryType] of dirents) {
-        if (!entryName || entryName.startsWith('.')) {
+        if (!entryName || (!includeHidden && entryName.startsWith('.'))) {
+          continue;
+        }
+
+        if (respectGitignore && ignoredNames.has(entryName)) {
           continue;
         }
 
@@ -259,7 +321,7 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
         const absolute = normalizeFsPath(entryUri.fsPath);
 
         if (entryType === vscode.FileType.Directory) {
-          if (shouldSkipSearchDirectory(entryName)) {
+          if (shouldSkipSearchDirectory(entryName, includeHidden)) {
             continue;
           }
           if (!visited.has(absolute)) {
@@ -330,7 +392,13 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
   }));
 };
 
-const searchDirectory = async (directory: string, query: string, limit = 60) => {
+const searchDirectory = async (
+  directory: string,
+  query: string,
+  limit = 60,
+  includeHidden = false,
+  respectGitignore = true
+) => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
   const rootPath = directory
     ? resolveUserPath(directory, workspaceRoot)
@@ -339,38 +407,40 @@ const searchDirectory = async (directory: string, query: string, limit = 60) => 
 
   const sanitizedQuery = query?.trim() || '';
   if (!sanitizedQuery) {
-    return searchFilesystemFiles(rootPath, '', limit);
+    return searchFilesystemFiles(rootPath, '', limit, includeHidden, respectGitignore);
   }
 
   // Fast-path via VS Code's file index (may be case-sensitive depending on platform/workspace).
-  try {
-    const pattern = `**/*${sanitizedQuery}*`;
-    const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
-    const results = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
-      exclude,
-      limit,
-    );
+  if (!includeHidden) {
+    try {
+      const pattern = `**/*${sanitizedQuery}*`;
+      const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
+      const results = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
+        exclude,
+        limit,
+      );
 
-    if (Array.isArray(results) && results.length > 0) {
-      return results.map((file) => {
-        const absolute = normalizeFsPath(file.fsPath);
-        const relative = normalizeFsPath(path.relative(rootPath, absolute));
-        const name = path.basename(absolute);
-        return {
-          name,
-          path: absolute,
-          relativePath: relative || name,
-          extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
-        };
-      });
+      if (Array.isArray(results) && results.length > 0) {
+        return results.map((file) => {
+          const absolute = normalizeFsPath(file.fsPath);
+          const relative = normalizeFsPath(path.relative(rootPath, absolute));
+          const name = path.basename(absolute);
+          return {
+            name,
+            path: absolute,
+            relativePath: relative || name,
+            extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+          };
+        });
+      }
+    } catch {
+      // Fall through to filesystem traversal.
     }
-  } catch {
-    // Fall through to filesystem traversal.
   }
 
   // Fallback: deterministic, case-insensitive traversal with early-exit at limit.
-  return searchFilesystemFiles(rootPath, sanitizedQuery, limit);
+  return searchFilesystemFiles(rootPath, sanitizedQuery, limit, includeHidden, respectGitignore);
 };
 
 const fetchModelsMetadata = async () => {
@@ -510,18 +580,49 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
       case 'api:fs:list': {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
-        const target = (payload as { path?: string })?.path || workspaceRoot;
+        const { path: targetPath, respectGitignore } = (payload || {}) as { path?: string; respectGitignore?: boolean };
+        const target = targetPath || workspaceRoot;
         const resolvedPath = resolveUserPath(target, workspaceRoot) || workspaceRoot;
+
         const entries = await listDirectoryEntries(resolvedPath);
         const normalized = normalizeFsPath(resolvedPath);
-        return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+
+        if (!respectGitignore) {
+          return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
+
+        const pathsToCheck = entries.map((entry) => entry.name).filter(Boolean);
+        if (pathsToCheck.length === 0) {
+          return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
+
+        try {
+          const result = await execGit(['check-ignore', '--', ...pathsToCheck], normalized);
+          const ignoredNames = new Set(
+            result.stdout
+              .split('\n')
+              .map((name) => name.trim())
+              .filter(Boolean)
+          );
+
+          const filteredEntries = entries.filter((entry) => !ignoredNames.has(entry.name));
+          return { id, type, success: true, data: { entries: filteredEntries, directory: normalized, path: normalized } };
+        } catch {
+          return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
       }
 
-      case 'api:fs:search': {
-        const { directory = '', query = '', limit } = (payload || {}) as { directory?: string; query?: string; limit?: number };
-        const files = await searchDirectory(directory, query, limit);
-        return { id, type, success: true, data: { files } };
-      }
+       case 'api:fs:search': {
+         const { directory = '', query = '', limit, includeHidden, respectGitignore } = (payload || {}) as {
+           directory?: string;
+           query?: string;
+           limit?: number;
+           includeHidden?: boolean;
+           respectGitignore?: boolean;
+         };
+         const files = await searchDirectory(directory, query, limit, Boolean(includeHidden), respectGitignore !== false);
+         return { id, type, success: true, data: { files } };
+       }
 
       case 'api:fs:mkdir': {
         const target = (payload as { path: string })?.path;

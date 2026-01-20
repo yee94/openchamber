@@ -5,10 +5,12 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 
 export const GitSettings: React.FC = () => {
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
   const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
+  const showGitignored = useFilesViewShowGitignored();
 
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -85,7 +87,7 @@ export const GitSettings: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">Commit Messages</h3>
@@ -113,6 +115,29 @@ export const GitSettings: React.FC = () => {
           </label>
           <p className="typography-meta text-muted-foreground pl-5.5">
             Adds a gitmoji selector to the Git commit message input.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <h3 className="typography-ui-header font-semibold text-foreground">Files Overview</h3>
+        <p className="typography-meta text-muted-foreground">
+          Show gitignored files in the Files browser pane only.
+        </p>
+      </div>
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary"
+              checked={showGitignored}
+              onChange={(event) => setFilesViewShowGitignored(event.target.checked)}
+            />
+            <span className="typography-ui-label text-foreground">Display gitignored files</span>
+          </label>
+          <p className="typography-meta text-muted-foreground pl-5.5">
+            Toggles gitignored files in the Files tree and search results.
           </p>
         </div>
       </div>

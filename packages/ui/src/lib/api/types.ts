@@ -322,6 +322,8 @@ export interface FileSearchQuery {
   directory: string;
   query: string;
   maxResults?: number;
+  includeHidden?: boolean;
+  respectGitignore?: boolean;
 }
 
 export interface FileSearchResult {
@@ -576,4 +578,3 @@ export interface SkillsInstallResponse {
   skipped?: Array<{ skillName: string; reason: string }>;
   error?: SkillsInstallError;
 }
-

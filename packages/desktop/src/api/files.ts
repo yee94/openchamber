@@ -48,8 +48,9 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
     try {
       const result = await safeInvoke<ListDirectoryResponse>('list_directory', {
         path: normalizePath(path),
-        includeHidden: false,
+        // NOTE: pass both casings; Tauri arg casing differs across commands
         respectGitignore: options?.respectGitignore ?? false,
+        respect_gitignore: options?.respectGitignore ?? false,
       }, {
         timeout: 10000,
         onCancel: () => {
@@ -74,7 +75,13 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
       const result = await safeInvoke<SearchFilesResponse>('search_files', {
         directory: normalizedDirectory,
         query: payload.query,
-        max_results: payload.maxResults || 100
+        // NOTE: pass both casings; Tauri arg casing differs across commands
+        maxResults: payload.maxResults || 100,
+        includeHidden: payload.includeHidden ?? false,
+        respectGitignore: payload.respectGitignore ?? true,
+        max_results: payload.maxResults || 100,
+        include_hidden: payload.includeHidden ?? false,
+        respect_gitignore: payload.respectGitignore ?? true,
       }, {
         timeout: 15000,
         onCancel: () => {

@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
+import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,8 @@ import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
+import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 
 type FileNode = {
   name: string;
@@ -232,7 +235,10 @@ const getFileIcon = (extension?: string): React.ReactNode => {
 export const FilesView: React.FC = () => {
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme } = useThemeSystem();
+  React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
   const { isMobile, screenWidth } = useDeviceInfo();
+  const showHidden = useDirectoryShowHidden();
+  const showGitignored = useFilesViewShowGitignored();
 
   const currentDirectory = useEffectiveDirectory();
   const root = normalizePath(currentDirectory);
@@ -400,7 +406,8 @@ export const FilesView: React.FC = () => {
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
       .filter((entry) => entry && typeof entry.name === 'string' && entry.name.length > 0)
-      .filter((entry) => !shouldIgnoreEntryName(entry.name))
+      .filter((entry) => showHidden || !entry.name.startsWith('.'))
+      .filter((entry) => showGitignored || !shouldIgnoreEntryName(entry.name))
       .map<FileNode>((entry) => {
         const name = entry.name;
         const path = normalizePath(entry.path || `${dirPath}/${name}`);
@@ -415,7 +422,7 @@ export const FilesView: React.FC = () => {
       });
 
     return sortNodes(nodes);
-  }, []);
+  }, [showGitignored, showHidden]);
 
   const loadDirectory = React.useCallback(async (dirPath: string) => {
     const normalizedDir = normalizePath(dirPath.trim());
@@ -431,17 +438,17 @@ export const FilesView: React.FC = () => {
     inFlightDirsRef.current.add(normalizedDir);
 
     try {
-      // Use gitignore filtering for both desktop and web
+      const respectGitignore = !showGitignored;
       let entries: Array<{ name: string; path: string; isDirectory: boolean }>;
       if (runtime.isDesktop) {
-        const result = await files.listDirectory(normalizedDir, { respectGitignore: true });
+        const result = await files.listDirectory(normalizedDir, { respectGitignore });
         entries = result.entries.map((entry) => ({
           name: entry.name,
           path: entry.path,
           isDirectory: entry.isDirectory,
         }));
       } else {
-        const result = await opencodeClient.listLocalDirectory(normalizedDir, { respectGitignore: true });
+        const result = await opencodeClient.listLocalDirectory(normalizedDir, { respectGitignore });
         entries = result.map((entry) => ({
           name: entry.name,
           path: entry.path,
@@ -463,7 +470,7 @@ export const FilesView: React.FC = () => {
       inFlightDirsRef.current = new Set(inFlightDirsRef.current);
       inFlightDirsRef.current.delete(normalizedDir);
     }
-  }, [files, mapDirectoryEntries, runtime.isDesktop]);
+  }, [files, mapDirectoryEntries, runtime.isDesktop, showGitignored]);
 
   const refreshRoot = React.useCallback(async () => {
     const normalizedRoot = normalizePath(currentDirectory.trim());
@@ -493,6 +500,14 @@ export const FilesView: React.FC = () => {
     setDesktopImageSrc('');
     setShowMobilePageContent(false);
   }, [currentDirectory, refreshRoot]);
+
+  React.useEffect(() => {
+    if (!currentDirectory) {
+      return;
+    }
+
+    void refreshRoot();
+  }, [currentDirectory, refreshRoot, showGitignored]);
 
   const fuzzyScore = React.useCallback((query: string, candidate: string): number | null => {
     const q = query.trim().toLowerCase();
@@ -546,6 +561,14 @@ export const FilesView: React.FC = () => {
 
   React.useEffect(() => {
     if (!currentDirectory) {
+      return;
+    }
+
+    void refreshRoot();
+  }, [currentDirectory, refreshRoot, showGitignored]);
+
+  React.useEffect(() => {
+    if (!currentDirectory) {
       setSearchResults([]);
       setSearching(false);
       return;
@@ -562,13 +585,16 @@ export const FilesView: React.FC = () => {
     let cancelled = false;
     setSearching(true);
 
-    searchFiles(currentDirectory, trimmedQuery, 150)
+    searchFiles(currentDirectory, trimmedQuery, 150, {
+      includeHidden: showHidden,
+      respectGitignore: !showGitignored,
+    })
       .then((hits) => {
         if (cancelled) {
           return;
         }
 
-        const filtered = hits.filter((hit) => !shouldIgnorePath(hit.path));
+        const filtered = hits.filter((hit) => showGitignored || !shouldIgnorePath(hit.path));
 
         // Apply fuzzy scoring and sort by score
         const ranked = filtered
@@ -609,7 +635,7 @@ export const FilesView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, debouncedSearchQuery, fuzzyScore, searchFiles]);
+  }, [currentDirectory, debouncedSearchQuery, fuzzyScore, searchFiles, showHidden, showGitignored]);
 
   const readFile = React.useCallback(async (path: string): Promise<string> => {
     if (files.readFile) {
@@ -1318,33 +1344,35 @@ export const FilesView: React.FC = () => {
       "flex min-h-0 flex-col overflow-hidden",
       isMobile ? "h-full w-full bg-background" : "h-full rounded-xl border border-border/60 bg-background/70"
     )}>
-      <div className={cn("flex items-center gap-2 py-2", isMobile ? "px-3" : "px-2")}>
-        <div className="relative flex-1 min-w-0">
-          <RiSearchLine className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
-          <Input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search files…"
-            className="h-8 pl-8 pr-8 typography-meta"
-          />
-          {searchQuery.trim().length > 0 && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setSearchQuery('');
-                searchInputRef.current?.focus();
-              }}
-            >
-              <RiCloseLine className="h-4 w-4" />
-            </button>
-          )}
+      <div className={cn("flex flex-col gap-2 py-2", isMobile ? "px-3" : "px-2")}>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <RiSearchLine className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search files…"
+              className="h-8 pl-8 pr-8 typography-meta"
+            />
+            {searchQuery.trim().length > 0 && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+              >
+                <RiCloseLine className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => void refreshRoot()} className="h-8 w-8 p-0 flex-shrink-0">
+            <RiRefreshLine className="h-4 w-4" />
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => void refreshRoot()} className="h-8 w-8 p-0 flex-shrink-0">
-          <RiRefreshLine className="h-4 w-4" />
-        </Button>
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className={cn("py-2", isMobile ? "px-3" : "px-2")}>

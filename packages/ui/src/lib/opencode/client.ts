@@ -1708,7 +1708,7 @@ class OpencodeService {
     const desktopFiles = getDesktopFilesApi();
     if (desktopFiles) {
       try {
-        const result = await desktopFiles.listDirectory(directoryPath || '');
+        const result = await desktopFiles.listDirectory(directoryPath || '', options);
         if (!result || !Array.isArray(result.entries)) {
           return [];
         }
@@ -1753,7 +1753,15 @@ class OpencodeService {
     }
   }
 
-  async searchFiles(query: string, options?: { directory?: string | null; limit?: number }): Promise<ProjectFileSearchHit[]> {
+  async searchFiles(
+    query: string,
+    options?: {
+      directory?: string | null;
+      limit?: number;
+      includeHidden?: boolean;
+      respectGitignore?: boolean;
+    }
+  ): Promise<ProjectFileSearchHit[]> {
     const desktopFiles = getDesktopFilesApi();
     const directory = typeof options?.directory === 'string' && options.directory.trim().length > 0
       ? options.directory.trim()
@@ -1766,6 +1774,8 @@ class OpencodeService {
           directory: directory || '',
           query,
           maxResults: options?.limit,
+          includeHidden: options?.includeHidden,
+          respectGitignore: options?.respectGitignore,
         });
 
         if (!Array.isArray(results)) {
@@ -1808,6 +1818,12 @@ class OpencodeService {
     }
     if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
       params.set('limit', String(options.limit));
+    }
+    if (options?.includeHidden) {
+      params.set('includeHidden', 'true');
+    }
+    if (options?.respectGitignore === false) {
+      params.set('respectGitignore', 'false');
     }
 
     const searchUrl = `${this.baseUrl}/fs/search${params.toString() ? `?${params.toString()}` : ''}`;

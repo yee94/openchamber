@@ -263,6 +263,14 @@ if (workspaceFolder) {
   try {
     window.localStorage.setItem('lastDirectory', normalizedWorkspaceFolder);
     window.localStorage.setItem('homeDirectory', normalizedWorkspaceFolder);
+
+    // VS Code defaults: show dotfiles, hide gitignored
+    if (window.localStorage.getItem('directoryTreeShowHidden') === null) {
+      window.localStorage.setItem('directoryTreeShowHidden', 'true');
+    }
+    if (window.localStorage.getItem('filesViewShowGitignored') === null) {
+      window.localStorage.setItem('filesViewShowGitignored', 'false');
+    }
   } catch (error) {
     console.warn('Failed to persist workspace folder', error);
   }
@@ -357,7 +365,8 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
 
   if (pathname.startsWith('/api/fs/list')) {
     const targetPath = url.searchParams.get('path') || '';
-    const data = await sendBridgeMessage('api:fs:list', { path: targetPath });
+    const respectGitignore = url.searchParams.get('respectGitignore') === 'true';
+    const data = await sendBridgeMessage('api:fs:list', { path: targetPath, respectGitignore });
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -367,7 +376,15 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
     const limitParam = url.searchParams.get('limit');
     const limit = limitParam ? Number(limitParam) : undefined;
     const resolvedLimit = Number.isFinite(limit) ? limit : undefined;
-    const data = await sendBridgeMessage('api:fs:search', { directory, query, limit: resolvedLimit });
+    const includeHidden = url.searchParams.get('includeHidden') === 'true';
+    const respectGitignore = url.searchParams.get('respectGitignore') !== 'false';
+    const data = await sendBridgeMessage('api:fs:search', {
+      directory,
+      query,
+      limit: resolvedLimit,
+      includeHidden,
+      respectGitignore,
+    });
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 

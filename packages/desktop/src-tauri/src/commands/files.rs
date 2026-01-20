@@ -270,6 +270,8 @@ pub async fn search_files(
     directory: Option<String>,
     query: Option<String>,
     max_results: Option<usize>,
+    include_hidden: Option<bool>,
+    respect_gitignore: Option<bool>,
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<SearchFilesResponse, String> {
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
@@ -280,6 +282,8 @@ pub async fn search_files(
     let limit = clamp_search_limit(max_results);
     let normalized_query = query.unwrap_or_default().trim().to_lowercase();
     let match_all = normalized_query.is_empty();
+    let include_hidden = include_hidden.unwrap_or(false);
+    let respect_gitignore = respect_gitignore.unwrap_or(true);
 
     // Collect more candidates for fuzzy matching, then sort and trim
     let collect_limit = if match_all {
@@ -306,20 +310,59 @@ pub async fn search_files(
                 Err(_) => continue,
             };
 
+            let mut all_entries = Vec::new();
             while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().to_string();
+                all_entries.push((entry, name));
+            }
+
+            let ignored_names: HashSet<String> = if respect_gitignore {
+                let names: Vec<String> = all_entries.iter().map(|(_, name)| name.clone()).collect();
+                if names.is_empty() {
+                    HashSet::new()
+                } else {
+                    let cwd = dir.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let output = Command::new("git")
+                            .arg("check-ignore")
+                            .arg("--")
+                            .args(&names)
+                            .current_dir(&cwd)
+                            .output();
+
+                        match output {
+                            Ok(out) => String::from_utf8_lossy(&out.stdout)
+                                .lines()
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect(),
+                            Err(_) => HashSet::new(),
+                        }
+                    })
+                    .await
+                    .unwrap_or_default()
+                }
+            } else {
+                HashSet::new()
+            };
+
+            for (entry, name) in all_entries {
                 let Ok(file_type) = entry.file_type().await else {
                     continue;
                 };
 
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.is_empty() {
+                let name_str = name.as_str();
+                if name_str.is_empty() || (!include_hidden && name_str.starts_with('.')) {
+                    continue;
+                }
+
+                if respect_gitignore && ignored_names.contains(name_str) {
                     continue;
                 }
 
                 let entry_path = entry.path();
                 if file_type.is_dir() {
-                    if should_skip_directory(&name_str) {
+                    if should_skip_directory(name_str, include_hidden) {
                         continue;
                     }
                     if visited.insert(entry_path.clone()) && candidates.len() < collect_limit {
@@ -357,10 +400,6 @@ pub async fn search_files(
                 if candidates.len() >= collect_limit {
                     break;
                 }
-            }
-
-            if candidates.len() >= collect_limit {
-                break;
             }
         }
     }
@@ -568,7 +607,10 @@ fn clamp_search_limit(value: Option<usize>) -> usize {
     limit.clamp(1, MAX_FILE_SEARCH_LIMIT)
 }
 
-fn should_skip_directory(name: &str) -> bool {
+fn should_skip_directory(name: &str, include_hidden: bool) -> bool {
+    if !include_hidden && name.starts_with('.') {
+        return true;
+    }
     FILE_SEARCH_EXCLUDED_DIRS
         .iter()
         .any(|dir| dir.eq_ignore_ascii_case(name))
