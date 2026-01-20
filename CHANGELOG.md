@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-01-20
+
+- Files: edit files inline with syntax highlighting, draft protection, and save/discard flow.
+- Files: toggles to show hidden/dotfiles and gitignored entries in file browsers and pickers (thanks to @syntext).
+- Settings: new memory limits controls for session message history.
+- Chat: smoother session switching with more stable scroll anchoring.
+- Chat: new Activity view in collapsed state, now shows latest 6 tools by default.
+- Chat: fixed message copy on Firefox for macOS (thanks to @syntext).
+- Appearance: new corner radius control and restored input bar offset setting (thanks to @TheRealAshik).
+- Git: generated commit messages now auto-pick a gitmoji when enabled (thanks to @TheRealAshik).
+- Performance: faster filesystem/search operations and general stability improvements (thanks to @TheRealAshik).
+
+
 ## [1.5.2] - 2026-01-17
 
 - Sessions: added branch picker dialog to start new worktree sessions from local branches (thanks to @nilskroe).

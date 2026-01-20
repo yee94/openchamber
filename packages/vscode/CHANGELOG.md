@@ -1,3 +1,12 @@
+## [1.5.3] - 2026-01-20
+
+- Chat: Smoother session switching with more stable scroll anchoring.
+- Chat: new Activity view in collapsed state, now shows latest 6 tools by default.
+- Chat: Updated accent color derivation to better match editor themes.
+- Performance: Faster filesystem/search operations and general stability improvements (thanks to @TheRealAshik).
+- Files: adjusted default visibility for hidden/dotfiles to be visible and gitignored entries to be hidden.
+
+
 ## [1.5.2] - 2026-01-17
 
 - Chat: optimized message loading for opening sessions.
