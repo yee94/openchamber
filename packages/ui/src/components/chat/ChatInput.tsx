@@ -360,6 +360,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         if (!canSend || (!currentSessionId && !newSessionDraftOpen)) return;
 
+        // Re-pin and scroll to bottom when sending
         scrollToBottom?.({ instant: true, force: true });
 
         if (!currentProviderId || !currentModelId) {
@@ -1356,25 +1357,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         <form
             onSubmit={handleSubmit}
             className={cn(
-                "pt-0 pb-2 md:pb-4",
+                "relative pt-0 pb-2 md:pb-4",
                 isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
             data-keyboard-avoid="true"
             style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
-            <StatusRow
-                isWorking={working.isWorking}
-                statusText={workingStatusText}
-                isGenericStatus={working.isGenericStatus}
-                isWaitingForPermission={working.isWaitingForPermission}
-                wasAborted={working.wasAborted}
-                abortActive={working.abortActive}
-                completionId={working.lastCompletionId}
-                isComplete={working.isComplete}
-                showAbort={showAbortInStatusRow}
-                onAbort={handleAbort}
-                showAbortStatus={showAbortStatus}
-            />
+            {/* Absolute positioned above input - no layout shift */}
+            <div className="absolute bottom-full left-0 right-0">
+                <StatusRow
+                    isWorking={working.isWorking}
+                    statusText={workingStatusText}
+                    isGenericStatus={working.isGenericStatus}
+                    isWaitingForPermission={working.isWaitingForPermission}
+                    wasAborted={working.wasAborted}
+                    abortActive={working.abortActive}
+                    completionId={working.lastCompletionId}
+                    isComplete={working.isComplete}
+                    showAbort={showAbortInStatusRow}
+                    onAbort={handleAbort}
+                    showAbortStatus={showAbortStatus}
+                />
+            </div>
             <div
                 ref={dropZoneRef}
                 className={cn(

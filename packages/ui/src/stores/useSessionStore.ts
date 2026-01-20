@@ -310,7 +310,7 @@ export const useSessionStore = create<SessionStore>()(
 
                     get().evictLeastRecentlyUsed();
                 },
-                loadMessages: (sessionId: string) => useMessageStore.getState().loadMessages(sessionId),
+                loadMessages: (sessionId: string, limit?: number) => useMessageStore.getState().loadMessages(sessionId, limit),
                 sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => {
                     const draft = get().newSessionDraft;
                     const trimmedAgent = typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined;
@@ -502,11 +502,9 @@ export const useSessionStore = create<SessionStore>()(
                 clearAttachedFiles: () => useFileStore.getState().clearAttachedFiles(),
 
                 updateViewportAnchor: (sessionId: string, anchor: number) => useMessageStore.getState().updateViewportAnchor(sessionId, anchor),
-                updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => useMessageStore.getState().updateActiveTurnAnchor(sessionId, anchorId, spacerHeight),
-                getActiveTurnAnchor: (sessionId: string) => useMessageStore.getState().getActiveTurnAnchor(sessionId),
                 trimToViewportWindow: (sessionId: string, targetSize?: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
-                    // Skip trimming for sessions in active phase (busy/cooldown) to preserve anchor/spacer
+                    // Skip trimming for sessions in active phase (busy/cooldown)
                     const phase = get().sessionActivityPhase?.get(sessionId);
                     if (phase === 'busy' || phase === 'cooldown') {
                         return;

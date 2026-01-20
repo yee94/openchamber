@@ -63,8 +63,7 @@ interface ChatMessageProps {
     };
     onContentChange?: (reason?: ContentChangeReason) => void;
     animationHandlers?: AnimationHandlers;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
-    isPendingAnchor?: boolean;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     turnGroupingContext?: TurnGroupingContext;
 }
 
@@ -74,7 +73,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
-    isPendingAnchor = false,
     turnGroupingContext,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
@@ -834,7 +832,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 )}
                 data-message-id={message.info.id}
                 ref={messageContainerRef}
-                style={isPendingAnchor ? { visibility: 'hidden' } : undefined}
             >
                 <div className="chat-column">
                     {isUser ? (

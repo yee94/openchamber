@@ -343,7 +343,7 @@ interface MessageState {
 }
 
 interface MessageActions {
-    loadMessages: (sessionId: string) => Promise<void>;
+    loadMessages: (sessionId: string, limit?: number) => Promise<void>;
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -354,8 +354,6 @@ interface MessageActions {
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
     syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
-    updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => void;
-    getActiveTurnAnchor: (sessionId: string) => { anchorId: string | null; spacerHeight: number } | null;
     trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => void;
     evictLeastRecentlyUsed: (currentSessionId?: string) => void;
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;
@@ -387,10 +385,12 @@ export const useMessageStore = create<MessageStore>()(
 
                 loadMessages: async (sessionId: string, limit?: number) => {
                         const memLimits = getMemoryLimits();
-                        const effectiveLimit = limit ?? memLimits.HISTORICAL_MESSAGES;
+                        const noLimit = limit === Infinity;
+                        const effectiveLimit = noLimit ? Infinity : (limit ?? memLimits.HISTORICAL_MESSAGES);
                         const isStreaming = get().sessionMemoryState.get(sessionId)?.isStreaming;
                         const targetLimit = isStreaming ? memLimits.VIEWPORT_MESSAGES : effectiveLimit;
-                        const fetchLimit = isStreaming ? undefined : targetLimit + memLimits.FETCH_BUFFER;
+                        // Don't pass Infinity to API - use undefined for "fetch all"
+                        const fetchLimit = isStreaming || noLimit ? undefined : targetLimit + memLimits.FETCH_BUFFER;
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId, fetchLimit));
 
                         // Filter out reverted messages first
@@ -2201,34 +2201,6 @@ export const useMessageStore = create<MessageStore>()(
                     });
                 },
 
-                updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => {
-                    set((state) => {
-                        const memoryState = state.sessionMemoryState.get(sessionId) || {
-                            viewportAnchor: 0,
-                            isStreaming: false,
-                            lastAccessedAt: Date.now(),
-                            backgroundMessageCount: 0,
-                        };
-
-                        const newMemoryState = new Map(state.sessionMemoryState);
-                        newMemoryState.set(sessionId, {
-                            ...memoryState,
-                            activeTurnAnchorId: anchorId ?? undefined,
-                            activeTurnSpacerHeight: spacerHeight,
-                        });
-                        return { sessionMemoryState: newMemoryState };
-                    });
-                },
-
-                getActiveTurnAnchor: (sessionId: string) => {
-                    const memoryState = get().sessionMemoryState.get(sessionId);
-                    if (!memoryState) return null;
-                    return {
-                        anchorId: memoryState.activeTurnAnchorId ?? null,
-                        spacerHeight: memoryState.activeTurnSpacerHeight ?? 0,
-                    };
-                },
-
                 trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => {
                     const effectiveTargetSize = targetSize ?? getMemoryLimits().VIEWPORT_MESSAGES;
                     const state = get();
@@ -2502,8 +2474,6 @@ export const useMessageStore = create<MessageStore>()(
                             totalAvailableMessages: memory.totalAvailableMessages,
                             hasMoreAbove: memory.hasMoreAbove,
                             trimmedHeadMaxId: memory.trimmedHeadMaxId,
-                            activeTurnAnchorId: memory.activeTurnAnchorId,
-                            activeTurnSpacerHeight: memory.activeTurnSpacerHeight,
                         },
                     ]),
                     sessionAbortFlags: Array.from(state.sessionAbortFlags.entries()).map(([sessionId, record]) => [

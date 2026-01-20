@@ -35,10 +35,6 @@ export interface SessionMemoryState {
     hasMoreAbove?: boolean;
     trimmedHeadMaxId?: string;
     streamingCooldownUntil?: number;
-    /** Message ID of the user's active turn anchor (for scroll position preservation) */
-    activeTurnAnchorId?: string;
-    /** Height of the spacer below messages for active turn positioning */
-    activeTurnSpacerHeight?: number;
 }
 
 export interface SessionContextUsage {
@@ -163,7 +159,7 @@ export interface SessionStore {
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
     setCurrentSession: (id: string | null) => void;
-    loadMessages: (sessionId: string) => Promise<void>;
+    loadMessages: (sessionId: string, limit?: number) => Promise<void>;
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
     abortCurrentOperation: () => Promise<void>;
     acknowledgeSessionAbort: (sessionId: string) => void;
@@ -197,8 +193,6 @@ export interface SessionStore {
     clearAttachedFiles: () => void;
 
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
-    updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => void;
-    getActiveTurnAnchor: (sessionId: string) => { anchorId: string | null; spacerHeight: number } | null;
     trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
     evictLeastRecentlyUsed: () => void;
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;

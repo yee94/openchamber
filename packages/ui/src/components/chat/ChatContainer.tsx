@@ -25,8 +25,6 @@ export const ChatContainer: React.FC = () => {
         loadMessages,
         loadMoreMessages,
         updateViewportAnchor,
-        updateActiveTurnAnchor,
-        getActiveTurnAnchor,
         sessionMemoryState,
         openNewSessionDraft,
         isSyncing,
@@ -75,26 +73,22 @@ export const ChatContainer: React.FC = () => {
     const {
         scrollRef,
         handleMessageContentChange,
-    getAnimationHandlers,
-    showScrollButton,
-    scrollToBottom,
-        spacerHeight,
-        pendingAnchorId,
-        hasActiveAnchor,
+        getAnimationHandlers,
+        showScrollButton,
+        scrollToBottom,
+        scrollToPosition,
+        isPinned,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
         streamingMessageId,
         sessionMemoryState,
         updateViewportAnchor,
-        updateActiveTurnAnchor,
-        getActiveTurnAnchor,
         isSyncing,
         isMobile,
         messageStreamStates,
         sessionPermissions: sessionBlockingCards,
         trimToViewportWindow,
-        sessionActivityPhase,
     });
 
     const memoryState = React.useMemo(() => {
@@ -123,12 +117,12 @@ export const ChatContainer: React.FC = () => {
             await loadMoreMessages(currentSessionId, 'up');
             if (container && prevHeight !== null && prevTop !== null) {
                 const heightDiff = container.scrollHeight - prevHeight;
-                container.scrollTop = prevTop + heightDiff;
+                scrollToPosition(prevTop + heightDiff, { instant: true });
             }
         } finally {
             setIsLoadingOlder(false);
         }
-    }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef]);
+    }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef, scrollToPosition]);
 
     // Scroll to a specific message by ID (for timeline dialog)
     const scrollToMessage = React.useCallback((messageId: string) => {
@@ -169,7 +163,8 @@ export const ChatContainer: React.FC = () => {
             } finally {
                 const currentPhase = sessionActivityPhase?.get(currentSessionId) ?? 'idle';
                 const isActivePhase = currentPhase === 'busy' || currentPhase === 'cooldown';
-                const shouldSkipScroll = isActivePhase && hasActiveAnchor;
+                // When pinned and active, scroll is already maintained automatically
+                const shouldSkipScroll = isActivePhase && isPinned;
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {
@@ -184,7 +179,7 @@ export const ChatContainer: React.FC = () => {
         };
 
         void load();
-    }, [currentSessionId, hasActiveAnchor, loadMessages, messages, scrollToBottom, sessionActivityPhase]);
+    }, [currentSessionId, isPinned, loadMessages, messages, scrollToBottom, sessionActivityPhase]);
 
     if (!currentSessionId && !draftOpen) {
         return (
@@ -277,7 +272,6 @@ export const ChatContainer: React.FC = () => {
                         }}
                         data-scroll-shadow="true"
                         data-scrollbar="chat"
-                        hideBottomShadow={!!pendingAnchorId}
                     >
                         <div className="relative z-0 min-h-full">
                             <MessageList
@@ -290,16 +284,7 @@ export const ChatContainer: React.FC = () => {
                                 isLoadingOlder={isLoadingOlder}
                                 onLoadOlder={handleLoadOlder}
                                 scrollToBottom={scrollToBottom}
-                                pendingAnchorId={pendingAnchorId}
                             />
-                            {}
-                            {spacerHeight > 0 && hasActiveAnchor && (
-                                <div
-                                    data-role="active-turn-spacer"
-                                    style={{ height: spacerHeight }}
-                                    aria-hidden="true"
-                                />
-                            )}
                         </div>
                     </ScrollShadow>
                     <OverlayScrollbar containerRef={scrollRef} />

@@ -2,6 +2,7 @@ import React from 'react';
 import { opencodeClient, type RoutedOpencodeEvent } from '@/lib/opencode/client';
 import { saveSessionCursor } from '@/lib/messageCursorPersistence';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { getActiveSessionWindow } from '@/stores/types/sessionTypes';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -276,7 +277,7 @@ export const useEventStream = () => {
   );
 
   const resyncMessages = React.useCallback(
-    (sessionId: string, reason: string) => {
+    (sessionId: string, reason: string, limit?: number) => {
       if (!sessionId) {
         return Promise.resolve();
       }
@@ -287,7 +288,7 @@ export const useEventStream = () => {
       if (now - lastResyncAtRef.current < RESYNC_DEBOUNCE_MS) {
         return Promise.resolve();
       }
-      const task = loadMessages(sessionId)
+      const task = loadMessages(sessionId, limit)
         .catch((error) => {
           console.warn(`[useEventStream] Failed to resync messages (${reason}):`, error);
         })
@@ -309,7 +310,7 @@ export const useEventStream = () => {
       try {
         await Promise.all([
           loadSessions(),
-          currentSessionId ? resyncMessages(currentSessionId, reason) : Promise.resolve(),
+          currentSessionId ? resyncMessages(currentSessionId, reason, Infinity) : Promise.resolve(),
         ]);
       } catch (error) {
         console.warn('[useEventStream] Bootstrap failed:', reason, error);
@@ -1451,7 +1452,7 @@ export const useEventStream = () => {
         const sessionId = currentSessionIdRef.current;
         if (sessionId) {
           setTimeout(() => {
-            resyncMessages(sessionId, 'sse_reconnected')
+            resyncMessages(sessionId, 'sse_reconnected', Infinity)
               .then(() => requestSessionMetadataRefresh(sessionId))
               .catch((error) => {
                 console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
@@ -1618,7 +1619,7 @@ export const useEventStream = () => {
         console.info('[useEventStream] Visibility restored, triggering soft refresh...');
         const sessionId = currentSessionIdRef.current;
           if (sessionId) {
-            resyncMessages(sessionId, 'visibility_restore').catch(() => {});
+            resyncMessages(sessionId, 'visibility_restore', getActiveSessionWindow()).catch(() => {});
             requestSessionMetadataRefresh(sessionId);
           }
           
@@ -1644,7 +1645,7 @@ export const useEventStream = () => {
           const sessionId = currentSessionIdRef.current;
           if (sessionId) {
             requestSessionMetadataRefresh(sessionId);
-            resyncMessages(sessionId, 'window_focus')
+            resyncMessages(sessionId, 'window_focus', getActiveSessionWindow())
               .then(() => console.info('[useEventStream] Messages refreshed on focus'))
               .catch((err) => console.warn('[useEventStream] Failed to refresh messages:', err));
           }

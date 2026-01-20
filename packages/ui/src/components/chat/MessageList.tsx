@@ -19,8 +19,7 @@ interface MessageListProps {
     hasMoreAbove: boolean;
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
-    pendingAnchorId?: string | null;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -33,7 +32,6 @@ const MessageList: React.FC<MessageListProps> = ({
     isLoadingOlder,
     onLoadOlder,
     scrollToBottom,
-    pendingAnchorId,
 }) => {
     React.useEffect(() => {
         if (permissions.length === 0 && questions.length === 0) {
@@ -101,7 +99,6 @@ const MessageList: React.FC<MessageListProps> = ({
                         onContentChange={onMessageContentChange}
                         animationHandlers={getAnimationHandlers(message.info.id)}
                         scrollToBottom={scrollToBottom}
-                        isPendingAnchor={pendingAnchorId === message.info.id}
                         turnGroupingContext={getContextForMessage(message.info.id)}
                     />
                 ))}
@@ -118,6 +115,9 @@ const MessageList: React.FC<MessageListProps> = ({
                     ))}
                 </div>
             )}
+
+            {/* Bottom spacer - always 10% of viewport height */}
+            <div className="flex-shrink-0" style={{ height: '10vh' }} aria-hidden="true" />
         </div>
     );
 };

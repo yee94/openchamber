@@ -1,5 +1,4 @@
 import React from 'react';
-import { flushSync } from 'react-dom';
 import type { Part } from '@opencode-ai/sdk/v2';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
@@ -26,7 +25,6 @@ interface SessionMemoryState {
     isZombie?: boolean;
 }
 
-type SessionActivityPhase = 'idle' | 'busy' | 'cooldown';
 
 interface UseChatScrollManagerOptions {
     currentSessionId: string | null;
@@ -35,13 +33,10 @@ interface UseChatScrollManagerOptions {
     streamingMessageId: string | null;
     sessionMemoryState: Map<string, SessionMemoryState>;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
-    updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => void;
-    getActiveTurnAnchor: (sessionId: string) => { anchorId: string | null; spacerHeight: number } | null;
     isSyncing: boolean;
     isMobile: boolean;
     messageStreamStates: Map<string, unknown>;
     trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
-    sessionActivityPhase?: Map<string, SessionActivityPhase>;
 }
 
 export interface AnimationHandlers {
@@ -59,136 +54,79 @@ interface UseChatScrollManagerResult {
     handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
-    scrollToBottom: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
-    spacerHeight: number;
-    pendingAnchorId: string | null;
-    hasActiveAnchor: boolean;
+    scrollToBottom: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToPosition: (position: number, options?: { instant?: boolean }) => void;
+    isPinned: boolean;
 }
 
-const ANCHOR_TARGET_OFFSET = 8;
-const DEFAULT_SCROLL_BUTTON_THRESHOLD = 40;
-const NEW_USER_ANCHOR_WINDOW_MS = 20_000;
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
-// After we set an anchor/spacer, ignore incidental scroll events for a bit.
-const ANCHOR_CLEAR_GRACE_MS = 1200;
-// Require recent direct user input (wheel/touch) to treat scroll as intentional.
 const DIRECT_SCROLL_INTENT_WINDOW_MS = 250;
-const ANCHOR_CLEAR_TOLERANCE_PX = 24;
-
-const getMessageId = (message: ChatMessageRecord): string | null => {
-    const info = message.info;
-    if (typeof info?.id === 'string') {
-        return info.id;
-    }
-    return null;
-};
-
-const isUserMessage = (message: ChatMessageRecord): boolean => {
-    const info = message.info;
-    if (info?.userMessageMarker === true) {
-        return true;
-    }
-    const clientRole = info?.clientRole;
-    const serverRole = info?.role;
-    return clientRole === 'user' || serverRole === 'user';
-};
-
-const getMessageCreatedAt = (message: ChatMessageRecord): number => {
-    const info = message.info as { time?: { created?: unknown } };
-    const created = info?.time?.created;
-    return typeof created === 'number' ? created : 0;
-};
+// Threshold for re-pinning: 10% of container height (matches bottom spacer)
+const PIN_THRESHOLD_RATIO = 0.10;
 
 export const useChatScrollManager = ({
     currentSessionId,
     sessionMessages,
-    streamingMessageId,
     updateViewportAnchor,
-    updateActiveTurnAnchor,
-    getActiveTurnAnchor,
     isSyncing,
     isMobile,
-    sessionActivityPhase,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
 
-    const [anchorId, setAnchorId] = React.useState<string | null>(null);
-    const [spacerHeight, setSpacerHeight] = React.useState(0);
-    const [showScrollButton, setShowScrollButton] = React.useState(false);
-    const [pendingAnchorId, setPendingAnchorId] = React.useState<string | null>(null);
+    const getPinThreshold = React.useCallback(() => {
+        const container = scrollRef.current;
+        if (!container || container.clientHeight <= 0) {
+            return 0;
+        }
+        const raw = container.clientHeight * PIN_THRESHOLD_RATIO;
+        return Math.max(24, Math.min(200, raw));
+    }, []);
 
-    const lastScrolledAnchorIdRef = React.useRef<string | null>(null);
+    const [showScrollButton, setShowScrollButton] = React.useState(false);
+    const [isPinned, setIsPinned] = React.useState(true);
+
     const lastSessionIdRef = React.useRef<string | null>(null);
     const currentSessionIdRef = React.useRef<string | null>(currentSessionId ?? null);
     const suppressUserScrollUntilRef = React.useRef<number>(0);
-    const anchorClearIgnoreUntilRef = React.useRef<number>(0);
     const lastDirectScrollIntentAtRef = React.useRef<number>(0);
-    const previousMessageIdsRef = React.useRef<Set<string>>(new Set());
-    const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
-    const spacerHeightRef = React.useRef(0);
+    const isPinnedRef = React.useRef(true);
+    const lastScrollTopRef = React.useRef<number>(0);
 
-    const anchorIdRef = React.useRef<string | null>(null);
-    const pendingRestoreAnchorRef = React.useRef<{ sessionId: string; anchorId: string; startedAt: number } | null>(null);
-
-    const userScrollOverrideRef = React.useRef<boolean>(false);
-
-    const currentPhase = currentSessionId
-        ? sessionActivityPhase?.get(currentSessionId) ?? 'idle'
-        : 'idle';
-    const isActivePhase = currentPhase === 'busy' || currentPhase === 'cooldown';
 
     React.useEffect(() => {
         currentSessionIdRef.current = currentSessionId ?? null;
     }, [currentSessionId]);
 
-    const updateSpacerHeight = React.useCallback((height: number) => {
-        const newHeight = Math.max(0, height);
-        if (spacerHeightRef.current !== newHeight) {
-            spacerHeightRef.current = newHeight;
-            setSpacerHeight(newHeight);
-        }
-    }, []);
-
-    const calculateAnchorPosition = React.useCallback((anchorElement: HTMLElement): number => {
-        const messageTop = anchorElement.offsetTop;
-        return messageTop - ANCHOR_TARGET_OFFSET;
-    }, []);
-
-    const isAnchorStillPinned = React.useCallback((): boolean => {
-        const container = scrollRef.current;
-        const anchorId = anchorIdRef.current;
-        if (!container || !anchorId) return false;
-
-        const anchorElement = container.querySelector(`[data-message-id="${anchorId}"]`) as HTMLElement | null;
-        if (!anchorElement) return false;
-
-        const expectedTop = calculateAnchorPosition(anchorElement);
-        const distance = Math.abs(container.scrollTop - expectedTop);
-        return distance <= ANCHOR_CLEAR_TOLERANCE_PX;
-    }, [calculateAnchorPosition]);
-
-    const clearActiveTurnAnchor = React.useCallback((sessionId: string) => {
-        anchorIdRef.current = null;
-        lastScrolledAnchorIdRef.current = null;
-        pendingRestoreAnchorRef.current = null;
-        setAnchorId(null);
-        updateSpacerHeight(0);
-        updateActiveTurnAnchor(sessionId, null, 0);
-    }, [updateActiveTurnAnchor, updateSpacerHeight]);
-
     const markProgrammaticScroll = React.useCallback(() => {
         suppressUserScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_SUPPRESS_MS;
     }, []);
 
+    const getDistanceFromBottom = React.useCallback(() => {
+        const container = scrollRef.current;
+        if (!container) return 0;
+        return container.scrollHeight - container.scrollTop - container.clientHeight;
+    }, []);
+
+    const updatePinnedState = React.useCallback((newPinned: boolean) => {
+        if (isPinnedRef.current !== newPinned) {
+            isPinnedRef.current = newPinned;
+            setIsPinned(newPinned);
+        }
+    }, []);
+
+    const scrollToBottomInternal = React.useCallback((options?: { instant?: boolean; followBottom?: boolean }) => {
+        const container = scrollRef.current;
+        if (!container) return;
+
+        const bottom = container.scrollHeight - container.clientHeight;
+        markProgrammaticScroll();
+        scrollEngine.scrollToPosition(Math.max(0, bottom), options);
+    }, [markProgrammaticScroll, scrollEngine]);
+
     const updateScrollButtonVisibility = React.useCallback(() => {
         const container = scrollRef.current;
         if (!container) {
-            setShowScrollButton(false);
-            return;
-        }
-
-        if (pendingAnchorId) {
             setShowScrollButton(false);
             return;
         }
@@ -199,115 +137,29 @@ export const useChatScrollManager = ({
             return;
         }
 
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        const currentSpacerHeight = spacerHeightRef.current;
+        // Show scroll button when scrolled above the 10vh threshold
+        const distanceFromBottom = getDistanceFromBottom();
+        setShowScrollButton(distanceFromBottom > getPinThreshold());
+    }, [getDistanceFromBottom, getPinThreshold]);
 
-        if (currentSpacerHeight > 0) {
-            const spacerStartPosition = container.scrollHeight - currentSpacerHeight;
-            const viewportBottom = container.scrollTop + container.clientHeight;
-            setShowScrollButton(viewportBottom < spacerStartPosition);
-        } else {
-            setShowScrollButton(distanceFromBottom > DEFAULT_SCROLL_BUTTON_THRESHOLD);
-        }
-    }, [pendingAnchorId]);
-
-    const scrollToBottom = React.useCallback((options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => {
+    const scrollToPosition = React.useCallback((position: number, options?: { instant?: boolean }) => {
         const container = scrollRef.current;
         if (!container) return;
 
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-
-        const shouldRespectUserScroll =
-            userScrollOverrideRef.current &&
-            currentPhase === 'idle' &&
-            !isSyncing &&
-            !options?.force &&
-            distanceFromBottom > DEFAULT_SCROLL_BUTTON_THRESHOLD;
-
-        if (shouldRespectUserScroll) {
-            return;
-        }
-
-        if (options?.force) {
-            userScrollOverrideRef.current = false;
-        }
-
-        if (options?.clearAnchor && currentSessionId && anchorIdRef.current) {
-            clearActiveTurnAnchor(currentSessionId);
-        }
-
-        const bottom = container.scrollHeight - container.clientHeight;
         markProgrammaticScroll();
-        scrollEngine.scrollToPosition(Math.max(0, bottom), options);
-    }, [clearActiveTurnAnchor, currentPhase, currentSessionId, isSyncing, markProgrammaticScroll, scrollEngine]);
+        scrollEngine.scrollToPosition(Math.max(0, position), options);
+    }, [markProgrammaticScroll, scrollEngine]);
 
-    const scrollToNewAnchor = React.useCallback((messageId: string) => {
-        if (lastScrolledAnchorIdRef.current === messageId) {
-            return;
-        }
-        lastScrolledAnchorIdRef.current = messageId;
+    const scrollToBottom = React.useCallback((options?: { instant?: boolean; force?: boolean }) => {
+        const container = scrollRef.current;
+        if (!container) return;
 
-        // Give the UI a grace window so incidental scroll/layout events don't clear the anchor.
-        anchorClearIgnoreUntilRef.current = Date.now() + ANCHOR_CLEAR_GRACE_MS;
+        // Re-pin when explicitly scrolling to bottom
+        updatePinnedState(true);
 
-        setPendingAnchorId(messageId);
-        const expectedSessionId = currentSessionIdRef.current;
-
-        window.requestAnimationFrame(() => {
-            if (expectedSessionId !== currentSessionIdRef.current) {
-                return;
-            }
-
-            const container = scrollRef.current;
-            if (!container) {
-                setPendingAnchorId(null);
-                return;
-            }
-
-            const anchorElement = container.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null;
-            if (!anchorElement) {
-                setPendingAnchorId(null);
-                return;
-            }
-
-            const containerHeight = container.clientHeight;
-            const targetScrollTop = calculateAnchorPosition(anchorElement);
-
-            const contentHeight = container.scrollHeight;
-            const currentSpacer = spacerHeightRef.current;
-            const contentWithoutSpacer = contentHeight - currentSpacer;
-            const requiredHeight = targetScrollTop + containerHeight;
-
-            let newSpacerHeight = 0;
-            if (contentWithoutSpacer < requiredHeight) {
-                newSpacerHeight = requiredHeight - contentWithoutSpacer;
-            }
-
-            if (newSpacerHeight !== currentSpacer) {
-                updateSpacerHeight(newSpacerHeight);
-            }
-
-            if (currentSessionIdRef.current) {
-                updateActiveTurnAnchor(currentSessionIdRef.current, messageId, newSpacerHeight);
-            }
-
-            window.requestAnimationFrame(() => {
-                if (expectedSessionId !== currentSessionIdRef.current) {
-                    return;
-                }
-
-                markProgrammaticScroll();
-                scrollEngine.scrollToPosition(Math.max(0, targetScrollTop), { instant: true });
-
-                window.requestAnimationFrame(() => {
-                    if (expectedSessionId !== currentSessionIdRef.current) {
-                        return;
-                    }
-                    setPendingAnchorId(null);
-                });
-            });
-        });
-    }, [calculateAnchorPosition, markProgrammaticScroll, scrollEngine, updateActiveTurnAnchor, updateSpacerHeight]);
+        scrollToBottomInternal(options);
+        setShowScrollButton(false);
+    }, [scrollToBottomInternal, updatePinnedState]);
 
     const handleScrollEvent = React.useCallback((event?: Event) => {
         const container = scrollRef.current;
@@ -316,46 +168,44 @@ export const useChatScrollManager = ({
         }
 
         const now = Date.now();
-        const isProgrammatic = now < suppressUserScrollUntilRef.current || pendingAnchorId !== null;
-
+        const isProgrammatic = now < suppressUserScrollUntilRef.current;
         const hasDirectIntent = now - lastDirectScrollIntentAtRef.current <= DIRECT_SCROLL_INTENT_WINDOW_MS;
-
-        if (event?.isTrusted && !isProgrammatic && hasDirectIntent) {
-            userScrollOverrideRef.current = true;
-        }
 
         scrollEngine.handleScroll();
         updateScrollButtonVisibility();
 
-        const shouldIgnoreAnchorClear = now < anchorClearIgnoreUntilRef.current;
+        // Handle pin/unpin logic
+        const currentScrollTop = container.scrollTop;
 
-        if (
-            event?.isTrusted &&
-            !isProgrammatic &&
-            !shouldIgnoreAnchorClear &&
-            hasDirectIntent &&
-            currentPhase === 'idle' &&
-            anchorIdRef.current !== null &&
-            spacerHeightRef.current > 0 &&
-            // Only clear when the user actually scrolls away from the pinned anchor.
-            // (Spacer being out of viewport is expected while anchored.)
-            !isAnchorStillPinned()
-        ) {
-            clearActiveTurnAnchor(currentSessionId);
+        // Unpin requires strict user intent check
+        if (event?.isTrusted && !isProgrammatic && hasDirectIntent) {
+            const scrollingUp = currentScrollTop < lastScrollTopRef.current;
+            if (scrollingUp && isPinnedRef.current) {
+                updatePinnedState(false);
+            }
         }
+
+        // Re-pin at bottom should always work (even momentum scroll)
+        if (!isPinnedRef.current) {
+            const distanceFromBottom = getDistanceFromBottom();
+            if (distanceFromBottom <= getPinThreshold()) {
+                updatePinnedState(true);
+            }
+        }
+
+        lastScrollTopRef.current = currentScrollTop;
 
         const { scrollTop, scrollHeight, clientHeight } = container;
         const position = (scrollTop + clientHeight / 2) / Math.max(scrollHeight, 1);
         const estimatedIndex = Math.floor(position * sessionMessages.length);
         updateViewportAnchor(currentSessionId, estimatedIndex);
     }, [
-        clearActiveTurnAnchor,
-        currentPhase,
         currentSessionId,
-        isAnchorStillPinned,
-        pendingAnchorId,
+        getDistanceFromBottom,
+        getPinThreshold,
         scrollEngine,
         sessionMessages.length,
+        updatePinnedState,
         updateScrollButtonVisibility,
         updateViewportAnchor,
     ]);
@@ -379,6 +229,7 @@ export const useChatScrollManager = ({
         };
     }, [handleScrollEvent]);
 
+    // Session switch - always start pinned at bottom
     useIsomorphicLayoutEffect(() => {
         if (!currentSessionId || currentSessionId === lastSessionIdRef.current) {
             return;
@@ -387,175 +238,69 @@ export const useChatScrollManager = ({
         lastSessionIdRef.current = currentSessionId;
         MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
 
-        previousMessageIdsRef.current = new Set(
-            sessionMessages.map(getMessageId).filter((id): id is string => Boolean(id))
-        );
-        lastMessageCountRef.current = sessionMessages.length;
-
-        if (isActivePhase) {
-            const persistedAnchor = getActiveTurnAnchor(currentSessionId);
-            if (persistedAnchor && persistedAnchor.anchorId) {
-                anchorIdRef.current = persistedAnchor.anchorId;
-                lastScrolledAnchorIdRef.current = persistedAnchor.anchorId;
-
-                const container = scrollRef.current;
-                const anchorElement = container
-                    ? (container.querySelector(`[data-message-id="${persistedAnchor.anchorId}"]`) as HTMLElement | null)
-                    : null;
-                const messageHeight = anchorElement?.offsetHeight ?? 0;
-                const restoredSpacerHeight = Math.max(0, persistedAnchor.spacerHeight - (messageHeight - 50));
-
-                flushSync(() => {
-                    setAnchorId(persistedAnchor.anchorId);
-                    updateSpacerHeight(restoredSpacerHeight);
-                });
-
-                pendingRestoreAnchorRef.current = { sessionId: currentSessionId, anchorId: persistedAnchor.anchorId, startedAt: Date.now() };
-            } else {
-                lastScrolledAnchorIdRef.current = null;
-                anchorIdRef.current = null;
-                setAnchorId(null);
-                updateSpacerHeight(0);
-                pendingRestoreAnchorRef.current = null;
-
-                const container = scrollRef.current;
-                if (container) {
-                    const bottom = container.scrollHeight - container.clientHeight;
-                    markProgrammaticScroll();
-                    scrollEngine.scrollToPosition(Math.max(0, bottom), { instant: true });
-                }
-            }
-        } else {
-            lastScrolledAnchorIdRef.current = null;
-            anchorIdRef.current = null;
-            setAnchorId(null);
-            updateSpacerHeight(0);
-            pendingRestoreAnchorRef.current = null;
-            updateActiveTurnAnchor(currentSessionId, null, 0);
-
-            const container = scrollRef.current;
-            if (container) {
-                const bottom = container.scrollHeight - container.clientHeight;
-                markProgrammaticScroll();
-                scrollEngine.scrollToPosition(Math.max(0, bottom), { instant: true });
-            }
-        }
-
-        setPendingAnchorId(null);
+        // Always start pinned at bottom on session switch
+        updatePinnedState(true);
         setShowScrollButton(false);
-        userScrollOverrideRef.current = false;
-    }, [
-        currentSessionId,
-        getActiveTurnAnchor,
-        isActivePhase,
-        markProgrammaticScroll,
-        scrollEngine,
-        updateActiveTurnAnchor,
-        updateSpacerHeight,
-        sessionMessages,
-    ]);
 
-    useIsomorphicLayoutEffect(() => {
-        if (typeof window === 'undefined') return;
-        if (!currentSessionId) return;
+        const container = scrollRef.current;
+        if (container) {
+            markProgrammaticScroll();
+            scrollToBottomInternal({ instant: true });
+        }
+    }, [currentSessionId, markProgrammaticScroll, scrollToBottomInternal, updatePinnedState]);
 
-        const pending = pendingRestoreAnchorRef.current;
-        if (!pending || pending.sessionId !== currentSessionId) return;
+    // Maintain pin-to-bottom when content changes
+    React.useEffect(() => {
+        if (!isPinnedRef.current) return;
+        if (isSyncing) return;
 
         const container = scrollRef.current;
         if (!container) return;
 
-        const anchorElement = container.querySelector(`[data-message-id="${pending.anchorId}"]`) as HTMLElement | null;
-        if (!anchorElement) {
-            // When the anchor is created from a just-sent user message, the persisted anchor can
-            // show up before the message is in the rendered list. Give it a short window.
-            if (Date.now() - pending.startedAt < 1200) {
-                return;
-            }
-            clearActiveTurnAnchor(currentSessionId);
-            return;
+        // When pinned and content grows, scroll to bottom instantly
+        const distanceFromBottom = getDistanceFromBottom();
+        if (distanceFromBottom > getPinThreshold()) {
+            markProgrammaticScroll();
+            scrollToBottomInternal({ instant: true });
         }
+    }, [getDistanceFromBottom, getPinThreshold, isSyncing, markProgrammaticScroll, scrollToBottomInternal, sessionMessages]);
 
-        const targetScrollTop = calculateAnchorPosition(anchorElement);
-        markProgrammaticScroll();
-        scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
-        pendingRestoreAnchorRef.current = null;
-    }, [calculateAnchorPosition, clearActiveTurnAnchor, currentSessionId, markProgrammaticScroll, scrollEngine, sessionMessages]);
-
-    useIsomorphicLayoutEffect(() => {
-        if (isSyncing) {
-            return;
-        }
-
-        if (lastSessionIdRef.current !== currentSessionId) {
-            return;
-        }
-
-        const previousIds = previousMessageIdsRef.current;
-        const nextIds = new Set(sessionMessages.map(getMessageId).filter((id): id is string => Boolean(id)));
-        const nextCount = sessionMessages.length;
-
-        if (nextCount > lastMessageCountRef.current) {
-            const addedIds: string[] = [];
-            nextIds.forEach((id) => {
-                if (!previousIds.has(id)) {
-                    addedIds.push(id);
-                }
-            });
-
-            if (addedIds.length > 0) {
-                const now = Date.now();
-                let latestNewUserMessageId: string | null = null;
-                let latestNewUserCreatedAt = 0;
-
-                for (let i = 0; i < sessionMessages.length; i++) {
-                    const message = sessionMessages[i];
-                    const id = getMessageId(message);
-                    if (!id || !addedIds.includes(id)) continue;
-                    if (!isUserMessage(message)) continue;
-
-                    let createdAt = getMessageCreatedAt(message);
-                    if (createdAt <= 0 && (Boolean(streamingMessageId) || isActivePhase)) {
-                        createdAt = now;
-                    }
-                    if (createdAt >= latestNewUserCreatedAt) {
-                        latestNewUserCreatedAt = createdAt;
-                        latestNewUserMessageId = id;
-                    }
-                }
-
-                const shouldAnchorNewUser =
-                    latestNewUserMessageId !== null &&
-                    (Boolean(streamingMessageId) ||
-                        isActivePhase ||
-                        now - latestNewUserCreatedAt <= NEW_USER_ANCHOR_WINDOW_MS);
-
-                if (shouldAnchorNewUser && latestNewUserMessageId) {
-                    anchorIdRef.current = latestNewUserMessageId;
-                    setAnchorId(latestNewUserMessageId);
-                    scrollToNewAnchor(latestNewUserMessageId);
-                }
-            }
-        }
-
-        lastMessageCountRef.current = nextCount;
-        previousMessageIdsRef.current = nextIds;
-    }, [currentSessionId, isActivePhase, isSyncing, scrollToNewAnchor, sessionMessages, streamingMessageId]);
-
+    // Use ResizeObserver to detect content changes and maintain pin
     React.useEffect(() => {
         const container = scrollRef.current;
         if (!container || typeof ResizeObserver === 'undefined') return;
 
         const observer = new ResizeObserver(() => {
             updateScrollButtonVisibility();
+
+            // Maintain pin when content grows - always instant for smooth experience
+            if (isPinnedRef.current) {
+                const distanceFromBottom = getDistanceFromBottom();
+                if (distanceFromBottom > getPinThreshold()) {
+                    scrollToBottomInternal({ instant: true });
+                }
+            }
         });
 
         observer.observe(container);
 
+        // Also observe children for content changes
+        const childObserver = new MutationObserver(() => {
+            if (isPinnedRef.current) {
+                const distanceFromBottom = getDistanceFromBottom();
+                if (distanceFromBottom > getPinThreshold()) {
+                    scrollToBottomInternal({ instant: true });
+                }
+            }
+        });
+
+        childObserver.observe(container, { childList: true, subtree: true });
+
         return () => {
             observer.disconnect();
+            childObserver.disconnect();
         };
-    }, [updateScrollButtonVisibility]);
+    }, [getDistanceFromBottom, getPinThreshold, scrollToBottomInternal, updateScrollButtonVisibility]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {
@@ -572,23 +317,21 @@ export const useChatScrollManager = ({
         };
     }, [currentSessionId, sessionMessages.length, updateScrollButtonVisibility]);
 
-    React.useEffect(() => {
-        if (anchorId) {
-            updateScrollButtonVisibility();
-        }
-    }, [anchorId, updateScrollButtonVisibility]);
-
-    React.useEffect(() => {
-        updateScrollButtonVisibility();
-    }, [spacerHeight, updateScrollButtonVisibility]);
-
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
 
     const handleMessageContentChange = React.useCallback(() => {
         updateScrollButtonVisibility();
-    }, [updateScrollButtonVisibility]);
 
-    const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
+        // Maintain pin when content changes - always instant
+        if (isPinnedRef.current) {
+            const distanceFromBottom = getDistanceFromBottom();
+            if (distanceFromBottom > getPinThreshold()) {
+                scrollToBottomInternal({ instant: true });
+            }
+        }
+    }, [getDistanceFromBottom, getPinThreshold, scrollToBottomInternal, updateScrollButtonVisibility]);
+ 
+     const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
         const existing = animationHandlersRef.current.get(messageId);
         if (existing) {
             return existing;
@@ -597,30 +340,34 @@ export const useChatScrollManager = ({
         const handlers: AnimationHandlers = {
             onChunk: () => {
                 updateScrollButtonVisibility();
+                if (isPinnedRef.current) {
+                    const distanceFromBottom = getDistanceFromBottom();
+                    if (distanceFromBottom > getPinThreshold()) {
+                        scrollToBottomInternal({ instant: true });
+                    }
+                }
             },
             onComplete: () => {
                 updateScrollButtonVisibility();
             },
-            onStreamingCandidate: () => {
-
-            },
-            onAnimationStart: () => {
-
-            },
+            onStreamingCandidate: () => {},
+            onAnimationStart: () => {},
             onAnimatedHeightChange: () => {
                 updateScrollButtonVisibility();
+                if (isPinnedRef.current) {
+                    const distanceFromBottom = getDistanceFromBottom();
+                    if (distanceFromBottom > getPinThreshold()) {
+                        scrollToBottomInternal({ instant: true });
+                    }
+                }
             },
-            onReservationCancelled: () => {
-
-            },
-            onReasoningBlock: () => {
-
-            },
+            onReservationCancelled: () => {},
+            onReasoningBlock: () => {},
         };
 
         animationHandlersRef.current.set(messageId, handlers);
         return handlers;
-    }, [updateScrollButtonVisibility]);
+    }, [getDistanceFromBottom, getPinThreshold, scrollToBottomInternal, updateScrollButtonVisibility]);
 
     return {
         scrollRef,
@@ -628,8 +375,7 @@ export const useChatScrollManager = ({
         getAnimationHandlers,
         showScrollButton,
         scrollToBottom,
-        spacerHeight,
-        pendingAnchorId,
-        hasActiveAnchor: anchorId !== null,
+        scrollToPosition,
+        isPinned,
     };
 };
