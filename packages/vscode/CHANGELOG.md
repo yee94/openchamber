@@ -1,3 +1,9 @@
+## [1.5.5] - 2026-01-23
+
+- Settings: agent and command overrides now prefer plural directories while still honoring legacy singular folders.
+- Skills: installs now target plural directories while still recognizing legacy singular folders.
+
+
 ## [1.5.4] - 2026-01-22
 
 - Apply Patch tool now shows a diff preview for applying patch edits.

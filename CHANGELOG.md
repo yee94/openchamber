@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-01-23
+
+- Navigation: URLs now sync the active session, tab, settings, and diff state for shareable links and reliable back/forward (thanks to @TaylorBeeston).
+- Settings: agent and command overrides now prefer plural directories while still honoring legacy singular folders.
+- Skills: installs now target plural directories while still recognizing legacy singular folders.
+- Web: push notifications no longer fire when a window is visible, avoiding duplicate alerts.
+- Web: improved push subscription handling across multiple windows for more reliable delivery.
+
 
 ## [1.5.4] - 2026-01-22
 
