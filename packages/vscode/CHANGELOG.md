@@ -1,3 +1,9 @@
+## [Unreleased]
+
+- Apply Patch tool now shows a diff preview for applying patch edits.
+- Settings: manage provider configuration files directly from the extension.
+
+
 ## [1.5.3] - 2026-01-20
 
 - Chat: Smoother session switching with more stable scroll anchoring.

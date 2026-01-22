@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Chat: new Apply Patch tool UI with diff preview for patch-based edits.
+- Files: refreshed attachment cards and related file views for clearer context.
+- Settings: manage provider configuration files directly from the UI.
+- UI: updated header and sidebar layout for a cleaner, tighter workspace fit (thanks to @TheRealAshik).
+- Diff: large diffs now lazy-load to avoid freezes (thanks to @Jovines).
+- Web: added Background notifications for PWA.
+- Reliability: connect to external OpenCode servers without auto-start and fixed subagent crashes (thanks to @TaylorBeeston).
+
+
 ## [1.5.3] - 2026-01-20
 
 - Files: edit files inline with syntax highlighting, draft protection, and save/discard flow.

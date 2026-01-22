@@ -146,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             className={cn(
                 'relative flex h-full overflow-hidden border-r border-border',
                 isDesktopApp
-                    ? 'bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/80'
+                    ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
                     : 'bg-sidebar',
                 isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
                 !isOpen && 'border-r-0'
