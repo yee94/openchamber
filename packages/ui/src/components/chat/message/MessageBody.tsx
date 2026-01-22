@@ -155,7 +155,7 @@ const UserMessageBody: React.FC<{
             style={{ contain: 'layout', transform: 'translateZ(0)' }}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
-            <div className="leading-normal overflow-hidden text-foreground/85">
+            <div className="leading-relaxed overflow-hidden text-foreground/90 text-base">
                 {textParts.map((part, index) => {
                     let mentionForPart: AgentMentionInfo | undefined;
                     if (agentMention && mentionToken && !mentionInjected) {
@@ -180,8 +180,7 @@ const UserMessageBody: React.FC<{
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
-                    "mt-1 flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto",
-                    copyHintVisible && "opacity-100 pointer-events-auto"
+                    "mt-1 flex items-center justify-end gap-2"
                 )}>
                     {onRevert && (
                         <Tooltip delayDuration={1000}>
@@ -284,7 +283,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     errorMessage,
 }) => {
 
-    void _streamPhase;
     void _allowAnimation;
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
@@ -899,11 +897,9 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             }}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
-            <div
-                className="px-3"
-            >
+            <div>
                 <div
-                    className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
+                    className="leading-relaxed overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
                 >
                     {renderedParts}
                     {showErrorMessage && (

@@ -16,9 +16,22 @@ import {
   RiSave3Line,
   RiSendPlane2Line,
   RiTextWrap,
+  RiMore2Fill,
+  RiFileAddLine,
+  RiFolderAddLine,
+  RiDeleteBinLine,
+  RiEditLine,
+  RiFileCopyLine,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -273,6 +286,24 @@ export const FilesView: React.FC = () => {
   const pendingTabRef = React.useRef<import('@/stores/useUIStore').MainTab | null>(null);
   const skipDirtyOnceRef = React.useRef(false);
 
+  const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
+  const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
+  const [dialogInputValue, setDialogInputValue] = React.useState('');
+  const [isDialogSubmitting, setIsDialogSubmitting] = React.useState(false);
+  const [contextMenuPath, setContextMenuPath] = React.useState<string | null>(null);
+
+  const canCreateFile = Boolean(files.writeFile);
+  const canCreateFolder = Boolean(files.createDirectory);
+  const canRename = Boolean(files.rename);
+  const canDelete = Boolean(files.delete);
+
+  const handleOpenDialog = React.useCallback((type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => {
+    setActiveDialog(type);
+    setDialogData(data);
+    setDialogInputValue(type === 'rename' ? data.name || '' : '');
+    setIsDialogSubmitting(false);
+  }, []);
+
   // Line selection state for commenting
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = React.useState('');
@@ -508,6 +539,78 @@ export const FilesView: React.FC = () => {
 
     void refreshRoot();
   }, [currentDirectory, refreshRoot, showGitignored]);
+
+  const handleDialogSubmit = React.useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!dialogData || !activeDialog) return;
+
+    setIsDialogSubmitting(true);
+    try {
+      if (activeDialog === 'createFile') {
+        if (!dialogInputValue.trim()) throw new Error('Filename is required');
+        const parentPath = dialogData.path;
+        // Handle root path or empty path
+        const prefix = parentPath ? `${parentPath}/` : '';
+        const newPath = normalizePath(`${prefix}${dialogInputValue.trim()}`);
+
+        if (!files.writeFile) throw new Error('Write not supported');
+        const result = await files.writeFile(newPath, '');
+        if (result.success) {
+          toast.success('File created');
+          await refreshRoot();
+        }
+      } else if (activeDialog === 'createFolder') {
+        if (!dialogInputValue.trim()) throw new Error('Folder name is required');
+        const parentPath = dialogData.path;
+        const prefix = parentPath ? `${parentPath}/` : '';
+        const newPath = normalizePath(`${prefix}${dialogInputValue.trim()}`);
+
+        const result = await files.createDirectory(newPath);
+        if (result.success) {
+          toast.success('Folder created');
+          await refreshRoot();
+        }
+      } else if (activeDialog === 'rename') {
+        if (!dialogInputValue.trim()) throw new Error('Name is required');
+        const oldPath = dialogData.path;
+        const parentDir = oldPath.split('/').slice(0, -1).join('/');
+        const prefix = parentDir ? `${parentDir}/` : '';
+        const newPath = normalizePath(`${prefix}${dialogInputValue.trim()}`);
+
+        if (files.rename) {
+            const result = await files.rename(oldPath, newPath);
+            if (result.success) {
+                toast.success('Renamed successfully');
+                await refreshRoot();
+                if (selectedFile?.path === oldPath) {
+                    setSelectedFile(null);
+                }
+            }
+        } else {
+            toast.error("Rename not supported");
+        }
+      } else if (activeDialog === 'delete') {
+        if (files.delete) {
+            const result = await files.delete(dialogData.path);
+            if (result.success) {
+                toast.success('Deleted successfully');
+                await refreshRoot();
+                if (selectedFile?.path === dialogData.path || selectedFile?.path.startsWith(dialogData.path + '/')) {
+                    setSelectedFile(null);
+                    setFileContent('');
+                }
+            }
+        } else {
+             toast.error("Delete not supported");
+        }
+      }
+      setActiveDialog(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Operation failed');
+    } finally {
+      setIsDialogSubmitting(false);
+    }
+  }, [activeDialog, dialogData, dialogInputValue, files, refreshRoot, selectedFile]);
 
   const fuzzyScore = React.useCallback((query: string, candidate: string): number | null => {
     const q = query.trim().toLowerCase();
@@ -853,56 +956,129 @@ export const FilesView: React.FC = () => {
   const renderTree = React.useCallback((dirPath: string, depth: number): React.ReactNode => {
     const nodes = childrenByDir[dirPath] ?? [];
 
-    return nodes.map((node) => {
+    return nodes.map((node, index) => {
       const isDir = node.type === 'directory';
       const isExpanded = isDir && expandedDirs.has(node.path);
       const isActive = selectedFile?.path === node.path;
       const isLoading = isDir && inFlightDirsRef.current.has(node.path);
+      const isLast = index === nodes.length - 1;
 
       return (
-        <li key={node.path}>
-          <button
-            type="button"
-            onClick={() => {
-              if (isDir) {
-                void toggleDirectory(node.path);
-              } else {
-                void handleSelectFile(node);
+        <li key={node.path} className="relative">
+          {depth > 0 && (
+            <>
+              <span className="absolute top-3.5 left-[-12px] w-3 h-px bg-border/40" />
+              {isLast && (
+                <span className="absolute top-3.5 bottom-0 left-[-13px] w-[2px] bg-background" />
+              )}
+            </>
+          )}
+          <div
+            className="group relative flex items-center"
+            onContextMenu={(event) => {
+              if (!canRename && !canCreateFile && !canCreateFolder && !canDelete) {
+                return;
               }
+              event.preventDefault();
+              setContextMenuPath(node.path);
             }}
-            className={cn(
-              'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors',
-              isActive ? 'bg-accent/70' : 'hover:bg-accent/40'
-            )}
-            style={{ paddingLeft: `${8 + depth * 12}px` }}
           >
-            {isDir ? (
-              isLoading ? (
-                <RiLoader4Line className="h-4 w-4 flex-shrink-0 animate-spin" />
-              ) : isExpanded ? (
-                <RiFolderOpenFill className="h-4 w-4 flex-shrink-0 text-primary/60" />
-              ) : (
-                <RiFolder3Fill className="h-4 w-4 flex-shrink-0 text-primary/60" />
-              )
-            ) : (
-              getFileIcon(node.extension)
-            )}
-            <span
-              className="min-w-0 flex-1 truncate typography-meta"
-              title={node.path}
+            <button
+              type="button"
+              onClick={() => {
+                if (isDir) {
+                  void toggleDirectory(node.path);
+                } else {
+                  void handleSelectFile(node);
+                }
+              }}
+              className={cn(
+                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
+                isActive ? 'bg-accent/70' : 'hover:bg-accent/40'
+              )}
             >
-              {node.name}
-            </span>
-          </button>
+              {isDir ? (
+                isLoading ? (
+                  <RiLoader4Line className="h-4 w-4 flex-shrink-0 animate-spin" />
+                ) : isExpanded ? (
+                  <RiFolderOpenFill className="h-4 w-4 flex-shrink-0 text-primary/60" />
+                ) : (
+                  <RiFolder3Fill className="h-4 w-4 flex-shrink-0 text-primary/60" />
+                )
+              ) : (
+                getFileIcon(node.extension)
+              )}
+              <span
+                className="min-w-0 flex-1 truncate typography-meta"
+                title={node.path}
+              >
+                {node.name}
+              </span>
+            </button>
+            {(canRename || canCreateFile || canCreateFolder || canDelete) && (
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                <DropdownMenu
+                  open={contextMenuPath === node.path}
+                  onOpenChange={(open) => setContextMenuPath(open ? node.path : null)}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                      <RiMore2Fill className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" onCloseAutoFocus={() => setContextMenuPath(null)}>
+                    {canRename && (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('rename', node); }}>
+                        <RiEditLine className="mr-2 h-4 w-4" /> Rename
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      void navigator.clipboard.writeText(node.path);
+                      toast.success('Path copied');
+                    }}>
+                      <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
+                    </DropdownMenuItem>
+                    {isDir && (canCreateFile || canCreateFolder) && (
+                      <>
+                        <DropdownMenuSeparator />
+                        {canCreateFile && (
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFile', node); }}>
+                            <RiFileAddLine className="mr-2 h-4 w-4" /> New File
+                          </DropdownMenuItem>
+                        )}
+                        {canCreateFolder && (
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFolder', node); }}>
+                            <RiFolderAddLine className="mr-2 h-4 w-4" /> New Folder
+                          </DropdownMenuItem>
+                        )}
+                      </>
+                    )}
+                    {canDelete && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); handleOpenDialog('delete', node); }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <RiDeleteBinLine className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
           {isDir && isExpanded && (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-1 ml-3 pl-3 border-l border-border/40 relative">
               {renderTree(node.path, depth + 1)}
             </ul>
           )}
         </li>
       );
     });
-  }, [childrenByDir, expandedDirs, handleSelectFile, selectedFile?.path, toggleDirectory]);
+  }, [childrenByDir, expandedDirs, handleSelectFile, selectedFile?.path, toggleDirectory, handleOpenDialog, canCreateFile, canCreateFolder, canRename, canDelete, contextMenuPath, setContextMenuPath]);
 
   const isSelectedImage = Boolean(selectedFile?.path && isImageFile(selectedFile.path));
   const isSelectedSvg = Boolean(selectedFile?.path && selectedFile.path.toLowerCase().endsWith('.svg'));
@@ -999,6 +1175,58 @@ export const FilesView: React.FC = () => {
       cancelled = true;
     };
   }, [files, isSelectedImage, isSelectedSvg, runtime.isDesktop, selectedFile?.path]);
+
+  const renderDialogs = () => (
+    <Dialog open={!!activeDialog} onOpenChange={(open) => !open && setActiveDialog(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {activeDialog === 'createFile' && 'Create File'}
+            {activeDialog === 'createFolder' && 'Create Folder'}
+            {activeDialog === 'rename' && 'Rename'}
+            {activeDialog === 'delete' && 'Delete'}
+          </DialogTitle>
+          <DialogDescription>
+            {activeDialog === 'createFile' && `Create a new file in ${dialogData?.path ?? 'root'}`}
+            {activeDialog === 'createFolder' && `Create a new folder in ${dialogData?.path ?? 'root'}`}
+            {activeDialog === 'rename' && `Rename ${dialogData?.name}`}
+            {activeDialog === 'delete' && `Are you sure you want to delete ${dialogData?.name}? This action cannot be undone.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        {activeDialog !== 'delete' && (
+          <div className="py-4">
+            <Input
+              value={dialogInputValue}
+              onChange={(e) => setDialogInputValue(e.target.value)}
+              placeholder={activeDialog === 'rename' ? 'New name' : 'Name'}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  void handleDialogSubmit();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setActiveDialog(null)} disabled={isDialogSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            variant={activeDialog === 'delete' ? 'destructive' : 'default'}
+            onClick={() => void handleDialogSubmit()}
+            disabled={isDialogSubmitting || (activeDialog !== 'delete' && !dialogInputValue.trim())}
+          >
+            {isDialogSubmitting ? <RiLoader4Line className="animate-spin" /> : (
+                activeDialog === 'delete' ? 'Delete' : 'Confirm'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Comment UI component
   const renderCommentUI = () => {
@@ -1369,6 +1597,24 @@ export const FilesView: React.FC = () => {
               </button>
             )}
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleOpenDialog('createFile', { path: currentDirectory, type: 'directory' })}
+            className="h-8 w-8 p-0 flex-shrink-0"
+            title="New File"
+          >
+            <RiFileAddLine className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleOpenDialog('createFolder', { path: currentDirectory, type: 'directory' })}
+            className="h-8 w-8 p-0 flex-shrink-0"
+            title="New Folder"
+          >
+            <RiFolderAddLine className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => void refreshRoot()} className="h-8 w-8 p-0 flex-shrink-0">
             <RiRefreshLine className="h-4 w-4" />
           </Button>
@@ -1419,6 +1665,7 @@ export const FilesView: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-background">
+      {renderDialogs()}
       {isMobile ? (
         showMobilePageContent ? (
           fileViewer
