@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.5.4] - 2026-01-22
 
 - Apply Patch tool now shows a diff preview for applying patch edits.
 - Settings: manage provider configuration files directly from the extension.

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+
+## [1.5.4] - 2026-01-22
+
 - Chat: new Apply Patch tool UI with diff preview for patch-based edits.
 - Files: refreshed attachment cards and related file views for clearer context.
 - Settings: manage provider configuration files directly from the UI.
