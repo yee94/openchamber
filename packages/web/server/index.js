@@ -64,6 +64,33 @@ const normalizeDirectoryPath = (value) => {
   return trimmed;
 };
 
+const resolveWorkspacePath = (targetPath, baseDirectory) => {
+  const normalized = normalizeDirectoryPath(targetPath);
+  if (!normalized || typeof normalized !== 'string') {
+    return { ok: false, error: 'Path is required' };
+  }
+
+  const resolved = path.resolve(normalized);
+  const resolvedBase = path.resolve(baseDirectory || os.homedir());
+  const relative = path.relative(resolvedBase, resolved);
+
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    return { ok: false, error: 'Path is outside of active workspace' };
+  }
+
+  return { ok: true, base: resolvedBase, resolved };
+};
+
+const resolveWorkspacePathFromContext = async (req, targetPath) => {
+  const resolvedProject = await resolveProjectDirectory(req);
+  if (!resolvedProject.directory) {
+    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
+  }
+
+  return resolveWorkspacePath(targetPath, resolvedProject.directory);
+};
+
+
 const normalizeRelativeSearchPath = (rootPath, targetPath) => {
   const relative = path.relative(rootPath, targetPath) || path.basename(targetPath);
   return relative.split(path.sep).join('/') || targetPath;
@@ -4643,16 +4670,14 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Path is required' });
       }
 
-      const expandedPath = normalizeDirectoryPath(dirPath);
-      const normalizedPath = path.normalize(expandedPath);
-      if (normalizedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, dirPath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
-      const resolvedPath = path.resolve(expandedPath);
-      await fsPromises.mkdir(resolvedPath, { recursive: true });
+      await fsPromises.mkdir(resolved.resolved, { recursive: true });
 
-      res.json({ success: true, path: resolvedPath });
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
@@ -4751,15 +4776,15 @@ async function main(options = {}) {
     }
 
     try {
-      const resolvedPath = path.resolve(normalizeDirectoryPath(filePath));
-      if (resolvedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, filePath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
       // Ensure parent directory exists
-      await fsPromises.mkdir(path.dirname(resolvedPath), { recursive: true });
-      await fsPromises.writeFile(resolvedPath, content, 'utf8');
-      res.json({ success: true, path: resolvedPath });
+      await fsPromises.mkdir(path.dirname(resolved.resolved), { recursive: true });
+      await fsPromises.writeFile(resolved.resolved, content, 'utf8');
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'EACCES') {
@@ -4767,6 +4792,75 @@ async function main(options = {}) {
       }
       console.error('Failed to write file:', error);
       res.status(500).json({ error: (error && error.message) || 'Failed to write file' });
+    }
+  });
+
+  // Delete file or directory
+  app.post('/api/fs/delete', async (req, res) => {
+    const { path: targetPath } = req.body || {};
+    if (!targetPath || typeof targetPath !== 'string') {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolved = await resolveWorkspacePathFromContext(req, targetPath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+
+      await fsPromises.rm(resolved.resolved, { recursive: true, force: true });
+
+      res.json({ success: true, path: resolved.resolved });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'File or directory not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to delete path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to delete path' });
+    }
+  });
+
+  // Rename/Move file or directory
+  app.post('/api/fs/rename', async (req, res) => {
+    const { oldPath, newPath } = req.body || {};
+    if (!oldPath || typeof oldPath !== 'string') {
+      return res.status(400).json({ error: 'oldPath is required' });
+    }
+    if (!newPath || typeof newPath !== 'string') {
+      return res.status(400).json({ error: 'newPath is required' });
+    }
+
+    try {
+      const resolvedOld = await resolveWorkspacePathFromContext(req, oldPath);
+      if (!resolvedOld.ok) {
+        return res.status(400).json({ error: resolvedOld.error });
+      }
+      const resolvedNew = await resolveWorkspacePathFromContext(req, newPath);
+      if (!resolvedNew.ok) {
+        return res.status(400).json({ error: resolvedNew.error });
+      }
+
+      if (resolvedOld.base !== resolvedNew.base) {
+        return res.status(400).json({ error: 'Source and destination must share the same workspace root' });
+      }
+
+      await fsPromises.rename(resolvedOld.resolved, resolvedNew.resolved);
+
+      res.json({ success: true, path: resolvedNew.resolved });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Source path not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to rename path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to rename path' });
     }
   });
 
