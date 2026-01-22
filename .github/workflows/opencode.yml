@@ -20,6 +20,8 @@ on:
 jobs:
   serve:
     runs-on: ubuntu-latest
+    env:
+      OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
 
     steps:
       - name: Checkout repo
@@ -29,7 +31,7 @@ jobs:
       # PERSISTENCE: Restore previous session (OAuth, chats, config)
       # ============================================================
       - name: Restore Session Data (Artifact)
-        if: ${{ secrets.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
@@ -42,9 +44,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply Restored Session Data
-        if: ${{ secrets.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
         env:
-          OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
+          OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
         run: |
           chmod +x scripts/persistence-restore.sh
           RESTORE_DIR=/tmp/opencode-restore ./scripts/persistence-restore.sh
@@ -89,7 +91,7 @@ jobs:
       # ============================================================
       - name: Start Services
         env:
-          OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
+          OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
         run: |
           # Setup Password Protection
           TTYD_ARGS=""
@@ -201,7 +203,7 @@ jobs:
       # ============================================================
       - name: Monitor & Self-Heal
         env:
-          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
+          OPENCHAMBER_UI_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
         run: |
           chmod +x scripts/monitor.sh
           # Pass all 3 URLs to monitor script
@@ -211,15 +213,15 @@ jobs:
       # PERSISTENCE: Save all session data (always runs)
       # ============================================================
       - name: Prepare Session Data for Save
-        if: ${{ always() && secrets.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
         env:
-          OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
+          OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
         run: |
           chmod +x scripts/persistence-save.sh
           SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
 
       - name: Upload Session Data (Artifact)
-        if: ${{ always() && secrets.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session
