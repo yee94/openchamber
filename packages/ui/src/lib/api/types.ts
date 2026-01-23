@@ -269,6 +269,11 @@ export interface GeneratedCommitMessage {
   highlights: string[];
 }
 
+export interface GeneratedPullRequestDescription {
+  title: string;
+  body: string;
+}
+
 export interface GitAPI {
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string): Promise<GitStatus>;
@@ -280,6 +285,10 @@ export interface GitAPI {
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
   deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }>;
   generateCommitMessage(directory: string, files: string[]): Promise<{ message: GeneratedCommitMessage }>;
+  generatePullRequestDescription(
+    directory: string,
+    payload: { base: string; head: string }
+  ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
   addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }>;
   removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }>;
@@ -478,6 +487,112 @@ export interface PushAPI {
   setVisibility(payload: { visible: boolean }): Promise<{ ok: true } | null>;
 }
 
+export type GitHubUserSummary = {
+  login: string;
+  id?: number;
+  avatarUrl?: string;
+  name?: string;
+  email?: string;
+};
+
+export type GitHubRepoRef = {
+  owner: string;
+  repo: string;
+  url: string;
+};
+
+export type GitHubChecksSummary = {
+  state: 'success' | 'failure' | 'pending' | 'unknown';
+  total: number;
+  success: number;
+  failure: number;
+  pending: number;
+};
+
+export type GitHubPullRequest = {
+  number: number;
+  title: string;
+  url: string;
+  state: 'open' | 'closed' | 'merged';
+  draft: boolean;
+  base: string;
+  head: string;
+  headSha?: string;
+  mergeable?: boolean | null;
+  mergeableState?: string | null;
+};
+
+export type GitHubPullRequestStatus = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  branch?: string;
+  pr?: GitHubPullRequest | null;
+  checks?: GitHubChecksSummary | null;
+  canMerge?: boolean;
+};
+
+export type GitHubPullRequestCreateInput = {
+  directory: string;
+  title: string;
+  head: string;
+  base: string;
+  body?: string;
+  draft?: boolean;
+};
+
+export type GitHubPullRequestMergeInput = {
+  directory: string;
+  number: number;
+  method: 'merge' | 'squash' | 'rebase';
+};
+
+export type GitHubPullRequestReadyInput = {
+  directory: string;
+  number: number;
+};
+
+export type GitHubPullRequestReadyResult = {
+  ready: boolean;
+};
+
+export type GitHubPullRequestMergeResult = {
+  merged: boolean;
+  message?: string;
+};
+
+export type GitHubAuthStatus = {
+  connected: boolean;
+  user?: GitHubUserSummary | null;
+  scope?: string;
+};
+
+export type GitHubDeviceFlowStart = {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete?: string;
+  expiresIn: number;
+  interval: number;
+  scope?: string;
+};
+
+export type GitHubDeviceFlowComplete =
+  | { connected: true; user: GitHubUserSummary; scope?: string }
+  | { connected: false; status?: string; error?: string };
+
+export interface GitHubAPI {
+  authStatus(): Promise<GitHubAuthStatus>;
+  authStart(): Promise<GitHubDeviceFlowStart>;
+  authComplete(deviceCode: string): Promise<GitHubDeviceFlowComplete>;
+  authDisconnect(): Promise<{ removed: boolean }>;
+  me?(): Promise<GitHubUserSummary>;
+
+  prStatus(directory: string, branch: string): Promise<GitHubPullRequestStatus>;
+  prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>;
+  prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;
+  prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -486,6 +601,7 @@ export interface RuntimeAPIs {
   settings: SettingsAPI;
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
+  github?: GitHubAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;

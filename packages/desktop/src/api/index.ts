@@ -7,6 +7,7 @@ import { createDesktopPermissionsAPI } from './permissions';
 import { createDesktopDiagnosticsAPI } from './diagnostics';
 import { createDesktopNotificationsAPI } from './notifications';
 import { createDesktopToolsAPI } from './tools';
+import { createDesktopGitHubAPI } from './github';
 
 const activeTerminalConnections = new Set<string>();
 
@@ -39,6 +40,7 @@ export const createDesktopAPIs = (): RuntimeAPIs & { cleanup?: () => void } => {
     settings: createDesktopSettingsAPI(),
     permissions: createDesktopPermissionsAPI(),
     notifications: createDesktopNotificationsAPI(),
+    github: createDesktopGitHubAPI(),
     diagnostics: createDesktopDiagnosticsAPI(),
     tools: createDesktopToolsAPI(),
     cleanup: () => {

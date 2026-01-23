@@ -143,7 +143,10 @@ fn get_project_config_file(working_directory: &Path) -> PathBuf {
     }
 
     // Default to root opencode.json for new configs
-    candidates.into_iter().next().unwrap_or_else(|| working_directory.join("opencode.json"))
+    candidates
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| working_directory.join("opencode.json"))
 }
 
 /// Get custom config file path from OPENCODE_CONFIG env var
@@ -390,15 +393,29 @@ pub async fn get_provider_sources(
             .is_some();
 
     Ok(ProviderSources {
-        auth: ProviderSourceInfo { exists: false, path: None },
-        user: ProviderSourceInfo { exists: user_exists, path: Some(layers.paths.user.to_string_lossy().to_string()) },
+        auth: ProviderSourceInfo {
+            exists: false,
+            path: None,
+        },
+        user: ProviderSourceInfo {
+            exists: user_exists,
+            path: Some(layers.paths.user.to_string_lossy().to_string()),
+        },
         project: ProviderSourceInfo {
             exists: project_exists,
-            path: layers.paths.project.as_ref().map(|p| p.to_string_lossy().to_string()),
+            path: layers
+                .paths
+                .project
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
         },
         custom: ProviderSourceInfo {
             exists: custom_exists,
-            path: layers.paths.custom.as_ref().map(|p| p.to_string_lossy().to_string()),
+            path: layers
+                .paths
+                .custom
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
         },
     })
 }
@@ -432,10 +449,7 @@ pub async fn remove_provider_config(
     let mut remove_provider_key = false;
     let mut remove_providers_key = false;
 
-    if let Some(provider_section) = config
-        .get_mut("provider")
-        .and_then(|v| v.as_object_mut())
-    {
+    if let Some(provider_section) = config.get_mut("provider").and_then(|v| v.as_object_mut()) {
         if provider_section.remove(provider_id).is_some() {
             removed = true;
             if provider_section.is_empty() {
@@ -444,10 +458,7 @@ pub async fn remove_provider_config(
         }
     }
 
-    if let Some(provider_section) = config
-        .get_mut("providers")
-        .and_then(|v| v.as_object_mut())
-    {
+    if let Some(provider_section) = config.get_mut("providers").and_then(|v| v.as_object_mut()) {
         if provider_section.remove(provider_id).is_some() {
             removed = true;
             if provider_section.is_empty() {
@@ -485,7 +496,8 @@ fn get_legacy_project_agent_dir(working_directory: &Path) -> PathBuf {
 /// Get project-level agent path
 fn get_project_agent_path(working_directory: &Path, agent_name: &str) -> PathBuf {
     let plural_path = get_project_agent_dir(working_directory).join(format!("{}.md", agent_name));
-    let legacy_path = get_legacy_project_agent_dir(working_directory).join(format!("{}.md", agent_name));
+    let legacy_path =
+        get_legacy_project_agent_dir(working_directory).join(format!("{}.md", agent_name));
     if legacy_path.exists() && !plural_path.exists() {
         return legacy_path;
     }
@@ -566,8 +578,10 @@ fn get_legacy_project_command_dir(working_directory: &Path) -> PathBuf {
 
 /// Get project-level command path
 fn get_project_command_path(working_directory: &Path, command_name: &str) -> PathBuf {
-    let plural_path = get_project_command_dir(working_directory).join(format!("{}.md", command_name));
-    let legacy_path = get_legacy_project_command_dir(working_directory).join(format!("{}.md", command_name));
+    let plural_path =
+        get_project_command_dir(working_directory).join(format!("{}.md", command_name));
+    let legacy_path =
+        get_legacy_project_command_dir(working_directory).join(format!("{}.md", command_name));
     if legacy_path.exists() && !plural_path.exists() {
         return legacy_path;
     }

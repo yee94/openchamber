@@ -12,6 +12,22 @@ import {
   installSkillsFromRepository as installSkillsFromGit,
   type SkillsCatalogSourceConfig,
 } from './skillsCatalog';
+import {
+  DEFAULT_GITHUB_CLIENT_ID,
+  DEFAULT_GITHUB_SCOPES,
+  clearGitHubAuth,
+  exchangeDeviceCode,
+  fetchMe,
+  readGitHubAuth,
+  startDeviceFlow,
+  writeGitHubAuth,
+} from './githubAuth';
+import {
+  createPullRequest,
+  getPullRequestStatus,
+  markPullRequestReady,
+  mergePullRequest,
+} from './githubPr';
 
 export interface BridgeRequest {
   id: string;
@@ -75,6 +91,67 @@ const readSettings = (ctx?: BridgeContext) => {
     lastDirectory: workspaceFolder,
     ...restStored,
   };
+};
+
+const readStringField = (value: unknown, key: string): string => {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  const candidate = record[key];
+  return typeof candidate === 'string' ? candidate.trim() : '';
+};
+
+const readBooleanField = (value: unknown, key: string): boolean | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const candidate = record[key];
+  return typeof candidate === 'boolean' ? candidate : undefined;
+};
+
+const readNumberField = (value: unknown, key: string): number | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const candidate = record[key];
+  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined;
+};
+
+const normalizeMergeMethod = (value: string): 'merge' | 'squash' | 'rebase' => {
+  const trimmed = value.trim();
+  if (trimmed === 'merge' || trimmed === 'squash' || trimmed === 'rebase') return trimmed;
+  return 'merge';
+};
+
+const extractZenOutputText = (value: unknown): string | null => {
+  if (!value || typeof value !== 'object') return null;
+  const root = value as Record<string, unknown>;
+  const output = root.output;
+  if (!Array.isArray(output)) return null;
+
+  const messageItem = output.find((item) => {
+    if (!item || typeof item !== 'object') return false;
+    return (item as Record<string, unknown>).type === 'message';
+  }) as Record<string, unknown> | undefined;
+  if (!messageItem) return null;
+
+  const content = messageItem.content;
+  if (!Array.isArray(content)) return null;
+
+  const textItem = content.find((item) => {
+    if (!item || typeof item !== 'object') return false;
+    return (item as Record<string, unknown>).type === 'output_text';
+  }) as Record<string, unknown> | undefined;
+
+  const text = typeof textItem?.text === 'string' ? textItem.text.trim() : '';
+  return text || null;
+};
+
+const parseJsonObjectSafe = (value: string): Record<string, unknown> | null => {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 };
 
 const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeContext) => {
@@ -877,6 +954,223 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: updated };
       }
 
+      case 'api:github/auth:status': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) {
+          return { id, type, success: true, data: { connected: false } };
+        }
+
+        try {
+          const user = await fetchMe(stored.accessToken);
+          return { id, type, success: true, data: { connected: true, user, scope: stored.scope } };
+        } catch (error: unknown) {
+          const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          if (status === 401 || message === 'unauthorized') {
+            await clearGitHubAuth(context);
+            return { id, type, success: true, data: { connected: false } };
+          }
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/auth:start': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const settings = readSettings(ctx);
+        const clientId = readStringField(settings, 'githubClientId') || DEFAULT_GITHUB_CLIENT_ID;
+        const scopes = readStringField(settings, 'githubScopes') || DEFAULT_GITHUB_SCOPES;
+        const flow = await startDeviceFlow(clientId, scopes);
+        return { id, type, success: true, data: flow };
+      }
+
+      case 'api:github/auth:complete': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const deviceCode = readStringField(payload, 'deviceCode');
+        if (!deviceCode) return { id, type, success: false, error: 'deviceCode is required' };
+
+        const settings = readSettings(ctx);
+        const clientId = readStringField(settings, 'githubClientId') || DEFAULT_GITHUB_CLIENT_ID;
+
+        const token = await exchangeDeviceCode(clientId, deviceCode);
+        const tokenRecord = token && typeof token === 'object' ? (token as Record<string, unknown>) : null;
+        const tokenError = typeof tokenRecord?.error === 'string' ? tokenRecord.error : '';
+        const tokenErrorDescription = typeof tokenRecord?.error_description === 'string' ? tokenRecord.error_description : '';
+        if (tokenError) {
+          return {
+            id,
+            type,
+            success: true,
+            data: {
+              connected: false,
+              status: tokenError,
+              error: tokenErrorDescription || tokenError,
+            },
+          };
+        }
+        const accessToken = typeof tokenRecord?.access_token === 'string' ? tokenRecord.access_token : '';
+        if (!accessToken) {
+          return { id, type, success: false, error: 'Missing access_token from GitHub' };
+        }
+
+        const user = await fetchMe(accessToken);
+        await writeGitHubAuth(context, {
+          accessToken,
+          scope: typeof tokenRecord?.scope === 'string' ? tokenRecord.scope : undefined,
+          tokenType: typeof tokenRecord?.token_type === 'string' ? tokenRecord.token_type : undefined,
+          createdAt: Date.now(),
+          user,
+        });
+
+        return {
+          id,
+          type,
+          success: true,
+          data: {
+            connected: true,
+            user,
+            scope: typeof tokenRecord?.scope === 'string' ? tokenRecord.scope : undefined,
+          },
+        };
+      }
+
+      case 'api:github/auth:disconnect': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const removed = await clearGitHubAuth(context);
+        return { id, type, success: true, data: { removed } };
+      }
+
+      case 'api:github/me': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) return { id, type, success: false, error: 'GitHub not connected' };
+        try {
+          const user = await fetchMe(stored.accessToken);
+          return { id, type, success: true, data: user };
+        } catch (error: unknown) {
+          const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          if (status === 401 || message === 'unauthorized') {
+            await clearGitHubAuth(context);
+            return { id, type, success: false, error: 'GitHub token expired or revoked' };
+          }
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/pr:status': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const directory = readStringField(payload, 'directory');
+        const branch = readStringField(payload, 'branch');
+        if (!directory || !branch) {
+          return { id, type, success: false, error: 'directory and branch are required' };
+        }
+
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) {
+          return { id, type, success: true, data: { connected: false } };
+        }
+
+        try {
+          const result = await getPullRequestStatus(
+            stored.accessToken,
+            stored.user?.login || null,
+            directory,
+            branch,
+          );
+          if (result.connected === false) {
+            await clearGitHubAuth(context);
+          }
+          return { id, type, success: true, data: result };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/pr:create': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) return { id, type, success: false, error: 'GitHub not connected' };
+        const directory = readStringField(payload, 'directory');
+        const title = readStringField(payload, 'title');
+        const head = readStringField(payload, 'head');
+        const base = readStringField(payload, 'base');
+        const body = readStringField(payload, 'body');
+        const draft = readBooleanField(payload, 'draft');
+        if (!directory || !title || !head || !base) {
+          return { id, type, success: false, error: 'directory, title, head, base are required' };
+        }
+        try {
+          const pr = await createPullRequest(stored.accessToken, directory, {
+            directory,
+            title,
+            head,
+            base,
+            ...(body ? { body } : {}),
+            ...(typeof draft === 'boolean' ? { draft } : {}),
+          });
+          return { id, type, success: true, data: pr };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/pr:merge': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) return { id, type, success: false, error: 'GitHub not connected' };
+        const directory = readStringField(payload, 'directory');
+        const method = normalizeMergeMethod(readStringField(payload, 'method') || 'merge');
+        const number = readNumberField(payload, 'number') ?? 0;
+        if (!directory || !number) {
+          return { id, type, success: false, error: 'directory and number are required' };
+        }
+        try {
+          const result = await mergePullRequest(stored.accessToken, directory, {
+            directory,
+            number,
+            method,
+          });
+          return { id, type, success: true, data: result };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/pr:ready': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) return { id, type, success: false, error: 'GitHub not connected' };
+        const directory = readStringField(payload, 'directory');
+        const number = readNumberField(payload, 'number') ?? 0;
+        if (!directory || !number) {
+          return { id, type, success: false, error: 'directory and number are required' };
+        }
+        try {
+          const result = await markPullRequestReady(stored.accessToken, directory, number);
+          return { id, type, success: true, data: result };
+        } catch (error: unknown) {
+          const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          if (status === 401 || message === 'unauthorized') {
+            await clearGitHubAuth(context);
+          }
+          return { id, type, success: false, error: message };
+        }
+      }
+
       case 'api:config/reload': {
         await ctx?.manager?.restart();
         return { id, type, success: true, data: { restarted: true } };
@@ -1612,6 +1906,91 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
         const result = await gitService.getCommitFiles(directory, hash);
         return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/pr-description': {
+        const { directory, base, head } = (payload || {}) as {
+          directory?: string;
+          base?: string;
+          head?: string;
+        };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!base || !head) {
+          return { id, type, success: false, error: 'base and head are required' };
+        }
+
+        // Collect diffs (best-effort)
+        let files: string[] = [];
+        try {
+          const listed = await gitService.getGitRangeFiles(directory, base, head);
+          files = Array.isArray(listed) ? listed : [];
+        } catch {
+          files = [];
+        }
+
+        if (files.length === 0) {
+          return { id, type, success: false, error: 'No diffs available for base...head' };
+        }
+
+        let diffSummaries = '';
+        for (const file of files) {
+          try {
+            const diff = await gitService.getGitRangeDiff(directory, base, head, file, 3);
+            const raw = typeof diff?.diff === 'string' ? diff.diff : '';
+            if (!raw.trim()) continue;
+            diffSummaries += `FILE: ${file}\n${raw}\n\n`;
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!diffSummaries.trim()) {
+          return { id, type, success: false, error: 'No diffs available for selected files' };
+        }
+
+        const prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:\n- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")\n- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes\n- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names\n- Testing: bullet list ("- Not tested" allowed)\n- Notes: bullet list; include breaking/rollout notes only when relevant\n\nContext:\n- base branch: ${base}\n- head branch: ${head}\n\nDiff summary:\n${diffSummaries}`;
+
+        try {
+          const response = await fetch('https://opencode.ai/zen/v1/responses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'gpt-5-nano',
+              input: [{ role: 'user', content: prompt }],
+              max_output_tokens: 1200,
+              stream: false,
+              reasoning: { effort: 'low' },
+            }),
+          });
+          if (!response.ok) {
+            return { id, type, success: false, error: 'Failed to generate PR description' };
+          }
+          const data = await response.json().catch(() => null) as unknown;
+          const raw = extractZenOutputText(data);
+          if (!raw) {
+            return { id, type, success: false, error: 'No PR description returned by generator' };
+          }
+          const cleaned = String(raw)
+            .trim()
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/```\s*$/i, '')
+            .trim();
+
+          const parsed = parseJsonObjectSafe(cleaned) || parseJsonObjectSafe(raw);
+          if (parsed) {
+            const title = typeof parsed.title === 'string' ? parsed.title : '';
+            const body = typeof parsed.body === 'string' ? parsed.body : '';
+            return { id, type, success: true, data: { title, body } };
+          }
+
+          return { id, type, success: true, data: { title: '', body: String(raw) } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
       }
 
       case 'api:git/identity': {

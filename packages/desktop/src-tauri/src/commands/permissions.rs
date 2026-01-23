@@ -129,7 +129,10 @@ pub async fn process_directory_selection(
 
             if let Some(obj) = settings.as_object_mut() {
                 obj.insert("activeProjectId".to_string(), json!(project_id.clone()));
-                obj.insert("lastDirectory".to_string(), json!(normalized_path_for_update));
+                obj.insert(
+                    "lastDirectory".to_string(),
+                    json!(normalized_path_for_update),
+                );
             }
 
             (settings, project_id)

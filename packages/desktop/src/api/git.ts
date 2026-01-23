@@ -10,6 +10,7 @@ import type {
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   GeneratedCommitMessage,
+  GeneratedPullRequestDescription,
   GitWorktreeInfo,
   GitAddWorktreePayload,
   GitRemoveWorktreePayload,
@@ -106,6 +107,17 @@ export const createDesktopGitAPI = (): GitAPI => ({
       files
     });
     return response;
+  },
+
+  async generatePullRequestDescription(
+    directory: string,
+    payload: { base: string; head: string }
+  ): Promise<GeneratedPullRequestDescription> {
+    return safeGitInvoke<GeneratedPullRequestDescription>('generate_pr_description', {
+      directory,
+      base: payload.base,
+      head: payload.head,
+    });
   },
 
   async listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {

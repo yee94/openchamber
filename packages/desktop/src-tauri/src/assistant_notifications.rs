@@ -267,7 +267,6 @@ async fn handle_question_asked(
     properties: &Value,
     notified_questions: &Mutex<HashSet<String>>,
 ) {
-
     let session_id = properties.get("sessionID").and_then(Value::as_str);
     let question_id = properties.get("id").and_then(Value::as_str);
 

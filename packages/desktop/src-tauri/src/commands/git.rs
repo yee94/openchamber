@@ -2042,7 +2042,9 @@ pub async fn get_remote_url(
         .map_err(|e| e.to_string())?;
 
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
-    let url = run_git(&["remote", "get-url", &remote_name], &root).await.ok();
+    let url = run_git(&["remote", "get-url", &remote_name], &root)
+        .await
+        .ok();
 
     Ok(url.filter(|s| !s.is_empty()))
 }
@@ -2162,7 +2164,11 @@ pub async fn set_git_identity(
                 .await
                 .map_err(|e| e.to_string())?;
         }
-        let _ = run_git(&["config", "--local", "--unset", "credential.helper"], &root).await;
+        let _ = run_git(
+            &["config", "--local", "--unset", "credential.helper"],
+            &root,
+        )
+        .await;
     } else if auth_type == "token" && profile.host.is_some() {
         run_git(&["config", "--local", "credential.helper", "store"], &root)
             .await
@@ -2329,4 +2335,135 @@ Diff summary:
         "Failed to parse AI response: {}",
         last_error.unwrap_or_else(|| "unknown error".to_string())
     ))
+}
+
+#[tauri::command]
+pub async fn generate_pr_description(
+    directory: String,
+    base: String,
+    head: String,
+    state: State<'_, DesktopRuntime>,
+) -> Result<serde_json::Value, String> {
+    let root = validate_git_path(&directory, state.settings())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if base.trim().is_empty() || head.trim().is_empty() {
+        return Err("base and head are required".to_string());
+    }
+
+    // 1. Collect PR range diffs (base...head)
+    let range = format!("{}...{}", base.trim(), head.trim());
+    let files = {
+        let args = vec!["diff", "--name-only", range.as_str()];
+        let raw = run_git(&args, &root).await.unwrap_or_default();
+        raw.lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<String>>()
+    };
+    if files.is_empty() {
+        return Err("No diffs available for base...head".to_string());
+    }
+    let mut diff_summaries = String::new();
+    for file in files.iter() {
+        let context = "-U3";
+        let args = vec![
+            "diff",
+            "--no-color",
+            context,
+            range.as_str(),
+            "--",
+            file.as_str(),
+        ];
+        if let Ok(diff) = run_git(&args, &root).await {
+            if !diff.trim().is_empty() {
+                diff_summaries.push_str(&format!("FILE: {}\n{}\n\n", file, diff));
+            }
+        }
+    }
+
+    if diff_summaries.is_empty() {
+        return Err("No diffs available for selected files".to_string());
+    }
+
+    // 2. Construct PR-specific prompt
+    let prompt = format!(
+        r#"You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {{\"title\": string, \"body\": string}} (ONLY JSON in response, no markdown fences) with these rules:
+- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no \"feat:\", \"fix:\")
+- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes
+- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names
+- Testing: bullet list (\"- Not tested\" allowed)
+- Notes: bullet list; include breaking/rollout notes only when relevant
+Context:
+- base branch: {base}
+- head branch: {head}
+
+Diff summary:
+{diffs}"#,
+        base = base.trim(),
+        head = head.trim(),
+        diffs = diff_summaries
+    );
+
+    let model = "gpt-5-nano";
+
+    // 3. Call API
+    let client = Client::new();
+    let res = client
+        .post("https://opencode.ai/zen/v1/responses")
+        .json(&serde_json::json!({
+            "model": model,
+            "input": [{ "role": "user", "content": prompt }],
+            "max_output_tokens": 1200,
+            "stream": false,
+            "reasoning": { "effort": "low" }
+        }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        return Err(format!("API request failed: {}", res.status()));
+    }
+
+    let body_json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let raw_content = body_json["output"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["type"] == "message"))
+        .and_then(|item| item["content"].as_array())
+        .and_then(|content| content.iter().find(|entry| entry["type"] == "output_text"))
+        .and_then(|entry| entry["text"].as_str())
+        .unwrap_or("")
+        .trim();
+
+    if raw_content.is_empty() {
+        return Err("No PR description returned by generator".to_string());
+    }
+
+    let cleaned = raw_content
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+
+    let extracted = extract_json_object(cleaned);
+    let candidates = [
+        Some(cleaned.to_string()),
+        extracted,
+        Some(raw_content.to_string()),
+    ];
+
+    for candidate in candidates.iter().flatten() {
+        if !(candidate.starts_with('{') || candidate.starts_with('[')) {
+            continue;
+        }
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(candidate) {
+            let title = parsed.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            let body = parsed.get("body").and_then(|v| v.as_str()).unwrap_or("");
+            return Ok(serde_json::json!({ "title": title, "body": body }));
+        }
+    }
+
+    Ok(serde_json::json!({ "title": "", "body": raw_content }))
 }

@@ -432,6 +432,40 @@ export async function getDiff(directory, { path, staged = false, contextLines = 
   }
 }
 
+export async function getRangeDiff(directory, { base, head, path, contextLines = 3 } = {}) {
+  const git = simpleGit(normalizeDirectoryPath(directory));
+  const baseRef = typeof base === 'string' ? base.trim() : '';
+  const headRef = typeof head === 'string' ? head.trim() : '';
+  if (!baseRef || !headRef) {
+    throw new Error('base and head are required');
+  }
+
+  const args = ['diff', '--no-color'];
+  if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
+    args.push(`-U${Math.max(0, contextLines)}`);
+  }
+  args.push(`${baseRef}...${headRef}`);
+  if (path) {
+    args.push('--', path);
+  }
+  const diff = await git.raw(args);
+  return diff;
+}
+
+export async function getRangeFiles(directory, { base, head } = {}) {
+  const git = simpleGit(normalizeDirectoryPath(directory));
+  const baseRef = typeof base === 'string' ? base.trim() : '';
+  const headRef = typeof head === 'string' ? head.trim() : '';
+  if (!baseRef || !headRef) {
+    throw new Error('base and head are required');
+  }
+  const raw = await git.raw(['diff', '--name-only', `${baseRef}...${headRef}`]);
+  return String(raw || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif'];
 
 function isImageFile(filePath) {

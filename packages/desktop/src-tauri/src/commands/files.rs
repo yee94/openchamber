@@ -234,13 +234,11 @@ pub async fn list_directory(
                     .output();
 
                 match output {
-                    Ok(out) => {
-                        String::from_utf8_lossy(&out.stdout)
-                            .lines()
-                            .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
-                            .collect()
-                    }
+                    Ok(out) => String::from_utf8_lossy(&out.stdout)
+                        .lines()
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect(),
                     Err(_) => HashSet::new(),
                 }
             })
@@ -507,9 +505,13 @@ pub async fn delete_path(
     }
 
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
-    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
-        .await
-        .map_err(|err| err.to_delete_message())?;
+    let resolved_path = resolve_sandboxed_path(
+        Some(trimmed.to_string()),
+        &workspace_roots,
+        default_root.as_ref(),
+    )
+    .await
+    .map_err(|err| err.to_delete_message())?;
 
     let metadata = fs::metadata(&resolved_path)
         .await
@@ -544,9 +546,13 @@ pub async fn rename_path(
     }
 
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
-    let resolved_old = resolve_sandboxed_path(Some(trimmed_old.to_string()), &workspace_roots, default_root.as_ref())
-        .await
-        .map_err(|err| err.to_rename_message())?;
+    let resolved_old = resolve_sandboxed_path(
+        Some(trimmed_old.to_string()),
+        &workspace_roots,
+        default_root.as_ref(),
+    )
+    .await
+    .map_err(|err| err.to_rename_message())?;
     let resolved_new = resolve_creatable_path(trimmed_new, &workspace_roots, default_root.as_ref())
         .await
         .map_err(|err| err.to_rename_message())?;
@@ -895,9 +901,13 @@ pub async fn read_file(
     }
 
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
-    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
-        .await
-        .map_err(|_| "File not found or access denied".to_string())?;
+    let resolved_path = resolve_sandboxed_path(
+        Some(trimmed.to_string()),
+        &workspace_roots,
+        default_root.as_ref(),
+    )
+    .await
+    .map_err(|_| "File not found or access denied".to_string())?;
 
     let metadata = fs::metadata(&resolved_path)
         .await
@@ -932,9 +942,13 @@ pub async fn read_file_binary(
     }
 
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
-    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
-        .await
-        .map_err(|_| "File not found or access denied".to_string())?;
+    let resolved_path = resolve_sandboxed_path(
+        Some(trimmed.to_string()),
+        &workspace_roots,
+        default_root.as_ref(),
+    )
+    .await
+    .map_err(|_| "File not found or access denied".to_string())?;
 
     let metadata = fs::metadata(&resolved_path)
         .await
@@ -1041,14 +1055,8 @@ fn build_shell_path_command(shell: &str) -> Vec<String> {
             "-lic".to_string(),
             "source ~/.bashrc 2>/dev/null; echo \"__PATH__=$PATH\"".to_string(),
         ],
-        "fish" => vec![
-            "-lic".to_string(),
-            "echo \"__PATH__=$PATH\"".to_string(),
-        ],
-        _ => vec![
-            "-lic".to_string(),
-            "echo \"__PATH__=$PATH\"".to_string(),
-        ],
+        "fish" => vec!["-lic".to_string(), "echo \"__PATH__=$PATH\"".to_string()],
+        _ => vec!["-lic".to_string(), "echo \"__PATH__=$PATH\"".to_string()],
     }
 }
 
@@ -1130,9 +1138,13 @@ pub async fn exec_commands(
     }
 
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
-    let resolved_cwd = resolve_sandboxed_path(Some(cwd_trimmed.to_string()), &workspace_roots, default_root.as_ref())
-        .await
-        .map_err(|_| "Working directory not found or access denied".to_string())?;
+    let resolved_cwd = resolve_sandboxed_path(
+        Some(cwd_trimmed.to_string()),
+        &workspace_roots,
+        default_root.as_ref(),
+    )
+    .await
+    .map_err(|_| "Working directory not found or access denied".to_string())?;
 
     let metadata = fs::metadata(&resolved_cwd)
         .await

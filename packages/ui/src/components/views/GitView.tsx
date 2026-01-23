@@ -5,6 +5,7 @@ import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import {
   useGitStore,
   useGitStatus,
@@ -39,6 +40,7 @@ import { GitEmptyState } from './git/GitEmptyState';
 import { ChangesSection } from './git/ChangesSection';
 import { CommitSection } from './git/CommitSection';
 import { HistorySection } from './git/HistorySection';
+import { PullRequestSection } from './git/PullRequestSection';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -230,6 +232,15 @@ export const GitView: React.FC = () => {
   }, [currentDirectory]);
 
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+
+  const activeProject = useProjectsStore((state) => state.getActiveProject());
+  const baseBranch = React.useMemo(() => {
+    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
+    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
+      return fromProject.trim();
+    }
+    return 'main';
+  }, [activeProject?.worktreeDefaults?.baseBranch]);
 
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
@@ -1037,6 +1048,14 @@ export const GitView: React.FC = () => {
                 />
               )}
             </div>
+
+            {currentDirectory && status?.current ? (
+              <PullRequestSection
+                directory={currentDirectory}
+                branch={status.current}
+                baseBranch={baseBranch}
+              />
+            ) : null}
 
             {/* History below, constrained width */}
             <HistorySection

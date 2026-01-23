@@ -28,18 +28,26 @@ use axum::{
     routing::{any, get, post},
     Json, Router,
 };
-use commands::files::{create_directory, delete_path, exec_commands, list_directory, read_file, read_file_binary, rename_path, search_files, write_file};
+use commands::files::{
+    create_directory, delete_path, exec_commands, list_directory, read_file, read_file_binary,
+    rename_path, search_files, write_file,
+};
 use commands::git::{
-    add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit, rename_branch,
+    add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit,
     create_git_identity, delete_git_branch, delete_git_identity, delete_remote_branch,
-    discover_git_credentials, ensure_openchamber_ignored, generate_commit_message, get_commit_files,
-    get_current_git_identity, has_local_identity, get_git_branches, get_git_diff, get_git_file_diff,
+    discover_git_credentials, ensure_openchamber_ignored, generate_commit_message,
+    get_commit_files, get_current_git_identity, get_git_branches, get_git_diff, get_git_file_diff,
     get_git_identities, get_git_log, get_git_status, get_global_git_identity, get_remote_url,
-    git_fetch, git_pull, git_push, is_linked_worktree, list_git_worktrees, remove_git_worktree,
-    revert_git_file, set_git_identity, update_git_identity,
+    git_fetch, git_pull, git_push, has_local_identity, is_linked_worktree, list_git_worktrees,
+    remove_git_worktree, rename_branch, revert_git_file, set_git_identity, update_git_identity,
+    generate_pr_description,
 };
 use commands::logs::fetch_desktop_logs;
 
+use commands::github::{
+    github_auth_complete, github_auth_disconnect, github_auth_start, github_auth_status, github_me,
+    github_pr_create, github_pr_merge, github_pr_ready, github_pr_status,
+};
 use commands::notifications::desktop_notify;
 use commands::permissions::{
     pick_directory, process_directory_selection, request_directory_access,
@@ -880,6 +888,7 @@ fn main() {
             set_git_identity,
             discover_git_credentials,
             generate_commit_message,
+            generate_pr_description,
             create_terminal_session,
             send_terminal_input,
             resize_terminal,
@@ -888,6 +897,15 @@ fn main() {
             force_kill_terminal,
             fetch_desktop_logs,
             desktop_notify,
+            github_auth_status,
+            github_auth_start,
+            github_auth_complete,
+            github_auth_disconnect,
+            github_me,
+            github_pr_status,
+            github_pr_create,
+            github_pr_merge,
+            github_pr_ready,
         ])
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
@@ -2256,7 +2274,9 @@ async fn handle_config_routes(
                     resolve_project_directory(&state, None).await.ok()
                 };
 
-                match opencode_config::get_provider_sources(trimmed, working_directory.as_deref()).await {
+                match opencode_config::get_provider_sources(trimmed, working_directory.as_deref())
+                    .await
+                {
                     Ok(mut sources) => {
                         let auth = opencode_auth::get_provider_auth(trimmed).await;
                         sources.auth.exists = auth.ok().flatten().is_some();
@@ -2324,13 +2344,30 @@ async fn handle_config_routes(
                 let removal_result = if scope == "auth" {
                     opencode_auth::remove_provider_auth(trimmed).await
                 } else if scope == "user" {
-                    opencode_config::remove_provider_config(trimmed, working_directory.as_deref(), opencode_config::ProviderScope::User).await
+                    opencode_config::remove_provider_config(
+                        trimmed,
+                        working_directory.as_deref(),
+                        opencode_config::ProviderScope::User,
+                    )
+                    .await
                 } else if scope == "project" {
-                    opencode_config::remove_provider_config(trimmed, working_directory.as_deref(), opencode_config::ProviderScope::Project).await
+                    opencode_config::remove_provider_config(
+                        trimmed,
+                        working_directory.as_deref(),
+                        opencode_config::ProviderScope::Project,
+                    )
+                    .await
                 } else if scope == "custom" {
-                    opencode_config::remove_provider_config(trimmed, working_directory.as_deref(), opencode_config::ProviderScope::Custom).await
+                    opencode_config::remove_provider_config(
+                        trimmed,
+                        working_directory.as_deref(),
+                        opencode_config::ProviderScope::Custom,
+                    )
+                    .await
                 } else if scope == "all" {
-                    let auth_removed = opencode_auth::remove_provider_auth(trimmed).await.unwrap_or(false);
+                    let auth_removed = opencode_auth::remove_provider_auth(trimmed)
+                        .await
+                        .unwrap_or(false);
                     let user_removed = opencode_config::remove_provider_config(
                         trimmed,
                         working_directory.as_deref(),
@@ -2500,7 +2537,10 @@ async fn change_directory_handler(
                 "activeProjectId".to_string(),
                 Value::String(active_project_id.clone()),
             );
-            map.insert("lastDirectory".to_string(), Value::String(path_value.clone()));
+            map.insert(
+                "lastDirectory".to_string(),
+                Value::String(path_value.clone()),
+            );
 
             settings
         })
@@ -2645,7 +2685,6 @@ impl SettingsStore {
         }
     }
 
-
     pub(crate) async fn update_with<R, F>(&self, f: F) -> Result<(Value, R)>
     where
         F: FnOnce(Value) -> (Value, R),
@@ -2653,7 +2692,9 @@ impl SettingsStore {
         let _lock = self.guard.lock().await;
 
         let current = match fs::read(&self.path).await {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default())),
+            Ok(bytes) => {
+                serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default()))
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 Value::Object(Default::default())
             }

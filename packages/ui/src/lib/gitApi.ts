@@ -104,6 +104,17 @@ export async function generateCommitMessage(
   return gitHttp.generateCommitMessage(directory, files);
 }
 
+export async function generatePullRequestDescription(
+  directory: string,
+  payload: { base: string; head: string }
+): Promise<import('./api/types').GeneratedPullRequestDescription> {
+  const runtime = getRuntimeGit();
+  if (runtime?.generatePullRequestDescription) {
+    return runtime.generatePullRequestDescription(directory, payload);
+  }
+  return gitHttp.generatePullRequestDescription(directory, payload);
+}
+
 export async function listGitWorktrees(directory: string): Promise<import('./api/types').GitWorktreeInfo[]> {
   const runtime = getRuntimeGit();
   if (runtime) return runtime.listGitWorktrees(directory);

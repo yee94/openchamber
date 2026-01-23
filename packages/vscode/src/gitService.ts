@@ -685,6 +685,48 @@ export async function getGitDiff(
 }
 
 /**
+ * Get diff between two refs for a file (base...head).
+ */
+export async function getGitRangeDiff(
+  directory: string,
+  base: string,
+  head: string,
+  filePath: string,
+  contextLines = 3
+): Promise<{ diff: string }> {
+  const baseRef = (base || '').trim();
+  const headRef = (head || '').trim();
+  if (!baseRef || !headRef) {
+    return { diff: '' };
+  }
+  const args = ['diff', '--no-color', `-U${Math.max(0, contextLines)}`, `${baseRef}...${headRef}`, '--', filePath];
+  const result = await execGit(args, directory);
+  return { diff: result.stdout };
+}
+
+/**
+ * List files changed between two refs (base...head).
+ */
+export async function getGitRangeFiles(
+  directory: string,
+  base: string,
+  head: string
+): Promise<string[]> {
+  const baseRef = (base || '').trim();
+  const headRef = (head || '').trim();
+  if (!baseRef || !headRef) {
+    return [];
+  }
+  const args = ['diff', '--name-only', `${baseRef}...${headRef}`];
+  const result = await execGit(args, directory);
+  if (result.exitCode !== 0) return [];
+  return String(result.stdout || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+/**
  * Get file diff with original and modified content
  */
 export async function getGitFileDiff(

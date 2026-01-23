@@ -7,6 +7,7 @@ import { DefaultsSettings } from './DefaultsSettings';
 import { GitSettings } from './GitSettings';
 import { WorktreeSectionContent } from './WorktreeSectionContent';
 import { NotificationSettings } from './NotificationSettings';
+import { GitHubSettings } from './GitHubSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isWebRuntime } from '@/lib/desktop';
@@ -56,6 +57,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <SessionsSectionContent />;
             case 'git':
                 return <GitSectionContent />;
+            case 'github':
+                return <GitHubSectionContent />;
             case 'notifications':
                 return <NotificationSectionContent />;
             default:
@@ -115,6 +118,11 @@ const GitSectionContent: React.FC = () => {
             </div>
         </div>
     );
+};
+
+// GitHub section: Connect account for PR/issue workflows
+const GitHubSectionContent: React.FC = () => {
+    return <GitHubSettings />;
 };
 
 // Notifications section: Native browser notifications

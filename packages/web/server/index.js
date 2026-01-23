@@ -721,6 +721,18 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
     result.markdownDisplayMode = candidate.markdownDisplayMode;
   }
+  if (typeof candidate.githubClientId === 'string') {
+    const trimmed = candidate.githubClientId.trim();
+    if (trimmed.length > 0) {
+      result.githubClientId = trimmed;
+    }
+  }
+  if (typeof candidate.githubScopes === 'string') {
+    const trimmed = candidate.githubScopes.trim();
+    if (trimmed.length > 0) {
+      result.githubScopes = trimmed;
+    }
+  }
   if (typeof candidate.showReasoningTraces === 'boolean') {
     result.showReasoningTraces = candidate.showReasoningTraces;
   }
@@ -3839,6 +3851,471 @@ async function main(options = {}) {
     return authLibrary;
   };
 
+  // ================= GitHub OAuth (Device Flow) =================
+
+  // Note: scopes may be overridden via OPENCHAMBER_GITHUB_SCOPES or settings.json (see github-auth.js).
+
+  let githubLibraries = null;
+  const getGitHubLibraries = async () => {
+    if (!githubLibraries) {
+      const [auth, device, octokit] = await Promise.all([
+        import('./lib/github-auth.js'),
+        import('./lib/github-device-flow.js'),
+        import('./lib/github-octokit.js'),
+      ]);
+      githubLibraries = { ...auth, ...device, ...octokit };
+    }
+    return githubLibraries;
+  };
+
+  const getGitHubUserSummary = async (octokit) => {
+    const me = await octokit.rest.users.getAuthenticated();
+
+    let email = typeof me.data.email === 'string' ? me.data.email : null;
+    if (!email) {
+      try {
+        const emails = await octokit.rest.users.listEmailsForAuthenticatedUser({ per_page: 100 });
+        const list = Array.isArray(emails?.data) ? emails.data : [];
+        const primaryVerified = list.find((e) => e && e.primary && e.verified && typeof e.email === 'string');
+        const anyVerified = list.find((e) => e && e.verified && typeof e.email === 'string');
+        email = primaryVerified?.email || anyVerified?.email || null;
+      } catch {
+        // ignore (scope might be missing)
+      }
+    }
+
+    return {
+      login: me.data.login,
+      id: me.data.id,
+      avatarUrl: me.data.avatar_url,
+      name: typeof me.data.name === 'string' ? me.data.name : null,
+      email,
+    };
+  };
+
+  app.get('/api/github/auth/status', async (_req, res) => {
+    try {
+      const { getGitHubAuth, getOctokitOrNull, clearGitHubAuth } = await getGitHubLibraries();
+      const auth = getGitHubAuth();
+      if (!auth?.accessToken) {
+        return res.json({ connected: false });
+      }
+
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      let user = null;
+      try {
+        user = await getGitHubUserSummary(octokit);
+      } catch (error) {
+        if (error?.status === 401) {
+          clearGitHubAuth();
+          return res.json({ connected: false });
+        }
+      }
+
+      const fallback = auth.user;
+      const mergedUser = user || fallback;
+
+      return res.json({
+        connected: true,
+        user: mergedUser,
+        scope: auth.scope,
+      });
+    } catch (error) {
+      console.error('Failed to get GitHub auth status:', error);
+      return res.status(500).json({ error: error.message || 'Failed to get GitHub auth status' });
+    }
+  });
+
+  app.post('/api/github/auth/start', async (_req, res) => {
+    try {
+      const { getGitHubClientId, getGitHubScopes, startDeviceFlow } = await getGitHubLibraries();
+      const clientId = getGitHubClientId();
+      if (!clientId) {
+        return res.status(400).json({
+          error: 'GitHub OAuth client not configured. Set OPENCHAMBER_GITHUB_CLIENT_ID.',
+        });
+      }
+
+      const scope = getGitHubScopes();
+
+      const payload = await startDeviceFlow({
+        clientId,
+        scope,
+      });
+
+      return res.json({
+        deviceCode: payload.device_code,
+        userCode: payload.user_code,
+        verificationUri: payload.verification_uri,
+        verificationUriComplete: payload.verification_uri_complete,
+        expiresIn: payload.expires_in,
+        interval: payload.interval,
+        scope,
+      });
+    } catch (error) {
+      console.error('Failed to start GitHub device flow:', error);
+      return res.status(500).json({ error: error.message || 'Failed to start GitHub device flow' });
+    }
+  });
+
+  app.post('/api/github/auth/complete', async (req, res) => {
+    try {
+      const { getGitHubClientId, exchangeDeviceCode, setGitHubAuth } = await getGitHubLibraries();
+      const clientId = getGitHubClientId();
+      if (!clientId) {
+        return res.status(400).json({
+          error: 'GitHub OAuth client not configured. Set OPENCHAMBER_GITHUB_CLIENT_ID.',
+        });
+      }
+
+      const deviceCode = typeof req.body?.deviceCode === 'string'
+        ? req.body.deviceCode
+        : (typeof req.body?.device_code === 'string' ? req.body.device_code : '');
+
+      if (!deviceCode) {
+        return res.status(400).json({ error: 'deviceCode is required' });
+      }
+
+      const payload = await exchangeDeviceCode({ clientId, deviceCode });
+
+      if (payload?.error) {
+        return res.json({
+          connected: false,
+          status: payload.error,
+          error: payload.error_description || payload.error,
+        });
+      }
+
+      const accessToken = payload?.access_token;
+      if (!accessToken) {
+        return res.status(500).json({ error: 'Missing access_token from GitHub' });
+      }
+
+      const { Octokit } = await import('@octokit/rest');
+      const octokit = new Octokit({ auth: accessToken });
+      const user = await getGitHubUserSummary(octokit);
+
+      setGitHubAuth({
+        accessToken,
+        scope: typeof payload.scope === 'string' ? payload.scope : '',
+        tokenType: typeof payload.token_type === 'string' ? payload.token_type : 'bearer',
+        user,
+      });
+
+      return res.json({
+        connected: true,
+        user,
+        scope: typeof payload.scope === 'string' ? payload.scope : '',
+      });
+    } catch (error) {
+      console.error('Failed to complete GitHub device flow:', error);
+      return res.status(500).json({ error: error.message || 'Failed to complete GitHub device flow' });
+    }
+  });
+
+  app.delete('/api/github/auth', async (_req, res) => {
+    try {
+      const { clearGitHubAuth } = await getGitHubLibraries();
+      const removed = clearGitHubAuth();
+      return res.json({ success: true, removed });
+    } catch (error) {
+      console.error('Failed to disconnect GitHub:', error);
+      return res.status(500).json({ error: error.message || 'Failed to disconnect GitHub' });
+    }
+  });
+
+  app.get('/api/github/me', async (_req, res) => {
+    try {
+      const { getOctokitOrNull, clearGitHubAuth } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ error: 'GitHub not connected' });
+      }
+      let user;
+      try {
+        user = await getGitHubUserSummary(octokit);
+      } catch (error) {
+        if (error?.status === 401) {
+          clearGitHubAuth();
+          return res.status(401).json({ error: 'GitHub token expired or revoked' });
+        }
+        throw error;
+      }
+      return res.json(user);
+    } catch (error) {
+      console.error('Failed to fetch GitHub user:', error);
+      return res.status(500).json({ error: error.message || 'Failed to fetch GitHub user' });
+    }
+  });
+
+  // ================= GitHub PR APIs =================
+
+  app.get('/api/github/pr/status', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const branch = typeof req.query?.branch === 'string' ? req.query.branch.trim() : '';
+      if (!directory || !branch) {
+        return res.status(400).json({ error: 'directory and branch are required' });
+      }
+
+      const { getOctokitOrNull, getGitHubAuth } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
+      }
+
+      // Find PR for this branch (same-repo assumption)
+      const list = await octokit.rest.pulls.list({
+        owner: repo.owner,
+        repo: repo.repo,
+        state: 'open',
+        head: `${repo.owner}:${branch}`,
+        per_page: 10,
+      });
+      const first = Array.isArray(list?.data) ? list.data[0] : null;
+      if (!first) {
+        return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
+      }
+
+      // Enrich with mergeability fields
+      const prFull = await octokit.rest.pulls.get({ owner: repo.owner, repo: repo.repo, pull_number: first.number });
+      const prData = prFull?.data;
+      if (!prData) {
+        return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
+      }
+
+      // Checks summary (combined status)
+      let checks = null;
+      try {
+        const combined = await octokit.rest.repos.getCombinedStatusForRef({
+          owner: repo.owner,
+          repo: repo.repo,
+          ref: prData.head?.sha,
+        });
+        const statuses = Array.isArray(combined?.data?.statuses) ? combined.data.statuses : [];
+        const counts = { success: 0, failure: 0, pending: 0 };
+        statuses.forEach((s) => {
+          if (s.state === 'success') counts.success += 1;
+          else if (s.state === 'failure' || s.state === 'error') counts.failure += 1;
+          else if (s.state === 'pending') counts.pending += 1;
+        });
+        const total = counts.success + counts.failure + counts.pending;
+        const state = counts.failure > 0 ? 'failure' : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+        checks = { state, total, ...counts };
+      } catch {
+        checks = null;
+      }
+
+      // Permission check (best-effort)
+      let canMerge = false;
+      try {
+        const auth = getGitHubAuth();
+        const username = auth?.user?.login;
+        if (username) {
+          const perm = await octokit.rest.repos.getCollaboratorPermissionLevel({
+            owner: repo.owner,
+            repo: repo.repo,
+            username,
+          });
+          const level = perm?.data?.permission;
+          canMerge = level === 'admin' || level === 'maintain' || level === 'write';
+        }
+      } catch {
+        canMerge = false;
+      }
+
+      const mergedState = prData.merged ? 'merged' : (prData.state === 'closed' ? 'closed' : 'open');
+
+      return res.json({
+        connected: true,
+        repo,
+        branch,
+        pr: {
+          number: prData.number,
+          title: prData.title,
+          url: prData.html_url,
+          state: mergedState,
+          draft: Boolean(prData.draft),
+          base: prData.base?.ref,
+          head: prData.head?.ref,
+          headSha: prData.head?.sha,
+          mergeable: prData.mergeable,
+          mergeableState: prData.mergeable_state,
+        },
+        checks,
+        canMerge,
+      });
+    } catch (error) {
+      if (error?.status === 401) {
+        const { clearGitHubAuth } = await getGitHubLibraries();
+        clearGitHubAuth();
+        return res.json({ connected: false });
+      }
+      console.error('Failed to load GitHub PR status:', error);
+      return res.status(500).json({ error: error.message || 'Failed to load GitHub PR status' });
+    }
+  });
+
+  app.post('/api/github/pr/create', async (req, res) => {
+    try {
+      const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+      const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+      const head = typeof req.body?.head === 'string' ? req.body.head.trim() : '';
+      const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
+      const body = typeof req.body?.body === 'string' ? req.body.body : undefined;
+      const draft = typeof req.body?.draft === 'boolean' ? req.body.draft : undefined;
+      if (!directory || !title || !head || !base) {
+        return res.status(400).json({ error: 'directory, title, head, base are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ error: 'GitHub not connected' });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
+      }
+
+      const created = await octokit.rest.pulls.create({
+        owner: repo.owner,
+        repo: repo.repo,
+        title,
+        head,
+        base,
+        ...(typeof body === 'string' ? { body } : {}),
+        ...(typeof draft === 'boolean' ? { draft } : {}),
+      });
+
+      const pr = created?.data;
+      if (!pr) {
+        return res.status(500).json({ error: 'Failed to create PR' });
+      }
+
+      return res.json({
+        number: pr.number,
+        title: pr.title,
+        url: pr.html_url,
+        state: pr.state === 'closed' ? 'closed' : 'open',
+        draft: Boolean(pr.draft),
+        base: pr.base?.ref,
+        head: pr.head?.ref,
+        headSha: pr.head?.sha,
+        mergeable: pr.mergeable,
+        mergeableState: pr.mergeable_state,
+      });
+    } catch (error) {
+      console.error('Failed to create GitHub PR:', error);
+      return res.status(500).json({ error: error.message || 'Failed to create GitHub PR' });
+    }
+  });
+
+  app.post('/api/github/pr/merge', async (req, res) => {
+    try {
+      const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+      const number = typeof req.body?.number === 'number' ? req.body.number : null;
+      const method = typeof req.body?.method === 'string' ? req.body.method : 'merge';
+      if (!directory || !number) {
+        return res.status(400).json({ error: 'directory and number are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ error: 'GitHub not connected' });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
+      }
+
+      try {
+        const result = await octokit.rest.pulls.merge({
+          owner: repo.owner,
+          repo: repo.repo,
+          pull_number: number,
+          merge_method: method,
+        });
+        return res.json({ merged: Boolean(result?.data?.merged), message: result?.data?.message });
+      } catch (error) {
+        if (error?.status === 403) {
+          return res.status(403).json({ error: 'Not authorized to merge this PR' });
+        }
+        if (error?.status === 405 || error?.status === 409) {
+          return res.json({ merged: false, message: error?.message || 'PR not mergeable' });
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Failed to merge GitHub PR:', error);
+      return res.status(500).json({ error: error.message || 'Failed to merge GitHub PR' });
+    }
+  });
+
+  app.post('/api/github/pr/ready', async (req, res) => {
+    try {
+      const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+      const number = typeof req.body?.number === 'number' ? req.body.number : null;
+      if (!directory || !number) {
+        return res.status(400).json({ error: 'directory and number are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ error: 'GitHub not connected' });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
+      }
+
+      const pr = await octokit.rest.pulls.get({ owner: repo.owner, repo: repo.repo, pull_number: number });
+      const nodeId = pr?.data?.node_id;
+      if (!nodeId) {
+        return res.status(500).json({ error: 'Failed to resolve PR node id' });
+      }
+
+      if (pr?.data?.draft === false) {
+        return res.json({ ready: true });
+      }
+
+      try {
+        await octokit.graphql(
+          `mutation($pullRequestId: ID!) {\n  markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {\n    pullRequest {\n      id\n      isDraft\n    }\n  }\n}`,
+          { pullRequestId: nodeId }
+        );
+      } catch (error) {
+        if (error?.status === 403) {
+          return res.status(403).json({ error: 'Not authorized to mark PR ready' });
+        }
+        throw error;
+      }
+
+      return res.json({ ready: true });
+    } catch (error) {
+      console.error('Failed to mark PR ready:', error);
+      return res.status(500).json({ error: error.message || 'Failed to mark PR ready' });
+    }
+  });
+
   app.get('/api/provider/:providerId/source', async (req, res) => {
     try {
       const { providerId } = req.params;
@@ -4310,6 +4787,97 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to generate commit message:', error);
       res.status(500).json({ error: error.message || 'Failed to generate commit message' });
+    }
+  });
+
+  app.post('/api/git/pr-description', async (req, res) => {
+    const { getRangeDiff, getRangeFiles } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
+      const head = typeof req.body?.head === 'string' ? req.body.head.trim() : '';
+      if (!base || !head) {
+        return res.status(400).json({ error: 'base and head are required' });
+      }
+
+      const filesToDiff = await getRangeFiles(directory, { base, head });
+
+      const diffs = [];
+      for (const filePath of filesToDiff) {
+        const diff = await getRangeDiff(directory, { base, head, path: filePath, contextLines: 3 }).catch(() => '');
+        if (diff && diff.trim().length > 0) {
+          diffs.push({ path: filePath, diff });
+        }
+      }
+      if (diffs.length === 0) {
+        return res.status(400).json({ error: 'No diffs available for selected files' });
+      }
+
+      const diffSummaries = diffs.map(({ path, diff }) => `FILE: ${path}\n${diff}`).join('\n\n');
+
+      const prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:\n- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")\n- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes\n- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names\n- Testing: bullet list ("- Not tested" allowed)\n- Notes: bullet list; include breaking/rollout notes only when relevant\n\nContext:\n- base branch: ${base}\n- head branch: ${head}\n\nDiff summary:\n${diffSummaries}`;
+
+      const model = 'gpt-5-nano';
+
+      const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch('https://opencode.ai/zen/v1/responses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            input: [{ role: 'user', content: prompt }],
+            max_output_tokens: 1200,
+            stream: false,
+            reasoning: { effort: 'low' },
+          }),
+          signal: completionTimeout.signal,
+        });
+      } finally {
+        completionTimeout.cleanup();
+      }
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('PR description generation failed:', errorBody);
+        return res.status(502).json({ error: 'Failed to generate PR description' });
+      }
+
+      const data = await response.json();
+      const raw = data?.output?.find((item) => item?.type === 'message')?.content?.find((item) => item?.type === 'output_text')?.text?.trim();
+      if (!raw) {
+        return res.status(502).json({ error: 'No PR description returned by generator' });
+      }
+
+      const cleanedJson = stripJsonMarkdownWrapper(raw);
+      const extractedJson = extractJsonObject(cleanedJson) || extractJsonObject(raw);
+      const candidates = [cleanedJson, extractedJson, raw].filter((candidate, index, array) => {
+        return candidate && array.indexOf(candidate) === index;
+      });
+
+      for (const candidate of candidates) {
+        if (!(candidate.startsWith('{') || candidate.startsWith('['))) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(candidate);
+          const title = typeof parsed?.title === 'string' ? parsed.title : '';
+          const body = typeof parsed?.body === 'string' ? parsed.body : '';
+          return res.json({ title, body });
+        } catch (parseError) {
+          console.warn('PR description generation returned non-JSON body:', parseError);
+        }
+      }
+
+      return res.json({ title: '', body: raw });
+    } catch (error) {
+      console.error('Failed to generate PR description:', error);
+      return res.status(500).json({ error: error.message || 'Failed to generate PR description' });
     }
   });
 

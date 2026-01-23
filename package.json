@@ -84,6 +84,7 @@
     "@heroui/theme": "^2.4.23",
     "@ibm/plex": "^6.4.1",
     "@lezer/highlight": "^1.2.3",
+    "@octokit/rest": "^22.0.1",
     "@opencode-ai/sdk": "^1.1.19",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",

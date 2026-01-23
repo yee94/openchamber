@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use tauri::State;
@@ -233,6 +233,20 @@ fn sanitize_settings_update(payload: &Value) -> Value {
                 result_obj.insert("markdownDisplayMode".to_string(), json!(s));
             }
         }
+
+        // GitHub OAuth config (non-secret)
+        if let Some(Value::String(s)) = obj.get("githubClientId") {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                result_obj.insert("githubClientId".to_string(), json!(trimmed));
+            }
+        }
+        if let Some(Value::String(s)) = obj.get("githubScopes") {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                result_obj.insert("githubScopes".to_string(), json!(trimmed));
+            }
+        }
         if let Some(Value::String(s)) = obj.get("defaultModel") {
             let trimmed = s.trim();
             if trimmed.is_empty() {
@@ -304,7 +318,10 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Number(n)) = obj.get("memoryLimitHistorical") {
             let parsed = n
                 .as_u64()
-                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| {
+                    n.as_i64()
+                        .and_then(|v| if v >= 0 { Some(v as u64) } else { None })
+                })
                 .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
             if let Some(value) = parsed {
                 let clamped = value.max(10).min(500);
@@ -314,7 +331,10 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Number(n)) = obj.get("memoryLimitViewport") {
             let parsed = n
                 .as_u64()
-                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| {
+                    n.as_i64()
+                        .and_then(|v| if v >= 0 { Some(v as u64) } else { None })
+                })
                 .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
             if let Some(value) = parsed {
                 let clamped = value.max(20).min(500);
@@ -324,7 +344,10 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Number(n)) = obj.get("memoryLimitActiveSession") {
             let parsed = n
                 .as_u64()
-                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| {
+                    n.as_i64()
+                        .and_then(|v| if v >= 0 { Some(v as u64) } else { None })
+                })
                 .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
             if let Some(value) = parsed {
                 let clamped = value.max(30).min(1000);

@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { ButtonLarge } from '@/components/ui/button-large';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CommitInput } from './CommitInput';
 import { AIHighlightsBox } from './AIHighlightsBox';
 
@@ -97,32 +96,25 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
           )}
 
           <div className="flex items-center gap-2">
-            <Tooltip delayDuration={1000}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={onGenerateMessage}
-                  disabled={
-                    isGeneratingMessage ||
-                    commitAction !== null ||
-                    selectedCount === 0 ||
-                    isBusy
-                  }
-                  aria-label="Generate commit message"
-                >
-                  {isGeneratingMessage ? (
-                    <RiLoader4Line className="size-4 animate-spin" />
-                  ) : (
-                    <RiAiGenerate2 className="size-4 text-primary" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent sideOffset={8}>
-                Generate commit message with AI
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onGenerateMessage}
+              disabled={
+                isGeneratingMessage ||
+                commitAction !== null ||
+                selectedCount === 0 ||
+                isBusy
+              }
+              type="button"
+            >
+              {isGeneratingMessage ? (
+                <RiLoader4Line className="size-4 animate-spin" />
+              ) : (
+                <RiAiGenerate2 className="size-4 text-primary" />
+              )}
+              Generate
+            </Button>
 
             <div className="flex-1" />
 

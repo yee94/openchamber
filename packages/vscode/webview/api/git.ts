@@ -15,6 +15,7 @@ import type {
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   GeneratedCommitMessage,
+  GeneratedPullRequestDescription,
   GitWorktreeInfo,
   GitAddWorktreePayload,
   GitRemoveWorktreePayload,
@@ -94,6 +95,17 @@ export const createVSCodeGitAPI = (): GitAPI => ({
         highlights: [],
       },
     };
+  },
+
+  generatePullRequestDescription: async (
+    directory: string,
+    payload: { base: string; head: string }
+  ): Promise<GeneratedPullRequestDescription> => {
+    return sendBridgeMessage<GeneratedPullRequestDescription>('api:git/pr-description', {
+      directory,
+      base: payload.base,
+      head: payload.head,
+    });
   },
 
   listGitWorktrees: async (directory: string): Promise<GitWorktreeInfo[]> => {

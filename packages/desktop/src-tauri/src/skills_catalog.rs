@@ -791,7 +791,12 @@ async fn scan_clawdhub() -> Result<Vec<SkillsCatalogItem>> {
 
     for _ in 0..max_pages {
         let url = match &cursor {
-            Some(c) => format!("{}{}?cursor={}", CLAWDHUB_API_BASE, "/skills", urlencoding::encode(c)),
+            Some(c) => format!(
+                "{}{}?cursor={}",
+                CLAWDHUB_API_BASE,
+                "/skills",
+                urlencoding::encode(c)
+            ),
             None => format!("{}/skills", CLAWDHUB_API_BASE),
         };
 
@@ -1440,7 +1445,11 @@ async fn install_skills_from_clawdhub(
     // Check for conflicts first
     let mut conflicts = vec![];
     for sel in &req.selections {
-        let slug = sel.clawdhub.as_ref().map(|c| c.slug.as_str()).unwrap_or(&sel.skill_dir);
+        let slug = sel
+            .clawdhub
+            .as_ref()
+            .map(|c| c.slug.as_str())
+            .unwrap_or(&sel.skill_dir);
         if !validate_skill_name(slug) {
             continue;
         }
@@ -1478,8 +1487,17 @@ async fn install_skills_from_clawdhub(
     }
 
     for sel in &req.selections {
-        let slug = sel.clawdhub.as_ref().map(|c| c.slug.as_str()).unwrap_or(&sel.skill_dir);
-        let mut version = sel.clawdhub.as_ref().map(|c| c.version.as_str()).unwrap_or("latest").to_string();
+        let slug = sel
+            .clawdhub
+            .as_ref()
+            .map(|c| c.slug.as_str())
+            .unwrap_or(&sel.skill_dir);
+        let mut version = sel
+            .clawdhub
+            .as_ref()
+            .map(|c| c.version.as_str())
+            .unwrap_or("latest")
+            .to_string();
 
         if !validate_skill_name(slug) {
             skipped.push(SkippedSkill {
@@ -1548,7 +1566,8 @@ async fn install_skills_from_clawdhub(
         // Download and extract
         match download_clawdhub_skill(slug, &version).await {
             Ok(zip_data) => {
-                let temp_dir = std::env::temp_dir().join(format!("clawdhub-{}-{}", slug, Uuid::new_v4()));
+                let temp_dir =
+                    std::env::temp_dir().join(format!("clawdhub-{}-{}", slug, Uuid::new_v4()));
                 let _ = tokio::fs::remove_dir_all(&temp_dir).await;
 
                 // Extract ZIP using the zip crate

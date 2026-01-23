@@ -248,6 +248,35 @@ export async function generateCommitMessage(
   };
 }
 
+export async function generatePullRequestDescription(
+  directory: string,
+  payload: { base: string; head: string }
+): Promise<{ title: string; body: string }> {
+  const { base, head } = payload;
+  if (!base || !head) {
+    throw new Error('base and head are required');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/pr-description`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base, head }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to generate PR description');
+  }
+
+  const data = await response.json().catch(() => null);
+  const title = typeof data?.title === 'string' ? data.title : '';
+  const body = typeof data?.body === 'string' ? data.body : '';
+  if (!title && !body) {
+    throw new Error('Malformed PR description response');
+  }
+  return { title, body };
+}
+
 export async function listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
   const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory));
   if (!response.ok) {
