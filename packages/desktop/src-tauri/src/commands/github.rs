@@ -56,6 +56,105 @@ pub struct GitHubPullRequestSummary {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestHeadRepo {
+    owner: String,
+    repo: String,
+    url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    clone_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestContextResult {
+    connected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo: Option<GitHubRepoRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pr: Option<GitHubPullRequestContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    issue_comments: Option<Vec<GitHubIssueComment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    review_comments: Option<Vec<GitHubPullRequestReviewComment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    files: Option<Vec<GitHubPullRequestFile>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diff: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    checks: Option<GitHubChecksSummary>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestsListResult {
+    connected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo: Option<GitHubRepoRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prs: Option<Vec<GitHubPullRequestContext>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    has_more: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestContext {
+    #[serde(flatten)]
+    summary: GitHubPullRequestSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<GitHubUserSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    head_label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    head_repo: Option<GitHubPullRequestHeadRepo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestFile {
+    filename: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    additions: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deletions: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    patch: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestReviewComment {
+    id: u64,
+    url: String,
+    body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<GitHubUserSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    position: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GitHubPullRequestStatus {
     connected: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -142,6 +241,10 @@ pub struct GitHubIssuesListResult {
     repo: Option<GitHubRepoRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     issues: Option<Vec<GitHubIssueSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    has_more: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -345,6 +448,65 @@ struct IssueCommentResponse {
     body: Option<String>,
     #[serde(default)]
     user: Option<IssueUser>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PullListItem {
+    number: u64,
+    title: String,
+    html_url: String,
+    state: String,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    merged_at: Option<String>,
+    #[serde(default)]
+    user: Option<IssueUser>,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    base: Option<Value>,
+    #[serde(default)]
+    head: Option<Value>,
+    #[serde(default)]
+    mergeable: Option<bool>,
+    #[serde(default)]
+    mergeable_state: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PullFileResponse {
+    filename: String,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    additions: Option<u64>,
+    #[serde(default)]
+    deletions: Option<u64>,
+    #[serde(default)]
+    changes: Option<u64>,
+    #[serde(default)]
+    patch: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PullReviewCommentResponse {
+    id: u64,
+    html_url: String,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    user: Option<IssueUser>,
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    line: Option<i64>,
+    #[serde(default)]
+    position: Option<i64>,
     #[serde(default)]
     created_at: Option<String>,
     #[serde(default)]
@@ -1378,6 +1540,7 @@ pub async fn github_pr_ready(
 #[tauri::command]
 pub async fn github_issues_list(
     directory: String,
+    page: Option<u32>,
     _state: State<'_, DesktopRuntime>,
 ) -> Result<GitHubIssuesListResult, String> {
     let directory = directory.trim().to_string();
@@ -1391,6 +1554,8 @@ pub async fn github_issues_list(
             connected: false,
             repo: None,
             issues: None,
+            page: None,
+            has_more: None,
         });
     };
     if stored.access_token.trim().is_empty() {
@@ -1399,6 +1564,8 @@ pub async fn github_issues_list(
             connected: false,
             repo: None,
             issues: None,
+            page: None,
+            has_more: None,
         });
     }
 
@@ -1408,27 +1575,46 @@ pub async fn github_issues_list(
             connected: true,
             repo: None,
             issues: Some(vec![]),
+            page: Some(page.unwrap_or(1).max(1) as u64),
+            has_more: Some(false),
         });
     };
 
+    let page = page.unwrap_or(1).max(1);
     let url = format!(
-        "{}/{}/{}/issues?state=open&per_page=50",
-        API_PULLS_URL_PREFIX, repo.owner, repo.repo
+        "{}/{}/{}/issues?state=open&per_page=50&page={}",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, page
     );
 
-    let list = github_get_json::<Vec<IssueListItem>>(&url, &stored.access_token).await;
-    let list = match list {
-        Ok(v) => v,
-        Err(err) if err == "unauthorized" => {
-            let _ = clear_auth_file().await;
-            return Ok(GitHubIssuesListResult {
-                connected: false,
-                repo: None,
-                issues: None,
-            });
-        }
-        Err(err) => return Err(err),
-    };
+    let resp = reqwest::Client::new()
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        .header("Authorization", format!("Bearer {}", stored.access_token))
+        .header("User-Agent", "OpenChamber")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubIssuesListResult {
+            connected: false,
+            repo: None,
+            issues: None,
+            page: None,
+            has_more: None,
+        });
+    }
+    if !resp.status().is_success() {
+        return Err(format!("GitHub request failed: {}", resp.status()));
+    }
+    let link = resp
+        .headers()
+        .get("link")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let has_more = link.contains("rel=\"next\"");
+    let list = resp.json::<Vec<IssueListItem>>().await.map_err(|e| e.to_string())?;
 
     let issues = list
         .into_iter()
@@ -1447,6 +1633,8 @@ pub async fn github_issues_list(
         connected: true,
         repo: Some(repo),
         issues: Some(issues),
+        page: Some(page as u64),
+        has_more: Some(has_more),
     })
 }
 
@@ -1615,5 +1803,513 @@ pub async fn github_issue_comments(
         connected: true,
         repo: Some(repo),
         comments: Some(mapped),
+    })
+}
+
+fn read_string_field(value: &Value, key: &str) -> String {
+    value
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn read_bool_field(value: &Value, key: &str) -> Option<bool> {
+    value.get(key).and_then(|v| v.as_bool())
+}
+
+fn read_number_field(value: &Value, key: &str) -> Option<u64> {
+    value.get(key).and_then(|v| v.as_u64())
+}
+
+fn map_pr_user(value: &Value) -> Option<GitHubUserSummary> {
+    let login = value.get("login").and_then(|v| v.as_str()).unwrap_or("");
+    if login.trim().is_empty() {
+        return None;
+    }
+    Some(GitHubUserSummary {
+        login: login.to_string(),
+        id: value.get("id").and_then(|v| v.as_u64()),
+        avatar_url: value
+            .get("avatar_url")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        name: None,
+        email: None,
+    })
+}
+
+fn map_pr_head_repo(value: &Value) -> Option<GitHubPullRequestHeadRepo> {
+    let owner = value
+        .get("owner")
+        .and_then(|o| o.get("login"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let repo = value.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let url = value.get("html_url").and_then(|v| v.as_str()).unwrap_or("");
+    if owner.trim().is_empty() || repo.trim().is_empty() || url.trim().is_empty() {
+        return None;
+    }
+    Some(GitHubPullRequestHeadRepo {
+        owner: owner.to_string(),
+        repo: repo.to_string(),
+        url: url.to_string(),
+        clone_url: value
+            .get("clone_url")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+    })
+}
+
+async fn github_get_text(url: &str, access_token: &str, accept: &str) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(url)
+        .header("Accept", accept)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("User-Agent", "OpenChamber")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("unauthorized".to_string());
+    }
+    if !resp.status().is_success() {
+        return Err(format!("GitHub request failed: {}", resp.status()));
+    }
+    resp.text().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn github_prs_list(
+    directory: String,
+    page: Option<u32>,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<GitHubPullRequestsListResult, String> {
+    let directory = directory.trim().to_string();
+    if directory.is_empty() {
+        return Err("directory is required".to_string());
+    }
+
+    let stored = read_auth_file().await;
+    let Some(stored) = stored else {
+        return Ok(GitHubPullRequestsListResult {
+            connected: false,
+            repo: None,
+            prs: None,
+            page: None,
+            has_more: None,
+        });
+    };
+    if stored.access_token.trim().is_empty() {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubPullRequestsListResult {
+            connected: false,
+            repo: None,
+            prs: None,
+            page: None,
+            has_more: None,
+        });
+    }
+
+    let repo = resolve_repo_from_directory(&directory).await;
+    let Some(repo) = repo else {
+        return Ok(GitHubPullRequestsListResult {
+            connected: true,
+            repo: None,
+            prs: Some(vec![]),
+            page: Some(page.unwrap_or(1).max(1) as u64),
+            has_more: Some(false),
+        });
+    };
+
+    let page = page.unwrap_or(1).max(1);
+    let url = format!(
+        "{}/{}/{}/pulls?state=open&per_page=50&page={}",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, page
+    );
+
+    let resp = reqwest::Client::new()
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        .header("Authorization", format!("Bearer {}", stored.access_token))
+        .header("User-Agent", "OpenChamber")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubPullRequestsListResult {
+            connected: false,
+            repo: None,
+            prs: None,
+            page: None,
+            has_more: None,
+        });
+    }
+    if !resp.status().is_success() {
+        return Err(format!("GitHub request failed: {}", resp.status()));
+    }
+    let link = resp
+        .headers()
+        .get("link")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let has_more = link.contains("rel=\"next\"");
+    let list = resp.json::<Vec<Value>>().await.map_err(|e| e.to_string())?;
+
+    let prs = list
+        .into_iter()
+        .filter_map(|pr| {
+            let number = read_number_field(&pr, "number")?;
+            let head = pr.get("head")?;
+            let base = pr.get("base")?;
+            let head_ref = read_string_field(head, "ref");
+            let base_ref = read_string_field(base, "ref");
+            let merged = read_bool_field(&pr, "merged").unwrap_or(false);
+            let state_raw = read_string_field(&pr, "state");
+            let state = if merged {
+                "merged".to_string()
+            } else if state_raw == "closed" {
+                "closed".to_string()
+            } else {
+                "open".to_string()
+            };
+            let head_sha = read_string_field(head, "sha");
+            let head_sha = if head_sha.trim().is_empty() { None } else { Some(head_sha) };
+            let mergeable = read_bool_field(&pr, "mergeable");
+            let mergeable_state = pr
+                .get("mergeable_state")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let author = pr.get("user").and_then(map_pr_user);
+            let head_label = head.get("label").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let head_repo = head.get("repo").and_then(map_pr_head_repo);
+
+            Some(GitHubPullRequestContext {
+                summary: GitHubPullRequestSummary {
+                    number,
+                    title: read_string_field(&pr, "title"),
+                    url: read_string_field(&pr, "html_url"),
+                    state,
+                    draft: read_bool_field(&pr, "draft").unwrap_or(false),
+                    base: base_ref,
+                    head: head_ref,
+                    head_sha,
+                    mergeable,
+                    mergeable_state,
+                },
+                author,
+                head_label,
+                head_repo,
+                body: None,
+                created_at: None,
+                updated_at: None,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(GitHubPullRequestsListResult {
+        connected: true,
+        repo: Some(repo),
+        prs: Some(prs),
+        page: Some(page as u64),
+        has_more: Some(has_more),
+    })
+}
+
+#[tauri::command]
+pub async fn github_pr_context(
+    directory: String,
+    number: u64,
+    #[allow(non_snake_case)]
+    includeDiff: bool,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<GitHubPullRequestContextResult, String> {
+    let directory = directory.trim().to_string();
+    if directory.is_empty() {
+        return Err("directory is required".to_string());
+    }
+    if number == 0 {
+        return Err("number is required".to_string());
+    }
+
+    let stored = read_auth_file().await;
+    let Some(stored) = stored else {
+        return Ok(GitHubPullRequestContextResult {
+            connected: false,
+            repo: None,
+            pr: None,
+            issue_comments: None,
+            review_comments: None,
+            files: None,
+            diff: None,
+            checks: None,
+        });
+    };
+    if stored.access_token.trim().is_empty() {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubPullRequestContextResult {
+            connected: false,
+            repo: None,
+            pr: None,
+            issue_comments: None,
+            review_comments: None,
+            files: None,
+            diff: None,
+            checks: None,
+        });
+    }
+
+    let repo = resolve_repo_from_directory(&directory).await;
+    let Some(repo) = repo else {
+        return Ok(GitHubPullRequestContextResult {
+            connected: true,
+            repo: None,
+            pr: None,
+            issue_comments: None,
+            review_comments: None,
+            files: None,
+            diff: None,
+            checks: None,
+        });
+    };
+
+    let pr_url = format!("{}/{}/{}/pulls/{}", API_PULLS_URL_PREFIX, repo.owner, repo.repo, number);
+    let pr_json = github_get_json::<Value>(&pr_url, &stored.access_token).await;
+    let pr_json = match pr_json {
+        Ok(v) => v,
+        Err(err) if err == "unauthorized" => {
+            let _ = clear_auth_file().await;
+            return Ok(GitHubPullRequestContextResult {
+                connected: false,
+                repo: None,
+                pr: None,
+                issue_comments: None,
+                review_comments: None,
+                files: None,
+                diff: None,
+                checks: None,
+            });
+        }
+        Err(err) => return Err(err),
+    };
+
+    let head = pr_json.get("head").cloned().unwrap_or(Value::Null);
+    let base = pr_json.get("base").cloned().unwrap_or(Value::Null);
+    let head_ref = read_string_field(&head, "ref");
+    let base_ref = read_string_field(&base, "ref");
+    let merged = read_bool_field(&pr_json, "merged").unwrap_or(false);
+    let state_raw = read_string_field(&pr_json, "state");
+    let state = if merged {
+        "merged".to_string()
+    } else if state_raw == "closed" {
+        "closed".to_string()
+    } else {
+        "open".to_string()
+    };
+    let head_sha = read_string_field(&head, "sha");
+    let head_sha = if head_sha.trim().is_empty() { None } else { Some(head_sha) };
+
+    let pr = GitHubPullRequestContext {
+        summary: GitHubPullRequestSummary {
+            number,
+            title: read_string_field(&pr_json, "title"),
+            url: read_string_field(&pr_json, "html_url"),
+            state,
+            draft: read_bool_field(&pr_json, "draft").unwrap_or(false),
+            base: base_ref,
+            head: head_ref,
+            head_sha,
+            mergeable: read_bool_field(&pr_json, "mergeable"),
+            mergeable_state: pr_json
+                .get("mergeable_state")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+        },
+        author: pr_json.get("user").and_then(map_pr_user),
+        head_label: head.get("label").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        head_repo: head.get("repo").and_then(map_pr_head_repo),
+        body: pr_json.get("body").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        created_at: pr_json.get("created_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        updated_at: pr_json.get("updated_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
+    };
+
+    let issue_comments_url = format!(
+        "{}/{}/{}/issues/{}/comments?per_page=100",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, number
+    );
+    let issue_comments = github_get_json::<Vec<IssueCommentResponse>>(&issue_comments_url, &stored.access_token).await?;
+    let issue_comments = issue_comments
+        .into_iter()
+        .map(|c| GitHubIssueComment {
+            id: c.id,
+            url: c.html_url,
+            body: c.body.unwrap_or_default(),
+            author: c.user.as_ref().map(map_issue_user),
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+        })
+        .collect::<Vec<_>>();
+
+    let review_comments_url = format!(
+        "{}/{}/{}/pulls/{}/comments?per_page=100",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, number
+    );
+    let review_comments = github_get_json::<Vec<PullReviewCommentResponse>>(&review_comments_url, &stored.access_token).await?;
+    let review_comments = review_comments
+        .into_iter()
+        .map(|c| GitHubPullRequestReviewComment {
+            id: c.id,
+            url: c.html_url,
+            body: c.body.unwrap_or_default(),
+            author: c.user.as_ref().map(map_issue_user),
+            path: c.path,
+            line: c.line,
+            position: c.position,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+        })
+        .collect::<Vec<_>>();
+
+    let files_url = format!(
+        "{}/{}/{}/pulls/{}/files?per_page=100",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, number
+    );
+    let files = github_get_json::<Vec<PullFileResponse>>(&files_url, &stored.access_token).await?;
+    let files = files
+        .into_iter()
+        .map(|f| GitHubPullRequestFile {
+            filename: f.filename,
+            status: f.status,
+            additions: f.additions,
+            deletions: f.deletions,
+            changes: f.changes,
+            patch: f.patch,
+        })
+        .collect::<Vec<_>>();
+
+    // checks summary (same as github_pr_status)
+    let mut checks: Option<GitHubChecksSummary> = None;
+    if let Some(ref sha) = pr.summary.head_sha {
+        let check_runs_url = format!(
+            "{}/{}/{}/commits/{}/check-runs",
+            API_PULLS_URL_PREFIX, repo.owner, repo.repo, sha
+        );
+        if let Ok(runs) = github_get_json::<CheckRunsResponse>(&check_runs_url, &stored.access_token).await {
+            if !runs.check_runs.is_empty() {
+                let mut success = 0;
+                let mut failure = 0;
+                let mut pending = 0;
+                for run in runs.check_runs.iter() {
+                    let status = run.status.as_deref().unwrap_or("");
+                    let conclusion = run.conclusion.as_deref().unwrap_or("");
+                    if status == "queued" || status == "in_progress" {
+                        pending += 1;
+                        continue;
+                    }
+                    if conclusion.is_empty() {
+                        pending += 1;
+                        continue;
+                    }
+                    if conclusion == "success" || conclusion == "neutral" || conclusion == "skipped" {
+                        success += 1;
+                    } else {
+                        failure += 1;
+                    }
+                }
+                let total = success + failure + pending;
+                let state = if failure > 0 {
+                    "failure"
+                } else if pending > 0 {
+                    "pending"
+                } else if total > 0 {
+                    "success"
+                } else {
+                    "unknown"
+                };
+                checks = Some(GitHubChecksSummary {
+                    state: state.to_string(),
+                    total,
+                    success,
+                    failure,
+                    pending,
+                });
+            }
+        }
+
+        if checks.is_none() {
+            let status_url = format!(
+                "{}/{}/{}/commits/{}/status",
+                API_PULLS_URL_PREFIX, repo.owner, repo.repo, sha
+            );
+            if let Ok(status) = github_get_json::<CombinedStatusResponse>(&status_url, &stored.access_token).await {
+                let mut success = 0;
+                let mut failure = 0;
+                let mut pending = 0;
+                for s in status.statuses.iter() {
+                    match s.state.as_str() {
+                        "success" => success += 1,
+                        "failure" | "error" => failure += 1,
+                        "pending" => pending += 1,
+                        _ => {}
+                    }
+                }
+                let total = success + failure + pending;
+                let state = if failure > 0 {
+                    "failure"
+                } else if pending > 0 {
+                    "pending"
+                } else if total > 0 {
+                    "success"
+                } else {
+                    "unknown"
+                };
+                checks = Some(GitHubChecksSummary {
+                    state: state.to_string(),
+                    total,
+                    success,
+                    failure,
+                    pending,
+                });
+            }
+        }
+    }
+
+    let diff = if includeDiff {
+        let diff_text = github_get_text(&pr_url, &stored.access_token, "application/vnd.github.v3.diff").await;
+        match diff_text {
+            Ok(v) => Some(v),
+            Err(err) if err == "unauthorized" => {
+                let _ = clear_auth_file().await;
+                return Ok(GitHubPullRequestContextResult {
+                    connected: false,
+                    repo: None,
+                    pr: None,
+                    issue_comments: None,
+                    review_comments: None,
+                    files: None,
+                    diff: None,
+                    checks: None,
+                });
+            }
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    Ok(GitHubPullRequestContextResult {
+        connected: true,
+        repo: Some(repo),
+        pr: Some(pr),
+        issue_comments: Some(issue_comments),
+        review_comments: Some(review_comments),
+        files: Some(files),
+        diff,
+        checks,
     })
 }

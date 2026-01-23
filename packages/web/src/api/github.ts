@@ -4,6 +4,8 @@ import type {
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssuesListResult,
+  GitHubPullRequestContextResult,
+  GitHubPullRequestsListResult,
   GitHubPullRequest,
   GitHubPullRequestCreateInput,
   GitHubPullRequestMergeInput,
@@ -125,9 +127,38 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     return body;
   },
 
-  async issuesList(directory: string): Promise<GitHubIssuesListResult> {
+  async prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult> {
+    const page = options?.page ?? 1;
     const response = await fetch(
-      `/api/github/issues/list?directory=${encodeURIComponent(directory)}`,
+      `/api/github/pulls/list?directory=${encodeURIComponent(directory)}&page=${encodeURIComponent(String(page))}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    );
+    const body = await jsonOrNull<GitHubPullRequestsListResult & { error?: string }>(response);
+    if (!response.ok || !body) {
+      throw new Error(body?.error || response.statusText || 'Failed to load pull requests');
+    }
+    return body;
+  },
+
+  async prContext(directory: string, number: number, options?: { includeDiff?: boolean }): Promise<GitHubPullRequestContextResult> {
+    const url = new URL('/api/github/pulls/context', window.location.origin);
+    url.searchParams.set('directory', directory);
+    url.searchParams.set('number', String(number));
+    if (options?.includeDiff) {
+      url.searchParams.set('diff', '1');
+    }
+    const response = await fetch(url.toString(), { method: 'GET', headers: { Accept: 'application/json' } });
+    const body = await jsonOrNull<GitHubPullRequestContextResult & { error?: string }>(response);
+    if (!response.ok || !body) {
+      throw new Error(body?.error || response.statusText || 'Failed to load pull request context');
+    }
+    return body;
+  },
+
+  async issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult> {
+    const page = options?.page ?? 1;
+    const response = await fetch(
+      `/api/github/issues/list?directory=${encodeURIComponent(directory)}&page=${encodeURIComponent(String(page))}`,
       { method: 'GET', headers: { Accept: 'application/json' } }
     );
     const payload = await jsonOrNull<GitHubIssuesListResult & { error?: string }>(response);

@@ -13,7 +13,7 @@ import {
   RiCheckboxBlankLine,
   RiCheckboxLine,
   RiExternalLinkLine,
-  RiGithubLine,
+  RiGitPullRequestLine,
   RiLoader4Line,
   RiSearchLine,
 } from '@remixicon/react';
@@ -25,15 +25,15 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useContextStore } from '@/stores/contextStore';
 import { opencodeClient } from '@/lib/opencode/client';
-import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
-import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
-import type { GitHubIssue, GitHubIssueComment, GitHubIssuesListResult, GitHubIssueSummary } from '@/lib/api/types';
+import { createWorktreeSessionForNewBranchExact } from '@/lib/worktreeSessionCreator';
+import { gitFetch } from '@/lib/gitApi';
+import type { GitHubPullRequestContextResult, GitHubPullRequestSummary, GitHubPullRequestsListResult } from '@/lib/api/types';
 
-const parseIssueNumber = (value: string): number | null => {
+const parsePullRequestNumber = (value: string): number | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const urlMatch = trimmed.match(/\/issues\/(\d+)(?:\b|\/|$)/i);
+  const urlMatch = trimmed.match(/\/pull\/(\d+)(?:\b|\/|$)/i);
   if (urlMatch) {
     const parsed = Number(urlMatch[1]);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -48,20 +48,11 @@ const parseIssueNumber = (value: string): number | null => {
   return null;
 };
 
-const buildIssueContextText = (args: {
-  repo: GitHubIssuesListResult['repo'] | undefined;
-  issue: GitHubIssue;
-  comments: GitHubIssueComment[];
-}) => {
-  const payload = {
-    repo: args.repo ?? null,
-    issue: args.issue,
-    comments: args.comments,
-  };
-  return `GitHub issue context (JSON)\n${JSON.stringify(payload, null, 2)}`;
+const buildPullRequestContextText = (payload: GitHubPullRequestContextResult) => {
+  return `GitHub pull request context (JSON)\n${JSON.stringify(payload, null, 2)}`;
 };
 
-export function GitHubIssuePickerDialog({
+export function GitHubPullRequestPickerDialog({
   open,
   onOpenChange,
 }: {
@@ -72,15 +63,15 @@ export function GitHubIssuePickerDialog({
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
   const projectDirectory = activeProject?.path ?? null;
-  const baseBranch = activeProject?.worktreeDefaults?.baseBranch || 'main';
 
   const [query, setQuery] = React.useState('');
   const [createInWorktree, setCreateInWorktree] = React.useState(false);
-  const [result, setResult] = React.useState<GitHubIssuesListResult | null>(null);
-  const [issues, setIssues] = React.useState<GitHubIssueSummary[]>([]);
+  const [includeDiff, setIncludeDiff] = React.useState(false);
+  const [result, setResult] = React.useState<GitHubPullRequestsListResult | null>(null);
+  const [prs, setPrs] = React.useState<GitHubPullRequestSummary[]>([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(false);
-  const [startingIssueNumber, setStartingIssueNumber] = React.useState<number | null>(null);
+  const [startingNumber, setStartingNumber] = React.useState<number | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -91,7 +82,7 @@ export function GitHubIssuePickerDialog({
       setError('No active project');
       return;
     }
-    if (!github?.issuesList) {
+    if (!github?.prsList) {
       setResult(null);
       setError('GitHub runtime API unavailable');
       return;
@@ -100,9 +91,9 @@ export function GitHubIssuePickerDialog({
     setIsLoading(true);
     setError(null);
     try {
-      const next = await github.issuesList(projectDirectory, { page: 1 });
+      const next = await github.prsList(projectDirectory, { page: 1 });
       setResult(next);
-      setIssues(next.issues ?? []);
+      setPrs(next.prs ?? []);
       setPage(next.page ?? 1);
       setHasMore(Boolean(next.hasMore));
       if (next.connected === false) {
@@ -117,21 +108,21 @@ export function GitHubIssuePickerDialog({
 
   const loadMore = React.useCallback(async () => {
     if (!projectDirectory) return;
-    if (!github?.issuesList) return;
+    if (!github?.prsList) return;
     if (isLoadingMore || isLoading) return;
     if (!hasMore) return;
 
     setIsLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const next = await github.issuesList(projectDirectory, { page: nextPage });
+      const next = await github.prsList(projectDirectory, { page: nextPage });
       setResult(next);
-      setIssues((prev) => [...prev, ...(next.issues ?? [])]);
+      setPrs((prev) => [...prev, ...(next.prs ?? [])]);
       setPage(next.page ?? nextPage);
       setHasMore(Boolean(next.hasMore));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      toast.error('Failed to load more issues', { description: message });
+      toast.error('Failed to load more PRs', { description: message });
     } finally {
       setIsLoadingMore(false);
     }
@@ -141,13 +132,14 @@ export function GitHubIssuePickerDialog({
     if (!open) {
       setQuery('');
       setCreateInWorktree(false);
-      setStartingIssueNumber(null);
-      setError(null);
+      setIncludeDiff(false);
       setResult(null);
-      setIssues([]);
+      setPrs([]);
       setPage(1);
       setHasMore(false);
+      setStartingNumber(null);
       setIsLoading(false);
+      setError(null);
       return;
     }
     void refresh();
@@ -158,14 +150,14 @@ export function GitHubIssuePickerDialog({
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return issues;
-    return issues.filter((issue) => {
-      if (String(issue.number) === q.replace(/^#/, '')) return true;
-      return issue.title.toLowerCase().includes(q);
+    if (!q) return prs;
+    return prs.filter((pr) => {
+      if (String(pr.number) === q.replace(/^#/, '')) return true;
+      return pr.title.toLowerCase().includes(q);
     });
-  }, [issues, query]);
+  }, [prs, query]);
 
-  const directNumber = React.useMemo(() => parseIssueNumber(query), [query]);
+  const directNumber = React.useMemo(() => parsePullRequestNumber(query), [query]);
 
   const resolveDefaultAgentName = React.useCallback((): string | undefined => {
     const configState = useConfigStore.getState();
@@ -178,131 +170,136 @@ export function GitHubIssuePickerDialog({
       }
     }
 
-    return (
-      visibleAgents.find((agent) => agent.name === 'build')?.name ||
-      visibleAgents[0]?.name
-    );
+    return visibleAgents.find((agent) => agent.name === 'build')?.name || visibleAgents[0]?.name;
   }, []);
 
   const resolveDefaultModelSelection = React.useCallback((): { providerID: string; modelID: string } | null => {
     const configState = useConfigStore.getState();
     const settingsDefaultModel = configState.settingsDefaultModel;
-    if (!settingsDefaultModel) {
-      return null;
-    }
+    if (!settingsDefaultModel) return null;
 
     const parts = settingsDefaultModel.split('/');
-    if (parts.length !== 2) {
-      return null;
-    }
+    if (parts.length !== 2) return null;
     const [providerID, modelID] = parts;
-    if (!providerID || !modelID) {
-      return null;
-    }
+    if (!providerID || !modelID) return null;
 
     const modelMetadata = configState.getModelMetadata(providerID, modelID);
-    if (!modelMetadata) {
-      return null;
-    }
-
+    if (!modelMetadata) return null;
     return { providerID, modelID };
   }, []);
 
   const resolveDefaultVariant = React.useCallback((providerID: string, modelID: string): string | undefined => {
     const configState = useConfigStore.getState();
     const settingsDefaultVariant = configState.settingsDefaultVariant;
-    if (!settingsDefaultVariant) {
-      return undefined;
-    }
+    if (!settingsDefaultVariant) return undefined;
 
     const provider = configState.providers.find((p) => p.id === providerID);
     const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelID) as
       | { variants?: Record<string, unknown> }
       | undefined;
     const variants = model?.variants;
-    if (!variants) {
-      return undefined;
-    }
-    if (!Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
-      return undefined;
-    }
+    if (!variants) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) return undefined;
     return settingsDefaultVariant;
   }, []);
 
-  const startSession = React.useCallback(async (issueNumber: number) => {
+  const createPrWorktreeSession = React.useCallback(async (
+    baseRepo: GitHubPullRequestsListResult['repo'] | undefined,
+    pr: GitHubPullRequestSummary,
+  ): Promise<{ id: string } | null> => {
+    if (!projectDirectory) return null;
+    const headRef = pr.head;
+    const headRepo = pr.headRepo;
+    if (!headRef) {
+      throw new Error('PR head ref missing');
+    }
+
+    const isFork = Boolean(
+      headRepo?.owner && headRepo?.repo &&
+      baseRepo?.owner && baseRepo?.repo &&
+      (headRepo.owner !== baseRepo.owner || headRepo.repo !== baseRepo.repo)
+    );
+
+    const fetchRemote = isFork
+      ? (headRepo?.cloneUrl || headRepo?.url || '')
+      : 'origin';
+    if (!fetchRemote) {
+      throw new Error('PR head remote URL missing');
+    }
+
+    const fetchRef = `refs/heads/${headRef}`;
+    const fetchResult = await gitFetch(projectDirectory, { remote: fetchRemote, branch: fetchRef });
+    if (!fetchResult?.success) {
+      throw new Error('Failed to fetch PR head');
+    }
+
+    const preferredBranch = pr.head;
+    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, 'FETCH_HEAD');
+    if (!session?.id) {
+      throw new Error('Failed to create PR worktree session');
+    }
+    return { id: session.id };
+  }, [projectDirectory]);
+
+  const startSession = React.useCallback(async (number: number) => {
     if (!projectDirectory) {
       toast.error('No active project');
       return;
     }
-    if (!github?.issueGet || !github?.issueComments) {
+    if (!github?.prContext) {
       toast.error('GitHub runtime API unavailable');
       return;
     }
-    if (startingIssueNumber) return;
-    setStartingIssueNumber(issueNumber);
+    if (startingNumber) return;
+    setStartingNumber(number);
     try {
-      const issueRes = await github.issueGet(projectDirectory, issueNumber);
-      if (issueRes.connected === false) {
+      const prContext = await github.prContext(projectDirectory, number, { includeDiff });
+      if (prContext.connected === false) {
         toast.error('GitHub not connected');
         return;
       }
-      if (!issueRes.repo) {
-        toast.error('Repo not resolvable', {
-          description: 'origin remote must be a GitHub URL',
-        });
+      if (!prContext.repo) {
+        toast.error('Repo not resolvable', { description: 'origin remote must be a GitHub URL' });
         return;
       }
-      const issue = issueRes.issue;
-      if (!issue) {
-        toast.error('Issue not found');
+      if (!prContext.pr) {
+        toast.error('PR not found');
         return;
       }
 
-      const commentsRes = await github.issueComments(projectDirectory, issueNumber);
-      if (commentsRes.connected === false) {
-        toast.error('GitHub not connected');
-        return;
-      }
-      const comments = commentsRes.comments ?? [];
-
-      const sessionTitle = `#${issue.number} ${issue.title}`.trim();
+      const pr = prContext.pr;
+      const sessionTitle = `#${pr.number} ${pr.title}`.trim();
 
       const sessionId = await (async () => {
         if (createInWorktree) {
-          const preferred = `issue-${issue.number}-${generateBranchSlug()}`;
-          const created = await createWorktreeSessionForNewBranch(
-            projectDirectory,
-            preferred,
-            baseBranch || 'main'
-          );
-          if (!created?.id) {
-            throw new Error('Failed to create worktree session');
+          try {
+            const worktreeSession = await createPrWorktreeSession(prContext.repo, pr);
+            return worktreeSession?.id || null;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            toast.error('PR worktree failed', { description: msg });
+            // fall back to normal session
           }
-          return created.id;
         }
-
         const session = await useSessionStore.getState().createSession(sessionTitle, projectDirectory, null);
-        if (!session?.id) {
-          throw new Error('Failed to create session');
-        }
-        return session.id;
+        return session?.id || null;
       })();
 
-      // Ensure worktree-based sessions also get the issue title.
-      void useSessionStore.getState().updateSessionTitle(sessionId, sessionTitle).catch(() => undefined);
+      if (!sessionId) {
+        throw new Error('Failed to create session');
+      }
 
+      void useSessionStore.getState().updateSessionTitle(sessionId, sessionTitle).catch(() => undefined);
       try {
         useSessionStore.getState().initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents);
       } catch {
         // ignore
       }
 
-      // Close modal immediately after session exists (don't wait for message send).
       onOpenChange(false);
 
       const configState = useConfigStore.getState();
       const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
-
       const defaultModel = resolveDefaultModelSelection();
       const providerID = defaultModel?.providerID || configState.currentProviderId || lastUsedProvider?.providerID;
       const modelID = defaultModel?.modelID || configState.currentModelId || lastUsedProvider?.modelID;
@@ -313,7 +310,6 @@ export function GitHubIssuePickerDialog({
       }
 
       const variant = resolveDefaultVariant(providerID, modelID);
-
       try {
         useContextStore.getState().saveSessionModelSelection(sessionId, providerID, modelID);
       } catch {
@@ -326,19 +322,16 @@ export function GitHubIssuePickerDialog({
         } catch {
           // ignore
         }
-
         try {
           useContextStore.getState().saveSessionAgentSelection(sessionId, agentName);
         } catch {
           // ignore
         }
-
         try {
           useContextStore.getState().saveAgentModelForSession(sessionId, agentName, providerID, modelID);
         } catch {
           // ignore
         }
-
         if (variant !== undefined) {
           try {
             configState.setCurrentVariant(variant);
@@ -353,43 +346,51 @@ export function GitHubIssuePickerDialog({
         }
       }
 
-      const visiblePromptText = 'Review this issue using the provided issue context: title, body, labels, assignees, comments, metadata.';
-      const instructionsText = `Review this issue using the provided issue context.
-
-Process:
-- First classify the issue type (bug / feature request / question/support / refactor / ops) and state it as: Type: <one label>.
+      const visiblePromptText = 'Review this pull request using the provided PR context: description, comments, files, diff, checks.';
+      const instructionsText = `Before reporting issues:
+- First identify the PR intent (what it’s trying to achieve) from title/body/diff, then evaluate whether the implementation matches that intent; call out missing pieces, incorrect behavior vs intent, and scope creep.
 - Gather any needed repository context (code, config, docs) to validate assumptions.
-- After gathering, if anything is still unclear or cannot be verified, do not speculate—state what’s missing and ask targeted questions.
+- No speculation: if something is unclear or cannot be verified, say what’s missing and ask for it instead of guessing.
 
 Output rules:
-- Compact output; pick ONE template below and omit the others.
+- Start with a 1-2 sentence summary.
+- Provide a single concise PR review comment.
 - No emojis. No code snippets. No fenced blocks.
-- Short inline code identifiers allowed.
-- Reference evidence with file paths and line ranges when applicable; if exact lines aren’t available, cite the file and say “approx” + why.
-- Keep the entire response under ~300 words.
+- Short inline code identifiers allowed, but no snippets or fenced blocks.
+- Reference evidence with file paths and line ranges (e.g., path/to/file.ts:120-138). If exact lines aren’t available, cite the file and say “approx” + why.
+- Keep the entire comment under ~300 words.
 
-Templates (choose one):
-Bug:
-- Summary (1-2 sentences)
-- Likely cause (max 2)
-- Repro/diagnostics needed (max 3)
-- Fix approach (max 4 steps)
-- Verification (max 3)
+Report:
+- Must-fix issues (blocking) — brief why and a one-line action each.
+- Nice-to-have improvements (optional) — brief why and a one-line action each.
 
-Feature:
-- Summary (1-2 sentences)
-- Requirements (max 4)
-- Unknowns/questions (max 4)
-- Proposed plan (max 5 steps)
-- Verification (max 3)
+Quality & safety (general):
+- Call out correctness risks, edge cases, performance regressions, security/privacy concerns, and backwards-compatibility risks.
+- Call out missing tests/verification steps and suggest the minimal validation needed.
+- Note readability/maintainability issues when they materially affect future changes.
 
-Question/Support:
-- Summary (1-2 sentences)
-- Answer/guidance (max 6 lines)
-- Missing info (max 4)
+Applicability (only if relevant):
+- If changes affect multiple components/targets/environments (e.g., client/server, OSs, deployments), state what is affected vs not, and why.
 
-Do not implement changes until I confirm; end with: “Next actions: <1 sentence>”.`;
-      const contextText = buildIssueContextText({ repo: issueRes.repo, issue, comments });
+Architecture:
+- Call out breakages, missing implementations across modules/targets, boundary violations, and cross-cutting concerns (errors, logging/observability, accessibility).
+
+Precedence:
+- If local precedent conflicts with best practices, state it and suggest a follow-up task.
+
+Do not implement changes until I confirm; end with a short “Next actions” sentence describing the recommended plan.
+
+Format exactly:
+Must-fix:
+- <issue> — <brief why> — <file:line-range> — Action: <one-line action>
+Nice-to-have:
+- <issue> — <brief why> — <file:line-range> — Action: <one-line action>
+If no issues, write:
+Must-fix:
+- None
+Nice-to-have:
+- None`;
+      const contextText = buildPullRequestContextText(prContext);
 
       void opencodeClient.sendMessage({
         id: sessionId,
@@ -404,37 +405,46 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
         ],
       }).catch((e) => {
         const message = e instanceof Error ? e.message : String(e);
-        toast.error('Failed to send issue context', {
-          description: message,
-        });
+        toast.error('Failed to send PR context', { description: message });
       });
 
-      toast.success('Session created from issue');
+      toast.success('Session created from PR');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to start session', { description: message });
     } finally {
-      setStartingIssueNumber(null);
+      setStartingNumber(null);
     }
-  }, [createInWorktree, github, onOpenChange, projectDirectory, baseBranch, resolveDefaultAgentName, resolveDefaultModelSelection, resolveDefaultVariant, startingIssueNumber]);
+  }, [
+    createInWorktree,
+    createPrWorktreeSession,
+    github,
+    includeDiff,
+    onOpenChange,
+    projectDirectory,
+    resolveDefaultAgentName,
+    resolveDefaultModelSelection,
+    resolveDefaultVariant,
+    startingNumber,
+  ]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <RiGithubLine className="h-5 w-5" />
-            New Session From GitHub Issue
+            <RiGitPullRequestLine className="h-5 w-5" />
+            New Session From GitHub PR
           </DialogTitle>
           <DialogDescription>
-            Seeds a new session with hidden issue context (title/body/labels/comments).
+            Seeds a new session with hidden PR context (title/body/comments/files/checks).
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative mt-2">
           <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by title or #123, or paste issue URL"
+            placeholder="Search by title or #123, or paste PR URL"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="pl-9 w-full"
@@ -453,7 +463,7 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
           {isLoading ? (
             <div className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
               <RiLoader4Line className="h-4 w-4 animate-spin" />
-              Loading issues...
+              Loading pull requests...
             </div>
           ) : null}
 
@@ -469,16 +479,16 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
             <div
               className={cn(
                 'group flex items-center gap-2 py-1.5 hover:bg-muted/30 rounded transition-colors cursor-pointer',
-                startingIssueNumber === directNumber && 'bg-muted/30'
+                startingNumber === directNumber && 'bg-muted/30'
               )}
               onClick={() => void startSession(directNumber)}
             >
               <span className="typography-meta text-muted-foreground w-5 text-right flex-shrink-0">#</span>
               <p className="flex-1 min-w-0 typography-small text-foreground truncate ml-0.5">
-                Use issue #{directNumber}
+                Use PR #{directNumber}
               </p>
               <div className="flex-shrink-0 h-5 flex items-center mr-2">
-                {startingIssueNumber === directNumber ? (
+                {startingNumber === directNumber ? (
                   <RiLoader4Line className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : null}
               </div>
@@ -486,31 +496,26 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
           ) : null}
 
           {filtered.length === 0 && !isLoading && connected && github && projectDirectory ? (
-            <div className="text-center text-muted-foreground py-8">{query ? 'No issues found' : 'No open issues found'}</div>
+            <div className="text-center text-muted-foreground py-8">{query ? 'No PRs found' : 'No open PRs found'}</div>
           ) : null}
 
-          {filtered.map((issue) => (
+          {filtered.map((pr) => (
             <div
-              key={issue.number}
+              key={pr.number}
               className={cn(
                 'group flex items-center gap-2 py-1.5 hover:bg-muted/30 rounded transition-colors cursor-pointer',
-                startingIssueNumber === issue.number && 'bg-muted/30'
+                startingNumber === pr.number && 'bg-muted/30'
               )}
-              onClick={() => void startSession(issue.number)}
+              onClick={() => void startSession(pr.number)}
             >
-              <span className="typography-meta text-muted-foreground w-12 text-right flex-shrink-0">
-                #{issue.number}
-              </span>
-              <p className="flex-1 min-w-0 typography-small text-foreground truncate ml-0.5">
-                {issue.title}
-              </p>
-
+              <span className="typography-meta text-muted-foreground w-12 text-right flex-shrink-0">#{pr.number}</span>
+              <p className="flex-1 min-w-0 typography-small text-foreground truncate ml-0.5">{pr.title}</p>
               <div className="flex-shrink-0 h-5 flex items-center mr-2">
-                {startingIssueNumber === issue.number ? (
+                {startingNumber === pr.number ? (
                   <RiLoader4Line className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : (
                   <a
-                    href={issue.url}
+                    href={pr.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hidden group-hover:flex h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
@@ -529,10 +534,10 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
               <button
                 type="button"
                 onClick={() => void loadMore()}
-                disabled={isLoadingMore || Boolean(startingIssueNumber)}
+                disabled={isLoadingMore || Boolean(startingNumber)}
                 className={cn(
                   'typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4',
-                  (isLoadingMore || Boolean(startingIssueNumber)) && 'opacity-50 cursor-not-allowed hover:text-muted-foreground'
+                  (isLoadingMore || Boolean(startingNumber)) && 'opacity-50 cursor-not-allowed hover:text-muted-foreground'
                 )}
               >
                 {isLoadingMore ? (
@@ -580,9 +585,41 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
                   <RiCheckboxBlankLine className="h-4 w-4" />
                 )}
               </button>
-              <span className="typography-meta text-muted-foreground">Create in worktree</span>
-              <span className="typography-meta text-muted-foreground/70">(issue-&lt;number&gt;-&lt;slug&gt;)</span>
+              <span className="typography-meta text-muted-foreground">Create session in PR worktree</span>
             </div>
+
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              role="button"
+              tabIndex={0}
+              aria-pressed={includeDiff}
+              onClick={() => setIncludeDiff((v) => !v)}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  setIncludeDiff((v) => !v);
+                }
+              }}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIncludeDiff((v) => !v);
+                }}
+                aria-label="Toggle diff"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {includeDiff ? (
+                  <RiCheckboxLine className="h-4 w-4 text-primary" />
+                ) : (
+                  <RiCheckboxBlankLine className="h-4 w-4" />
+                )}
+              </button>
+              <span className="typography-meta text-muted-foreground">Include full diff</span>
+            </div>
+
             <div className="flex-1" />
             {repoUrl ? (
               <Button variant="outline" size="sm" asChild>
@@ -592,7 +629,7 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
                 </a>
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading || Boolean(startingIssueNumber)}>
+            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading || Boolean(startingNumber)}>
               Refresh
             </Button>
           </div>

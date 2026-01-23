@@ -438,3 +438,197 @@ export async function createWorktreeSessionForBranch(
     isCreatingWorktreeSession = false;
   }
 }
+
+/**
+ * Create a worktree session for a new branch (created at startPoint).
+ * This avoids checking out the branch in the main worktree.
+ */
+export async function createWorktreeSessionForNewBranch(
+  projectDirectory: string,
+  preferredBranchName: string,
+  startPoint: string,
+  options?: { allowSuffix?: boolean }
+): Promise<{ id: string; branch: string } | null> {
+  if (isCreatingWorktreeSession) {
+    return null;
+  }
+
+  let isGitRepo = false;
+  try {
+    isGitRepo = await checkIsGitRepository(projectDirectory);
+  } catch {
+    // ignore
+  }
+
+  if (!isGitRepo) {
+    toast.error('Not a Git repository', {
+      description: 'Worktrees can only be created in Git repositories.',
+    });
+    return null;
+  }
+
+  isCreatingWorktreeSession = true;
+  startConfigUpdate('Creating worktree session...');
+
+  try {
+    const start = startPoint?.trim() || 'HEAD';
+    const base = preferredBranchName?.trim();
+    if (!base) {
+      throw new Error('Branch name is required');
+    }
+
+    let lastError: unknown = null;
+    const allowSuffix = options?.allowSuffix !== false;
+    const maxAttempts = allowSuffix ? 6 : 1;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
+      try {
+        const worktreeSlug = sanitizeWorktreeSlug(candidate);
+        const metadata = await createWorktree({
+          projectDirectory,
+          worktreeSlug,
+          branch: candidate,
+          createBranch: true,
+          startPoint: start,
+        });
+
+        const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
+        const createdMetadata = status ? { ...metadata, status } : metadata;
+
+        const sessionStore = useSessionStore.getState();
+        const session = await sessionStore.createSession(undefined, metadata.path);
+        if (!session) {
+          await removeWorktree({ projectDirectory, path: metadata.path, force: true }).catch(() => undefined);
+          throw new Error('Could not create a session for the worktree.');
+        }
+
+        const configState = useConfigStore.getState();
+        sessionStore.initializeNewOpenChamberSession(session.id, configState.agents);
+        sessionStore.setSessionDirectory(session.id, metadata.path);
+        sessionStore.setWorktreeMetadata(session.id, createdMetadata);
+
+        // Apply default agent/model/variant settings (reuse same logic as createWorktreeSessionForBranch)
+        try {
+          const visibleAgents = configState.getVisibleAgents();
+          let agentName: string | undefined;
+          if (configState.settingsDefaultAgent) {
+            const settingsAgent = visibleAgents.find((a) => a.name === configState.settingsDefaultAgent);
+            if (settingsAgent) {
+              agentName = settingsAgent.name;
+            }
+          }
+          if (!agentName) {
+            agentName =
+              visibleAgents.find((agent) => agent.name === 'build')?.name ||
+              visibleAgents[0]?.name;
+          }
+
+          if (agentName) {
+            configState.setAgent(agentName);
+            useContextStore.getState().saveSessionAgentSelection(session.id, agentName);
+
+            const settingsDefaultModel = configState.settingsDefaultModel;
+            if (settingsDefaultModel) {
+              const parts = settingsDefaultModel.split('/');
+              if (parts.length === 2) {
+                const [providerId, modelId] = parts;
+                const modelMetadata = configState.getModelMetadata(providerId, modelId);
+                if (modelMetadata) {
+                  useContextStore.getState().saveSessionModelSelection(session.id, providerId, modelId);
+                  useContextStore.getState().saveAgentModelForSession(session.id, agentName, providerId, modelId);
+
+                  const settingsDefaultVariant = configState.settingsDefaultVariant;
+                  if (settingsDefaultVariant) {
+                    const provider = configState.providers.find((p) => p.id === providerId);
+                    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
+                      | { variants?: Record<string, unknown> }
+                      | undefined;
+                    const variants = model?.variants;
+                    if (variants && Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
+                      configState.setCurrentVariant(settingsDefaultVariant);
+                      useContextStore
+                        .getState()
+                        .saveAgentModelVariantForSession(session.id, agentName, providerId, modelId, settingsDefaultVariant);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        useDirectoryStore.getState().setDirectory(metadata.path, { showOverlay: false });
+        try {
+          await sessionStore.loadSessions();
+        } catch {
+          // ignore
+        }
+
+        // Get and run setup commands
+        const setupCommands = await getWorktreeSetupCommands(projectDirectory);
+        const commandsToRun = setupCommands.filter((cmd) => cmd.trim().length > 0);
+
+        if (commandsToRun.length > 0) {
+          toast.success('Worktree created', {
+            description: `Branch: ${candidate}. Running ${commandsToRun.length} setup command${commandsToRun.length === 1 ? '' : 's'}...`,
+          });
+
+          // Run setup commands in background
+          runWorktreeSetupCommands(metadata.path, projectDirectory, commandsToRun)
+            .then((result) => {
+              if (result.success) {
+                toast.success('Setup commands completed', {
+                  description: `All ${result.results.length} command${result.results.length === 1 ? '' : 's'} succeeded.`,
+                });
+              } else {
+                const failed = result.results.filter((r) => !r.success);
+                const succeeded = result.results.filter((r) => r.success);
+                toast.error('Setup commands failed', {
+                  description:
+                    `${failed.length} of ${result.results.length} command${result.results.length === 1 ? '' : 's'} failed.` +
+                    (succeeded.length > 0 ? ` ${succeeded.length} succeeded.` : ''),
+                });
+              }
+            })
+            .catch(() => {
+              toast.error('Setup commands failed', {
+                description: 'Could not execute setup commands.',
+              });
+            });
+        } else {
+          toast.success('Worktree created', {
+            description: `Branch: ${candidate}`,
+          });
+        }
+
+        return { id: session.id, branch: candidate };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    const message = lastError instanceof Error ? lastError.message : 'Failed to create worktree session';
+    toast.error('Failed to create worktree', {
+      description: message,
+    });
+    return null;
+  } finally {
+    finishConfigUpdate();
+    isCreatingWorktreeSession = false;
+  }
+}
+
+/**
+ * Same as createWorktreeSessionForNewBranch, but does NOT suffix the branch name.
+ * Use when the worktree must be created on an exact branch name (e.g. PR head ref).
+ */
+export async function createWorktreeSessionForNewBranchExact(
+  projectDirectory: string,
+  branchName: string,
+  startPoint: string
+): Promise<{ id: string; branch: string } | null> {
+  return createWorktreeSessionForNewBranch(projectDirectory, branchName, startPoint, { allowSuffix: false });
+}

@@ -4,6 +4,8 @@ import type {
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssuesListResult,
+  GitHubPullRequestContextResult,
+  GitHubPullRequestsListResult,
   GitHubPullRequest,
   GitHubPullRequestCreateInput,
   GitHubPullRequestMergeInput,
@@ -35,10 +37,15 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
   prReady: async (payload: GitHubPullRequestReadyInput) =>
     sendBridgeMessage<GitHubPullRequestReadyResult>('api:github/pr:ready', payload),
 
-  issuesList: async (directory: string) =>
-    sendBridgeMessage<GitHubIssuesListResult>('api:github/issues:list', { directory }),
+  issuesList: async (directory: string, options?: { page?: number }) =>
+    sendBridgeMessage<GitHubIssuesListResult>('api:github/issues:list', { directory, page: options?.page ?? 1 }),
   issueGet: async (directory: string, number: number) =>
     sendBridgeMessage<GitHubIssueGetResult>('api:github/issues:get', { directory, number }),
   issueComments: async (directory: string, number: number) =>
     sendBridgeMessage<GitHubIssueCommentsResult>('api:github/issues:comments', { directory, number }),
+
+  prsList: async (directory: string, options?: { page?: number }) =>
+    sendBridgeMessage<GitHubPullRequestsListResult>('api:github/pulls:list', { directory, page: options?.page ?? 1 }),
+  prContext: async (directory: string, number: number, options?: { includeDiff?: boolean }) =>
+    sendBridgeMessage<GitHubPullRequestContextResult>('api:github/pulls:context', { directory, number, includeDiff: Boolean(options?.includeDiff) }),
 });

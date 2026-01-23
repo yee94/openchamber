@@ -17,6 +17,8 @@ type GitHubIssuesListResult = {
     author?: { login: string; id?: number; avatarUrl?: string; name?: string; email?: string } | null;
     labels?: Array<{ name: string; color?: string }>;
   }>;
+  page?: number;
+  hasMore?: boolean;
 };
 
 type GitHubIssueGetResult = {
@@ -102,6 +104,7 @@ const mapLabels = (raw: unknown): Array<{ name: string; color?: string }> => {
 export const listIssues = async (
   accessToken: string,
   directory: string,
+  page: number = 1,
 ): Promise<GitHubIssuesListResult> => {
   const repo = await resolveRepoFromDirectory(directory);
   if (!repo) {
@@ -111,11 +114,15 @@ export const listIssues = async (
   const url = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/issues`);
   url.searchParams.set('state', 'open');
   url.searchParams.set('per_page', '50');
+  url.searchParams.set('page', String(page));
 
   const resp = await githubFetch(url.toString(), accessToken);
   if (resp.status === 401) {
     return { connected: false };
   }
+
+  const link = resp.headers.get('link') || '';
+  const hasMore = /rel="next"/.test(link);
 
   const json = await jsonOrNull<unknown[]>(resp);
   if (!resp.ok || !Array.isArray(json)) {
@@ -140,7 +147,7 @@ export const listIssues = async (
     })
     .filter(Boolean) as GitHubIssuesListResult['issues'];
 
-  return { connected: true, repo, issues: issues || [] };
+  return { connected: true, repo, issues: issues || [], page, hasMore };
 };
 
 export const getIssue = async (

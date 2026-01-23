@@ -522,6 +522,62 @@ export type GitHubPullRequest = {
   mergeableState?: string | null;
 };
 
+export type GitHubPullRequestHeadRepo = {
+  owner: string;
+  repo: string;
+  url: string;
+  cloneUrl?: string;
+};
+
+export type GitHubPullRequestSummary = GitHubPullRequest & {
+  author?: GitHubUserSummary | null;
+  body?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  headLabel?: string;
+  headRepo?: GitHubPullRequestHeadRepo | null;
+};
+
+export type GitHubPullRequestFile = {
+  filename: string;
+  status?: string;
+  additions?: number;
+  deletions?: number;
+  changes?: number;
+  patch?: string;
+};
+
+export type GitHubPullRequestReviewComment = {
+  id: number;
+  url: string;
+  body: string;
+  author?: GitHubUserSummary | null;
+  path?: string;
+  line?: number | null;
+  position?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GitHubPullRequestsListResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  prs?: GitHubPullRequestSummary[];
+  page?: number;
+  hasMore?: boolean;
+};
+
+export type GitHubPullRequestContextResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  pr?: GitHubPullRequestSummary | null;
+  issueComments?: GitHubIssueComment[];
+  reviewComments?: GitHubPullRequestReviewComment[];
+  files?: GitHubPullRequestFile[];
+  diff?: string;
+  checks?: GitHubChecksSummary | null;
+};
+
 export type GitHubPullRequestStatus = {
   connected: boolean;
   repo?: GitHubRepoRef | null;
@@ -594,6 +650,8 @@ export type GitHubIssuesListResult = {
   connected: boolean;
   repo?: GitHubRepoRef | null;
   issues?: GitHubIssueSummary[];
+  page?: number;
+  hasMore?: boolean;
 };
 
 export type GitHubIssueGetResult = {
@@ -640,7 +698,10 @@ export interface GitHubAPI {
   prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;
   prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
 
-  issuesList(directory: string): Promise<GitHubIssuesListResult>;
+  prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult>;
+  prContext(directory: string, number: number, options?: { includeDiff?: boolean }): Promise<GitHubPullRequestContextResult>;
+
+  issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;
   issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult>;
 }

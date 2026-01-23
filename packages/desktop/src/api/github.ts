@@ -4,6 +4,8 @@ import type {
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssuesListResult,
+  GitHubPullRequestContextResult,
+  GitHubPullRequestsListResult,
   GitHubPullRequest,
   GitHubPullRequestCreateInput,
   GitHubPullRequestMergeInput,
@@ -63,9 +65,9 @@ export const createDesktopGitHubAPI = (): GitHubAPI => ({
     return safeInvoke<GitHubPullRequestReadyResult>('github_pr_ready', payload, { timeout: 20000 });
   },
 
-  async issuesList(directory: string): Promise<GitHubIssuesListResult> {
+  async issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult> {
     const { safeInvoke } = await import('../lib/tauriCallbackManager');
-    return safeInvoke<GitHubIssuesListResult>('github_issues_list', { directory }, { timeout: 20000 });
+    return safeInvoke<GitHubIssuesListResult>('github_issues_list', { directory, page: options?.page ?? 1 }, { timeout: 20000 });
   },
 
   async issueGet(directory: string, number: number): Promise<GitHubIssueGetResult> {
@@ -76,5 +78,19 @@ export const createDesktopGitHubAPI = (): GitHubAPI => ({
   async issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult> {
     const { safeInvoke } = await import('../lib/tauriCallbackManager');
     return safeInvoke<GitHubIssueCommentsResult>('github_issue_comments', { directory, number }, { timeout: 20000 });
+  },
+
+  async prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult> {
+    const { safeInvoke } = await import('../lib/tauriCallbackManager');
+    return safeInvoke<GitHubPullRequestsListResult>('github_prs_list', { directory, page: options?.page ?? 1 }, { timeout: 20000 });
+  },
+
+  async prContext(directory: string, number: number, options?: { includeDiff?: boolean }): Promise<GitHubPullRequestContextResult> {
+    const { safeInvoke } = await import('../lib/tauriCallbackManager');
+    return safeInvoke<GitHubPullRequestContextResult>(
+      'github_pr_context',
+      { directory, number, includeDiff: Boolean(options?.includeDiff) },
+      { timeout: 30000 }
+    );
   },
 });

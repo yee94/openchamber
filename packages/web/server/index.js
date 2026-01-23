@@ -4365,6 +4365,7 @@ async function main(options = {}) {
   app.get('/api/github/issues/list', async (req, res) => {
     try {
       const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const page = typeof req.query?.page === 'string' ? Number(req.query.page) : 1;
       if (!directory) {
         return res.status(400).json({ error: 'directory is required' });
       }
@@ -4386,7 +4387,10 @@ async function main(options = {}) {
         repo: repo.repo,
         state: 'open',
         per_page: 50,
+        page: Number.isFinite(page) && page > 0 ? page : 1,
       });
+      const link = typeof list?.headers?.link === 'string' ? list.headers.link : '';
+      const hasMore = /rel="next"/.test(link);
       const issues = (Array.isArray(list?.data) ? list.data : [])
         .filter((item) => !item?.pull_request)
         .map((item) => ({
@@ -4407,7 +4411,7 @@ async function main(options = {}) {
             : [],
         }));
 
-      return res.json({ connected: true, repo, issues });
+      return res.json({ connected: true, repo, issues, page: Number.isFinite(page) && page > 0 ? page : 1, hasMore });
     } catch (error) {
       console.error('Failed to list GitHub issues:', error);
       return res.status(500).json({ error: error.message || 'Failed to list GitHub issues' });
@@ -4515,6 +4519,268 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to fetch GitHub issue comments:', error);
       return res.status(500).json({ error: error.message || 'Failed to fetch GitHub issue comments' });
+    }
+  });
+
+  // ================= GitHub Pull Request Context APIs =================
+
+  app.get('/api/github/pulls/list', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const page = typeof req.query?.page === 'string' ? Number(req.query.page) : 1;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory is required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.json({ connected: true, repo: null, prs: [] });
+      }
+
+      const list = await octokit.rest.pulls.list({
+        owner: repo.owner,
+        repo: repo.repo,
+        state: 'open',
+        per_page: 50,
+        page: Number.isFinite(page) && page > 0 ? page : 1,
+      });
+
+      const link = typeof list?.headers?.link === 'string' ? list.headers.link : '';
+      const hasMore = /rel="next"/.test(link);
+
+      const prs = (Array.isArray(list?.data) ? list.data : []).map((pr) => {
+        const mergedState = pr.merged_at ? 'merged' : (pr.state === 'closed' ? 'closed' : 'open');
+        const headRepo = pr.head?.repo
+          ? {
+              owner: pr.head.repo.owner?.login,
+              repo: pr.head.repo.name,
+              url: pr.head.repo.html_url,
+              cloneUrl: pr.head.repo.clone_url,
+            }
+          : null;
+        return {
+          number: pr.number,
+          title: pr.title,
+          url: pr.html_url,
+          state: mergedState,
+          draft: Boolean(pr.draft),
+          base: pr.base?.ref,
+          head: pr.head?.ref,
+          headSha: pr.head?.sha,
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state,
+          author: pr.user ? { login: pr.user.login, id: pr.user.id, avatarUrl: pr.user.avatar_url } : null,
+          headLabel: pr.head?.label,
+          headRepo: headRepo && headRepo.owner && headRepo.repo && headRepo.url
+            ? headRepo
+            : null,
+        };
+      });
+
+      return res.json({ connected: true, repo, prs, page: Number.isFinite(page) && page > 0 ? page : 1, hasMore });
+    } catch (error) {
+      if (error?.status === 401) {
+        const { clearGitHubAuth } = await getGitHubLibraries();
+        clearGitHubAuth();
+        return res.json({ connected: false });
+      }
+      console.error('Failed to list GitHub PRs:', error);
+      return res.status(500).json({ error: error.message || 'Failed to list GitHub PRs' });
+    }
+  });
+
+  app.get('/api/github/pulls/context', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const number = typeof req.query?.number === 'string' ? Number(req.query.number) : null;
+      const includeDiff = req.query?.diff === '1' || req.query?.diff === 'true';
+      if (!directory || !number) {
+        return res.status(400).json({ error: 'directory and number are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.json({ connected: true, repo: null, pr: null });
+      }
+
+      const prResp = await octokit.rest.pulls.get({ owner: repo.owner, repo: repo.repo, pull_number: number });
+      const prData = prResp?.data;
+      if (!prData) {
+        return res.status(404).json({ error: 'PR not found' });
+      }
+
+      const headRepo = prData.head?.repo
+        ? {
+            owner: prData.head.repo.owner?.login,
+            repo: prData.head.repo.name,
+            url: prData.head.repo.html_url,
+            cloneUrl: prData.head.repo.clone_url,
+          }
+        : null;
+
+      const mergedState = prData.merged ? 'merged' : (prData.state === 'closed' ? 'closed' : 'open');
+      const pr = {
+        number: prData.number,
+        title: prData.title,
+        url: prData.html_url,
+        state: mergedState,
+        draft: Boolean(prData.draft),
+        base: prData.base?.ref,
+        head: prData.head?.ref,
+        headSha: prData.head?.sha,
+        mergeable: prData.mergeable,
+        mergeableState: prData.mergeable_state,
+        author: prData.user ? { login: prData.user.login, id: prData.user.id, avatarUrl: prData.user.avatar_url } : null,
+        headLabel: prData.head?.label,
+        headRepo: headRepo && headRepo.owner && headRepo.repo && headRepo.url ? headRepo : null,
+        body: prData.body || '',
+        createdAt: prData.created_at,
+        updatedAt: prData.updated_at,
+      };
+
+      const issueCommentsResp = await octokit.rest.issues.listComments({
+        owner: repo.owner,
+        repo: repo.repo,
+        issue_number: number,
+        per_page: 100,
+      });
+      const issueComments = (Array.isArray(issueCommentsResp?.data) ? issueCommentsResp.data : []).map((comment) => ({
+        id: comment.id,
+        url: comment.html_url,
+        body: comment.body || '',
+        createdAt: comment.created_at,
+        updatedAt: comment.updated_at,
+        author: comment.user ? { login: comment.user.login, id: comment.user.id, avatarUrl: comment.user.avatar_url } : null,
+      }));
+
+      const reviewCommentsResp = await octokit.rest.pulls.listReviewComments({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: number,
+        per_page: 100,
+      });
+      const reviewComments = (Array.isArray(reviewCommentsResp?.data) ? reviewCommentsResp.data : []).map((comment) => ({
+        id: comment.id,
+        url: comment.html_url,
+        body: comment.body || '',
+        createdAt: comment.created_at,
+        updatedAt: comment.updated_at,
+        path: comment.path,
+        line: typeof comment.line === 'number' ? comment.line : null,
+        position: typeof comment.position === 'number' ? comment.position : null,
+        author: comment.user ? { login: comment.user.login, id: comment.user.id, avatarUrl: comment.user.avatar_url } : null,
+      }));
+
+      const filesResp = await octokit.rest.pulls.listFiles({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: number,
+        per_page: 100,
+      });
+      const files = (Array.isArray(filesResp?.data) ? filesResp.data : []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        changes: f.changes,
+        patch: f.patch,
+      }));
+
+      // checks summary (same logic as status endpoint)
+      let checks = null;
+      const sha = prData.head?.sha;
+      if (sha) {
+        try {
+          const runs = await octokit.rest.checks.listForRef({ owner: repo.owner, repo: repo.repo, ref: sha, per_page: 100 });
+          const checkRuns = Array.isArray(runs?.data?.check_runs) ? runs.data.check_runs : [];
+          if (checkRuns.length > 0) {
+            const counts = { success: 0, failure: 0, pending: 0 };
+            for (const run of checkRuns) {
+              const status = run?.status;
+              const conclusion = run?.conclusion;
+              if (status === 'queued' || status === 'in_progress') {
+                counts.pending += 1;
+                continue;
+              }
+              if (!conclusion) {
+                counts.pending += 1;
+                continue;
+              }
+              if (conclusion === 'success' || conclusion === 'neutral' || conclusion === 'skipped') {
+                counts.success += 1;
+              } else {
+                counts.failure += 1;
+              }
+            }
+            const total = counts.success + counts.failure + counts.pending;
+            const state = counts.failure > 0 ? 'failure' : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+            checks = { state, total, ...counts };
+          }
+        } catch {
+          // ignore and fall back
+        }
+        if (!checks) {
+          try {
+            const combined = await octokit.rest.repos.getCombinedStatusForRef({ owner: repo.owner, repo: repo.repo, ref: sha });
+            const statuses = Array.isArray(combined?.data?.statuses) ? combined.data.statuses : [];
+            const counts = { success: 0, failure: 0, pending: 0 };
+            statuses.forEach((s) => {
+              if (s.state === 'success') counts.success += 1;
+              else if (s.state === 'failure' || s.state === 'error') counts.failure += 1;
+              else if (s.state === 'pending') counts.pending += 1;
+            });
+            const total = counts.success + counts.failure + counts.pending;
+            const state = counts.failure > 0 ? 'failure' : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+            checks = { state, total, ...counts };
+          } catch {
+            checks = null;
+          }
+        }
+      }
+
+      let diff = undefined;
+      if (includeDiff) {
+        const diffResp = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
+          owner: repo.owner,
+          repo: repo.repo,
+          pull_number: number,
+          headers: { accept: 'application/vnd.github.v3.diff' },
+        });
+        diff = typeof diffResp?.data === 'string' ? diffResp.data : undefined;
+      }
+
+      return res.json({
+        connected: true,
+        repo,
+        pr,
+        issueComments,
+        reviewComments,
+        files,
+        ...(diff ? { diff } : {}),
+        checks,
+      });
+    } catch (error) {
+      if (error?.status === 401) {
+        const { clearGitHubAuth } = await getGitHubLibraries();
+        clearGitHubAuth();
+        return res.json({ connected: false });
+      }
+      console.error('Failed to load GitHub PR context:', error);
+      return res.status(500).json({ error: error.message || 'Failed to load GitHub PR context' });
     }
   });
 
