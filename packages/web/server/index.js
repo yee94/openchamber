@@ -4360,6 +4360,164 @@ async function main(options = {}) {
     }
   });
 
+  // ================= GitHub Issue APIs =================
+
+  app.get('/api/github/issues/list', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      if (!directory) {
+        return res.status(400).json({ error: 'directory is required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.json({ connected: true, repo: null, issues: [] });
+      }
+
+      const list = await octokit.rest.issues.listForRepo({
+        owner: repo.owner,
+        repo: repo.repo,
+        state: 'open',
+        per_page: 50,
+      });
+      const issues = (Array.isArray(list?.data) ? list.data : [])
+        .filter((item) => !item?.pull_request)
+        .map((item) => ({
+          number: item.number,
+          title: item.title,
+          url: item.html_url,
+          state: item.state === 'closed' ? 'closed' : 'open',
+          author: item.user ? { login: item.user.login, id: item.user.id, avatarUrl: item.user.avatar_url } : null,
+          labels: Array.isArray(item.labels)
+            ? item.labels
+                .map((label) => {
+                  if (typeof label === 'string') return null;
+                  const name = typeof label?.name === 'string' ? label.name : '';
+                  if (!name) return null;
+                  return { name, color: typeof label?.color === 'string' ? label.color : undefined };
+                })
+                .filter(Boolean)
+            : [],
+        }));
+
+      return res.json({ connected: true, repo, issues });
+    } catch (error) {
+      console.error('Failed to list GitHub issues:', error);
+      return res.status(500).json({ error: error.message || 'Failed to list GitHub issues' });
+    }
+  });
+
+  app.get('/api/github/issues/get', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const number = typeof req.query?.number === 'string' ? Number(req.query.number) : null;
+      if (!directory || !number) {
+        return res.status(400).json({ error: 'directory and number are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.json({ connected: true, repo: null, issue: null });
+      }
+
+      const result = await octokit.rest.issues.get({ owner: repo.owner, repo: repo.repo, issue_number: number });
+      const issue = result?.data;
+      if (!issue || issue.pull_request) {
+        return res.status(400).json({ error: 'Not a GitHub issue' });
+      }
+
+      return res.json({
+        connected: true,
+        repo,
+        issue: {
+          number: issue.number,
+          title: issue.title,
+          url: issue.html_url,
+          state: issue.state === 'closed' ? 'closed' : 'open',
+          body: issue.body || '',
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          author: issue.user ? { login: issue.user.login, id: issue.user.id, avatarUrl: issue.user.avatar_url } : null,
+          assignees: Array.isArray(issue.assignees)
+            ? issue.assignees
+                .map((u) => (u ? { login: u.login, id: u.id, avatarUrl: u.avatar_url } : null))
+                .filter(Boolean)
+            : [],
+          labels: Array.isArray(issue.labels)
+            ? issue.labels
+                .map((label) => {
+                  if (typeof label === 'string') return null;
+                  const name = typeof label?.name === 'string' ? label.name : '';
+                  if (!name) return null;
+                  return { name, color: typeof label?.color === 'string' ? label.color : undefined };
+                })
+                .filter(Boolean)
+            : [],
+        },
+      });
+    } catch (error) {
+      console.error('Failed to fetch GitHub issue:', error);
+      return res.status(500).json({ error: error.message || 'Failed to fetch GitHub issue' });
+    }
+  });
+
+  app.get('/api/github/issues/comments', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const number = typeof req.query?.number === 'string' ? Number(req.query.number) : null;
+      if (!directory || !number) {
+        return res.status(400).json({ error: 'directory and number are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.json({ connected: true, repo: null, comments: [] });
+      }
+
+      const result = await octokit.rest.issues.listComments({
+        owner: repo.owner,
+        repo: repo.repo,
+        issue_number: number,
+        per_page: 100,
+      });
+      const comments = (Array.isArray(result?.data) ? result.data : [])
+        .map((comment) => ({
+          id: comment.id,
+          url: comment.html_url,
+          body: comment.body || '',
+          createdAt: comment.created_at,
+          updatedAt: comment.updated_at,
+          author: comment.user ? { login: comment.user.login, id: comment.user.id, avatarUrl: comment.user.avatar_url } : null,
+        }));
+
+      return res.json({ connected: true, repo, comments });
+    } catch (error) {
+      console.error('Failed to fetch GitHub issue comments:', error);
+      return res.status(500).json({ error: error.message || 'Failed to fetch GitHub issue comments' });
+    }
+  });
+
   app.get('/api/provider/:providerId/source', async (req, res) => {
     try {
       const { providerId } = req.params;

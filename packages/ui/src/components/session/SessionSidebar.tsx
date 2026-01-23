@@ -42,6 +42,8 @@ import {
   RiGitRepositoryLine,
   RiLinkUnlinkM,
 
+  RiGithubLine,
+
   RiMore2Line,
   RiPencilAiLine,
   RiShare2Line,
@@ -62,6 +64,7 @@ import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { BranchPickerDialog } from './BranchPickerDialog';
+import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
@@ -139,6 +142,7 @@ interface SortableProjectItemProps {
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
   onOpenBranchPicker?: () => void;
+  onNewSessionFromGitHubIssue?: () => void;
   onOpenMultiRunLauncher: () => void;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
@@ -163,6 +167,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onNewSession,
   onNewWorktreeSession,
   onOpenBranchPicker,
+  onNewSessionFromGitHubIssue,
   onOpenMultiRunLauncher,
   onClose,
   sentinelRef,
@@ -271,6 +276,12 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 <DropdownMenuItem onClick={onOpenBranchPicker}>
                   <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
                   Browse Branches
+                </DropdownMenuItem>
+              )}
+              {isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
+                <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
+                  <RiGithubLine className="mr-1.5 h-4 w-4" />
+                  New session from GitHub issue
                 </DropdownMenuItem>
               )}
               {isRepo && !hideDirectoryControls && (
@@ -399,6 +410,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = React.useState(false);
+  const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
   const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
@@ -1631,6 +1643,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       createWorktreeSession();
                     }}
                     onOpenBranchPicker={() => setBranchPickerOpen(true)}
+                    onNewSessionFromGitHubIssue={() => {
+                      if (projectKey !== activeProjectId) {
+                        setActiveProject(projectKey);
+                      }
+                      setActiveMainTab('chat');
+                      if (mobileVariant) {
+                        setSessionSwitcherOpen(false);
+                      }
+                      setIssuePickerOpen(true);
+                    }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
@@ -1671,6 +1693,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         onOpenChange={setBranchPickerOpen}
         projects={normalizedProjects}
         activeProjectId={activeProjectId}
+      />
+
+      <GitHubIssuePickerDialog
+        open={issuePickerOpen}
+        onOpenChange={setIssuePickerOpen}
       />
     </div>
   );

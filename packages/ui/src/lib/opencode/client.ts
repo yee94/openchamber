@@ -598,6 +598,7 @@ class OpencodeService {
     modelID: string;
     text: string;
     prefaceText?: string;
+    prefaceTextSynthetic?: boolean;
     agent?: string;
     variant?: string;
     files?: Array<{
@@ -609,6 +610,7 @@ class OpencodeService {
     /** Additional text/file parts to include (for batch sending queued messages) */
     additionalParts?: Array<{
       text: string;
+      synthetic?: boolean;
       files?: Array<{
         type: 'file';
         mime: string;
@@ -630,7 +632,8 @@ class OpencodeService {
     if (params.prefaceText && params.prefaceText.trim()) {
       parts.push({
         type: 'text',
-        text: params.prefaceText
+        text: params.prefaceText,
+        synthetic: params.prefaceTextSynthetic !== false,
       });
     }
 
@@ -663,7 +666,8 @@ class OpencodeService {
         if (additional.text && additional.text.trim()) {
           parts.push({
             type: 'text',
-            text: additional.text
+            text: additional.text,
+            ...(additional.synthetic ? { synthetic: true } : {}),
           });
         }
         if (additional.files && additional.files.length > 0) {

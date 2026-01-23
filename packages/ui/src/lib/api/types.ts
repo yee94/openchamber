@@ -560,6 +560,54 @@ export type GitHubPullRequestMergeResult = {
   message?: string;
 };
 
+export type GitHubIssueLabel = {
+  name: string;
+  color?: string;
+};
+
+export type GitHubIssueSummary = {
+  number: number;
+  title: string;
+  url: string;
+  state: 'open' | 'closed';
+  author?: GitHubUserSummary | null;
+  labels?: GitHubIssueLabel[];
+};
+
+export type GitHubIssue = GitHubIssueSummary & {
+  body?: string;
+  assignees?: GitHubUserSummary[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GitHubIssueComment = {
+  id: number;
+  url: string;
+  body: string;
+  author?: GitHubUserSummary | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GitHubIssuesListResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  issues?: GitHubIssueSummary[];
+};
+
+export type GitHubIssueGetResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  issue?: GitHubIssue | null;
+};
+
+export type GitHubIssueCommentsResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  comments?: GitHubIssueComment[];
+};
+
 export type GitHubAuthStatus = {
   connected: boolean;
   user?: GitHubUserSummary | null;
@@ -591,6 +639,10 @@ export interface GitHubAPI {
   prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>;
   prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;
   prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
+
+  issuesList(directory: string): Promise<GitHubIssuesListResult>;
+  issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;
+  issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult>;
 }
 
 export interface RuntimeAPIs {

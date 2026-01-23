@@ -145,14 +145,16 @@ Implemented code pointers
 
 ## Feature B: Start Session From GitHub Issue
 
+Status: implemented.
+
 ### Intent
 Create a new session seeded with issue context, without polluting chat with large issue bodies/comments.
 
 ### Entry Point
-Session kebab menu in `packages/ui/src/components/session/SessionSidebar.tsx`.
+Project header menu in `packages/ui/src/components/session/SessionSidebar.tsx`.
 
 Add new item:
-- “New session from GitHub issue…”
+- “New session from GitHub issue”
 
 ### Modal UI
 Issue picker modal:
@@ -162,6 +164,10 @@ Issue picker modal:
   - full URL
   - `#123` or `123`
 - checkbox: “Create in worktree”
+
+Implementation notes:
+- modal layout matches Timeline dialog styling/patterns
+- “Open Repo” + per-issue “Open in GitHub” use `<a href=... target="_blank">` (desktop webview safe)
 
 ### Worktree option
 If enabled:
@@ -177,7 +183,7 @@ If disabled:
 ### Session Bootstrap (message)
 Send a single user message with:
 1) Visible text part: concise prompt, e.g.
-   - “Review the issue, clarify requirements, propose plan, then implement.”
+   - “Review the issue; summarize requirements + unknowns; ask clarifying questions; gather needed code context; propose plan + next actions; do not implement until user confirms.”
 2) Hidden synthetic parts: issue payload
    - issue title/body
    - labels, assignees, author
@@ -191,6 +197,22 @@ Do not invent a new hidden-context mechanism.
 - List issues
 - Get issue by number
 - List issue comments
+
+Implemented code pointers
+- UI modal: `packages/ui/src/components/session/GitHubIssuePickerDialog.tsx`
+- Shared sendMessage synthetic parts: `packages/ui/src/lib/opencode/client.ts`
+- Web server endpoints:
+  - `GET /api/github/issues/list`
+  - `GET /api/github/issues/get`
+  - `GET /api/github/issues/comments`
+- Desktop Tauri commands:
+  - `github_issues_list`
+  - `github_issue_get`
+  - `github_issue_comments`
+- VS Code bridge handlers:
+  - `api:github/issues:list`
+  - `api:github/issues:get`
+  - `api:github/issues:comments`
 
 ## Feature C: Start Session From GitHub PR (with worktree checkout)
 

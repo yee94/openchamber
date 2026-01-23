@@ -52,8 +52,10 @@ const openExternal = async (url: string) => {
   const desktop = (window as typeof window & { opencodeDesktop?: { openExternal?: (url: string) => Promise<unknown> } }).opencodeDesktop;
   if (desktop?.openExternal) {
     try {
-      await desktop.openExternal(url);
-      return;
+      const result = await desktop.openExternal(url);
+      if (result && typeof result === 'object' && 'success' in result && (result as { success?: boolean }).success === true) {
+        return;
+      }
     } catch {
       // fall through
     }

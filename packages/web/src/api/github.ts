@@ -1,6 +1,9 @@
 import type {
   GitHubAPI,
   GitHubAuthStatus,
+  GitHubIssueCommentsResult,
+  GitHubIssueGetResult,
+  GitHubIssuesListResult,
   GitHubPullRequest,
   GitHubPullRequestCreateInput,
   GitHubPullRequestMergeInput,
@@ -120,5 +123,41 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
       throw new Error((body as { error?: string } | null)?.error || response.statusText || 'Failed to mark PR ready');
     }
     return body;
+  },
+
+  async issuesList(directory: string): Promise<GitHubIssuesListResult> {
+    const response = await fetch(
+      `/api/github/issues/list?directory=${encodeURIComponent(directory)}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    );
+    const payload = await jsonOrNull<GitHubIssuesListResult & { error?: string }>(response);
+    if (!response.ok || !payload) {
+      throw new Error(payload?.error || response.statusText || 'Failed to load issues');
+    }
+    return payload;
+  },
+
+  async issueGet(directory: string, number: number): Promise<GitHubIssueGetResult> {
+    const response = await fetch(
+      `/api/github/issues/get?directory=${encodeURIComponent(directory)}&number=${encodeURIComponent(String(number))}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    );
+    const payload = await jsonOrNull<GitHubIssueGetResult & { error?: string }>(response);
+    if (!response.ok || !payload) {
+      throw new Error(payload?.error || response.statusText || 'Failed to load issue');
+    }
+    return payload;
+  },
+
+  async issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult> {
+    const response = await fetch(
+      `/api/github/issues/comments?directory=${encodeURIComponent(directory)}&number=${encodeURIComponent(String(number))}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    );
+    const payload = await jsonOrNull<GitHubIssueCommentsResult & { error?: string }>(response);
+    if (!response.ok || !payload) {
+      throw new Error(payload?.error || response.statusText || 'Failed to load issue comments');
+    }
+    return payload;
   },
 });

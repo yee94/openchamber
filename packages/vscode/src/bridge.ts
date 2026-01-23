@@ -29,6 +29,12 @@ import {
   mergePullRequest,
 } from './githubPr';
 
+import {
+  getIssue,
+  listIssueComments,
+  listIssues,
+} from './githubIssues';
+
 export interface BridgeRequest {
   id: string;
   type: string;
@@ -1167,6 +1173,77 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           if (status === 401 || message === 'unauthorized') {
             await clearGitHubAuth(context);
           }
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/issues:list': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) {
+          return { id, type, success: true, data: { connected: false } };
+        }
+        const directory = readStringField(payload, 'directory');
+        if (!directory) {
+          return { id, type, success: false, error: 'directory is required' };
+        }
+        try {
+          const result = await listIssues(stored.accessToken, directory);
+          if (result.connected === false) {
+            await clearGitHubAuth(context);
+          }
+          return { id, type, success: true, data: result };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/issues:get': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) {
+          return { id, type, success: true, data: { connected: false } };
+        }
+        const directory = readStringField(payload, 'directory');
+        const number = readNumberField(payload, 'number') ?? 0;
+        if (!directory || !number) {
+          return { id, type, success: false, error: 'directory and number are required' };
+        }
+        try {
+          const result = await getIssue(stored.accessToken, directory, number);
+          if (result.connected === false) {
+            await clearGitHubAuth(context);
+          }
+          return { id, type, success: true, data: result };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/issues:comments': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) {
+          return { id, type, success: true, data: { connected: false } };
+        }
+        const directory = readStringField(payload, 'directory');
+        const number = readNumberField(payload, 'number') ?? 0;
+        if (!directory || !number) {
+          return { id, type, success: false, error: 'directory and number are required' };
+        }
+        try {
+          const result = await listIssueComments(stored.accessToken, directory, number);
+          if (result.connected === false) {
+            await clearGitHubAuth(context);
+          }
+          return { id, type, success: true, data: result };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
           return { id, type, success: false, error: message };
         }
       }

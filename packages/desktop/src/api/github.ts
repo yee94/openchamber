@@ -1,6 +1,9 @@
 import type {
   GitHubAPI,
   GitHubAuthStatus,
+  GitHubIssueCommentsResult,
+  GitHubIssueGetResult,
+  GitHubIssuesListResult,
   GitHubPullRequest,
   GitHubPullRequestCreateInput,
   GitHubPullRequestMergeInput,
@@ -58,5 +61,20 @@ export const createDesktopGitHubAPI = (): GitHubAPI => ({
   async prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult> {
     const { safeInvoke } = await import('../lib/tauriCallbackManager');
     return safeInvoke<GitHubPullRequestReadyResult>('github_pr_ready', payload, { timeout: 20000 });
+  },
+
+  async issuesList(directory: string): Promise<GitHubIssuesListResult> {
+    const { safeInvoke } = await import('../lib/tauriCallbackManager');
+    return safeInvoke<GitHubIssuesListResult>('github_issues_list', { directory }, { timeout: 20000 });
+  },
+
+  async issueGet(directory: string, number: number): Promise<GitHubIssueGetResult> {
+    const { safeInvoke } = await import('../lib/tauriCallbackManager');
+    return safeInvoke<GitHubIssueGetResult>('github_issue_get', { directory, number }, { timeout: 20000 });
+  },
+
+  async issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult> {
+    const { safeInvoke } = await import('../lib/tauriCallbackManager');
+    return safeInvoke<GitHubIssueCommentsResult>('github_issue_comments', { directory, number }, { timeout: 20000 });
   },
 });

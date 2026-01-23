@@ -86,6 +86,86 @@ pub struct GitHubPullRequestReadyResult {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct GitHubIssueLabel {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssueSummary {
+    number: u64,
+    title: String,
+    url: String,
+    state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<GitHubUserSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    labels: Option<Vec<GitHubIssueLabel>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssue {
+    #[serde(flatten)]
+    summary: GitHubIssueSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assignees: Option<Vec<GitHubUserSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssueComment {
+    id: u64,
+    url: String,
+    body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<GitHubUserSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssuesListResult {
+    connected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo: Option<GitHubRepoRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    issues: Option<Vec<GitHubIssueSummary>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssueGetResult {
+    connected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo: Option<GitHubRepoRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    issue: Option<GitHubIssue>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssueCommentsResult {
+    connected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo: Option<GitHubRepoRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    comments: Option<Vec<GitHubIssueComment>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GitHubUserSummary {
     login: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -203,6 +283,72 @@ struct ApiUserResponse {
     name: Option<String>,
     #[serde(default)]
     email: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IssueUser {
+    login: String,
+    #[serde(default)]
+    id: Option<u64>,
+    #[serde(default)]
+    avatar_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IssueLabel {
+    name: String,
+    #[serde(default)]
+    color: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IssueListItem {
+    number: u64,
+    title: String,
+    html_url: String,
+    state: String,
+    #[serde(default)]
+    user: Option<IssueUser>,
+    #[serde(default)]
+    labels: Vec<IssueLabel>,
+    #[serde(default)]
+    pull_request: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IssueDetailsResponse {
+    number: u64,
+    title: String,
+    html_url: String,
+    state: String,
+    #[serde(default)]
+    user: Option<IssueUser>,
+    #[serde(default)]
+    labels: Vec<IssueLabel>,
+    #[serde(default)]
+    assignees: Vec<IssueUser>,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    pull_request: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IssueCommentResponse {
+    id: u64,
+    html_url: String,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    user: Option<IssueUser>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -589,6 +735,27 @@ async fn fetch_me(access_token: &str) -> Result<GitHubUserSummary, String> {
         name: payload.name,
         email,
     })
+}
+
+fn map_issue_user(user: &IssueUser) -> GitHubUserSummary {
+    GitHubUserSummary {
+        login: user.login.clone(),
+        id: user.id,
+        avatar_url: user.avatar_url.clone(),
+        name: None,
+        email: None,
+    }
+}
+
+fn map_issue_labels(labels: Vec<IssueLabel>) -> Vec<GitHubIssueLabel> {
+    labels
+        .into_iter()
+        .filter(|l| !l.name.trim().is_empty())
+        .map(|l| GitHubIssueLabel {
+            name: l.name,
+            color: l.color,
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -1206,4 +1373,247 @@ pub async fn github_pr_ready(
     }
 
     Ok(GitHubPullRequestReadyResult { ready: true })
+}
+
+#[tauri::command]
+pub async fn github_issues_list(
+    directory: String,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<GitHubIssuesListResult, String> {
+    let directory = directory.trim().to_string();
+    if directory.is_empty() {
+        return Err("directory is required".to_string());
+    }
+
+    let stored = read_auth_file().await;
+    let Some(stored) = stored else {
+        return Ok(GitHubIssuesListResult {
+            connected: false,
+            repo: None,
+            issues: None,
+        });
+    };
+    if stored.access_token.trim().is_empty() {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubIssuesListResult {
+            connected: false,
+            repo: None,
+            issues: None,
+        });
+    }
+
+    let repo = resolve_repo_from_directory(&directory).await;
+    let Some(repo) = repo else {
+        return Ok(GitHubIssuesListResult {
+            connected: true,
+            repo: None,
+            issues: Some(vec![]),
+        });
+    };
+
+    let url = format!(
+        "{}/{}/{}/issues?state=open&per_page=50",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo
+    );
+
+    let list = github_get_json::<Vec<IssueListItem>>(&url, &stored.access_token).await;
+    let list = match list {
+        Ok(v) => v,
+        Err(err) if err == "unauthorized" => {
+            let _ = clear_auth_file().await;
+            return Ok(GitHubIssuesListResult {
+                connected: false,
+                repo: None,
+                issues: None,
+            });
+        }
+        Err(err) => return Err(err),
+    };
+
+    let issues = list
+        .into_iter()
+        .filter(|item| item.pull_request.is_none())
+        .map(|item| GitHubIssueSummary {
+            number: item.number,
+            title: item.title,
+            url: item.html_url,
+            state: item.state,
+            author: item.user.as_ref().map(map_issue_user),
+            labels: Some(map_issue_labels(item.labels)),
+        })
+        .collect::<Vec<_>>();
+
+    Ok(GitHubIssuesListResult {
+        connected: true,
+        repo: Some(repo),
+        issues: Some(issues),
+    })
+}
+
+#[tauri::command]
+pub async fn github_issue_get(
+    directory: String,
+    number: u64,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<GitHubIssueGetResult, String> {
+    let directory = directory.trim().to_string();
+    if directory.is_empty() {
+        return Err("directory is required".to_string());
+    }
+    if number == 0 {
+        return Err("number is required".to_string());
+    }
+
+    let stored = read_auth_file().await;
+    let Some(stored) = stored else {
+        return Ok(GitHubIssueGetResult {
+            connected: false,
+            repo: None,
+            issue: None,
+        });
+    };
+    if stored.access_token.trim().is_empty() {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubIssueGetResult {
+            connected: false,
+            repo: None,
+            issue: None,
+        });
+    }
+
+    let repo = resolve_repo_from_directory(&directory).await;
+    let Some(repo) = repo else {
+        return Ok(GitHubIssueGetResult {
+            connected: true,
+            repo: None,
+            issue: None,
+        });
+    };
+
+    let url = format!(
+        "{}/{}/{}/issues/{}",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, number
+    );
+
+    let issue = github_get_json::<IssueDetailsResponse>(&url, &stored.access_token).await;
+    let issue = match issue {
+        Ok(v) => v,
+        Err(err) if err == "unauthorized" => {
+            let _ = clear_auth_file().await;
+            return Ok(GitHubIssueGetResult {
+                connected: false,
+                repo: None,
+                issue: None,
+            });
+        }
+        Err(err) => return Err(err),
+    };
+
+    if issue.pull_request.is_some() {
+        return Err("Not a GitHub issue".to_string());
+    }
+
+    let summary = GitHubIssueSummary {
+        number: issue.number,
+        title: issue.title,
+        url: issue.html_url,
+        state: issue.state,
+        author: issue.user.as_ref().map(map_issue_user),
+        labels: Some(map_issue_labels(issue.labels)),
+    };
+    let assignees = issue
+        .assignees
+        .iter()
+        .map(map_issue_user)
+        .collect::<Vec<_>>();
+
+    Ok(GitHubIssueGetResult {
+        connected: true,
+        repo: Some(repo),
+        issue: Some(GitHubIssue {
+            summary,
+            body: issue.body,
+            assignees: Some(assignees),
+            created_at: issue.created_at,
+            updated_at: issue.updated_at,
+        }),
+    })
+}
+
+#[tauri::command]
+pub async fn github_issue_comments(
+    directory: String,
+    number: u64,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<GitHubIssueCommentsResult, String> {
+    let directory = directory.trim().to_string();
+    if directory.is_empty() {
+        return Err("directory is required".to_string());
+    }
+    if number == 0 {
+        return Err("number is required".to_string());
+    }
+
+    let stored = read_auth_file().await;
+    let Some(stored) = stored else {
+        return Ok(GitHubIssueCommentsResult {
+            connected: false,
+            repo: None,
+            comments: None,
+        });
+    };
+    if stored.access_token.trim().is_empty() {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubIssueCommentsResult {
+            connected: false,
+            repo: None,
+            comments: None,
+        });
+    }
+
+    let repo = resolve_repo_from_directory(&directory).await;
+    let Some(repo) = repo else {
+        return Ok(GitHubIssueCommentsResult {
+            connected: true,
+            repo: None,
+            comments: Some(vec![]),
+        });
+    };
+
+    let url = format!(
+        "{}/{}/{}/issues/{}/comments?per_page=100",
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, number
+    );
+
+    let comments = github_get_json::<Vec<IssueCommentResponse>>(&url, &stored.access_token).await;
+    let comments = match comments {
+        Ok(v) => v,
+        Err(err) if err == "unauthorized" => {
+            let _ = clear_auth_file().await;
+            return Ok(GitHubIssueCommentsResult {
+                connected: false,
+                repo: None,
+                comments: None,
+            });
+        }
+        Err(err) => return Err(err),
+    };
+
+    let mapped = comments
+        .into_iter()
+        .map(|c| GitHubIssueComment {
+            id: c.id,
+            url: c.html_url,
+            body: c.body.unwrap_or_default(),
+            author: c.user.as_ref().map(map_issue_user),
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+        })
+        .collect::<Vec<_>>();
+
+    Ok(GitHubIssueCommentsResult {
+        connected: true,
+        repo: Some(repo),
+        comments: Some(mapped),
+    })
 }

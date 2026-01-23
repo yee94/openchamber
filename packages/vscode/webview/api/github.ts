@@ -1,6 +1,9 @@
 import type {
   GitHubAPI,
   GitHubAuthStatus,
+  GitHubIssueCommentsResult,
+  GitHubIssueGetResult,
+  GitHubIssuesListResult,
   GitHubPullRequest,
   GitHubPullRequestCreateInput,
   GitHubPullRequestMergeInput,
@@ -31,4 +34,11 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
     sendBridgeMessage<GitHubPullRequestMergeResult>('api:github/pr:merge', payload),
   prReady: async (payload: GitHubPullRequestReadyInput) =>
     sendBridgeMessage<GitHubPullRequestReadyResult>('api:github/pr:ready', payload),
+
+  issuesList: async (directory: string) =>
+    sendBridgeMessage<GitHubIssuesListResult>('api:github/issues:list', { directory }),
+  issueGet: async (directory: string, number: number) =>
+    sendBridgeMessage<GitHubIssueGetResult>('api:github/issues:get', { directory, number }),
+  issueComments: async (directory: string, number: number) =>
+    sendBridgeMessage<GitHubIssueCommentsResult>('api:github/issues:comments', { directory, number }),
 });
