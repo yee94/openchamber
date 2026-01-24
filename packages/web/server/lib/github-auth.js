@@ -43,7 +43,17 @@ function readJsonFile() {
 
 function writeJsonFile(payload) {
   ensureStorageDir();
-  fs.writeFileSync(STORAGE_FILE, JSON.stringify(payload, null, 2), 'utf8');
+
+  // Atomic write so multiple OpenChamber instances can safely share the same file.
+  const tmpFile = `${STORAGE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    fs.chmodSync(tmpFile, 0o600);
+  } catch {
+    // best-effort
+  }
+
+  fs.renameSync(tmpFile, STORAGE_FILE);
   try {
     fs.chmodSync(STORAGE_FILE, 0o600);
   } catch {
