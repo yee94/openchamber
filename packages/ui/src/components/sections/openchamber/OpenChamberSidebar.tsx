@@ -46,6 +46,7 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'github',
     label: 'GitHub',
     items: ['Connect', 'PRs', 'Issues'],
+    hideInVSCode: true,
   },
   {
     id: 'notifications',

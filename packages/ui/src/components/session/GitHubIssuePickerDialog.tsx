@@ -24,6 +24,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useContextStore } from '@/stores/contextStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
@@ -69,6 +70,8 @@ export function GitHubIssuePickerDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { github } = useRuntimeAPIs();
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+  const setSidebarSection = useUIStore((state) => state.setSidebarSection);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
   const projectDirectory = activeProject?.path ?? null;
@@ -155,6 +158,11 @@ export function GitHubIssuePickerDialog({
 
   const connected = Boolean(result?.connected);
   const repoUrl = result?.repo?.url ?? null;
+
+  const openGitHubSettings = React.useCallback(() => {
+    setSidebarSection('settings');
+    setSettingsDialogOpen(true);
+  }, [setSettingsDialogOpen, setSidebarSection]);
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -458,7 +466,14 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
           ) : null}
 
           {connected === false ? (
-            <div className="text-center text-muted-foreground py-8">GitHub not connected.</div>
+            <div className="text-center text-muted-foreground py-8 space-y-3">
+              <div>GitHub not connected. Connect your GitHub account in settings.</div>
+              <div className="flex justify-center">
+                <Button variant="outline" size="sm" onClick={openGitHubSettings}>
+                  Open settings
+                </Button>
+              </div>
+            </div>
           ) : null}
 
           {error ? (

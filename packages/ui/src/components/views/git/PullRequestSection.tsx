@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { generatePullRequestDescription } from '@/lib/gitApi';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useUIStore } from '@/stores/useUIStore';
 import type {
   GitHubPullRequest,
   GitHubPullRequestStatus,
@@ -73,6 +74,13 @@ export const PullRequestSection: React.FC<{
   baseBranch: string;
 }> = ({ directory, branch, baseBranch }) => {
   const { github } = useRuntimeAPIs();
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+  const setSidebarSection = useUIStore((state) => state.setSidebarSection);
+
+  const openGitHubSettings = React.useCallback(() => {
+    setSidebarSection('settings');
+    setSettingsDialogOpen(true);
+  }, [setSettingsDialogOpen, setSidebarSection]);
 
   const [isOpen, setIsOpen] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -263,8 +271,13 @@ export const PullRequestSection: React.FC<{
         <div className="border-t border-border/40">
           <div className="flex flex-col gap-3 p-3">
             {!isConnected ? (
-              <div className="typography-meta text-muted-foreground">
-                GitHub not connected. Connect in Settings to create and merge PRs.
+              <div className="space-y-2">
+                <div className="typography-meta text-muted-foreground">
+                  GitHub not connected. Connect your GitHub account in settings.
+                </div>
+                <Button variant="outline" size="sm" onClick={openGitHubSettings} className="w-fit">
+                  Open settings
+                </Button>
               </div>
             ) : null}
 

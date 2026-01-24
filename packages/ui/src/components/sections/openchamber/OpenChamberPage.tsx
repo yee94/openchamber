@@ -10,7 +10,7 @@ import { NotificationSettings } from './NotificationSettings';
 import { GitHubSettings } from './GitHubSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
-import { isWebRuntime } from '@/lib/desktop';
+import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import type { OpenChamberSection } from './OpenChamberSidebar';
 
 interface OpenChamberPageProps {
@@ -122,6 +122,9 @@ const GitSectionContent: React.FC = () => {
 
 // GitHub section: Connect account for PR/issue workflows
 const GitHubSectionContent: React.FC = () => {
+    if (isVSCodeRuntime()) {
+        return null;
+    }
     return <GitHubSettings />;
 };
 
