@@ -85,11 +85,15 @@ export const createDesktopGitHubAPI = (): GitHubAPI => ({
     return safeInvoke<GitHubPullRequestsListResult>('github_prs_list', { directory, page: options?.page ?? 1 }, { timeout: 20000 });
   },
 
-  async prContext(directory: string, number: number, options?: { includeDiff?: boolean }): Promise<GitHubPullRequestContextResult> {
+  async prContext(
+    directory: string,
+    number: number,
+    options?: { includeDiff?: boolean; includeCheckDetails?: boolean }
+  ): Promise<GitHubPullRequestContextResult> {
     const { safeInvoke } = await import('../lib/tauriCallbackManager');
     return safeInvoke<GitHubPullRequestContextResult>(
       'github_pr_context',
-      { directory, number, includeDiff: Boolean(options?.includeDiff) },
+      { directory, number, includeDiff: Boolean(options?.includeDiff), includeCheckDetails: Boolean(options?.includeCheckDetails) },
       { timeout: 30000 }
     );
   },

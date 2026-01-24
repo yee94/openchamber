@@ -4082,7 +4082,23 @@ async function main(options = {}) {
         head: `${repo.owner}:${branch}`,
         per_page: 10,
       });
-      const first = Array.isArray(list?.data) ? list.data[0] : null;
+
+      let first = Array.isArray(list?.data) ? list.data[0] : null;
+
+      // Fork PR support: head owner != base owner. If no PR found via head filter,
+      // fall back to listing open PRs and matching by head ref name.
+      if (!first) {
+        const openList = await octokit.rest.pulls.list({
+          owner: repo.owner,
+          repo: repo.repo,
+          state: 'open',
+          per_page: 100,
+        });
+        const matches = Array.isArray(openList?.data)
+          ? openList.data.filter((pr) => pr?.head?.ref === branch)
+          : [];
+        first = matches[0] ?? null;
+      }
       if (!first) {
         return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
       }
@@ -4601,6 +4617,7 @@ async function main(options = {}) {
       const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
       const number = typeof req.query?.number === 'string' ? Number(req.query.number) : null;
       const includeDiff = req.query?.diff === '1' || req.query?.diff === 'true';
+      const includeCheckDetails = req.query?.checkDetails === '1' || req.query?.checkDetails === 'true';
       if (!directory || !number) {
         return res.status(400).json({ error: 'directory and number are required' });
       }
@@ -4702,12 +4719,108 @@ async function main(options = {}) {
 
       // checks summary (same logic as status endpoint)
       let checks = null;
+      let checkRunsOut = undefined;
       const sha = prData.head?.sha;
       if (sha) {
         try {
           const runs = await octokit.rest.checks.listForRef({ owner: repo.owner, repo: repo.repo, ref: sha, per_page: 100 });
           const checkRuns = Array.isArray(runs?.data?.check_runs) ? runs.data.check_runs : [];
           if (checkRuns.length > 0) {
+            const parsedJobs = new Map();
+            if (includeCheckDetails) {
+              // Prefetch actions jobs per runId.
+              const runIds = new Set();
+              const jobIds = new Map();
+              for (const run of checkRuns) {
+                const details = typeof run.details_url === 'string' ? run.details_url : '';
+                const match = details.match(/\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/);
+                if (match) {
+                  const runId = Number(match[1]);
+                  const jobId = match[2] ? Number(match[2]) : null;
+                  if (Number.isFinite(runId) && runId > 0) {
+                    runIds.add(runId);
+                    if (jobId && Number.isFinite(jobId) && jobId > 0) {
+                      jobIds.set(details, { runId, jobId });
+                    } else {
+                      jobIds.set(details, { runId, jobId: null });
+                    }
+                  }
+                }
+              }
+
+              for (const runId of runIds) {
+                try {
+                  const jobsResp = await octokit.rest.actions.listJobsForWorkflowRun({
+                    owner: repo.owner,
+                    repo: repo.repo,
+                    run_id: runId,
+                    per_page: 100,
+                  });
+                  const jobs = Array.isArray(jobsResp?.data?.jobs) ? jobsResp.data.jobs : [];
+                  parsedJobs.set(runId, jobs);
+                } catch {
+                  parsedJobs.set(runId, []);
+                }
+              }
+            }
+
+            checkRunsOut = checkRuns.map((run) => {
+              const detailsUrl = typeof run.details_url === 'string' ? run.details_url : undefined;
+              let job = undefined;
+              if (includeCheckDetails && detailsUrl) {
+                const match = detailsUrl.match(/\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/);
+                const runId = match ? Number(match[1]) : null;
+                const jobId = match && match[2] ? Number(match[2]) : null;
+                if (runId && Number.isFinite(runId)) {
+                  const jobs = parsedJobs.get(runId) || [];
+                  const matched = jobId
+                    ? jobs.find((j) => j.id === jobId)
+                    : null;
+                  const picked = matched || jobs.find((j) => j.name === run.name) || null;
+                  if (picked) {
+                    job = {
+                      runId,
+                      jobId: picked.id,
+                      url: picked.html_url,
+                      name: picked.name,
+                      conclusion: picked.conclusion,
+                      steps: Array.isArray(picked.steps)
+                        ? picked.steps.map((s) => ({
+                            name: s.name,
+                            status: s.status,
+                            conclusion: s.conclusion,
+                            number: s.number,
+                          }))
+                        : undefined,
+                    };
+                  } else {
+                    job = { runId, ...(jobId ? { jobId } : {}), url: detailsUrl };
+                  }
+                }
+              }
+
+              return {
+                id: run.id,
+                name: run.name,
+                app: run.app
+                  ? {
+                      name: run.app.name || undefined,
+                      slug: run.app.slug || undefined,
+                    }
+                  : undefined,
+                status: run.status,
+                conclusion: run.conclusion,
+                detailsUrl,
+                output: run.output
+                  ? {
+                      title: run.output.title || undefined,
+                      summary: run.output.summary || undefined,
+                      text: run.output.text || undefined,
+                    }
+                  : undefined,
+                ...(job ? { job } : {}),
+              };
+            });
             const counts = { success: 0, failure: 0, pending: 0 };
             for (const run of checkRuns) {
               const status = run?.status;
@@ -4772,6 +4885,7 @@ async function main(options = {}) {
         files,
         ...(diff ? { diff } : {}),
         checks,
+        ...(Array.isArray(checkRunsOut) ? { checkRuns: checkRunsOut } : {}),
       });
     } catch (error) {
       if (error?.status === 401) {

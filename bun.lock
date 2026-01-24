@@ -95,7 +95,7 @@
     },
     "packages/desktop": {
       "name": "@openchamber/desktop",
-      "version": "1.5.5",
+      "version": "1.5.6",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@tauri-apps/plugin-notification": "^2.3.3",
@@ -118,7 +118,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.5.5",
+      "version": "1.5.6",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.0",
         "@codemirror/commands": "^6.10.1",
@@ -212,7 +212,7 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.5.5",
+      "version": "1.5.6",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@opencode-ai/sdk": "^1.1.19",
@@ -235,7 +235,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.5.5",
+      "version": "1.5.6",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
@@ -243,6 +243,7 @@
         "@fontsource/ibm-plex-mono": "^5.2.7",
         "@fontsource/ibm-plex-sans": "^5.1.1",
         "@ibm/plex": "^6.4.1",
+        "@octokit/rest": "^22.0.1",
         "@opencode-ai/sdk": "^1.1.19",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",

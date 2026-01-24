@@ -261,7 +261,7 @@ export function GitHubPullRequestPickerDialog({
     if (startingNumber) return;
     setStartingNumber(number);
     try {
-      const prContext = await github.prContext(projectDirectory, number, { includeDiff });
+      const prContext = await github.prContext(projectDirectory, number, { includeDiff, includeCheckDetails: false });
       if (prContext.connected === false) {
         toast.error('GitHub not connected');
         return;

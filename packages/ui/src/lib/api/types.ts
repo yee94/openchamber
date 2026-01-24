@@ -509,6 +509,31 @@ export type GitHubChecksSummary = {
   pending: number;
 };
 
+export type GitHubCheckRun = {
+  id?: number;
+  name: string;
+  app?: {
+    name?: string;
+    slug?: string;
+  };
+  status?: string;
+  conclusion?: string | null;
+  detailsUrl?: string;
+  output?: {
+    title?: string;
+    summary?: string;
+    text?: string;
+  };
+  job?: {
+    runId?: number;
+    jobId?: number;
+    url?: string;
+    name?: string;
+    conclusion?: string | null;
+    steps?: Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+  };
+};
+
 export type GitHubPullRequest = {
   number: number;
   title: string;
@@ -576,6 +601,7 @@ export type GitHubPullRequestContextResult = {
   files?: GitHubPullRequestFile[];
   diff?: string;
   checks?: GitHubChecksSummary | null;
+  checkRuns?: GitHubCheckRun[];
 };
 
 export type GitHubPullRequestStatus = {
@@ -699,7 +725,11 @@ export interface GitHubAPI {
   prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
 
   prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult>;
-  prContext(directory: string, number: number, options?: { includeDiff?: boolean }): Promise<GitHubPullRequestContextResult>;
+  prContext(
+    directory: string,
+    number: number,
+    options?: { includeDiff?: boolean; includeCheckDetails?: boolean }
+  ): Promise<GitHubPullRequestContextResult>;
 
   issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;

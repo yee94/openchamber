@@ -82,6 +82,75 @@ pub struct GitHubPullRequestContextResult {
     diff: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     checks: Option<GitHubChecksSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    check_runs: Option<Vec<GitHubCheckRun>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCheckRun {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    app: Option<GitHubCheckRunApp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conclusion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output: Option<GitHubCheckRunOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    job: Option<GitHubCheckRunJob>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCheckRunApp {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    slug: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCheckRunJob {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    run_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    job_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conclusion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    steps: Option<Vec<GitHubCheckRunJobStep>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCheckRunJobStep {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conclusion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    number: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCheckRunOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -541,9 +610,35 @@ struct CombinedStatusResponse {
 #[derive(Debug, Deserialize)]
 struct CheckRunEntry {
     #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    app: Option<CheckRunApp>,
+    #[serde(default)]
     status: Option<String>,
     #[serde(default)]
     conclusion: Option<String>,
+    #[serde(default)]
+    details_url: Option<String>,
+    #[serde(default)]
+    output: Option<CheckRunOutput>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CheckRunApp {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    slug: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CheckRunOutput {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1151,7 +1246,32 @@ pub async fn github_pr_status(
         Err(err) => return Err(err),
     };
 
-    let Some(first) = list.first() else {
+    let mut first_number = list.first().map(|p| p.number);
+
+    // Fork PR support: if head owner differs, head filter returns empty.
+    // Fall back to listing open PRs and matching by head ref name.
+    if first_number.is_none() {
+        let open_list_url = format!(
+            "{}/{}/{}/pulls?state=open&per_page=100",
+            API_PULLS_URL_PREFIX, repo.owner, repo.repo
+        );
+        let open_list = github_get_json::<Vec<Value>>(&open_list_url, &stored.access_token).await;
+        if let Ok(items) = open_list {
+            for item in items.iter() {
+                let head_ref = item
+                    .get("head")
+                    .and_then(|h| h.get("ref"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if head_ref == branch {
+                    first_number = item.get("number").and_then(|v| v.as_u64());
+                    break;
+                }
+            }
+        }
+    }
+
+    let Some(first_number) = first_number else {
         return Ok(GitHubPullRequestStatus {
             connected: true,
             repo: Some(repo),
@@ -1164,7 +1284,7 @@ pub async fn github_pr_status(
 
     let pr_url = format!(
         "{}/{}/{}/pulls/{}",
-        API_PULLS_URL_PREFIX, repo.owner, repo.repo, first.number
+        API_PULLS_URL_PREFIX, repo.owner, repo.repo, first_number
     );
     let pr = github_get_json::<PullDetailsResponse>(&pr_url, &stored.access_token).await?;
 
@@ -2003,6 +2123,8 @@ pub async fn github_pr_context(
     number: u64,
     #[allow(non_snake_case)]
     includeDiff: bool,
+    #[allow(non_snake_case)]
+    includeCheckDetails: Option<bool>,
     _state: State<'_, DesktopRuntime>,
 ) -> Result<GitHubPullRequestContextResult, String> {
     let directory = directory.trim().to_string();
@@ -2024,6 +2146,7 @@ pub async fn github_pr_context(
             files: None,
             diff: None,
             checks: None,
+            check_runs: None,
         });
     };
     if stored.access_token.trim().is_empty() {
@@ -2037,6 +2160,7 @@ pub async fn github_pr_context(
             files: None,
             diff: None,
             checks: None,
+            check_runs: None,
         });
     }
 
@@ -2051,6 +2175,7 @@ pub async fn github_pr_context(
             files: None,
             diff: None,
             checks: None,
+            check_runs: None,
         });
     };
 
@@ -2069,6 +2194,7 @@ pub async fn github_pr_context(
                 files: None,
                 diff: None,
                 checks: None,
+                check_runs: None,
             });
         }
         Err(err) => return Err(err),
@@ -2170,6 +2296,12 @@ pub async fn github_pr_context(
 
     // checks summary (same as github_pr_status)
     let mut checks: Option<GitHubChecksSummary> = None;
+    let mut check_runs_out: Option<Vec<GitHubCheckRun>> = None;
+    let include_check_details = includeCheckDetails.unwrap_or(false);
+
+    // actions jobs cache per run_id
+    let mut jobs_by_run_id: std::collections::HashMap<u64, Vec<Value>> = std::collections::HashMap::new();
+
     if let Some(ref sha) = pr.summary.head_sha {
         let check_runs_url = format!(
             "{}/{}/{}/commits/{}/check-runs",
@@ -2177,6 +2309,139 @@ pub async fn github_pr_context(
         );
         if let Ok(runs) = github_get_json::<CheckRunsResponse>(&check_runs_url, &stored.access_token).await {
             if !runs.check_runs.is_empty() {
+                let mut out: Vec<GitHubCheckRun> = Vec::new();
+
+                for run in runs.check_runs.iter() {
+                    let name = run.name.clone().unwrap_or_default();
+                    if name.trim().is_empty() {
+                        continue;
+                    }
+
+                    let mut job: Option<GitHubCheckRunJob> = None;
+                    if include_check_details {
+                        if let Some(details_url) = &run.details_url {
+                            let (run_id, job_id) = (|| {
+                                let marker = "/actions/runs/";
+                                let idx = details_url.find(marker)?;
+                                let rest = &details_url[(idx + marker.len())..];
+                                let mut iter = rest.split('/');
+                                let run_id_str = iter.next()?;
+                                let run_id_val = run_id_str.parse::<u64>().ok()?;
+                                let mut job_id_val: Option<u64> = None;
+                                let next = iter.next().unwrap_or("");
+                                if next == "job" {
+                                    job_id_val = iter.next().and_then(|s| s.parse::<u64>().ok());
+                                }
+                                Some((run_id_val, job_id_val))
+                            })().unwrap_or((0, None));
+
+                            if run_id > 0 {
+                                if !jobs_by_run_id.contains_key(&run_id) {
+                                    let jobs_url = format!(
+                                        "{}/{}/{}/actions/runs/{}/jobs?per_page=100",
+                                        API_PULLS_URL_PREFIX, repo.owner, repo.repo, run_id
+                                    );
+                                    let jobs_json = github_get_json::<Value>(&jobs_url, &stored.access_token).await;
+                                    let jobs = jobs_json
+                                        .ok()
+                                        .and_then(|v| v.get("jobs").cloned())
+                                        .and_then(|v| v.as_array().cloned())
+                                        .unwrap_or_default();
+                                    jobs_by_run_id.insert(run_id, jobs);
+                                }
+
+                                let jobs = jobs_by_run_id.get(&run_id).cloned().unwrap_or_default();
+                                let picked = if let Some(job_id_val) = job_id {
+                                    jobs.iter()
+                                        .find(|j| j.get("id").and_then(|v| v.as_u64()) == Some(job_id_val))
+                                        .cloned()
+                                } else {
+                                    jobs.iter()
+                                        .find(|j| j.get("name").and_then(|v| v.as_str()) == Some(name.as_str()))
+                                        .cloned()
+                                };
+
+                                if let Some(picked) = picked {
+                                    let steps = picked
+                                        .get("steps")
+                                        .and_then(|v| v.as_array())
+                                        .map(|arr| {
+                                            arr.iter()
+                                                .filter_map(|s| {
+                                                    let step_name = s
+                                                        .get("name")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("");
+                                                    if step_name.trim().is_empty() {
+                                                        return None;
+                                                    }
+                                                    Some(GitHubCheckRunJobStep {
+                                                        name: step_name.to_string(),
+                                                        status: s
+                                                            .get("status")
+                                                            .and_then(|v| v.as_str())
+                                                            .map(|s| s.to_string()),
+                                                        conclusion: s
+                                                            .get("conclusion")
+                                                            .and_then(|v| v.as_str())
+                                                            .map(|s| s.to_string()),
+                                                        number: s.get("number").and_then(|v| v.as_u64()),
+                                                    })
+                                                })
+                                                .collect::<Vec<_>>()
+                                        });
+
+                                    job = Some(GitHubCheckRunJob {
+                                        run_id: Some(run_id),
+                                        job_id: picked.get("id").and_then(|v| v.as_u64()),
+                                        url: picked
+                                            .get("html_url")
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| s.to_string()),
+                                        name: picked
+                                            .get("name")
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| s.to_string()),
+                                        conclusion: picked
+                                            .get("conclusion")
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| s.to_string()),
+                                        steps,
+                                    });
+                                } else {
+                                    job = Some(GitHubCheckRunJob {
+                                        run_id: Some(run_id),
+                                        job_id,
+                                        url: Some(details_url.clone()),
+                                        name: None,
+                                        conclusion: None,
+                                        steps: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    out.push(GitHubCheckRun {
+                        name,
+                        app: run.app.as_ref().map(|a| GitHubCheckRunApp {
+                            name: a.name.clone(),
+                            slug: a.slug.clone(),
+                        }),
+                        status: run.status.clone(),
+                        conclusion: run.conclusion.clone(),
+                        details_url: run.details_url.clone(),
+                        output: run.output.as_ref().map(|o| GitHubCheckRunOutput {
+                            title: o.title.clone(),
+                            summary: o.summary.clone(),
+                            text: o.text.clone(),
+                        }),
+                        job,
+                    });
+                }
+
+                check_runs_out = Some(out);
+
                 let mut success = 0;
                 let mut failure = 0;
                 let mut pending = 0;
@@ -2270,6 +2535,7 @@ pub async fn github_pr_context(
                     files: None,
                     diff: None,
                     checks: None,
+                    check_runs: None,
                 });
             }
             Err(_) => None,
@@ -2287,5 +2553,6 @@ pub async fn github_pr_context(
         files: Some(files),
         diff,
         checks,
+        check_runs: check_runs_out,
     })
 }

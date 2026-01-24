@@ -46,6 +46,11 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
 
   prsList: async (directory: string, options?: { page?: number }) =>
     sendBridgeMessage<GitHubPullRequestsListResult>('api:github/pulls:list', { directory, page: options?.page ?? 1 }),
-  prContext: async (directory: string, number: number, options?: { includeDiff?: boolean }) =>
-    sendBridgeMessage<GitHubPullRequestContextResult>('api:github/pulls:context', { directory, number, includeDiff: Boolean(options?.includeDiff) }),
+  prContext: async (directory: string, number: number, options?: { includeDiff?: boolean; includeCheckDetails?: boolean }) =>
+    sendBridgeMessage<GitHubPullRequestContextResult>('api:github/pulls:context', {
+      directory,
+      number,
+      includeDiff: Boolean(options?.includeDiff),
+      includeCheckDetails: Boolean(options?.includeCheckDetails),
+    }),
 });

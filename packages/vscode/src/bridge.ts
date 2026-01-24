@@ -1288,11 +1288,12 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         const directory = readStringField(payload, 'directory');
         const number = readNumberField(payload, 'number') ?? 0;
         const includeDiff = readBooleanField(payload, 'includeDiff') ?? false;
+        const includeCheckDetails = readBooleanField(payload, 'includeCheckDetails') ?? false;
         if (!directory || !number) {
           return { id, type, success: false, error: 'directory and number are required' };
         }
         try {
-          const result = await getPullRequestContext(stored.accessToken, directory, number, includeDiff);
+          const result = await getPullRequestContext(stored.accessToken, directory, number, includeDiff, includeCheckDetails);
           if (result.connected === false) {
             await clearGitHubAuth(context);
           }

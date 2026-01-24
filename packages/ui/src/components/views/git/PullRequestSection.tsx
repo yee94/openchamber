@@ -9,6 +9,13 @@ import {
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -19,8 +26,13 @@ import {
 import { generatePullRequestDescription } from '@/lib/gitApi';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
+import { useMessageStore } from '@/stores/messageStore';
+import { useSessionStore } from '@/stores/useSessionStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import type {
   GitHubPullRequest,
+  GitHubCheckRun,
+  GitHubPullRequestContextResult,
   GitHubPullRequestStatus,
 } from '@/lib/api/types';
 
@@ -76,6 +88,8 @@ export const PullRequestSection: React.FC<{
   const { github } = useRuntimeAPIs();
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSidebarSection = useUIStore((state) => state.setSidebarSection);
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const currentSessionId = useSessionStore((state) => state.currentSessionId);
 
   const openGitHubSettings = React.useCallback(() => {
     setSidebarSection('settings');
@@ -97,7 +111,223 @@ export const PullRequestSection: React.FC<{
   const [isMerging, setIsMerging] = React.useState(false);
   const [isMarkingReady, setIsMarkingReady] = React.useState(false);
 
+  const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
+  const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
+  const [isLoadingCheckDetails, setIsLoadingCheckDetails] = React.useState(false);
+
   const canShow = Boolean(directory && branch && baseBranch && branch !== baseBranch);
+
+  const pr = status?.pr ?? null;
+
+  const openChecksDialog = React.useCallback(async () => {
+    if (!github?.prContext) {
+      toast.error('GitHub runtime API unavailable');
+      return;
+    }
+    if (!pr) return;
+
+    setChecksDialogOpen(true);
+    setIsLoadingCheckDetails(true);
+    try {
+      const ctx = await github.prContext(directory, pr.number, {
+        includeDiff: false,
+        includeCheckDetails: true,
+      });
+      setCheckDetails(ctx);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error('Failed to load check details', { description: message });
+    } finally {
+      setIsLoadingCheckDetails(false);
+    }
+  }, [directory, github, pr]);
+
+  const renderCheckRunSummary = React.useCallback((run: GitHubCheckRun) => {
+    const status = run.status || 'unknown';
+    const conclusion = run.conclusion ?? undefined;
+    const statusText = conclusion ? `${status} / ${conclusion}` : status;
+    const appName = run.app?.name || run.app?.slug;
+    return (
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="typography-ui-label text-foreground truncate">{run.name}</div>
+          <div className="typography-micro text-muted-foreground truncate">
+            {appName ? `${appName} · ${statusText}` : statusText}
+          </div>
+          {run.output?.summary ? (
+            <div className="typography-micro text-muted-foreground whitespace-pre-wrap line-clamp-4 mt-2">
+              {run.output.summary}
+            </div>
+          ) : null}
+          {run.job?.steps && run.job.steps.length > 0 ? (
+            <div className="mt-2 space-y-1">
+              <div className="typography-micro text-muted-foreground">Steps</div>
+              <div className="space-y-1">
+                {run.job.steps.map((step, idx) => {
+                  const c = (step.conclusion || '').toLowerCase();
+                  const isFail = c && !['success', 'neutral', 'skipped'].includes(c);
+                  return (
+                    <div
+                      key={`${step.name}-${idx}`}
+                      className={
+                        'typography-micro flex items-center gap-2 rounded px-2 py-1 ' +
+                        (isFail ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground')
+                      }
+                    >
+                      <span className="truncate">{step.name}</span>
+                      {step.conclusion ? <span className="ml-auto flex-shrink-0">{step.conclusion}</span> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {run.detailsUrl ? (
+          <Button variant="outline" size="sm" asChild className="flex-shrink-0">
+            <a href={run.detailsUrl} target="_blank" rel="noopener noreferrer">
+              <RiExternalLinkLine className="size-4" />
+              Open
+            </a>
+          </Button>
+        ) : null}
+      </div>
+    );
+  }, []);
+
+  const sendFailedChecksToChat = React.useCallback(async () => {
+    setActiveMainTab('chat');
+
+    if (!github?.prContext) {
+      toast.error('GitHub runtime API unavailable');
+      return;
+    }
+    if (!directory || !pr) return;
+    if (!currentSessionId) {
+      toast.error('No active session', { description: 'Open a chat session first.' });
+      return;
+    }
+
+    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
+    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
+    const providerID = currentProviderId || lastUsedProvider?.providerID;
+    const modelID = currentModelId || lastUsedProvider?.modelID;
+    if (!providerID || !modelID) {
+      toast.error('No model selected');
+      return;
+    }
+
+    try {
+      const context = await github.prContext(directory, pr.number, { includeDiff: false, includeCheckDetails: true });
+      const runs = context.checkRuns ?? [];
+      const failed = runs.filter((r) => {
+        const conclusion = typeof r.conclusion === 'string' ? r.conclusion.toLowerCase() : '';
+        if (!conclusion) return false;
+        return !['success', 'neutral', 'skipped'].includes(conclusion);
+      });
+
+      if (failed.length === 0) {
+        toast.message('No failed checks');
+        return;
+      }
+
+      const visibleText = 'Review these PR failed checks and propose likely fixes. Do not implement until I confirm.';
+      const instructionsText = `Use the attached checks payload.
+- Summarize what is failing.
+- Identify likely root cause(s).
+- Propose a minimal fix plan and verification steps.
+- No speculation: ask for missing info if needed.`;
+      const payloadText = `GitHub PR failed checks (JSON)\n${JSON.stringify({
+        repo: context.repo ?? null,
+        pr: context.pr ?? null,
+        failedChecks: failed,
+      }, null, 2)}`;
+
+      await useMessageStore.getState().sendMessage(
+        visibleText,
+        providerID,
+        modelID,
+        currentAgentName ?? undefined,
+        currentSessionId,
+        undefined,
+        null,
+        [
+          { text: instructionsText, synthetic: true },
+          { text: payloadText, synthetic: true },
+        ],
+        currentVariant
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error('Failed to load checks', { description: message });
+    }
+  }, [currentSessionId, directory, github, pr, setActiveMainTab]);
+
+  const sendCommentsToChat = React.useCallback(async () => {
+    setActiveMainTab('chat');
+
+    if (!github?.prContext) {
+      toast.error('GitHub runtime API unavailable');
+      return;
+    }
+    if (!directory || !pr) return;
+    if (!currentSessionId) {
+      toast.error('No active session', { description: 'Open a chat session first.' });
+      return;
+    }
+
+    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
+    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
+    const providerID = currentProviderId || lastUsedProvider?.providerID;
+    const modelID = currentModelId || lastUsedProvider?.modelID;
+    if (!providerID || !modelID) {
+      toast.error('No model selected');
+      return;
+    }
+
+    try {
+      const context = await github.prContext(directory, pr.number, { includeDiff: false, includeCheckDetails: false });
+      const issueComments = context.issueComments ?? [];
+      const reviewComments = context.reviewComments ?? [];
+      const total = issueComments.length + reviewComments.length;
+      if (total === 0) {
+        toast.message('No PR comments');
+        return;
+      }
+
+      const visibleText = 'Review these PR comments and propose the required changes and next actions. Do not implement until I confirm.';
+      const instructionsText = `Use the attached comments payload.
+- Identify required vs optional changes.
+- Call out intent/implementation mismatch if present.
+- Propose a minimal plan and verification steps.
+- No speculation: ask for missing info if needed.`;
+      const payloadText = `GitHub PR comments (JSON)\n${JSON.stringify({
+        repo: context.repo ?? null,
+        pr: context.pr ?? null,
+        issueComments,
+        reviewComments,
+      }, null, 2)}`;
+
+      await useMessageStore.getState().sendMessage(
+        visibleText,
+        providerID,
+        modelID,
+        currentAgentName ?? undefined,
+        currentSessionId,
+        undefined,
+        null,
+        [
+          { text: instructionsText, synthetic: true },
+          { text: payloadText, synthetic: true },
+        ],
+        currentVariant
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error('Failed to load PR comments', { description: message });
+    }
+  }, [currentSessionId, directory, github, pr, setActiveMainTab]);
 
   const refresh = React.useCallback(async () => {
     if (!canShow) return;
@@ -236,7 +466,6 @@ export const PullRequestSection: React.FC<{
     return null;
   }
 
-  const pr = status?.pr ?? null;
   const repoUrl = status?.repo?.url || null;
   const checks = status?.checks ?? null;
   const canMerge = Boolean(status?.canMerge);
@@ -305,6 +534,27 @@ export const PullRequestSection: React.FC<{
                       {pr.state}{pr.draft ? ' (draft)' : ''}
                       {pr.mergeable === false ? ' · not mergeable' : ''}
                       {typeof pr.mergeableState === 'string' && pr.mergeableState ? ` · ${pr.mergeableState}` : ''}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {checks ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={openChecksDialog}
+                          disabled={isLoadingCheckDetails}
+                        >
+                          {isLoadingCheckDetails ? <RiLoader4Line className="size-4 animate-spin" /> : null}
+                          Check details
+                        </Button>
+                      ) : null}
+                      {checks?.failure ? (
+                        <Button variant="outline" size="sm" onClick={sendFailedChecksToChat}>
+                          Send failed checks to chat
+                        </Button>
+                      ) : null}
+                      <Button variant="outline" size="sm" onClick={sendCommentsToChat}>
+                        Send PR comments to chat
+                      </Button>
                     </div>
                     {canMerge && pr.draft ? (
                       <div className="typography-micro text-muted-foreground">
@@ -450,6 +700,50 @@ export const PullRequestSection: React.FC<{
           </div>
         </div>
       </CollapsibleContent>
+
+      <Dialog open={checksDialogOpen} onOpenChange={setChecksDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RiGitPullRequestLine className="h-5 w-5" />
+              Check Details
+            </DialogTitle>
+            <DialogDescription>
+              {pr ? `PR #${pr.number}` : 'Pull request'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto mt-2">
+            {isLoadingCheckDetails ? (
+              <div className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
+                <RiLoader4Line className="h-4 w-4 animate-spin" />
+                Loading...
+              </div>
+            ) : null}
+
+            {!isLoadingCheckDetails ? (
+              <div className="space-y-3">
+                {Array.isArray(checkDetails?.checkRuns) && checkDetails?.checkRuns.length > 0 ? (
+                  checkDetails.checkRuns.map((run, idx) => (
+                    <div key={`${run.name}-${idx}`} className="rounded-md border border-border/60 p-3">
+                      {renderCheckRunSummary(run)}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">No check details available.</div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2 mt-3">
+            <div className="flex-1" />
+            <Button variant="outline" onClick={() => setChecksDialogOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Collapsible>
   );
 };

@@ -16,6 +16,31 @@ type GitHubChecksSummary = {
   pending: number;
 };
 
+type GitHubCheckRun = {
+  id?: number;
+  name: string;
+  app?: {
+    name?: string;
+    slug?: string;
+  };
+  status?: string;
+  conclusion?: string | null;
+  detailsUrl?: string;
+  output?: {
+    title?: string;
+    summary?: string;
+    text?: string;
+  };
+  job?: {
+    runId?: number;
+    jobId?: number;
+    url?: string;
+    name?: string;
+    conclusion?: string | null;
+    steps?: Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+  };
+};
+
 type GitHubPullRequestHeadRepo = { owner: string; repo: string; url: string; cloneUrl?: string };
 
 type GitHubPullRequestSummary = {
@@ -84,6 +109,7 @@ export type GitHubPullRequestContextResult = {
   files?: GitHubPullRequestFile[];
   diff?: string;
   checks?: GitHubChecksSummary | null;
+  checkRuns?: GitHubCheckRun[];
 };
 
 const githubFetch = async (
@@ -149,12 +175,49 @@ const mapHeadRepo = (raw: unknown): GitHubPullRequestHeadRepo | null => {
   };
 };
 
-const computeChecks = async (accessToken: string, repo: GitHubRepoRef, sha: string): Promise<GitHubChecksSummary | null> => {
+const computeChecks = async (
+  accessToken: string,
+  repo: GitHubRepoRef,
+  sha: string
+): Promise<{ summary: GitHubChecksSummary | null; runs: GitHubCheckRun[] }> => {
   const runsResp = await githubFetch(`${API_BASE}/repos/${repo.owner}/${repo.repo}/commits/${sha}/check-runs`, accessToken);
+  if (runsResp.status === 401) {
+    return { summary: null, runs: [] };
+  }
   const runsJson = await jsonOrNull<JsonRecord>(runsResp);
   const runs = Array.isArray((runsJson as JsonRecord | null)?.check_runs)
     ? ((runsJson as JsonRecord).check_runs as unknown[])
     : [];
+
+  const mappedRuns: GitHubCheckRun[] = runs
+    .map((r) => {
+      const rec = (r && typeof r === 'object') ? (r as JsonRecord) : null;
+      const name = readString(rec?.name);
+      if (!name) return null;
+      const output = rec?.output && typeof rec.output === 'object' ? (rec.output as JsonRecord) : null;
+      const app = rec?.app && typeof rec.app === 'object' ? (rec.app as JsonRecord) : null;
+      return {
+        id: typeof rec?.id === 'number' ? rec.id : undefined,
+        name,
+        app: app
+          ? {
+              name: readString(app.name) || undefined,
+              slug: readString(app.slug) || undefined,
+            }
+          : undefined,
+        status: readString(rec?.status) || undefined,
+        conclusion: (rec?.conclusion === null || typeof rec?.conclusion === 'string') ? (rec?.conclusion as string | null) : undefined,
+        detailsUrl: readString(rec?.details_url) || undefined,
+        output: output
+          ? {
+              title: readString(output.title) || undefined,
+              summary: readString(output.summary) || undefined,
+              text: readString(output.text) || undefined,
+            }
+          : undefined,
+      };
+    })
+    .filter(Boolean) as GitHubCheckRun[];
 
   if (runsResp.ok && runs.length > 0) {
     const counts = { success: 0, failure: 0, pending: 0 };
@@ -180,12 +243,12 @@ const computeChecks = async (accessToken: string, repo: GitHubRepoRef, sha: stri
     const state = counts.failure > 0
       ? 'failure'
       : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
-    return { state, total, ...counts };
+    return { summary: { state, total, ...counts }, runs: mappedRuns };
   }
 
   const statusResp = await githubFetch(`${API_BASE}/repos/${repo.owner}/${repo.repo}/commits/${sha}/status`, accessToken);
   const statusJson = await jsonOrNull<JsonRecord>(statusResp);
-  if (!statusResp.ok || !statusJson) return null;
+  if (!statusResp.ok || !statusJson) return { summary: null, runs: mappedRuns };
   const statuses = Array.isArray(statusJson.statuses) ? (statusJson.statuses as unknown[]) : [];
   const counts = { success: 0, failure: 0, pending: 0 };
   statuses.forEach((s) => {
@@ -198,7 +261,7 @@ const computeChecks = async (accessToken: string, repo: GitHubRepoRef, sha: stri
   const state = counts.failure > 0
     ? 'failure'
     : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
-  return { state, total, ...counts };
+  return { summary: { state, total, ...counts }, runs: mappedRuns };
 };
 
 export const listPullRequests = async (
@@ -259,6 +322,7 @@ export const getPullRequestContext = async (
   directory: string,
   number: number,
   includeDiff: boolean,
+  includeCheckDetails: boolean,
 ): Promise<GitHubPullRequestContextResult> => {
   const repo = await resolveRepoFromDirectory(directory);
   if (!repo) {
@@ -358,7 +422,80 @@ export const getPullRequestContext = async (
     })
     .filter(Boolean) as GitHubPullRequestFile[];
 
-  const checks = pr.headSha ? await computeChecks(accessToken, repo, pr.headSha) : null;
+  const checksResult = pr.headSha ? await computeChecks(accessToken, repo, pr.headSha) : { summary: null, runs: [] };
+  const checks = checksResult.summary;
+  const checkRuns = checksResult.runs;
+
+  if (includeCheckDetails && checkRuns.length > 0) {
+    const parseIds = (url: string | undefined): { runId: number | null; jobId: number | null } => {
+      if (!url) return { runId: null, jobId: null };
+      const match = url.match(/\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/);
+      if (!match) return { runId: null, jobId: null };
+      const runId = Number(match[1]);
+      const jobId = match[2] ? Number(match[2]) : null;
+      return {
+        runId: Number.isFinite(runId) && runId > 0 ? runId : null,
+        jobId: jobId && Number.isFinite(jobId) && jobId > 0 ? jobId : null,
+      };
+    };
+
+    const jobsByRunId = new Map<number, JsonRecord[]>();
+    const runIds = new Set<number>();
+    checkRuns.forEach((r) => {
+      const ids = parseIds(r.detailsUrl);
+      if (ids.runId) runIds.add(ids.runId);
+    });
+
+    for (const runId of runIds) {
+      const jobsResp = await githubFetch(`${API_BASE}/repos/${repo.owner}/${repo.repo}/actions/runs/${runId}/jobs?per_page=100`, accessToken);
+      if (jobsResp.status === 401) {
+        return { connected: false };
+      }
+      const jobsJson = await jsonOrNull<JsonRecord>(jobsResp);
+      const jobs = Array.isArray(jobsJson?.jobs) ? (jobsJson?.jobs as unknown[]) : [];
+      jobsByRunId.set(runId, jobs.filter((j) => j && typeof j === 'object') as JsonRecord[]);
+    }
+
+    for (const run of checkRuns) {
+      const ids = parseIds(run.detailsUrl);
+      if (!ids.runId) continue;
+      const jobs = jobsByRunId.get(ids.runId) ?? [];
+      const picked = ids.jobId
+        ? jobs.find((j) => typeof j.id === 'number' && j.id === ids.jobId)
+        : jobs.find((j) => readString(j.name) === run.name);
+      if (!picked) {
+        run.job = { runId: ids.runId, ...(ids.jobId ? { jobId: ids.jobId } : {}), url: run.detailsUrl };
+        continue;
+      }
+      const stepsRaw = Array.isArray(picked.steps) ? (picked.steps as unknown[]) : [];
+      const steps = stepsRaw
+        .map((s) => {
+          const rec = s && typeof s === 'object' ? (s as JsonRecord) : null;
+          const name = readString(rec?.name);
+          if (!name) return null;
+          return {
+            name,
+            status: readString(rec?.status) || undefined,
+            conclusion: (rec?.conclusion === null || typeof rec?.conclusion === 'string')
+              ? (rec?.conclusion as string | null)
+              : undefined,
+            number: typeof rec?.number === 'number' ? rec.number : undefined,
+          };
+        })
+        .filter(Boolean) as Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+
+      run.job = {
+        runId: ids.runId,
+        jobId: typeof picked.id === 'number' ? picked.id : undefined,
+        url: readString(picked.html_url) || undefined,
+        name: readString(picked.name) || undefined,
+        conclusion: (picked.conclusion === null || typeof picked.conclusion === 'string')
+          ? (picked.conclusion as string | null)
+          : undefined,
+        steps: steps.length > 0 ? steps : undefined,
+      };
+    }
+  }
 
   let diff: string | undefined;
   if (includeDiff) {
@@ -369,5 +506,5 @@ export const getPullRequestContext = async (
     }
   }
 
-  return { connected: true, repo, pr, issueComments, reviewComments, files, diff, checks };
+  return { connected: true, repo, pr, issueComments, reviewComments, files, diff, checks, checkRuns };
 };

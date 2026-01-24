@@ -340,11 +340,12 @@ interface MessageState {
     sessionAbortFlags: Map<string, SessionAbortRecord>;
     pendingAssistantHeaderSessions: Set<string>;
     pendingUserMessageMetaBySession: Map<string, { mode?: string; providerID?: string; modelID?: string; variant?: string }>;
+
 }
 
 interface MessageActions {
     loadMessages: (sessionId: string, limit?: number) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -552,7 +553,7 @@ export const useMessageStore = create<MessageStore>()(
                         });
                 },
 
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
@@ -677,6 +678,7 @@ export const useMessageStore = create<MessageStore>()(
                                 // Convert additional parts to SDK format
                                 const additionalPartsPayload = additionalParts?.map((part) => ({
                                     text: part.text,
+                                    synthetic: part.synthetic,
                                     files: part.attachments?.map((file) => ({
                                         type: "file" as const,
                                         mime: file.mimeType,
@@ -693,7 +695,7 @@ export const useMessageStore = create<MessageStore>()(
                                     agent,
                                     variant,
                                     files: filePayloads.length > 0 ? filePayloads : undefined,
-                                    additionalParts: additionalPartsPayload,
+                                    additionalParts: additionalPartsPayload && additionalPartsPayload.length > 0 ? additionalPartsPayload : undefined,
                                     agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,
                                 });
 

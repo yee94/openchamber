@@ -148,11 +148,34 @@ export const getPullRequestStatus = async (
     return { connected: false };
   }
   const list = await jsonOrNull<Array<{ number: number }>>(listResp);
-  if (!listResp.ok || !Array.isArray(list) || list.length === 0) {
-    return { connected: true, repo, branch, pr: null, checks: null, canMerge: false };
+  let number = (listResp.ok && Array.isArray(list) && list.length > 0)
+    ? list[0].number
+    : null;
+
+  // Fork PR support: head owner differs -> head filter yields empty.
+  if (!number) {
+    const openListUrl = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls`);
+    openListUrl.searchParams.set('state', 'open');
+    openListUrl.searchParams.set('per_page', '100');
+    const openResp = await githubFetch(openListUrl.toString(), accessToken);
+    if (openResp.status === 401) {
+      return { connected: false };
+    }
+    const openList = await jsonOrNull<Array<JsonRecord>>(openResp);
+    if (openResp.ok && Array.isArray(openList)) {
+      const match = openList.find((prItem) => {
+        const head = prItem?.head && typeof prItem.head === 'object' ? (prItem.head as JsonRecord) : null;
+        return readString(head?.ref) === branch;
+      });
+      if (match && typeof match.number === 'number') {
+        number = match.number;
+      }
+    }
   }
 
-  const number = list[0].number;
+  if (!number) {
+    return { connected: true, repo, branch, pr: null, checks: null, canMerge: false };
+  }
   const prResp = await githubFetch(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls/${number}`, accessToken);
   if (prResp.status === 401) {
     return { connected: false };

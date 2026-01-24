@@ -140,12 +140,19 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     return body;
   },
 
-  async prContext(directory: string, number: number, options?: { includeDiff?: boolean }): Promise<GitHubPullRequestContextResult> {
+  async prContext(
+    directory: string,
+    number: number,
+    options?: { includeDiff?: boolean; includeCheckDetails?: boolean }
+  ): Promise<GitHubPullRequestContextResult> {
     const url = new URL('/api/github/pulls/context', window.location.origin);
     url.searchParams.set('directory', directory);
     url.searchParams.set('number', String(number));
     if (options?.includeDiff) {
       url.searchParams.set('diff', '1');
+    }
+    if (options?.includeCheckDetails) {
+      url.searchParams.set('checkDetails', '1');
     }
     const response = await fetch(url.toString(), { method: 'GET', headers: { Accept: 'application/json' } });
     const body = await jsonOrNull<GitHubPullRequestContextResult & { error?: string }>(response);
