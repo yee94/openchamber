@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-01-24
+
+- GitHub: PR panel supports fork PR detection by branch name.
+- GitHub: Git tab PR panel can send failed checks/comments to chat with hidden context; added check details dialog with Actions step breakdown.
+- Web: GitHub auth flow fixes.
+
+
 ## [1.5.6] - 2026-01-24
 
 - GitHub: connect your account in Settings with device-flow auth to enable GitHub tools.

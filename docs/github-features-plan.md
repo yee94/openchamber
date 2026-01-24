@@ -285,6 +285,8 @@ Implemented code pointers
 
 ## Feature E: PR Context Helpers (Checks/Comments -> Chat)
 
+Status: implemented.
+
 Intent
 Reduce PR iteration loop time by letting the user add targeted PR signal (failed checks, review feedback) into the next chat message without polluting visible chat.
 
@@ -292,19 +294,25 @@ Placement
 Inside the existing Git tab PR panel (`packages/ui/src/components/views/git/PullRequestSection.tsx`).
 
 UI
-- “Add failed checks to context” (only if failures exist)
-- “Add PR comments to context” (issue comments + review comments)
+- “Send failed checks to chat” (only if failures exist)
+- “Send PR comments to chat” (issue comments + review comments)
+- “Check details” dialog (shows check runs, app name, and GitHub Actions job steps when available)
 - “Refresh checks” affordance
 
 Behavior
-- All added context is sent as synthetic parts (never shown in chat rendering).
+- On click, sends a new user message in the current session (and switches to Chat tab).
+- Message contains a short visible prompt plus hidden synthetic parts.
 - Failed checks payload should include: check name, status/conclusion, details URL, and any available summary/text.
+- When available, include GitHub Actions job + step breakdown and the check app name.
 - Comments payload should include: author, body, file/path + line when available, and comment URL.
 - Keep visible user prompt short; include only human intent.
 
 Implementation notes
 - Reuse Feature C PR context endpoint (`/api/github/pulls/context`) as the single source for comments/files/checks/diff.
 - Prefer a compact checks rollup (passed/total) with optional expand into failing checks.
+
+Implemented code pointers
+- UI: `packages/ui/src/components/views/git/PullRequestSection.tsx`
 
 ### Required GitHub API Calls
 - List PRs
