@@ -216,14 +216,16 @@ Implemented code pointers
 
 ## Feature C: Start Session From GitHub PR (with worktree checkout)
 
+Status: implemented.
+
 ### Intent
 Create a session seeded with PR context, with optional worktree checkout of PR branch (including forks).
 
 ### Entry Point
-Session kebab menu in `packages/ui/src/components/session/SessionSidebar.tsx`.
+Project header menu in `packages/ui/src/components/session/SessionSidebar.tsx`.
 
 Add new item:
-- “New session from GitHub PR…”
+- “New session from GitHub PR”
 
 ### Modal UI
 PR picker modal:
@@ -234,20 +236,24 @@ PR picker modal:
   - `#123` or `123`
 - checkbox: “Create session in PR worktree”
 
+Implementation notes:
+- modal layout matches Timeline dialog styling/patterns
+- list pagination: “Load more” (page-based, `per_page=50`)
+- optional toggle: include full diff in hidden context
+
 ### Worktree behavior
 If enabled:
 - if PR is from same repo:
-  - fetch head branch
-  - create worktree from that branch (reuse `createWorktreeSessionForBranch`)
+  - fetch PR head into `FETCH_HEAD`
+  - create worktree using the PR branch name, starting at `FETCH_HEAD` (does not change main worktree)
 - if PR is from fork:
-  - add temporary remote (derived from PR head repo clone URL)
-  - fetch `<head.ref>`
-  - create worktree
+  - fetch PR head from fork clone URL into `FETCH_HEAD`
+  - create worktree using the PR branch name, starting at `FETCH_HEAD`
 
 Fallbacks:
 - if fetch/remote fails or permission denied:
   - still create a normal session with PR context
-  - show toast with “Open in GitHub” action
+  - show toast with error; user can open PR in GitHub
 
 ### Session Bootstrap (message)
 Same synthetic-parts approach as Issues.
@@ -260,10 +266,45 @@ Hidden parts should include:
 - checks/status summary
 
 Visible prompt text should instruct:
-- review PR intent
-- identify risks
-- propose changes
-- optionally implement changes in checked-out branch/worktree
+- review PR intent; call out intent/implementation mismatch
+- identify risks + missing pieces
+- gather needed repo context; no speculation; ask for missing info
+- propose a plan + next actions; do not implement until user confirms
+
+Implemented code pointers
+- UI modal: `packages/ui/src/components/session/GitHubPullRequestPickerDialog.tsx`
+- Web server endpoints:
+  - `GET /api/github/pulls/list`
+  - `GET /api/github/pulls/context`
+- Desktop Tauri commands:
+  - `github_prs_list`
+  - `github_pr_context`
+- VS Code bridge handlers:
+  - `api:github/pulls:list`
+  - `api:github/pulls:context`
+
+## Feature E: PR Context Helpers (Checks/Comments -> Chat)
+
+Intent
+Reduce PR iteration loop time by letting the user add targeted PR signal (failed checks, review feedback) into the next chat message without polluting visible chat.
+
+Placement
+Inside the existing Git tab PR panel (`packages/ui/src/components/views/git/PullRequestSection.tsx`).
+
+UI
+- “Add failed checks to context” (only if failures exist)
+- “Add PR comments to context” (issue comments + review comments)
+- “Refresh checks” affordance
+
+Behavior
+- All added context is sent as synthetic parts (never shown in chat rendering).
+- Failed checks payload should include: check name, status/conclusion, details URL, and any available summary/text.
+- Comments payload should include: author, body, file/path + line when available, and comment URL.
+- Keep visible user prompt short; include only human intent.
+
+Implementation notes
+- Reuse Feature C PR context endpoint (`/api/github/pulls/context`) as the single source for comments/files/checks/diff.
+- Prefer a compact checks rollup (passed/total) with optional expand into failing checks.
 
 ### Required GitHub API Calls
 - List PRs
