@@ -1,3 +1,8 @@
+## [1.5.6] - 2026-01-24
+
+- GitHub: added backend support for PRs/issues workflows; UI comes later.
+
+
 ## [1.5.5] - 2026-01-23
 
 - Settings: agent and command overrides now prefer plural directories while still honoring legacy singular folders.

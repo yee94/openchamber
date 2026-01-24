@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-01-24
+
+- GitHub: connect your account in Settings with device-flow auth to enable GitHub tools.
+- Sessions: start new sessions from GitHub issues with seeded context (title, body, labels, comments).
+- Sessions: start new sessions from GitHub pull requests with PR context baked in (including diffs).
+- Git: manage pull requests in the Git view with AI-generated descriptions, status checks, ready-for-review, and merge actions.
+- Mobile: fixed CommandAutocomplete dropdown scrolling (thanks to @nelsonPires5).
+
+
 ## [1.5.5] - 2026-01-23
 
 - Navigation: URLs now sync the active session, tab, settings, and diff state for shareable links and reliable back/forward (thanks to @TaylorBeeston).

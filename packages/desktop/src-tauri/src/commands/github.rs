@@ -455,30 +455,6 @@ struct IssueCommentResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct PullListItem {
-    number: u64,
-    title: String,
-    html_url: String,
-    state: String,
-    #[serde(default)]
-    draft: bool,
-    #[serde(default)]
-    merged_at: Option<String>,
-    #[serde(default)]
-    user: Option<IssueUser>,
-    #[serde(default)]
-    body: Option<String>,
-    #[serde(default)]
-    base: Option<Value>,
-    #[serde(default)]
-    head: Option<Value>,
-    #[serde(default)]
-    mergeable: Option<bool>,
-    #[serde(default)]
-    mergeable_state: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 struct PullFileResponse {
     filename: String,
     #[serde(default)]
