@@ -277,20 +277,18 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     setSelection(null);
     setActiveMainTab('chat');
     
-    try {
-      await sendMessage(
-        message,
-        effectiveProviderId,
-        effectiveModelId,
-        sessionAgent,
-        undefined,
-        undefined,
-        undefined,
-        effectiveVariant
-      );
-    } catch (e) {
-      console.error("Failed to send comment", e);
-    }
+    void sendMessage(
+      message,
+      effectiveProviderId,
+      effectiveModelId,
+      sessionAgent,
+      undefined,
+      undefined,
+      undefined,
+      effectiveVariant
+    ).catch((e) => {
+      console.error('Failed to send comment', e);
+    });
   }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
 
   ensureFlexokiThemesRegistered();

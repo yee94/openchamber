@@ -494,12 +494,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             ...additionalParts.flatMap(p => p.attachments ?? []),
         ];
 
-        await sendMessage(
-            primaryText, 
-            currentProviderId, 
-            currentModelId, 
-            currentAgentName, 
-            primaryAttachments, 
+        void sendMessage(
+            primaryText,
+            currentProviderId,
+            currentModelId,
+            currentAgentName,
+            primaryAttachments,
             agentMentionName,
             additionalParts.length > 0 ? additionalParts : undefined,
             currentVariant

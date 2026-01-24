@@ -244,7 +244,7 @@ export const PullRequestSection: React.FC<{
         failedChecks: failed,
       }, null, 2)}`;
 
-      await useMessageStore.getState().sendMessage(
+      void useMessageStore.getState().sendMessage(
         visibleText,
         providerID,
         modelID,
@@ -257,7 +257,10 @@ export const PullRequestSection: React.FC<{
           { text: payloadText, synthetic: true },
         ],
         currentVariant
-      );
+      ).catch((e) => {
+        const message = e instanceof Error ? e.message : String(e);
+        toast.error('Failed to send message', { description: message });
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to load checks', { description: message });
@@ -309,7 +312,7 @@ export const PullRequestSection: React.FC<{
         reviewComments,
       }, null, 2)}`;
 
-      await useMessageStore.getState().sendMessage(
+      void useMessageStore.getState().sendMessage(
         visibleText,
         providerID,
         modelID,
@@ -322,7 +325,10 @@ export const PullRequestSection: React.FC<{
           { text: payloadText, synthetic: true },
         ],
         currentVariant
-      );
+      ).catch((e) => {
+        const message = e instanceof Error ? e.message : String(e);
+        toast.error('Failed to send message', { description: message });
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to load PR comments', { description: message });

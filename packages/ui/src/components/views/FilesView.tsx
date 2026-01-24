@@ -418,20 +418,18 @@ export const FilesView: React.FC = () => {
     setLineSelection(null);
     setActiveMainTab('chat');
 
-    try {
-      await sendMessage(
-        message,
-        effectiveProviderId,
-        effectiveModelId,
-        sessionAgent,
-        undefined,
-        undefined,
-        undefined,
-        effectiveVariant
-      );
-    } catch (e) {
+    void sendMessage(
+      message,
+      effectiveProviderId,
+      effectiveModelId,
+      sessionAgent,
+      undefined,
+      undefined,
+      undefined,
+      effectiveVariant
+    ).catch((e) => {
       console.error('Failed to send comment', e);
-    }
+    });
   }, [lineSelection, commentText, selectedFile, fileContent, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, extractSelectedCode, sendMessage, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
 
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
