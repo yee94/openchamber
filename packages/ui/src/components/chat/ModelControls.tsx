@@ -47,6 +47,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
+import { useIsTextTruncated } from '@/hooks/useIsTextTruncated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IconComponent = ComponentType<any>;
@@ -1082,6 +1083,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const currentModel = models.find((m: ProviderModel) => m.id === currentModelId);
         return getModelDisplayName(currentModel);
     };
+
+    const currentModelDisplayName = getCurrentModelDisplayName();
+    const modelLabelRef = React.useRef<HTMLSpanElement>(null);
+    const isModelLabelTruncated = useIsTextTruncated(modelLabelRef, [currentModelDisplayName, isCompact]);
 
     const getAgentDisplayName = () => {
         if (!uiAgentName) {
@@ -2122,19 +2127,20 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     ) : (
                                         <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
                                     )}
-                                    <span
-                                        key={`${currentProviderId}-${currentModelId}`}
-                                        className={cn(
-                                            'model-controls__model-label overflow-hidden',
-                                            controlTextSize,
-                                            'font-medium whitespace-nowrap text-foreground min-w-0',
-                                            'max-w-[260px]'
-                                        )}
-                                    >
-                                        <span className="marquee-text">
-                                            {getCurrentModelDisplayName()}
+                                        <span
+                                            ref={modelLabelRef}
+                                            key={`${currentProviderId}-${currentModelId}`}
+                                            className={cn(
+                                                'model-controls__model-label overflow-hidden',
+                                                controlTextSize,
+                                                'font-medium whitespace-nowrap text-foreground min-w-0',
+                                                'max-w-[260px]'
+                                            )}
+                                        >
+                                            <span className={cn('marquee-text', isModelLabelTruncated && 'marquee-text--active')}>
+                                                {currentModelDisplayName}
+                                            </span>
                                         </span>
-                                    </span>
                                 </div>
                             </DropdownMenuTrigger>
                         </TooltipTrigger>
@@ -2246,13 +2252,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
                         )}
                         <span
+                            ref={modelLabelRef}
                             className={cn(
                                 'model-controls__model-label typography-micro font-medium overflow-hidden min-w-0',
                                 isMobile ? 'max-w-[120px]' : 'max-w-[220px]',
                             )}
                         >
-                            <span className="marquee-text">
-                                {getCurrentModelDisplayName()}
+                            <span className={cn('marquee-text', isModelLabelTruncated && 'marquee-text--active')}>
+                                {currentModelDisplayName}
                             </span>
                         </span>
                     </button>

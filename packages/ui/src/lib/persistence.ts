@@ -2,6 +2,8 @@ import { getDesktopSettings, updateDesktopSettings as updateDesktopSettingsApi, 
 import type { DesktopSettings } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
+import { setDirectoryShowHidden } from '@/lib/directoryShowHidden';
+import { setFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { loadAppearancePreferences, applyAppearancePreferences } from '@/lib/appearancePersistence';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
@@ -51,6 +53,12 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
     localStorage.setItem('gitmojiEnabled', String(settings.gitmojiEnabled));
   } else {
     localStorage.removeItem('gitmojiEnabled');
+  }
+  if (typeof settings.directoryShowHidden === 'boolean') {
+    localStorage.setItem('directoryTreeShowHidden', settings.directoryShowHidden ? 'true' : 'false');
+  }
+  if (typeof settings.filesViewShowGitignored === 'boolean') {
+    localStorage.setItem('filesViewShowGitignored', settings.filesViewShowGitignored ? 'true' : 'false');
   }
 };
 
@@ -199,6 +207,54 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.queueModeEnabled === 'boolean' && settings.queueModeEnabled !== queueStore.queueModeEnabled) {
     queueStore.setQueueMode(settings.queueModeEnabled);
   }
+
+  if (typeof settings.showTextJustificationActivity === 'boolean' && settings.showTextJustificationActivity !== store.showTextJustificationActivity) {
+    store.setShowTextJustificationActivity(settings.showTextJustificationActivity);
+  }
+  if (typeof settings.nativeNotificationsEnabled === 'boolean' && settings.nativeNotificationsEnabled !== store.nativeNotificationsEnabled) {
+    store.setNativeNotificationsEnabled(settings.nativeNotificationsEnabled);
+  }
+  if (typeof settings.notificationMode === 'string' && (settings.notificationMode === 'always' || settings.notificationMode === 'hidden-only')) {
+    if (settings.notificationMode !== store.notificationMode) {
+      store.setNotificationMode(settings.notificationMode);
+    }
+  }
+  if (typeof settings.toolCallExpansion === 'string'
+    && (settings.toolCallExpansion === 'collapsed' || settings.toolCallExpansion === 'activity' || settings.toolCallExpansion === 'detailed')) {
+    if (settings.toolCallExpansion !== store.toolCallExpansion) {
+      store.setToolCallExpansion(settings.toolCallExpansion);
+    }
+  }
+  if (typeof settings.fontSize === 'number' && Number.isFinite(settings.fontSize) && settings.fontSize !== store.fontSize) {
+    store.setFontSize(settings.fontSize);
+  }
+  if (typeof settings.padding === 'number' && Number.isFinite(settings.padding) && settings.padding !== store.padding) {
+    store.setPadding(settings.padding);
+  }
+  if (typeof settings.cornerRadius === 'number' && Number.isFinite(settings.cornerRadius) && settings.cornerRadius !== store.cornerRadius) {
+    store.setCornerRadius(settings.cornerRadius);
+  }
+  if (typeof settings.inputBarOffset === 'number' && Number.isFinite(settings.inputBarOffset) && settings.inputBarOffset !== store.inputBarOffset) {
+    store.setInputBarOffset(settings.inputBarOffset);
+  }
+  if (typeof settings.diffLayoutPreference === 'string'
+    && (settings.diffLayoutPreference === 'dynamic' || settings.diffLayoutPreference === 'inline' || settings.diffLayoutPreference === 'side-by-side')) {
+    if (settings.diffLayoutPreference !== store.diffLayoutPreference) {
+      store.setDiffLayoutPreference(settings.diffLayoutPreference);
+    }
+  }
+  if (typeof settings.diffViewMode === 'string'
+    && (settings.diffViewMode === 'single' || settings.diffViewMode === 'stacked')) {
+    if (settings.diffViewMode !== store.diffViewMode) {
+      store.setDiffViewMode(settings.diffViewMode);
+    }
+  }
+  if (typeof settings.directoryShowHidden === 'boolean') {
+    setDirectoryShowHidden(settings.directoryShowHidden, { persist: false });
+  }
+  if (typeof settings.filesViewShowGitignored === 'boolean') {
+    setFilesViewShowGitignored(settings.filesViewShowGitignored, { persist: false });
+  }
 };
 
 const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
@@ -282,6 +338,55 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
+  }
+  if (typeof candidate.showTextJustificationActivity === 'boolean') {
+    result.showTextJustificationActivity = candidate.showTextJustificationActivity;
+  }
+  if (typeof candidate.nativeNotificationsEnabled === 'boolean') {
+    result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled;
+  }
+  if (typeof candidate.notificationMode === 'string' && (candidate.notificationMode === 'always' || candidate.notificationMode === 'hidden-only')) {
+    result.notificationMode = candidate.notificationMode;
+  }
+  if (
+    typeof candidate.toolCallExpansion === 'string'
+    && (candidate.toolCallExpansion === 'collapsed'
+      || candidate.toolCallExpansion === 'activity'
+      || candidate.toolCallExpansion === 'detailed')
+  ) {
+    result.toolCallExpansion = candidate.toolCallExpansion;
+  }
+  if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
+    result.fontSize = candidate.fontSize;
+  }
+  if (typeof candidate.padding === 'number' && Number.isFinite(candidate.padding)) {
+    result.padding = candidate.padding;
+  }
+  if (typeof candidate.cornerRadius === 'number' && Number.isFinite(candidate.cornerRadius)) {
+    result.cornerRadius = candidate.cornerRadius;
+  }
+  if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
+    result.inputBarOffset = candidate.inputBarOffset;
+  }
+  if (
+    typeof candidate.diffLayoutPreference === 'string'
+    && (candidate.diffLayoutPreference === 'dynamic'
+      || candidate.diffLayoutPreference === 'inline'
+      || candidate.diffLayoutPreference === 'side-by-side')
+  ) {
+    result.diffLayoutPreference = candidate.diffLayoutPreference;
+  }
+  if (
+    typeof candidate.diffViewMode === 'string'
+    && (candidate.diffViewMode === 'single' || candidate.diffViewMode === 'stacked')
+  ) {
+    result.diffViewMode = candidate.diffViewMode;
+  }
+  if (typeof candidate.directoryShowHidden === 'boolean') {
+    result.directoryShowHidden = candidate.directoryShowHidden;
+  }
+  if (typeof candidate.filesViewShowGitignored === 'boolean') {
+    result.filesViewShowGitignored = candidate.filesViewShowGitignored;
   }
 
   if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {

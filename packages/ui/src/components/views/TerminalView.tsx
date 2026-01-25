@@ -44,6 +44,7 @@ const MODIFIER_ARROW_SUFFIX: Record<Modifier, string> = {
     cmd: '3',
 };
 
+
 const STREAM_OPTIONS = {
     retry: {
         maxRetries: 3,
@@ -428,6 +429,7 @@ export const TerminalView: React.FC = () => {
             });
         }
     }, [clearBuffer, effectiveDirectory, setConnectionError, terminal]);
+
 
     const handleViewportInput = React.useCallback(
         (data: string) => {

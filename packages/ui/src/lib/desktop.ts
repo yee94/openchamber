@@ -52,6 +52,8 @@ export type DesktopSettings = {
   pinnedDirectories?: string[];
   showReasoningTraces?: boolean;
   showTextJustificationActivity?: boolean;
+  nativeNotificationsEnabled?: boolean;
+  notificationMode?: 'always' | 'hidden-only';
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"
@@ -61,6 +63,15 @@ export type DesktopSettings = {
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
+  toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
+  fontSize?: number;
+  padding?: number;
+  cornerRadius?: number;
+  inputBarOffset?: number;
+  diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
+  diffViewMode?: 'single' | 'stacked';
+  directoryShowHidden?: boolean;
+  filesViewShowGitignored?: boolean;
 
   // Memory limits for message viewport management
   memoryLimitHistorical?: number;   // Default fetch limit when loading/syncing (default: 90)
@@ -320,4 +331,3 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
     return false;
   }
 };
-

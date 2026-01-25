@@ -122,6 +122,55 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       }
     }, []);
 
+    const copySelectionToClipboard = React.useCallback(async () => {
+      if (typeof window === 'undefined' || typeof document === 'undefined') {
+        return;
+      }
+      const selection = window.getSelection();
+      if (!selection) {
+        return;
+      }
+      const text = selection.toString();
+      if (!text.trim()) {
+        return;
+      }
+      const container = containerRef.current;
+      if (!container) {
+        return;
+      }
+      const anchorNode = selection.anchorNode;
+      const focusNode = selection.focusNode;
+      if (anchorNode && !container.contains(anchorNode)) {
+        return;
+      }
+      if (focusNode && !container.contains(focusNode)) {
+        return;
+      }
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+      } catch {
+        // fall through to execCommand
+      }
+
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        // ignore
+      }
+    }, []);
+
     const resetWriteState = React.useCallback(() => {
       pendingWriteRef.current = '';
       if (writeScheduledRef.current !== null && typeof window !== 'undefined') {
@@ -781,6 +830,12 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
           } else {
             terminalRef.current?.focus();
           }
+        }}
+        onMouseUp={() => {
+          void copySelectionToClipboard();
+        }}
+        onTouchEnd={() => {
+          void copySelectionToClipboard();
         }}
       >
         {enableTouchScroll ? (

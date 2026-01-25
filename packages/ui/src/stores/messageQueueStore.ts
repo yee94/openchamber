@@ -33,7 +33,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
         persist(
             (set, get) => ({
                 queuedMessages: {},
-                queueModeEnabled: false,
+                queueModeEnabled: true,
 
                 addToQueue: (sessionId, message) => {
                     const id = `queued-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;

@@ -6,6 +6,7 @@ import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
+import { useIsTextTruncated } from '@/hooks/useIsTextTruncated';
 import type { ToolPopupContent } from './message/types';
 
 export const FileAttachmentButton = memo(() => {
@@ -125,6 +126,21 @@ interface FileChipProps {
   onRemove: () => void;
 }
 
+const TruncatedMarquee = memo(({ text, title }: { text: string; title?: string }) => {
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const isTruncated = useIsTextTruncated(labelRef, [text]);
+
+  return (
+    <span
+      ref={labelRef}
+      className={cn('marquee-text', isTruncated && 'marquee-text--active')}
+      title={title ?? text}
+    >
+      {text}
+    </span>
+  );
+});
+
 const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const getFileIcon = () => {
     if (file.mimeType.startsWith('image/')) {
@@ -169,9 +185,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
       </div>
       {getFileIcon()}
       <div className="overflow-hidden max-w-[200px]">
-        <span className="marquee-text" title={file.serverPath || displayName}>
-          {displayName}
-        </span>
+        <TruncatedMarquee text={displayName} title={file.serverPath || displayName} />
       </div>
       <span className="text-muted-foreground flex-shrink-0">
         ({formatFileSize(file.size)})
@@ -292,9 +306,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
             >
               {getFileIcon(file.mime)}
               <div className="overflow-hidden max-w-[200px]">
-                <span className="marquee-text">
-                  {extractFilename(file.filename)}
-                </span>
+                <TruncatedMarquee text={extractFilename(file.filename)} />
               </div>
             </div>
           ))}

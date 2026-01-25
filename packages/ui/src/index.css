@@ -644,7 +644,7 @@ html:not(.dark) .chat-scroll {
   white-space: nowrap;
 }
 
-.group:hover .marquee-text,
-.marquee-text:hover {
+.group:hover .marquee-text--active,
+.marquee-text--active:hover {
   animation: marquee-scroll 5s linear infinite alternate;
 }

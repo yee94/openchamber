@@ -289,6 +289,18 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Bool(b)) = obj.get("showReasoningTraces") {
             result_obj.insert("showReasoningTraces".to_string(), json!(b));
         }
+        if let Some(Value::Bool(b)) = obj.get("showTextJustificationActivity") {
+            result_obj.insert("showTextJustificationActivity".to_string(), json!(b));
+        }
+        if let Some(Value::Bool(b)) = obj.get("nativeNotificationsEnabled") {
+            result_obj.insert("nativeNotificationsEnabled".to_string(), json!(b));
+        }
+        if let Some(Value::String(s)) = obj.get("notificationMode") {
+            let trimmed = s.trim();
+            if trimmed == "always" || trimmed == "hidden-only" {
+                result_obj.insert("notificationMode".to_string(), json!(trimmed));
+            }
+        }
         if let Some(Value::Bool(b)) = obj.get("autoDeleteEnabled") {
             result_obj.insert("autoDeleteEnabled".to_string(), json!(b));
         }
@@ -297,6 +309,12 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         }
         if let Some(Value::Bool(b)) = obj.get("autoCreateWorktree") {
             result_obj.insert("autoCreateWorktree".to_string(), json!(b));
+        }
+        if let Some(Value::String(s)) = obj.get("toolCallExpansion") {
+            let trimmed = s.trim();
+            if trimmed == "collapsed" || trimmed == "activity" || trimmed == "detailed" {
+                result_obj.insert("toolCallExpansion".to_string(), json!(trimmed));
+            }
         }
 
         // Number fields
@@ -311,6 +329,47 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             if let Some(value) = parsed {
                 let clamped = value.max(1).min(365);
                 result_obj.insert("autoDeleteAfterDays".to_string(), json!(clamped));
+            }
+        }
+
+        if let Some(Value::Number(n)) = obj.get("fontSize") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(50).min(200);
+                result_obj.insert("fontSize".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("padding") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(50).min(200);
+                result_obj.insert("padding".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("cornerRadius") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(0).min(32);
+                result_obj.insert("cornerRadius".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("inputBarOffset") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(0).min(100);
+                result_obj.insert("inputBarOffset".to_string(), json!(clamped));
             }
         }
 
@@ -353,6 +412,25 @@ fn sanitize_settings_update(payload: &Value) -> Value {
                 let clamped = value.max(30).min(1000);
                 result_obj.insert("memoryLimitActiveSession".to_string(), json!(clamped));
             }
+        }
+
+        if let Some(Value::String(s)) = obj.get("diffLayoutPreference") {
+            let trimmed = s.trim();
+            if trimmed == "dynamic" || trimmed == "inline" || trimmed == "side-by-side" {
+                result_obj.insert("diffLayoutPreference".to_string(), json!(trimmed));
+            }
+        }
+        if let Some(Value::String(s)) = obj.get("diffViewMode") {
+            let trimmed = s.trim();
+            if trimmed == "single" || trimmed == "stacked" {
+                result_obj.insert("diffViewMode".to_string(), json!(trimmed));
+            }
+        }
+        if let Some(Value::Bool(b)) = obj.get("directoryShowHidden") {
+            result_obj.insert("directoryShowHidden".to_string(), json!(b));
+        }
+        if let Some(Value::Bool(b)) = obj.get("filesViewShowGitignored") {
+            result_obj.insert("filesViewShowGitignored".to_string(), json!(b));
         }
 
         // Array fields

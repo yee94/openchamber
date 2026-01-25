@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { getSafeStorage } from '@/stores/utils/safeStorage';
+import { updateDesktopSettings } from '@/lib/persistence';
 
 const SHOW_GITIGNORED_STORAGE_KEY = 'filesViewShowGitignored';
 const SHOW_GITIGNORED_EVENT = 'files-view-show-gitignored-change';
@@ -24,7 +25,10 @@ export const notifyFilesViewShowGitignoredChanged = () => {
   window.dispatchEvent(new Event(SHOW_GITIGNORED_EVENT));
 };
 
-export const setFilesViewShowGitignored = (value: boolean) => {
+export const setFilesViewShowGitignored = (
+  value: boolean,
+  options: { persist?: boolean } = {}
+) => {
   if (typeof window === 'undefined') {
     return;
   }
@@ -33,6 +37,10 @@ export const setFilesViewShowGitignored = (value: boolean) => {
     notifyFilesViewShowGitignoredChanged();
   } catch {
     // ignore storage errors
+  }
+
+  if (options.persist !== false) {
+    void updateDesktopSettings({ filesViewShowGitignored: value });
   }
 };
 

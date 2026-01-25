@@ -60,6 +60,15 @@ const branchToTitle = (branch: string): string => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+type PullRequestDraftSnapshot = {
+  title: string;
+  body: string;
+  draft: boolean;
+  isOpen: boolean;
+};
+
+const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
+
 const openExternal = async (url: string) => {
   if (typeof window === 'undefined') return;
   const desktop = (window as typeof window & { opencodeDesktop?: { openExternal?: (url: string) => Promise<unknown> } }).opencodeDesktop;
@@ -96,14 +105,20 @@ export const PullRequestSection: React.FC<{
     setSettingsDialogOpen(true);
   }, [setSettingsDialogOpen, setSidebarSection]);
 
-  const [isOpen, setIsOpen] = React.useState(true);
+  const snapshotKey = React.useMemo(() => `${directory}::${branch}`, [directory, branch]);
+  const initialSnapshot = React.useMemo(
+    () => pullRequestDraftSnapshots.get(snapshotKey) ?? null,
+    [snapshotKey]
+  );
+
+  const [isOpen, setIsOpen] = React.useState(initialSnapshot?.isOpen ?? true);
   const [isLoading, setIsLoading] = React.useState(false);
   const [status, setStatus] = React.useState<GitHubPullRequestStatus | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [title, setTitle] = React.useState(() => branchToTitle(branch));
-  const [body, setBody] = React.useState('');
-  const [draft, setDraft] = React.useState(false);
+  const [title, setTitle] = React.useState(() => initialSnapshot?.title ?? branchToTitle(branch));
+  const [body, setBody] = React.useState(() => initialSnapshot?.body ?? '');
+  const [draft, setDraft] = React.useState(() => initialSnapshot?.draft ?? false);
   const [mergeMethod, setMergeMethod] = React.useState<MergeMethod>('squash');
 
   const [isGenerating, setIsGenerating] = React.useState(false);
@@ -359,11 +374,25 @@ export const PullRequestSection: React.FC<{
   }, [branch, canShow, directory, github]);
 
   React.useEffect(() => {
-    setTitle(branchToTitle(branch));
-    setBody('');
-    setDraft(false);
+    const snapshot = pullRequestDraftSnapshots.get(snapshotKey) ?? null;
+    setTitle(snapshot?.title ?? branchToTitle(branch));
+    setBody(snapshot?.body ?? '');
+    setDraft(snapshot?.draft ?? false);
+    setIsOpen(snapshot?.isOpen ?? true);
     void refresh();
-  }, [branch, refresh]);
+  }, [branch, refresh, snapshotKey]);
+
+  React.useEffect(() => {
+    if (!directory || !branch) {
+      return;
+    }
+    pullRequestDraftSnapshots.set(snapshotKey, {
+      title,
+      body,
+      draft,
+      isOpen,
+    });
+  }, [snapshotKey, title, body, draft, isOpen, directory, branch]);
 
   const generateDescription = React.useCallback(async () => {
     if (isGenerating) return;

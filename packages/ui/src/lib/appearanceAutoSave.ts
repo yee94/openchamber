@@ -4,8 +4,18 @@ import type { DesktopSettings } from '@/lib/desktop';
 
 type AppearanceSlice = {
   showReasoningTraces: boolean;
+  showTextJustificationActivity: boolean;
+  nativeNotificationsEnabled: boolean;
+  notificationMode: 'always' | 'hidden-only';
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
+  toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
+  fontSize: number;
+  padding: number;
+  cornerRadius: number;
+  inputBarOffset: number;
+  diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
+  diffViewMode: 'single' | 'stacked';
 };
 
 let initialized = false;
@@ -19,8 +29,18 @@ export const startAppearanceAutoSave = (): void => {
 
   let previous: AppearanceSlice = {
     showReasoningTraces: useUIStore.getState().showReasoningTraces,
+    showTextJustificationActivity: useUIStore.getState().showTextJustificationActivity,
+    nativeNotificationsEnabled: useUIStore.getState().nativeNotificationsEnabled,
+    notificationMode: useUIStore.getState().notificationMode,
     autoDeleteEnabled: useUIStore.getState().autoDeleteEnabled,
     autoDeleteAfterDays: useUIStore.getState().autoDeleteAfterDays,
+    toolCallExpansion: useUIStore.getState().toolCallExpansion,
+    fontSize: useUIStore.getState().fontSize,
+    padding: useUIStore.getState().padding,
+    cornerRadius: useUIStore.getState().cornerRadius,
+    inputBarOffset: useUIStore.getState().inputBarOffset,
+    diffLayoutPreference: useUIStore.getState().diffLayoutPreference,
+    diffViewMode: useUIStore.getState().diffViewMode,
   };
 
   let pending: Partial<DesktopSettings> | null = null;
@@ -46,8 +66,18 @@ export const startAppearanceAutoSave = (): void => {
   useUIStore.subscribe((state) => {
     const current: AppearanceSlice = {
       showReasoningTraces: state.showReasoningTraces,
+      showTextJustificationActivity: state.showTextJustificationActivity,
+      nativeNotificationsEnabled: state.nativeNotificationsEnabled,
+      notificationMode: state.notificationMode,
       autoDeleteEnabled: state.autoDeleteEnabled,
       autoDeleteAfterDays: state.autoDeleteAfterDays,
+      toolCallExpansion: state.toolCallExpansion,
+      fontSize: state.fontSize,
+      padding: state.padding,
+      cornerRadius: state.cornerRadius,
+      inputBarOffset: state.inputBarOffset,
+      diffLayoutPreference: state.diffLayoutPreference,
+      diffViewMode: state.diffViewMode,
     };
 
     const diff: Partial<DesktopSettings> = {};
@@ -55,11 +85,41 @@ export const startAppearanceAutoSave = (): void => {
     if (current.showReasoningTraces !== previous.showReasoningTraces) {
       diff.showReasoningTraces = current.showReasoningTraces;
     }
+    if (current.showTextJustificationActivity !== previous.showTextJustificationActivity) {
+      diff.showTextJustificationActivity = current.showTextJustificationActivity;
+    }
+    if (current.nativeNotificationsEnabled !== previous.nativeNotificationsEnabled) {
+      diff.nativeNotificationsEnabled = current.nativeNotificationsEnabled;
+    }
+    if (current.notificationMode !== previous.notificationMode) {
+      diff.notificationMode = current.notificationMode;
+    }
     if (current.autoDeleteEnabled !== previous.autoDeleteEnabled) {
       diff.autoDeleteEnabled = current.autoDeleteEnabled;
     }
     if (current.autoDeleteAfterDays !== previous.autoDeleteAfterDays) {
       diff.autoDeleteAfterDays = current.autoDeleteAfterDays;
+    }
+    if (current.toolCallExpansion !== previous.toolCallExpansion) {
+      diff.toolCallExpansion = current.toolCallExpansion;
+    }
+    if (current.fontSize !== previous.fontSize) {
+      diff.fontSize = current.fontSize;
+    }
+    if (current.padding !== previous.padding) {
+      diff.padding = current.padding;
+    }
+    if (current.cornerRadius !== previous.cornerRadius) {
+      diff.cornerRadius = current.cornerRadius;
+    }
+    if (current.inputBarOffset !== previous.inputBarOffset) {
+      diff.inputBarOffset = current.inputBarOffset;
+    }
+    if (current.diffLayoutPreference !== previous.diffLayoutPreference) {
+      diff.diffLayoutPreference = current.diffLayoutPreference;
+    }
+    if (current.diffViewMode !== previous.diffViewMode) {
+      diff.diffViewMode = current.diffViewMode;
     }
 
     previous = current;

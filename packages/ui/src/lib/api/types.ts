@@ -395,10 +395,22 @@ export interface SettingsPayload {
   securityScopedBookmarks?: string[];
   pinnedDirectories?: string[];
   showReasoningTraces?: boolean;
+  showTextJustificationActivity?: boolean;
+  nativeNotificationsEnabled?: boolean;
+  notificationMode?: 'always' | 'hidden-only';
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
+  toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
+  fontSize?: number;
+  padding?: number;
+  cornerRadius?: number;
+  inputBarOffset?: number;
+  diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
+  diffViewMode?: 'single' | 'stacked';
+  directoryShowHidden?: boolean;
+  filesViewShowGitignored?: boolean;
 
   [key: string]: unknown;
 }

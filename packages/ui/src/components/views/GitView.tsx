@@ -49,6 +49,7 @@ type GitViewSnapshot = {
   directory?: string;
   selectedPaths: string[];
   commitMessage: string;
+  generatedHighlights: string[];
 };
 
 type GitmojiEntry = {
@@ -179,7 +180,7 @@ const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): Git
   return null;
 };
 
-let gitViewSnapshot: GitViewSnapshot | null = null;
+const gitViewSnapshots = new Map<string, GitViewSnapshot>();
 
 const useEffectiveDirectory = () => {
   const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
@@ -226,9 +227,8 @@ export const GitView: React.FC = () => {
   } = useGitStore();
 
   const initialSnapshot = React.useMemo(() => {
-    if (!gitViewSnapshot) return null;
-    if (gitViewSnapshot.directory !== currentDirectory) return null;
-    return gitViewSnapshot;
+    if (!currentDirectory) return null;
+    return gitViewSnapshots.get(currentDirectory) ?? null;
   }, [currentDirectory]);
 
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
@@ -273,7 +273,9 @@ export const GitView: React.FC = () => {
   const [hasUserAdjustedSelection, setHasUserAdjustedSelection] = React.useState(false);
   const [revertingPaths, setRevertingPaths] = React.useState<Set<string>>(new Set());
   const [isGeneratingMessage, setIsGeneratingMessage] = React.useState(false);
-  const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>([]);
+  const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>(
+    initialSnapshot?.generatedHighlights ?? []
+  );
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
@@ -346,19 +348,14 @@ export const GitView: React.FC = () => {
   }, [expandedCommitHashes, currentDirectory, git, commitFilesMap, loadingCommitHashes]);
 
   React.useEffect(() => {
-    return () => {
-      if (!currentDirectory) {
-        gitViewSnapshot = null;
-        return;
-      }
-
-      gitViewSnapshot = {
-        directory: currentDirectory,
-        selectedPaths: Array.from(selectedPaths),
-        commitMessage,
-      };
-    };
-  }, [commitMessage, currentDirectory, selectedPaths]);
+    if (!currentDirectory) return;
+    gitViewSnapshots.set(currentDirectory, {
+      directory: currentDirectory,
+      selectedPaths: Array.from(selectedPaths),
+      commitMessage,
+      generatedHighlights,
+    });
+  }, [commitMessage, currentDirectory, selectedPaths, generatedHighlights]);
 
   React.useEffect(() => {
     loadProfiles();

@@ -1,18 +1,22 @@
 import React from 'react';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
+import { updateDesktopSettings } from '@/lib/persistence';
 
 const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
 const SHOW_HIDDEN_EVENT = 'directory-show-hidden-change';
 
 const readStoredShowHidden = (): boolean => {
   if (typeof window === 'undefined') {
-    return false;
+    return true;
   }
   try {
     const stored = getSafeStorage().getItem(SHOW_HIDDEN_STORAGE_KEY);
+    if (stored === null) {
+      return true;
+    }
     return stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 };
 
@@ -23,7 +27,10 @@ export const notifyDirectoryShowHiddenChanged = () => {
   window.dispatchEvent(new Event(SHOW_HIDDEN_EVENT));
 };
 
-export const setDirectoryShowHidden = (value: boolean) => {
+export const setDirectoryShowHidden = (
+  value: boolean,
+  options: { persist?: boolean } = {}
+) => {
   if (typeof window === 'undefined') {
     return;
   }
@@ -32,6 +39,10 @@ export const setDirectoryShowHidden = (value: boolean) => {
     notifyDirectoryShowHiddenChanged();
   } catch {
     // ignore storage errors
+  }
+
+  if (options.persist !== false) {
+    void updateDesktopSettings({ directoryShowHidden: value });
   }
 };
 

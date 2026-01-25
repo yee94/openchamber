@@ -736,6 +736,18 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.showReasoningTraces === 'boolean') {
     result.showReasoningTraces = candidate.showReasoningTraces;
   }
+  if (typeof candidate.showTextJustificationActivity === 'boolean') {
+    result.showTextJustificationActivity = candidate.showTextJustificationActivity;
+  }
+  if (typeof candidate.nativeNotificationsEnabled === 'boolean') {
+    result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled;
+  }
+  if (typeof candidate.notificationMode === 'string') {
+    const mode = candidate.notificationMode.trim();
+    if (mode === 'always' || mode === 'hidden-only') {
+      result.notificationMode = mode;
+    }
+  }
   if (typeof candidate.autoDeleteEnabled === 'boolean') {
     result.autoDeleteEnabled = candidate.autoDeleteEnabled;
   }
@@ -773,6 +785,42 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.gitmojiEnabled === 'boolean') {
     result.gitmojiEnabled = candidate.gitmojiEnabled;
+  }
+  if (typeof candidate.toolCallExpansion === 'string') {
+    const mode = candidate.toolCallExpansion.trim();
+    if (mode === 'collapsed' || mode === 'activity' || mode === 'detailed') {
+      result.toolCallExpansion = mode;
+    }
+  }
+  if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
+    result.fontSize = Math.max(50, Math.min(200, Math.round(candidate.fontSize)));
+  }
+  if (typeof candidate.padding === 'number' && Number.isFinite(candidate.padding)) {
+    result.padding = Math.max(50, Math.min(200, Math.round(candidate.padding)));
+  }
+  if (typeof candidate.cornerRadius === 'number' && Number.isFinite(candidate.cornerRadius)) {
+    result.cornerRadius = Math.max(0, Math.min(32, Math.round(candidate.cornerRadius)));
+  }
+  if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
+    result.inputBarOffset = Math.max(0, Math.min(100, Math.round(candidate.inputBarOffset)));
+  }
+  if (typeof candidate.diffLayoutPreference === 'string') {
+    const mode = candidate.diffLayoutPreference.trim();
+    if (mode === 'dynamic' || mode === 'inline' || mode === 'side-by-side') {
+      result.diffLayoutPreference = mode;
+    }
+  }
+  if (typeof candidate.diffViewMode === 'string') {
+    const mode = candidate.diffViewMode.trim();
+    if (mode === 'single' || mode === 'stacked') {
+      result.diffViewMode = mode;
+    }
+  }
+  if (typeof candidate.directoryShowHidden === 'boolean') {
+    result.directoryShowHidden = candidate.directoryShowHidden;
+  }
+  if (typeof candidate.filesViewShowGitignored === 'boolean') {
+    result.filesViewShowGitignored = candidate.filesViewShowGitignored;
   }
 
   // Memory limits for message viewport management
