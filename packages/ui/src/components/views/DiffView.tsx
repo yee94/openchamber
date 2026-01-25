@@ -1072,7 +1072,7 @@ export const DiffView: React.FC = () => {
         if (!effectiveDirectory) return null;
 
         return (
-            <div className="flex flex-1 min-h-0 gap-3 px-3 pb-3 pt-2">
+            <div className="flex flex-1 min-h-0 h-full gap-3 px-3 pb-3 pt-2">
                 {showFileSidebar && (
                     <section className="hidden lg:flex w-72 flex-col rounded-xl border border-border/60 bg-background/70 overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40">
@@ -1088,8 +1088,9 @@ export const DiffView: React.FC = () => {
                 )}
                 <ScrollableOverlay
                     ref={diffScrollRef}
-                    outerClassName="flex-1 min-h-0"
+                    outerClassName="flex-1 min-h-0 h-full"
                     className="pr-2"
+                    disableHorizontal
                 >
                     <div className="flex flex-col gap-3">
                         {changedFiles.map((file) => (

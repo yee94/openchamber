@@ -41,7 +41,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
           ref={containerRef as React.Ref<HTMLElement>}
           className={cn(
             "overlay-scrollbar-target overlay-scrollbar-container overscroll-none",
-            fillContainer ? "flex-1 min-h-0 w-full h-full" : "flex-none w-full h-auto",
+            fillContainer ? "flex-1 min-h-0 w-full" : "flex-none w-full h-auto",
             disableHorizontal ? "overflow-y-auto overflow-x-hidden" : "overflow-auto",
             className
           )}
