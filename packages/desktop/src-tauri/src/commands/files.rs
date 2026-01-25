@@ -185,9 +185,17 @@ pub async fn list_directory(
         .await
         .map_err(|err| err.to_list_message())?;
 
-    let metadata = fs::metadata(&resolved_path)
-        .await
-        .map_err(|err| FsCommandError::from(err).to_list_message())?;
+    let metadata = match fs::metadata(&resolved_path).await {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(DirectoryListResult {
+                directory: normalize_path(&resolved_path),
+                path: normalize_path(&resolved_path),
+                entries: Vec::new(),
+            });
+        }
+        Err(err) => return Err(FsCommandError::from(err).to_list_message()),
+    };
 
     if !metadata.is_dir() {
         return Err(FsCommandError::NotDirectory.to_list_message());

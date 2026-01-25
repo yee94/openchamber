@@ -6378,17 +6378,20 @@ async function main(options = {}) {
         entries: entries.filter(Boolean)
       });
     } catch (error) {
-      console.error('Failed to list directory:', error);
       const err = error;
       if (err && typeof err === 'object' && 'code' in err) {
         const code = err.code;
         if (code === 'ENOENT') {
-          return res.status(404).json({ error: 'Directory not found' });
+          return res.json({
+            path: path.resolve(normalizeDirectoryPath(rawPath)),
+            entries: []
+          });
         }
         if (code === 'EACCES') {
           return res.status(403).json({ error: 'Access to directory denied' });
         }
       }
+      console.error('Failed to list directory:', error);
       res.status(500).json({ error: (error && error.message) || 'Failed to list directory' });
     }
   });
