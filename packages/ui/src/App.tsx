@@ -248,7 +248,7 @@ function App({ apis }: AppProps) {
       <RuntimeAPIProvider apis={apis}>
         <GitPollingProvider>
           <FireworksProvider>
-            <div className={`h-full text-foreground ${isDesktopRuntime ? 'bg-transparent' : 'bg-background'}`}>
+            <div className="h-full text-foreground bg-background">
               <MainLayout />
               <Toaster />
               <ConfigUpdateOverlay />

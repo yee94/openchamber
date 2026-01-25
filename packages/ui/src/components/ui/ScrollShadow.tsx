@@ -106,10 +106,20 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
       const el = internalRef.current;
       if (!el) return;
 
-      const handleScroll = () => checkOverflow();
-      const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => checkOverflow()) : null;
+      // Throttle with RAF to avoid excessive calls during rapid DOM changes
+      let rafId: number | null = null;
+      const throttledCheck = () => {
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          checkOverflow();
+        });
+      };
+
+      const handleScroll = () => checkOverflow(); // Scroll should be immediate
+      const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(throttledCheck) : null;
       const mutationObserver =
-        typeof MutationObserver !== "undefined" ? new MutationObserver(() => checkOverflow()) : null;
+        typeof MutationObserver !== "undefined" ? new MutationObserver(throttledCheck) : null;
 
       checkOverflow();
 
@@ -118,6 +128,7 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
       mutationObserver?.observe(el, { childList: true, subtree: true, characterData: true });
 
       return () => {
+        if (rafId !== null) cancelAnimationFrame(rafId);
         el.removeEventListener("scroll", handleScroll);
         resizeObserver?.disconnect();
         mutationObserver?.disconnect();

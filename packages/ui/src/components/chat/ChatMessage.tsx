@@ -96,6 +96,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             currentSessionId: state.currentSessionId,
             getAgentModelForSession: state.getAgentModelForSession,
             getSessionModelSelection: state.getSessionModelSelection,
+            revertToMessage: state.revertToMessage,
+            forkFromMessage: state.forkFromMessage,
         }))
     );
 
@@ -105,11 +107,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         currentSessionId,
         getAgentModelForSession,
         getSessionModelSelection,
+        revertToMessage,
+        forkFromMessage,
     } = sessionState;
 
     const providers = useConfigStore((state) => state.providers);
-    const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
-    const toolCallExpansion = useUIStore((state) => state.toolCallExpansion);
+    const { showReasoningTraces, toolCallExpansion } = useUIStore(
+        useShallow((state) => ({
+            showReasoningTraces: state.showReasoningTraces,
+            toolCallExpansion: state.toolCallExpansion,
+        }))
+    );
 
     React.useEffect(() => {
         if (currentSessionId) {
@@ -136,11 +144,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const sessionId = message.info.sessionID;
 
     // Subscribe to context changes so badges update immediately on mode switches.
-    const currentContextAgent = useContextStore(
-        (state) => (sessionId ? state.currentAgentContext.get(sessionId) : undefined)
-    );
-    const savedSessionAgentSelection = useContextStore(
-        (state) => (sessionId ? state.sessionAgentSelections.get(sessionId) : undefined)
+    const { currentContextAgent, savedSessionAgentSelection } = useContextStore(
+        useShallow((state) => ({
+            currentContextAgent: sessionId ? state.currentAgentContext.get(sessionId) : undefined,
+            savedSessionAgentSelection: sessionId ? state.sessionAgentSelections.get(sessionId) : undefined,
+        }))
     );
 
     const normalizedParts = React.useMemo(() => {
@@ -566,30 +574,28 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, []);
 
     const userMessageIdForTurn = turnGroupingContext?.turnId;
-    const assistantSummaryFromStore = useMessageStore((state) => {
-        if (!userMessageIdForTurn) return undefined;
-        const sessionId = message.info.sessionID;
-        if (!sessionId) return undefined;
-        const sessionMessages = state.messages.get(sessionId);
-        if (!sessionMessages) return undefined;
-        const userMsg = sessionMessages.find((entry) => entry.info?.id === userMessageIdForTurn);
-        if (!userMsg) return undefined;
-        const summary = (userMsg.info as { summary?: { body?: string | null | undefined } | null | undefined }).summary;
-        const body = summary?.body;
-        return typeof body === 'string' && body.trim().length > 0 ? body : undefined;
-    });
-
-    const variantFromTurnStore = useMessageStore((state) => {
-        if (!userMessageIdForTurn) return undefined;
-        const sessionId = message.info.sessionID;
-        if (!sessionId) return undefined;
-        const sessionMessages = state.messages.get(sessionId);
-        if (!sessionMessages) return undefined;
-        const userMsg = sessionMessages.find((entry) => entry.info?.id === userMessageIdForTurn);
-        if (!userMsg) return undefined;
-        const variant = (userMsg.info as { variant?: unknown }).variant;
-        return typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined;
-    });
+    const { assistantSummaryFromStore, variantFromTurnStore } = useMessageStore(
+        useShallow((state) => {
+            if (!userMessageIdForTurn || !message.info.sessionID) {
+                return { assistantSummaryFromStore: undefined, variantFromTurnStore: undefined };
+            }
+            const sessionMessages = state.messages.get(message.info.sessionID);
+            if (!sessionMessages) {
+                return { assistantSummaryFromStore: undefined, variantFromTurnStore: undefined };
+            }
+            const userMsg = sessionMessages.find((entry) => entry.info?.id === userMessageIdForTurn);
+            if (!userMsg) {
+                return { assistantSummaryFromStore: undefined, variantFromTurnStore: undefined };
+            }
+            const summary = (userMsg.info as { summary?: { body?: string | null | undefined } | null | undefined }).summary;
+            const body = summary?.body;
+            const variant = (userMsg.info as { variant?: unknown }).variant;
+            return {
+                assistantSummaryFromStore: typeof body === 'string' && body.trim().length > 0 ? body : undefined,
+                variantFromTurnStore: typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined,
+            };
+        })
+    );
 
     const headerVariantRaw = !isUser ? (variantFromTurnStore ?? previousUserMetadata?.variant) : undefined;
 
@@ -698,9 +704,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         setCopiedMessage(true);
         setTimeout(() => setCopiedMessage(false), 2000);
     }, [copyTextToClipboard, messageTextContent]);
-
-    const revertToMessage = useSessionStore((state) => state.revertToMessage);
-    const forkFromMessage = useSessionStore((state) => state.forkFromMessage);
 
     const handleRevert = React.useCallback(() => {
         if (!sessionId || !message.info.id) return;

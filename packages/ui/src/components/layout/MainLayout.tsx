@@ -31,19 +31,6 @@ export const MainLayout: React.FC = () => {
     } = useUIStore();
 
     const { isMobile } = useDeviceInfo();
-    const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
-        if (typeof window === 'undefined') {
-            return false;
-        }
-        return typeof window.opencodeDesktop !== 'undefined';
-    });
-
-    React.useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-        setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
-    }, []);
 
     useEdgeSwipe({ enabled: true });
 
@@ -322,7 +309,7 @@ export const MainLayout: React.FC = () => {
                 className={cn(
                     'main-content-safe-area h-[100dvh]',
                     isMobile ? 'flex flex-col' : 'flex',
-                    isDesktopRuntime ? 'bg-transparent' : 'bg-background'
+                    'bg-background'
                 )}
             >
                 <CommandPalette />
@@ -405,7 +392,7 @@ export const MainLayout: React.FC = () => {
 
                         {/* Multi-Run Launcher: replaces tabs content only */}
                         {isMultiRunLauncherOpen && (
-                            <div className={cn('absolute inset-0 z-10', isDesktopRuntime ? 'bg-transparent' : 'bg-background')}>
+                            <div className={cn('absolute inset-0 z-10 bg-background')}>
                                 <ErrorBoundary>
                                     <MultiRunLauncher
                                         initialPrompt={multiRunLauncherPrefillPrompt}
@@ -419,7 +406,7 @@ export const MainLayout: React.FC = () => {
 
                     {/* Settings view: full screen overlay */}
                     {isSettingsActive && (
-                        <div className={cn('absolute inset-0 z-10', isDesktopRuntime ? 'bg-transparent' : 'bg-background')}>
+                        <div className={cn('absolute inset-0 z-10 bg-background')}>
                             <ErrorBoundary><SettingsView onClose={() => setSettingsDialogOpen(false)} /></ErrorBoundary>
                         </div>
                     )}

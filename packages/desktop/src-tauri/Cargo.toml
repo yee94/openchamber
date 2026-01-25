@@ -59,4 +59,5 @@ zip = "2.1"
 tauri-build = { version = "2.5.3", features = [] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-window-vibrancy = "0.7.1"
+objc2-app-kit = { version = "0.3.2", features = ["NSView", "NSResponder"] }
+objc2-quartz-core = { version = "0.3.2", features = ["CALayer"] }

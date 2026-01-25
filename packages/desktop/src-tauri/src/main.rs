@@ -88,8 +88,7 @@ use window_state::{load_window_state, persist_window_state, WindowStateManager};
 #[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+
 
 #[cfg(target_os = "macos")]
 static NEEDS_TRAFFIC_LIGHT_FIX: AtomicBool = AtomicBool::new(false);
@@ -349,6 +348,41 @@ fn adjust_traffic_lights_position<R: tauri::Runtime>(
                 }
             }
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn optimize_webview_layer<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    if let Ok(ns_view) = window.ns_view() {
+        unsafe {
+            let view: *mut AnyObject = ns_view.cast();
+            if view.is_null() {
+                warn!("[macos:layer] NSView is null");
+                return;
+            }
+
+            // Enable layer-backing for GPU compositing
+            let _: () = msg_send![view, setWantsLayer: true];
+
+            // Get the layer
+            let layer: *mut AnyObject = msg_send![view, layer];
+            if !layer.is_null() {
+                // Enable asynchronous drawing for better scroll performance
+                let _: () = msg_send![layer, setDrawsAsynchronously: true];
+
+                // Disable implicit animations that can cause jitter
+                let _: () = msg_send![layer, setActions: std::ptr::null::<AnyObject>()];
+
+                info!("[macos:layer] WebView layer optimizations applied");
+            } else {
+                warn!("[macos:layer] Layer is null after setWantsLayer");
+            }
+        }
+    } else {
+        warn!("[macos:layer] Failed to get NSView");
     }
 }
 
@@ -681,28 +715,13 @@ fn main() {
                     let macos_version = get_macos_major_version();
                     info!("[macos] Detected macOS version: {}", macos_version);
 
-                    let corner_radius = if macos_version >= 26 { 24.0 } else { 10.0 };
-                    if let Err(error) = apply_vibrancy(
-                        &window,
-                        NSVisualEffectMaterial::Sidebar,
-                        None,
-                        Some(corner_radius),
-                    ) {
-                        warn!(
-                            "[desktop:vibrancy] Failed to apply macOS vibrancy: {}",
-                            error
-                        );
-                    } else {
-                        info!(
-                            "[desktop:vibrancy] Applied macOS Sidebar vibrancy with radius {}",
-                            corner_radius
-                        );
-                    }
-
                     if macos_version < 26 {
                         NEEDS_TRAFFIC_LIGHT_FIX.store(true, Ordering::SeqCst);
                         adjust_traffic_lights_position(&window, 17.0, 16.0);
                     }
+
+                    // Apply layer optimizations for smoother scrolling
+                    optimize_webview_layer(&window);
                 }
 
                 if let Some(saved) = &stored_state {

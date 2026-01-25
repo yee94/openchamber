@@ -269,6 +269,10 @@ export const ChatContainer: React.FC = () => {
                         style={{
                             contain: 'strict',
                             ['--scroll-shadow-size' as string]: '48px',
+                            // GPU acceleration hints for smoother scrolling
+                            transform: 'translateZ(0)',
+                            willChange: 'scroll-position',
+                            backfaceVisibility: 'hidden',
                         }}
                         data-scroll-shadow="true"
                         data-scrollbar="chat"

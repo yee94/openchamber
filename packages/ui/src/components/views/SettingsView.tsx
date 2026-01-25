@@ -346,7 +346,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
 
   return (
-    <div ref={containerRef} className={cn('flex h-full flex-col overflow-hidden', isDesktopApp ? 'bg-transparent' : 'bg-background')}>
+    <div ref={containerRef} className={cn('flex h-full flex-col overflow-hidden bg-background')}>
       {/* Header with tabs and close button */}
       <div
         onMouseDown={!isMobile ? handleDragStart : undefined}

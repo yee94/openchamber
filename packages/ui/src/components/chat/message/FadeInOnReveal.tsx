@@ -9,11 +9,23 @@ interface FadeInOnRevealProps {
 
 const FADE_ANIMATION_ENABLED = true;
 
+// Context to allow parent components (like VirtualMessageList) to disable animations
+// for items entering the viewport due to scrolling rather than new content
+const FadeInDisabledContext = React.createContext(false);
+
+export const FadeInDisabledProvider: React.FC<{ disabled: boolean; children: React.ReactNode }> = ({ disabled, children }) => (
+    <FadeInDisabledContext.Provider value={disabled}>
+        {children}
+    </FadeInDisabledContext.Provider>
+);
+
 export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, className, skipAnimation }) => {
-    const [visible, setVisible] = React.useState(skipAnimation ?? false);
+    const contextDisabled = React.useContext(FadeInDisabledContext);
+    const shouldSkip = skipAnimation || contextDisabled;
+    const [visible, setVisible] = React.useState(shouldSkip);
 
     React.useEffect(() => {
-        if (!FADE_ANIMATION_ENABLED || skipAnimation) {
+        if (!FADE_ANIMATION_ENABLED || shouldSkip) {
             return;
         }
 
@@ -36,9 +48,9 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, classN
                 window.cancelAnimationFrame(frame);
             }
         };
-    }, [skipAnimation]);
+    }, [shouldSkip]);
 
-    if (!FADE_ANIMATION_ENABLED || skipAnimation) {
+    if (!FADE_ANIMATION_ENABLED || shouldSkip) {
         return <>{children}</>;
     }
 

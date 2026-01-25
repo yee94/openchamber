@@ -80,6 +80,9 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
     const [expansionKey, setExpansionKey] = React.useState(0);
 
+    // Track which parts have already been shown in collapsed view (for fade-in animation)
+    const shownInCollapsedRef = React.useRef<Set<string>>(new Set());
+
     React.useEffect(() => {
         if (previousExpandedRef.current === isExpanded) return;
         const wasCollapsed = previousExpandedRef.current === false;
@@ -89,6 +92,8 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         if (isExpanded && wasCollapsed) {
             setExpansionKey((k) => k + 1);
             setJustExpandedFromCollapsed(true);
+            // Clear collapsed tracking when expanding (will restart when collapsed again)
+            shownInCollapsedRef.current.clear();
             // Reset after a short delay (after animations would have started)
             const timer = setTimeout(() => setJustExpandedFromCollapsed(false), 50);
             return () => clearTimeout(timer);
@@ -216,11 +221,24 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
                         const animationKey = `${partId}-exp${expansionKey}`;
 
-                        // Skip animation if:
-                        // - We just expanded from collapsed AND
-                        // - This part was already visible in collapsed state
+                        // Determine if animation should be skipped:
+                        // 1. When expanding from collapsed: skip for items that were already visible
+                        // 2. When collapsed: skip for items already shown before (track in ref)
                         const wasVisibleInCollapsed = activity.part.id ? visibleInCollapsedIds.has(activity.part.id) : false;
-                        const skipAnimation = justExpandedFromCollapsed && wasVisibleInCollapsed;
+                        
+                        let skipAnimation = false;
+                        if (justExpandedFromCollapsed && wasVisibleInCollapsed) {
+                            // Expanding: don't animate items that were already visible in collapsed state
+                            skipAnimation = true;
+                        } else if (!isExpanded && activity.part.id) {
+                            // Collapsed: animate only items that haven't been shown yet
+                            if (shownInCollapsedRef.current.has(activity.part.id)) {
+                                skipAnimation = true;
+                            } else {
+                                // Mark as shown for future renders
+                                shownInCollapsedRef.current.add(activity.part.id);
+                            }
+                        }
 
                         switch (activity.kind) {
                             case 'tool':

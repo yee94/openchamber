@@ -815,6 +815,38 @@ class OpencodeService {
     return this.getSessionStatusForDirectory(null);
   }
 
+  /**
+   * Get session activity from web server's in-memory tracking.
+   * This is more reliable than getGlobalSessionStatus on visibility restore
+   * because the web server tracks activity even when UI is not listening to SSE.
+   */
+  async getWebServerSessionActivity(): Promise<
+    Record<string, { type: string }> | null
+  > {
+    try {
+      // Web server endpoint - use relative path that works with both dev and prod
+      const response = await fetch('/api/session-activity', {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data !== 'object') {
+        return null;
+      }
+
+      return data as Record<string, { type: string }>;
+    } catch {
+      return null;
+    }
+  }
+
   // Tools
   async listToolIds(options?: { directory?: string | null }): Promise<string[]> {
     try {

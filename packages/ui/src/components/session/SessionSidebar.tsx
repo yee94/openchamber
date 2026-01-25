@@ -1531,7 +1531,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     <div
       className={cn(
         'flex h-full flex-col text-foreground overflow-x-hidden',
-        mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar',
+        mobileVariant ? '' : 'bg-sidebar',
       )}
     >
       {!hideDirectoryControls && (
