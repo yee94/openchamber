@@ -5,16 +5,51 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCodeLine, RiCommandLine, RiFolder6Line, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCodeLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
+
+const normalize = (value: string): string => {
+  if (!value) return '';
+  const replaced = value.replace(/\\/g, '/');
+  return replaced === '/' ? '/' : replaced.replace(/\/+$/, '');
+};
+
+const joinPath = (base: string, segment: string): string => {
+  const normalizedBase = normalize(base);
+  const cleanSegment = segment.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!normalizedBase || normalizedBase === '/') {
+    return `/${cleanSegment}`;
+  }
+  return `${normalizedBase}/${cleanSegment}`;
+};
+
+const buildRepoPlansDirectory = (directory: string): string => {
+  return joinPath(joinPath(directory, '.opencode'), 'plans');
+};
+
+const buildHomePlansDirectory = (): string => {
+  return '~/.opencode/plans';
+};
+
+const resolveTilde = (path: string, homeDir: string | null): string => {
+  const trimmed = path.trim();
+  if (!trimmed.startsWith('~')) return trimmed;
+  if (trimmed === '~') return homeDir || trimmed;
+  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
+    return homeDir ? `${homeDir}${trimmed.slice(1)}` : trimmed;
+  }
+  return trimmed;
+};
 
 interface TabConfig {
   id: MainTab;
@@ -34,8 +69,12 @@ export const Header: React.FC = () => {
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
 
   const { getCurrentModel } = useConfigStore();
+  const runtimeApis = useRuntimeAPIs();
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
+  const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const sessions = useSessionStore((state) => state.sessions);
+  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const { isMobile } = useDeviceInfo();
   const diffFileCount = useDiffFileCount();
   const updateAvailable = useUpdateStore((state) => state.available);
@@ -72,6 +111,90 @@ export const Header: React.FC = () => {
   const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
   const contextUsage = getContextUsage(contextLimit, outputLimit);
   const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
+
+  const currentSession = React.useMemo(() => {
+    if (!currentSessionId) return null;
+    return sessions.find((s) => s.id === currentSessionId) ?? null;
+  }, [currentSessionId, sessions]);
+
+  const sessionDirectory = React.useMemo(() => {
+    const raw = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
+    return normalize(raw || '');
+  }, [currentSession?.directory]);
+
+
+  const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
+  const showPlanTab = planTabAvailable;
+  const lastPlanSessionKeyRef = React.useRef<string>('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const checkExists = async (directory: string, fileName: string): Promise<boolean> => {
+      if (!directory || !fileName) return false;
+      if (!runtimeApis.files?.listDirectory) return false;
+
+      try {
+        const listing = await runtimeApis.files.listDirectory(directory);
+        const entries = Array.isArray(listing?.entries) ? listing.entries : [];
+        return entries.some((entry) => entry?.name === fileName && !entry?.isDirectory);
+      } catch {
+        return false;
+      }
+    };
+
+    const runOnce = async () => {
+      if (cancelled) return;
+
+      if (!currentSession?.slug || !currentSession?.time?.created || !sessionDirectory) {
+        setPlanTabAvailable(false);
+        if (useUIStore.getState().activeMainTab === 'plan') {
+          useUIStore.getState().setActiveMainTab('chat');
+        }
+        return;
+      }
+
+      const fileName = `${currentSession.time.created}-${currentSession.slug}.md`;
+      const repoDir = buildRepoPlansDirectory(sessionDirectory);
+      const homeDir = resolveTilde(buildHomePlansDirectory(), homeDirectory || null);
+
+      const [repoExists, homeExists] = await Promise.all([
+        checkExists(repoDir, fileName),
+        checkExists(homeDir, fileName),
+      ]);
+
+      if (cancelled) return;
+
+      const available = repoExists || homeExists;
+      setPlanTabAvailable(available);
+      if (!available && useUIStore.getState().activeMainTab === 'plan') {
+        useUIStore.getState().setActiveMainTab('chat');
+      }
+    };
+
+    const sessionKey = `${currentSessionId || 'none'}:${sessionDirectory || 'none'}:${currentSession?.time?.created || 0}:${currentSession?.slug || 'none'}`;
+    if (lastPlanSessionKeyRef.current !== sessionKey) {
+      lastPlanSessionKeyRef.current = sessionKey;
+      setPlanTabAvailable(false);
+    }
+    void runOnce();
+
+    const interval = window.setInterval(() => {
+      void runOnce();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    sessionDirectory,
+    currentSession?.slug,
+    currentSession?.time?.created,
+    currentSessionId,
+    homeDirectory,
+    runtimeApis.files,
+  ]);
 
   const blurActiveElement = React.useCallback(() => {
     if (typeof document === 'undefined') {
@@ -193,23 +316,34 @@ export const Header: React.FC = () => {
     }
   }, [isDesktopApp]);
 
-  const tabs: TabConfig[] = React.useMemo(() => [
-    { id: 'chat', label: 'Chat', icon: RiChat4Line },
-    {
-      id: 'diff',
-      label: 'Diff',
-      icon: RiCodeLine,
-      badge: !isMobile && diffFileCount > 0 ? diffFileCount : undefined,
-    },
-    { id: 'files', label: 'Files', icon: RiFolder6Line },
-    { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
-    {
-      id: 'git',
-      label: 'Git',
-      icon: RiGitBranchLine,
-      showDot: isMobile && diffFileCount > 0,
-    },
-  ], [diffFileCount, isMobile]);
+  const tabs: TabConfig[] = React.useMemo(() => {
+    const base: TabConfig[] = [
+      { id: 'chat', label: 'Chat', icon: RiChat4Line },
+    ];
+
+    if (showPlanTab) {
+      base.push({ id: 'plan', label: 'Plan', icon: RiFileTextLine });
+    }
+
+    base.push(
+      {
+        id: 'diff',
+        label: 'Diff',
+        icon: RiCodeLine,
+        badge: !isMobile && diffFileCount > 0 ? diffFileCount : undefined,
+      },
+      { id: 'files', label: 'Files', icon: RiFolder6Line },
+      { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
+      {
+        id: 'git',
+        label: 'Git',
+        icon: RiGitBranchLine,
+        showDot: isMobile && diffFileCount > 0,
+      },
+    );
+
+    return base;
+  }, [diffFileCount, isMobile, showPlanTab]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
