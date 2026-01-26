@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-01-26
+
+- Plans: new Plan/Build mode switching support with dedicated Plan content view with per-session context.
+- GitHub: sign in with multiple accounts and smoother auth flow.
+- Chat/UI: linkable mentions, better wrapping, and markdown/scroll polish in messages.
+- Skills: ClawdHub catalog now pages results and retries transient failures.
+- Diff: fixed Chrome scrolling in All Files layout.
+- Mobile: improved layout for attachments, git, and permissions on small screens (thanks to @nelsonPires5).
+- Web: iOS safe-area support for the PWA header.
+- Activity: added a text-justification setting for activity summaries (thanks to @iyangdianfeng).
+- Reliability: file lists and message sends handle missing directories and transient errors more gracefully.
+
+
 ## [1.5.7] - 2026-01-24
 
 - GitHub: PR panel supports fork PR detection by branch name.

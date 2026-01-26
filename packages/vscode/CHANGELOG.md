@@ -1,3 +1,14 @@
+## [1.5.8] - 2026-01-26
+
+- Plans: added new Plan/Build mode switching support.
+- Chat: linkable mentions, better wrapping, and markdown/scroll polish in messages.
+- Skills: ClawdHub catalog now pages results and retries transient failures.
+- Diff: fixed Chrome scrolling in All Files layout.
+- Activity: added a text-justification setting for activity summaries (thanks to @iyangdianfeng).
+- Performance: faster chat rendering for busy sessions.
+- Reliability: file lists and message sends handle missing directories and transient errors more gracefully.
+
+
 ## [1.5.7] - 2026-01-24
 
 - No notable changes
