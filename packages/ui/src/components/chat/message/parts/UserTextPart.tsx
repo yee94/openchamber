@@ -1,7 +1,6 @@
 import React from 'react';
 
 import { cn } from '@/lib/utils';
-import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import type { Part } from '@opencode-ai/sdk/v2';
 import type { AgentMentionInfo } from '../types';
 
@@ -61,14 +60,26 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         const idx = textContent.indexOf(agentMention.token);
         const before = textContent.slice(0, idx);
         const after = textContent.slice(idx + agentMention.token.length);
-        const mentionLink = `[${agentMention.token}](${buildMentionUrl(agentMention.name)})`;
-        return `${before}${mentionLink}${after}`;
+        return (
+            <>
+                {before}
+                <a
+                    href={buildMentionUrl(agentMention.name)}
+                    className="text-primary hover:underline"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    {agentMention.token}
+                </a>
+                {after}
+            </>
+        );
     };
 
     return (
         <div
             className={cn(
-                "font-sans typography-markdown",
+                "font-sans typography-markdown whitespace-pre-wrap",
                 !isExpanded && "line-clamp-3",
                 (isTruncated || isExpanded) && "cursor-pointer"
             )}
@@ -76,10 +87,9 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
             onClick={handleClick}
             key={part.id || `${messageId}-user-text`}
         >
-            <SimpleMarkdownRenderer
-                content={renderContent()}
-                className="text-foreground/90"
-            />
+            <span className="text-foreground/90">
+                {renderContent()}
+            </span>
         </div>
     );
 };
