@@ -25,6 +25,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { createWorktreeSessionForNewBranchExact } from '@/lib/worktreeSessionCreator';
 import { gitFetch } from '@/lib/gitApi';
@@ -61,6 +62,8 @@ export function GitHubPullRequestPickerDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { github } = useRuntimeAPIs();
+  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
+  const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSidebarSection = useUIStore((state) => state.setSidebarSection);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
@@ -85,6 +88,14 @@ export function GitHubPullRequestPickerDialog({
       setError('No active project');
       return;
     }
+    if (githubAuthChecked && githubAuthStatus?.connected === false) {
+      setResult({ connected: false });
+      setPrs([]);
+      setHasMore(false);
+      setPage(1);
+      setError(null);
+      return;
+    }
     if (!github?.prsList) {
       setResult(null);
       setError('GitHub runtime API unavailable');
@@ -107,7 +118,7 @@ export function GitHubPullRequestPickerDialog({
     } finally {
       setIsLoading(false);
     }
-  }, [github, projectDirectory]);
+  }, [github, githubAuthChecked, githubAuthStatus, projectDirectory]);
 
   const loadMore = React.useCallback(async () => {
     if (!projectDirectory) return;
@@ -148,7 +159,18 @@ export function GitHubPullRequestPickerDialog({
     void refresh();
   }, [open, refresh]);
 
-  const connected = Boolean(result?.connected);
+  React.useEffect(() => {
+    if (!open) return;
+    if (githubAuthChecked && githubAuthStatus?.connected === false) {
+      setResult({ connected: false });
+      setPrs([]);
+      setHasMore(false);
+      setPage(1);
+      setError(null);
+    }
+  }, [githubAuthChecked, githubAuthStatus, open]);
+
+  const connected = githubAuthChecked ? result?.connected !== false : true;
   const repoUrl = result?.repo?.url ?? null;
 
   const openGitHubSettings = React.useCallback(() => {

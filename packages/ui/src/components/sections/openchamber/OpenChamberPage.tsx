@@ -28,20 +28,22 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
             <ScrollableOverlay
                 keyboardAvoid
                 outerClassName="h-full"
-                className="openchamber-page-body mx-auto max-w-3xl space-y-3 p-3 sm:space-y-6 sm:p-6"
+                className="w-full"
             >
-                <OpenChamberVisualSettings />
-                <div className="border-t border-border/40 pt-6">
-                    <DefaultsSettings />
-                </div>
-                <div className="border-t border-border/40 pt-6">
-                    <SessionRetentionSettings />
-                </div>
-                {showAbout && (
+                <div className="openchamber-page-body mx-auto max-w-3xl space-y-3 p-3 sm:space-y-6 sm:p-6">
+                    <OpenChamberVisualSettings />
                     <div className="border-t border-border/40 pt-6">
-                        <AboutSettings />
+                        <DefaultsSettings />
                     </div>
-                )}
+                    <div className="border-t border-border/40 pt-6">
+                        <SessionRetentionSettings />
+                    </div>
+                    {showAbout && (
+                        <div className="border-t border-border/40 pt-6">
+                            <AboutSettings />
+                        </div>
+                    )}
+                </div>
             </ScrollableOverlay>
         );
     }
@@ -70,9 +72,11 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         <ScrollableOverlay
             keyboardAvoid
             outerClassName="h-full"
-            className="openchamber-page-body mx-auto max-w-3xl space-y-6 p-3 sm:p-6"
+            className="w-full"
         >
-            {renderSectionContent()}
+            <div className="openchamber-page-body mx-auto max-w-3xl space-y-6 p-3 sm:p-6">
+                {renderSectionContent()}
+            </div>
         </ScrollableOverlay>
     );
 };

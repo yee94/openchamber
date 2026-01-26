@@ -254,6 +254,8 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
     const metadata = getModelMetadata(providerID, modelID);
     const contextTokens = formatTokens(metadata?.limit?.context);
 
+    const showProviderLogo = keyPrefix === 'fav' || keyPrefix === 'recent';
+
     return (
       <button
         key={`${keyPrefix}-${key}`}
@@ -275,6 +277,9 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         )}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {showProviderLogo && (
+            <ProviderLogo providerId={providerID} className="h-3.5 w-3.5 flex-shrink-0" />
+          )}
           <span className="font-medium truncate">
             {getModelDisplayName(model)}
           </span>

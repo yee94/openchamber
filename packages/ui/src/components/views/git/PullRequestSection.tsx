@@ -29,6 +29,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type {
   GitHubPullRequest,
   GitHubCheckRun,
@@ -95,6 +96,8 @@ export const PullRequestSection: React.FC<{
   baseBranch: string;
 }> = ({ directory, branch, baseBranch }) => {
   const { github } = useRuntimeAPIs();
+  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
+  const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSidebarSection = useUIStore((state) => state.setSidebarSection);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
@@ -352,6 +355,12 @@ export const PullRequestSection: React.FC<{
 
   const refresh = React.useCallback(async () => {
     if (!canShow) return;
+    if (githubAuthChecked && githubAuthStatus?.connected === false) {
+      setStatus({ connected: false });
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
     if (!github?.prStatus) {
       setStatus(null);
       setError('GitHub runtime API unavailable');
@@ -371,7 +380,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsLoading(false);
     }
-  }, [branch, canShow, directory, github]);
+  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus]);
 
   React.useEffect(() => {
     const snapshot = pullRequestDraftSnapshots.get(snapshotKey) ?? null;
@@ -381,6 +390,13 @@ export const PullRequestSection: React.FC<{
     setIsOpen(snapshot?.isOpen ?? true);
     void refresh();
   }, [branch, refresh, snapshotKey]);
+
+  React.useEffect(() => {
+    if (githubAuthChecked && githubAuthStatus?.connected === false) {
+      setStatus({ connected: false });
+      setError(null);
+    }
+  }, [githubAuthChecked, githubAuthStatus]);
 
   React.useEffect(() => {
     if (!directory || !branch) {
@@ -505,6 +521,7 @@ export const PullRequestSection: React.FC<{
   const checks = status?.checks ?? null;
   const canMerge = Boolean(status?.canMerge);
   const isConnected = Boolean(status?.connected);
+  const shouldShowConnectionNotice = githubAuthChecked && status?.connected === false;
 
   return (
     <Collapsible
@@ -534,7 +551,7 @@ export const PullRequestSection: React.FC<{
       <CollapsibleContent>
         <div className="border-t border-border/40">
           <div className="flex flex-col gap-3 p-3">
-            {!isConnected ? (
+            {shouldShowConnectionNotice ? (
               <div className="space-y-2">
                 <div className="typography-meta text-muted-foreground">
                   GitHub not connected. Connect your GitHub account in settings.

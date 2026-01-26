@@ -153,6 +153,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         const isSelected = providerId === provID && modelId === modID;
         const isFavorite = isFavoriteModel(provID, modID);
 
+        const showProviderLogo = keyPrefix === 'fav' || keyPrefix === 'recent';
+
         return (
             <div
                 key={`${keyPrefix}-${provID}-${modID}`}
@@ -165,6 +167,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 onMouseEnter={() => setSelectedIndex(flatIndex)}
             >
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    {showProviderLogo && (
+                        <ProviderLogo providerId={provID} className="h-3.5 w-3.5 flex-shrink-0" />
+                    )}
                     <span className="font-medium truncate">
                         {getModelDisplayName(model)}
                     </span>

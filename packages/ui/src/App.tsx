@@ -29,6 +29,7 @@ import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { OnboardingScreen } from '@/components/onboarding/OnboardingScreen';
 import { isCliAvailable } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
+import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
 
 const AboutDialogWrapper: React.FC = () => {
@@ -52,6 +53,7 @@ function App({ apis }: AppProps) {
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const { uiFont, monoFont } = useFontPreferences();
+  const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => apis.runtime.isDesktop);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [cliAvailable, setCliAvailable] = React.useState<boolean>(() => {
@@ -68,6 +70,10 @@ function App({ apis }: AppProps) {
     registerRuntimeAPIs(apis);
     return () => registerRuntimeAPIs(null);
   }, [apis]);
+
+  React.useEffect(() => {
+    void refreshGitHubAuthStatus(apis.github, { force: true });
+  }, [apis.github, refreshGitHubAuthStatus]);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') {

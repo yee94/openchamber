@@ -1945,6 +1945,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const isSelected = currentProviderId === providerID && currentModelId === modelID;
         const isFavorite = isFavoriteModel(providerID, modelID);
 
+        const showProviderLogo = keyPrefix === 'fav' || keyPrefix === 'recent';
+
         return (
             <div
                 key={`${keyPrefix}-${providerID}-${modelID}`}
@@ -1957,6 +1959,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 onMouseEnter={() => setModelSelectedIndex(flatIndex)}
             >
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    {showProviderLogo && (
+                        <ProviderLogo providerId={providerID} className="h-3.5 w-3.5 flex-shrink-0" />
+                    )}
                     <span className="font-medium truncate">
                         {getModelDisplayName(model)}
                     </span>
