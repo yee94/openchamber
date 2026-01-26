@@ -828,6 +828,14 @@ export interface SkillsCatalogResponse {
   ok: boolean;
   sources?: SkillsCatalogSource[];
   itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
+  pageInfoBySource?: Record<SkillsCatalogSourceId, { nextCursor?: string | null }>;
+  error?: { kind: string; message: string };
+}
+
+export interface SkillsCatalogSourceResponse {
+  ok: boolean;
+  items?: SkillsCatalogItem[];
+  nextCursor?: string | null;
   error?: { kind: string; message: string };
 }
 

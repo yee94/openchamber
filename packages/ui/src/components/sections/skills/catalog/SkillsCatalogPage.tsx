@@ -65,7 +65,13 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     selectedSourceId,
     setSelectedSource,
     loadCatalog,
+    loadSource,
+    loadMoreClawdHub,
     isLoadingCatalog,
+    isLoadingSource,
+    isLoadingMore,
+    loadedSourceIds,
+    clawdhubHasMoreBySource,
     lastCatalogError,
   } = useSkillsCatalogStore();
 
@@ -78,6 +84,15 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   React.useEffect(() => {
     void loadCatalog();
   }, [loadCatalog]);
+
+  React.useEffect(() => {
+    if (!selectedSourceId) {
+      return;
+    }
+    if (!loadedSourceIds[selectedSourceId]) {
+      void loadSource(selectedSourceId);
+    }
+  }, [selectedSourceId, loadedSourceIds, loadSource]);
 
   const items = React.useMemo(() => {
     if (!selectedSourceId) return [];
@@ -98,6 +113,10 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   const selectedSource = React.useMemo(() => sources.find((s) => s.id === selectedSourceId) || null, [sources, selectedSourceId]);
 
   const isCustomSource = Boolean(selectedSourceId && selectedSourceId.startsWith('custom:'));
+  const isClawdHubSource = selectedSource?.source === 'clawdhub:registry' || selectedSource?.sourceType === 'clawdhub';
+  const hasMoreClawdHub = Boolean(
+    selectedSourceId && (clawdhubHasMoreBySource[selectedSourceId] ?? true)
+  );
 
   const removeSelectedCatalog = async () => {
     if (!selectedSourceId || !isCustomSource) {
@@ -167,8 +186,14 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
             <Button
               type="button"
               variant="outline"
-              onClick={() => void loadCatalog({ refresh: true })}
-              disabled={isLoadingCatalog}
+              onClick={() => {
+                if (selectedSourceId) {
+                  void loadSource(selectedSourceId, { refresh: true });
+                } else {
+                  void loadCatalog({ refresh: true });
+                }
+              }}
+              disabled={isLoadingCatalog || isLoadingSource}
               className="gap-2"
             >
               <RiRefreshLine className="h-4 w-4" />
@@ -219,81 +244,99 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && !isLoadingSource ? (
           <div className="py-10 text-center text-muted-foreground">
             <p className="typography-body">No skills found</p>
             <p className="typography-meta mt-1 opacity-75">Try a different search or refresh the catalog</p>
           </div>
+        ) : isLoadingSource ? (
+          <div className="py-10 text-center text-muted-foreground">
+            <p className="typography-body">Loading skills…</p>
+          </div>
         ) : (
-          filtered.map((item) => {
-            const installed = item.installed?.isInstalled;
-            const installedScope = item.installed?.scope;
+          <>
+            {filtered.map((item) => {
+              const installed = item.installed?.isInstalled;
+              const installedScope = item.installed?.scope;
 
-            return (
-              <div
-                key={`${item.sourceId}:${item.skillDir}`}
-                className="rounded-lg border bg-muted/10 px-3 py-2"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="typography-ui-label truncate">{item.skillName}</div>
-                      {installed ? (
-                        <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                          installed ({installedScope || 'unknown'})
-                        </span>
-                      ) : null}
-                      {!item.installable ? (
-                        <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                          not installable
-                        </span>
-                      ) : null}
-                    </div>
-                    {item.description ? (
-                      <div className="typography-meta text-muted-foreground mt-0.5 line-clamp-2">{item.description}</div>
-                    ) : (
-                      <div className="typography-micro text-muted-foreground mt-0.5">No description provided</div>
-                    )}
-                    {item.clawdhub ? (
-                      <div className="typography-micro text-muted-foreground mt-1 flex items-center gap-3">
-                        {item.clawdhub.owner ? (
-                          <span>by {item.clawdhub.owner}</span>
-                        ) : null}
-                        <span className="flex items-center gap-1">
-                          <RiDownloadLine className="h-3 w-3" />
-                          {item.clawdhub.downloads?.toLocaleString() ?? 0}
-                        </span>
-                        {(item.clawdhub.stars ?? 0) > 0 ? (
-                          <span className="flex items-center gap-1">
-                            <RiStarLine className="h-3 w-3" />
-                            {item.clawdhub.stars}
+              return (
+                <div
+                  key={`${item.sourceId}:${item.skillDir}`}
+                  className="rounded-lg border bg-muted/10 px-3 py-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="typography-ui-label truncate">{item.skillName}</div>
+                        {installed ? (
+                          <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+                            installed ({installedScope || 'unknown'})
                           </span>
                         ) : null}
-                        <span>v{item.clawdhub.version}</span>
+                        {!item.installable ? (
+                          <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+                            not installable
+                          </span>
+                        ) : null}
                       </div>
-                    ) : null}
-                    {item.warnings?.length ? (
-                      <div className="typography-micro text-muted-foreground mt-1">{item.warnings.join(' · ')}</div>
-                    ) : null}
-                  </div>
+                      {item.description ? (
+                        <div className="typography-meta text-muted-foreground mt-0.5 line-clamp-2">{item.description}</div>
+                      ) : (
+                        <div className="typography-micro text-muted-foreground mt-0.5">No description provided</div>
+                      )}
+                      {item.clawdhub ? (
+                        <div className="typography-micro text-muted-foreground mt-1 flex items-center gap-3">
+                          {item.clawdhub.owner ? (
+                            <span>by {item.clawdhub.owner}</span>
+                          ) : null}
+                          <span className="flex items-center gap-1">
+                            <RiDownloadLine className="h-3 w-3" />
+                            {item.clawdhub.downloads?.toLocaleString() ?? 0}
+                          </span>
+                          {(item.clawdhub.stars ?? 0) > 0 ? (
+                            <span className="flex items-center gap-1">
+                              <RiStarLine className="h-3 w-3" />
+                              {item.clawdhub.stars}
+                            </span>
+                          ) : null}
+                          <span>v{item.clawdhub.version}</span>
+                        </div>
+                      ) : null}
+                      {item.warnings?.length ? (
+                        <div className="typography-micro text-muted-foreground mt-1">{item.warnings.join(' · ')}</div>
+                      ) : null}
+                    </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    disabled={!item.installable}
-                    onClick={() => {
-                      setInstallItem(item);
-                      setInstallDialogOpen(true);
-                    }}
-                  >
-                    Install
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={!item.installable}
+                      onClick={() => {
+                        setInstallItem(item);
+                        setInstallDialogOpen(true);
+                      }}
+                    >
+                      Install
+                    </Button>
+                  </div>
                 </div>
+              );
+            })}
+            {isClawdHubSource && hasMoreClawdHub ? (
+              <div className="flex justify-center pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void loadMoreClawdHub()}
+                  disabled={isLoadingMore || isLoadingSource}
+                >
+                  {isLoadingMore ? 'Loading…' : 'Load more'}
+                </Button>
               </div>
-            );
-          })
+            ) : null}
+          </>
         )}
       </div>
 

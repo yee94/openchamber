@@ -721,6 +721,7 @@ fn cache_key(normalized_repo: &str, subpath: Option<&str>, identity_id: Option<&
 // ============== ClawdHub API ==============
 
 const CLAWDHUB_API_BASE: &str = "https://clawdhub.com/api/v1";
+const CLAWDHUB_PAGE_LIMIT: usize = 25;
 
 fn is_clawdhub_source(source: &str) -> bool {
     source.starts_with("clawdhub:")
@@ -789,23 +790,56 @@ async fn scan_clawdhub() -> Result<Vec<SkillsCatalogItem>> {
     let mut cursor: Option<String> = None;
     let max_pages = 20;
 
-    for _ in 0..max_pages {
+    for page in 0..max_pages {
         let url = match &cursor {
             Some(c) => format!(
-                "{}{}?cursor={}",
+                "{}{}?cursor={}&limit={}",
                 CLAWDHUB_API_BASE,
                 "/skills",
-                urlencoding::encode(c)
+                urlencoding::encode(c),
+                CLAWDHUB_PAGE_LIMIT
             ),
-            None => format!("{}/skills", CLAWDHUB_API_BASE),
+            None => format!("{}/skills?limit={}", CLAWDHUB_API_BASE, CLAWDHUB_PAGE_LIMIT),
         };
 
-        let response = client.get(&url).send().await?;
-        if !response.status().is_success() {
-            return Err(anyhow!("ClawdHub API error: {}", response.status()));
+        let mut response: Option<reqwest::Response> = None;
+        let max_attempts = 10;
+
+        for attempt in 0..max_attempts {
+            let resp = client.get(&url).send().await?;
+            if resp.status().is_success() {
+                response = Some(resp);
+                break;
+            }
+
+            let should_retry = (resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+                || resp.status().is_server_error())
+                && attempt + 1 < max_attempts;
+
+            if should_retry {
+                tokio::time::sleep(Duration::from_millis(50 * (attempt + 1) as u64)).await;
+                continue;
+            }
+
+            if page > 0 && !all_items.is_empty() {
+                break;
+            }
+            return Err(anyhow!("ClawdHub API error: {}", resp.status()));
         }
 
-        let data: ClawdHubSkillsResponse = response.json().await?;
+        let Some(response) = response else {
+            break;
+        };
+
+        let data: ClawdHubSkillsResponse = match response.json().await {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                if page > 0 && !all_items.is_empty() {
+                    break;
+                }
+                return Err(err.into());
+            }
+        };
 
         for item in data.items {
             let latest_version = item
@@ -1510,12 +1544,22 @@ async fn install_skills_from_clawdhub(
         // Resolve 'latest' version
         if version == "latest" {
             if let Ok(info) = fetch_clawdhub_skill_info(slug).await {
-                version = info
+                if let Some(latest) = info
                     .skill
                     .and_then(|s| s.tags)
                     .and_then(|t| t.latest)
                     .or_else(|| info.latest_version.and_then(|v| v.version))
-                    .unwrap_or_else(|| "latest".to_string());
+                {
+                    version = latest;
+                }
+            }
+
+            if version == "latest" {
+                skipped.push(SkippedSkill {
+                    skill_name: slug.to_string(),
+                    reason: "Unable to resolve latest version".to_string(),
+                });
+                continue;
             }
         }
 

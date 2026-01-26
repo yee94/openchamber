@@ -533,6 +533,25 @@ const resolveProjectDirectory = async (req) => {
   return { directory: validated.directory, error: null };
 };
 
+const resolveOptionalProjectDirectory = async (req) => {
+  const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+  const queryDirectory = Array.isArray(req.query?.directory)
+    ? req.query.directory[0]
+    : req.query?.directory;
+  const requested = headerDirectory || queryDirectory || null;
+
+  if (!requested) {
+    return { directory: null, error: null };
+  }
+
+  const validated = await validateDirectoryPath(requested);
+  if (!validated.ok) {
+    return { directory: null, error: validated.error };
+  }
+
+  return { directory: validated.directory, error: null };
+};
+
 const sanitizeTypographySizesPartial = (input) => {
   if (!input || typeof input !== 'object') {
     return undefined;
@@ -2416,6 +2435,7 @@ function setupProxy(app) {
       req.path.startsWith('/push') ||
       req.path.startsWith('/config/agents') ||
       req.path.startsWith('/config/settings') ||
+      req.path.startsWith('/config/skills') ||
       req.path === '/config/reload' ||
       req.path === '/health'
     ) {
@@ -2448,6 +2468,7 @@ function setupProxy(app) {
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/config/agents') ||
       req.path.startsWith('/config/settings') ||
+      req.path.startsWith('/config/skills') ||
       req.path === '/health'
     ) {
       return next();
@@ -3508,7 +3529,7 @@ async function main(options = {}) {
   const { parseSkillRepoSource } = await import('./lib/skills-catalog/source.js');
   const { scanSkillsRepository } = await import('./lib/skills-catalog/scan.js');
   const { installSkillsFromRepository } = await import('./lib/skills-catalog/install.js');
-  const { scanClawdHub, installSkillsFromClawdHub, isClawdHubSource } = await import('./lib/skills-catalog/clawdhub/index.js');
+  const { scanClawdHubPage, installSkillsFromClawdHub, isClawdHubSource } = await import('./lib/skills-catalog/clawdhub/index.js');
   const { getProfiles, getProfile } = await import('./lib/git-identity-storage.js');
 
   const listGitIdentitiesForResponse = () => {
@@ -3538,11 +3559,10 @@ async function main(options = {}) {
 
   app.get('/api/config/skills/catalog', async (req, res) => {
     try {
-      const { directory, error } = await resolveProjectDirectory(req);
-      if (!directory) {
+      const { error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
         return res.status(400).json({ error });
       }
-      const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
 
       const curatedSources = getCuratedSkillsSources();
       const settings = await readSettingsFromDisk();
@@ -3558,95 +3578,121 @@ async function main(options = {}) {
       }));
 
       const sources = [...curatedSources, ...customSources];
+      const sourcesForUi = sources.map(({ gitIdentityId, ...rest }) => rest);
 
-      const discovered = discoverSkills(directory);
+      res.json({ ok: true, sources: sourcesForUi, itemsBySource: {}, pageInfoBySource: {} });
+    } catch (error) {
+      console.error('Failed to load skills catalog:', error);
+      res.status(500).json({ ok: false, error: { kind: 'unknown', message: error.message || 'Failed to load catalog' } });
+    }
+  });
+
+  app.get('/api/config/skills/catalog/source', async (req, res) => {
+    try {
+      const { directory, error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
+        return res.status(400).json({ ok: false, error: { kind: 'invalidSource', message: error } });
+      }
+
+      const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId : null;
+      if (!sourceId) {
+        return res.status(400).json({ ok: false, error: { kind: 'invalidSource', message: 'Missing sourceId' } });
+      }
+
+      const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+      const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : null;
+
+      const curatedSources = getCuratedSkillsSources();
+      const settings = await readSettingsFromDisk();
+      const customSourcesRaw = sanitizeSkillCatalogs(settings.skillCatalogs) || [];
+
+      const customSources = customSourcesRaw.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        description: entry.source,
+        source: entry.source,
+        defaultSubpath: entry.subpath,
+        gitIdentityId: entry.gitIdentityId,
+      }));
+
+      const sources = [...curatedSources, ...customSources];
+      const src = sources.find((entry) => entry.id === sourceId);
+
+      if (!src) {
+        return res.status(404).json({ ok: false, error: { kind: 'invalidSource', message: 'Unknown source' } });
+      }
+
+      const discovered = directory ? discoverSkills(directory) : [];
       const installedByName = new Map(discovered.map((s) => [s.name, s]));
 
-      const itemsBySource = {};
-
-      for (const src of sources) {
-        // Handle ClawdHub sources separately (API-based, not git-based)
-        if (src.sourceType === 'clawdhub' || isClawdHubSource(src.source)) {
-          const cacheKey = 'clawdhub:registry';
-          let scanResult = !refresh ? getCachedScan(cacheKey) : null;
-
-          if (!scanResult) {
-            const scanned = await scanClawdHub();
-            if (!scanned.ok) {
-              itemsBySource[src.id] = [];
-              continue;
-            }
-            scanResult = scanned;
-            setCachedScan(cacheKey, scanResult);
-          }
-
-          const items = (scanResult.items || []).map((item) => {
-            const installed = installedByName.get(item.skillName);
-            return {
-              ...item,
-              sourceId: src.id,
-              installed: installed
-                ? { isInstalled: true, scope: installed.scope }
-                : { isInstalled: false },
-            };
-          });
-
-          itemsBySource[src.id] = items;
-          continue;
+      if (src.sourceType === 'clawdhub' || isClawdHubSource(src.source)) {
+        const scanned = await scanClawdHubPage({ cursor: cursor || null });
+        if (!scanned.ok) {
+          return res.status(500).json({ ok: false, error: scanned.error });
         }
 
-        // Handle GitHub sources (git clone based)
-        const parsed = parseSkillRepoSource(src.source);
-        if (!parsed.ok) {
-          itemsBySource[src.id] = [];
-          continue;
-        }
-
-        const effectiveSubpath = src.defaultSubpath || parsed.effectiveSubpath || null;
-        const cacheKey = getCacheKey({
-          normalizedRepo: parsed.normalizedRepo,
-          subpath: effectiveSubpath || '',
-          identityId: src.gitIdentityId || '',
-        });
-
-        let scanResult = !refresh ? getCachedScan(cacheKey) : null;
-        if (!scanResult) {
-          const scanned = await scanSkillsRepository({
-            source: src.source,
-            subpath: src.defaultSubpath,
-            defaultSubpath: src.defaultSubpath,
-            identity: resolveGitIdentity(src.gitIdentityId),
-          });
-
-          if (!scanned.ok) {
-            itemsBySource[src.id] = [];
-            continue;
-          }
-
-          scanResult = scanned;
-          setCachedScan(cacheKey, scanResult);
-        }
-
-        const items = (scanResult.items || []).map((item) => {
+        const items = (scanned.items || []).map((item) => {
           const installed = installedByName.get(item.skillName);
           return {
-            sourceId: src.id,
             ...item,
-            gitIdentityId: src.gitIdentityId,
+            sourceId: src.id,
             installed: installed
               ? { isInstalled: true, scope: installed.scope }
               : { isInstalled: false },
           };
         });
 
-        itemsBySource[src.id] = items;
+        return res.json({ ok: true, items, nextCursor: scanned.nextCursor || null });
       }
 
-      const sourcesForUi = sources.map(({ gitIdentityId, ...rest }) => rest);
-      res.json({ ok: true, sources: sourcesForUi, itemsBySource });
+      const parsed = parseSkillRepoSource(src.source);
+      if (!parsed.ok) {
+        return res.status(400).json({ ok: false, error: parsed.error });
+      }
+
+      const effectiveSubpath = src.defaultSubpath || parsed.effectiveSubpath || null;
+      const cacheKey = getCacheKey({
+        normalizedRepo: parsed.normalizedRepo,
+        subpath: effectiveSubpath || '',
+        identityId: src.gitIdentityId || '',
+      });
+
+      let scanResult = !refresh ? getCachedScan(cacheKey) : null;
+      if (!scanResult) {
+        const scanned = await scanSkillsRepository({
+          source: src.source,
+          subpath: src.defaultSubpath,
+          defaultSubpath: src.defaultSubpath,
+          identity: resolveGitIdentity(src.gitIdentityId),
+        });
+
+        if (!scanned.ok) {
+          return res.status(500).json({ ok: false, error: scanned.error });
+        }
+
+        scanResult = scanned;
+        setCachedScan(cacheKey, scanResult);
+      }
+
+      const items = (scanResult.items || []).map((item) => {
+        const installed = installedByName.get(item.skillName);
+        return {
+          sourceId: src.id,
+          ...item,
+          gitIdentityId: src.gitIdentityId,
+          installed: installed
+            ? { isInstalled: true, scope: installed.scope }
+            : { isInstalled: false },
+        };
+      });
+
+      return res.json({ ok: true, items });
     } catch (error) {
-      console.error('Failed to load skills catalog:', error);
-      res.status(500).json({ ok: false, error: { kind: 'unknown', message: error.message || 'Failed to load catalog' } });
+      console.error('Failed to load catalog source:', error);
+      return res.status(500).json({
+        ok: false,
+        error: { kind: 'unknown', message: error.message || 'Failed to load catalog source' },
+      });
     }
   });
 

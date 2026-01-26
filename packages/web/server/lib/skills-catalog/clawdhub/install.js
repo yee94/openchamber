@@ -150,10 +150,17 @@ export async function installSkillsFromClawdHub({
       if (resolvedVersion === 'latest') {
         try {
           const info = await fetchClawdHubSkillInfo(plan.slug);
-          resolvedVersion = info.skill?.tags?.latest || info.latestVersion?.version || plan.version;
+          const latest = info.skill?.tags?.latest || info.latestVersion?.version || null;
+          if (latest) {
+            resolvedVersion = latest;
+          }
         } catch {
-          // Fall back to 'latest' tag if info fetch fails
-          resolvedVersion = 'latest';
+          // ignore
+        }
+
+        if (resolvedVersion === 'latest') {
+          skipped.push({ skillName: plan.slug, reason: 'Unable to resolve latest version' });
+          continue;
         }
       }
 

@@ -94,6 +94,7 @@ export const CURATED_SOURCES: CuratedSource[] = [
 // ============== ClawdHub API ==============
 
 const CLAWDHUB_API_BASE = 'https://clawdhub.com/api/v1';
+const CLAWDHUB_PAGE_LIMIT = 25;
 const CLAWDHUB_RATE_LIMIT_MS = 100;
 let clawdhubLastRequest = 0;
 
@@ -102,21 +103,40 @@ function isClawdHubSource(source: string): boolean {
 }
 
 async function clawdhubFetch(url: string, options?: RequestInit): Promise<Response> {
-  const now = Date.now();
-  const elapsed = now - clawdhubLastRequest;
-  if (elapsed < CLAWDHUB_RATE_LIMIT_MS) {
-    await new Promise((resolve) => setTimeout(resolve, CLAWDHUB_RATE_LIMIT_MS - elapsed));
-  }
-  clawdhubLastRequest = Date.now();
+  const maxAttempts = 10;
+  let lastResponse: Response | null = null;
 
-  return fetch(url, {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'OpenChamber-VSCode/1.0',
-      ...options?.headers,
-    },
-  });
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const now = Date.now();
+    const elapsed = now - clawdhubLastRequest;
+    if (elapsed < CLAWDHUB_RATE_LIMIT_MS) {
+      await new Promise((resolve) => setTimeout(resolve, CLAWDHUB_RATE_LIMIT_MS - elapsed));
+    }
+    clawdhubLastRequest = Date.now();
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'OpenChamber-VSCode/1.0',
+        ...options?.headers,
+      },
+    });
+
+    lastResponse = response;
+
+    if (response.status === 429 || response.status >= 500) {
+      if (attempt < maxAttempts - 1) {
+        const waitMs = 50 * (attempt + 1);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+    }
+
+    return response;
+  }
+
+  return lastResponse as Response;
 }
 
 type ClawdHubSkillListItem = {
@@ -142,15 +162,24 @@ async function scanClawdHub(): Promise<SkillsRepoScanResult> {
 
     for (let page = 0; page < maxPages; page++) {
       const url = cursor
-        ? `${CLAWDHUB_API_BASE}/skills?cursor=${encodeURIComponent(cursor)}`
-        : `${CLAWDHUB_API_BASE}/skills`;
+        ? `${CLAWDHUB_API_BASE}/skills?cursor=${encodeURIComponent(cursor)}&limit=${CLAWDHUB_PAGE_LIMIT}`
+        : `${CLAWDHUB_API_BASE}/skills?limit=${CLAWDHUB_PAGE_LIMIT}`;
 
-      const response = await clawdhubFetch(url);
-      if (!response.ok) {
-        throw new Error(`ClawdHub API error: ${response.status}`);
+      let data: ClawdHubSkillsResponse;
+
+      try {
+        const response = await clawdhubFetch(url);
+        if (!response.ok) {
+          throw new Error(`ClawdHub API error: ${response.status}`);
+        }
+
+        data = (await response.json()) as ClawdHubSkillsResponse;
+      } catch (error) {
+        if (page > 0 && allItems.length > 0) {
+          break;
+        }
+        throw error;
       }
-
-      const data = (await response.json()) as ClawdHubSkillsResponse;
 
       for (const item of data.items || []) {
         const latestVersion = item.tags?.latest || item.latestVersion?.version || '1.0.0';
@@ -275,14 +304,22 @@ export async function installSkillsFromClawdHub(options: {
 
     try {
       // Resolve 'latest' version
-      if (version === 'latest') {
-        try {
-          const info = await fetchClawdHubSkillInfo(slug);
-          version = info.skill?.tags?.latest || info.latestVersion?.version || version;
-        } catch {
-          // Fall back to 'latest'
+    if (version === 'latest') {
+      try {
+        const info = await fetchClawdHubSkillInfo(slug);
+        const latest = info.skill?.tags?.latest || info.latestVersion?.version || null;
+        if (latest) {
+          version = latest;
         }
+      } catch {
+        // ignore
       }
+
+      if (version === 'latest') {
+        skipped.push({ skillName: slug, reason: 'Unable to resolve latest version' });
+        continue;
+      }
+    }
 
       const targetDir = options.scope === 'user'
         ? path.join(userSkillDir, slug)

@@ -6,29 +6,48 @@
  */
 
 const CLAWDHUB_API_BASE = 'https://clawdhub.com/api/v1';
+const CLAWDHUB_PAGE_LIMIT = 25;
 
 // Rate limiting: ClawdHub allows 120 requests/minute
 const RATE_LIMIT_DELAY_MS = 100;
 let lastRequestTime = 0;
 
 async function rateLimitedFetch(url, options = {}) {
-  const now = Date.now();
-  const elapsed = now - lastRequestTime;
-  if (elapsed < RATE_LIMIT_DELAY_MS) {
-    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY_MS - elapsed));
+  const maxAttempts = 10;
+
+  let lastResponse = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const now = Date.now();
+    const elapsed = now - lastRequestTime;
+    if (elapsed < RATE_LIMIT_DELAY_MS) {
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY_MS - elapsed));
+    }
+    lastRequestTime = Date.now();
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'OpenChamber/1.0',
+        ...options.headers,
+      },
+    });
+
+    lastResponse = response;
+
+    if (response.status === 429 || response.status >= 500) {
+      if (attempt < maxAttempts - 1) {
+        const waitMs = 50 * (attempt + 1);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+    }
+
+    return response;
   }
-  lastRequestTime = Date.now();
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'OpenChamber/1.0',
-      ...options.headers,
-    },
-  });
-
-  return response;
+  return lastResponse;
 }
 
 /**
@@ -39,8 +58,8 @@ async function rateLimitedFetch(url, options = {}) {
  */
 export async function fetchClawdHubSkills({ cursor } = {}) {
   const url = cursor
-    ? `${CLAWDHUB_API_BASE}/skills?cursor=${encodeURIComponent(cursor)}`
-    : `${CLAWDHUB_API_BASE}/skills`;
+    ? `${CLAWDHUB_API_BASE}/skills?cursor=${encodeURIComponent(cursor)}&limit=${CLAWDHUB_PAGE_LIMIT}`
+    : `${CLAWDHUB_API_BASE}/skills?limit=${CLAWDHUB_PAGE_LIMIT}`;
 
   const response = await rateLimitedFetch(url);
 
@@ -50,9 +69,16 @@ export async function fetchClawdHubSkills({ cursor } = {}) {
   }
 
   const data = await response.json();
+  const nextCursor =
+    (typeof data.nextCursor === 'string' && data.nextCursor) ||
+    (typeof data.next_cursor === 'string' && data.next_cursor) ||
+    (typeof data.next === 'string' && data.next) ||
+    (typeof data.cursor === 'string' && data.cursor) ||
+    null;
+
   return {
     items: data.items || [],
-    nextCursor: data.nextCursor || null,
+    nextCursor,
   };
 }
 
@@ -95,7 +121,10 @@ export async function fetchClawdHubSkillVersion(slug, version = 'latest') {
  * @returns {Promise<ArrayBuffer>} - ZIP file contents
  */
 export async function downloadClawdHubSkill(slug, version) {
-  const url = `${CLAWDHUB_API_BASE}/download?slug=${encodeURIComponent(slug)}&version=${encodeURIComponent(version)}`;
+  const versionParam = typeof version === 'string' && version !== 'latest'
+    ? `&version=${encodeURIComponent(version)}`
+    : '&tag=latest';
+  const url = `${CLAWDHUB_API_BASE}/download?slug=${encodeURIComponent(slug)}${versionParam}`;
 
   const response = await rateLimitedFetch(url, {
     headers: {

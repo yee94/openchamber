@@ -5,7 +5,7 @@
  * https://clawdhub.com
  */
 
-export { scanClawdHub } from './scan.js';
+export { scanClawdHub, scanClawdHubPage } from './scan.js';
 export { installSkillsFromClawdHub } from './install.js';
 export {
   fetchClawdHubSkills,

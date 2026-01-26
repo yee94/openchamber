@@ -147,29 +147,6 @@ const permissionConfigToRuleset = (value: unknown): PermissionRule[] => {
   return rules;
 };
 
-const buildPermissionConfigFromRules = (ruleset: PermissionRule[]): AgentConfig['permission'] | undefined => {
-  const normalized = normalizeRuleset(ruleset);
-  if (normalized.length === 0) {
-    return undefined;
-  }
-
-  const grouped: Record<string, Record<string, PermissionAction>> = {};
-  for (const rule of normalized) {
-    (grouped[rule.permission] ||= {})[rule.pattern] = rule.action;
-  }
-
-  const result: Record<string, PermissionConfigValue> = {};
-  for (const [permissionName, patterns] of Object.entries(grouped)) {
-    if (Object.keys(patterns).length === 1 && patterns['*']) {
-      result[permissionName] = patterns['*'];
-    } else {
-      result[permissionName] = patterns;
-    }
-  }
-
-  return result as AgentConfig['permission'];
-};
-
 const buildPermissionConfigWithGlobal = (
   globalAction: PermissionAction,
   ruleset: PermissionRule[],
@@ -201,23 +178,6 @@ const buildPermissionConfigWithGlobal = (
   return result as AgentConfig['permission'];
 };
 
-const buildPermissionDiffConfig = (
-  baselineRules: PermissionRule[],
-  currentRules: PermissionRule[],
-): AgentConfig['permission'] | undefined => {
-  const baselineMap = buildRuleMap(baselineRules);
-  const currentMap = buildRuleMap(currentRules);
-  const changedRules: PermissionRule[] = [];
-
-  for (const [key, rule] of currentMap.entries()) {
-    const baselineRule = baselineMap.get(key);
-    if (!baselineRule || baselineRule.action !== rule.action) {
-      changedRules.push(rule);
-    }
-  }
-
-  return buildPermissionConfigFromRules(changedRules);
-};
 
 export const AgentsPage: React.FC = () => {
   const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents, agentDraft, setAgentDraft } = useAgentsStore();
@@ -324,12 +284,6 @@ export const AgentsPage: React.FC = () => {
     currentRuleMap.get(buildRuleKey(permissionName, '*'))?.action
   ), [currentRuleMap]);
 
-  const getEffectiveWildcardAction = React.useCallback((permissionName: string): PermissionAction => {
-    if (permissionName === '*') {
-      return globalPermission;
-    }
-    return getWildcardOverride(permissionName) ?? globalPermission;
-  }, [getWildcardOverride, globalPermission]);
 
   const getPatternRules = React.useCallback((permissionName: string): PermissionRule[] => (
     permissionRules
@@ -348,12 +302,6 @@ export const AgentsPage: React.FC = () => {
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [knownPermissionNames]);
 
-  const getFallbackDefaultAction = React.useCallback((permissionName: string): PermissionAction => {
-    if (permissionName === 'doom_loop' || permissionName === 'external_directory') {
-      return 'ask';
-    }
-    return 'allow';
-  }, []);
 
   const getPermissionSummary = React.useCallback((permissionName: string) => {
     const defaultAction = permissionName === '*'
