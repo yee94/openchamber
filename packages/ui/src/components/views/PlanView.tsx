@@ -1,5 +1,8 @@
 import React from 'react';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+import { PreviewToggleButton } from './PreviewToggleButton';
+import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -114,11 +117,36 @@ export const PlanView: React.FC = () => {
   const [loading, setLoading] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
   const [copiedContent, setCopiedContent] = React.useState(false);
+  const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
   const copiedTimeoutRef = React.useRef<number | null>(null);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = React.useState('');
+
+  const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
+
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem(MD_VIEWER_MODE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as unknown;
+      if (parsed === 'preview' || parsed === 'edit') {
+        setMdViewMode(parsed);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
+    setMdViewMode(mode);
+    try {
+      localStorage.setItem(MD_VIEWER_MODE_KEY, JSON.stringify(mode));
+    } catch {
+      // ignore
+    }
+  }, []);
   const isSelectingRef = React.useRef(false);
   const selectionStartRef = React.useRef<number | null>(null);
 
@@ -421,6 +449,10 @@ export const PlanView: React.FC = () => {
         </div>
         {resolvedPath ? (
           <div className="flex items-center gap-1">
+            <PreviewToggleButton
+              currentMode={mdViewMode}
+              onToggle={() => saveMdViewMode(mdViewMode === 'preview' ? 'edit' : 'preview')}
+            />
             <Button
               variant="ghost"
               size="sm"
@@ -496,68 +528,85 @@ export const PlanView: React.FC = () => {
                 }}
               >
                 <div className="h-full oc-plan-editor">
-                  <CodeMirrorEditor
-                    value={content}
-                    onChange={() => {
-                      // read-only
-                    }}
-                    readOnly={true}
-                    className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
-                    extensions={editorExtensions}
-                    highlightLines={lineSelection
-                      ? {
-                        start: Math.min(lineSelection.start, lineSelection.end),
-                        end: Math.max(lineSelection.start, lineSelection.end),
-                      }
-                      : undefined}
-                    lineNumbersConfig={{
-                      domEventHandlers: {
-                        mousedown: (view, line, event) => {
-                          if (!(event instanceof MouseEvent)) return false;
-                          if (event.button !== 0) return false;
-                          event.preventDefault();
-                          const lineNumber = view.state.doc.lineAt(line.from).number;
+                  {mdViewMode === 'preview' ? (
+                    <div className="h-full overflow-auto p-3">
+                      <ErrorBoundary
+                        fallback={
+                          <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                            <div className="mb-1 font-medium text-destructive">Preview unavailable</div>
+                            <div className="text-sm text-muted-foreground">
+                              Switch to edit mode to fix the issue.
+                            </div>
+                          </div>
+                        }
+                      >
+                        <SimpleMarkdownRenderer content={content} className="typography-markdown-body" />
+                      </ErrorBoundary>
+                    </div>
+                  ) : (
+                    <CodeMirrorEditor
+                      value={content}
+                      onChange={() => {
+                        // read-only
+                      }}
+                      readOnly={true}
+                      className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
+                      extensions={editorExtensions}
+                      highlightLines={lineSelection
+                        ? {
+                          start: Math.min(lineSelection.start, lineSelection.end),
+                          end: Math.max(lineSelection.start, lineSelection.end),
+                        }
+                        : undefined}
+                      lineNumbersConfig={{
+                        domEventHandlers: {
+                          mousedown: (view, line, event) => {
+                            if (!(event instanceof MouseEvent)) return false;
+                            if (event.button !== 0) return false;
+                            event.preventDefault();
+                            const lineNumber = view.state.doc.lineAt(line.from).number;
 
-                          if (isMobile && lineSelection && !event.shiftKey) {
-                            const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                            const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                            if (isMobile && lineSelection && !event.shiftKey) {
+                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                              setLineSelection({ start, end });
+                              isSelectingRef.current = false;
+                              selectionStartRef.current = null;
+                              return true;
+                            }
+
+                            isSelectingRef.current = true;
+                            selectionStartRef.current = lineNumber;
+
+                            if (lineSelection && event.shiftKey) {
+                              const start = Math.min(lineSelection.start, lineNumber);
+                              const end = Math.max(lineSelection.end, lineNumber);
+                              setLineSelection({ start, end });
+                            } else {
+                              setLineSelection({ start: lineNumber, end: lineNumber });
+                            }
+
+                            return true;
+                          },
+                          mouseover: (view, line, event) => {
+                            if (!(event instanceof MouseEvent)) return false;
+                            if (event.buttons !== 1) return false;
+                            if (!isSelectingRef.current || selectionStartRef.current === null) return false;
+                            const lineNumber = view.state.doc.lineAt(line.from).number;
+                            const start = Math.min(selectionStartRef.current, lineNumber);
+                            const end = Math.max(selectionStartRef.current, lineNumber);
                             setLineSelection({ start, end });
+                            return false;
+                          },
+                          mouseup: () => {
                             isSelectingRef.current = false;
                             selectionStartRef.current = null;
-                            return true;
-                          }
-
-                          isSelectingRef.current = true;
-                          selectionStartRef.current = lineNumber;
-
-                          if (lineSelection && event.shiftKey) {
-                            const start = Math.min(lineSelection.start, lineNumber);
-                            const end = Math.max(lineSelection.end, lineNumber);
-                            setLineSelection({ start, end });
-                          } else {
-                            setLineSelection({ start: lineNumber, end: lineNumber });
-                          }
-
-                          return true;
+                            return false;
+                          },
                         },
-                        mouseover: (view, line, event) => {
-                          if (!(event instanceof MouseEvent)) return false;
-                          if (event.buttons !== 1) return false;
-                          if (!isSelectingRef.current || selectionStartRef.current === null) return false;
-                          const lineNumber = view.state.doc.lineAt(line.from).number;
-                          const start = Math.min(selectionStartRef.current, lineNumber);
-                          const end = Math.max(selectionStartRef.current, lineNumber);
-                          setLineSelection({ start, end });
-                          return false;
-                        },
-                        mouseup: () => {
-                          isSelectingRef.current = false;
-                          selectionStartRef.current = null;
-                          return false;
-                        },
-                      },
-                    }}
-                  />
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -565,7 +614,7 @@ export const PlanView: React.FC = () => {
         </ScrollableOverlay>
       </div>
 
-      {lineSelection && (
+      {lineSelection && mdViewMode !== 'preview' && (
         <div
           className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-end"
           style={{ paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px' }}
