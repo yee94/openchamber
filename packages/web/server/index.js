@@ -6505,9 +6505,16 @@ async function main(options = {}) {
       ? req.query.path.trim()
       : os.homedir();
     const respectGitignore = req.query.respectGitignore === 'true';
+    let resolvedPath = '';
+
+    const isPlansDirectory = (value) => {
+      if (!value || typeof value !== 'string') return false;
+      const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
+      return normalized.endsWith('/.opencode/plans') || normalized.endsWith('.opencode/plans');
+    };
 
     try {
-      const resolvedPath = path.resolve(normalizeDirectoryPath(rawPath));
+      resolvedPath = path.resolve(normalizeDirectoryPath(rawPath));
 
       const stats = await fsPromises.stat(resolvedPath);
       if (!stats.isDirectory()) {
@@ -6588,16 +6595,17 @@ async function main(options = {}) {
         entries: entries.filter(Boolean)
       });
     } catch (error) {
-      console.error('Failed to list directory:', error);
       const err = error;
-      if (err && typeof err === 'object' && 'code' in err) {
-        const code = err.code;
-        if (code === 'ENOENT') {
-          return res.status(404).json({ error: 'Directory not found' });
-        }
-        if (code === 'EACCES') {
-          return res.status(403).json({ error: 'Access to directory denied' });
-        }
+      const code = err && typeof err === 'object' && 'code' in err ? err.code : undefined;
+      const isPlansPath = code === 'ENOENT' && (isPlansDirectory(resolvedPath) || isPlansDirectory(rawPath));
+      if (!isPlansPath) {
+        console.error('Failed to list directory:', error);
+      }
+      if (code === 'ENOENT') {
+        return res.status(404).json({ error: 'Directory not found' });
+      }
+      if (code === 'EACCES') {
+        return res.status(403).json({ error: 'Access to directory denied' });
       }
       res.status(500).json({ error: (error && error.message) || 'Failed to list directory' });
     }
