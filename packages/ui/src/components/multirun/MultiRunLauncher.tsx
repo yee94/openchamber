@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiAddLine, RiArrowDownSLine, RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine, RiPlayLine } from '@remixicon/react';
+import { RiAddLine, RiArrowDownSLine, RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,9 @@ import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import type { ProjectRef } from '@/lib/openchamberConfig';
 import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multirun';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from './ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from './BranchSelector';
@@ -75,23 +75,21 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   // Get project directory for setup commands
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const projects = useProjectsStore((state) => state.projects);
-  const projectDirectory = React.useMemo(() => {
+  const projectRef = React.useMemo<ProjectRef | null>(() => {
     if (activeProjectId) {
       const project = projects.find((p) => p.id === activeProjectId);
-      if (project?.path) return project.path;
+      if (project?.path) {
+        return { id: project.id, path: project.path };
+      }
     }
 
     const base = currentDirectory ?? vscodeWorkspaceFolder;
-    if (!base) return null;
+    if (!base) {
+      return null;
+    }
 
-    const normalized = base.replace(/\\/g, '/').replace(/\/+$/, '') || base;
-    const marker = '/.openchamber/';
-    const markerIndex = normalized.indexOf(marker);
-    if (markerIndex > 0) return normalized.slice(0, markerIndex);
-    if (normalized.endsWith('/.openchamber')) return normalized.slice(0, normalized.length - '/.openchamber'.length);
-    return normalized;
+    return { id: `path:${base}`, path: base };
   }, [activeProjectId, projects, currentDirectory, vscodeWorkspaceFolder]);
-  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
 
   const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') {
@@ -117,10 +115,29 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
   const desktopHeaderPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
-      return isSidebarOpen ? 'pl-0' : 'pl-[8.0rem]';
+      // Match main app header: reserve space for Mac traffic lights.
+      return 'pl-[5.75rem]';
     }
     return 'pl-3';
-  }, [isDesktopApp, isMacPlatform, isSidebarOpen]);
+  }, [isDesktopApp, isMacPlatform]);
+
+  const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
+      return;
+    }
+    if (e.button !== 0) {
+      return;
+    }
+    if (isDesktopApp) {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const window = getCurrentWindow();
+        await window.startDragging();
+      } catch {
+        // ignore
+      }
+    }
+  }, [isDesktopApp]);
 
   // Use the BranchSelector hook for branch state management
   const [worktreeBaseBranch, setWorktreeBaseBranch] = React.useState<string>('HEAD');
@@ -138,14 +155,14 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
   // Load setup commands from config
   React.useEffect(() => {
-    if (!projectDirectory) return;
+    if (!projectRef) return;
     
     let cancelled = false;
     setIsLoadingSetupCommands(true);
     
     (async () => {
       try {
-        const commands = await getWorktreeSetupCommands(projectDirectory);
+        const commands = await getWorktreeSetupCommands(projectRef);
         if (!cancelled) {
           setSetupCommands(commands);
         }
@@ -159,7 +176,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     })();
     
     return () => { cancelled = true; };
-  }, [projectDirectory]);
+  }, [projectRef]);
 
   const handleAddModel = (model: ModelSelectionWithId) => {
     if (selectedModels.length >= MAX_MODELS) {
@@ -287,17 +304,15 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     <div className="flex flex-col h-full bg-background">
       {/* Header - same height as app header (h-12 = 48px) */}
       <header
+        onMouseDown={handleDragStart}
         className={cn(
-          'flex h-12 items-center justify-between border-b app-region-drag',
+          'flex h-12 items-center justify-between border-b app-region-drag select-none',
           desktopHeaderPaddingClass
         )}
         style={{ borderColor: 'var(--interactive-border)' }}
       >
         <div
-          className={cn(
-            'flex items-center gap-3',
-            isDesktopApp && isMacPlatform && isSidebarOpen && 'pl-4'
-          )}
+          className="flex items-center gap-3"
         >
           <h1 className="typography-ui-label font-medium">New Multi-Run</h1>
         </div>
@@ -391,7 +406,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                 <CollapsibleContent>
                   <div className="pt-2 space-y-2">
                     <p className="typography-micro text-muted-foreground/70">
-                      Commands run in each new worktree. Use <code className="font-mono text-xs">$ROOT_WORKTREE_PATH</code> for project root.
+                      Commands run in each new worktree. Use <code className="font-mono text-xs">$ROOT_PROJECT_PATH</code> for project root.
                     </p>
                     {isLoadingSetupCommands ? (
                       <p className="typography-meta text-muted-foreground/70">Loading...</p>
@@ -567,7 +582,6 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                   'Creating...'
                 ) : (
                   <>
-                    <RiPlayLine className="h-4 w-4 mr-2" />
                     Start ({selectedModels.length} models)
                   </>
                 )}

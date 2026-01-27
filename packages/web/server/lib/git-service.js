@@ -56,6 +56,7 @@ export async function isGitRepository(directory) {
 }
 
 export async function ensureOpenChamberIgnored(directory) {
+  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
   const directoryPath = normalizeDirectoryPath(directory);
   if (!directoryPath || !fs.existsSync(directoryPath)) {
     return false;

@@ -64,6 +64,17 @@ const normalizeDirectoryPath = (value) => {
   return trimmed;
 };
 
+const OPENCHAMBER_USER_CONFIG_ROOT = path.join(os.homedir(), '.config', 'openchamber');
+
+const isPathWithinRoot = (resolvedPath, rootPath) => {
+  const resolvedRoot = path.resolve(rootPath || os.homedir());
+  const relative = path.relative(resolvedRoot, resolvedPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return false;
+  }
+  return true;
+};
+
 const resolveWorkspacePath = (targetPath, baseDirectory) => {
   const normalized = normalizeDirectoryPath(targetPath);
   if (!normalized || typeof normalized !== 'string') {
@@ -72,13 +83,18 @@ const resolveWorkspacePath = (targetPath, baseDirectory) => {
 
   const resolved = path.resolve(normalized);
   const resolvedBase = path.resolve(baseDirectory || os.homedir());
-  const relative = path.relative(resolvedBase, resolved);
 
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-    return { ok: false, error: 'Path is outside of active workspace' };
+  if (isPathWithinRoot(resolved, resolvedBase)) {
+    return { ok: true, base: resolvedBase, resolved };
   }
 
-  return { ok: true, base: resolvedBase, resolved };
+  // Allow writing OpenChamber per-project config under ~/.config/openchamber.
+  // LEGACY_PROJECT_CONFIG: migration target root; allowed outside workspace.
+  if (isPathWithinRoot(resolved, OPENCHAMBER_USER_CONFIG_ROOT)) {
+    return { ok: true, base: path.resolve(OPENCHAMBER_USER_CONFIG_ROOT), resolved };
+  }
+
+  return { ok: false, error: 'Path is outside of active workspace' };
 };
 
 const resolveWorkspacePathFromContext = async (req, targetPath) => {
@@ -5942,6 +5958,7 @@ async function main(options = {}) {
   });
 
   app.post('/api/git/ignore-openchamber', async (req, res) => {
+    // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
     const { ensureOpenChamberIgnored } = await getGitLibraries();
     try {
       const directory = req.query.directory;

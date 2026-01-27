@@ -1,5 +1,12 @@
 export interface WorktreeMetadata {
 
+  /**
+   * Worktree origin.
+   * - sdk: created/managed by OpenCode SDK worktrees
+   * - legacy: git worktree under <project>/.openchamber
+   */
+  source?: 'sdk' | 'legacy';
+
   path: string;
 
   projectDirectory: string;
@@ -7,6 +14,9 @@ export interface WorktreeMetadata {
   branch: string;
 
   label: string;
+
+  /** SDK worktree name (slug), if available. */
+  name?: string;
 
   relativePath?: string;
 

@@ -11,22 +11,28 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository } from '@/lib/gitApi';
-import { generateUniqueBranchName } from '@/lib/git/branchNameGenerator';
+import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import {
-  createWorktree,
   getWorktreeStatus,
-  removeWorktree,
-  runWorktreeSetupCommands,
 } from '@/lib/git/worktreeService';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import {
+  createSdkWorktree,
+  removeProjectWorktree,
+  type ProjectRef,
+} from '@/lib/worktrees/worktreeManager';
 import { startConfigUpdate, finishConfigUpdate } from '@/lib/configUpdate';
 
-const sanitizeWorktreeSlug = (value: string): string => {
-  return value
-    .trim()
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '')
-    .slice(0, 120);
+const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '') || value;
+
+const resolveProjectRef = (directory: string): ProjectRef | null => {
+  const normalized = normalizePath(directory);
+  const projects = useProjectsStore.getState().projects;
+  const match = projects.find((project) => normalizePath(project.path) === normalized);
+  if (!match) {
+    return null;
+  }
+  return { id: match.id, path: match.path };
 };
 
 // Track if we're currently creating a worktree session
@@ -74,29 +80,19 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
   try {
     // Get worktree defaults from project settings
     const worktreeDefaults = activeProject.worktreeDefaults;
-    const branchPrefix = worktreeDefaults?.branchPrefix;
     const baseBranch = worktreeDefaults?.baseBranch;
 
-    // Generate a unique branch name
-    const branchName = await generateUniqueBranchName(projectDirectory, branchPrefix);
-    if (!branchName) {
-      toast.error('Failed to generate branch name', {
-        description: 'Could not generate a unique branch name. Please try again.',
-      });
-      return null;
-    }
+    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
 
-    const worktreeSlug = sanitizeWorktreeSlug(branchName);
+    // Generate a friendly name (SDK will slugify + ensure uniqueness).
+    const preferredName = generateBranchName();
 
-    // Determine start point (base branch)
     const startPoint = baseBranch && baseBranch !== 'HEAD' ? baseBranch : undefined;
 
-    // Create the worktree
-    const metadata = await createWorktree({
-      projectDirectory,
-      worktreeSlug,
-      branch: branchName,
-      createBranch: true,
+    const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const metadata = await createSdkWorktree(projectRef, {
+      preferredName,
+      setupCommands,
       startPoint,
     });
 
@@ -109,7 +105,7 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     const session = await sessionStore.createSession(undefined, metadata.path);
     if (!session) {
       // Clean up the worktree if session creation failed
-      await removeWorktree({ projectDirectory, path: metadata.path, force: true }).catch(() => undefined);
+      await removeProjectWorktree(projectRef, metadata).catch(() => undefined);
       toast.error('Failed to create session', {
         description: 'Could not create a session for the worktree.',
       });
@@ -196,39 +192,9 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
       // Ignore
     }
 
-    // Get and run setup commands
-    const setupCommands = await getWorktreeSetupCommands(projectDirectory);
-    const commandsToRun = setupCommands.filter(cmd => cmd.trim().length > 0);
-
-    if (commandsToRun.length > 0) {
-      toast.success('Worktree created', {
-        description: `Branch: ${branchName}. Running ${commandsToRun.length} setup command${commandsToRun.length === 1 ? '' : 's'}...`,
-      });
-
-      // Run setup commands in background
-      runWorktreeSetupCommands(metadata.path, projectDirectory, commandsToRun).then((result) => {
-        if (result.success) {
-          toast.success('Setup commands completed', {
-            description: `All ${result.results.length} command${result.results.length === 1 ? '' : 's'} succeeded.`,
-          });
-        } else {
-          const failed = result.results.filter(r => !r.success);
-          const succeeded = result.results.filter(r => r.success);
-          toast.error('Setup commands failed', {
-            description: `${failed.length} of ${result.results.length} command${result.results.length === 1 ? '' : 's'} failed.` +
-              (succeeded.length > 0 ? ` ${succeeded.length} succeeded.` : ''),
-          });
-        }
-      }).catch(() => {
-        toast.error('Setup commands failed', {
-          description: 'Could not execute setup commands.',
-        });
-      });
-    } else {
-      toast.success('Worktree created', {
-        description: `Branch: ${branchName}`,
-      });
-    }
+    toast.success('Worktree created', {
+      description: metadata.branch ? `Branch: ${metadata.branch}` : 'Ready',
+    });
 
     return session;
   } catch (error) {
@@ -285,15 +251,16 @@ export async function createWorktreeSessionForBranch(
   startConfigUpdate("Creating worktree session...");
 
   try {
-    // Use the branch name as the worktree slug (sanitized)
-    const worktreeSlug = sanitizeWorktreeSlug(branchName);
+    const projectRef = resolveProjectRef(projectDirectory);
+    if (!projectRef) {
+      throw new Error('Project is not registered in OpenChamber');
+    }
 
-    // Create the worktree - don't create a new branch, use existing one
-    const metadata = await createWorktree({
-      projectDirectory,
-      worktreeSlug,
-      branch: branchName,
-      createBranch: false, // Use existing branch
+    const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const metadata = await createSdkWorktree(projectRef, {
+      preferredName: branchName,
+      setupCommands,
+      startPoint: branchName,
     });
 
     // Get worktree status
@@ -305,7 +272,7 @@ export async function createWorktreeSessionForBranch(
     const session = await sessionStore.createSession(undefined, metadata.path);
     if (!session) {
       // Clean up the worktree if session creation failed
-      await removeWorktree({ projectDirectory, path: metadata.path, force: true }).catch(() => undefined);
+      await removeProjectWorktree(projectRef, metadata).catch(() => undefined);
       toast.error('Failed to create session', {
         description: 'Could not create a session for the worktree.',
       });
@@ -392,39 +359,9 @@ export async function createWorktreeSessionForBranch(
       // Ignore
     }
 
-    // Get and run setup commands
-    const setupCommands = await getWorktreeSetupCommands(projectDirectory);
-    const commandsToRun = setupCommands.filter(cmd => cmd.trim().length > 0);
-
-    if (commandsToRun.length > 0) {
-      toast.success('Worktree created', {
-        description: `Branch: ${branchName}. Running ${commandsToRun.length} setup command${commandsToRun.length === 1 ? '' : 's'}...`,
-      });
-
-      // Run setup commands in background
-      runWorktreeSetupCommands(metadata.path, projectDirectory, commandsToRun).then((result) => {
-        if (result.success) {
-          toast.success('Setup commands completed', {
-            description: `All ${result.results.length} command${result.results.length === 1 ? '' : 's'} succeeded.`,
-          });
-        } else {
-          const failed = result.results.filter(r => !r.success);
-          const succeeded = result.results.filter(r => r.success);
-          toast.error('Setup commands failed', {
-            description: `${failed.length} of ${result.results.length} command${result.results.length === 1 ? '' : 's'} failed.` +
-              (succeeded.length > 0 ? ` ${succeeded.length} succeeded.` : ''),
-          });
-        }
-      }).catch(() => {
-        toast.error('Setup commands failed', {
-          description: 'Could not execute setup commands.',
-        });
-      });
-    } else {
-      toast.success('Worktree created', {
-        description: `Branch: ${branchName}`,
-      });
-    }
+    toast.success('Worktree created', {
+      description: metadata.branch ? `Branch: ${metadata.branch}` : 'Ready',
+    });
 
     return session;
   } catch (error) {
@@ -477,21 +414,22 @@ export async function createWorktreeSessionForNewBranch(
       throw new Error('Branch name is required');
     }
 
-    let lastError: unknown = null;
     const allowSuffix = options?.allowSuffix !== false;
-    const maxAttempts = allowSuffix ? 6 : 1;
 
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
-      try {
-        const worktreeSlug = sanitizeWorktreeSlug(candidate);
-        const metadata = await createWorktree({
-          projectDirectory,
-          worktreeSlug,
-          branch: candidate,
-          createBranch: true,
-          startPoint: start,
-        });
+    const projectRef = resolveProjectRef(projectDirectory);
+    if (!projectRef) {
+      throw new Error('Project is not registered in OpenChamber');
+    }
+
+    const setupCommands = await getWorktreeSetupCommands(projectRef);
+
+    try {
+      const metadata = await createSdkWorktree(projectRef, {
+        preferredName: base,
+        setupCommands,
+        startPoint: start,
+        allowSuffix,
+      });
 
         const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
         const createdMetadata = status ? { ...metadata, status } : metadata;
@@ -499,7 +437,7 @@ export async function createWorktreeSessionForNewBranch(
         const sessionStore = useSessionStore.getState();
         const session = await sessionStore.createSession(undefined, metadata.path);
         if (!session) {
-          await removeWorktree({ projectDirectory, path: metadata.path, force: true }).catch(() => undefined);
+          await removeProjectWorktree(projectRef, metadata).catch(() => undefined);
           throw new Error('Could not create a session for the worktree.');
         }
 
@@ -567,54 +505,16 @@ export async function createWorktreeSessionForNewBranch(
           // ignore
         }
 
-        // Get and run setup commands
-        const setupCommands = await getWorktreeSetupCommands(projectDirectory);
-        const commandsToRun = setupCommands.filter((cmd) => cmd.trim().length > 0);
+        toast.success('Worktree created', {
+          description: metadata.branch ? `Branch: ${metadata.branch}` : 'Ready',
+        });
 
-        if (commandsToRun.length > 0) {
-          toast.success('Worktree created', {
-            description: `Branch: ${candidate}. Running ${commandsToRun.length} setup command${commandsToRun.length === 1 ? '' : 's'}...`,
-          });
-
-          // Run setup commands in background
-          runWorktreeSetupCommands(metadata.path, projectDirectory, commandsToRun)
-            .then((result) => {
-              if (result.success) {
-                toast.success('Setup commands completed', {
-                  description: `All ${result.results.length} command${result.results.length === 1 ? '' : 's'} succeeded.`,
-                });
-              } else {
-                const failed = result.results.filter((r) => !r.success);
-                const succeeded = result.results.filter((r) => r.success);
-                toast.error('Setup commands failed', {
-                  description:
-                    `${failed.length} of ${result.results.length} command${result.results.length === 1 ? '' : 's'} failed.` +
-                    (succeeded.length > 0 ? ` ${succeeded.length} succeeded.` : ''),
-                });
-              }
-            })
-            .catch(() => {
-              toast.error('Setup commands failed', {
-                description: 'Could not execute setup commands.',
-              });
-            });
-        } else {
-          toast.success('Worktree created', {
-            description: `Branch: ${candidate}`,
-          });
-        }
-
-        return { id: session.id, branch: candidate };
-      } catch (error) {
-        lastError = error;
-      }
+        return { id: session.id, branch: metadata.branch || base };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create worktree session';
+      toast.error('Failed to create worktree', { description: message });
+      return null;
     }
-
-    const message = lastError instanceof Error ? lastError.message : 'Failed to create worktree session';
-    toast.error('Failed to create worktree', {
-      description: message,
-    });
-    return null;
   } finally {
     finishConfigUpdate();
     isCreatingWorktreeSession = false;
