@@ -38,6 +38,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+import { PreviewToggleButton } from './PreviewToggleButton';
+import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -65,6 +67,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 type FileNode = {
   name: string;
@@ -230,7 +233,7 @@ const DOCUMENT_EXTENSIONS = new Set([
 
 const getFileIcon = (extension?: string): React.ReactNode => {
   const ext = extension?.toLowerCase();
-  
+
   if (ext && CODE_EXTENSIONS.has(ext)) {
     return <RiCodeLine className="h-4 w-4 flex-shrink-0 text-blue-500" />;
   }
@@ -244,6 +247,12 @@ const getFileIcon = (extension?: string): React.ReactNode => {
     return <RiFileTextLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
   }
   return <RiFileTextLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
+};
+
+const isMarkdownFile = (path: string): boolean => {
+  if (!path) return false;
+  const ext = path.toLowerCase().split('.').pop();
+  return ext === 'md' || ext === 'markdown';
 };
 
 export const FilesView: React.FC = () => {
@@ -296,6 +305,9 @@ export const FilesView: React.FC = () => {
   const [contextMenuPath, setContextMenuPath] = React.useState<string | null>(null);
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
+
+  // Markdown view mode (global, not per-file)
+  const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
 
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
@@ -553,6 +565,38 @@ export const FilesView: React.FC = () => {
 
     void refreshRoot();
   }, [currentDirectory, refreshRoot, showGitignored]);
+
+  const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
+
+  // Load markdown view mode preference from localStorage on mount
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem(MD_VIEWER_MODE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed === 'preview' || parsed === 'edit') {
+          setMdViewMode(parsed);
+        }
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  // Save markdown view mode preference to localStorage
+  const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
+    setMdViewMode(mode);
+    try {
+      localStorage.setItem(MD_VIEWER_MODE_KEY, JSON.stringify(mode));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  // Get the view mode for a markdown file (from state, default to 'edit')
+  const getMdViewMode = React.useCallback((): 'preview' | 'edit' => {
+    return mdViewMode;
+  }, [mdViewMode]);
 
   const handleDialogSubmit = React.useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1408,8 +1452,15 @@ export const FilesView: React.FC = () => {
             </Button>
           )}
 
-          {(canCopy || canCopyPath) && (canEdit || (selectedFile && !isSelectedImage)) && (
+          {(canCopy || canCopyPath || (selectedFile && isMarkdownFile(selectedFile.path))) && (canEdit || (selectedFile && !isSelectedImage)) && (
             <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
+          )}
+
+          {selectedFile && isMarkdownFile(selectedFile.path) && (
+            <PreviewToggleButton
+              currentMode={getMdViewMode()}
+              onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
+            />
           )}
 
           {canCopy && (
@@ -1492,6 +1543,26 @@ export const FilesView: React.FC = () => {
                 alt={selectedFile?.name ?? 'Image'}
                 className="max-w-full max-h-[70vh] object-contain rounded-md border border-border/30 bg-primary/10"
               />
+            </div>
+          ) : selectedFile && isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
+            <div className="h-full overflow-auto p-3">
+              {fileContent.length > 500 * 1024 && (
+                <div className="mb-3 rounded-md border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
+                  ⚠️ This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
+                </div>
+              )}
+              <ErrorBoundary
+                fallback={
+                  <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                    <div className="mb-1 font-medium text-destructive">Preview unavailable</div>
+                    <div className="text-sm text-muted-foreground">
+                      Switch to edit mode to fix the issue.
+                    </div>
+                  </div>
+                }
+              >
+                <SimpleMarkdownRenderer content={fileContent} className="typography-markdown-body" />
+              </ErrorBoundary>
             </div>
           ) : (
             <div className="h-full">
