@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-01-28
+
+- Worktrees: migrated to Opencode SDK worktree implementation; sessions in worktrees are now completely isolated.
+- Git: integrate worktree commits back to a target branch with commit previews and guided conflict handling.
+- Files: toggle markdown preview when viewing files (thanks to @Jovines).
+- Files: open the file viewer in fullscreen for focused review and editing (thanks to @TaylorBeeston).
+- Plans: switch between markdown preview and edit mode in the Plan view.
+- UI: Files, Diff, Git, and Terminal now follow the active session/worktree directory, including new-session drafts.
+- Web: plan lists no longer error when the plans directory is missing.
+
+
 ## [1.5.8] - 2026-01-26
 
 - Plans: new Plan/Build mode switching support with dedicated Plan content view with per-session context.

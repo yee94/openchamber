@@ -1,3 +1,9 @@
+## [1.5.9] - 2026-01-28
+
+- Agent Manager: migrated to Opencode SDK worktree implementation; sessions in worktrees are now completely isolated.
+- Agent Manager: worktree setup commands are now persistant per project and automatically saved/restored.
+
+
 ## [1.5.8] - 2026-01-26
 
 - Plans: added new Plan/Build mode switching support.
