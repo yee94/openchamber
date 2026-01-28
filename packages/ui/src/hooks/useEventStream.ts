@@ -22,6 +22,16 @@ interface EventData {
   properties?: Record<string, unknown>;
 }
 
+const readStringProp = (obj: unknown, keys: string[]): string | null => {
+  if (!obj || typeof obj !== 'object') return null;
+  const record = obj as Record<string, unknown>;
+  for (let i = 0; i < keys.length; i++) {
+    const value = record[keys[i]];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
+};
+
 type MessageTracker = (messageId: string, event?: string, extraData?: Record<string, unknown>) => void;
 
 declare global {
@@ -347,6 +357,10 @@ export const useEventStream = () => {
     [resyncMessages]
   );
 
+  React.useEffect(() => {
+    scheduleSoftResyncRef.current = scheduleSoftResync;
+  }, [scheduleSoftResync]);
+
   const trackMessage = React.useCallback((messageId: string, event?: string, extraData?: Record<string, unknown>) => {
     if (streamDebugEnabled()) {
       console.debug(`[MessageTracker] ${messageId}: ${event}`, extraData);
@@ -389,6 +403,14 @@ export const useEventStream = () => {
   const pauseTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const lastEventTimestampRef = React.useRef<number>(Date.now());
+  const lastMessageEventBySessionRef = React.useRef<Map<string, number>>(new Map());
+  const pendingMessageStallTimersRef = React.useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastMessageStallRecoveryBySessionRef = React.useRef<Map<string, number>>(new Map());
+
+  const scheduleSoftResyncRef = React.useRef<
+    (sessionId: string, reason: string, limit?: number) => Promise<void>
+  >(() => Promise.resolve());
+  const scheduleReconnectRef = React.useRef<(hint?: string) => void>(() => {});
   const isDesktopRuntimeRef = React.useRef<boolean>(false);
 
   const maybeBootstrapIfStale = React.useCallback(
@@ -491,6 +513,52 @@ export const useEventStream = () => {
     if (storePhase === phase) {
       sessionActivityPhaseRef.current = new Map(useSessionStore.getState().sessionActivityPhase ?? new Map());
       return;
+    }
+
+    const shouldArmMessageStallCheck = storePhase === 'idle' && (phase === 'busy' || phase === 'cooldown');
+    const shouldDisarmMessageStallCheck = phase === 'idle';
+
+    if (shouldDisarmMessageStallCheck) {
+      const pending = pendingMessageStallTimersRef.current.get(sessionId);
+      if (pending) {
+        clearTimeout(pending);
+        pendingMessageStallTimersRef.current.delete(sessionId);
+      }
+    }
+
+    if (shouldArmMessageStallCheck) {
+      const pending = pendingMessageStallTimersRef.current.get(sessionId);
+      if (pending) {
+        clearTimeout(pending);
+        pendingMessageStallTimersRef.current.delete(sessionId);
+      }
+
+      const startAt = Date.now();
+      const timer = setTimeout(() => {
+        const currentPhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
+        if (currentPhase !== 'busy' && currentPhase !== 'cooldown') {
+          return;
+        }
+
+        const lastRecoveryAt = lastMessageStallRecoveryBySessionRef.current.get(sessionId) ?? 0;
+        if (Date.now() - lastRecoveryAt < 15000) {
+          return;
+        }
+
+        const lastMsgAt = lastMessageEventBySessionRef.current.get(sessionId) ?? 0;
+        if (lastMsgAt >= startAt) {
+          return;
+        }
+
+        lastMessageStallRecoveryBySessionRef.current.set(sessionId, Date.now());
+
+        void scheduleSoftResyncRef.current(sessionId, 'activity_started_no_message', getActiveSessionWindow())
+          .finally(() => {
+            scheduleReconnectRef.current('No message events after activity start');
+          });
+      }, 2000);
+
+      pendingMessageStallTimersRef.current.set(sessionId, timer);
     }
 
     const existingTimer = sessionCooldownTimersRef.current.get(sessionId);
@@ -737,25 +805,19 @@ export const useEventStream = () => {
         const partExt = part as Record<string, unknown>;
         const messageInfo = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) : props;
 
-        const messageInfoSessionId = typeof (messageInfo as { sessionID?: unknown }).sessionID === 'string'
-          ? (messageInfo as { sessionID?: string }).sessionID
-          : null;
+        const messageInfoSessionId = readStringProp(messageInfo, ['sessionID', 'sessionId']);
 
         const resolvedSessionId =
-          (typeof partExt.sessionID === 'string' && (partExt.sessionID as string).length > 0) ? (partExt.sessionID as string) :
-          (typeof messageInfoSessionId === 'string' && messageInfoSessionId.length > 0) ? messageInfoSessionId :
-          (typeof props.sessionID === 'string' && (props.sessionID as string).length > 0) ? (props.sessionID as string) :
-          null;
+          readStringProp(partExt, ['sessionID', 'sessionId']) ||
+          messageInfoSessionId ||
+          readStringProp(props, ['sessionID', 'sessionId']);
 
-        const messageInfoId = typeof (messageInfo as { id?: unknown }).id === 'string'
-          ? (messageInfo as { id?: string }).id
-          : null;
+        const messageInfoId = readStringProp(messageInfo, ['messageID', 'messageId', 'id']);
 
         const resolvedMessageId =
-          (typeof partExt.messageID === 'string' && (partExt.messageID as string).length > 0) ? (partExt.messageID as string) :
-          (typeof messageInfoId === 'string' && messageInfoId.length > 0) ? messageInfoId :
-          (typeof props.messageID === 'string' && (props.messageID as string).length > 0) ? (props.messageID as string) :
-          null;
+          readStringProp(partExt, ['messageID', 'messageId']) ||
+          messageInfoId ||
+          readStringProp(props, ['messageID', 'messageId']);
 
         if (!resolvedSessionId || !resolvedMessageId) {
           if (streamDebugEnabled()) {
@@ -769,6 +831,13 @@ export const useEventStream = () => {
 
         const sessionId = resolvedSessionId;
         const messageId = resolvedMessageId;
+
+        lastMessageEventBySessionRef.current.set(sessionId, Date.now());
+        const pendingTimer = pendingMessageStallTimersRef.current.get(sessionId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          pendingMessageStallTimersRef.current.delete(sessionId);
+        }
 
         const trimmedHeadMaxId = useSessionStore.getState().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
         if (trimmedHeadMaxId && !isIdNewer(messageId, trimmedHeadMaxId)) {
@@ -817,14 +886,12 @@ export const useEventStream = () => {
         const messageExt = message as Record<string, unknown>;
 
         const resolvedSessionId =
-          (typeof messageExt.sessionID === 'string' && (messageExt.sessionID as string).length > 0) ? (messageExt.sessionID as string) :
-          (typeof props.sessionID === 'string' && (props.sessionID as string).length > 0) ? (props.sessionID as string) :
-          null;
+          readStringProp(messageExt, ['sessionID', 'sessionId']) ||
+          readStringProp(props, ['sessionID', 'sessionId']);
 
         const resolvedMessageId =
-          (typeof messageExt.id === 'string' && (messageExt.id as string).length > 0) ? (messageExt.id as string) :
-          (typeof props.messageID === 'string' && (props.messageID as string).length > 0) ? (props.messageID as string) :
-          null;
+          readStringProp(messageExt, ['messageID', 'messageId', 'id']) ||
+          readStringProp(props, ['messageID', 'messageId']);
 
         if (!resolvedSessionId || !resolvedMessageId) {
           if (streamDebugEnabled()) {
@@ -838,6 +905,13 @@ export const useEventStream = () => {
 
         const sessionId = resolvedSessionId;
         const messageId = resolvedMessageId;
+
+        lastMessageEventBySessionRef.current.set(sessionId, Date.now());
+        const pendingTimer = pendingMessageStallTimersRef.current.get(sessionId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          pendingMessageStallTimersRef.current.delete(sessionId);
+        }
 
         const trimmedHeadMaxId = useSessionStore.getState().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
         if (trimmedHeadMaxId && !isIdNewer(messageId, trimmedHeadMaxId)) {
@@ -1777,6 +1851,10 @@ export const useEventStream = () => {
   }, [shouldHoldConnection, stopStream, publishStatus, startStream]);
 
   React.useEffect(() => {
+    scheduleReconnectRef.current = scheduleReconnect;
+  }, [scheduleReconnect]);
+
+  React.useEffect(() => {
     const cooldownTimers = sessionCooldownTimersRef.current;
 
     if (typeof window !== 'undefined') {
@@ -1923,32 +2001,33 @@ export const useEventStream = () => {
       clearInterval(staleCheckIntervalRef.current);
     }
 
-    staleCheckIntervalRef.current = setInterval(() => {
-      if (!shouldHoldConnection()) return;
+        staleCheckIntervalRef.current = setInterval(() => {
+          if (!shouldHoldConnection()) return;
 
-      const now = Date.now();
-      const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-        (phase) => phase === 'busy' || phase === 'cooldown'
-      );
-      if (hasBusySessions) {
-        void refreshSessionActivityStatus();
-      }
-      if (now - lastEventTimestampRef.current > 45000) {
-        Promise.resolve().then(async () => {
-          try {
-            const healthy = await opencodeClient.checkHealth();
-            if (!healthy) {
-              scheduleReconnect('Refreshing stalled stream');
-            } else {
-              lastEventTimestampRef.current = Date.now();
-            }
-          } catch (error) {
-            console.warn('Health check after stale stream failed:', error);
-            scheduleReconnect('Refreshing stalled stream');
+          const now = Date.now();
+          const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
+            (phase) => phase === 'busy' || phase === 'cooldown'
+          );
+
+          if (hasBusySessions) {
+            void refreshSessionActivityStatus();
           }
-        });
-      }
-    }, 10000);
+          if (now - lastEventTimestampRef.current > 45000) {
+            Promise.resolve().then(async () => {
+              try {
+                const healthy = await opencodeClient.checkHealth();
+                if (!healthy) {
+                  scheduleReconnect('Refreshing stalled stream');
+                } else {
+                  lastEventTimestampRef.current = Date.now();
+                }
+              } catch (error) {
+                console.warn('Health check after stale stream failed:', error);
+                scheduleReconnect('Refreshing stalled stream');
+              }
+            });
+          }
+        }, 10000);
 
     return () => {
       clearTimeout(startTimer);
