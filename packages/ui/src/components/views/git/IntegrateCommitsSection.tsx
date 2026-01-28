@@ -51,6 +51,7 @@ export const IntegrateCommitsSection: React.FC<{
   worktreeMetadata: WorktreeMetadata;
   localBranches: string[];
   defaultTargetBranch: string;
+  refreshKey?: number;
   onRefresh?: () => void;
 }> = ({
   repoRoot,
@@ -58,6 +59,7 @@ export const IntegrateCommitsSection: React.FC<{
   worktreeMetadata,
   localBranches,
   defaultTargetBranch,
+  refreshKey,
   onRefresh,
 }) => {
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
@@ -156,7 +158,7 @@ export const IntegrateCommitsSection: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [isEligible, repoRoot, sourceBranch, targetBranch]);
+  }, [isEligible, repoRoot, sourceBranch, targetBranch, refreshKey]);
 
   const persistTarget = React.useCallback(
     (branch: string) => {
