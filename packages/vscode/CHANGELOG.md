@@ -1,5 +1,7 @@
-## [Unreleased]
+## [1.6.0] - 2026-01-29
 
+- Added message stall detection with automatic soft resync for more reliable message delivery.
+- Fixed "Load older" button in long sessions with proper progressive pagination.
 - Session activity status now updates reliably even when the extension panel is hidden or collapsed.
 
 
