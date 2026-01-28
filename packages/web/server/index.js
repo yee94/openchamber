@@ -1563,6 +1563,11 @@ const startGlobalEventWatcher = async () => {
             buffer = buffer.slice(separatorIndex + 2);
             const payload = parseSseDataPayload(block);
             void maybeSendPushForTrigger(payload);
+            // Track session activity independently of UI (mirrors Tauri desktop behavior)
+            const activity = deriveSessionActivity(payload);
+            if (activity) {
+              setSessionActivityPhase(activity.sessionId, activity.phase);
+            }
           }
         }
       } catch (error) {
