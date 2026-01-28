@@ -6619,6 +6619,10 @@ async function main(options = {}) {
         console.error('Failed to list directory:', error);
       }
       if (code === 'ENOENT') {
+        // Return empty result for plans directory (expected to not exist until first use)
+        if (isPlansPath) {
+          return res.json({ path: resolvedPath || rawPath, entries: [] });
+        }
         return res.status(404).json({ error: 'Directory not found' });
       }
       if (code === 'EACCES') {
