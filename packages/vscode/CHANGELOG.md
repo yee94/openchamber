@@ -1,3 +1,8 @@
+## [Unreleased]
+
+- Session activity status now updates reliably even when the extension panel is hidden or collapsed.
+
+
 ## [1.5.9] - 2026-01-28
 
 - Agent Manager: migrated to Opencode SDK worktree implementation; sessions in worktrees are now completely isolated.

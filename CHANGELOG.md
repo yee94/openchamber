@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Git: worktree integration now syncs clean target directories before merging.
+- Diff: fixed memory leak when viewing many modified files; large changesets now lazy-load for smoother performance.
+- VSCode: session activity status now updates reliably even when the webview is hidden.
+- Web: session activity tracking now works consistently across browser tabs.
+- Reliability: plans directory no longer errors when missing.
+
 ## [1.5.9] - 2026-01-28
 
 - Worktrees: migrated to Opencode SDK worktree implementation; sessions in worktrees are now completely isolated.
