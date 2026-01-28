@@ -21,6 +21,8 @@ export type IntegrateInProgress = {
   tempWorktreePath: string;
   sourceBranch: string;
   targetBranch: string;
+  /** Worktrees on target branch that were clean pre-integration; safe to fast-sync after ref update. */
+  cleanTargetWorktrees: string[];
   remainingCommits: string[];
   currentCommit: string;
 };
@@ -46,6 +48,60 @@ const isOk = (result: CommandExecResult): boolean => Boolean(result.success);
 
 const stdoutText = (result: CommandExecResult): string => (result.stdout || '').trim();
 const stderrText = (result: CommandExecResult): string => (result.stderr || '').trim();
+
+type GitWorktreeEntry = { path: string; branchRef: string | null };
+
+async function listGitWorktrees(repoRoot: string): Promise<GitWorktreeEntry[]> {
+  const out = await execCommand('git worktree list --porcelain', repoRoot);
+  const lines = (out.stdout || '').split(/\r?\n/);
+
+  const entries: GitWorktreeEntry[] = [];
+  let current: GitWorktreeEntry | null = null;
+
+  for (const line of lines) {
+    if (line.startsWith('worktree ')) {
+      if (current) entries.push(current);
+      current = { path: line.slice('worktree '.length).trim(), branchRef: null };
+      continue;
+    }
+    if (!current) continue;
+    if (line.startsWith('branch ')) {
+      current.branchRef = line.slice('branch '.length).trim();
+    }
+  }
+  if (current) entries.push(current);
+
+  return entries.filter((e) => Boolean(e.path));
+}
+
+async function computeCleanWorktreesToSync(args: {
+  repoRoot: string;
+  targetBranch: string;
+  excludePaths: string[];
+}): Promise<string[]> {
+  const targetRef = `refs/heads/${args.targetBranch}`;
+  const exclude = new Set(args.excludePaths);
+  const entries = await listGitWorktrees(args.repoRoot);
+  const candidates = entries
+    .filter((e) => e.branchRef === targetRef)
+    .map((e) => e.path)
+    .filter((p) => p && !exclude.has(p));
+
+  const clean: string[] = [];
+  for (const path of candidates) {
+    const status = await execCommand('git status --porcelain', path);
+    if (!stdoutText(status)) {
+      clean.push(path);
+    }
+  }
+  return clean;
+}
+
+async function syncCleanTargetWorktrees(repoRoot: string, paths: string[]): Promise<void> {
+  for (const path of paths) {
+    await execCommand('git reset --hard', path).catch(() => undefined);
+  }
+}
 
 async function ensureLocalBranch(repoRoot: string, candidate: string): Promise<string> {
   const raw = candidate.trim();
@@ -198,6 +254,12 @@ export async function integrateWorktreeCommits(plan: IntegratePlan): Promise<Int
       throw new Error('Target branch has local changes; abort integration and retry');
     }
 
+    const cleanTargetWorktrees = await computeCleanWorktreesToSync({
+      repoRoot: plan.repoRoot,
+      targetBranch: plan.targetBranch,
+      excludePaths: [tmpDir],
+    }).catch(() => []);
+
     remaining = [...plan.commits];
     while (remaining.length > 0) {
       const sha = remaining[0];
@@ -218,6 +280,7 @@ export async function integrateWorktreeCommits(plan: IntegratePlan): Promise<Int
             tempWorktreePath: tmpDir,
             sourceBranch: plan.sourceBranch,
             targetBranch: plan.targetBranch,
+            cleanTargetWorktrees,
             remainingCommits: remaining,
             currentCommit: sha,
           },
@@ -229,6 +292,7 @@ export async function integrateWorktreeCommits(plan: IntegratePlan): Promise<Int
     }
 
     await removeTempWorktree(plan.repoRoot, tmpDir);
+    await syncCleanTargetWorktrees(plan.repoRoot, cleanTargetWorktrees).catch(() => undefined);
     return { kind: 'success', moved: plan.commits.length };
   } catch (e) {
     // Cleanup on any non-conflict error.
@@ -279,6 +343,7 @@ export async function continueIntegrate(state: IntegrateInProgress): Promise<Int
           tempWorktreePath: tmpDir,
           sourceBranch: state.sourceBranch,
           targetBranch: state.targetBranch,
+          cleanTargetWorktrees: state.cleanTargetWorktrees,
           remainingCommits: still,
           currentCommit: sha,
         },
@@ -289,5 +354,6 @@ export async function continueIntegrate(state: IntegrateInProgress): Promise<Int
   }
 
   await removeTempWorktree(state.repoRoot, state.tempWorktreePath);
+  await syncCleanTargetWorktrees(state.repoRoot, state.cleanTargetWorktrees).catch(() => undefined);
   return { kind: 'success', moved: remaining.length };
 }
