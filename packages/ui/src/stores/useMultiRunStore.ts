@@ -167,6 +167,11 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 startPoint: startPoint ?? null,
               });
 
+              const enrichedMetadata = {
+                ...worktreeMetadata,
+                createdFromBranch: startPoint ?? 'HEAD',
+              };
+
               // Session title format: groupSlug/provider/model (or groupSlug/provider/model/index for duplicates)
               const sessionTitle = count > 1
                 ? `${groupSlug}/${model.providerID}/${model.modelID}/${index}`
@@ -177,7 +182,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 () => opencodeClient.createSession({ title: sessionTitle })
               );
 
-              useSessionStore.getState().setWorktreeMetadata(session.id, worktreeMetadata);
+              useSessionStore.getState().setWorktreeMetadata(session.id, enrichedMetadata);
 
               createdRuns.push({
                 sessionId: session.id,

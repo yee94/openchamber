@@ -18,6 +18,12 @@ export interface WorktreeMetadata {
   /** SDK worktree name (slug), if available. */
   name?: string;
 
+  /**
+   * Branch/ref this worktree was created from (intended integration target).
+   * For SDK worktrees this is typically the user-selected base branch.
+   */
+  createdFromBranch?: string;
+
   relativePath?: string;
 
   status?: {

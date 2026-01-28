@@ -96,9 +96,14 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
       startPoint,
     });
 
+    const createdMetadata = {
+      ...metadata,
+      createdFromBranch: startPoint ?? 'HEAD',
+    };
+
     // Get worktree status
     const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
-    const createdMetadata = status ? { ...metadata, status } : metadata;
+    const createdMetadataWithStatus = status ? { ...createdMetadata, status } : createdMetadata;
 
     // Create the session
     const sessionStore = useSessionStore.getState();
@@ -117,7 +122,7 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     const agents = configState.agents;
     sessionStore.initializeNewOpenChamberSession(session.id, agents);
     sessionStore.setSessionDirectory(session.id, metadata.path);
-    sessionStore.setWorktreeMetadata(session.id, createdMetadata);
+    sessionStore.setWorktreeMetadata(session.id, createdMetadataWithStatus);
 
     // Apply default agent and model settings
     try {
@@ -263,9 +268,14 @@ export async function createWorktreeSessionForBranch(
       startPoint: branchName,
     });
 
+    const createdMetadata = {
+      ...metadata,
+      createdFromBranch: branchName,
+    };
+
     // Get worktree status
     const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
-    const createdMetadata = status ? { ...metadata, status } : metadata;
+    const createdMetadataWithStatus = status ? { ...createdMetadata, status } : createdMetadata;
 
     // Create the session
     const sessionStore = useSessionStore.getState();
@@ -284,7 +294,7 @@ export async function createWorktreeSessionForBranch(
     const agents = configState.agents;
     sessionStore.initializeNewOpenChamberSession(session.id, agents);
     sessionStore.setSessionDirectory(session.id, metadata.path);
-    sessionStore.setWorktreeMetadata(session.id, createdMetadata);
+    sessionStore.setWorktreeMetadata(session.id, createdMetadataWithStatus);
 
     // Apply default agent and model settings
     try {
@@ -431,8 +441,13 @@ export async function createWorktreeSessionForNewBranch(
         allowSuffix,
       });
 
+      const createdMetadata = {
+        ...metadata,
+        createdFromBranch: start,
+      };
+
         const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
-        const createdMetadata = status ? { ...metadata, status } : metadata;
+        const createdMetadataWithStatus = status ? { ...createdMetadata, status } : createdMetadata;
 
         const sessionStore = useSessionStore.getState();
         const session = await sessionStore.createSession(undefined, metadata.path);
@@ -444,7 +459,7 @@ export async function createWorktreeSessionForNewBranch(
         const configState = useConfigStore.getState();
         sessionStore.initializeNewOpenChamberSession(session.id, configState.agents);
         sessionStore.setSessionDirectory(session.id, metadata.path);
-        sessionStore.setWorktreeMetadata(session.id, createdMetadata);
+        sessionStore.setWorktreeMetadata(session.id, createdMetadataWithStatus);
 
         // Apply default agent/model/variant settings (reuse same logic as createWorktreeSessionForBranch)
         try {

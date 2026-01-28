@@ -9,6 +9,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
 import type { Session } from '@opencode-ai/sdk/v2';
 
+// LEGACY_WORKTREES: legacy worktree root inside project.
 const OPENCHAMBER_DIR = '.openchamber';
 
 const resolveProjectDirectory = (currentDirectory: string | null | undefined): string | null => {

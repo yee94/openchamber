@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+// (dropdown menu used inside IntegrateCommitsSection)
 import {
   Command,
   CommandEmpty,
@@ -34,6 +35,7 @@ import {
 
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
+import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
 import { GitEmptyState } from './git/GitEmptyState';
@@ -44,6 +46,7 @@ import { PullRequestSection } from './git/PullRequestSection';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
+
 
 type GitViewSnapshot = {
   directory?: string;
@@ -190,6 +193,7 @@ export const GitView: React.FC = () => {
     ? worktreeMap.get(currentSessionId) ?? undefined
     : undefined;
 
+
   const { profiles, globalIdentity, defaultGitIdentityId, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId } =
     useGitIdentitiesStore();
 
@@ -260,6 +264,20 @@ export const GitView: React.FC = () => {
   const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>(
     initialSnapshot?.generatedHighlights ?? []
   );
+
+  const repoRootForIntegrate = worktreeMetadata?.projectDirectory || null;
+  const sourceBranchForIntegrate = status?.current || null;
+  const defaultTargetBranch = React.useMemo(() => {
+    const fromMeta = worktreeMetadata?.createdFromBranch;
+    if (typeof fromMeta === 'string' && fromMeta.trim().length > 0) {
+      return fromMeta.trim();
+    }
+    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
+    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
+      return fromProject.trim();
+    }
+    return 'main';
+  }, [worktreeMetadata?.createdFromBranch, activeProject?.worktreeDefaults?.baseBranch]);
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
@@ -1030,7 +1048,23 @@ export const GitView: React.FC = () => {
               )}
             </div>
 
-            {currentDirectory && status?.current ? (
+            {worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate ? (
+              <IntegrateCommitsSection
+                repoRoot={repoRootForIntegrate}
+                sourceBranch={sourceBranchForIntegrate}
+                worktreeMetadata={worktreeMetadata}
+                localBranches={localBranches}
+                defaultTargetBranch={defaultTargetBranch}
+                onRefresh={() => {
+                  if (!currentDirectory) return;
+                  fetchStatus(currentDirectory, git);
+                  fetchBranches(currentDirectory, git);
+                  fetchLog(currentDirectory, git, logMaxCountLocal);
+                }}
+              />
+            ) : null}
+
+            {currentDirectory && status?.current && status?.tracking ? (
               <PullRequestSection
                 directory={currentDirectory}
                 branch={status.current}

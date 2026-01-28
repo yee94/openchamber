@@ -11,6 +11,7 @@ import { isVSCodeRuntime } from './desktop';
 type ProjectRef = { id: string; path: string };
 
 const CONFIG_FILENAME = 'openchamber.json';
+// LEGACY_PROJECT_CONFIG: legacy per-project config root inside repo.
 const LEGACY_CONFIG_DIR = '.openchamber';
 const USER_CONFIG_DIR_SEGMENTS = ['.config', 'openchamber'];
 const USER_PROJECTS_DIR_SEGMENTS = ['.config', 'openchamber', 'projects'];

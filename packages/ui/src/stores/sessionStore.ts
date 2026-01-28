@@ -574,7 +574,7 @@ export const useSessionStore = create<SessionStore>()(
                                             }
                                         });
 
-                                        // Check if .openchamber directory exists before trying to list it
+                                        // LEGACY_WORKTREES: check if .openchamber directory exists before listing it
                                         // LEGACY_WORKTREES: filesystem scan fallback for legacy <project>/.openchamber/*
                                         const projectEntriesList = await opencodeClient.listLocalDirectory(normalizedProject);
                                         const worktreeDirExists = projectEntriesList.some(

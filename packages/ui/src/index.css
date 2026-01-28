@@ -499,6 +499,23 @@ html:not(.dark) .chat-scroll {
   }
 }
 
+/* Commit actions: collapse labels when narrow. */
+@container commit-actions (max-width: 28rem) {
+  .commit-actions__label--long {
+    display: none;
+  }
+}
+
+@container commit-actions (max-width: 22rem) {
+  .commit-actions__label {
+    display: none;
+  }
+
+  .commit-actions__btn {
+    padding-inline: 0.5rem;
+  }
+}
+
 /* Text font: IBM Plex Sans */
 .streamdown-content {
   font-family: var(--font-sans);
