@@ -314,15 +314,37 @@ export const useEventStream = () => {
         console.info('[useEventStream] Bootstrapping state:', reason);
       }
       try {
+        const activeLimit = getActiveSessionWindow();
         await Promise.all([
           loadSessions(),
-          currentSessionId ? resyncMessages(currentSessionId, reason, Infinity) : Promise.resolve(),
+          currentSessionId ? resyncMessages(currentSessionId, reason, activeLimit) : Promise.resolve(),
         ]);
       } catch (error) {
         console.warn('[useEventStream] Bootstrap failed:', reason, error);
       }
     },
     [currentSessionId, loadSessions, resyncMessages]
+  );
+
+  const scheduleSoftResync = React.useCallback(
+    (sessionId: string, reason: string, limit = getActiveSessionWindow()): Promise<void> => {
+      if (!sessionId) return Promise.resolve();
+
+      const memory = useSessionStore.getState().sessionMemoryState.get(sessionId);
+      const cooldownUntil = memory?.streamingCooldownUntil;
+      const now = Date.now();
+      if (typeof cooldownUntil === 'number' && cooldownUntil > now) {
+        const delay = Math.min(3000, Math.max(0, cooldownUntil - now));
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resyncMessages(sessionId, reason, limit).finally(resolve);
+          }, delay);
+        });
+      }
+
+      return resyncMessages(sessionId, reason, limit);
+    },
+    [resyncMessages]
   );
 
   const trackMessage = React.useCallback((messageId: string, event?: string, extraData?: Record<string, unknown>) => {
@@ -1635,21 +1657,21 @@ export const useEventStream = () => {
       // already-running sessions (e.g., started via CLI before UI opened)
       void refreshSessionActivityStatus();
 
-      if (shouldRefresh) {
-        void bootstrapState('sse_reconnected');
-      } else {
-        const sessionId = currentSessionIdRef.current;
-        if (sessionId) {
-          setTimeout(() => {
-            resyncMessages(sessionId, 'sse_reconnected', Infinity)
+       if (shouldRefresh) {
+         void bootstrapState('sse_reconnected');
+       } else {
+         const sessionId = currentSessionIdRef.current;
+         if (sessionId) {
+           setTimeout(() => {
+            scheduleSoftResync(sessionId, 'sse_reconnected', getActiveSessionWindow())
               .then(() => requestSessionMetadataRefresh(sessionId))
-              .catch((error) => {
+              .catch((error: unknown) => {
                 console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
               });
-          }, 0);
+            }, 0);
+          }
         }
-      }
-    };
+      };
 
     if (streamDebugEnabled()) {
       console.info('[useEventStream] Connecting to event source (SDK SSE only):', {
@@ -1712,7 +1734,7 @@ export const useEventStream = () => {
     stopStream,
     publishStatus,
     checkConnection,
-    resyncMessages,
+    scheduleSoftResync,
     requestSessionMetadataRefresh,
     handleEvent,
     effectiveDirectory,
@@ -1798,8 +1820,8 @@ export const useEventStream = () => {
       }, 5000);
     };
 
-    const handleVisibilityChange = () => {
-      visibilityStateRef.current = resolveVisibilityState();
+       const handleVisibilityChange = () => {
+         visibilityStateRef.current = resolveVisibilityState();
 
     if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
@@ -1808,7 +1830,7 @@ export const useEventStream = () => {
         console.info('[useEventStream] Visibility restored, triggering soft refresh...');
         const sessionId = currentSessionIdRef.current;
           if (sessionId) {
-            resyncMessages(sessionId, 'visibility_restore', getActiveSessionWindow()).catch(() => {});
+            scheduleSoftResync(sessionId, 'visibility_restore', getActiveSessionWindow());
             requestSessionMetadataRefresh(sessionId);
           }
           
@@ -1822,8 +1844,8 @@ export const useEventStream = () => {
       }
     };
 
-    const handleWindowFocus = () => {
-      visibilityStateRef.current = resolveVisibilityState();
+     const handleWindowFocus = () => {
+       visibilityStateRef.current = resolveVisibilityState();
 
     if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
@@ -1832,13 +1854,11 @@ export const useEventStream = () => {
       if (pendingResumeRef.current || !unsubscribeRef.current) {
         console.info('[useEventStream] Window focused after pause, triggering soft refresh...');
           const sessionId = currentSessionIdRef.current;
-          if (sessionId) {
-            requestSessionMetadataRefresh(sessionId);
-            resyncMessages(sessionId, 'window_focus', getActiveSessionWindow())
-              .then(() => console.info('[useEventStream] Messages refreshed on focus'))
-              .catch((err) => console.warn('[useEventStream] Failed to refresh messages:', err));
-          }
-          void refreshSessionActivityStatus();
+           if (sessionId) {
+             requestSessionMetadataRefresh(sessionId);
+             scheduleSoftResync(sessionId, 'window_focus', getActiveSessionWindow());
+           }
+           void refreshSessionActivityStatus();
 
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
@@ -1846,31 +1866,54 @@ export const useEventStream = () => {
       }
     };
 
-    const handleOnline = () => {
-      onlineStatusRef.current = true;
-      maybeBootstrapIfStale('network_restored');
-      if (pendingResumeRef.current || !unsubscribeRef.current) {
-        publishStatus('connecting', 'Network restored');
-        startStream({ resetAttempts: true });
+      const handleOnline = () => {
+        onlineStatusRef.current = true;
+        maybeBootstrapIfStale('network_restored');
+        if (pendingResumeRef.current || !unsubscribeRef.current) {
+          publishStatus('connecting', 'Network restored');
+          startStream({ resetAttempts: true });
+        }
+      };
+
+      const handleOffline = () => {
+        onlineStatusRef.current = false;
+        pendingResumeRef.current = true;
+        publishStatus('offline', 'Waiting for network');
+        stopStream();
+      };
+
+      const handlePageHide = () => {
+        pendingResumeRef.current = true;
+        stopStream();
+        publishStatus('paused', 'Paused while hidden');
+      };
+
+      const handlePageShow = (event: PageTransitionEvent) => {
+        // If page was restored from bfcache, SSE is definitely gone.
+        pendingResumeRef.current = pendingResumeRef.current || Boolean(event.persisted);
+        visibilityStateRef.current = resolveVisibilityState();
+        if (visibilityStateRef.current === 'visible') {
+          const sessionId = currentSessionIdRef.current;
+          if (sessionId) {
+            void scheduleSoftResync(sessionId, 'page_show', getActiveSessionWindow());
+            requestSessionMetadataRefresh(sessionId);
+          }
+          void refreshSessionActivityStatus();
+          startStream({ resetAttempts: true });
+        }
+      };
+
+     if (typeof document !== 'undefined') {
+       document.addEventListener('visibilitychange', handleVisibilityChange);
+     }
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('focus', handleWindowFocus);
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('pageshow', handlePageShow as EventListener);
       }
-    };
-
-    const handleOffline = () => {
-      onlineStatusRef.current = false;
-      pendingResumeRef.current = true;
-      publishStatus('offline', 'Waiting for network');
-      stopStream();
-    };
-
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-    }
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
-      window.addEventListener('focus', handleWindowFocus);
-    }
 
     const startTimer = setTimeout(() => {
       startStream({ resetAttempts: true });
@@ -1922,6 +1965,8 @@ export const useEventStream = () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
         window.removeEventListener('focus', handleWindowFocus);
+        window.removeEventListener('pagehide', handlePageHide);
+        window.removeEventListener('pageshow', handlePageShow as EventListener);
       }
 
       clearPauseTimeout();
@@ -1967,6 +2012,7 @@ export const useEventStream = () => {
     shouldHoldConnection,
     loadSessions,
     maybeBootstrapIfStale,
-    resyncMessages
+    resyncMessages,
+    scheduleSoftResync
   ]);
 };
