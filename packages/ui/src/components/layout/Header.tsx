@@ -107,6 +107,18 @@ export const Header: React.FC = () => {
     return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
   }, []);
 
+  const macosMajorVersion = React.useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return null;
+    }
+    const match = (navigator.userAgent || '').match(/Mac OS X (\d+)[._]/);
+    if (!match) {
+      return null;
+    }
+    const parsed = Number.parseInt(match[1], 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -289,6 +301,16 @@ export const Header: React.FC = () => {
     return 'pl-3';
   }, [isDesktopApp, isMacPlatform]);
 
+  const macosHeaderSizeClass = React.useMemo(() => {
+    if (!isDesktopApp || !isMacPlatform) {
+      return '';
+    }
+    if (macosMajorVersion === null || macosMajorVersion > 15) {
+      return '';
+    }
+    return 'h-14';
+  }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
+
   const updateHeaderHeight = React.useCallback(() => {
     if (typeof document === 'undefined') {
       return;
@@ -463,7 +485,8 @@ export const Header: React.FC = () => {
       onMouseDown={handleDragStart}
       className={cn(
         'app-region-drag relative flex h-12 select-none items-center',
-        desktopPaddingClass
+        desktopPaddingClass,
+        macosHeaderSizeClass
       )}
       role="tablist"
       aria-label="Main navigation"
