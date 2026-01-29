@@ -1234,17 +1234,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
                 className={cn(
-                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
+                  'flex min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
                 )}
               >
                 {}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                   {isStreaming ? (
                     <GridLoader size="xs" className="text-primary flex-shrink-0" />
                   ) : null}
-                  <span className="truncate typography-ui-label font-normal text-foreground">
+                  <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap typography-ui-label font-normal text-foreground">
                     {sessionTitle}
-                  </span>
+                  </div>
 
                   {pendingPermissionCount > 0 ? (
                     <span
