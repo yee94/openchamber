@@ -424,8 +424,15 @@ export async function getDiff(directory, { path, staged = false, contextLines = 
         noIndexArgs.push(`-U${Math.max(0, contextLines)}`);
       }
       noIndexArgs.push('--no-index', '--', '/dev/null', path);
-      const noIndexDiff = await git.raw(noIndexArgs);
-      return noIndexDiff;
+      try {
+        const noIndexDiff = await git.raw(noIndexArgs);
+        return noIndexDiff;
+      } catch (noIndexError) {
+        if (noIndexError.message && noIndexError.message.includes('diff --git')) {
+          return noIndexError.message;
+        }
+        throw noIndexError;
+      }
     }
   } catch (error) {
     console.error('Failed to get Git diff:', error);
