@@ -1132,7 +1132,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         event.target.value = '';
     }, [attachFiles]);
 
-    const footerGapClass = isMobile ? 'gap-x-0.5 gap-y-0' : 'gap-x-1.5 gap-y-0';
+    const footerGapClass = 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
     const footerHeightClass = isMobile ? 'h-9 w-9' : (isVSCode ? 'h-[22px] w-[22px]' : 'h-7 w-7');
@@ -1143,12 +1143,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
     );
 
-    const cancelButton = canAbort ? (
+    const stopButton = canAbort ? (
         <button
             type="button"
             onClick={handleAbort}
             className={cn(
                 iconButtonBaseClass,
+                'absolute right-2 top-2 z-10',
                 'text-[var(--status-error)] hover:text-[var(--status-error)]'
             )}
             aria-label="Stop generating"
@@ -1157,7 +1158,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         </button>
     ) : null;
 
-    const sendButton = (
+    const actionButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
             disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
@@ -1194,7 +1195,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
             )}
-            aria-label='Send message'
+            aria-label="Send message"
         >
             <RiSendPlane2Line className={cn(iconSizeClass)} />
         </button>
@@ -1382,6 +1383,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     )}
                     style={chatInputWrapperStyle}
                 >
+                    {stopButton}
                         {}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
@@ -1435,6 +1437,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         className={cn(
                             'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
+                            canAbort && 'pr-10',
                             "focus-visible:outline-none focus-visible:ring-0"
                         )}
                         style={{
@@ -1450,7 +1453,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         className={cn(
                             'bg-transparent',
                             footerPaddingClass,
-                            cn('flex items-center justify-between', footerGapClass)
+                            isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
                         )}
                         style={{
                             borderBottomLeftRadius: cornerRadius,
@@ -1458,18 +1461,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         }}
                         data-chat-input-footer="true"
                     >
-                        <div className={cn('flex items-center min-w-0 flex-1', footerGapClass)}>
-                            <div className={cn('flex items-center flex-shrink-0', footerGapClass)}>
-                                {attachmentsControls}
+                        {isMobile ? (
+                            <div className="flex w-full items-center gap-x-1.5">
+                                <div className="flex items-center flex-shrink-0 gap-x-1">
+                                    {attachmentsControls}
+                                </div>
+                                <div className="flex flex-1 items-center justify-end gap-x-1 min-w-0">
+                                    <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
+                                        <ModelControls className={cn('w-full flex items-center justify-end min-w-0')} />
+                                    </div>
+                                    {actionButton}
+                                </div>
                             </div>
-                            <div className="flex min-w-0 flex-1 overflow-hidden">
-                                <ModelControls className={cn('w-full min-w-0')} />
-                            </div>
-                        </div>
-                        <div className={cn('flex items-center flex-shrink-0', footerGapClass)}>
-                            {cancelButton}
-                            {sendButton}
-                        </div>
+                        ) : (
+                            <>
+                                <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
+                                    {attachmentsControls}
+                                </div>
+                                <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
+                                    <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
+                                    {actionButton}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
