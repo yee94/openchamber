@@ -325,6 +325,15 @@ fn get_macos_major_version() -> isize {
 }
 
 #[cfg(target_os = "macos")]
+fn get_traffic_light_y(macos_version: isize) -> f64 {
+    if macos_version <= 15 {
+        4.0
+    } else {
+        16.0
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn adjust_traffic_lights_position<R: tauri::Runtime>(
     window: &tauri::WebviewWindow<R>,
     x: f64,
@@ -349,6 +358,41 @@ fn adjust_traffic_lights_position<R: tauri::Runtime>(
             }
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+fn adjust_traffic_lights_centered<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    fallback_x: f64,
+    y: f64,
+) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSPoint, NSRect};
+
+    if let Ok(ns_window) = window.ns_window() {
+        unsafe {
+            let ns_window: *mut AnyObject = ns_window.cast();
+            let close_button: *mut AnyObject = msg_send![ns_window, standardWindowButton: 0usize];
+
+            if !close_button.is_null() {
+                let superview: *mut AnyObject = msg_send![close_button, superview];
+                if !superview.is_null() {
+                    let frame: NSRect = msg_send![superview, frame];
+                    let parent: *mut AnyObject = msg_send![superview, superview];
+                    if !parent.is_null() {
+                        let parent_frame: NSRect = msg_send![parent, frame];
+                        let new_x = (parent_frame.size.width - frame.size.width) / 2.0;
+                        let new_frame = NSRect::new(NSPoint::new(new_x, y), frame.size);
+                        let _: () = msg_send![superview, setFrame: new_frame];
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    adjust_traffic_lights_position(window, fallback_x, y);
 }
 
 #[cfg(target_os = "macos")]
@@ -715,9 +759,10 @@ fn main() {
                     let macos_version = get_macos_major_version();
                     info!("[macos] Detected macOS version: {}", macos_version);
 
-                    if macos_version < 26 {
+                    if macos_version <= 15 {
                         NEEDS_TRAFFIC_LIGHT_FIX.store(true, Ordering::SeqCst);
-                        adjust_traffic_lights_position(&window, 17.0, 16.0);
+                        let traffic_light_y = get_traffic_light_y(macos_version);
+                        adjust_traffic_lights_centered(&window, 17.0, traffic_light_y);
                     }
 
                     // Apply layer optimizations for smoother scrolling
@@ -1087,7 +1132,9 @@ fn main() {
                     #[cfg(target_os = "macos")]
                     if NEEDS_TRAFFIC_LIGHT_FIX.load(Ordering::SeqCst) {
                         if let Some(webview) = window.app_handle().get_webview_window("main") {
-                            adjust_traffic_lights_position(&webview, 17.0, 16.0);
+                            let macos_version = get_macos_major_version();
+                            let traffic_light_y = get_traffic_light_y(macos_version);
+                            adjust_traffic_lights_centered(&webview, 17.0, traffic_light_y);
                         }
                     }
                 }

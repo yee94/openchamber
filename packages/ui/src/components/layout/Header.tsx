@@ -284,7 +284,7 @@ export const Header: React.FC = () => {
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
       // Always reserve space for Mac traffic lights since header is always on top
-      return 'pl-[5.75rem]';
+      return 'pl-[5.125rem]';
     }
     return 'pl-3';
   }, [isDesktopApp, isMacPlatform]);
