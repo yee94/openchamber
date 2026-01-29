@@ -71,6 +71,8 @@ export const buildSdkStartCommand = (args: {
   const startPoint = typeof args.startPoint === 'string' ? args.startPoint.trim() : '';
   if (startPoint && startPoint !== 'HEAD') {
     commands.push(`git reset --hard ${shellQuote(startPoint)}`);
+  } else {
+    commands.push('git reset --hard HEAD');
   }
 
   for (const raw of args.setupCommands) {
