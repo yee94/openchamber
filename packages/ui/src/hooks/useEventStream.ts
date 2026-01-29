@@ -1830,6 +1830,10 @@ export const useEventStream = () => {
       return;
     }
 
+    if (reconnectTimeoutRef.current) {
+      return;
+    }
+
     const nextAttempt = reconnectAttemptsRef.current + 1;
     reconnectAttemptsRef.current = nextAttempt;
     const statusHint = hint ?? `Retrying (${nextAttempt})`;
@@ -1881,53 +1885,49 @@ export const useEventStream = () => {
       }
     };
 
-    const pauseStreamSoon = () => {
-      if (pauseTimeoutRef.current) return;
+    const handleVisibilityChange = () => {
+      visibilityStateRef.current = resolveVisibilityState();
 
-      pauseTimeoutRef.current = setTimeout(() => {
-        const pendingVisibility = resolveVisibilityState();
-        visibilityStateRef.current = pendingVisibility;
+      if (visibilityStateRef.current !== 'visible') {
+        // Keep SSE connection alive while hidden; browsers may briefly toggle
+        // visibility during tab/window transitions.
+        return;
+      }
 
-        if (pendingVisibility !== 'visible') {
-          stopStream();
-          pendingResumeRef.current = true;
-          publishStatus('paused', 'Paused while hidden');
-        } else {
-          clearPauseTimeout();
-        }
-      }, 5000);
-    };
-
-       const handleVisibilityChange = () => {
-         visibilityStateRef.current = resolveVisibilityState();
-
-    if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
       maybeBootstrapIfStale('visibility_restore');
+
+      const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
+      if (isStalled) {
+        console.info('[useEventStream] Visibility restored with stalled stream, reconnecting...');
+        pendingResumeRef.current = true;
+      }
+
       if (pendingResumeRef.current || !unsubscribeRef.current) {
         console.info('[useEventStream] Visibility restored, triggering soft refresh...');
         const sessionId = currentSessionIdRef.current;
-          if (sessionId) {
-            scheduleSoftResync(sessionId, 'visibility_restore', getActiveSessionWindow());
-            requestSessionMetadataRefresh(sessionId);
-          }
-          
-          void refreshSessionActivityStatus();
-          publishStatus('connecting', 'Resuming stream');
-          startStream({ resetAttempts: true });
+        if (sessionId) {
+          scheduleSoftResync(sessionId, 'visibility_restore', getActiveSessionWindow());
+          requestSessionMetadataRefresh(sessionId);
         }
-      } else {
-        publishStatus('paused', 'Paused while hidden');
-        pauseStreamSoon();
+
+        void refreshSessionActivityStatus();
+        publishStatus('connecting', 'Resuming stream');
+        startStream({ resetAttempts: true });
       }
     };
 
-     const handleWindowFocus = () => {
-       visibilityStateRef.current = resolveVisibilityState();
+      const handleWindowFocus = () => {
+        visibilityStateRef.current = resolveVisibilityState();
 
     if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
       maybeBootstrapIfStale('window_focus');
+
+      const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
+      if (isStalled) {
+        pendingResumeRef.current = true;
+      }
 
       if (pendingResumeRef.current || !unsubscribeRef.current) {
         console.info('[useEventStream] Window focused after pause, triggering soft refresh...');
@@ -2018,9 +2018,12 @@ export const useEventStream = () => {
                 const healthy = await opencodeClient.checkHealth();
                 if (!healthy) {
                   scheduleReconnect('Refreshing stalled stream');
-                } else {
-                  lastEventTimestampRef.current = Date.now();
+                  return;
                 }
+
+                // If health is ok but SSE has been silent (including heartbeat),
+                // treat it as a stalled connection and reconnect.
+                scheduleReconnect('Refreshing stalled stream');
               } catch (error) {
                 console.warn('Health check after stale stream failed:', error);
                 scheduleReconnect('Refreshing stalled stream');
