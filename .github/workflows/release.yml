@@ -80,7 +80,7 @@ jobs:
 
   build-desktop-macos:
     needs: create-release
-    runs-on: macos-26
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
