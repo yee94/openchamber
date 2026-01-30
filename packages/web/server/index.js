@@ -783,6 +783,9 @@ const sanitizeSettingsUpdate = (payload) => {
       result.notificationMode = mode;
     }
   }
+  if (typeof candidate.notifyOnSubtasks === 'boolean') {
+    result.notifyOnSubtasks = candidate.notifyOnSubtasks;
+  }
   if (typeof candidate.autoDeleteEnabled === 'boolean') {
     result.autoDeleteEnabled = candidate.autoDeleteEnabled;
   }
@@ -1861,6 +1864,53 @@ const pushPermissionDebounceTimers = new Map();
 const notifiedPermissionRequests = new Set();
 const lastReadyNotificationAt = new Map();
 
+// Cache: sessionId -> parentID (string) or null (no parent). Undefined = unknown.
+const sessionParentIdCache = new Map();
+const SESSION_PARENT_CACHE_TTL_MS = 60 * 1000;
+
+const getCachedSessionParentId = (sessionId) => {
+  const entry = sessionParentIdCache.get(sessionId);
+  if (!entry) return undefined;
+  if (Date.now() - entry.at > SESSION_PARENT_CACHE_TTL_MS) {
+    sessionParentIdCache.delete(sessionId);
+    return undefined;
+  }
+  return entry.parentID;
+};
+
+const setCachedSessionParentId = (sessionId, parentID) => {
+  sessionParentIdCache.set(sessionId, { parentID: parentID ?? null, at: Date.now() });
+};
+
+const fetchSessionParentId = async (sessionId) => {
+  if (!sessionId) return undefined;
+
+  const cached = getCachedSessionParentId(sessionId);
+  if (cached !== undefined) return cached;
+
+  try {
+    const response = await fetch(buildOpenCodeUrl('/session', ''), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!response.ok) {
+      return undefined;
+    }
+    const data = await response.json().catch(() => null);
+    if (!Array.isArray(data)) {
+      return undefined;
+    }
+
+    const match = data.find((s) => s && typeof s === 'object' && s.id === sessionId);
+    const parentID = match && typeof match.parentID === 'string' && match.parentID.length > 0 ? match.parentID : null;
+    setCachedSessionParentId(sessionId, parentID);
+    return parentID;
+  } catch {
+    return undefined;
+  }
+};
+
 const extractSessionIdFromPayload = (payload) => {
   if (!payload || typeof payload !== 'object') return null;
   const props = payload.properties;
@@ -1919,6 +1969,22 @@ const maybeSendPushForTrigger = async (payload) => {
   if (payload.type === 'message.updated') {
     const info = payload.properties?.info;
     if (info?.role === 'assistant' && info?.finish === 'stop' && sessionId) {
+      // Check if this is a subtask and if we should notify for subtasks
+      const settings = await readSettingsFromDisk();
+      if (settings.notifyOnSubtasks === false) {
+        // Prefer parentID on payload (if present), else fetch from sessions list.
+        const sessionInfo = payload.properties?.session;
+        const parentIDFromPayload = sessionInfo?.parentID ?? payload.properties?.parentID;
+        const parentID = parentIDFromPayload
+          ? parentIDFromPayload
+          : await fetchSessionParentId(sessionId);
+
+        // Fail open: if parentID cannot be resolved, send notification.
+        if (parentID) {
+          return;
+        }
+      }
+
       const now = Date.now();
       const lastAt = lastReadyNotificationAt.get(sessionId) ?? 0;
       if (now - lastAt < PUSH_READY_COOLDOWN_MS) {

@@ -67,6 +67,7 @@ interface UIStore {
   isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
+  notifyOnSubtasks: boolean;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
@@ -121,6 +122,7 @@ interface UIStore {
   setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
+  setNotifyOnSubtasks: (value: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
@@ -176,6 +178,7 @@ export const useUIStore = create<UIStore>()(
         isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
+        notifyOnSubtasks: true,
 
         setTheme: (theme) => {
           set({ theme });
@@ -593,6 +596,10 @@ export const useUIStore = create<UIStore>()(
         setNotificationMode: (mode) => {
           set({ notificationMode: mode });
         },
+
+        setNotifyOnSubtasks: (value) => {
+          set({ notifyOnSubtasks: value });
+        },
       }),
       {
         name: 'ui-store',
@@ -627,6 +634,7 @@ export const useUIStore = create<UIStore>()(
           diffViewMode: state.diffViewMode,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
+          notifyOnSubtasks: state.notifyOnSubtasks,
         })
       }
     ),
