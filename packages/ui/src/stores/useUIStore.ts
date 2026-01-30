@@ -62,6 +62,7 @@ interface UIStore {
   diffWrapLines: boolean;
   diffViewMode: 'single' | 'stacked';
   isTimelineDialogOpen: boolean;
+  isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
 
@@ -113,6 +114,7 @@ interface UIStore {
   setDiffViewMode: (mode: 'single' | 'stacked') => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
+  setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
   openMultiRunLauncher: () => void;
@@ -165,6 +167,7 @@ export const useUIStore = create<UIStore>()(
         diffWrapLines: false,
         diffViewMode: 'stacked',
         isTimelineDialogOpen: false,
+        isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
 
@@ -532,6 +535,10 @@ export const useUIStore = create<UIStore>()(
 
         setTimelineDialogOpen: (open) => {
           set({ isTimelineDialogOpen: open });
+        },
+
+        setImagePreviewOpen: (open) => {
+          set({ isImagePreviewOpen: open });
         },
 
         setNativeNotificationsEnabled: (value) => {

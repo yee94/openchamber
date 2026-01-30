@@ -309,6 +309,23 @@ async fn desktop_open_devtools(window: WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn get_macos_major_version() -> isize {
+    use objc2_foundation::NSProcessInfo;
+    let process_info = NSProcessInfo::processInfo();
+    let version = process_info.operatingSystemVersion();
+    version.majorVersion
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_macos_major_version() -> isize {
+    0
+}
+
+#[tauri::command]
+fn desktop_get_macos_version() -> isize {
+    get_macos_major_version()
+}
 
 #[cfg(target_os = "macos")]
 fn optimize_webview_layer<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
@@ -807,6 +824,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             desktop_server_info,
             desktop_restart_opencode,
+            desktop_get_macos_version,
             #[cfg(feature = "devtools")]
             desktop_open_devtools,
             load_settings,
