@@ -1238,11 +1238,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 )}
               >
                 {}
-                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                <div className="flex w-full items-center gap-2 min-w-0 flex-1 overflow-hidden">
                   {isStreaming ? (
                     <GridLoader size="xs" className="text-primary flex-shrink-0" />
                   ) : null}
-                  <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap typography-ui-label font-normal text-foreground">
+                  <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
                     {sessionTitle}
                   </div>
 
