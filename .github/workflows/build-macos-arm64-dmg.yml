@@ -1,4 +1,4 @@
-name: Build macOS 15 DMG (arm64)
+name: Build macOS DMG (arm64)
 
 on:
   workflow_dispatch:
@@ -22,6 +22,7 @@ env:
 
 jobs:
   build-macos-dmg-arm64:
+    name: Build DMG (arm64, ${{ inputs.macos_version }})
     runs-on: ${{ inputs.macos_version }}
     steps:
       - name: Checkout
@@ -109,7 +110,7 @@ jobs:
           DMG_PATH="packages/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg"
           if ls $DMG_PATH 1> /dev/null 2>&1; then
             DMG_FILE=$(ls $DMG_PATH | head -n 1)
-            DMG_NAME="OpenChamber_macos15_arm64.dmg"
+            DMG_NAME="OpenChamber_${{ inputs.macos_version }}_arm64.dmg"
             cp "$DMG_FILE" "artifacts/$DMG_NAME"
           else
             echo "Error: DMG file not found at $DMG_PATH"
@@ -119,6 +120,6 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos15-dmg-arm64
+          name: dmg-${{ inputs.macos_version }}-arm64
           path: artifacts/*.dmg
           retention-days: 7
