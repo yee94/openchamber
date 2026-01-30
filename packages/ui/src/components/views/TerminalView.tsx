@@ -79,6 +79,8 @@ export const TerminalView: React.FC = () => {
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
     const { isMobile, hasTouchInput } = useDeviceInfo();
+    const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
+    const showQuickKeys = isMobile || showTerminalQuickKeysOnDesktop;
 
     const { currentSessionId, newSessionDraft } = useSessionStore();
     const hasActiveContext = currentSessionId !== null || newSessionDraft?.open === true;
@@ -138,10 +140,10 @@ export const TerminalView: React.FC = () => {
     }, [effectiveDirectory]);
 
     React.useEffect(() => {
-        if (!isMobile && activeModifier !== null) {
+        if (!showQuickKeys && activeModifier !== null) {
             setActiveModifier(null);
         }
-    }, [isMobile, activeModifier, setActiveModifier]);
+    }, [showQuickKeys, activeModifier, setActiveModifier]);
 
     React.useEffect(() => {
         if (!terminalSessionId && activeModifier !== null) {
@@ -492,7 +494,7 @@ export const TerminalView: React.FC = () => {
     );
 
     React.useEffect(() => {
-        if (!isMobile || !activeModifier || !terminalSessionId) {
+        if (!showQuickKeys || !activeModifier || !terminalSessionId) {
             return;
         }
 
@@ -565,7 +567,7 @@ export const TerminalView: React.FC = () => {
         activeModifier,
         handleMobileKeyPress,
         handleViewportInput,
-        isMobile,
+        showQuickKeys,
         setActiveModifier,
         terminalSessionId,
     ]);
@@ -693,7 +695,7 @@ export const TerminalView: React.FC = () => {
                         </Button>
                     </div>
                 </div>
-                {isMobile ? (
+                {showQuickKeys ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                         <Button
                             type="button"

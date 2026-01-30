@@ -69,6 +69,8 @@ interface UIStore {
   notificationMode: 'always' | 'hidden-only';
   notifyOnSubtasks: boolean;
 
+  showTerminalQuickKeysOnDesktop: boolean;
+
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
@@ -122,6 +124,7 @@ interface UIStore {
   setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
+  setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
   setNotifyOnSubtasks: (value: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
@@ -179,6 +182,8 @@ export const useUIStore = create<UIStore>()(
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
         notifyOnSubtasks: true,
+
+        showTerminalQuickKeysOnDesktop: false,
 
         setTheme: (theme) => {
           set({ theme });
@@ -597,6 +602,10 @@ export const useUIStore = create<UIStore>()(
           set({ notificationMode: mode });
         },
 
+        setShowTerminalQuickKeysOnDesktop: (value) => {
+          set({ showTerminalQuickKeysOnDesktop: value });
+        },
+
         setNotifyOnSubtasks: (value) => {
           set({ notifyOnSubtasks: value });
         },
@@ -634,6 +643,7 @@ export const useUIStore = create<UIStore>()(
           diffViewMode: state.diffViewMode,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
+          showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
           notifyOnSubtasks: state.notifyOnSubtasks,
         })
       }

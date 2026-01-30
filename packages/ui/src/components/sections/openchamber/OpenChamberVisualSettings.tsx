@@ -8,6 +8,7 @@ import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
+import { Switch } from '@/components/ui/switch';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import {
@@ -73,7 +74,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity';
+export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -101,6 +102,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setDiffLayoutPreference = useUIStore(state => state.setDiffLayoutPreference);
     const diffViewMode = useUIStore(state => state.diffViewMode);
     const setDiffViewMode = useUIStore(state => state.setDiffViewMode);
+    const showTerminalQuickKeysOnDesktop = useUIStore(state => state.showTerminalQuickKeysOnDesktop);
+    const setShowTerminalQuickKeysOnDesktop = useUIStore(state => state.setShowTerminalQuickKeysOnDesktop);
     const queueModeEnabled = useMessageQueueStore(state => state.queueModeEnabled);
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
     const {
@@ -249,6 +252,25 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             </ButtonSmall>
                         </div>
                     )}
+                </div>
+            )}
+
+            {shouldShow('terminalQuickKeys') && !isMobile && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Show terminal optional key bar
+                        </h3>
+                        <p className="typography-ui text-muted-foreground">
+                            Esc, Ctrl, arrows, Enter.
+                        </p>
+                    </div>
+
+                    <Switch
+                        checked={showTerminalQuickKeysOnDesktop}
+                        onCheckedChange={setShowTerminalQuickKeysOnDesktop}
+                        className="data-[state=checked]:bg-status-info"
+                    />
                 </div>
             )}
 
