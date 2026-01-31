@@ -2,6 +2,7 @@ import React from 'react';
 
 import {
   RiArrowLeftSLine,
+  RiArrowDownSLine,
   RiClipboardLine,
   RiCloseLine,
   RiCodeLine,
@@ -274,6 +275,7 @@ export const FilesView: React.FC = () => {
   const [searching, setSearching] = React.useState(false);
 
   const [selectedFile, setSelectedFile] = React.useState<FileNode | null>(null);
+  const [openFiles, setOpenFiles] = React.useState<FileNode[]>([]);
   const [fileContent, setFileContent] = React.useState<string>('');
   const [fileLoading, setFileLoading] = React.useState(false);
   const [fileError, setFileError] = React.useState<string | null>(null);
@@ -285,6 +287,7 @@ export const FilesView: React.FC = () => {
   const [confirmDiscardOpen, setConfirmDiscardOpen] = React.useState(false);
   const pendingSelectFileRef = React.useRef<FileNode | null>(null);
   const pendingTabRef = React.useRef<import('@/stores/useUIStore').MainTab | null>(null);
+  const pendingClosePathRef = React.useRef<string | null>(null);
   const skipDirtyOnceRef = React.useRef(false);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
@@ -543,6 +546,7 @@ export const FilesView: React.FC = () => {
 
     void refreshRoot();
     setSelectedFile(null);
+    setOpenFiles([]);
     setFileContent('');
     setFileError(null);
     setDesktopImageSrc('');
@@ -631,8 +635,15 @@ export const FilesView: React.FC = () => {
             if (result.success) {
                 toast.success('Renamed successfully');
                 await refreshRoot();
-                if (selectedFile?.path === oldPath) {
+                setOpenFiles((prev) => prev.filter((file) => file.path !== oldPath && !file.path.startsWith(`${oldPath}/`)));
+                if (selectedFile?.path === oldPath || selectedFile?.path.startsWith(`${oldPath}/`)) {
                     setSelectedFile(null);
+                    setFileContent('');
+                    setFileError(null);
+                    setDesktopImageSrc('');
+                    if (isMobile) {
+                      setShowMobilePageContent(false);
+                    }
                 }
             }
         } else {
@@ -644,9 +655,15 @@ export const FilesView: React.FC = () => {
             if (result.success) {
                 toast.success('Deleted successfully');
                 await refreshRoot();
+                setOpenFiles((prev) => prev.filter((file) => file.path !== dialogData.path && !file.path.startsWith(`${dialogData.path}/`)));
                 if (selectedFile?.path === dialogData.path || selectedFile?.path.startsWith(dialogData.path + '/')) {
                     setSelectedFile(null);
                     setFileContent('');
+                    setFileError(null);
+                    setDesktopImageSrc('');
+                    if (isMobile) {
+                      setShowMobilePageContent(false);
+                    }
                 }
             }
         } else {
@@ -659,7 +676,7 @@ export const FilesView: React.FC = () => {
     } finally {
       setIsDialogSubmitting(false);
     }
-  }, [activeDialog, dialogData, dialogInputValue, files, refreshRoot, selectedFile]);
+  }, [activeDialog, dialogData, dialogInputValue, files, refreshRoot, selectedFile, isMobile]);
 
   const fuzzyScore = React.useCallback((query: string, candidate: string): number | null => {
     const q = query.trim().toLowerCase();
@@ -882,6 +899,26 @@ export const FilesView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSaving, saveDraft]);
 
+  const upsertOpenFile = React.useCallback((node: FileNode) => {
+    setOpenFiles((prev) => {
+      const index = prev.findIndex((file) => file.path === node.path);
+      if (index === -1) {
+        return [...prev, node];
+      }
+      const next = prev.slice();
+      next[index] = node;
+      return next;
+    });
+  }, []);
+
+  const getNextOpenFile = React.useCallback((path: string, filesList: FileNode[]) => {
+    const index = filesList.findIndex((file) => file.path === path);
+    if (index === -1 || filesList.length <= 1) {
+      return null;
+    }
+    return filesList[index + 1] ?? filesList[index - 1] ?? null;
+  }, []);
+
   const handleSelectFile = React.useCallback(async (node: FileNode) => {
     if (skipDirtyOnceRef.current) {
       skipDirtyOnceRef.current = false;
@@ -892,6 +929,7 @@ export const FilesView: React.FC = () => {
     }
 
     setSelectedFile(node);
+    upsertOpenFile(node);
     setFileError(null);
     setDesktopImageSrc('');
 
@@ -932,14 +970,16 @@ export const FilesView: React.FC = () => {
     } finally {
       setFileLoading(false);
     }
-  }, [isDirty, isMobile, readFile, runtime.isDesktop]);
+  }, [isDirty, isMobile, readFile, runtime.isDesktop, upsertOpenFile]);
 
   const discardAndContinue = React.useCallback(() => {
     const nextFile = pendingSelectFileRef.current;
     const nextTab = pendingTabRef.current;
+    const closePath = pendingClosePathRef.current;
 
     pendingSelectFileRef.current = null;
     pendingTabRef.current = null;
+    pendingClosePathRef.current = null;
 
     // Allow one guarded navigation (tab/file) without re-opening dialog.
     skipDirtyOnceRef.current = true;
@@ -948,6 +988,24 @@ export const FilesView: React.FC = () => {
 
     // Discard draft by reverting back to last loaded content
     setDraftContent(displayedContent);
+
+    if (closePath) {
+      setOpenFiles((prev) => prev.filter((file) => file.path !== closePath));
+      if (selectedFile?.path === closePath) {
+        if (nextFile) {
+          void handleSelectFile(nextFile);
+        } else {
+          setSelectedFile(null);
+          setFileContent('');
+          setFileError(null);
+          setDesktopImageSrc('');
+          if (isMobile) {
+            setShowMobilePageContent(false);
+          }
+        }
+      }
+      return;
+    }
 
     if (nextFile) {
       void handleSelectFile(nextFile);
@@ -958,14 +1016,16 @@ export const FilesView: React.FC = () => {
       setMainTabGuard(null);
       useUIStore.getState().setActiveMainTab(nextTab);
     }
-  }, [displayedContent, handleSelectFile, setMainTabGuard]);
+  }, [displayedContent, handleSelectFile, isMobile, selectedFile?.path, setMainTabGuard]);
 
   const saveAndContinue = React.useCallback(async () => {
     const nextFile = pendingSelectFileRef.current;
     const nextTab = pendingTabRef.current;
+    const closePath = pendingClosePathRef.current;
 
     pendingSelectFileRef.current = null;
     pendingTabRef.current = null;
+    pendingClosePathRef.current = null;
 
     // We'll proceed after saving; suppress guard reopening.
     skipDirtyOnceRef.current = true;
@@ -973,6 +1033,24 @@ export const FilesView: React.FC = () => {
     setConfirmDiscardOpen(false);
 
     await saveDraft();
+
+    if (closePath) {
+      setOpenFiles((prev) => prev.filter((file) => file.path !== closePath));
+      if (selectedFile?.path === closePath) {
+        if (nextFile) {
+          await handleSelectFile(nextFile);
+        } else {
+          setSelectedFile(null);
+          setFileContent('');
+          setFileError(null);
+          setDesktopImageSrc('');
+          if (isMobile) {
+            setShowMobilePageContent(false);
+          }
+        }
+      }
+      return;
+    }
 
     if (nextFile) {
       await handleSelectFile(nextFile);
@@ -983,7 +1061,38 @@ export const FilesView: React.FC = () => {
       setMainTabGuard(null);
       useUIStore.getState().setActiveMainTab(nextTab);
     }
-  }, [handleSelectFile, saveDraft, setMainTabGuard]);
+  }, [handleSelectFile, isMobile, saveDraft, selectedFile?.path, setMainTabGuard]);
+
+  const handleCloseFile = React.useCallback((path: string) => {
+    const isActive = selectedFile?.path === path;
+    const nextFile = getNextOpenFile(path, openFiles);
+
+    if (isActive && isDirty) {
+      setConfirmDiscardOpen(true);
+      pendingSelectFileRef.current = nextFile;
+      pendingClosePathRef.current = path;
+      return;
+    }
+
+    setOpenFiles((prev) => prev.filter((file) => file.path !== path));
+
+    if (!isActive) {
+      return;
+    }
+
+    if (nextFile) {
+      void handleSelectFile(nextFile);
+      return;
+    }
+
+    setSelectedFile(null);
+    setFileContent('');
+    setFileError(null);
+    setDesktopImageSrc('');
+    if (isMobile) {
+      setShowMobilePageContent(false);
+    }
+  }, [getNextOpenFile, handleSelectFile, isDirty, isMobile, openFiles, selectedFile?.path]);
 
   const toggleDirectory = React.useCallback(async (dirPath: string) => {
     const normalized = normalizePath(dirPath);
@@ -1131,17 +1240,20 @@ export const FilesView: React.FC = () => {
 
   const isSelectedImage = Boolean(selectedFile?.path && isImageFile(selectedFile.path));
   const isSelectedSvg = Boolean(selectedFile?.path && selectedFile.path.toLowerCase().endsWith('.svg'));
-  const displaySelectedPath = React.useMemo(() => {
-    if (!selectedFile?.path) return '';
-    const normalizedFilePath = normalizePath(selectedFile.path);
+  const getDisplayPath = React.useCallback((path: string): string => {
+    if (!path) return '';
+    const normalizedFilePath = normalizePath(path);
     if (root && normalizedFilePath.startsWith(root)) {
       const relative = normalizedFilePath.slice(root.length);
       return relative.startsWith('/') ? relative.slice(1) : relative;
     }
     return normalizedFilePath;
-  }, [selectedFile?.path, root]);
+  }, [root]);
 
-
+  const displaySelectedPath = React.useMemo(() => {
+    if (!selectedFile?.path) return '';
+    return getDisplayPath(selectedFile.path);
+  }, [getDisplayPath, selectedFile?.path]);
 
   const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
@@ -1395,13 +1507,120 @@ export const FilesView: React.FC = () => {
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="typography-ui-label font-medium truncate">
-            {selectedFile ? selectedFile.name : 'Select a file'}
-          </div>
-          {selectedFile && !isMobile && (
-            <div className="typography-meta text-muted-foreground truncate" title={displaySelectedPath}>
-              {displaySelectedPath}
-            </div>
+          {isMobile ? (
+            selectedFile ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex min-w-0 max-w-full items-center gap-1 text-left typography-ui-label font-medium"
+                    aria-label="Open files"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{selectedFile.name}</span>
+                    <RiArrowDownSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[16rem]">
+                  {openFiles.map((file) => {
+                    const isActive = selectedFile?.path === file.path;
+                    return (
+                      <DropdownMenuItem
+                        key={file.path}
+                        onSelect={(event) => {
+                          const target = event.target as HTMLElement;
+                          if (target.closest('[data-close-open-file]')) {
+                            event.preventDefault();
+                            return;
+                          }
+                          if (!isActive) {
+                            void handleSelectFile(file);
+                          }
+                        }}
+                        className={cn(
+                          'flex items-center justify-between gap-2',
+                          isActive && 'bg-accent/70'
+                        )}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          data-close-open-file
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleCloseFile(file.path);
+                          }}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                          aria-label={`Close ${file.name}`}
+                        >
+                          <RiCloseLine className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="typography-ui-label font-medium truncate">Select a file</div>
+            )
+          ) : (
+            openFiles.length > 0 ? (
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+                  {openFiles.map((file) => {
+                    const isActive = selectedFile?.path === file.path;
+                    return (
+                      <div
+                        key={file.path}
+                        title={getDisplayPath(file.path)}
+                        className={cn(
+                          'group inline-flex items-center gap-1 rounded-md border px-2 py-1 typography-ui-label transition-colors',
+                          isActive
+                            ? 'border-border/60 bg-accent/70 text-foreground'
+                            : 'border-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isActive) {
+                              void handleSelectFile(file);
+                            }
+                          }}
+                          className="max-w-[12rem] truncate text-left"
+                        >
+                          {file.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCloseFile(file.path);
+                          }}
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                          aria-label={`Close ${file.name}`}
+                        >
+                          <RiCloseLine className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {selectedFile && (
+                  <div className="typography-meta text-muted-foreground truncate" title={displaySelectedPath}>
+                    {displaySelectedPath}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="typography-ui-label font-medium truncate">Select a file</div>
+            )
           )}
         </div>
 
