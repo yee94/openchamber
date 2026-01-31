@@ -97,13 +97,48 @@ const resolveWorkspacePath = (targetPath, baseDirectory) => {
   return { ok: false, error: 'Path is outside of active workspace' };
 };
 
+const resolveWorkspacePathFromWorktrees = async (targetPath, baseDirectory) => {
+  const normalized = normalizeDirectoryPath(targetPath);
+  if (!normalized || typeof normalized !== 'string') {
+    return { ok: false, error: 'Path is required' };
+  }
+
+  const resolved = path.resolve(normalized);
+  const resolvedBase = path.resolve(baseDirectory || os.homedir());
+
+  try {
+    const { getWorktrees } = await import('./lib/git-service.js');
+    const worktrees = await getWorktrees(resolvedBase);
+
+    for (const worktree of worktrees) {
+      const candidate = typeof worktree?.worktree === 'string' ? normalizeDirectoryPath(worktree.worktree) : '';
+      if (!candidate) {
+        continue;
+      }
+      const candidateResolved = path.resolve(candidate);
+      if (isPathWithinRoot(resolved, candidateResolved)) {
+        return { ok: true, base: candidateResolved, resolved };
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to resolve worktree roots:', error);
+  }
+
+  return { ok: false, error: 'Path is outside of active workspace' };
+};
+
 const resolveWorkspacePathFromContext = async (req, targetPath) => {
   const resolvedProject = await resolveProjectDirectory(req);
   if (!resolvedProject.directory) {
     return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
   }
 
-  return resolveWorkspacePath(targetPath, resolvedProject.directory);
+  const resolved = resolveWorkspacePath(targetPath, resolvedProject.directory);
+  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') {
+    return resolved;
+  }
+
+  return resolveWorkspacePathFromWorktrees(targetPath, resolvedProject.directory);
 };
 
 
