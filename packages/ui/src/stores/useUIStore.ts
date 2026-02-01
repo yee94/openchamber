@@ -232,6 +232,9 @@ export const useUIStore = create<UIStore>()(
         },
 
         setMainTabGuard: (guard) => {
+          if (get().mainTabGuard === guard) {
+            return;
+          }
           set({ mainTabGuard: guard });
         },
 
