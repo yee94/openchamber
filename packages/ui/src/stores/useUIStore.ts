@@ -669,7 +669,7 @@ export const useUIStore = create<UIStore>()(
           activeMainTab: state.activeMainTab,
           sidebarSection: state.sidebarSection,
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
-          isSettingsDialogOpen: state.isSettingsDialogOpen,
+          // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,
           showTextJustificationActivity: state.showTextJustificationActivity,
           autoDeleteEnabled: state.autoDeleteEnabled,
