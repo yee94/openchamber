@@ -52,15 +52,17 @@ const SETTINGS_SIDEBAR_MAX_WIDTH = 500;
 const SETTINGS_SIDEBAR_DEFAULT_WIDTH = 264;
 
 // Width threshold for hiding tab labels (show icons only)
-const TAB_LABELS_MIN_WIDTH = 940;
+const TAB_LABELS_MIN_WIDTH = 1024;
 
 interface SettingsViewProps {
   onClose?: () => void;
   /** Force mobile layout regardless of device detection */
   forceMobile?: boolean;
+  /** Rendered inside a window/dialog (skip traffic light padding) */
+  isWindowed?: boolean;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed }) => {
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
 
@@ -342,13 +344,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   // Keyboard shortcut display based on platform
   const shortcutKey = getModifierLabel();
 
-  // Desktop padding for Mac titlebar area
+  // Desktop padding for Mac titlebar area (only when full-screen, not windowed)
   const desktopPaddingClass = React.useMemo(() => {
+    if (isWindowed) {
+      return 'pl-1.5'; // Balanced padding for windowed mode
+    }
     if (isDesktopApp && isMacPlatform) {
       return 'pl-[5.75rem]'; // Space for traffic lights
     }
     return '';
-  }, [isDesktopApp, isMacPlatform]);
+  }, [isDesktopApp, isMacPlatform, isWindowed]);
 
 
   return (
