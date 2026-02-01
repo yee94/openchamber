@@ -15,6 +15,8 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useMessageQueueStore } from '@/stores/messageQueueStore';
+import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel } from '@/lib/utils';
 
@@ -188,6 +190,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const getSessionAgentSelection = useContextStore(state => state.getSessionAgentSelection);
   const getAgentModelForSession = useContextStore(state => state.getAgentModelForSession);
   const getAgentModelVariantForSession = useContextStore(state => state.getAgentModelVariantForSession);
+  const queueModeEnabled = useMessageQueueStore(state => state.queueModeEnabled);
+  const addToQueue = useMessageQueueStore(state => state.addToQueue);
+  const { phase: sessionPhase } = useCurrentSessionActivity();
 
   // Update main content metrics on resize
   useEffect(() => {
@@ -303,19 +308,25 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     setSelection(null);
     setActiveMainTab('chat');
 
-    void sendMessage(
-      message,
-      effectiveProviderId,
-      effectiveModelId,
-      sessionAgent,
-      undefined,
-      undefined,
-      undefined,
-      effectiveVariant
-    ).catch((e) => {
-      console.error('Failed to send comment', e);
-    });
-  }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
+    // Check if should queue instead of send
+    const canQueue = sessionPhase !== 'idle';
+    if (queueModeEnabled && canQueue) {
+      addToQueue(currentSessionId, { content: message });
+    } else {
+      void sendMessage(
+        message,
+        effectiveProviderId,
+        effectiveModelId,
+        sessionAgent,
+        undefined,
+        undefined,
+        undefined,
+        effectiveVariant
+      ).catch((e) => {
+        console.error('Failed to send comment', e);
+      });
+    }
+  }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession, queueModeEnabled, sessionPhase, addToQueue]);
 
   ensurePierreThemeRegistered(lightTheme);
   ensurePierreThemeRegistered(darkTheme);

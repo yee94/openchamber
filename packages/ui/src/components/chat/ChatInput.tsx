@@ -445,6 +445,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     };
 
+    // Primary action for send button - respects queue mode setting
+    const handlePrimaryAction = React.useCallback(() => {
+        const canQueue = hasContent && currentSessionId && sessionPhase !== 'idle';
+        if (queueModeEnabled && canQueue) {
+            handleQueueMessage();
+        } else {
+            void handleSubmit();
+        }
+    }, [hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage, handleSubmit]);
+
     // Keep a ref to handleSubmit for auto-send effect
     const handleSubmitRef = React.useRef(handleSubmit);
     handleSubmitRef.current = handleSubmit;
@@ -1075,30 +1085,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const footerGapClass = 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
-    const footerHeightClass = isMobile ? 'h-9 w-9' : (isVSCode ? 'h-[22px] w-[22px]' : 'h-7 w-7');
+    const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
+    const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
+    const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
     const iconSizeClass = isMobile ? 'h-5 w-5' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
 
-    const iconButtonBaseClass = cn(
-        footerHeightClass,
-        'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
-    );
+    const iconButtonBaseClass = 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0';
 
-    const stopButton = canAbort ? (
-        <button
-            type="button"
-            onClick={handleAbort}
-            className={cn(
-                iconButtonBaseClass,
-                'absolute right-2 top-2 z-10',
-                'text-[var(--status-error)] hover:text-[var(--status-error)]'
-            )}
-            aria-label="Stop generating"
-        >
-            <StopIcon className={cn(iconSizeClass)} />
-        </button>
-    ) : null;
-
-    const actionButton = (
+    // Send button - respects queue mode setting
+    const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
             disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
@@ -1114,7 +1109,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 sendTriggeredByPointerDownRef.current = true;
                 event.preventDefault();
                 event.stopPropagation();
-                void handleSubmit();
+                handlePrimaryAction();
             }}
             onClick={(event) => {
                 if (!isMobile) {
@@ -1127,18 +1122,88 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 }
 
                 event.preventDefault();
-                void handleSubmit();
+                handlePrimaryAction();
             }}
             className={cn(
                 iconButtonBaseClass,
+                buttonSizeClass,
                 canSend && (currentSessionId || newSessionDraftOpen)
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
             )}
             aria-label="Send message"
         >
-            <RiSendPlane2Line className={cn(iconSizeClass)} />
+            <RiSendPlane2Line className={cn(sendIconSizeClass)} />
         </button>
+    );
+
+    // Queue button for adding message to queue while working
+    const queueButton = (
+        <button
+            type="button"
+            disabled={!hasContent || !currentSessionId}
+            onPointerDownCapture={(event) => {
+                if (!isMobile || event.pointerType !== 'touch') {
+                    return;
+                }
+
+                if (!hasContent || !currentSessionId) {
+                    return;
+                }
+
+                sendTriggeredByPointerDownRef.current = true;
+                event.preventDefault();
+                event.stopPropagation();
+                handleQueueMessage();
+            }}
+            onClick={(event) => {
+                if (isMobile) {
+                    if (sendTriggeredByPointerDownRef.current) {
+                        sendTriggeredByPointerDownRef.current = false;
+                        return;
+                    }
+                    event.preventDefault();
+                }
+                handleQueueMessage();
+            }}
+            className={cn(
+                iconButtonBaseClass,
+                buttonSizeClass,
+                'absolute bottom-full left-1/2 -translate-x-1/2 mb-1',
+                hasContent && currentSessionId
+                    ? 'text-primary hover:text-primary'
+                    : 'opacity-30'
+            )}
+            aria-label="Queue message"
+        >
+            <RiSendPlane2Line className={cn(sendIconSizeClass, '-rotate-90')} />
+        </button>
+    );
+
+    // Stop button replaces send button when working
+    const stopButton = (
+        <button
+            type="button"
+            onClick={handleAbort}
+            className={cn(
+                iconButtonBaseClass,
+                buttonSizeClass,
+                'text-[var(--status-error)] hover:text-[var(--status-error)]'
+            )}
+            aria-label="Stop generating"
+        >
+            <StopIcon className={cn(stopIconSizeClass)} />
+        </button>
+    );
+
+    // Action buttons area: either send button, or stop (+ optional queue button floating above)
+    const actionButtons = canAbort ? (
+        <div className="relative">
+            {hasContent && queueButton}
+            {stopButton}
+        </div>
+    ) : (
+        sendButton
     );
 
     const attachmentMenu = (
@@ -1256,7 +1321,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     return (
 
         <form
-            onSubmit={handleSubmit}
+            onSubmit={(e) => { e.preventDefault(); handlePrimaryAction(); }}
             className={cn(
                 "relative pt-0 pb-4",
                 isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
@@ -1327,8 +1392,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         backgroundColor: currentTheme?.colors?.surface?.subtle,
                     }}
                 >
-                    {stopButton}
-                        {}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
                             ref={commandRef}
@@ -1380,8 +1443,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             outerClassName="focus-within:ring-0"
                         className={cn(
                             'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent',
-                            isMobile ? "py-2.5" : "pt-4 pb-2",
-                            canAbort && 'pr-10'
+                            isMobile ? "py-2.5" : "pt-4 pb-2"
                         )}
                         style={{
                             flex: 'none',
@@ -1414,7 +1476,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                         <StatusChip onClick={handleOpenMobileControls} className="min-w-0" />
                                     </div>
                                     <div className="flex-shrink-0">
-                                        {actionButton}
+                                        {actionButtons}
                                     </div>
                                 </div>
                                 <ModelControls
@@ -1438,7 +1500,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
-                                    {actionButton}
+                                    {actionButtons}
                                 </div>
                             </>
                         )}

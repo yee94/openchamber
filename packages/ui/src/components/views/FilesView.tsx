@@ -66,6 +66,8 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useMessageQueueStore } from '@/stores/messageQueueStore';
+import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
@@ -358,6 +360,9 @@ export const FilesView: React.FC = () => {
   const setMainTabGuard = useUIStore((state) => state.setMainTabGuard);
   const inputBarOffset = useUIStore((state) => state.inputBarOffset);
   const isKeyboardOpen = useUIStore((state) => state.isKeyboardOpen);
+  const queueModeEnabled = useMessageQueueStore((state) => state.queueModeEnabled);
+  const addToQueue = useMessageQueueStore((state) => state.addToQueue);
+  const { phase: sessionPhase } = useCurrentSessionActivity();
 
 
   // Global mouseup to end drag selection
@@ -467,19 +472,25 @@ export const FilesView: React.FC = () => {
     setLineSelection(null);
     setActiveMainTab('chat');
 
-    void sendMessage(
-      message,
-      effectiveProviderId,
-      effectiveModelId,
-      sessionAgent,
-      undefined,
-      undefined,
-      undefined,
-      effectiveVariant
-    ).catch((e) => {
-      console.error('Failed to send comment', e);
-    });
-  }, [lineSelection, commentText, selectedFile, fileContent, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, extractSelectedCode, sendMessage, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
+    // Check if should queue instead of send
+    const canQueue = sessionPhase !== 'idle';
+    if (queueModeEnabled && canQueue) {
+      addToQueue(currentSessionId, { content: message });
+    } else {
+      void sendMessage(
+        message,
+        effectiveProviderId,
+        effectiveModelId,
+        sessionAgent,
+        undefined,
+        undefined,
+        undefined,
+        effectiveVariant
+      ).catch((e) => {
+        console.error('Failed to send comment', e);
+      });
+    }
+  }, [lineSelection, commentText, selectedFile, fileContent, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, extractSelectedCode, sendMessage, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession, queueModeEnabled, sessionPhase, addToQueue]);
 
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
