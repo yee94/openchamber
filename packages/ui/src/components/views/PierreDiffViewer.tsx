@@ -1,11 +1,11 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FileDiff } from '@pierre/diffs/react';
-import { parseDiffFromFile, type FileContents, type FileDiffMetadata, type SelectedLineRange } from '@pierre/diffs';
+import { FileDiff as PierreFileDiff, type FileContents, type FileDiffOptions, type SelectedLineRange } from '@pierre/diffs';
 import { RiSendPlane2Line } from '@remixicon/react';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { useWorkerPool } from '@/contexts/DiffWorkerProvider';
 import { ensurePierreThemeRegistered, getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
 
@@ -96,15 +96,23 @@ const WEBKIT_SCROLL_FIX_CSS = `
 `;
 
 // Fast cache key - use length + samples instead of full hash
-function getCacheKey(fileName: string, original: string, modified: string, themeKey: string): string {
-  // Sample a few characters instead of hashing entire content
-  const sampleOriginal = original.length > 100
-    ? `${original.slice(0, 50)}${original.slice(-50)}`
-    : original;
-  const sampleModified = modified.length > 100
-    ? `${modified.slice(0, 50)}${modified.slice(-50)}`
-    : modified;
-  return `${themeKey}::${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
+function fnv1a32(input: string): string {
+  // Fast + stable across runtimes; good enough for cache keys.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    // hash *= 16777619 (but keep 32-bit)
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+function makeContentCacheKey(contents: string): string {
+  // Avoid hashing full file; sample head+tail.
+  const sample = contents.length > 400
+    ? `${contents.slice(0, 200)}${contents.slice(-200)}`
+    : contents;
+  return `${contents.length}:${fnv1a32(sample)}`;
 }
 
 const extractSelectedCode = (original: string, modified: string, range: SelectedLineRange): string => {
@@ -315,6 +323,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const diffThemeKey = `${lightTheme.metadata.id}:${darkTheme.metadata.id}:${isDark ? 'dark' : 'light'}`;
 
   const diffRootRef = useRef<HTMLDivElement | null>(null);
+  const diffContainerRef = useRef<HTMLDivElement | null>(null);
+  const diffInstanceRef = useRef<PierreFileDiff<unknown> | null>(null);
+  const workerPool = useWorkerPool();
 
   const lightResolvedTheme = useMemo(() => getResolvedShikiTheme(lightTheme), [lightTheme]);
   const darkResolvedTheme = useMemo(() => getResolvedShikiTheme(darkTheme), [darkTheme]);
@@ -393,43 +404,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     }
   }, [darkResolvedTheme, diffThemeKey, isDark, lightResolvedTheme]);
 
-  // Cache the last computed diff to avoid recomputing on every render
-  const diffCacheRef = useRef<{
-    key: string;
-    fileDiff: FileDiffMetadata;
-  } | null>(null);
-
-  // Pre-parse the diff with cacheKey for worker pool caching
-  const fileDiff = useMemo(() => {
-    const cacheKey = getCacheKey(fileName, original, modified, diffThemeKey);
-
-    // Return cached diff if inputs haven't changed
-    if (diffCacheRef.current?.key === cacheKey) {
-      return diffCacheRef.current.fileDiff;
-    }
-
-    const oldFile: FileContents = {
-      name: fileName,
-      contents: original,
-      lang: language as FileContents['lang'],
-      cacheKey: `old-${cacheKey}`,
-    };
-
-    const newFile: FileContents = {
-      name: fileName,
-      contents: modified,
-      lang: language as FileContents['lang'],
-      cacheKey: `new-${cacheKey}`,
-    };
-
-    const diff = parseDiffFromFile(oldFile, newFile);
-
-    // Cache the result
-    diffCacheRef.current = { key: cacheKey, fileDiff: diff };
-
-    return diff;
-  }, [diffThemeKey, fileName, original, modified, language]);
-
   const options = useMemo(() => ({
     theme: {
       dark: darkTheme.metadata.id,
@@ -439,7 +413,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     diffStyle: renderSideBySide ? ('split' as const) : ('unified' as const),
     diffIndicators: 'none' as const,
     hunkSeparators: 'line-info' as const,
-    lineDiffType: 'word-alt' as const,
+    // Perf: disable intra-line diff (word-level) globally.
+    lineDiffType: 'none' as const,
     overflow: wrapLines ? ('wrap' as const) : ('scroll' as const),
     disableFileHeader: true,
     enableLineSelection: true,
@@ -447,6 +422,61 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     onLineSelected: handleSelectionChange,
     unsafeCSS: WEBKIT_SCROLL_FIX_CSS,
   }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id, renderSideBySide, wrapLines, handleSelectionChange]);
+
+  // Imperative render (like upstream OpenCode): avoids `parseDiffFromFile` on main thread.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const container = diffContainerRef.current;
+    if (!container) return;
+    if (!workerPool) return;
+
+    // Dispose previous instance
+    diffInstanceRef.current?.cleanUp();
+    diffInstanceRef.current = null;
+    container.innerHTML = '';
+
+    const instance = new PierreFileDiff(options as unknown as FileDiffOptions<unknown>, workerPool);
+    diffInstanceRef.current = instance;
+
+    const oldFile: FileContents = {
+      name: fileName,
+      contents: original,
+      lang: language as FileContents['lang'],
+      cacheKey: `old:${diffThemeKey}:${fileName}:${makeContentCacheKey(original)}`,
+    };
+    const newFile: FileContents = {
+      name: fileName,
+      contents: modified,
+      lang: language as FileContents['lang'],
+      cacheKey: `new:${diffThemeKey}:${fileName}:${makeContentCacheKey(modified)}`,
+    };
+
+    instance.render({
+      oldFile,
+      newFile,
+      lineAnnotations: [],
+      containerWrapper: container,
+    });
+
+    return () => {
+      instance.cleanUp();
+      if (diffInstanceRef.current === instance) {
+        diffInstanceRef.current = null;
+      }
+      container.innerHTML = '';
+    };
+  }, [diffThemeKey, fileName, language, modified, options, original, workerPool]);
+
+  useEffect(() => {
+    const instance = diffInstanceRef.current;
+    if (!instance) return;
+    try {
+      instance.setSelectedLines(selection);
+    } catch {
+      // ignore
+    }
+  }, [selection]);
 
   if (typeof window === 'undefined') {
     return null;
@@ -557,12 +587,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             fillContainer={true}
           >
             <div ref={diffRootRef} className="size-full">
-              <FileDiff
-                key={diffThemeKey}
-                fileDiff={fileDiff}
-                options={options}
-                selectedLines={selection}
-              />
+              <div ref={diffContainerRef} className="size-full" />
             </div>
           </ScrollableOverlay>
         </div>
@@ -595,12 +620,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   return (
     <div className={cn("relative", "w-full")}>
       <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible">
-        <FileDiff
-          key={diffThemeKey}
-          fileDiff={fileDiff}
-          options={options}
-          selectedLines={selection}
-        />
+        <div ref={diffContainerRef} className="w-full" />
       </div>
 
       {selection && createPortal(

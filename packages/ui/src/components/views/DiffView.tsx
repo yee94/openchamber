@@ -29,8 +29,14 @@ import { useDeviceInfo } from '@/lib/device';
 const SIDE_BY_SIDE_MIN_WIDTH = 1100;
 const DIFF_REQUEST_TIMEOUT_MS = 15000;
 
-// Memory optimization: limit concurrent expanded diffs in stacked view
-const STACKED_VIEW_MAX_EXPANDED_DIFFS = 10;
+// Perf: limit concurrent expanded diffs in stacked view.
+// Expanding many diffs mounts many Pierre instances + lots of DOM.
+const getStackedViewDefaultExpandedCount = (fileCount: number): number => {
+    if (fileCount <= 6) return fileCount;
+    if (fileCount <= 12) return 6;
+    if (fileCount <= 25) return 4;
+    return 2;
+};
 
 type FileEntry = GitStatus['files'][number] & {
     insertions: number;
@@ -771,7 +777,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                                 Loading diff…
                             </div>
                         ) : null}
-                        {diffData ? (
+                        {isExpanded && diffData ? (
                             <InlineDiffViewer
                                 filePath={file.path}
                                 diff={diffData}
@@ -1054,6 +1060,8 @@ export const DiffView: React.FC = () => {
     const renderStackedDiffView = () => {
         if (!effectiveDirectory) return null;
 
+        const defaultExpandedCount = getStackedViewDefaultExpandedCount(changedFiles.length);
+
         return (
             <div className="flex flex-1 min-h-0 h-full gap-3 px-3 pb-3 pt-2">
                 {showFileSidebar && (
@@ -1087,7 +1095,7 @@ export const DiffView: React.FC = () => {
                                 isSelected={file.path === selectedFile}
                                 onSelect={handleSelectFile}
                                 registerSectionRef={registerSectionRef}
-                                defaultCollapsed={index >= STACKED_VIEW_MAX_EXPANDED_DIFFS}
+                                defaultCollapsed={index >= defaultExpandedCount}
                             />
                         ))}
                     </div>
