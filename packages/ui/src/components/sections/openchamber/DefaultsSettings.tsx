@@ -125,6 +125,7 @@ export const DefaultsSettings: React.FC = () => {
     loadSettings();
   }, []);
 
+
   const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
     const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
     setDefaultModel(newValue);
@@ -243,6 +244,7 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [setSettingsAutoCreateWorktree]);
 
+
   if (isLoading) {
     return null;
   }
@@ -301,7 +303,7 @@ export const DefaultsSettings: React.FC = () => {
          </div>
        </div>
 
-          {(parsedModel.providerId || defaultAgent) && (
+      {(parsedModel.providerId || defaultAgent) && (
         <div className="typography-meta text-muted-foreground">
           New sessions will start with:{' '}
           {parsedModel.providerId && (
@@ -314,6 +316,7 @@ export const DefaultsSettings: React.FC = () => {
           {defaultAgent && <span className="text-foreground">{defaultAgent}</span>}
         </div>
       )}
+
 
       {!isVSCode && (
         <div className="pt-2">
