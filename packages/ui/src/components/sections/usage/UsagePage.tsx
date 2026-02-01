@@ -69,20 +69,20 @@ export const UsagePage: React.FC = () => {
         </div>
 
         {!selectedResult && (
-          <div className="rounded-lg border border-border/60 bg-card/40 p-4 text-muted-foreground">
+          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
             <p className="typography-body">No usage data available yet.</p>
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-border/60 bg-card/40 p-4 text-muted-foreground">
+          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
             <p className="typography-body">Failed to refresh usage data.</p>
             <p className="typography-meta mt-1">{error}</p>
           </div>
         )}
 
         {selectedResult && !selectedResult.configured && (
-          <div className="rounded-lg border border-border/60 bg-card/40 p-4 text-muted-foreground">
+          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
             <p className="typography-body">Provider is not configured yet.</p>
             <p className="typography-meta mt-1">
               Add credentials in the Providers tab to enable usage tracking.
@@ -114,7 +114,7 @@ export const UsagePage: React.FC = () => {
 
         {selectedResult?.configured && usage && Object.keys(usage.windows ?? {}).length === 0 &&
           Object.keys(usage.models ?? {}).length === 0 && (
-          <div className="rounded-lg border border-border/60 bg-card/40 p-4 text-muted-foreground">
+          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
             <p className="typography-body">No quota windows reported for this provider.</p>
           </div>
         )}

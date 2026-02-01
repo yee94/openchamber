@@ -11,17 +11,17 @@ export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({ percent, cla
   const clamped = clampPercent(percent) ?? 0;
   const tone = resolveUsageTone(percent);
 
-  const fillClass = tone === 'critical'
-    ? 'from-rose-500 to-rose-400'
+  const fillStyle = tone === 'critical'
+    ? { backgroundColor: 'var(--status-error)' }
     : tone === 'warn'
-      ? 'from-amber-500 to-amber-400'
-      : 'from-emerald-500 to-emerald-400';
+      ? { backgroundColor: 'var(--status-warning)' }
+      : { backgroundColor: 'var(--status-success)' };
 
   return (
-    <div className={cn('h-2.5 rounded-full bg-muted/60 overflow-hidden', className)}>
+    <div className={cn('h-2.5 rounded-full bg-[var(--interactive-border)] overflow-hidden', className)}>
       <div
-        className={cn('h-full bg-gradient-to-r transition-all duration-300', fillClass)}
-        style={{ width: `${clamped}%` }}
+        className="h-full transition-all duration-300"
+        style={{ ...fillStyle, width: `${clamped}%` }}
         role="progressbar"
         aria-valuenow={clamped}
         aria-valuemin={0}

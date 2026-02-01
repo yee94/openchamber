@@ -7,6 +7,7 @@ mod opencode_auth;
 mod opencode_config;
 mod opencode_manager;
 mod path_utils;
+mod quota_providers;
 mod session_activity;
 mod skills_catalog;
 mod window_state;
@@ -22,7 +23,7 @@ use anyhow::{anyhow, Result};
 use assistant_notifications::spawn_assistant_notifications;
 use axum::{
     body::{to_bytes, Body},
-    extract::{Request, State},
+    extract::{Path, Request, State},
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{any, get, post},
@@ -273,6 +274,11 @@ struct ServerInfoPayload {
     api_prefix: String,
     cli_available: bool,
     has_last_directory: bool,
+}
+
+#[derive(Serialize)]
+struct QuotaProvidersResponse {
+    providers: Vec<String>,
 }
 
 #[tauri::command]
@@ -1098,6 +1104,8 @@ async fn run_http_server(
             "/api/openchamber/models-metadata",
             get(models_metadata_handler),
         )
+        .route("/api/quota/providers", get(quota_providers_handler))
+        .route("/api/quota/{providerId}", get(quota_provider_handler))
         .route("/api/opencode/directory", post(change_directory_handler))
         .route("/api", any(proxy_to_opencode))
         .route("/api/{*rest}", any(proxy_to_opencode))
@@ -1177,6 +1185,37 @@ async fn models_metadata_handler(
     }
 
     Ok(Json(payload))
+}
+
+async fn quota_providers_handler(State(_state): State<ServerState>) -> Response {
+    match quota_providers::list_configured_quota_providers().await {
+        Ok(providers) => json_response(
+            StatusCode::OK,
+            QuotaProvidersResponse { providers },
+        ),
+        Err(err) => {
+            error!("[desktop:quota] Failed to list quota providers: {}", err);
+            config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        }
+    }
+}
+
+async fn quota_provider_handler(
+    State(state): State<ServerState>,
+    Path(provider_id): Path<String>,
+) -> Response {
+    let trimmed = provider_id.trim();
+    if trimmed.is_empty() {
+        return config_error_response(StatusCode::BAD_REQUEST, "Provider ID is required");
+    }
+
+    match quota_providers::fetch_quota_for_provider(&state.client, trimmed).await {
+        Ok(result) => json_response(StatusCode::OK, result),
+        Err(err) => {
+            error!("[desktop:quota] Failed to fetch quota: {}", err);
+            config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        }
+    }
 }
 
 #[derive(Deserialize)]

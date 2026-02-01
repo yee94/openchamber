@@ -300,6 +300,9 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Bool(b)) = obj.get("notifyOnSubtasks") {
             result_obj.insert("notifyOnSubtasks".to_string(), json!(b));
         }
+        if let Some(Value::Bool(b)) = obj.get("usageAutoRefresh") {
+            result_obj.insert("usageAutoRefresh".to_string(), json!(b));
+        }
         if let Some(Value::String(s)) = obj.get("notificationMode") {
             let trimmed = s.trim();
             if trimmed == "always" || trimmed == "hidden-only" {
@@ -375,6 +378,16 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             if let Some(value) = parsed {
                 let clamped = value.max(0).min(100);
                 result_obj.insert("inputBarOffset".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("usageRefreshIntervalMs") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(30000).min(300000);
+                result_obj.insert("usageRefreshIntervalMs".to_string(), json!(clamped));
             }
         }
 

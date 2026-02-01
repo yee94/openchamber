@@ -3,6 +3,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -90,11 +91,21 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {QUOTA_PROVIDERS.length}</span>
           <div className="flex items-center gap-2">
-            <Switch
-              checked={usageAutoRefresh}
-              onCheckedChange={handleUsageAutoRefreshChange}
-              aria-label="Toggle auto refresh"
-            />
+            <Tooltip delayDuration={700}>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Switch
+                    checked={usageAutoRefresh}
+                    onCheckedChange={handleUsageAutoRefreshChange}
+                    aria-label="Toggle auto refresh"
+                    className="data-[state=checked]:bg-[var(--status-info)]"
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Auto-refresh usage data at set interval
+              </TooltipContent>
+            </Tooltip>
             <Select
               value={String(usageRefreshIntervalMs)}
               onValueChange={handleUsageRefreshIntervalChange}
@@ -113,7 +124,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7 -my-1 text-muted-foreground"
+              className="h-7 w-7 -my-1 text-muted-foreground overflow-hidden"
               onClick={() => fetchAllQuotas()}
               aria-label="Refresh usage"
               title="Refresh usage"
@@ -133,20 +144,20 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
           const isSelected = provider.id === selectedProviderId;
           const configured = result?.configured ?? false;
 
-          const statusClass = !configured
-            ? 'bg-muted-foreground/40'
+          const statusStyle = !configured
+            ? { backgroundColor: 'var(--surface-muted-foreground)', opacity: 0.4 }
             : tone === 'critical'
-              ? 'bg-rose-500'
+              ? { backgroundColor: 'var(--status-error)' }
               : tone === 'warn'
-                ? 'bg-amber-500'
-                : 'bg-emerald-500';
+                ? { backgroundColor: 'var(--status-warning)' }
+                : { backgroundColor: 'var(--status-success)' };
 
           return (
             <div
               key={provider.id}
               className={cn(
                 'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-                isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6'
+                isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
               )}
             >
               <button
@@ -157,7 +168,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 }}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <span className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', statusClass)} />
+                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={statusStyle} />
                 <ProviderLogo providerId={provider.id} className="h-4 w-4 flex-shrink-0" />
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
                   {provider.name}

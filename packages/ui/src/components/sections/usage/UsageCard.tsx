@@ -15,7 +15,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ title, window, subtitle })
   const windowLabel = formatWindowLabel(title);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/40 p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="typography-ui-label text-foreground truncate">{windowLabel}</div>
