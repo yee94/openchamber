@@ -1,3 +1,9 @@
+## [1.6.2] - 2026-02-1
+
+- Added multi-provider quota dashboard in settings to monitor API usage across OpenAI, Google, and z.ai with auto-refresh support (thanks to @nelsonPires5).
+- Enhanced token-based theming system for better themes support.
+
+
 ## [1.6.1] - 2026-01-30
 
 - Chat: added Stop button to cancel generation mid-response.
