@@ -46,34 +46,31 @@ const normalizeAuthEntry = (entry) => {
   return null;
 };
 
-const formatResetAt = (timestamp) => {
+const formatResetTime = (timestamp) => {
   try {
-    return new Date(timestamp).toLocaleTimeString(undefined, {
+    const resetDate = new Date(timestamp);
+    const now = new Date();
+    const isToday = resetDate.toDateString() === now.toDateString();
+    
+    if (isToday) {
+      // Same day: show time only (e.g., "9:56 PM")
+      return resetDate.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+    
+    // Different day: show date + weekday + time (e.g., "Feb 2, Sun 9:56 PM")
+    return resetDate.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      weekday: 'short',
       hour: 'numeric',
       minute: '2-digit'
     });
   } catch {
     return null;
   }
-};
-
-const formatDuration = (seconds) => {
-  if (typeof seconds !== 'number' || Number.isNaN(seconds)) {
-    return null;
-  }
-  const clamped = Math.max(0, Math.round(seconds));
-  const hours = Math.floor(clamped / 3600);
-  const minutes = Math.floor((clamped % 3600) / 60);
-  if (hours === 0 && minutes === 0) {
-    return '0m';
-  }
-  if (hours === 0) {
-    return `${minutes}m`;
-  }
-  if (minutes === 0) {
-    return `${hours}h`;
-  }
-  return `${hours}h ${minutes}m`;
 };
 
 const calculateResetAfterSeconds = (resetAt) => {
@@ -84,14 +81,15 @@ const calculateResetAfterSeconds = (resetAt) => {
 
 const toUsageWindow = ({ usedPercent, windowSeconds, resetAt }) => {
   const resetAfterSeconds = calculateResetAfterSeconds(resetAt);
+  const resetFormatted = resetAt ? formatResetTime(resetAt) : null;
   return {
     usedPercent,
     remainingPercent: usedPercent !== null ? Math.max(0, 100 - usedPercent) : null,
     windowSeconds: windowSeconds ?? null,
     resetAfterSeconds,
     resetAt,
-    resetAtFormatted: resetAt ? formatResetAt(resetAt) : null,
-    resetAfterFormatted: resetAfterSeconds !== null ? formatDuration(resetAfterSeconds) : null
+    resetAtFormatted: resetFormatted,
+    resetAfterFormatted: resetFormatted
   };
 };
 

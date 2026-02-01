@@ -154,28 +154,18 @@ fn normalize_auth_entry(value: Option<&Value>) -> Option<AuthEntry> {
     }
 }
 
-fn format_reset_at(timestamp_ms: i64) -> Option<String> {
-    let dt = Local.timestamp_millis_opt(timestamp_ms).single()?;
-    Some(dt.format("%-I:%M %p").to_string())
-}
+fn format_reset_time(timestamp_ms: i64) -> Option<String> {
+    let reset_dt = Local.timestamp_millis_opt(timestamp_ms).single()?;
+    let now = Local::now();
+    let is_today = reset_dt.date_naive() == now.date_naive();
 
-fn format_duration(seconds: i64) -> Option<String> {
-    if seconds < 0 {
-        return None;
+    if is_today {
+        // Same day: show time only (e.g., "9:56 PM")
+        Some(reset_dt.format("%-I:%M %p").to_string())
+    } else {
+        // Different day: show date + weekday + time (e.g., "Feb 2, Sun 9:56 PM")
+        Some(reset_dt.format("%b %-d, %a %-I:%M %p").to_string())
     }
-    let clamped = seconds.max(0) as i64;
-    let hours = clamped / 3600;
-    let minutes = (clamped % 3600) / 60;
-    if hours == 0 && minutes == 0 {
-        return Some("0m".to_string());
-    }
-    if hours == 0 {
-        return Some(format!("{}m", minutes));
-    }
-    if minutes == 0 {
-        return Some(format!("{}h", hours));
-    }
-    Some(format!("{}h {}m", hours, minutes))
 }
 
 fn calculate_reset_after_seconds(reset_at: Option<i64>) -> Option<i64> {
@@ -188,8 +178,7 @@ fn calculate_reset_after_seconds(reset_at: Option<i64>) -> Option<i64> {
 fn to_usage_window(used_percent: Option<f64>, window_seconds: Option<i64>, reset_at: Option<i64>) -> UsageWindow {
     let remaining_percent = used_percent.map(|value| (100.0 - value).max(0.0));
     let reset_after_seconds = calculate_reset_after_seconds(reset_at);
-    let reset_at_formatted = reset_at.and_then(format_reset_at);
-    let reset_after_formatted = reset_after_seconds.and_then(format_duration);
+    let reset_formatted = reset_at.and_then(format_reset_time);
 
     UsageWindow {
         used_percent,
@@ -197,8 +186,8 @@ fn to_usage_window(used_percent: Option<f64>, window_seconds: Option<i64>, reset
         window_seconds,
         reset_after_seconds,
         reset_at,
-        reset_at_formatted,
-        reset_after_formatted,
+        reset_at_formatted: reset_formatted.clone(),
+        reset_after_formatted: reset_formatted,
     }
 }
 
