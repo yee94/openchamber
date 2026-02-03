@@ -29,5 +29,6 @@ export const resolveUsageTone = (percent: number | null): 'safe' | 'warn' | 'cri
 export const formatWindowLabel = (label: string): string => {
   if (label === '5h') return '5-Hour Limit';
   if (label === 'weekly') return 'Weekly Limit';
+  if (label === 'premium_interactions') return 'Premium interactions';
   return label;
 };

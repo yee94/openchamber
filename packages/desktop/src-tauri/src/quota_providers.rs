@@ -258,6 +258,14 @@ pub async fn list_configured_quota_providers() -> Result<Vec<String>> {
         }
     }
 
+    let github_copilot_auth =
+        normalize_auth_entry(get_auth_entry(&auth, &["github-copilot"]));
+    if let Some(entry) = github_copilot_auth {
+        if entry.access.is_some() || entry.token.is_some() {
+            configured.insert("github-copilot".to_string());
+        }
+    }
+
     if has_antigravity_accounts().await {
         configured.insert("google".to_string());
     }
@@ -769,11 +777,147 @@ async fn fetch_zai_quota(client: &Client) -> Result<ProviderResult> {
     ))
 }
 
+async fn fetch_github_copilot_quota(client: &Client) -> Result<ProviderResult> {
+    let auth = load_auth_map().await?;
+    let entry = normalize_auth_entry(get_auth_entry(&auth, &["github-copilot"]));
+    let access_token = entry
+        .as_ref()
+        .and_then(|entry| entry.access.clone().or(entry.token.clone()));
+
+    let Some(access_token) = access_token else {
+        return Ok(build_result(
+            "github-copilot",
+            "GitHub Copilot",
+            false,
+            false,
+            None,
+            Some("Not configured".to_string()),
+        ));
+    };
+
+    let response = client
+        .get("https://api.github.com/copilot_internal/user")
+        .bearer_auth(access_token)
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "OpenChamber")
+        .send()
+        .await;
+
+    let response = match response {
+        Ok(resp) => resp,
+        Err(err) => {
+            return Ok(build_result(
+                "github-copilot",
+                "GitHub Copilot",
+                false,
+                true,
+                None,
+                Some(err.to_string()),
+            ))
+        }
+    };
+
+    if !response.status().is_success() {
+        return Ok(build_result(
+            "github-copilot",
+            "GitHub Copilot",
+            false,
+            true,
+            None,
+            Some(format!("API error: {}", response.status().as_u16())),
+        ));
+    }
+
+    let payload: Value = match response.json().await {
+        Ok(value) => value,
+        Err(err) => {
+            return Ok(build_result(
+                "github-copilot",
+                "GitHub Copilot",
+                false,
+                true,
+                None,
+                Some(err.to_string()),
+            ))
+        }
+    };
+
+    // Parse reset date
+    let mut reset_at: Option<i64> = None;
+    let reset_date_utc = payload
+        .get("quota_reset_date_utc")
+        .and_then(|v| v.as_str());
+    let reset_date = payload
+        .get("quota_reset_date")
+        .and_then(|v| v.as_str());
+
+    if let Some(date_str) = reset_date_utc {
+        if let Ok(dt) = DateTime::parse_from_rfc3339(date_str) {
+            reset_at = Some(dt.timestamp_millis());
+        }
+    } else if let Some(date_str) = reset_date {
+        // Use the date as UTC midnight
+        let full_date = format!("{}T00:00:00Z", date_str);
+        if let Ok(dt) = DateTime::parse_from_rfc3339(&full_date) {
+            reset_at = Some(dt.timestamp_millis());
+        }
+    }
+
+    let mut windows: HashMap<String, UsageWindow> = HashMap::new();
+
+    // Get premium_interactions snapshot
+    if let Some(snapshots) = payload.get("quota_snapshots") {
+        if let Some(premium) = snapshots.get("premium_interactions") {
+            let mut used_percent: Option<f64> = None;
+
+            let unlimited = premium
+                .get("unlimited")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if !unlimited {
+                if let Some(percent_remaining) = premium.get("percent_remaining").and_then(|v| v.as_f64()) {
+                    used_percent = Some(100.0 - percent_remaining);
+                } else if let Some(entitlement) = premium.get("entitlement").and_then(|v| v.as_f64()) {
+                    if entitlement > 0.0 {
+                        let remaining = premium
+                            .get("remaining")
+                            .and_then(|v| v.as_f64())
+                            .or_else(|| premium.get("quota_remaining").and_then(|v| v.as_f64()));
+
+                        if let Some(rem) = remaining {
+                            used_percent = Some(((entitlement - rem) / entitlement) * 100.0);
+                        }
+                    }
+                }
+            }
+
+            windows.insert(
+                "premium_interactions".to_string(),
+                to_usage_window(used_percent, None, reset_at),
+            );
+        }
+    }
+
+    Ok(build_result(
+        "github-copilot",
+        "GitHub Copilot",
+        true,
+        true,
+        Some(ProviderUsage {
+            windows,
+            models: None,
+        }),
+        None,
+    ))
+}
+
 pub async fn fetch_quota_for_provider(client: &Client, provider_id: &str) -> Result<ProviderResult> {
     match provider_id {
         "openai" => fetch_openai_quota(client).await,
         "google" => fetch_google_quota(client).await,
         "zai-coding-plan" => fetch_zai_quota(client).await,
+        "github-copilot" => fetch_github_copilot_quota(client).await,
         _ => Ok(build_result(
             provider_id,
             provider_id,
