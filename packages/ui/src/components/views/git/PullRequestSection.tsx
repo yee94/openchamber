@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/collapsible';
 import { generatePullRequestDescription } from '@/lib/gitApi';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useDeviceInfo } from '@/lib/device';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -66,6 +68,7 @@ type PullRequestDraftSnapshot = {
   body: string;
   draft: boolean;
   isOpen: boolean;
+  additionalContext: string;
 };
 
 const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
@@ -102,6 +105,7 @@ export const PullRequestSection: React.FC<{
   const setSidebarSection = useUIStore((state) => state.setSidebarSection);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const { isMobile } = useDeviceInfo();
 
   const openGitHubSettings = React.useCallback(() => {
     setSidebarSection('settings');
@@ -122,12 +126,16 @@ export const PullRequestSection: React.FC<{
   const [title, setTitle] = React.useState(() => initialSnapshot?.title ?? branchToTitle(branch));
   const [body, setBody] = React.useState(() => initialSnapshot?.body ?? '');
   const [draft, setDraft] = React.useState(() => initialSnapshot?.draft ?? false);
+  const [additionalContext, setAdditionalContext] = React.useState(() => initialSnapshot?.additionalContext ?? '');
   const [mergeMethod, setMergeMethod] = React.useState<MergeMethod>('squash');
 
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
   const [isMerging, setIsMerging] = React.useState(false);
   const [isMarkingReady, setIsMarkingReady] = React.useState(false);
+
+  const [isContextOpen, setIsContextOpen] = React.useState(false);
+  const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
 
   const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
   const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
@@ -407,8 +415,9 @@ export const PullRequestSection: React.FC<{
       body,
       draft,
       isOpen,
+      additionalContext,
     });
-  }, [snapshotKey, title, body, draft, isOpen, directory, branch]);
+  }, [snapshotKey, title, body, draft, isOpen, additionalContext, directory, branch]);
 
   const generateDescription = React.useCallback(async () => {
     if (isGenerating) return;
@@ -418,6 +427,7 @@ export const PullRequestSection: React.FC<{
       const generated = await generatePullRequestDescription(directory, {
         base: baseBranch,
         head: branch,
+        context: additionalContext,
       });
 
       if (generated.title?.trim()) {
@@ -433,7 +443,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsGenerating(false);
     }
-  }, [baseBranch, branch, directory, isGenerating]);
+  }, [baseBranch, branch, directory, isGenerating, additionalContext]);
 
   const createPr = React.useCallback(async () => {
     if (!github?.prCreate) {
@@ -730,6 +740,84 @@ export const PullRequestSection: React.FC<{
                   </button>
                   <span className="typography-ui-label text-foreground select-none">Draft</span>
                 </div>
+
+                {/* Additional Context Section */}
+                {isMobile ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="typography-micro text-muted-foreground">
+                        Additional context (optional)
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsContextSheetOpen(true)}
+                      >
+                        {additionalContext.trim() ? 'Edit' : 'Add'}
+                      </Button>
+                    </div>
+                    {additionalContext.trim() && (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-[var(--interactive-selection)] px-2 py-0.5 text-xs text-[var(--interactive-selection-foreground)]">
+                          Context added
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Collapsible open={isContextOpen} onOpenChange={setIsContextOpen}>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-3 py-2 hover:bg-[var(--interactive-hover)]">
+                      <span className="typography-micro text-muted-foreground">
+                        Additional context (optional)
+                      </span>
+                      <span className="typography-micro text-[var(--primary-base)]">
+                        {isContextOpen ? 'Hide' : additionalContext.trim() ? 'Edit' : 'Add'}
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="mt-2 space-y-2 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-3">
+                        <Textarea
+                          value={additionalContext}
+                          onChange={(e) => setAdditionalContext(e.target.value)}
+                          className="min-h-[100px] bg-transparent"
+                          placeholder="Explain why this change is needed...&#10;Mention how to test (commands / steps)...&#10;Call out risks / rollout plan..."
+                        />
+                        <p className="typography-micro text-muted-foreground">
+                          This text is only used to guide PR generation.
+                        </p>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Mobile Sheet for Context */}
+                <MobileOverlayPanel
+                  open={isContextSheetOpen}
+                  onClose={() => setIsContextSheetOpen(false)}
+                  title="Additional context"
+                  footer={
+                    <Button
+                      size="sm"
+                      onClick={() => setIsContextSheetOpen(false)}
+                      className="w-full"
+                    >
+                      Done
+                    </Button>
+                  }
+                >
+                  <div className="space-y-3">
+                    <Textarea
+                      value={additionalContext}
+                      onChange={(e) => setAdditionalContext(e.target.value)}
+                      className="min-h-[200px] bg-transparent"
+                      placeholder="Explain why this change is needed...&#10;Mention how to test (commands / steps)...&#10;Call out risks / rollout plan..."
+                      autoFocus
+                    />
+                    <p className="typography-micro text-muted-foreground">
+                      This text is only used to guide PR generation.
+                    </p>
+                  </div>
+                </MobileOverlayPanel>
 
                 <div className="flex items-center gap-2">
                   <Button

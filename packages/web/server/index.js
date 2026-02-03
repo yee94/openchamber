@@ -5983,6 +5983,7 @@ async function main(options = {}) {
 
       const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
       const head = typeof req.body?.head === 'string' ? req.body.head.trim() : '';
+      const context = typeof req.body?.context === 'string' ? req.body.context.trim() : '';
       if (!base || !head) {
         return res.status(400).json({ error: 'base and head are required' });
       }
@@ -6002,7 +6003,22 @@ async function main(options = {}) {
 
       const diffSummaries = diffs.map(({ path, diff }) => `FILE: ${path}\n${diff}`).join('\n\n');
 
-      const prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:\n- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")\n- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes\n- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names\n- Testing: bullet list ("- Not tested" allowed)\n- Notes: bullet list; include breaking/rollout notes only when relevant\n\nContext:\n- base branch: ${base}\n- head branch: ${head}\n\nDiff summary:\n${diffSummaries}`;
+      let prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:
+- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")
+- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes
+- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names
+- Testing: bullet list ("- Not tested" allowed)
+- Notes: bullet list; include breaking/rollout notes only when relevant
+
+Context:
+- base branch: ${base}
+- head branch: ${head}`;
+
+      if (context) {
+        prompt += `\n\nAdditional context provided by user:\n${context}`;
+      }
+
+      prompt += `\n\nDiff summary:\n${diffSummaries}`;
 
       const model = 'gpt-5-nano';
 

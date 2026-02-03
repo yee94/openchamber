@@ -250,17 +250,22 @@ export async function generateCommitMessage(
 
 export async function generatePullRequestDescription(
   directory: string,
-  payload: { base: string; head: string }
+  payload: { base: string; head: string; context?: string }
 ): Promise<{ title: string; body: string }> {
-  const { base, head } = payload;
+  const { base, head, context } = payload;
   if (!base || !head) {
     throw new Error('base and head are required');
+  }
+
+  const requestBody: { base: string; head: string; context?: string } = { base, head };
+  if (context?.trim()) {
+    requestBody.context = context.trim();
   }
 
   const response = await fetch(buildUrl(`${API_BASE}/pr-description`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base, head }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {

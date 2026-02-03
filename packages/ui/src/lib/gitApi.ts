@@ -106,7 +106,7 @@ export async function generateCommitMessage(
 
 export async function generatePullRequestDescription(
   directory: string,
-  payload: { base: string; head: string }
+  payload: { base: string; head: string; context?: string }
 ): Promise<import('./api/types').GeneratedPullRequestDescription> {
   const runtime = getRuntimeGit();
   if (runtime?.generatePullRequestDescription) {

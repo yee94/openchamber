@@ -2343,6 +2343,7 @@ pub async fn generate_pr_description(
     directory: String,
     base: String,
     head: String,
+    context: Option<String>,
     state: State<'_, DesktopRuntime>,
 ) -> Result<serde_json::Value, String> {
     let root = validate_git_path(&directory, state.settings())
@@ -2398,8 +2399,8 @@ pub async fn generate_pr_description(
     }
 
     // 2. Construct PR-specific prompt
-    let prompt = format!(
-        r#"You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {{\"title\": string, \"body\": string}} (ONLY JSON in response, no markdown fences) with these rules:
+    let mut prompt = format!(
+        r#"You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {{"title": string, "body": string}} (ONLY JSON in response, no markdown fences) with these rules:
 - title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no \"feat:\", \"fix:\")
 - body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes
 - Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names
@@ -2407,14 +2408,20 @@ pub async fn generate_pr_description(
 - Notes: bullet list; include breaking/rollout notes only when relevant
 Context:
 - base branch: {base}
-- head branch: {head}
-
-Diff summary:
-{diffs}"#,
+- head branch: {head}"#,
         base = base.trim(),
-        head = head.trim(),
-        diffs = diff_summaries
+        head = head.trim()
     );
+
+    // Include additional context if provided
+    if let Some(ctx) = context {
+        let trimmed = ctx.trim();
+        if !trimmed.is_empty() {
+            prompt.push_str(&format!("\n\nAdditional context provided by user:\n{}", trimmed));
+        }
+    }
+
+    prompt.push_str(&format!("\n\nDiff summary:\n{}", diff_summaries));
 
     let model = "gpt-5-nano";
 
