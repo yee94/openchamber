@@ -22,10 +22,11 @@ import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomp
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
-import { StatusChip } from './StatusChip';
 import { UnifiedControlsDrawer } from './UnifiedControlsDrawer';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
+import { MobileAgentButton } from './MobileAgentButton';
+import { MobileModelButton } from './MobileModelButton';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
@@ -530,7 +531,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         if (e.key === 'Tab' && !showCommandAutocomplete && !showAgentAutocomplete && !showFileMention) {
             e.preventDefault();
-            cycleAgent();
+            handleCycleAgent();
             return;
         }
 
@@ -587,9 +588,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         void abortCurrentOperation();
     }, [abortCurrentOperation, clearAbortPrompt, startAbortIndicator]);
 
-    const cycleAgent = () => {
+    const handleCycleAgent = React.useCallback(() => {
         const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
-
         if (primaryAgents.length <= 1) return;
 
         const currentIndex = primaryAgents.findIndex(agent => agent.name === currentAgentName);
@@ -599,10 +599,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         setAgent(nextAgent.name);
 
         if (currentSessionId) {
-
             saveSessionAgentSelection(currentSessionId, nextAgent.name);
         }
-    };
+    }, [agents, currentAgentName, currentSessionId, setAgent, saveSessionAgentSelection]);
 
     const adjustTextareaHeight = React.useCallback(() => {
         const textarea = textareaRef.current;
@@ -1364,7 +1363,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     <DropdownMenuTrigger asChild>
                         <button
                             type="button"
-                            className={iconButtonBaseClass}
+                            className={cn(iconButtonBaseClass, isMobile && 'h-7 w-7')}
                             title="Add attachment"
                             aria-label="Add attachment"
                         >
@@ -1400,7 +1399,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         <button
             type='button'
             onClick={onOpenSettings}
-            className={iconButtonBaseClass}
+            className={cn(iconButtonBaseClass, isMobile && 'h-7 w-7')}
             title='Model and agent settings'
             aria-label='Model and agent settings'
         >
@@ -1409,15 +1408,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     ) : null;
 
     const attachmentsControls = (
-        <>
+        <div className="flex items-center gap-x-1">
             {isMobile ? (
                 <button
                     type="button"
                     className={cn(
                         iconButtonBaseClass,
-                        'h-7 w-7 rounded-md border border-transparent typography-ui-label font-semibold text-muted-foreground',
+                        'h-7 w-7 rounded-md text-muted-foreground',
                         'hover:bg-interactive-hover/40 hover:text-foreground'
                     )}
+                    onPointerDownCapture={(event) => {
+                        if (event.pointerType === 'touch') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                    }}
                     onClick={handleOpenCommandMenu}
                     title="Commands"
                     aria-label="Commands"
@@ -1427,7 +1432,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             ) : null}
             {attachmentMenu}
             {settingsButton}
-        </>
+        </div>
     );
 
     const workingStatusText = working.statusText;
@@ -1621,14 +1626,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     >
                         {isMobile ? (
                             <>
-                                <div className="flex w-full items-center gap-x-1">
-                                    <div className="flex items-center flex-shrink-0">
+                                <div className="flex w-full items-center justify-between gap-x-1.5">
+                                    <div className="flex items-center gap-x-1">
                                         {attachmentsControls}
                                     </div>
-                                    <div className="flex flex-1 items-center min-w-0">
-                                        <StatusChip onClick={handleOpenMobileControls} className="min-w-0 max-w-full" />
-                                    </div>
-                                    <div className="flex items-center flex-shrink-0 gap-x-0.5">
+                                    <div className="flex items-center flex-shrink-0 gap-x-1">
+                                        <MobileModelButton onOpenModel={handleOpenMobileControls} />
+                                        <MobileAgentButton onCycleAgent={handleCycleAgent} onOpenAgentPanel={() => setMobileControlsPanel('agent')} />
                                         {actionButtons}
                                     </div>
                                 </div>
@@ -1637,11 +1641,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                     mobilePanel={mobileControlsPanel}
                                     onMobilePanelChange={setMobileControlsPanel}
                                     onMobilePanelSelection={handleReturnToUnifiedControls}
+                                    onAgentPanelSelection={() => setMobileControlsPanel(null)}
                                 />
                                 <UnifiedControlsDrawer
                                     open={mobileControlsOpen}
                                     onClose={handleCloseMobileControls}
-                                    onOpenAgent={() => handleOpenMobilePanel('agent')}
                                     onOpenModel={() => handleOpenMobilePanel('model')}
                                     onOpenEffort={() => handleOpenMobilePanel('variant')}
                                 />
