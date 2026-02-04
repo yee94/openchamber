@@ -39,24 +39,24 @@ export const StatusChip: React.FC<StatusChipProps> = ({ onClick, className }) =>
             onClick={onClick}
             className={cn(
                 'inline-flex min-w-0 items-center justify-center',
-                'rounded-lg border border-border/50 px-1.5',
-                'typography-meta font-medium text-foreground/80',
+                'rounded-md border border-border/50 px-1.5',
+                'text-[11px] font-medium text-foreground/80',
                 'focus:outline-none hover:bg-[var(--interactive-hover)]',
                 className
             )}
             style={{ 
-                height: '30px',
-                maxHeight: '30px',
-                minHeight: '30px',
+                height: '28px',
+                maxHeight: '28px',
+                minHeight: '28px',
             }}
             title={fullLabel}
         >
             <span className="shrink-0">{agentLabel}</span>
-            <span className="shrink-0 text-muted-foreground mx-1">·</span>
+            <span className="shrink-0 text-muted-foreground mx-0.5">·</span>
             <span className="min-w-0 truncate">{modelLabel}</span>
             {effortLabel && (
                 <>
-                    <span className="shrink-0 text-muted-foreground mx-1">·</span>
+                    <span className="shrink-0 text-muted-foreground mx-0.5">·</span>
                     <span className="shrink-0">{effortLabel}</span>
                 </>
             )}

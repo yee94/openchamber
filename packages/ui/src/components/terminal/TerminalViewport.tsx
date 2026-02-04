@@ -853,15 +853,17 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
             autoCorrect="off"
             spellCheck={false}
             tabIndex={-1}
-            aria-hidden="true"
+            enterKeyHint="send"
             style={{
               position: 'absolute',
               left: 0,
               top: 0,
-              width: 1,
-              height: 1,
-              opacity: 0,
-              zIndex: 1,
+              // Android IME needs visible, larger dimensions to properly attach
+              width: 30,
+              height: 30,
+              // Must be slightly visible for Android IME - clip to hide visually
+              opacity: 0.011,
+              zIndex: 10,
               background: 'transparent',
               color: 'transparent',
               caretColor: 'transparent',
@@ -872,15 +874,32 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
               padding: 0,
               margin: 0,
               outline: 'none',
+              // Prevent iOS zoom on focus - must be 16px+
+              fontSize: 16,
+              // Ensure pointer events work
+              pointerEvents: 'auto',
+              // Android needs these for IME to work properly
+              WebkitUserSelect: 'text',
+              userSelect: 'text',
+              // Transform off-screen but keep focusable
+              transform: 'translateX(-9999px)',
+              transformOrigin: 'left top',
+            }}
+            onFocus={(event) => {
+              // Move back on screen when focused (for Android IME)
+              event.currentTarget.style.transform = 'translateX(0)';
+            }}
+            onBlur={(event) => {
+              // Move off screen when blurred
+              event.currentTarget.style.transform = 'translateX(-9999px)';
             }}
             onBeforeInput={(event) => {
               const nativeEvent = event.nativeEvent as unknown as InputEvent | undefined;
               const inputType = nativeEvent?.inputType ?? '';
               const data = typeof nativeEvent?.data === 'string' ? nativeEvent.data : '';
 
-              // Android Chrome sometimes never commits text into the DOM value
-              // for invisible inputs. Use beforeinput as the primary path.
-              if (inputType === 'insertText' && data) {
+              // Handle insertText (iOS) and insertCompositionText (Android Gboard)
+              if ((inputType === 'insertText' || inputType === 'insertCompositionText') && data) {
                 event.preventDefault();
                 inputHandlerRef.current(data);
                 return;
@@ -898,22 +917,38 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
               }
             }}
             onInput={(event) => {
+              // Fallback: capture any text that makes it through to the input value
               const raw = String(event.currentTarget.value || '');
               if (!raw) {
                 return;
               }
 
-              // Some mobile keyboards (iOS esp.) insert `\n` for Enter; PTY expects CR.
+              // Some mobile keyboards insert `\n` for Enter; PTY expects CR.
               const value = raw.replace(/\r\n|\r|\n/g, '\r');
               inputHandlerRef.current(value);
               event.currentTarget.value = '';
             }}
             onKeyDown={(event) => {
+              // Handle Enter key explicitly for Android
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                inputHandlerRef.current('\r');
+                event.currentTarget.value = '';
+                return;
+              }
               if (event.key === 'Backspace') {
                 // If there's nothing in the input buffer, emulate DEL.
                 if (!event.currentTarget.value) {
                   inputHandlerRef.current('\x7f');
                 }
+              }
+            }}
+            onCompositionEnd={(event) => {
+              // Android IME sends final text via composition events
+              const data = event.data;
+              if (data) {
+                inputHandlerRef.current(data);
+                event.currentTarget.value = '';
               }
             }}
           />

@@ -19,16 +19,24 @@ export interface CommandAutocompleteHandle {
   handleKeyDown: (key: string) => void;
 }
 
+type AutocompleteTab = 'commands' | 'agents' | 'files';
+
 interface CommandAutocompleteProps {
   searchQuery: string;
-  onCommandSelect: (command: CommandInfo) => void;
+  onCommandSelect: (command: CommandInfo, options?: { dismissKeyboard?: boolean }) => void;
   onClose: () => void;
+  showTabs?: boolean;
+  activeTab?: AutocompleteTab;
+  onTabSelect?: (tab: AutocompleteTab) => void;
 }
 
 export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, CommandAutocompleteProps>(({
   searchQuery,
   onCommandSelect,
-  onClose
+  onClose,
+  showTabs,
+  activeTab = 'commands',
+  onTabSelect
 }, ref) => {
   const { hasMessagesInCurrentSession, currentSessionId } = useSessionStore(
     useShallow((state) => {
@@ -48,6 +56,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const ignoreClickRef = React.useRef(false);
+  const pointerStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const pointerMovedRef = React.useRef(false);
+  const ignoreTabClickRef = React.useRef(false);
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -234,7 +246,47 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       ref={containerRef}
       className="absolute z-[100] min-w-0 w-full max-w-[450px] max-h-64 bg-background border-2 border-border/60 rounded-xl shadow-md bottom-full mb-2 left-0 flex flex-col"
     >
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0 pb-2" fillContainer={false}>
+      {showTabs ? (
+        <div className="px-2 pt-2 pb-1 border-b border-border/60">
+          <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-elevated)] p-1">
+            {([
+              { id: 'commands' as const, label: 'Commands' },
+              { id: 'agents' as const, label: 'Agents' },
+              { id: 'files' as const, label: 'Files' },
+            ]).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={cn(
+                  'flex-1 px-2.5 py-1 rounded-md typography-meta font-semibold transition-none',
+                  activeTab === tab.id
+                    ? 'bg-interactive-selection text-interactive-selection-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-interactive-hover/50'
+                )}
+                onPointerDown={(event) => {
+                  if (event.pointerType !== 'touch') {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  ignoreTabClickRef.current = true;
+                  onTabSelect?.(tab.id);
+                }}
+                onClick={() => {
+                  if (ignoreTabClickRef.current) {
+                    ignoreTabClickRef.current = false;
+                    return;
+                  }
+                  onTabSelect?.(tab.id);
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0 pb-2">
         {loading ? (
           <div className="flex items-center justify-center py-4">
             <RiRefreshLine className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -253,7 +305,49 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                     "flex items-start gap-2 px-3 py-2 cursor-pointer rounded-lg",
                     index === selectedIndex && "bg-interactive-selection"
                   )}
-                  onClick={() => onCommandSelect(command)}
+                  onPointerDown={(event) => {
+                    if (event.pointerType !== 'touch') {
+                      return;
+                    }
+                    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+                    pointerMovedRef.current = false;
+                  }}
+                  onPointerMove={(event) => {
+                    if (event.pointerType !== 'touch' || !pointerStartRef.current) {
+                      return;
+                    }
+                    const dx = event.clientX - pointerStartRef.current.x;
+                    const dy = event.clientY - pointerStartRef.current.y;
+                    if (Math.hypot(dx, dy) > 6) {
+                      pointerMovedRef.current = true;
+                    }
+                  }}
+                  onPointerUp={(event) => {
+                    if (event.pointerType !== 'touch') {
+                      return;
+                    }
+                    const didMove = pointerMovedRef.current;
+                    pointerStartRef.current = null;
+                    pointerMovedRef.current = false;
+                    if (didMove) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    ignoreClickRef.current = true;
+                    onCommandSelect(command, { dismissKeyboard: true });
+                  }}
+                  onPointerCancel={() => {
+                    pointerStartRef.current = null;
+                    pointerMovedRef.current = false;
+                  }}
+                  onClick={() => {
+                    if (ignoreClickRef.current) {
+                      ignoreClickRef.current = false;
+                      return;
+                    }
+                    onCommandSelect(command);
+                  }}
                   onMouseEnter={() => setSelectedIndex(index)}
                 >
                   <div className="mt-0.5">
