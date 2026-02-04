@@ -43,17 +43,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
   const { isMobile } = useDeviceInfo();
 
-  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return typeof window.opencodeDesktop !== 'undefined';
-  });
-
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
-  }, []);
 
   React.useEffect(() => {
     void loadUsageSettings();
@@ -89,14 +79,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
     void persistUsageSettings({ usageDisplayMode: value });
   }, [persistUsageSettings, setUsageDisplayMode]);
 
-
-
-
-  const bgClass = isDesktopRuntime
-    ? 'bg-transparent'
-    : isVSCode
-      ? 'bg-background'
-      : 'bg-sidebar';
+  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>

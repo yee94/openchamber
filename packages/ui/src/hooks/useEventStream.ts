@@ -15,7 +15,7 @@ import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { isWebRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive } from '@/lib/desktop';
 
 interface EventData {
   type: string;
@@ -99,36 +99,6 @@ const getMessageFromStore = (sessionId: string, messageId: string): { info: Mess
   return message;
 };
 
-const formatModelID = (raw: string): string => {
-  if (!raw) {
-    return 'Assistant';
-  }
-
-  const tokens: string[] = raw.split(/[-_]/);
-  const result: string[] = [];
-  let i = 0;
-
-  while (i < tokens.length) {
-    const current = tokens[i];
-
-    if (/^\d+$/.test(current)) {
-      if (i + 1 < tokens.length && /^\d+$/.test(tokens[i + 1])) {
-        const combined = `${current}.${tokens[i + 1]}`;
-        result.push(combined);
-        i += 2;
-        continue;
-      }
-    }
-
-    result.push(current);
-    i += 1;
-  }
-
-  return result
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-};
-
 export const useEventStream = () => {
   const {
     addStreamingPart,
@@ -149,8 +119,6 @@ export const useEventStream = () => {
 
   const { checkConnection } = useConfigStore();
   const nativeNotificationsEnabled = useUIStore((state) => state.nativeNotificationsEnabled);
-  const notificationMode = useUIStore((state) => state.notificationMode);
-  const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const activeSessionDirectory = React.useMemo(() => {
@@ -412,7 +380,6 @@ export const useEventStream = () => {
     (sessionId: string, reason: string, limit?: number) => Promise<void>
   >(() => Promise.resolve());
   const scheduleReconnectRef = React.useRef<(hint?: string) => void>(() => {});
-  const isDesktopRuntimeRef = React.useRef<boolean>(false);
 
   const maybeBootstrapIfStale = React.useCallback(
     (reason: string) => {
@@ -425,17 +392,6 @@ export const useEventStream = () => {
     [bootstrapState]
   );
 
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const apis = (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isDesktop?: boolean } } }).__OPENCHAMBER_RUNTIME_APIS__;
-      if (apis?.runtime?.isDesktop) {
-        isDesktopRuntimeRef.current = true;
-      }
-    }
-  }, []);
-
-  const sessionCooldownTimersRef = React.useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const sessionActivityPhaseRef = React.useRef<Map<string, 'idle' | 'busy' | 'cooldown'>>(new Map());
   const sessionStatusLastRefreshAtRef = React.useRef<number>(0);
   const sessionStatusRefreshInFlightRef = React.useRef<Promise<void> | null>(null);
   const currentSessionIdRef = React.useRef<string | null>(currentSessionId);
@@ -509,15 +465,46 @@ export const useEventStream = () => {
   );
 
 
-  const updateSessionActivityPhase = React.useCallback((sessionId: string, phase: 'idle' | 'busy' | 'cooldown') => {
-    const storePhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
-    if (storePhase === phase) {
-      sessionActivityPhaseRef.current = new Map(useSessionStore.getState().sessionActivityPhase ?? new Map());
-      return;
+  type SessionStatusPayload = {
+    type: 'idle' | 'busy' | 'retry';
+    attempt?: number;
+    message?: string;
+    next?: number;
+  };
+
+  const updateSessionStatus = React.useCallback((
+    sessionId: string,
+    status: SessionStatusPayload,
+    source: string = 'unknown'
+  ) => {
+    if (!sessionId) return;
+
+    const storeStatus = useSessionStore.getState().sessionStatus?.get(sessionId);
+    const prevType = storeStatus?.type ?? 'idle';
+    const nextType = status?.type ?? 'idle';
+
+    if (prevType !== nextType) {
+      try {
+        console.info('[SESSION-STATUS]', {
+          sessionId,
+          from: prevType,
+          to: nextType,
+          source,
+          ...(nextType === 'retry'
+            ? {
+              attempt: status.attempt,
+              next: status.next,
+              message: status.message,
+            }
+            : {}),
+        });
+      } catch {
+        // ignore
+      }
     }
 
-    const shouldArmMessageStallCheck = storePhase === 'idle' && (phase === 'busy' || phase === 'cooldown');
-    const shouldDisarmMessageStallCheck = phase === 'idle';
+    const shouldArmMessageStallCheck = prevType === 'idle' && (nextType === 'busy' || nextType === 'retry');
+    const shouldDisarmMessageStallCheck = nextType === 'idle';
 
     if (shouldDisarmMessageStallCheck) {
       const pending = pendingMessageStallTimersRef.current.get(sessionId);
@@ -536,8 +523,8 @@ export const useEventStream = () => {
 
       const startAt = Date.now();
       const timer = setTimeout(() => {
-        const currentPhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
-        if (currentPhase !== 'busy' && currentPhase !== 'cooldown') {
+        const current = useSessionStore.getState().sessionStatus?.get(sessionId);
+        if (current?.type !== 'busy' && current?.type !== 'retry') {
           return;
         }
 
@@ -552,43 +539,25 @@ export const useEventStream = () => {
         }
 
         lastMessageStallRecoveryBySessionRef.current.set(sessionId, Date.now());
-
-        void scheduleSoftResyncRef.current(sessionId, 'activity_started_no_message', getActiveSessionWindow())
+        void scheduleSoftResyncRef.current(sessionId, 'status_busy_no_message', getActiveSessionWindow())
           .finally(() => {
-            scheduleReconnectRef.current('No message events after activity start');
+            scheduleReconnectRef.current('No message events after busy status');
           });
       }, 2000);
 
       pendingMessageStallTimersRef.current.set(sessionId, timer);
     }
 
-    const existingTimer = sessionCooldownTimersRef.current.get(sessionId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-      sessionCooldownTimersRef.current.delete(sessionId);
+    const next = new Map(useSessionStore.getState().sessionStatus ?? new Map());
+    if (nextType === 'idle') {
+      next.delete(sessionId);
+    } else {
+      next.set(sessionId, status);
     }
-
-    const next = new Map(useSessionStore.getState().sessionActivityPhase ?? new Map());
-    next.set(sessionId, phase);
-    sessionActivityPhaseRef.current = next;
-    useSessionStore.setState({ sessionActivityPhase: next });
-
-    if (phase === 'cooldown') {
-      const timer = setTimeout(() => {
-        sessionCooldownTimersRef.current.delete(sessionId);
-        const current = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
-        if (current === 'cooldown') {
-          const latest = new Map(useSessionStore.getState().sessionActivityPhase ?? new Map());
-          latest.set(sessionId, 'idle');
-          sessionActivityPhaseRef.current = latest;
-          useSessionStore.setState({ sessionActivityPhase: latest });
-        }
-      }, 2000);
-      sessionCooldownTimersRef.current.set(sessionId, timer);
-    }
+    useSessionStore.setState({ sessionStatus: next });
   }, []);
 
-  const refreshSessionActivityStatus = React.useCallback(async () => {
+  const refreshSessionStatus = React.useCallback(async () => {
     const now = Date.now();
     if (sessionStatusRefreshInFlightRef.current) {
       return sessionStatusRefreshInFlightRef.current;
@@ -598,8 +567,8 @@ export const useEventStream = () => {
     }
     sessionStatusLastRefreshAtRef.current = now;
 
-    const applyStatusMap = (statusMap: Record<string, { type?: string }>) => {
-      const observed = new Set<string>();
+      const applyStatusMap = (statusMap: Record<string, { type?: string }>) => {
+        const observed = new Set<string>();
       // Use getState() to avoid sessions dependency which causes cascading updates
       const currentSessions = useSessionStore.getState().sessions;
       const knownSessionIds = new Set(currentSessions.map((session) => session.id));
@@ -607,38 +576,37 @@ export const useEventStream = () => {
       for (const [sessionId, raw] of Object.entries(statusMap)) {
         if (!sessionId || !raw) continue;
         observed.add(sessionId);
-        const phase: 'idle' | 'busy' =
-          raw.type === 'busy' || raw.type === 'retry' ? 'busy' : 'idle';
-        updateSessionActivityPhase(sessionId, phase);
+        const typeRaw = raw.type;
+        const status: SessionStatusPayload =
+          typeRaw === 'retry'
+            ? {
+              type: 'retry',
+              attempt: (raw as { attempt?: unknown }).attempt as number | undefined,
+              message: (raw as { message?: unknown }).message as string | undefined,
+              next: (raw as { next?: unknown }).next as number | undefined,
+            }
+            : typeRaw === 'busy' || typeRaw === 'cooldown'
+              ? { type: 'busy' }
+              : { type: 'idle' };
+        updateSessionStatus(sessionId, status, 'poll:/session/status');
       }
 
       // OpenCode's /session/status may omit idle sessions (returns only busy/retry).
       // Treat missing entries as idle to avoid sessions getting stuck "working".
-      const currentPhases = useSessionStore.getState().sessionActivityPhase;
-      if (!currentPhases) return;
+      const currentStatuses = useSessionStore.getState().sessionStatus;
+      if (!currentStatuses) return;
 
-      for (const [sessionId, phase] of currentPhases.entries()) {
+      for (const [sessionId, status] of currentStatuses.entries()) {
         if (!knownSessionIds.has(sessionId)) continue;
-        if ((phase === 'busy' || phase === 'cooldown') && !observed.has(sessionId)) {
-          updateSessionActivityPhase(sessionId, 'idle');
+        if ((status.type === 'busy' || status.type === 'retry') && !observed.has(sessionId)) {
+          updateSessionStatus(sessionId, { type: 'idle' }, 'poll:missing->idle');
         }
       }
     };
 
     const task = (async (): Promise<void> => {
       try {
-        // Try web server's tracked activity first - more reliable on visibility restore
-        // because it tracks activity even when UI is not listening to SSE.
-        // Only available in web runtime (desktop/vscode use native events instead).
-        if (isWebRuntime()) {
-          const webServerActivity = await opencodeClient.getWebServerSessionActivity();
-          if (webServerActivity && Object.keys(webServerActivity).length > 0) {
-            applyStatusMap(webServerActivity);
-            return;
-          }
-        }
-
-        // Fallback to OpenCode's global session status
+        // OpenCode global session status (busy/retry only; idle omitted)
         const globalStatusMap = await opencodeClient.getGlobalSessionStatus();
         if (globalStatusMap && Object.keys(globalStatusMap).length > 0) {
           applyStatusMap(globalStatusMap);
@@ -677,11 +645,11 @@ export const useEventStream = () => {
         }
 
         if (Object.keys(merged).length === 0) {
-          const hasActivePhases = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-            (phase) => phase === 'busy' || phase === 'cooldown'
+          const hasActiveStatuses = Array.from(useSessionStore.getState().sessionStatus?.values?.() ?? []).some(
+            (status) => status?.type === 'busy' || status?.type === 'retry'
           );
 
-          if (hasActivePhases) {
+          if (hasActiveStatuses) {
             const healthy = await opencodeClient.checkHealth().catch(() => false);
             if (!healthy) {
               return;
@@ -699,7 +667,7 @@ export const useEventStream = () => {
 
     sessionStatusRefreshInFlightRef.current = task;
     return task;
-  }, [effectiveDirectory, normalizeDirectory, resolveSessionDirectoryForStatus, updateSessionActivityPhase]);
+  }, [effectiveDirectory, normalizeDirectory, resolveSessionDirectoryForStatus, updateSessionStatus]);
 
   React.useEffect(() => {
     const nextSessionId = currentSessionId ?? null;
@@ -709,13 +677,13 @@ export const useEventStream = () => {
 
     if (prevSessionId && nextSessionId && prevSessionId !== nextSessionId) {
       if (prevDirectory && nextDirectory && prevDirectory !== nextDirectory) {
-        void refreshSessionActivityStatus();
+        void refreshSessionStatus();
       }
     }
 
     previousSessionIdRef.current = nextSessionId;
     previousSessionDirectoryRef.current = nextDirectory;
-  }, [currentSessionId, refreshSessionActivityStatus, resolveSessionDirectoryForStatus]);
+  }, [currentSessionId, refreshSessionStatus, resolveSessionDirectoryForStatus]);
 
   const handleEvent = React.useCallback((event: EventData) => {
     lastEventTimestampRef.current = Date.now();
@@ -766,15 +734,6 @@ export const useEventStream = () => {
         void bootstrapState('server_disposed_event');
         break;
       }
-      case 'openchamber:session-activity': {
-        const sessionId = typeof props.sessionId === 'string' ? props.sessionId : null;
-        const phase = typeof props.phase === 'string' ? props.phase : null;
-        if (sessionId && (phase === 'idle' || phase === 'busy' || phase === 'cooldown')) {
-          updateSessionActivityPhase(sessionId, phase);
-          requestSessionMetadataRefresh(sessionId, typeof props.directory === 'string' ? props.directory : null);
-        }
-        break;
-      }
 
       case 'mcp.tools.changed': {
         const directory = typeof props.directory === 'string' ? props.directory : effectiveDirectory;
@@ -783,17 +742,25 @@ export const useEventStream = () => {
       }
 
       case 'session.status':
-        if (isDesktopRuntimeRef.current) break;
         {
           const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
           const statusObj = (typeof props.status === 'object' && props.status !== null) ? props.status as Record<string, unknown> : null;
           const statusType = typeof statusObj?.type === 'string' ? statusObj.type : null;
+          const statusInfo = statusObj ?? {};
 
           if (sessionId && statusType) {
-            updateSessionActivityPhase(
-              sessionId,
-              statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle',
-            );
+            if (statusType === 'busy') {
+            updateSessionStatus(sessionId, { type: 'busy' }, 'sse:session.status');
+            } else if (statusType === 'retry') {
+              updateSessionStatus(sessionId, {
+                type: 'retry',
+                attempt: typeof statusInfo.attempt === 'number' ? statusInfo.attempt : undefined,
+                message: typeof statusInfo.message === 'string' ? statusInfo.message : undefined,
+                next: typeof statusInfo.next === 'number' ? statusInfo.next : undefined,
+              }, 'sse:session.status');
+            } else {
+              updateSessionStatus(sessionId, { type: 'idle' }, 'sse:session.status');
+            }
             requestSessionMetadataRefresh(sessionId, typeof props.directory === 'string' ? props.directory : null);
           }
         }
@@ -877,6 +844,25 @@ export const useEventStream = () => {
           type: part.type || 'text',
         } as Part;
 
+        // Fallback: if we see assistant parts but session.status hasn't arrived yet, mark busy.
+        if (roleInfo === 'assistant') {
+          const partType = (messagePart as { type?: unknown }).type;
+          const isStreamingPart =
+            partType === 'step-start' ||
+            partType === 'text' ||
+            partType === 'tool' ||
+            partType === 'reasoning' ||
+            partType === 'file' ||
+            partType === 'patch';
+
+          if (isStreamingPart) {
+            const currentStatus = useSessionStore.getState().sessionStatus?.get(sessionId);
+            if (!currentStatus || currentStatus.type === 'idle') {
+              updateSessionStatus(sessionId, { type: 'busy' }, 'sse:message.part.updated');
+            }
+          }
+        }
+
         trackMessage(messageId, 'addStreamingPart_called');
         addStreamingPart(sessionId, messageId, messagePart, roleInfo);
         break;
@@ -926,7 +912,7 @@ export const useEventStream = () => {
           break;
         }
 
-        if (isDesktopRuntimeRef.current && streamDebugEnabled()) {
+        if (streamDebugEnabled()) {
           try {
             const serverParts = (props as { parts?: unknown }).parts || (messageExt as { parts?: unknown }).parts || [];
             const textParts = Array.isArray(serverParts)
@@ -1137,21 +1123,6 @@ export const useEventStream = () => {
             trackMessage(messageId, 'skipped_shrinking_update', { incomingLen, existingLen });
             break;
           }
-
-          if (isDesktopRuntimeRef.current) {
-            const zeroToleranceShrink = existingLen > 0 && incomingLen < existingLen;
-            const hasUsefulText = partsArray.some((p) => {
-              if (!p || p.type !== 'text') return false;
-              const textPart = p as { text?: string };
-              return typeof textPart.text === 'string' && textPart.text.length > 0;
-            });
-            const shrinkAllowed = eventHasStopFinish && hasUsefulText;
-
-            if (zeroToleranceShrink && !shrinkAllowed) {
-              trackMessage(messageId, 'desktop_shrinking_update_suppressed', { incomingLen, existingLen });
-              break;
-            }
-          }
         }
 
         updateMessageInfo(sessionId, messageId, message as unknown as Message);
@@ -1168,9 +1139,7 @@ export const useEventStream = () => {
             { count: partsArray.length }
           );
 
-          const partsToInject = isDesktopRuntimeRef.current && (messageExt as { role?: unknown }).role === 'assistant'
-            ? partsArray.filter((serverPart) => serverPart?.type !== 'text')
-            : partsArray;
+          const partsToInject = partsArray;
 
           for (let i = 0; i < partsToInject.length; i++) {
             const serverPart = partsToInject[i];
@@ -1212,11 +1181,6 @@ export const useEventStream = () => {
 
           const isActiveSession = currentSessionId === sessionId;
           if (isActiveSession && messageId !== latestAssistantMessageId) break;
-
-          if (!stopMarkerPresent && isDesktopRuntimeRef.current) {
-            trackMessage(messageId, 'desktop_completion_without_stop');
-            break;
-          }
 
           const timeCompleted =
             hasCompletedTimestamp
@@ -1305,53 +1269,6 @@ export const useEventStream = () => {
           }
 
 	          completeStreamingMessage(sessionId, messageId);
-
-	          // Only notify when entire message is finished (finish === 'stop')
-	          if (finish === 'stop' && isWebRuntime() && nativeNotificationsEnabled) {
-	            const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
-
-	            if (shouldNotify) {
-	              // Check if this is a subtask and if we should notify for subtasks
-	              if (!notifyOnSubtasks) {
-	                const sessions = useSessionStore.getState().sessions;
-	                const session = sessions.find(s => s.id === sessionId);
-	                const isSubtask = session && 'parentID' in session && Boolean((session as { parentID?: string }).parentID);
-	                if (isSubtask) {
-	                  // Skip notification for subtasks
-	                  return;
-	                }
-	              }
-
-	              const notifiedMessages = notifiedMessagesRef.current;
-
-	              if (!notifiedMessages.has(messageId)) {
-	                notifiedMessages.add(messageId);
-
-	                const runtimeAPIs = getRegisteredRuntimeAPIs();
-
-	                if (runtimeAPIs?.notifications) {
-	                  const rawMode = (messageExt as { mode?: string }).mode || 'agent';
-	                  const rawModel = (messageExt as { modelID?: string }).modelID || 'assistant';
-
-	                  const title = `${rawMode.charAt(0).toUpperCase() + rawMode.slice(1)} agent is ready`;
-	                  const body = `${formatModelID(rawModel)} completed the task`;
-
-	                  void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag: messageId });
-	                }
-	              }
-	            }
-	          }
-
-	          // For web/vscode: trigger cooldown only when assistant message has finish === "stop"
-	          // to match desktop backend semantics.
-	          if (!isDesktopRuntimeRef.current) {
-	            if (finish === 'stop') {
-	              const currentPhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
-	              if (currentPhase === 'busy') {
-	                updateSessionActivityPhase(sessionId, 'cooldown');
-	              }
-	            }
-	          }
 
 	          const rawMessageSessionId = (message as { sessionID?: string }).sessionID;
           const messageSessionId: string =
@@ -1481,19 +1398,6 @@ export const useEventStream = () => {
                 });
               });
 
-	              if (isWebRuntime() && nativeNotificationsEnabled) {
-	                const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
-	                if (shouldNotify) {
-	                  const runtimeAPIs = getRegisteredRuntimeAPIs();
-	                  if (runtimeAPIs?.notifications) {
-	                    void runtimeAPIs.notifications.notifyAgentCompletion({
-	                      title: 'Permission required',
-	                      body: sessionTitle,
-	                      tag: `permission-${toastKey}`,
-	                    });
-	                  }
-	                }
-	              }
           }, 0);
         }
 
@@ -1513,39 +1417,7 @@ export const useEventStream = () => {
 
         const toastKey = `${request.sessionID}:${request.id}`;
 
-        if (isWebRuntime() && nativeNotificationsEnabled) {
-          const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
-
-          if (shouldNotify) {
-            const notifiedQuestions = notifiedQuestionsRef.current;
-
-            if (!notifiedQuestions.has(toastKey)) {
-              notifiedQuestions.add(toastKey);
-
-              const runtimeAPIs = getRegisteredRuntimeAPIs();
-
-              if (runtimeAPIs?.notifications) {
-                const first = Array.isArray(request.questions) ? request.questions[0] : undefined;
-                const header = typeof first?.header === 'string' ? first.header.trim() : '';
-                const questionText = typeof first?.question === 'string' ? first.question.trim() : '';
-
-                const title = /plan\s*mode/i.test(header)
-                  ? 'Switch to plan mode'
-                  : /build\s*agent/i.test(header)
-                    ? 'Switch to build mode'
-                    : header || 'Input needed';
-
-                const body = questionText || 'Agent is waiting for your response';
-
-                void runtimeAPIs.notifications.notifyAgentCompletion({
-                  title,
-                  body,
-                  tag: toastKey,
-                });
-              }
-            }
-          }
-        }
+	        // notifications are emitted server-side (see openchamber:notification)
 
         if (!questionToastShownRef.current.has(toastKey)) {
           setTimeout(() => {
@@ -1606,6 +1478,34 @@ export const useEventStream = () => {
         break;
       }
 
+      case 'openchamber:notification': {
+        const title = typeof (props as { title?: unknown }).title === 'string' ? (props as { title: string }).title : '';
+        const body = typeof (props as { body?: unknown }).body === 'string' ? (props as { body: string }).body : '';
+        const tag = typeof (props as { tag?: unknown }).tag === 'string' ? (props as { tag: string }).tag : undefined;
+        const requireHidden = Boolean((props as { requireHidden?: unknown }).requireHidden);
+
+        if (requireHidden && visibilityStateRef.current !== 'hidden') {
+          break;
+        }
+
+        // Desktop local instance uses native notifications via sidecar stdout.
+        // Avoid duplicating via UI runtime notifications.
+        if (isDesktopLocalOriginActive()) {
+          break;
+        }
+
+        if (!nativeNotificationsEnabled) {
+          break;
+        }
+
+        const runtimeAPIs = getRegisteredRuntimeAPIs();
+        if (runtimeAPIs?.notifications && title) {
+          void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag });
+        }
+
+        break;
+      }
+
       case 'todo.updated': {
         const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
         const todos = Array.isArray(props.todos) ? props.todos : null;
@@ -1621,8 +1521,6 @@ export const useEventStream = () => {
   }, [
     currentSessionId,
     nativeNotificationsEnabled,
-    notificationMode,
-    notifyOnSubtasks,
     addStreamingPart,
     completeStreamingMessage,
     updateMessageInfo,
@@ -1635,7 +1533,7 @@ export const useEventStream = () => {
     applySessionMetadata,
     trackMessage,
     reportMessage,
-    updateSessionActivityPhase,
+    updateSessionStatus,
     updateSession,
     removeSessionFromStore,
     bootstrapState,
@@ -1651,7 +1549,6 @@ export const useEventStream = () => {
   const debugConnectionState = React.useCallback(() => {
     if (streamDebugEnabled()) {
       console.debug('[useEventStream] Connection state:', {
-        isDesktopRuntime: isDesktopRuntimeRef.current,
         hasUnsubscribe: Boolean(unsubscribeRef.current),
         currentSessionId: currentSessionIdRef.current,
         effectiveDirectory,
@@ -1662,8 +1559,6 @@ export const useEventStream = () => {
       });
     }
   }, [effectiveDirectory]);
-
-  const waitForDesktopBridge = React.useCallback(async (): Promise<boolean> => true, []);
 
   const stopStream = React.useCallback(() => {
     if (isCleaningUpRef.current) {
@@ -1708,13 +1603,6 @@ export const useEventStream = () => {
       return;
     }
 
-    if (isDesktopRuntimeRef.current) {
-      const bridgeReady = await waitForDesktopBridge();
-      if (!bridgeReady) {
-        console.warn('[useEventStream] Desktop bridge not ready, falling back to SDK');
-      }
-    }
-
     if (options?.resetAttempts) {
       reconnectAttemptsRef.current = 0;
     }
@@ -1740,9 +1628,9 @@ export const useEventStream = () => {
       publishStatus('connected', null);
       checkConnection();
 
-      // Always refresh session activity status on connect to detect any
+      // Always refresh session status on connect to detect any
       // already-running sessions (e.g., started via CLI before UI opened)
-      void refreshSessionActivityStatus();
+      void refreshSessionStatus();
 
        if (shouldRefresh) {
          void bootstrapState('sse_reconnected');
@@ -1825,8 +1713,7 @@ export const useEventStream = () => {
     requestSessionMetadataRefresh,
     handleEvent,
     effectiveDirectory,
-    refreshSessionActivityStatus,
-    waitForDesktopBridge,
+    refreshSessionStatus,
     debugConnectionState,
     bootstrapState
   ]);
@@ -1872,24 +1759,13 @@ export const useEventStream = () => {
   }, [scheduleReconnect]);
 
   React.useEffect(() => {
-    const cooldownTimers = sessionCooldownTimersRef.current;
-
     if (typeof window !== 'undefined') {
       window.__messageTracker = trackMessage;
     }
 
-    let desktopActivityHandler: ((event: CustomEvent<{ sessionId?: string; phase?: string }>) => void) | null = null;
-    if (isDesktopRuntimeRef.current && typeof window !== 'undefined') {
-      desktopActivityHandler = (event: CustomEvent<{ sessionId?: string; phase?: string }>) => {
-        const sessionId = typeof event.detail?.sessionId === 'string' ? event.detail.sessionId : null;
-        const phase = typeof event.detail?.phase === 'string' ? event.detail.phase : null;
-        if (sessionId && (phase === 'idle' || phase === 'busy' || phase === 'cooldown')) {
-          updateSessionActivityPhase(sessionId, phase);
-          requestSessionMetadataRefresh(sessionId);
-        }
-      };
-      window.addEventListener('openchamber:session-activity', desktopActivityHandler as EventListener);
-    }
+    // No-op
+
+    const desktopActivityHandler = null;
 
     const clearPauseTimeout = () => {
       if (pauseTimeoutRef.current) {
@@ -1924,7 +1800,7 @@ export const useEventStream = () => {
           requestSessionMetadataRefresh(sessionId);
         }
 
-        void refreshSessionActivityStatus();
+        void refreshSessionStatus();
         publishStatus('connecting', 'Resuming stream');
         startStream({ resetAttempts: true });
       }
@@ -1949,7 +1825,7 @@ export const useEventStream = () => {
              requestSessionMetadataRefresh(sessionId);
              scheduleSoftResync(sessionId, 'window_focus', getActiveSessionWindow());
            }
-           void refreshSessionActivityStatus();
+           void refreshSessionStatus();
 
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
@@ -1989,7 +1865,7 @@ export const useEventStream = () => {
             void scheduleSoftResync(sessionId, 'page_show', getActiveSessionWindow());
             requestSessionMetadataRefresh(sessionId);
           }
-          void refreshSessionActivityStatus();
+          void refreshSessionStatus();
           startStream({ resetAttempts: true });
         }
       };
@@ -2018,12 +1894,12 @@ export const useEventStream = () => {
           if (!shouldHoldConnection()) return;
 
           const now = Date.now();
-          const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-            (phase) => phase === 'busy' || phase === 'cooldown'
+          const hasBusySessions = Array.from(useSessionStore.getState().sessionStatus?.values?.() ?? []).some(
+            (status) => status?.type === 'busy' || status?.type === 'retry'
           );
 
           if (hasBusySessions) {
-            void refreshSessionActivityStatus();
+            void refreshSessionStatus();
           }
           if (now - lastEventTimestampRef.current > 45000) {
             Promise.resolve().then(async () => {
@@ -2048,9 +1924,7 @@ export const useEventStream = () => {
     return () => {
       clearTimeout(startTimer);
 
-      if (desktopActivityHandler && typeof window !== 'undefined') {
-        window.removeEventListener('openchamber:session-activity', desktopActivityHandler as EventListener);
-      }
+      void desktopActivityHandler;
 
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -2071,8 +1945,6 @@ export const useEventStream = () => {
         staleCheckIntervalRef.current = null;
       }
 
-      cooldownTimers.forEach((timer) => clearTimeout(timer));
-      cooldownTimers.clear();
       messageCache.clear();
       // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value at cleanup time
       notifiedMessagesRef.current.clear();
@@ -2102,13 +1974,12 @@ export const useEventStream = () => {
     scheduleReconnect,
     loadMessages,
     requestSessionMetadataRefresh,
-    updateSessionActivityPhase,
-    refreshSessionActivityStatus,
+    updateSessionStatus,
+    refreshSessionStatus,
     shouldHoldConnection,
     loadSessions,
     maybeBootstrapIfStale,
     resyncMessages,
     scheduleSoftResync,
-    notifyOnSubtasks,
   ]);
 };

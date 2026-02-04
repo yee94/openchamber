@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { isDesktopRuntime } from "@/lib/desktop";
+import { isTauriShell } from "@/lib/desktop";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -21,7 +21,7 @@ export const isMacOS = (): boolean => {
  * Browser intercepts Cmd shortcuts, so we only use Cmd in Tauri desktop app.
  */
 export const hasModifier = (e: KeyboardEvent | React.KeyboardEvent): boolean => {
-  return isMacOS() && isDesktopRuntime() ? e.metaKey : e.ctrlKey;
+  return isMacOS() && isTauriShell() ? e.metaKey : e.ctrlKey;
 };
 
 /**
@@ -30,7 +30,7 @@ export const hasModifier = (e: KeyboardEvent | React.KeyboardEvent): boolean => 
  * Browser intercepts Cmd shortcuts, so we only show Cmd in Tauri desktop app.
  */
 export const getModifierLabel = (): string => {
-  return isMacOS() && isDesktopRuntime() ? '⌘' : 'Ctrl';
+  return isMacOS() && isTauriShell() ? '⌘' : 'Ctrl';
 };
 
 export const truncatePathMiddle = (

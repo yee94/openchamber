@@ -17,7 +17,6 @@ import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import type { SkillsCatalogItem } from '@/lib/api/types';
 
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { getDesktopSettings, isDesktopRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { DesktopSettings, SkillCatalogConfig } from '@/lib/desktop';
 
@@ -33,10 +32,6 @@ interface SkillsCatalogPageProps {
 
 const loadSettings = async (): Promise<DesktopSettings | null> => {
   try {
-    if (isDesktopRuntime()) {
-      return await getDesktopSettings();
-    }
-
     const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
     if (runtimeSettings) {
       const result = await runtimeSettings.load();

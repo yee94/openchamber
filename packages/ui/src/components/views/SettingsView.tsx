@@ -104,10 +104,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(sidebarWidth);
 
-  const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
+  const isTauri = React.useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
-  });
+    return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+  }, []);
 
   const isMacPlatform = React.useMemo(() => {
     if (typeof navigator === 'undefined') return false;
@@ -118,10 +118,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   const settingsSections = React.useMemo(() => getSettingsSections(isVSCode), [isVSCode]);
 
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setIsDesktopApp(typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined');
-  }, []);
+  const isDesktopApp = isTauri;
 
   // Track container width for responsive tab labels
   React.useEffect(() => {

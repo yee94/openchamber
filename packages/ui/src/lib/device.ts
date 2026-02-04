@@ -1,4 +1,5 @@
 import React from 'react';
+import { isTauriShell } from '@/lib/desktop';
 
 export type DeviceType = 'desktop' | 'mobile' | 'tablet';
 
@@ -28,7 +29,7 @@ export const BREAKPOINTS = {
 } as const;
 
 const setRootDeviceAttributes = (
-  isDesktopRuntime: boolean,
+  isTauriShellRuntime: boolean,
   deviceType: DeviceType,
   hasTouchInput: boolean,
 ) => {
@@ -49,7 +50,7 @@ const setRootDeviceAttributes = (
         : 'device-desktop'
   );
 
-  if (isDesktopRuntime) {
+  if (isTauriShellRuntime) {
     root.classList.add('desktop-runtime');
     root.style.setProperty('--is-mobile', '0');
     root.style.setProperty('--device-type', 'desktop');
@@ -81,7 +82,7 @@ export function getDeviceInfo(): DeviceInfo {
   const noHover = hoverQuery?.matches ?? false;
   const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
 
-  const isDesktopRuntime = typeof window !== 'undefined' && typeof window.opencodeDesktop !== 'undefined';
+  const isTauriShellRuntime = isTauriShell();
 
   const hasTouchInput = prefersCoarsePointer || noHover || maxTouchPoints > 0;
 
@@ -93,7 +94,7 @@ export function getDeviceInfo(): DeviceInfo {
   let isDesktop = !hasTouchInput || width > BREAKPOINTS.lg;
   let deviceType: DeviceType = 'desktop';
 
-  if (isDesktopRuntime) {
+  if (isTauriShellRuntime) {
     isMobile = false;
     isTablet = false;
     isDesktop = true;
@@ -107,7 +108,7 @@ export function getDeviceInfo(): DeviceInfo {
     deviceType = 'desktop';
   }
 
-  setRootDeviceAttributes(isDesktopRuntime, deviceType, hasTouchInput);
+  setRootDeviceAttributes(isTauriShellRuntime, deviceType, hasTouchInput);
 
   let breakpoint: keyof typeof BREAKPOINTS = 'xs';
   for (const [key, value] of Object.entries(BREAKPOINTS)) {
@@ -130,7 +131,7 @@ export function getDeviceInfo(): DeviceInfo {
 export function isMobileDeviceViaCSS(): boolean {
   if (typeof window === 'undefined') return false;
 
-  if (typeof window.opencodeDesktop !== 'undefined') {
+  if (typeof window !== 'undefined' && isTauriShell()) {
     return false;
   }
 
@@ -205,7 +206,7 @@ export function useDeviceInfo(): DeviceInfo {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    const isDesktopRuntime = typeof window.opencodeDesktop !== 'undefined';
+    const isTauriShellRuntime = isTauriShell();
     const supportsMatchMedia = typeof window.matchMedia === 'function';
     const pointerQuery = supportsMatchMedia ? window.matchMedia('(pointer: coarse)') : null;
     const hoverQuery = supportsMatchMedia ? window.matchMedia('(hover: none)') : null;
@@ -213,7 +214,7 @@ export function useDeviceInfo(): DeviceInfo {
     const noHover = hoverQuery?.matches ?? false;
     const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
     const hasTouchInput = prefersCoarsePointer || noHover || maxTouchPoints > 0;
-    setRootDeviceAttributes(isDesktopRuntime, deviceInfo.deviceType, hasTouchInput);
+    setRootDeviceAttributes(isTauriShellRuntime, deviceInfo.deviceType, hasTouchInput);
   }, [deviceInfo.deviceType, deviceInfo.hasTouchInput]);
 
   return deviceInfo;

@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
-import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 60000;
@@ -57,11 +57,6 @@ const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState
 };
 
 const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
-  if (isDesktopRuntime()) {
-    const data = await getDesktopSettings();
-    return parseSettings((data as Record<string, unknown>) ?? null);
-  }
-
   const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
   if (runtimeSettings) {
     try {

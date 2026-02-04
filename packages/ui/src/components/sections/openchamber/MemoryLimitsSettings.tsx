@@ -5,7 +5,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useDeviceInfo } from '@/lib/device';
 import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { getDesktopSettings, isDesktopRuntime } from '@/lib/desktop';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { DEFAULT_MEMORY_LIMITS, DEFAULT_ACTIVE_SESSION_WINDOW } from '@/stores/types/sessionTypes';
 
@@ -34,11 +33,8 @@ export const MemoryLimitsSettings: React.FC = () => {
       try {
         let data: { memoryLimitHistorical?: number; memoryLimitViewport?: number; memoryLimitActiveSession?: number } | null = null;
 
-        // 1. Desktop runtime (Tauri)
-        if (isDesktopRuntime()) {
-          data = await getDesktopSettings();
-        } else {
-          // 2. Runtime settings API (VSCode)
+        // 1. Runtime settings API (VSCode)
+        if (!data) {
           const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
           if (runtimeSettings) {
             try {
@@ -52,19 +48,19 @@ export const MemoryLimitsSettings: React.FC = () => {
                 };
               }
             } catch {
-              // Fall through to fetch
+              // fall through
             }
           }
+        }
 
-          // 3. Fetch API (Web)
-          if (!data) {
-            const response = await fetch('/api/config/settings', {
-              method: 'GET',
-              headers: { Accept: 'application/json' },
-            });
-            if (response.ok) {
-              data = await response.json();
-            }
+        // 2. Fetch API (Web/server)
+        if (!data) {
+          const response = await fetch('/api/config/settings', {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          });
+          if (response.ok) {
+            data = await response.json();
           }
         }
 
@@ -91,17 +87,6 @@ export const MemoryLimitsSettings: React.FC = () => {
   const persistSetting = React.useCallback(async (key: string, value: number) => {
     try {
       await updateDesktopSettings({ [key]: value });
-
-      if (!isDesktopRuntime()) {
-        const response = await fetch('/api/config/settings', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [key]: value }),
-        });
-        if (!response.ok) {
-          console.warn(`Failed to save ${key} to server:`, response.status, response.statusText);
-        }
-      }
     } catch (error) {
       console.warn(`Failed to save ${key}:`, error);
     }

@@ -6,7 +6,7 @@ import React, {
 } from 'react';
 import type { Theme, ThemeMode } from '@/types/theme';
 import type { DesktopSettings } from '@/lib/desktop';
-import { isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isVSCodeRuntime } from '@/lib/desktop';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { updateDesktopSettings } from '@/lib/persistence';
 import {
@@ -190,7 +190,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return existing || null;
   });
   const isVSCode = useMemo(() => isVSCodeRuntime(), []);
-  const isDesktop = useMemo(() => isDesktopRuntime(), []);
+  const isLocalDesktopOrigin = useMemo(() => isDesktopLocalOriginActive(), []);
 
   const availableThemes = useMemo(() => {
     const merged: Theme[] = [];
@@ -256,7 +256,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     try {
       const res = await fetch('/api/config/themes', {
         method: 'GET',
-        credentials: isDesktop ? 'omit' : 'include',
+        credentials: isLocalDesktopOrigin ? 'omit' : 'include',
         headers: {
           Accept: 'application/json',
         },
@@ -280,7 +280,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     } finally {
       setCustomThemesLoading(false);
     }
-  }, [isDesktop, isVSCode]);
+  }, [isLocalDesktopOrigin, isVSCode]);
 
   useEffect(() => {
     void reloadCustomThemes();

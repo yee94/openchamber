@@ -17,7 +17,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { isDesktopRuntime, isWebRuntime } from '@/lib/desktop';
 
 type Modifier = 'ctrl' | 'cmd';
 type MobileKey =
@@ -74,12 +73,13 @@ const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | 
 };
 
 export const TerminalView: React.FC = () => {
-    const { terminal } = useRuntimeAPIs();
+    const { terminal, runtime } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
     const terminalFontSize = useUIStore(state => state.terminalFontSize);
     const { isMobile, hasTouchInput } = useDeviceInfo();
-    const enableTabs = !isMobile && (isWebRuntime() || isDesktopRuntime());
+    // Tabs are supported for web + desktop runtimes (not VSCode).
+    const enableTabs = !isMobile && runtime.platform !== 'vscode';
     const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
     const showQuickKeys = isMobile || showTerminalQuickKeysOnDesktop;
 

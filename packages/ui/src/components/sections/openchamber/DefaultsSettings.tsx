@@ -6,7 +6,7 @@ import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
@@ -67,11 +67,8 @@ export const DefaultsSettings: React.FC = () => {
       try {
         let data: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string } | null = null;
 
-        // 1. Desktop runtime (Tauri)
-        if (isDesktopRuntime()) {
-          data = await getDesktopSettings();
-        } else {
-          // 2. Runtime settings API (VSCode)
+        // 1. Runtime settings API (VSCode)
+        if (!data) {
           const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
           if (runtimeSettings) {
             try {
@@ -85,19 +82,19 @@ export const DefaultsSettings: React.FC = () => {
                 };
               }
             } catch {
-              // Fall through to fetch
+              // fall through
             }
           }
+        }
 
-          // 3. Fetch API (Web)
-          if (!data) {
-            const response = await fetch('/api/config/settings', {
-              method: 'GET',
-              headers: { Accept: 'application/json' },
-            });
-            if (response.ok) {
-              data = await response.json();
-            }
+        // 2. Fetch API (Web/server)
+        if (!data) {
+          const response = await fetch('/api/config/settings', {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          });
+          if (response.ok) {
+            data = await response.json();
           }
         }
 
@@ -153,12 +150,12 @@ export const DefaultsSettings: React.FC = () => {
          defaultVariant: '',
        });
 
-       if (!isDesktopRuntime()) {
-         const response = await fetch('/api/config/settings', {
-           method: 'PUT',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ defaultModel: newValue }),
-         });
+        {
+          const response = await fetch('/api/config/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ defaultModel: newValue }),
+          });
          if (!response.ok) {
            console.warn('Failed to save default model to server:', response.status, response.statusText);
          }

@@ -2,9 +2,10 @@ import React from 'react';
 import { RiLockLine, RiLockUnlockLine, RiLoader4Line } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/persistence';
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
+import { DesktopHostSwitcherInline } from '@/components/desktop/DesktopHostSwitcher';
 
 const STATUS_CHECK_ENDPOINT = '/auth/session';
 
@@ -119,9 +120,9 @@ const clearTokenFromUrl = () => {
 };
 
 export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) => {
-  const desktopRuntime = React.useMemo(() => isDesktopRuntime(), []);
   const vscodeRuntime = React.useMemo(() => isVSCodeRuntime(), []);
-  const skipAuth = desktopRuntime || vscodeRuntime;
+  const skipAuth = vscodeRuntime;
+  const showHostSwitcher = React.useMemo(() => isDesktopShell() && !vscodeRuntime, [vscodeRuntime]);
   const [state, setState] = React.useState<GateState>(() => (skipAuth ? 'authenticated' : 'pending'));
   const [password, setPassword] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -349,6 +350,15 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
               </p>
             )}
           </form>
+
+          {showHostSwitcher && (
+            <div className="w-full">
+              <DesktopHostSwitcherInline />
+              <p className="mt-1 text-center typography-micro text-muted-foreground">
+                Use Local if remote is unreachable.
+              </p>
+            </div>
+          )}
         </div>
       </AuthShell>
     );

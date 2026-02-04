@@ -6,6 +6,7 @@ export type ScrollShadowProps = React.HTMLAttributes<HTMLDivElement> & {
   size?: number;
   isEnabled?: boolean;
   hideBottomShadow?: boolean;
+  observeMutations?: boolean;
   onVisibilityChange?: (state: "both" | "none" | "top" | "bottom" | "left" | "right") => void;
 };
 
@@ -22,18 +23,19 @@ function mergeRefs<T>(...refs: Array<React.Ref<T>>): React.RefCallback<T> {
 }
 
 export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
-  (
-    {
-      orientation = "vertical",
-      offset = 72,
-      size = 48,
-      isEnabled = true,
-      hideBottomShadow = false,
-      onVisibilityChange,
-      style,
-      className,
-      children,
-      ...rest
+      (
+      {
+        orientation = "vertical",
+        offset = 72,
+        size = 48,
+        isEnabled = true,
+        hideBottomShadow = false,
+        observeMutations = true,
+        onVisibilityChange,
+        style,
+        className,
+        children,
+        ...rest
     },
     ref,
   ) => {
@@ -119,13 +121,13 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
       const handleScroll = () => checkOverflow(); // Scroll should be immediate
       const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(throttledCheck) : null;
       const mutationObserver =
-        typeof MutationObserver !== "undefined" ? new MutationObserver(throttledCheck) : null;
+        observeMutations && typeof MutationObserver !== "undefined" ? new MutationObserver(throttledCheck) : null;
 
       checkOverflow();
 
       el.addEventListener("scroll", handleScroll, { passive: true });
       resizeObserver?.observe(el);
-      mutationObserver?.observe(el, { childList: true, subtree: true, characterData: true });
+      mutationObserver?.observe(el, { childList: true, subtree: true });
 
       return () => {
         if (rafId !== null) cancelAnimationFrame(rafId);
@@ -133,7 +135,7 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
         resizeObserver?.disconnect();
         mutationObserver?.disconnect();
       };
-    }, [checkOverflow]);
+    }, [checkOverflow, observeMutations]);
 
     return (
       <div

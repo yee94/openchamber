@@ -56,10 +56,21 @@ textarea[data-chat-input="true"]:focus-visible {
 
 [data-scroll-shadow="true"][data-orientation="vertical"] {
   mask-mode: alpha;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 [data-scroll-shadow="true"][data-orientation="vertical"][data-top-bottom-scroll="true"] {
   mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
     #000 var(--scroll-shadow-size),
@@ -75,10 +86,22 @@ textarea[data-chat-input="true"]:focus-visible {
     #000 var(--scroll-shadow-size),
     #000 100%
   );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 100%
+  );
 }
 
 [data-scroll-shadow="true"][data-orientation="vertical"][data-bottom-scroll="true"] {
   mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
     to bottom,
     #000 0%,
     #000 calc(100% - var(--scroll-shadow-size)),

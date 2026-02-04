@@ -85,9 +85,7 @@ const getHomeDirectory = () => {
     const desktopHome =
       (typeof window.__OPENCHAMBER_HOME__ === 'string' && window.__OPENCHAMBER_HOME__.length > 0
         ? window.__OPENCHAMBER_HOME__
-        : window.opencodeDesktop && typeof window.opencodeDesktop.homeDirectory === 'string'
-          ? window.opencodeDesktop.homeDirectory
-          : null);
+        : null);
 
     if (desktopHome && desktopHome.length > 0) {
       cachedHomeDirectory = desktopHome;

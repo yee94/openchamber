@@ -67,17 +67,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
 
-  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return typeof window.opencodeDesktop !== 'undefined';
-  });
-
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
-  }, []);
 
   const unimportedCredentials = getUnimportedCredentials();
 
@@ -98,11 +88,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
     }
   };
 
-  const bgClass = isDesktopRuntime
-    ? 'bg-transparent'
-    : isVSCode
-      ? 'bg-background'
-      : 'bg-sidebar';
+  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
 
   const handleCreateProfile = () => {
     setSelectedProfile('new');

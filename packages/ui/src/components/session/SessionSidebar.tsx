@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
+import { isDesktopShell, isTauriShell } from '@/lib/desktop';
 import {
   DndContext,
   DragOverlay,
@@ -64,6 +65,7 @@ import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { BranchPickerDialog } from './BranchPickerDialog';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
@@ -135,7 +137,7 @@ interface SortableProjectItemProps {
   isActiveProject: boolean;
   isRepo: boolean;
   isHovered: boolean;
-  isDesktopRuntime: boolean;
+  isDesktopShell: boolean;
   isStuck: boolean;
   hideDirectoryControls: boolean;
   mobileVariant: boolean;
@@ -161,7 +163,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   isActiveProject,
   isRepo,
   isHovered,
-  isDesktopRuntime,
+  isDesktopShell,
   isStuck,
   hideDirectoryControls,
   mobileVariant,
@@ -190,7 +192,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   return (
     <div ref={setNodeRef} className={cn('relative', isDragging && 'opacity-40')}>
       {/* Sentinel for sticky detection */}
-      {isDesktopRuntime && (
+      {isDesktopShell && (
         <div
           ref={sentinelRef}
           data-project-id={id}
@@ -203,10 +205,10 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
       <div
         className={cn(
           'sticky top-0 z-10 pt-2 pb-1.5 w-full text-left cursor-pointer group/project border-b select-none',
-          !isDesktopRuntime && 'bg-sidebar',
+          !isDesktopShell && 'bg-sidebar',
         )}
         style={{
-          backgroundColor: isDesktopRuntime
+          backgroundColor: isDesktopShell
             ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
             : undefined,
           borderColor: isHovered
@@ -428,6 +430,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
+  const persistCollapsedProjectsTimer = React.useRef<number | null>(null);
+  const pendingCollapsedProjects = React.useRef<Set<string> | null>(null);
 
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -455,21 +459,63 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const shareSession = useSessionStore((state) => state.shareSession);
   const unshareSession = useSessionStore((state) => state.unshareSession);
   const sessionMemoryState = useSessionStore((state) => state.sessionMemoryState);
-  const sessionActivityPhase = useSessionStore((state) => state.sessionActivityPhase);
+  const sessionStatus = useSessionStore((state) => state.sessionStatus);
   const permissions = useSessionStore((state) => state.permissions);
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
 
-  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    return typeof window.opencodeDesktop !== 'undefined';
-  });
+  const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
+  const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+
+  const flushCollapsedProjectsPersist = React.useCallback(() => {
+    if (isVSCode) {
+      return;
+    }
+    const collapsed = pendingCollapsedProjects.current;
+    pendingCollapsedProjects.current = null;
+    persistCollapsedProjectsTimer.current = null;
+    if (!collapsed) {
+      return;
+    }
+
+    const { projects } = useProjectsStore.getState();
+    const updatedProjects = projects.map((project) => ({
+      ...project,
+      sidebarCollapsed: collapsed.has(project.id),
+    }));
+    void updateDesktopSettings({ projects: updatedProjects }).catch(() => {});
+  }, [isVSCode]);
+
+  const scheduleCollapsedProjectsPersist = React.useCallback((collapsed: Set<string>) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (isVSCode) {
+      return;
+    }
+
+    pendingCollapsedProjects.current = collapsed;
+    if (persistCollapsedProjectsTimer.current !== null) {
+      window.clearTimeout(persistCollapsedProjectsTimer.current);
+    }
+    persistCollapsedProjectsTimer.current = window.setTimeout(() => {
+      flushCollapsedProjectsPersist();
+    }, 700);
+  }, [flushCollapsedProjectsPersist, isVSCode]);
+
+  React.useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && persistCollapsedProjectsTimer.current !== null) {
+        window.clearTimeout(persistCollapsedProjectsTimer.current);
+      }
+      persistCollapsedProjectsTimer.current = null;
+      pendingCollapsedProjects.current = null;
+    };
+  }, []);
 
   React.useEffect(() => {
     try {
@@ -489,13 +535,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }
     } catch { /* ignored */ }
   }, [safeStorage]);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
-  }, []);
 
   const sortedSessions = React.useMemo(() => {
     return [...sessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
@@ -863,31 +902,32 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
-    if (isDesktopRuntime && window.opencodeDesktop?.requestDirectoryAccess) {
-      window.opencodeDesktop
-        .requestDirectoryAccess('')
-        .then((result) => {
-          if (result.success && result.path) {
-            const added = addProject(result.path, { id: result.projectId });
-            if (!added) {
-              toast.error('Failed to add project', {
-                description: 'Please select a valid directory.',
-              });
-            }
-          } else if (result.error && result.error !== 'Directory selection cancelled') {
-            toast.error('Failed to select directory', {
-              description: result.error,
+    if (!tauriIpcAvailable) {
+      sessionEvents.requestDirectoryDialog();
+      return;
+    }
+
+    import('@/lib/desktop')
+      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+      .then((result) => {
+        if (result.success && result.path) {
+          const added = addProject(result.path, { id: result.projectId });
+          if (!added) {
+            toast.error('Failed to add project', {
+              description: 'Please select a valid directory.',
             });
           }
-        })
-        .catch((error) => {
-          console.error('Desktop: Error selecting directory:', error);
-          toast.error('Failed to select directory');
-        });
-    } else {
-      sessionEvents.requestDirectoryDialog();
-    }
-  }, [addProject, isDesktopRuntime]);
+        } else if (result.error && result.error !== 'Directory selection cancelled') {
+          toast.error('Failed to select directory', {
+            description: result.error,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error('Desktop: Error selecting directory:', error);
+        toast.error('Failed to select directory');
+      });
+  }, [addProject, tauriIpcAvailable]);
 
   const toggleParent = React.useCallback((sessionId: string) => {
     setExpandedParents((prev) => {
@@ -1019,9 +1059,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       try {
         safeStorage.setItem(PROJECT_COLLAPSE_STORAGE_KEY, JSON.stringify(Array.from(next)));
       } catch { /* ignored */ }
+
+      // Persist collapse state to server settings (web + desktop local/remote).
+      if (!isVSCode) {
+        scheduleCollapsedProjectsPersist(next);
+      }
       return next;
     });
-  }, [safeStorage]);
+  }, [isVSCode, safeStorage, scheduleCollapsedProjectsPersist]);
 
   const normalizedProjects = React.useMemo(() => {
     return projects
@@ -1081,7 +1126,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   // Track when project sticky headers become "stuck"
   React.useEffect(() => {
-    if (!isDesktopRuntime) return;
+    if (!isDesktopShellRuntime) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -1108,7 +1153,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
 
     return () => observer.disconnect();
-  }, [isDesktopRuntime, projectSections]);
+  }, [isDesktopShellRuntime, projectSections]);
 
   const renderSessionNode = React.useCallback(
     (node: SessionNode, depth = 0, groupDirectory?: string | null, projectId?: string | null): React.ReactNode => {
@@ -1202,8 +1247,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         );
       }
 
-      const phase = sessionActivityPhase?.get(session.id) ?? 'idle';
-      const isStreaming = phase === 'busy' || phase === 'cooldown';
+      const statusType = sessionStatus?.get(session.id)?.type ?? 'idle';
+      const isStreaming = statusType === 'busy' || statusType === 'retry';
       const pendingPermissionCount = permissions.get(session.id)?.length ?? 0;
 
       const streamingIndicator = (() => {
@@ -1427,7 +1472,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [
       directoryStatus,
       sessionMemoryState,
-      sessionActivityPhase,
+      sessionStatus,
       permissions,
       currentSessionId,
       expandedParents,
@@ -1571,7 +1616,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               onClick={handleOpenDirectoryDialog}
               className={cn(
                 'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                !isDesktopRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                    !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
               )}
               aria-label="Add project"
               title="Add project"
@@ -1650,7 +1695,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     isActiveProject={isActiveProject}
                     isRepo={Boolean(isRepo)}
                     isHovered={isHovered}
-                    isDesktopRuntime={isDesktopRuntime}
+                    isDesktopShell={isDesktopShellRuntime}
                     isStuck={stuckProjectHeaders.has(projectKey)}
                     hideDirectoryControls={hideDirectoryControls}
                     mobileVariant={mobileVariant}

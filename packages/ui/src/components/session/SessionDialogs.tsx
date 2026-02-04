@@ -24,7 +24,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
-import { isDesktopRuntime } from '@/lib/desktop';
+import { isTauriShell } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { sessionEvents } from '@/lib/sessionEvents';
 
@@ -136,7 +136,7 @@ export const SessionDialogs: React.FC = () => {
 
         setHasShownInitialDirectoryPrompt(true);
 
-        if (isDesktopRuntime()) {
+        if (isTauriShell()) {
             requestAccess('')
                 .then(async (result) => {
                     if (!result.success || !result.path) {

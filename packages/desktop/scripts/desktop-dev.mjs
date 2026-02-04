@@ -2,7 +2,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startCli, stopCli } from './opencode-cli.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,8 +18,6 @@ function spawnProcess(command, args, opts = {}) {
 }
 
 async function main() {
-  await startCli();
-
   const tauriProcess = spawnProcess('bun', ['--cwd', desktopDir, 'tauri', 'dev', '--features', 'devtools']);
 
   let cleaning = false;
@@ -43,10 +40,6 @@ async function main() {
     };
 
     stopChild(tauriProcess, 'Tauri dev process');
-
-    await stopCli({ silent: true }).catch((error) => {
-      console.warn('[desktop:dev] Failed to stop OpenCode CLI:', error);
-    });
 
     process.exit(typeof code === 'number' ? code : 0);
   };

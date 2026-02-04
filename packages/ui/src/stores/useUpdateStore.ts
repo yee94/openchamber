@@ -4,7 +4,8 @@ import {
   checkForDesktopUpdates,
   downloadDesktopUpdate,
   restartToApplyUpdate,
-  isDesktopRuntime,
+  isDesktopLocalOriginActive,
+  isTauriShell,
   isWebRuntime,
 } from '@/lib/desktop';
 
@@ -55,7 +56,11 @@ async function checkForWebUpdates(): Promise<UpdateInfo | null> {
 }
 
 function detectRuntimeType(): 'desktop' | 'web' | 'vscode' | null {
-  if (isDesktopRuntime()) return 'desktop';
+  if (isTauriShell()) {
+    // Only use Tauri updater when we're on the local instance.
+    // When viewing a remote host inside the desktop shell, treat update as web update.
+    return isDesktopLocalOriginActive() ? 'desktop' : 'web';
+  }
   if (isWebRuntime()) return 'web';
   return null;
 }
@@ -115,9 +120,12 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     set({ downloading: true, error: null, progress: null });
 
     try {
-      await downloadDesktopUpdate((progress) => {
+      const ok = await downloadDesktopUpdate((progress) => {
         set({ progress });
       });
+      if (!ok) {
+        throw new Error('Desktop update only works on Local instance');
+      }
       set({ downloading: false, downloaded: true });
     } catch (error) {
       set({
@@ -135,7 +143,10 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     }
 
     try {
-      await restartToApplyUpdate();
+      const ok = await restartToApplyUpdate();
+      if (!ok) {
+        throw new Error('Desktop restart only works on Local instance');
+      }
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to restart',

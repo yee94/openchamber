@@ -116,27 +116,13 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
 
-  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return typeof window.opencodeDesktop !== 'undefined';
-  });
-
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
-  }, []);
 
   React.useEffect(() => {
     loadAgents();
   }, [loadAgents]);
 
-  const bgClass = isDesktopRuntime
-    ? 'bg-transparent'
-    : isVSCode
-      ? 'bg-background'
-      : 'bg-sidebar';
+  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
 
   const handleCreateNew = () => {
     // Generate unique name

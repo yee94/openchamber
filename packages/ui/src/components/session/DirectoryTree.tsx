@@ -12,7 +12,6 @@ import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiCloseLin
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDeviceInfo } from '@/lib/device';
-import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import type { DesktopSettings } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
@@ -54,7 +53,6 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   isRootReady,
   alwaysShowActions = false,
 }) => {
-  const desktopRuntime = React.useMemo(() => isDesktopRuntime(), []);
   const { isMobile } = useDeviceInfo();
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
@@ -243,22 +241,17 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       }
     };
 
-    const loadPinnedDirectories = async () => {
-      try {
-        let pinned: string[] = [];
+        const loadPinnedDirectories = async () => {
+          try {
+            let pinned: string[] = [];
 
-        if (desktopRuntime) {
-          const settings = await getDesktopSettings();
-          pinned = Array.isArray(settings?.pinnedDirectories) ? settings.pinnedDirectories : [];
-        } else {
-          const response = await fetch('/api/config/settings', {
-            method: 'GET',
-            headers: { Accept: 'application/json' },
-          });
-          if (response.ok) {
-            const data = await response.json();
-            pinned = Array.isArray(data?.pinnedDirectories) ? data.pinnedDirectories : [];
-          }
+        const response = await fetch('/api/config/settings', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          pinned = Array.isArray(data?.pinnedDirectories) ? data.pinnedDirectories : [];
         }
 
         if (cancelled) {
@@ -287,7 +280,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       cancelled = true;
       window.removeEventListener('openchamber:settings-synced', handleSettingsSynced);
     };
-  }, [desktopRuntime, stripTrailingSlashes]);
+  }, [stripTrailingSlashes]);
 
   const isInitialPinnedSync = React.useRef(true);
 

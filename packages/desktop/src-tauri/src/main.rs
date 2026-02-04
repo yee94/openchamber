@@ -1,389 +1,96 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod assistant_notifications;
-mod commands;
-mod logging;
-mod opencode_auth;
-mod opencode_config;
-mod opencode_manager;
-mod path_utils;
-mod quota_providers;
-mod session_activity;
-mod skills_catalog;
-mod window_state;
-
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
 use anyhow::{anyhow, Result};
-use assistant_notifications::spawn_assistant_notifications;
-use axum::{
-    body::{to_bytes, Body},
-    extract::{Path, Request, State},
-    http::{Method, StatusCode},
-    response::{IntoResponse, Response},
-    routing::{any, get, post},
-    Json, Router,
-};
-use commands::files::{
-    create_directory, delete_path, exec_commands, list_directory, read_file, read_file_binary,
-    rename_path, search_files, write_file,
-};
-use commands::git::{
-    add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit,
-    create_git_identity, delete_git_branch, delete_git_identity, delete_remote_branch,
-    discover_git_credentials, ensure_openchamber_ignored, generate_commit_message,
-    get_commit_files, get_current_git_identity, get_git_branches, get_git_diff, get_git_file_diff,
-    get_git_identities, get_git_log, get_git_status, get_global_git_identity, get_remote_url,
-    git_fetch, git_pull, git_push, has_local_identity, is_linked_worktree, list_git_worktrees,
-    remove_git_worktree, rename_branch, revert_git_file, set_git_identity, update_git_identity,
-    generate_pr_description,
-};
-use commands::logs::fetch_desktop_logs;
-
-use commands::github::{
-    github_auth_activate, github_auth_complete, github_auth_disconnect, github_auth_start, github_auth_status, github_me,
-    github_issue_comments, github_issue_get, github_issues_list,
-    github_pr_context, github_prs_list,
-    github_pr_create, github_pr_merge, github_pr_ready, github_pr_status,
-};
-use commands::notifications::desktop_notify;
-use commands::permissions::{
-    pick_directory, process_directory_selection, request_directory_access,
-    restore_bookmarks_on_startup, start_accessing_directory, stop_accessing_directory,
-};
-use commands::settings::{load_settings, restart_opencode, save_settings};
-use commands::terminal::{
-    close_terminal, create_terminal_session, force_kill_terminal, resize_terminal,
-    restart_terminal_session, send_terminal_input, TerminalState,
-};
-use futures_util::StreamExt as FuturesStreamExt;
-use log::{error, info, warn};
-use opencode_manager::OpenCodeManager;
-use path_utils::expand_tilde_path;
-use portpicker::pick_unused_port;
-use reqwest::{header, Body as ReqwestBody, Client};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use session_activity::spawn_session_activity_tracker;
-#[cfg(feature = "devtools")]
-use tauri::WebviewWindow;
-use tauri::{Emitter, Manager};
-use tauri_plugin_dialog::init as dialog_plugin;
-use tauri_plugin_fs::init as fs_plugin;
-use tauri_plugin_log::{Target, TargetKind};
-use tauri_plugin_notification::init as notification_plugin;
-use tauri_plugin_shell::init as shell_plugin;
-use tokio::{
-    fs,
+use std::{
     net::TcpListener,
-    sync::{broadcast, Mutex},
+    process::Command,
+    sync::Mutex,
+    time::Duration,
 };
-use tower_http::cors::CorsLayer;
-use window_state::{load_window_state, persist_window_state, WindowStateManager};
+use std::{fs, path::PathBuf};
+use std::env;
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
+fn eval_in_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, script: &str) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = window.eval(script);
+}
 
-const PROXY_BODY_LIMIT: usize = 50 * 1024 * 1024; // 50MB
-const CLIENT_RELOAD_DELAY_MS: u64 = 800;
-const MODELS_DEV_API_URL: &str = "https://models.dev/api.json";
-const MODELS_METADATA_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
-const MODELS_METADATA_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
+fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action: &str) {
+    let _ = app.emit("openchamber:menu-action", action);
 
-const MAX_THEME_JSON_BYTES: u64 = 512 * 1024;
+    let event = serde_json::to_string("openchamber:menu-action")
+        .unwrap_or_else(|_| "\"openchamber:menu-action\"".into());
+    let detail = serde_json::to_string(action).unwrap_or_else(|_| "\"\"".into());
+    let script = format!("window.dispatchEvent(new CustomEvent({event}, {{ detail: {detail} }}));");
+    eval_in_main_window(app, &script);
+}
 
-const CHECK_FOR_UPDATES_EVENT: &str = "openchamber:check-for-updates";
+fn dispatch_check_for_updates<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let _ = app.emit("openchamber:check-for-updates", ());
+
+    let event = serde_json::to_string("openchamber:check-for-updates")
+        .unwrap_or_else(|_| "\"openchamber:check-for-updates\"".into());
+    let script = format!("window.dispatchEvent(new Event({event}));");
+    eval_in_main_window(app, &script);
+}
+use tauri_plugin_shell::{process::CommandChild, process::CommandEvent, ShellExt};
+use tauri_plugin_updater::UpdaterExt;
 
 #[cfg(target_os = "macos")]
-const MENU_ITEM_CHECK_FOR_UPDATES_ID: &str = "openchamber_check_for_updates";
+const MENU_ITEM_ABOUT_ID: &str = "menu_about";
 #[cfg(target_os = "macos")]
-const MENU_ITEM_REPORT_BUG_ID: &str = "openchamber_report_bug";
+const MENU_ITEM_CHECK_FOR_UPDATES_ID: &str = "menu_check_for_updates";
 #[cfg(target_os = "macos")]
-const MENU_ITEM_REQUEST_FEATURE_ID: &str = "openchamber_request_feature";
+const MENU_ITEM_SETTINGS_ID: &str = "menu_settings";
 #[cfg(target_os = "macos")]
-const MENU_ITEM_JOIN_DISCORD_ID: &str = "openchamber_join_discord";
+const MENU_ITEM_COMMAND_PALETTE_ID: &str = "menu_command_palette";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_NEW_SESSION_ID: &str = "menu_new_session";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_WORKTREE_CREATOR_ID: &str = "menu_worktree_creator";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_CHANGE_WORKSPACE_ID: &str = "menu_change_workspace";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_OPEN_GIT_TAB_ID: &str = "menu_open_git_tab";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_OPEN_DIFF_TAB_ID: &str = "menu_open_diff_tab";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_OPEN_FILES_TAB_ID: &str = "menu_open_files_tab";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_OPEN_TERMINAL_TAB_ID: &str = "menu_open_terminal_tab";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_THEME_LIGHT_ID: &str = "menu_theme_light";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_THEME_DARK_ID: &str = "menu_theme_dark";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_THEME_SYSTEM_ID: &str = "menu_theme_system";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_TOGGLE_SIDEBAR_ID: &str = "menu_toggle_sidebar";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_TOGGLE_MEMORY_DEBUG_ID: &str = "menu_toggle_memory_debug";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_HELP_DIALOG_ID: &str = "menu_help_dialog";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_DOWNLOAD_LOGS_ID: &str = "menu_download_logs";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_REPORT_BUG_ID: &str = "menu_report_bug";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_REQUEST_FEATURE_ID: &str = "menu_request_feature";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_JOIN_DISCORD_ID: &str = "menu_join_discord";
 
-// App menu
 #[cfg(target_os = "macos")]
-const MENU_ITEM_ABOUT_ID: &str = "openchamber_about";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_SETTINGS_ID: &str = "openchamber_settings";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_COMMAND_PALETTE_ID: &str = "openchamber_command_palette";
-
-// File menu
-#[cfg(target_os = "macos")]
-const MENU_ITEM_NEW_SESSION_ID: &str = "openchamber_new_session";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_WORKTREE_CREATOR_ID: &str = "openchamber_worktree_creator";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_CHANGE_WORKSPACE_ID: &str = "openchamber_change_workspace";
-
-// View menu
-#[cfg(target_os = "macos")]
-const MENU_ITEM_OPEN_GIT_TAB_ID: &str = "openchamber_open_git_tab";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_OPEN_DIFF_TAB_ID: &str = "openchamber_open_diff_tab";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_OPEN_TERMINAL_TAB_ID: &str = "openchamber_open_terminal_tab";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_THEME_LIGHT_ID: &str = "openchamber_theme_light";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_THEME_DARK_ID: &str = "openchamber_theme_dark";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_THEME_SYSTEM_ID: &str = "openchamber_theme_system";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_TOGGLE_SIDEBAR_ID: &str = "openchamber_toggle_sidebar";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_TOGGLE_MEMORY_DEBUG_ID: &str = "openchamber_toggle_memory_debug";
-
-// Help menu
-#[cfg(target_os = "macos")]
-const MENU_ITEM_HELP_DIALOG_ID: &str = "openchamber_help_dialog";
-#[cfg(target_os = "macos")]
-const MENU_ITEM_DOWNLOAD_LOGS_ID: &str = "openchamber_download_logs";
-
 const GITHUB_BUG_REPORT_URL: &str =
     "https://github.com/btriapitsyn/openchamber/issues/new?template=bug_report.yml";
+#[cfg(target_os = "macos")]
 const GITHUB_FEATURE_REQUEST_URL: &str =
     "https://github.com/btriapitsyn/openchamber/issues/new?template=feature_request.yml";
+#[cfg(target_os = "macos")]
 const DISCORD_INVITE_URL: &str = "https://discord.gg/ZYRSdnwwKA";
-
-#[derive(Clone)]
-pub(crate) struct DesktopRuntime {
-    server_port: u16,
-    shutdown_tx: broadcast::Sender<()>,
-    opencode: Arc<OpenCodeManager>,
-    settings: Arc<SettingsStore>,
-}
-
-impl DesktopRuntime {
-    fn initialize_sync() -> Result<Self> {
-        let settings = Arc::new(SettingsStore::new()?);
-        let opencode = Arc::new(OpenCodeManager::new_with_directory(None));
-
-        let client = Client::builder().build()?;
-
-        let (shutdown_tx, shutdown_rx) = broadcast::channel(2);
-        let server_port =
-            pick_unused_port().ok_or_else(|| anyhow!("No free port available"))? as u16;
-        let server_state = ServerState {
-            client,
-            opencode: opencode.clone(),
-            settings: settings.clone(),
-            server_port,
-            directory_change_lock: Arc::new(Mutex::new(())),
-            models_metadata_cache: Arc::new(Mutex::new(ModelsMetadataCache::default())),
-        };
-
-        spawn_http_server(server_port, server_state, shutdown_rx);
-
-        Ok(Self {
-            server_port,
-            shutdown_tx,
-            opencode,
-            settings,
-        })
-    }
-
-    async fn start_opencode(&self) {
-        if self.opencode.is_cli_available() {
-            if let Err(e) = self.opencode.ensure_running().await {
-                warn!("[desktop] Failed to start OpenCode: {}", e);
-            }
-        } else {
-            info!("[desktop] OpenCode CLI not available - running in limited mode");
-        }
-    }
-
-    async fn shutdown(&self) {
-        let _ = self.shutdown_tx.send(());
-        let _ = self.opencode.shutdown().await;
-    }
-
-    pub(crate) fn settings(&self) -> &SettingsStore {
-        self.settings.as_ref()
-    }
-
-    pub(crate) fn subscribe_shutdown(&self) -> broadcast::Receiver<()> {
-        self.shutdown_tx.subscribe()
-    }
-
-    pub(crate) fn opencode_manager(&self) -> Arc<OpenCodeManager> {
-        self.opencode.clone()
-    }
-}
-
-#[derive(Clone)]
-struct ServerState {
-    client: Client,
-    opencode: Arc<OpenCodeManager>,
-    settings: Arc<SettingsStore>,
-    server_port: u16,
-    directory_change_lock: Arc<Mutex<()>>,
-    models_metadata_cache: Arc<Mutex<ModelsMetadataCache>>,
-}
-
-#[derive(Default)]
-struct ModelsMetadataCache {
-    payload: Option<Value>,
-    fetched_at: Option<Instant>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ConfigActionResponse {
-    success: bool,
-    requires_reload: bool,
-    message: String,
-    reload_delay_ms: u64,
-}
-
-#[derive(Serialize)]
-struct ConfigErrorResponse {
-    error: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ConfigMetadataResponse {
-    name: String,
-    sources: opencode_config::ConfigSources,
-    scope: Option<opencode_config::CommandScope>,
-    is_built_in: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct HealthResponse {
-    status: &'static str,
-    server_port: u16,
-    opencode_port: Option<u16>,
-    api_prefix: String,
-    is_opencode_ready: bool,
-    cli_available: bool,
-}
-
-#[derive(Serialize)]
-struct ServerInfoPayload {
-    server_port: u16,
-    opencode_port: Option<u16>,
-    api_prefix: String,
-    cli_available: bool,
-    has_last_directory: bool,
-}
-
-#[derive(Serialize)]
-struct QuotaProvidersResponse {
-    providers: Vec<String>,
-}
-
-#[tauri::command]
-async fn desktop_server_info(
-    state: tauri::State<'_, DesktopRuntime>,
-) -> Result<ServerInfoPayload, String> {
-    let has_last_directory = state
-        .settings()
-        .last_directory()
-        .await
-        .ok()
-        .flatten()
-        .is_some();
-    Ok(ServerInfoPayload {
-        server_port: state.server_port,
-        opencode_port: state.opencode.current_port(),
-        api_prefix: state.opencode.api_prefix(),
-        cli_available: state.opencode.is_cli_available(),
-        has_last_directory,
-    })
-}
-
-#[tauri::command]
-async fn desktop_restart_opencode(state: tauri::State<'_, DesktopRuntime>) -> Result<(), String> {
-    state
-        .opencode
-        .restart()
-        .await
-        .map_err(|err| err.to_string())
-}
-
-#[cfg(feature = "devtools")]
-#[tauri::command]
-async fn desktop_open_devtools(window: WebviewWindow) -> Result<(), String> {
-    window.open_devtools();
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn get_macos_major_version() -> isize {
-    use objc2_foundation::NSProcessInfo;
-    let process_info = NSProcessInfo::processInfo();
-    let version = process_info.operatingSystemVersion();
-    version.majorVersion
-}
-
-#[cfg(not(target_os = "macos"))]
-fn get_macos_major_version() -> isize {
-    0
-}
-
-#[tauri::command]
-fn desktop_get_macos_version() -> isize {
-    get_macos_major_version()
-}
-
-#[cfg(target_os = "macos")]
-fn optimize_webview_layer<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-
-    if let Ok(ns_view) = window.ns_view() {
-        unsafe {
-            let view: *mut AnyObject = ns_view.cast();
-            if view.is_null() {
-                warn!("[macos:layer] NSView is null");
-                return;
-            }
-
-            // Enable layer-backing for GPU compositing
-            let _: () = msg_send![view, setWantsLayer: true];
-
-            // Get the layer
-            let layer: *mut AnyObject = msg_send![view, layer];
-            if !layer.is_null() {
-                // Enable asynchronous drawing for better scroll performance
-                let _: () = msg_send![layer, setDrawsAsynchronously: true];
-
-                // Disable implicit animations that can cause jitter
-                let _: () = msg_send![layer, setActions: std::ptr::null::<AnyObject>()];
-
-                info!("[macos:layer] WebView layer optimizations applied");
-            } else {
-                warn!("[macos:layer] Layer is null after setWantsLayer");
-            }
-        }
-    } else {
-        warn!("[macos:layer] Failed to get NSView");
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn prevent_app_nap() {
-    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
-
-    let options = NSActivityOptions(0x00FFFFFF | 0xFF00000000);
-    let reason = NSString::from_str("Prevent App Nap");
-
-    let process_info = NSProcessInfo::processInfo();
-    let activity = process_info.beginActivityWithOptions_reason(options, &reason);
-
-    std::mem::forget(activity);
-
-    info!("[macos] App Nap prevention enabled via objc2");
-}
 
 #[cfg(target_os = "macos")]
 fn build_macos_menu<R: tauri::Runtime>(
@@ -394,6 +101,14 @@ fn build_macos_menu<R: tauri::Runtime>(
     };
 
     let pkg_info = app.package_info();
+
+    let auto_worktree = app
+        .try_state::<MenuRuntimeState>()
+        .map(|state| *state.auto_worktree.lock().expect("menu state mutex"))
+        .unwrap_or(false);
+
+    let new_session_shortcut = if auto_worktree { "Cmd+Shift+N" } else { "Cmd+N" };
+    let new_worktree_shortcut = if auto_worktree { "Cmd+N" } else { "Cmd+Shift+N" };
 
     let about = MenuItem::with_id(
         app,
@@ -411,7 +126,6 @@ fn build_macos_menu<R: tauri::Runtime>(
         None::<&str>,
     )?;
 
-    // App menu items
     let settings = MenuItem::with_id(app, MENU_ITEM_SETTINGS_ID, "Settings", true, Some("Cmd+,"))?;
 
     let command_palette = MenuItem::with_id(
@@ -422,13 +136,12 @@ fn build_macos_menu<R: tauri::Runtime>(
         Some("Cmd+K"),
     )?;
 
-    // File menu items
     let new_session = MenuItem::with_id(
         app,
         MENU_ITEM_NEW_SESSION_ID,
         "New Session",
         true,
-        Some("Cmd+N"),
+        Some(new_session_shortcut),
     )?;
 
     let worktree_creator = MenuItem::with_id(
@@ -436,24 +149,23 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_WORKTREE_CREATOR_ID,
         "New Worktree",
         true,
-        Some("Cmd+Shift+N"),
+        Some(new_worktree_shortcut),
     )?;
 
     let change_workspace = MenuItem::with_id(
         app,
         MENU_ITEM_CHANGE_WORKSPACE_ID,
-        "Change Workspace",
+        "Add Workspace",
         true,
         None::<&str>,
     )?;
 
-    // View menu items
     let open_git_tab =
         MenuItem::with_id(app, MENU_ITEM_OPEN_GIT_TAB_ID, "Git", true, Some("Cmd+G"))?;
-
     let open_diff_tab =
         MenuItem::with_id(app, MENU_ITEM_OPEN_DIFF_TAB_ID, "Diff", true, Some("Cmd+E"))?;
-
+    let open_files_tab =
+        MenuItem::with_id(app, MENU_ITEM_OPEN_FILES_TAB_ID, "Files", true, None::<&str>)?;
     let open_terminal_tab = MenuItem::with_id(
         app,
         MENU_ITEM_OPEN_TERMINAL_TAB_ID,
@@ -462,29 +174,12 @@ fn build_macos_menu<R: tauri::Runtime>(
         Some("Cmd+T"),
     )?;
 
-    let theme_light = MenuItem::with_id(
-        app,
-        MENU_ITEM_THEME_LIGHT_ID,
-        "Light Theme",
-        true,
-        None::<&str>,
-    )?;
-
-    let theme_dark = MenuItem::with_id(
-        app,
-        MENU_ITEM_THEME_DARK_ID,
-        "Dark Theme",
-        true,
-        None::<&str>,
-    )?;
-
-    let theme_system = MenuItem::with_id(
-        app,
-        MENU_ITEM_THEME_SYSTEM_ID,
-        "System Theme",
-        true,
-        None::<&str>,
-    )?;
+    let theme_light =
+        MenuItem::with_id(app, MENU_ITEM_THEME_LIGHT_ID, "Light Theme", true, None::<&str>)?;
+    let theme_dark =
+        MenuItem::with_id(app, MENU_ITEM_THEME_DARK_ID, "Dark Theme", true, None::<&str>)?;
+    let theme_system =
+        MenuItem::with_id(app, MENU_ITEM_THEME_SYSTEM_ID, "System Theme", true, None::<&str>)?;
 
     let toggle_sidebar = MenuItem::with_id(
         app,
@@ -502,7 +197,6 @@ fn build_macos_menu<R: tauri::Runtime>(
         Some("Cmd+Shift+D"),
     )?;
 
-    // Help menu items
     let help_dialog = MenuItem::with_id(
         app,
         MENU_ITEM_HELP_DIALOG_ID,
@@ -514,19 +208,13 @@ fn build_macos_menu<R: tauri::Runtime>(
     let download_logs = MenuItem::with_id(
         app,
         MENU_ITEM_DOWNLOAD_LOGS_ID,
-        "Download Logs",
+        "Show Diagnostics",
         true,
         Some("Cmd+Shift+L"),
     )?;
 
-    let report_bug = MenuItem::with_id(
-        app,
-        MENU_ITEM_REPORT_BUG_ID,
-        "Report a Bug",
-        true,
-        None::<&str>,
-    )?;
-
+    let report_bug =
+        MenuItem::with_id(app, MENU_ITEM_REPORT_BUG_ID, "Report a Bug", true, None::<&str>)?;
     let request_feature = MenuItem::with_id(
         app,
         MENU_ITEM_REQUEST_FEATURE_ID,
@@ -534,21 +222,11 @@ fn build_macos_menu<R: tauri::Runtime>(
         true,
         None::<&str>,
     )?;
+    let join_discord =
+        MenuItem::with_id(app, MENU_ITEM_JOIN_DISCORD_ID, "Join Discord", true, None::<&str>)?;
 
-    let join_discord = MenuItem::with_id(
-        app,
-        MENU_ITEM_JOIN_DISCORD_ID,
-        "Join Discord",
-        true,
-        None::<&str>,
-    )?;
-
-    let theme_submenu = Submenu::with_items(
-        app,
-        "Theme",
-        true,
-        &[&theme_light, &theme_dark, &theme_system],
-    )?;
+    let theme_submenu =
+        Submenu::with_items(app, "Theme", true, &[&theme_light, &theme_dark, &theme_system])?;
 
     let window_menu = Submenu::with_id_and_items(
         app,
@@ -635,6 +313,7 @@ fn build_macos_menu<R: tauri::Runtime>(
                 &[
                     &open_git_tab,
                     &open_diff_tab,
+                    &open_files_tab,
                     &open_terminal_tab,
                     &PredefinedMenuItem::separator(app)?,
                     &theme_submenu,
@@ -651,279 +330,888 @@ fn build_macos_menu<R: tauri::Runtime>(
     )
 }
 
-fn main() {
-    let mut log_builder = tauri_plugin_log::Builder::default()
-        .level(log::LevelFilter::Info)
-        .clear_targets()
-        .target(Target::new(TargetKind::Stdout))
-        .target(Target::new(TargetKind::Webview));
+#[tauri::command]
+fn desktop_set_auto_worktree_menu(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let Some(state) = app.try_state::<MenuRuntimeState>() else {
+        return Ok(());
+    };
 
-    if let Some(dir) = logging::log_directory() {
-        log_builder = log_builder.target(Target::new(TargetKind::Folder {
-            path: dir,
-            file_name: Some("openchamber".into()),
-        }));
+    {
+        let mut guard = state.auto_worktree.lock().expect("menu state mutex");
+        *guard = enabled;
     }
 
-    let app = tauri::Builder::default()
-        .plugin(shell_plugin())
-        .plugin(dialog_plugin())
-        .plugin(fs_plugin())
-        .plugin(notification_plugin())
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::menu::MenuItemKind;
+
+        let new_session_shortcut = if enabled { "Cmd+Shift+N" } else { "Cmd+N" };
+        let new_worktree_shortcut = if enabled { "Cmd+N" } else { "Cmd+Shift+N" };
+
+        if let Some(menu) = app.menu() {
+            if let Some(MenuItemKind::MenuItem(item)) = menu.get(MENU_ITEM_NEW_SESSION_ID) {
+                item.set_accelerator(Some(new_session_shortcut))
+                    .map_err(|err| err.to_string())?;
+            }
+            if let Some(MenuItemKind::MenuItem(item)) = menu.get(MENU_ITEM_WORKTREE_CREATOR_ID) {
+                item.set_accelerator(Some(new_worktree_shortcut))
+                    .map_err(|err| err.to_string())?;
+            }
+        } else {
+            // Should not happen on macOS, but keep as fallback.
+            let menu = build_macos_menu(&app).map_err(|err| err.to_string())?;
+            app.set_menu(menu).map_err(|err| err.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+const SIDECAR_NAME: &str = "openchamber-server";
+const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
+const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
+const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+const DEFAULT_DESKTOP_PORT: u16 = 57123;
+
+const LOCAL_HOST_ID: &str = "local";
+
+#[derive(Default)]
+struct SidecarState {
+    child: Mutex<Option<CommandChild>>,
+    url: Mutex<Option<String>>,
+}
+
+#[derive(Default)]
+struct DesktopUiInjectionState {
+    script: Mutex<Option<String>>,
+}
+
+struct WindowFocusState {
+    focused: Mutex<bool>,
+}
+
+impl Default for WindowFocusState {
+    fn default() -> Self {
+        Self {
+            focused: Mutex::new(true),
+        }
+    }
+}
+
+#[derive(Default)]
+struct MenuRuntimeState {
+    auto_worktree: Mutex<bool>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopHost {
+    id: String,
+    label: String,
+    url: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopHostsConfig {
+    hosts: Vec<DesktopHost>,
+    default_host_id: Option<String>,
+}
+
+fn normalize_host_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed = url::Url::parse(trimmed).ok()?;
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let host = parsed.host_str()?;
+    let mut normalized = format!("{}://{}", scheme, host);
+    if let Some(port) = parsed.port() {
+        normalized.push(':');
+        normalized.push_str(&port.to_string());
+    }
+    Some(normalized)
+}
+
+fn settings_file_path() -> PathBuf {
+    if let Ok(dir) = env::var("OPENCHAMBER_DATA_DIR") {
+        if !dir.trim().is_empty() {
+            return PathBuf::from(dir.trim()).join("settings.json");
+        }
+    }
+    let home = env::var("HOME").unwrap_or_default();
+    PathBuf::from(home)
+        .join(".config")
+        .join("openchamber")
+        .join("settings.json")
+}
+
+fn read_desktop_local_port_from_disk() -> Option<u16> {
+    let path = settings_file_path();
+    let raw = fs::read_to_string(path).ok();
+    let parsed = raw
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+    parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopLocalPort"))
+        .and_then(|v| v.as_u64())
+        .and_then(|v| if v > 0 && v <= u16::MAX as u64 { Some(v as u16) } else { None })
+}
+
+fn write_desktop_local_port_to_disk(port: u16) -> Result<()> {
+    let path = settings_file_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
+        serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    root["desktopLocalPort"] = serde_json::Value::Number(serde_json::Number::from(port));
+    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
+}
+
+
+fn read_desktop_hosts_config_from_disk() -> DesktopHostsConfig {
+    let path = settings_file_path();
+    let raw = fs::read_to_string(path).ok();
+    let parsed = raw
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+
+    let hosts_value = parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopHosts"))
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    let default_value = parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopDefaultHostId"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let mut hosts: Vec<DesktopHost> = Vec::new();
+    if let serde_json::Value::Array(items) = hosts_value {
+        for item in items {
+            if let Ok(host) = serde_json::from_value::<DesktopHost>(item) {
+                if host.id.trim().is_empty() || host.id == LOCAL_HOST_ID {
+                    continue;
+                }
+                if let Some(url) = normalize_host_url(&host.url) {
+                    hosts.push(DesktopHost {
+                        id: host.id,
+                        label: if host.label.trim().is_empty() {
+                            url.clone()
+                        } else {
+                            host.label
+                        },
+                        url,
+                    });
+                }
+            }
+        }
+    }
+
+    DesktopHostsConfig {
+        hosts,
+        default_host_id: default_value,
+    }
+}
+
+fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()> {
+    let path = settings_file_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
+        serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    let hosts: Vec<DesktopHost> = config
+        .hosts
+        .iter()
+        .filter_map(|h| {
+            let id = h.id.trim();
+            if id.is_empty() || id == LOCAL_HOST_ID {
+                return None;
+            }
+            let url = normalize_host_url(&h.url)?;
+            Some(DesktopHost {
+                id: id.to_string(),
+                label: if h.label.trim().is_empty() {
+                    url.clone()
+                } else {
+                    h.label.trim().to_string()
+                },
+                url,
+            })
+        })
+        .collect();
+
+    root["desktopHosts"] = serde_json::to_value(hosts).unwrap_or(serde_json::Value::Array(vec![]));
+    root["desktopDefaultHostId"] = match &config.default_host_id {
+        Some(id) if !id.trim().is_empty() => serde_json::Value::String(id.trim().to_string()),
+        _ => serde_json::Value::Null,
+    };
+
+    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn desktop_hosts_get() -> Result<DesktopHostsConfig, String> {
+    Ok(read_desktop_hosts_config_from_disk())
+}
+
+#[tauri::command]
+fn desktop_hosts_set(config: DesktopHostsConfig) -> Result<(), String> {
+    write_desktop_hosts_config_to_disk(&config).map_err(|err| err.to_string())
+}
+
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HostProbeResult {
+    status: String,
+    latency_ms: u64,
+}
+
+#[tauri::command]
+async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
+    let normalized = normalize_host_url(&url).ok_or_else(|| "Invalid URL".to_string())?;
+    let health = format!("{}/health", normalized.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .map_err(|err| err.to_string())?;
+    let started = std::time::Instant::now();
+    match client.get(&health).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let latency_ms = started.elapsed().as_millis() as u64;
+            if status.is_success() {
+                Ok(HostProbeResult {
+                    status: "ok".to_string(),
+                    latency_ms,
+                })
+            } else if status.as_u16() == 401 || status.as_u16() == 403 {
+                Ok(HostProbeResult {
+                    status: "auth".to_string(),
+                    latency_ms,
+                })
+            } else {
+                Ok(HostProbeResult {
+                    status: "unreachable".to_string(),
+                    latency_ms,
+                })
+            }
+        }
+        Err(_) => Ok(HostProbeResult {
+            status: "unreachable".to_string(),
+            latency_ms: started.elapsed().as_millis() as u64,
+        }),
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "event", content = "data")]
+enum UpdateProgressEvent {
+    #[serde(rename_all = "camelCase")]
+    Started {
+        content_length: Option<u64>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Progress {
+        chunk_length: usize,
+        downloaded: u64,
+        total: Option<u64>,
+    },
+    Finished,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopUpdateInfo {
+    available: bool,
+    current_version: String,
+    version: Option<String>,
+    body: Option<String>,
+    date: Option<String>,
+}
+
+struct PendingUpdate(Mutex<Option<tauri_plugin_updater::Update>>);
+
+fn pick_unused_port() -> Result<u16> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    Ok(port)
+}
+
+fn is_nonempty_string(value: &str) -> bool {
+    !value.trim().is_empty()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SidecarNotifyPayload {
+    title: Option<String>,
+    body: Option<String>,
+    tag: Option<String>,
+    require_hidden: Option<bool>,
+}
+
+fn maybe_show_sidecar_notification(app: &tauri::AppHandle, payload: SidecarNotifyPayload) {
+    let require_hidden = payload.require_hidden.unwrap_or(false);
+    if require_hidden {
+        let focused = app
+            .try_state::<WindowFocusState>()
+            .map(|state| *state.focused.lock().expect("focus mutex"))
+            .unwrap_or(false);
+        if focused {
+            return;
+        }
+    }
+
+    let title = payload
+        .title
+        .filter(|t| is_nonempty_string(t))
+        .unwrap_or_else(|| "OpenChamber".to_string());
+    let body = payload.body.filter(|b| is_nonempty_string(b));
+    let _tag = payload.tag;
+
+    use tauri_plugin_notification::NotificationExt;
+
+    let mut builder = app.notification().builder().title(title);
+    if let Some(body) = body {
+        builder = builder.body(body);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.sound("Glass");
+    }
+    let _ = builder.show();
+}
+
+async fn wait_for_health(url: &str) -> bool {
+    let client = match reqwest::Client::builder().no_proxy().build() {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    let deadline = std::time::Instant::now() + HEALTH_TIMEOUT;
+    let health_url = format!("{}/health", url.trim_end_matches('/'));
+
+    while std::time::Instant::now() < deadline {
+        if let Ok(resp) = client.get(&health_url).send().await {
+            if resp.status().is_success() {
+                return true;
+            }
+        }
+        tokio::time::sleep(HEALTH_POLL_INTERVAL).await;
+    }
+
+    false
+}
+
+fn kill_sidecar(app: tauri::AppHandle) {
+    let Some(state) = app.try_state::<SidecarState>() else {
+        return;
+    };
+
+    let mut guard = state.child.lock().expect("sidecar mutex");
+    if let Some(child) = guard.take() {
+        let _ = child.kill();
+    }
+}
+
+fn build_local_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}")
+}
+
+async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
+    let stored_port = read_desktop_local_port_from_disk();
+    let mut candidates: Vec<Option<u16>> = Vec::new();
+    if let Some(port) = stored_port {
+        candidates.push(Some(port));
+    }
+    candidates.push(Some(DEFAULT_DESKTOP_PORT));
+    candidates.push(None);
+
+    let dist_dir = resolve_web_dist_dir(app)?;
+    let no_proxy = "localhost,127.0.0.1";
+
+    // macOS app launch env often lacks user PATH entries.
+    let mut path_segments: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+
+    let mut push_unique = |value: String| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        if seen.insert(trimmed.to_string()) {
+            path_segments.push(trimmed.to_string());
+        }
+    };
+
+    // Respect explicit binary overrides by adding their parent dir first.
+    for var in [
+        "OPENCHAMBER_OPENCODE_PATH",
+        "OPENCHAMBER_OPENCODE_BIN",
+        "OPENCODE_PATH",
+        "OPENCODE_BINARY",
+    ] {
+        if let Ok(val) = env::var(var) {
+            let trimmed = val.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let path = std::path::Path::new(trimmed);
+            if let Some(parent) = path.parent() {
+                push_unique(parent.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // Common locations.
+    push_unique("/opt/homebrew/bin".to_string());
+    push_unique("/usr/local/bin".to_string());
+    push_unique("/usr/bin".to_string());
+    push_unique("/bin".to_string());
+    push_unique("/usr/sbin".to_string());
+    push_unique("/sbin".to_string());
+
+    if let Ok(home) = env::var("HOME") {
+        let home = home.trim();
+        if !home.is_empty() {
+            // OpenCode installer default.
+            push_unique(format!("{home}/.opencode/bin"));
+            push_unique(format!("{home}/.local/bin"));
+            push_unique(format!("{home}/.bun/bin"));
+            push_unique(format!("{home}/.cargo/bin"));
+            push_unique(format!("{home}/bin"));
+        }
+    }
+
+    if let Ok(existing) = env::var("PATH") {
+        for segment in existing.split(':') {
+            push_unique(segment.to_string());
+        }
+    }
+
+    let augmented_path = path_segments.join(":");
+
+    for candidate in candidates {
+        let port = match candidate {
+            Some(p) => p,
+            None => pick_unused_port()?,
+        };
+        let url = build_local_url(port);
+
+        let cmd = app
+            .shell()
+            .sidecar(SIDECAR_NAME)
+            .map_err(|err| anyhow!("Failed to resolve sidecar '{SIDECAR_NAME}': {err}"))?
+            .args(["--port", &port.to_string()])
+            .env("OPENCHAMBER_HOST", "127.0.0.1")
+            .env("OPENCHAMBER_DIST_DIR", dist_dir.clone())
+            .env("OPENCHAMBER_DESKTOP_NOTIFY", "true")
+            .env("PATH", augmented_path.clone())
+            .env("NO_PROXY", no_proxy)
+            .env("no_proxy", no_proxy);
+
+        let (rx, child) = match cmd.spawn() {
+            Ok(v) => v,
+            Err(err) => {
+                log::warn!("[sidecar] spawn failed on port {port}: {err}");
+                continue;
+            }
+        };
+
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut rx = rx;
+            while let Some(event) = rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(bytes) => {
+                        let line = String::from_utf8_lossy(&bytes);
+                        if let Some(rest) = line.strip_prefix(SIDECAR_NOTIFY_PREFIX) {
+                            if let Ok(parsed) =
+                                serde_json::from_str::<SidecarNotifyPayload>(rest.trim())
+                            {
+                                maybe_show_sidecar_notification(&app_handle, parsed);
+                            }
+                        }
+                    }
+                    CommandEvent::Error(error) => {
+                        log::warn!("[sidecar] error: {error}");
+                    }
+                    CommandEvent::Terminated(payload) => {
+                        log::warn!(
+                            "[sidecar] terminated code={:?} signal={:?}",
+                            payload.code,
+                            payload.signal
+                        );
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        if let Some(state) = app.try_state::<SidecarState>() {
+            *state.child.lock().expect("sidecar mutex") = Some(child);
+            *state.url.lock().expect("sidecar url mutex") = Some(url.clone());
+        }
+
+        if !wait_for_health(&url).await {
+            kill_sidecar(app.clone());
+            continue;
+        }
+
+        let _ = write_desktop_local_port_to_disk(port);
+        return Ok(url);
+    }
+
+    Err(anyhow!("Sidecar health check failed"))
+}
+
+fn resolve_web_dist_dir(app: &tauri::AppHandle) -> Result<PathBuf> {
+    let candidates = ["web-dist", "resources/web-dist"];
+    for candidate in candidates {
+        let path = app
+            .path()
+            .resolve(candidate, tauri::path::BaseDirectory::Resource)
+            .map_err(|err| anyhow!("Failed to resolve '{candidate}' resources: {err}"))?;
+        let index = path.join("index.html");
+        if fs::metadata(&index).is_ok() {
+            return Ok(path);
+        }
+    }
+
+    Err(anyhow!(
+        "Web assets missing in app resources (expected index.html under web-dist)"
+    ))
+}
+
+fn normalize_server_url(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    match url::Url::parse(trimmed) {
+        Ok(url) => {
+            if url.scheme() == "http" || url.scheme() == "https" {
+                Some(trimmed.trim_end_matches('/').to_string())
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+#[derive(Deserialize)]
+struct DesktopNotifyPayload {
+    title: Option<String>,
+    body: Option<String>,
+    tag: Option<String>,
+}
+
+#[tauri::command]
+fn desktop_notify(
+    app: tauri::AppHandle,
+    payload: Option<DesktopNotifyPayload>,
+) -> Result<bool, String> {
+    let payload = payload.unwrap_or(DesktopNotifyPayload {
+        title: None,
+        body: None,
+        tag: None,
+    });
+
+    use tauri_plugin_notification::NotificationExt;
+
+    let mut builder = app
+        .notification()
+        .builder()
+        .title(payload.title.unwrap_or_else(|| "OpenChamber".to_string()));
+
+    if let Some(body) = payload.body {
+        if is_nonempty_string(&body) {
+            builder = builder.body(body);
+        }
+    }
+
+    if let Some(tag) = payload.tag {
+        if is_nonempty_string(&tag) {
+            let _ = tag;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.sound("Glass");
+    }
+
+    builder.show().map(|_| true).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+async fn desktop_check_for_updates(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingUpdate>,
+) -> Result<DesktopUpdateInfo, String> {
+    let updater = app.updater().map_err(|err| err.to_string())?;
+    let update = updater.check().await.map_err(|err| err.to_string())?;
+
+    let current_version = app.package_info().version.to_string();
+
+    let info = if let Some(update) = update {
+        *pending.0.lock().expect("pending update mutex") = Some(update.clone());
+        DesktopUpdateInfo {
+            available: true,
+            current_version,
+            version: Some(update.version.clone()),
+            body: update.body.clone(),
+            date: update.date.map(|date| date.to_string()),
+        }
+    } else {
+        *pending.0.lock().expect("pending update mutex") = None;
+        DesktopUpdateInfo {
+            available: false,
+            current_version,
+            version: None,
+            body: None,
+            date: None,
+        }
+    };
+
+    Ok(info)
+}
+
+#[tauri::command]
+async fn desktop_download_and_install_update(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingUpdate>,
+) -> Result<(), String> {
+    let Some(update) = pending.0.lock().expect("pending update mutex").take() else {
+        return Err("No pending update".to_string());
+    };
+
+    let mut downloaded: u64 = 0;
+    let mut total: Option<u64> = None;
+    let mut started = false;
+
+    update
+        .download_and_install(
+            |chunk_length, content_length| {
+                if !started {
+                    total = content_length;
+                    let _ = app.emit(
+                        "openchamber:update-progress",
+                        UpdateProgressEvent::Started { content_length },
+                    );
+                    started = true;
+                }
+
+                downloaded = downloaded.saturating_add(chunk_length as u64);
+                let _ = app.emit(
+                    "openchamber:update-progress",
+                    UpdateProgressEvent::Progress {
+                        chunk_length,
+                        downloaded,
+                        total,
+                    },
+                );
+            },
+            || {
+                let _ = app.emit("openchamber:update-progress", UpdateProgressEvent::Finished);
+            },
+        )
+        .await
+        .map_err(|err| err.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn desktop_restart(app: tauri::AppHandle) {
+    app.restart();
+}
+
+fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Result<()> {
+    let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
+
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
+    #[cfg(target_os = "macos")]
+    fn macos_major_version() -> Option<u32> {
+        fn cmd_stdout(cmd: &str, args: &[&str]) -> Option<String> {
+            let output = Command::new(cmd).args(args).output().ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            String::from_utf8(output.stdout).ok()
+        }
+
+        // Use marketing version (sw_vers), but map legacy 10.x to minor (10.15 -> 15).
+        // This matches WebKit UA fallback logic in the UI.
+        if let Some(raw) = cmd_stdout("/usr/bin/sw_vers", &["-productVersion"]).or_else(|| cmd_stdout("sw_vers", &["-productVersion"])) {
+            let raw = raw.trim();
+            let mut parts = raw.split('.');
+            let major = parts.next().and_then(|v| v.parse::<u32>().ok())?;
+            let minor = parts.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+            return Some(if major == 10 { minor } else { major });
+        }
+
+        // Fallback: derive from Darwin major (kern.osrelease major).
+        let raw = cmd_stdout("/usr/sbin/sysctl", &["-n", "kern.osrelease"])
+            .or_else(|| cmd_stdout("sysctl", &["-n", "kern.osrelease"]))
+            .or_else(|| cmd_stdout("/usr/bin/uname", &["-r"]))
+            .or_else(|| cmd_stdout("uname", &["-r"]))?;
+        let raw = raw.trim();
+        let major = raw.split('.').next()?.parse::<u32>().ok()?;
+        if major >= 20 {
+            return Some(major - 9);
+        }
+        if major >= 15 {
+            return Some(major - 4);
+        }
+        Some(major)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn macos_major_version() -> Option<u32> {
+        None
+    }
+
+    let macos_major = macos_major_version().unwrap_or(0);
+
+    let home_json = serde_json::to_string(&home).unwrap_or_else(|_| "\"\"".into());
+    let local_json = serde_json::to_string(local_origin).unwrap_or_else(|_| "\"\"".into());
+
+    let mut init_script = format!(
+        "(function(){{try{{window.__OPENCHAMBER_HOME__={home_json};window.__OPENCHAMBER_MACOS_MAJOR__={macos_major};window.__OPENCHAMBER_LOCAL_ORIGIN__={local_json};}}catch(_e){{}}}})();"
+    );
+
+    // Cleanup: older builds injected a native-ish Instance switcher button into pages.
+    // Remove it if present so the UI-owned host switcher is the only one.
+    init_script.push_str("\ntry{var old=document.getElementById('__oc-instance-switcher');if(old)old.remove();}catch(_e){}");
+
+    if !cfg!(debug_assertions) {
+        init_script.push_str("\ntry{document.addEventListener('contextmenu',function(e){e.preventDefault();},true);}catch(_e){}");
+    }
+
+    if let Some(state) = app.try_state::<DesktopUiInjectionState>() {
+        *state.script.lock().expect("desktop ui injection mutex") = Some(init_script.clone());
+    }
+
+    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+        .title("OpenChamber")
+        .inner_size(1280.0, 800.0)
+        .decorations(true)
+        .visible(false)
+        .initialization_script(&init_script)
+        ;
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .hidden_title(true)
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition { x: 17.0, y: 26.0 }));
+    }
+
+    let window = builder.build()?;
+
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    Ok(())
+}
+
+fn main() {
+    let log_builder = tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Info)
+        .clear_targets()
+        .targets([
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+        ]);
+
+    let builder = tauri::Builder::default()
+        .manage(SidecarState::default())
+        .manage(DesktopUiInjectionState::default())
+        .manage(WindowFocusState::default())
+        .manage(MenuRuntimeState::default())
+        .manage(PendingUpdate(Mutex::new(None)))
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
         .plugin(log_builder.build())
+        .on_page_load(|window, _payload| {
+            if let Some(state) = window.app_handle().try_state::<DesktopUiInjectionState>() {
+                if let Ok(guard) = state.script.lock() {
+                    if let Some(script) = guard.as_ref() {
+                        let _ = window.eval(script);
+                    }
+                }
+            }
+        })
         .menu(|app| {
             #[cfg(target_os = "macos")]
             {
-                return build_macos_menu(app);
+                build_macos_menu(app)
             }
+
             #[cfg(not(target_os = "macos"))]
             {
-                return tauri::menu::Menu::default(app);
+                tauri::menu::Menu::default(app)
             }
         })
-        .setup(|app| {
-            #[cfg(target_os = "macos")]
-            prevent_app_nap();
-
-            app.manage(TerminalState::new());
-
-            let stored_state = tauri::async_runtime::block_on(load_window_state()).unwrap_or(None);
-            let manager = WindowStateManager::new(stored_state.clone().unwrap_or_default());
-            app.manage(manager.clone());
-
-            if let Some(window) = app.get_webview_window("main") {
-                #[cfg(target_os = "macos")]
-                {
-                    // Apply layer optimizations for smoother scrolling
-                    optimize_webview_layer(&window);
-                }
-
-                if let Some(saved) = &stored_state {
-                    let _ = window_state::apply_window_state(&window, saved);
-                }
-
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-
-            let runtime = DesktopRuntime::initialize_sync()?;
-            app.manage(runtime.clone());
-
-            let app_handle = app.app_handle().clone();
-            let runtime_clone = runtime.clone();
-            tauri::async_runtime::spawn(async move {
-                runtime_clone.start_opencode().await;
-
-                if let Err(e) =
-                    restore_bookmarks_on_startup(app_handle.state::<DesktopRuntime>().clone()).await
-                {
-                    warn!("Failed to restore bookmarks on startup: {}", e);
-                }
-
-                let _ = app_handle.emit("openchamber:runtime-ready", ());
-            });
-
-            // Sidecar watchdog: restart on unexpected exit and notify UI
-            {
-                let app_handle = app.app_handle().clone();
-                let runtime = runtime.clone();
-                tauri::async_runtime::spawn(async move {
-                    let mut backoff_ms: u64 = 1000;
-                    loop {
-                        if runtime.opencode_manager().is_shutting_down() {
-                            break;
-                        }
-
-                        let mut sleep_ms = backoff_ms;
-
-                        match runtime.opencode_manager().is_child_running().await {
-                            Ok(true) => {
-                                sleep_ms = 1000;
-                                backoff_ms = 1000;
-                            }
-                            Ok(false) => {
-                                let _ = app_handle.emit("server.instance.disposed", ());
-                                if runtime.opencode_manager().is_cli_available() {
-                                    if let Err(err) =
-                                        runtime.opencode_manager().ensure_running().await
-                                    {
-                                        warn!(
-                                            "[desktop:watchdog] Failed to restart OpenCode: {err}"
-                                        );
-                                    } else {
-                                        backoff_ms = 1000;
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                warn!("[desktop:watchdog] Failed to check child status: {err}");
-                            }
-                        }
-
-                        tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
-                        backoff_ms = (backoff_ms * 2).min(8000);
-                    }
-                });
-            }
-
-            // Health and wake monitor: emit health and port updates to webview
-            {
-                let app_handle = app.app_handle().clone();
-                let runtime = runtime.clone();
-                tauri::async_runtime::spawn(async move {
-                    #[derive(Clone, Serialize)]
-                    struct HealthSnapshot {
-                        ok: bool,
-                        port: Option<u16>,
-                        api_prefix: String,
-                        cli_available: bool,
-                    }
-
-                    let mut last_snapshot: Option<HealthSnapshot> = None;
-                    let mut last_tick = Instant::now();
-
-                    loop {
-                        if runtime.opencode_manager().is_shutting_down() {
-                            break;
-                        }
-
-                        let now = Instant::now();
-                        let gap_ms = now.saturating_duration_since(last_tick).as_millis() as u64;
-                        last_tick = now;
-
-                        let snapshot = HealthSnapshot {
-                            ok: runtime.opencode_manager().is_ready(),
-                            port: runtime.opencode_manager().current_port(),
-                            api_prefix: runtime.opencode_manager().api_prefix(),
-                            cli_available: opencode_manager::check_cli_exists(),
-                        };
-
-                        let changed = match &last_snapshot {
-                            Some(prev) => {
-                                prev.ok != snapshot.ok
-                                    || prev.port != snapshot.port
-                                    || prev.api_prefix != snapshot.api_prefix
-                                    || prev.cli_available != snapshot.cli_available
-                            }
-                            None => true,
-                        };
-
-                        if changed {
-                            let _ = app_handle.emit("openchamber:health-changed", &snapshot);
-                            last_snapshot = Some(snapshot.clone());
-                        }
-
-                        if gap_ms > 15000 {
-                            let _ = app_handle.emit("openchamber:wake", ());
-                        }
-
-                        tokio::time::sleep(Duration::from_secs(5)).await;
-                    }
-                });
-            }
-
-            spawn_assistant_notifications(app.app_handle().clone(), runtime.clone());
-            spawn_session_activity_tracker(app.app_handle().clone(), runtime.clone());
-
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            desktop_server_info,
-            desktop_restart_opencode,
-            desktop_get_macos_version,
-            #[cfg(feature = "devtools")]
-            desktop_open_devtools,
-            load_settings,
-            save_settings,
-            restart_opencode,
-            list_directory,
-            search_files,
-            create_directory,
-            delete_path,
-            rename_path,
-            read_file,
-            read_file_binary,
-            write_file,
-            exec_commands,
-            request_directory_access,
-            start_accessing_directory,
-            stop_accessing_directory,
-            pick_directory,
-            restore_bookmarks_on_startup,
-            process_directory_selection,
-            check_is_git_repository,
-            get_git_status,
-            get_git_diff,
-            get_git_file_diff,
-            revert_git_file,
-            is_linked_worktree,
-            get_git_branches,
-            delete_git_branch,
-            delete_remote_branch,
-            list_git_worktrees,
-            add_git_worktree,
-            remove_git_worktree,
-            ensure_openchamber_ignored,
-            create_git_commit,
-            git_push,
-            git_pull,
-            git_fetch,
-            checkout_branch,
-            create_branch,
-            rename_branch,
-            get_git_log,
-            get_commit_files,
-            get_git_identities,
-            create_git_identity,
-            update_git_identity,
-            delete_git_identity,
-            get_current_git_identity,
-            has_local_identity,
-            get_global_git_identity,
-            get_remote_url,
-            set_git_identity,
-            discover_git_credentials,
-            generate_commit_message,
-            generate_pr_description,
-            create_terminal_session,
-            send_terminal_input,
-            resize_terminal,
-            close_terminal,
-            restart_terminal_session,
-            force_kill_terminal,
-            fetch_desktop_logs,
-            desktop_notify,
-            github_auth_status,
-            github_auth_start,
-            github_auth_complete,
-            github_auth_disconnect,
-            github_auth_activate,
-            github_me,
-            github_pr_status,
-            github_pr_create,
-            github_pr_merge,
-            github_pr_ready,
-            github_prs_list,
-            github_pr_context,
-            github_issues_list,
-            github_issue_get,
-            github_issue_comments,
-        ])
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
             {
-                let event_id = event.id().as_ref();
+                let id = event.id().as_ref();
 
-                // Check for updates
-                if event_id == MENU_ITEM_CHECK_FOR_UPDATES_ID {
-                    let _ = app.emit(CHECK_FOR_UPDATES_EVENT, ());
+                log::info!("[menu] click id={}", id);
+
+                #[cfg(debug_assertions)]
+                {
+                    let msg = serde_json::to_string(id).unwrap_or_else(|_| "\"(unserializable)\"".into());
+                    eval_in_main_window(app, &format!("console.log('[menu] id=', {});", msg));
+                }
+
+                if id == MENU_ITEM_CHECK_FOR_UPDATES_ID {
+                    dispatch_check_for_updates(app);
                     return;
                 }
 
-                // External links
-                if event_id == MENU_ITEM_REPORT_BUG_ID {
+                if id == MENU_ITEM_REPORT_BUG_ID {
                     use tauri_plugin_shell::ShellExt;
                     #[allow(deprecated)]
                     {
@@ -932,7 +1220,7 @@ fn main() {
                     return;
                 }
 
-                if event_id == MENU_ITEM_REQUEST_FEATURE_ID {
+                if id == MENU_ITEM_REQUEST_FEATURE_ID {
                     use tauri_plugin_shell::ShellExt;
                     #[allow(deprecated)]
                     {
@@ -941,7 +1229,7 @@ fn main() {
                     return;
                 }
 
-                if event_id == MENU_ITEM_JOIN_DISCORD_ID {
+                if id == MENU_ITEM_JOIN_DISCORD_ID {
                     use tauri_plugin_shell::ShellExt;
                     #[allow(deprecated)]
                     {
@@ -950,2056 +1238,178 @@ fn main() {
                     return;
                 }
 
-                // App menu actions
-                if event_id == MENU_ITEM_ABOUT_ID {
-                    let _ = app.emit("openchamber:menu-action", "about");
+                if id == MENU_ITEM_ABOUT_ID {
+                    dispatch_menu_action(app, "about");
+                    return;
+                }
+                if id == MENU_ITEM_SETTINGS_ID {
+                    dispatch_menu_action(app, "settings");
+                    return;
+                }
+                if id == MENU_ITEM_COMMAND_PALETTE_ID {
+                    dispatch_menu_action(app, "command-palette");
                     return;
                 }
 
-                if event_id == MENU_ITEM_SETTINGS_ID {
-                    let _ = app.emit("openchamber:menu-action", "settings");
+                if id == MENU_ITEM_NEW_SESSION_ID {
+                    dispatch_menu_action(app, "new-session");
+                    return;
+                }
+                if id == MENU_ITEM_WORKTREE_CREATOR_ID {
+                    dispatch_menu_action(app, "new-worktree-session");
+                    return;
+                }
+                if id == MENU_ITEM_CHANGE_WORKSPACE_ID {
+                    dispatch_menu_action(app, "change-workspace");
                     return;
                 }
 
-                if event_id == MENU_ITEM_COMMAND_PALETTE_ID {
-                    let _ = app.emit("openchamber:menu-action", "command-palette");
+                if id == MENU_ITEM_OPEN_GIT_TAB_ID {
+                    dispatch_menu_action(app, "open-git-tab");
+                    return;
+                }
+                if id == MENU_ITEM_OPEN_DIFF_TAB_ID {
+                    dispatch_menu_action(app, "open-diff-tab");
                     return;
                 }
 
-                // File menu actions
-                if event_id == MENU_ITEM_NEW_SESSION_ID {
-                    let _ = app.emit("openchamber:menu-action", "new-session");
+                if id == MENU_ITEM_OPEN_FILES_TAB_ID {
+                    dispatch_menu_action(app, "open-files-tab");
+                    return;
+                }
+                if id == MENU_ITEM_OPEN_TERMINAL_TAB_ID {
+                    dispatch_menu_action(app, "open-terminal-tab");
                     return;
                 }
 
-                if event_id == MENU_ITEM_WORKTREE_CREATOR_ID {
-                    let _ = app.emit("openchamber:menu-action", "worktree-creator");
+                if id == MENU_ITEM_THEME_LIGHT_ID {
+                    dispatch_menu_action(app, "theme-light");
+                    return;
+                }
+                if id == MENU_ITEM_THEME_DARK_ID {
+                    dispatch_menu_action(app, "theme-dark");
+                    return;
+                }
+                if id == MENU_ITEM_THEME_SYSTEM_ID {
+                    dispatch_menu_action(app, "theme-system");
                     return;
                 }
 
-                if event_id == MENU_ITEM_CHANGE_WORKSPACE_ID {
-                    let _ = app.emit("openchamber:menu-action", "change-workspace");
+                if id == MENU_ITEM_TOGGLE_SIDEBAR_ID {
+                    dispatch_menu_action(app, "toggle-sidebar");
+                    return;
+                }
+                if id == MENU_ITEM_TOGGLE_MEMORY_DEBUG_ID {
+                    dispatch_menu_action(app, "toggle-memory-debug");
                     return;
                 }
 
-                // View menu actions
-                if event_id == MENU_ITEM_OPEN_GIT_TAB_ID {
-                    let _ = app.emit("openchamber:menu-action", "open-git-tab");
+                if id == MENU_ITEM_HELP_DIALOG_ID {
+                    dispatch_menu_action(app, "help-dialog");
                     return;
                 }
-
-                if event_id == MENU_ITEM_OPEN_DIFF_TAB_ID {
-                    let _ = app.emit("openchamber:menu-action", "open-diff-tab");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_OPEN_TERMINAL_TAB_ID {
-                    let _ = app.emit("openchamber:menu-action", "open-terminal-tab");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_THEME_LIGHT_ID {
-                    let _ = app.emit("openchamber:menu-action", "theme-light");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_THEME_DARK_ID {
-                    let _ = app.emit("openchamber:menu-action", "theme-dark");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_THEME_SYSTEM_ID {
-                    let _ = app.emit("openchamber:menu-action", "theme-system");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_TOGGLE_SIDEBAR_ID {
-                    let _ = app.emit("openchamber:menu-action", "toggle-sidebar");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_TOGGLE_MEMORY_DEBUG_ID {
-                    let _ = app.emit("openchamber:menu-action", "toggle-memory-debug");
-                    return;
-                }
-
-                // Help menu actions
-                if event_id == MENU_ITEM_HELP_DIALOG_ID {
-                    let _ = app.emit("openchamber:menu-action", "help-dialog");
-                    return;
-                }
-
-                if event_id == MENU_ITEM_DOWNLOAD_LOGS_ID {
-                    let _ = app.emit("openchamber:menu-action", "download-logs");
-                    return;
+                if id == MENU_ITEM_DOWNLOAD_LOGS_ID {
+                    dispatch_menu_action(app, "download-logs");
                 }
             }
         })
         .on_window_event(|window, event| {
-            let window_state_manager = window.state::<WindowStateManager>().inner().clone();
-
-            match event {
-                tauri::WindowEvent::Focused(true) => {
-                    // Clear dock badge and underlying badge state when the window gains focus
-                    let _ = window.set_badge_count(None);
-                    let _ = window
-                        .app_handle()
-                        .emit("openchamber:clear-badge-sessions", ());
+            if let tauri::WindowEvent::Focused(focused) = event {
+                let app = window.app_handle();
+                if let Some(state) = app.try_state::<WindowFocusState>() {
+                    *state.focused.lock().expect("focus mutex") = *focused;
                 }
-                tauri::WindowEvent::Moved(position) => {
-                    let is_maximized = window.is_maximized().unwrap_or(false);
-                    window_state_manager.update_position(
-                        position.x as f64,
-                        position.y as f64,
-                        is_maximized,
-                    );
-                }
-                tauri::WindowEvent::Resized(size) => {
-                    let is_maximized = window.is_maximized().unwrap_or(false);
-                    window_state_manager.update_size(
-                        size.width as f64,
-                        size.height as f64,
-                        is_maximized,
-                    );
-                }
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    api.prevent_close();
-                    let runtime = window.state::<DesktopRuntime>().inner().clone();
-                    let window_handle = window.clone();
-                    let manager_clone = window_state_manager.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(err) = persist_window_state(&window_handle, &manager_clone).await
-                        {
-                            warn!("Failed to persist window state: {}", err);
-                        }
-                        runtime.shutdown().await;
-                        let _ = window_handle.app_handle().exit(0);
-                    });
-                }
-                _ => {}
             }
         })
+        .invoke_handler(tauri::generate_handler![
+            desktop_notify,
+            desktop_check_for_updates,
+            desktop_download_and_install_update,
+            desktop_restart,
+            desktop_set_auto_worktree_menu,
+            desktop_hosts_get,
+            desktop_hosts_set,
+            desktop_host_probe,
+        ])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Always ensure local server is running for escape hatch.
+                let local_url = if cfg!(debug_assertions) {
+                    let dev_url = "http://127.0.0.1:3001";
+                    if wait_for_health(dev_url).await {
+                        dev_url.to_string()
+                    } else {
+                        match spawn_local_server(&handle).await {
+                            Ok(local) => local,
+                            Err(err) => {
+                                log::error!("[desktop] failed to start local server: {err}");
+                                return;
+                            }
+                        }
+                    }
+                } else {
+                    match spawn_local_server(&handle).await {
+                        Ok(local) => local,
+                        Err(err) => {
+                            log::error!("[desktop] failed to start local server: {err}");
+                            return;
+                        }
+                    }
+                };
+
+                // Ensure local URL is always available to desktop commands,
+                // even when we are using the Vite dev server (no sidecar child).
+                if let Some(state) = handle.try_state::<SidecarState>() {
+                    *state.url.lock().expect("sidecar url mutex") = Some(local_url.clone());
+                }
+
+                let local_origin = url::Url::parse(&local_url)
+                    .ok()
+                    .map(|u| u.origin().ascii_serialization())
+                    .unwrap_or_else(|| local_url.clone());
+
+                // Selected host: env override first, then desktop default host, else local.
+                let env_target = std::env::var("OPENCHAMBER_SERVER_URL")
+                    .ok()
+                    .and_then(|raw| normalize_server_url(&raw));
+
+                let mut initial_url = env_target.unwrap_or_else(|| local_url.clone());
+
+                if initial_url == local_url {
+                    let cfg = read_desktop_hosts_config_from_disk();
+                    if let Some(default_id) = cfg.default_host_id {
+                        if default_id == LOCAL_HOST_ID {
+                            initial_url = local_url.clone();
+                        } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
+                            initial_url = host.url;
+                        }
+                    }
+                }
+
+                if let Err(err) = create_main_window(&handle, &initial_url, &local_origin) {
+                    log::error!("[desktop] failed to create window: {err}");
+                }
+            });
+
+            Ok(())
+        })
+        ;
+
+    let app = builder
         .build(tauri::generate_context!())
         .expect("failed to build Tauri application");
 
-    app.run(|_app_handle, _event| {});
-}
-
-fn spawn_http_server(port: u16, state: ServerState, shutdown_rx: broadcast::Receiver<()>) {
-    tauri::async_runtime::spawn(async move {
-        if let Err(error) = run_http_server(port, state, shutdown_rx).await {
-            error!("[desktop:http] server stopped: {error:?}");
+    app.run(|app_handle, event| {
+        match event {
+            tauri::RunEvent::ExitRequested { .. } => {
+                // Best-effort cleanup; never block shutdown.
+                kill_sidecar(app_handle.clone());
+            }
+            tauri::RunEvent::Exit => {
+                kill_sidecar(app_handle.clone());
+            }
+            _ => {}
         }
     });
-}
-
-async fn run_http_server(
-    port: u16,
-    state: ServerState,
-    mut shutdown_rx: broadcast::Receiver<()>,
-) -> Result<()> {
-    let router = Router::new()
-        .route("/health", get(health_handler))
-        .route(
-            "/api/openchamber/models-metadata",
-            get(models_metadata_handler),
-        )
-        .route("/api/quota/providers", get(quota_providers_handler))
-        .route("/api/quota/{providerId}", get(quota_provider_handler))
-        .route("/api/opencode/directory", post(change_directory_handler))
-        .route("/api", any(proxy_to_opencode))
-        .route("/api/{*rest}", any(proxy_to_opencode))
-        .with_state(state)
-        .layer(CorsLayer::permissive());
-
-    let addr = format!("127.0.0.1:{port}");
-    let listener = TcpListener::bind(&addr).await?;
-    info!("[desktop:http] listening on http://{addr}");
-
-    axum::serve(listener, router)
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.recv().await;
-        })
-        .await?;
-
-    Ok(())
-}
-
-async fn health_handler(State(state): State<ServerState>) -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok",
-        server_port: state.server_port,
-        opencode_port: state.opencode.current_port(),
-        api_prefix: state.opencode.api_prefix(),
-        is_opencode_ready: state.opencode.is_ready(),
-        cli_available: opencode_manager::check_cli_exists(),
-    })
-}
-
-async fn models_metadata_handler(
-    State(state): State<ServerState>,
-) -> Result<Json<Value>, StatusCode> {
-    let now = Instant::now();
-    let cached_payload: Option<Value> = {
-        let cache = state.models_metadata_cache.lock().await;
-        if let (Some(payload), Some(fetched_at)) = (&cache.payload, cache.fetched_at) {
-            if now.duration_since(fetched_at) < MODELS_METADATA_CACHE_TTL {
-                return Ok(Json(payload.clone()));
-            }
-        }
-        cache.payload.clone()
-    };
-
-    let response = state
-        .client
-        .get(MODELS_DEV_API_URL)
-        .header(header::ACCEPT, "application/json")
-        .timeout(MODELS_METADATA_REQUEST_TIMEOUT)
-        .send()
-        .await
-        .map_err(|error| {
-            warn!("[desktop:http] Failed to fetch models metadata: {error}");
-            StatusCode::BAD_GATEWAY
-        })?;
-
-    if !response.status().is_success() {
-        warn!(
-            "[desktop:http] models.dev responded with status {}",
-            response.status()
-        );
-        if let Some(payload) = cached_payload {
-            return Ok(Json(payload));
-        }
-        return Err(StatusCode::BAD_GATEWAY);
-    }
-
-    let payload = response.json::<Value>().await.map_err(|error| {
-        warn!("[desktop:http] Failed to parse models.dev payload: {error}");
-        StatusCode::BAD_GATEWAY
-    })?;
-
-    {
-        let mut cache = state.models_metadata_cache.lock().await;
-        cache.payload = Some(payload.clone());
-        cache.fetched_at = Some(Instant::now());
-    }
-
-    Ok(Json(payload))
-}
-
-async fn quota_providers_handler(State(_state): State<ServerState>) -> Response {
-    match quota_providers::list_configured_quota_providers().await {
-        Ok(providers) => json_response(
-            StatusCode::OK,
-            QuotaProvidersResponse { providers },
-        ),
-        Err(err) => {
-            error!("[desktop:quota] Failed to list quota providers: {}", err);
-            config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
-    }
-}
-
-async fn quota_provider_handler(
-    State(state): State<ServerState>,
-    Path(provider_id): Path<String>,
-) -> Response {
-    let trimmed = provider_id.trim();
-    if trimmed.is_empty() {
-        return config_error_response(StatusCode::BAD_REQUEST, "Provider ID is required");
-    }
-
-    match quota_providers::fetch_quota_for_provider(&state.client, trimmed).await {
-        Ok(result) => json_response(StatusCode::OK, result),
-        Err(err) => {
-            error!("[desktop:quota] Failed to fetch quota: {}", err);
-            config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
-    }
-}
-
-#[derive(Deserialize)]
-struct DirectoryChangeRequest {
-    path: String,
-}
-
-#[derive(Serialize)]
-struct DirectoryChangeResponse {
-    success: bool,
-    restarted: bool,
-    path: String,
-}
-
-fn json_response<T: Serialize>(status: StatusCode, payload: T) -> Response {
-    (status, Json(payload)).into_response()
-}
-
-fn config_error_response(status: StatusCode, message: impl Into<String>) -> Response {
-    json_response(
-        status,
-        ConfigErrorResponse {
-            error: message.into(),
-        },
-    )
-}
-
-async fn parse_request_payload(req: &mut Request) -> Result<HashMap<String, Value>, Response> {
-    let body = std::mem::take(req.body_mut());
-    let body_bytes = to_bytes(body, PROXY_BODY_LIMIT)
-        .await
-        .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Invalid request body"))?;
-
-    if body_bytes.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    serde_json::from_slice::<HashMap<String, Value>>(&body_bytes)
-        .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Malformed JSON payload"))
-}
-
-async fn refresh_opencode_after_config_change(
-    state: &ServerState,
-    reason: &str,
-) -> Result<(), Response> {
-    info!("[desktop:config] Restarting OpenCode after {}", reason);
-    state.opencode.restart().await.map_err(|err| {
-        config_error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to restart OpenCode: {}", err),
-        )
-    })?;
-    Ok(())
-}
-
-fn extract_directory_from_request(req: &Request) -> Option<String> {
-    if let Some(value) = req.headers().get("x-opencode-directory") {
-        if let Ok(text) = value.to_str() {
-            let trimmed = text.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_string());
-            }
-        }
-    }
-
-    let query = req.uri().query()?;
-    for pair in query.split('&') {
-        let mut parts = pair.splitn(2, '=');
-        let key = parts.next()?;
-        if key != "directory" {
-            continue;
-        }
-        let value = parts.next().unwrap_or("");
-        if let Ok(decoded) = urlencoding::decode(value) {
-            let trimmed = decoded.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_string());
-            }
-        }
-    }
-
-    None
-}
-
-async fn resolve_directory_candidate(candidate: &str) -> Result<PathBuf, Response> {
-    let mut resolved = expand_tilde_path(candidate);
-    if !resolved.is_absolute() {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-        resolved = home.join(resolved);
-    }
-
-    let metadata = fs::metadata(&resolved)
-        .await
-        .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Directory not found"))?;
-    if !metadata.is_dir() {
-        return Err(config_error_response(
-            StatusCode::BAD_REQUEST,
-            "Specified path is not a directory",
-        ));
-    }
-
-    if let Ok(canonicalized) = fs::canonicalize(&resolved).await {
-        resolved = canonicalized;
-    }
-
-    Ok(resolved)
-}
-
-async fn resolve_project_directory_from_settings(
-    settings: &SettingsStore,
-) -> Result<Option<PathBuf>, Response> {
-    let raw = settings.load().await.map_err(|_| {
-        config_error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to load settings")
-    })?;
-
-    let active_id = raw
-        .get("activeProjectId")
-        .and_then(|value| value.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-
-    let projects = raw.get("projects").and_then(|value| value.as_array());
-    if let Some(projects) = projects {
-        if let Some(entry) = projects.iter().find(|entry| {
-            entry
-                .get("id")
-                .and_then(|value| value.as_str())
-                .map(|value| value.trim() == active_id)
-                .unwrap_or(false)
-        }) {
-            if let Some(path) = entry.get("path").and_then(|value| value.as_str()) {
-                return resolve_directory_candidate(path).await.map(Some);
-            }
-        }
-
-        if let Some(entry) = projects.first() {
-            if let Some(path) = entry.get("path").and_then(|value| value.as_str()) {
-                return resolve_directory_candidate(path).await.map(Some);
-            }
-        }
-    }
-
-    let legacy = raw
-        .get("lastDirectory")
-        .and_then(|value| value.as_str())
-        .unwrap_or("")
-        .trim();
-    if !legacy.is_empty() {
-        return resolve_directory_candidate(legacy).await.map(Some);
-    }
-
-    Ok(None)
-}
-
-async fn resolve_project_directory(
-    state: &ServerState,
-    directory: Option<String>,
-) -> Result<PathBuf, Response> {
-    if let Some(directory) = directory {
-        return resolve_directory_candidate(&directory).await;
-    }
-
-    match resolve_project_directory_from_settings(state.settings.as_ref()).await? {
-        Some(path) => Ok(path),
-        None => Err(config_error_response(
-            StatusCode::BAD_REQUEST,
-            "Directory parameter or active project is required",
-        )),
-    }
-}
-
-async fn handle_agent_route(
-    state: &ServerState,
-    method: Method,
-    mut req: Request,
-    name: String,
-) -> Result<Response, StatusCode> {
-    // Get working directory for project-level agent detection
-    let working_directory =
-        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
-            Ok(directory) => directory,
-            Err(response) => return Ok(response),
-        };
-
-    match method {
-        Method::GET => {
-            match opencode_config::get_agent_sources(&name, Some(&working_directory)).await {
-                Ok(sources) => {
-                    let resolved_scope = if sources.md.exists {
-                        sources.md.scope.clone()
-                    } else {
-                        sources.json.scope.clone()
-                    };
-                    let scope = resolved_scope.map(|s| match s {
-                        opencode_config::Scope::User => opencode_config::CommandScope::User,
-                        opencode_config::Scope::Project => opencode_config::CommandScope::Project,
-                    });
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigMetadataResponse {
-                            name,
-                            is_built_in: !sources.md.exists && !sources.json.exists,
-                            scope,
-                            sources,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!("[desktop:config] Failed to read agent sources: {}", err);
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to read agent configuration",
-                    ))
-                }
-            }
-        }
-        Method::POST => {
-            let payload = match parse_request_payload(&mut req).await {
-                Ok(data) => data,
-                Err(resp) => return Ok(resp),
-            };
-
-            // Extract scope from payload if present
-            let scope = payload
-                .get("scope")
-                .and_then(|v| v.as_str())
-                .and_then(|s| match s {
-                    "project" => Some(opencode_config::AgentScope::Project),
-                    "user" => Some(opencode_config::AgentScope::User),
-                    _ => None,
-                });
-
-            match opencode_config::create_agent(&name, &payload, Some(&working_directory), scope)
-                .await
-            {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "agent creation").await
-                    {
-                        return Ok(resp);
-                    }
-
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Agent {} created successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!("[desktop:config] Failed to create agent {}: {}", name, err);
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    ))
-                }
-            }
-        }
-        Method::PATCH => {
-            let payload = match parse_request_payload(&mut req).await {
-                Ok(data) => data,
-                Err(resp) => return Ok(resp),
-            };
-
-            match opencode_config::update_agent(&name, &payload, Some(&working_directory)).await {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "agent update").await
-                    {
-                        return Ok(resp);
-                    }
-
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Agent {} updated successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!("[desktop:config] Failed to update agent {}: {}", name, err);
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    ))
-                }
-            }
-        }
-        Method::DELETE => {
-            match opencode_config::delete_agent(&name, Some(&working_directory)).await {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "agent deletion").await
-                    {
-                        return Ok(resp);
-                    }
-
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Agent {} deleted successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!("[desktop:config] Failed to delete agent {}: {}", name, err);
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    ))
-                }
-            }
-        }
-        _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
-    }
-}
-
-/// Response type for skill metadata
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SkillMetadataResponse {
-    name: String,
-    exists: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    scope: Option<opencode_config::Scope>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<opencode_config::SkillSource>,
-    sources: opencode_config::SkillConfigSources,
-}
-
-/// Response type for skill list
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SkillListItem {
-    name: String,
-    path: String,
-    scope: opencode_config::Scope,
-    source: opencode_config::SkillSource,
-    sources: opencode_config::SkillConfigSources,
-}
-
-/// Response type for skill file content
-#[derive(Serialize)]
-struct SkillFileResponse {
-    path: String,
-    content: String,
-}
-
-async fn handle_skill_list_route(
-    state: &ServerState,
-    req: Request,
-) -> Result<Response, StatusCode> {
-    let working_directory =
-        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
-            Ok(directory) => directory,
-            Err(response) => return Ok(response),
-        };
-    let discovered = opencode_config::discover_skills(Some(&working_directory));
-
-    let mut skills = Vec::new();
-    for skill in discovered {
-        match opencode_config::get_skill_sources(&skill.name, Some(&working_directory)).await {
-            Ok(sources) => {
-                skills.push(SkillListItem {
-                    name: skill.name,
-                    path: skill.path,
-                    scope: skill.scope,
-                    source: skill.source,
-                    sources,
-                });
-            }
-            Err(err) => {
-                error!(
-                    "[desktop:config] Failed to get skill sources for {}: {}",
-                    skill.name, err
-                );
-            }
-        }
-    }
-
-    Ok(json_response(
-        StatusCode::OK,
-        serde_json::json!({ "skills": skills }),
-    ))
-}
-
-async fn handle_skill_route(
-    state: &ServerState,
-    method: Method,
-    mut req: Request,
-    name: String,
-    file_path: Option<String>,
-) -> Result<Response, StatusCode> {
-    let working_directory =
-        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
-            Ok(directory) => directory,
-            Err(response) => return Ok(response),
-        };
-
-    // Handle file operations: /api/config/skills/:name/files/*
-    if let Some(ref fp) = file_path {
-        match method {
-            Method::GET => {
-                // Read supporting file
-                match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
-                    Ok(sources) => {
-                        if !sources.md.exists {
-                            return Ok(config_error_response(
-                                StatusCode::NOT_FOUND,
-                                "Skill not found",
-                            ));
-                        }
-                        let skill_dir = sources.md.dir.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        match opencode_config::read_skill_supporting_file(
-                            std::path::Path::new(&skill_dir),
-                            fp,
-                        )
-                        .await
-                        {
-                            Ok(content) => Ok(json_response(
-                                StatusCode::OK,
-                                SkillFileResponse {
-                                    path: fp.clone(),
-                                    content,
-                                },
-                            )),
-                            Err(_) => Ok(config_error_response(
-                                StatusCode::NOT_FOUND,
-                                "File not found",
-                            )),
-                        }
-                    }
-                    Err(err) => {
-                        error!("[desktop:config] Failed to read skill sources: {}", err);
-                        Ok(config_error_response(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "Failed to read skill",
-                        ))
-                    }
-                }
-            }
-            Method::PUT => {
-                // Write supporting file
-                let payload = match parse_request_payload(&mut req).await {
-                    Ok(data) => data,
-                    Err(resp) => return Ok(resp),
-                };
-                let content = payload
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-
-                match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
-                    Ok(sources) => {
-                        if !sources.md.exists {
-                            return Ok(config_error_response(
-                                StatusCode::NOT_FOUND,
-                                "Skill not found",
-                            ));
-                        }
-                        let skill_dir = sources.md.dir.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        match opencode_config::write_skill_supporting_file(
-                            std::path::Path::new(&skill_dir),
-                            fp,
-                            content,
-                        )
-                        .await
-                        {
-                            Ok(()) => Ok(json_response(
-                                StatusCode::OK,
-                                ConfigActionResponse {
-                                    success: true,
-                                    requires_reload: false,
-                                    message: format!("File {} saved successfully", fp),
-                                    reload_delay_ms: 0,
-                                },
-                            )),
-                            Err(err) => Ok(config_error_response(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                err.to_string(),
-                            )),
-                        }
-                    }
-                    Err(err) => Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    )),
-                }
-            }
-            Method::DELETE => {
-                // Delete supporting file
-                match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
-                    Ok(sources) => {
-                        if !sources.md.exists {
-                            return Ok(config_error_response(
-                                StatusCode::NOT_FOUND,
-                                "Skill not found",
-                            ));
-                        }
-                        let skill_dir = sources.md.dir.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        match opencode_config::delete_skill_supporting_file(
-                            std::path::Path::new(&skill_dir),
-                            fp,
-                        )
-                        .await
-                        {
-                            Ok(()) => Ok(json_response(
-                                StatusCode::OK,
-                                ConfigActionResponse {
-                                    success: true,
-                                    requires_reload: false,
-                                    message: format!("File {} deleted successfully", fp),
-                                    reload_delay_ms: 0,
-                                },
-                            )),
-                            Err(err) => Ok(config_error_response(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                err.to_string(),
-                            )),
-                        }
-                    }
-                    Err(err) => Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    )),
-                }
-            }
-            _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
-        }
-    } else {
-        // Handle skill CRUD: /api/config/skills/:name
-        match method {
-            Method::GET => {
-                match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
-                    Ok(sources) => {
-                        let scope = sources.md.scope.clone();
-                        let source = sources.md.source.clone();
-                        Ok(json_response(
-                            StatusCode::OK,
-                            SkillMetadataResponse {
-                                name,
-                                exists: sources.md.exists,
-                                scope,
-                                source,
-                                sources,
-                            },
-                        ))
-                    }
-                    Err(err) => {
-                        error!("[desktop:config] Failed to read skill sources: {}", err);
-                        Ok(config_error_response(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "Failed to read skill configuration",
-                        ))
-                    }
-                }
-            }
-            Method::POST => {
-                let payload = match parse_request_payload(&mut req).await {
-                    Ok(data) => data,
-                    Err(resp) => return Ok(resp),
-                };
-
-                let scope = payload
-                    .get("scope")
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| match s {
-                        "project" => Some(opencode_config::SkillScope::Project),
-                        "user" => Some(opencode_config::SkillScope::User),
-                        _ => None,
-                    });
-
-                match opencode_config::create_skill(
-                    &name,
-                    &payload,
-                    Some(&working_directory),
-                    scope,
-                )
-                .await
-                {
-                    Ok(()) => {
-                        if let Err(resp) =
-                            refresh_opencode_after_config_change(state, "skill creation").await
-                        {
-                            return Ok(resp);
-                        }
-
-                        Ok(json_response(
-                            StatusCode::OK,
-                            ConfigActionResponse {
-                                success: true,
-                                requires_reload: true,
-                                message: format!(
-                                    "Skill {} created successfully. Reloading interface...",
-                                    name
-                                ),
-                                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                            },
-                        ))
-                    }
-                    Err(err) => {
-                        error!("[desktop:config] Failed to create skill {}: {}", name, err);
-                        Ok(config_error_response(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            err.to_string(),
-                        ))
-                    }
-                }
-            }
-            Method::PATCH => {
-                let payload = match parse_request_payload(&mut req).await {
-                    Ok(data) => data,
-                    Err(resp) => return Ok(resp),
-                };
-
-                match opencode_config::update_skill(&name, &payload, Some(&working_directory)).await
-                {
-                    Ok(()) => {
-                        if let Err(resp) =
-                            refresh_opencode_after_config_change(state, "skill update").await
-                        {
-                            return Ok(resp);
-                        }
-
-                        Ok(json_response(
-                            StatusCode::OK,
-                            ConfigActionResponse {
-                                success: true,
-                                requires_reload: true,
-                                message: format!(
-                                    "Skill {} updated successfully. Reloading interface...",
-                                    name
-                                ),
-                                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                            },
-                        ))
-                    }
-                    Err(err) => {
-                        error!("[desktop:config] Failed to update skill {}: {}", name, err);
-                        Ok(config_error_response(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            err.to_string(),
-                        ))
-                    }
-                }
-            }
-            Method::DELETE => {
-                match opencode_config::delete_skill(&name, Some(&working_directory)).await {
-                    Ok(()) => {
-                        if let Err(resp) =
-                            refresh_opencode_after_config_change(state, "skill deletion").await
-                        {
-                            return Ok(resp);
-                        }
-
-                        Ok(json_response(
-                            StatusCode::OK,
-                            ConfigActionResponse {
-                                success: true,
-                                requires_reload: true,
-                                message: format!(
-                                    "Skill {} deleted successfully. Reloading interface...",
-                                    name
-                                ),
-                                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                            },
-                        ))
-                    }
-                    Err(err) => {
-                        error!("[desktop:config] Failed to delete skill {}: {}", name, err);
-                        let status = if err.to_string().contains("not found") {
-                            StatusCode::NOT_FOUND
-                        } else {
-                            StatusCode::INTERNAL_SERVER_ERROR
-                        };
-                        Ok(config_error_response(status, err.to_string()))
-                    }
-                }
-            }
-            _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
-        }
-    }
-}
-
-async fn handle_command_route(
-    state: &ServerState,
-    method: Method,
-    mut req: Request,
-    name: String,
-) -> Result<Response, StatusCode> {
-    // Get working directory for project-level command detection
-    let working_directory =
-        match resolve_project_directory(state, extract_directory_from_request(&req)).await {
-            Ok(directory) => directory,
-            Err(response) => return Ok(response),
-        };
-
-    match method {
-        Method::GET => {
-            match opencode_config::get_command_sources(&name, Some(&working_directory)).await {
-                Ok(sources) => {
-                    let resolved_scope = if sources.md.exists {
-                        sources.md.scope.clone()
-                    } else {
-                        sources.json.scope.clone()
-                    };
-                    let scope = resolved_scope.map(|s| match s {
-                        opencode_config::Scope::User => opencode_config::CommandScope::User,
-                        opencode_config::Scope::Project => opencode_config::CommandScope::Project,
-                    });
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigMetadataResponse {
-                            name,
-                            is_built_in: !sources.md.exists && !sources.json.exists,
-                            scope,
-                            sources,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!("[desktop:config] Failed to read command sources: {}", err);
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to read command configuration",
-                    ))
-                }
-            }
-        }
-        Method::POST => {
-            let payload = match parse_request_payload(&mut req).await {
-                Ok(data) => data,
-                Err(resp) => return Ok(resp),
-            };
-
-            // Extract scope from payload if present
-            let scope = payload
-                .get("scope")
-                .and_then(|v| v.as_str())
-                .and_then(|s| match s {
-                    "project" => Some(opencode_config::CommandScope::Project),
-                    "user" => Some(opencode_config::CommandScope::User),
-                    _ => None,
-                });
-
-            match opencode_config::create_command(&name, &payload, Some(&working_directory), scope)
-                .await
-            {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "command creation").await
-                    {
-                        return Ok(resp);
-                    }
-
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Command {} created successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!(
-                        "[desktop:config] Failed to create command {}: {}",
-                        name, err
-                    );
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    ))
-                }
-            }
-        }
-        Method::PATCH => {
-            let payload = match parse_request_payload(&mut req).await {
-                Ok(data) => data,
-                Err(resp) => return Ok(resp),
-            };
-
-            match opencode_config::update_command(&name, &payload, Some(&working_directory)).await {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "command update").await
-                    {
-                        return Ok(resp);
-                    }
-
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Command {} updated successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!(
-                        "[desktop:config] Failed to update command {}: {}",
-                        name, err
-                    );
-                    Ok(config_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        err.to_string(),
-                    ))
-                }
-            }
-        }
-        Method::DELETE => {
-            match opencode_config::delete_command(&name, Some(&working_directory)).await {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "command deletion").await
-                    {
-                        return Ok(resp);
-                    }
-
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Command {} deleted successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
-                }
-                Err(err) => {
-                    error!(
-                        "[desktop:config] Failed to delete command {}: {}",
-                        name, err
-                    );
-                    let status = if err.to_string().contains("not found") {
-                        StatusCode::NOT_FOUND
-                    } else {
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    };
-                    Ok(config_error_response(status, err.to_string()))
-                }
-            }
-        }
-        _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
-    }
-}
-
-async fn handle_config_routes(
-    state: ServerState,
-    path: &str,
-    method: Method,
-    mut req: Request,
-) -> Result<Response, StatusCode> {
-    if path == "/api/config/themes" && method == Method::GET {
-        let themes = read_custom_themes_from_disk().await;
-        return Ok(json_response(
-            StatusCode::OK,
-            serde_json::json!({ "themes": themes }),
-        ));
-    }
-
-    if let Some(name) = path.strip_prefix("/api/config/agents/") {
-        let trimmed = name.trim();
-        if trimmed.is_empty() {
-            return Ok(config_error_response(
-                StatusCode::BAD_REQUEST,
-                "Agent name is required",
-            ));
-        }
-        return handle_agent_route(&state, method, req, trimmed.to_string()).await;
-    }
-
-    if let Some(name) = path.strip_prefix("/api/config/commands/") {
-        let trimmed = name.trim();
-        if trimmed.is_empty() {
-            return Ok(config_error_response(
-                StatusCode::BAD_REQUEST,
-                "Command name is required",
-            ));
-        }
-        return handle_command_route(&state, method, req, trimmed.to_string()).await;
-    }
-
-    // Skills catalog routes (must be checked before /api/config/skills/:name)
-    if path == "/api/config/skills/catalog" && method == Method::GET {
-        let refresh = req
-            .uri()
-            .query()
-            .map(|q| q.contains("refresh=true"))
-            .unwrap_or(false);
-
-        let working_directory =
-            match resolve_project_directory(&state, extract_directory_from_request(&req)).await {
-                Ok(directory) => directory,
-                Err(response) => return Ok(response),
-            };
-        let payload = skills_catalog::get_catalog(&working_directory, refresh).await;
-        return Ok(json_response(StatusCode::OK, payload));
-    }
-
-    if path == "/api/config/skills/scan" && method == Method::POST {
-        let payload_map = match parse_request_payload(&mut req).await {
-            Ok(data) => data,
-            Err(resp) => return Ok(resp),
-        };
-
-        let payload_value = serde_json::Value::Object(payload_map.into_iter().collect());
-        let scan_request =
-            match serde_json::from_value::<skills_catalog::SkillsScanRequest>(payload_value) {
-                Ok(v) => v,
-                Err(_) => {
-                    return Ok(json_response(
-                        StatusCode::BAD_REQUEST,
-                        skills_catalog::SkillsRepoScanResponse {
-                            ok: false,
-                            items: None,
-                            error: Some(skills_catalog::SkillsRepoError {
-                                kind: "invalidSource".to_string(),
-                                message: "Malformed scan request".to_string(),
-                                ssh_only: None,
-                                identities: None,
-                                conflicts: None,
-                            }),
-                        },
-                    ))
-                }
-            };
-
-        let response = skills_catalog::scan_repository(scan_request).await;
-        let status = if response.ok {
-            StatusCode::OK
-        } else if response.error.as_ref().map(|e| e.kind.as_str()) == Some("authRequired") {
-            StatusCode::UNAUTHORIZED
-        } else {
-            StatusCode::BAD_REQUEST
-        };
-
-        return Ok(json_response(status, response));
-    }
-
-    if path == "/api/config/skills/install" && method == Method::POST {
-        let payload_map = match parse_request_payload(&mut req).await {
-            Ok(data) => data,
-            Err(resp) => return Ok(resp),
-        };
-
-        let payload_value = serde_json::Value::Object(payload_map.into_iter().collect());
-        let install_request =
-            match serde_json::from_value::<skills_catalog::SkillsInstallRequest>(payload_value) {
-                Ok(v) => v,
-                Err(_) => {
-                    return Ok(json_response(
-                        StatusCode::BAD_REQUEST,
-                        skills_catalog::SkillsInstallResponse {
-                            ok: false,
-                            installed: None,
-                            skipped: None,
-                            error: Some(skills_catalog::SkillsRepoError {
-                                kind: "invalidSource".to_string(),
-                                message: "Malformed install request".to_string(),
-                                ssh_only: None,
-                                identities: None,
-                                conflicts: None,
-                            }),
-                        },
-                    ))
-                }
-            };
-
-        let working_directory = if install_request.scope == "project" {
-            match resolve_project_directory(&state, extract_directory_from_request(&req)).await {
-                Ok(directory) => directory,
-                Err(response) => return Ok(response),
-            }
-        } else {
-            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
-        };
-
-        let response = skills_catalog::install_skills(&working_directory, install_request).await;
-        let status = if response.ok {
-            StatusCode::OK
-        } else if response.error.as_ref().map(|e| e.kind.as_str()) == Some("authRequired") {
-            StatusCode::UNAUTHORIZED
-        } else if response.error.as_ref().map(|e| e.kind.as_str()) == Some("conflicts") {
-            StatusCode::CONFLICT
-        } else {
-            StatusCode::BAD_REQUEST
-        };
-
-        return Ok(json_response(status, response));
-    }
-
-    // Handle skill routes: /api/config/skills and /api/config/skills/:name
-    if path == "/api/config/skills" && method == Method::GET {
-        return handle_skill_list_route(&state, req).await;
-    }
-
-    if let Some(rest) = path.strip_prefix("/api/config/skills/") {
-        // Check if it's a file operation: /api/config/skills/:name/files/*
-        if let Some(files_start) = rest.find("/files/") {
-            let name = &rest[..files_start];
-            let file_path_encoded = &rest[files_start + 7..]; // Skip "/files/"
-                                                              // Decode URL-encoded path (e.g., "docs%2Foptimization.md" -> "docs/optimization.md")
-            let file_path = urlencoding::decode(file_path_encoded)
-                .map(|s| s.into_owned())
-                .unwrap_or_else(|_| file_path_encoded.to_string());
-            if name.is_empty() {
-                return Ok(config_error_response(
-                    StatusCode::BAD_REQUEST,
-                    "Skill name is required",
-                ));
-            }
-            return handle_skill_route(&state, method, req, name.to_string(), Some(file_path))
-                .await;
-        }
-
-        let trimmed = rest.trim();
-        if trimmed.is_empty() {
-            return Ok(config_error_response(
-                StatusCode::BAD_REQUEST,
-                "Skill name is required",
-            ));
-        }
-        return handle_skill_route(&state, method, req, trimmed.to_string(), None).await;
-    }
-
-    if path == "/api/config/reload" && method == Method::POST {
-        if let Err(resp) =
-            refresh_opencode_after_config_change(&state, "manual configuration reload").await
-        {
-            return Ok(resp);
-        }
-
-        return Ok(json_response(
-            StatusCode::OK,
-            ConfigActionResponse {
-                success: true,
-                requires_reload: true,
-                message: "Configuration reloaded successfully. Refreshing interface...".to_string(),
-                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-            },
-        ));
-    }
-
-    // Handle provider source lookup: GET /api/provider/:providerId/source
-    if let Some(rest) = path.strip_prefix("/api/provider/") {
-        if let Some(provider_id) = rest.strip_suffix("/source") {
-            if method == Method::GET {
-                let trimmed = provider_id.trim();
-                if trimmed.is_empty() {
-                    return Ok(config_error_response(
-                        StatusCode::BAD_REQUEST,
-                        "Provider ID is required",
-                    ));
-                }
-
-                let requested_directory = extract_directory_from_request(&req);
-                let working_directory = if let Some(ref value) = requested_directory {
-                    match resolve_project_directory(&state, Some(value.to_string())).await {
-                        Ok(directory) => Some(directory),
-                        Err(resp) => return Ok(resp),
-                    }
-                } else {
-                    resolve_project_directory(&state, None).await.ok()
-                };
-
-                match opencode_config::get_provider_sources(trimmed, working_directory.as_deref())
-                    .await
-                {
-                    Ok(mut sources) => {
-                        let auth = opencode_auth::get_provider_auth(trimmed).await;
-                        sources.auth.exists = auth.ok().flatten().is_some();
-                        return Ok(json_response(
-                            StatusCode::OK,
-                            serde_json::json!({
-                                "providerId": trimmed,
-                                "sources": sources
-                            }),
-                        ));
-                    }
-                    Err(err) => {
-                        error!(
-                            "[desktop:config] Failed to get provider sources {}: {}",
-                            trimmed, err
-                        );
-                        return Ok(config_error_response(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            err.to_string(),
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    // Handle provider auth removal: DELETE /api/provider/:providerId/auth
-    if let Some(rest) = path.strip_prefix("/api/provider/") {
-        if let Some(provider_id) = rest.strip_suffix("/auth") {
-            if method == Method::DELETE {
-                let trimmed = provider_id.trim();
-                if trimmed.is_empty() {
-                    return Ok(config_error_response(
-                        StatusCode::BAD_REQUEST,
-                        "Provider ID is required",
-                    ));
-                }
-
-                let scope = req
-                    .uri()
-                    .query()
-                    .and_then(|query| {
-                        query
-                            .split('&')
-                            .find(|pair| pair.starts_with("scope="))
-                            .and_then(|pair| pair.split('=').nth(1))
-                    })
-                    .unwrap_or("auth");
-
-                let requested_directory = extract_directory_from_request(&req);
-                let working_directory = if scope == "project" {
-                    match resolve_project_directory(&state, requested_directory.clone()).await {
-                        Ok(directory) => Some(directory),
-                        Err(resp) => return Ok(resp),
-                    }
-                } else if let Some(ref value) = requested_directory {
-                    match resolve_project_directory(&state, Some(value.to_string())).await {
-                        Ok(directory) => Some(directory),
-                        Err(resp) => return Ok(resp),
-                    }
-                } else {
-                    resolve_project_directory(&state, None).await.ok()
-                };
-
-                let removal_result = if scope == "auth" {
-                    opencode_auth::remove_provider_auth(trimmed).await
-                } else if scope == "user" {
-                    opencode_config::remove_provider_config(
-                        trimmed,
-                        working_directory.as_deref(),
-                        opencode_config::ProviderScope::User,
-                    )
-                    .await
-                } else if scope == "project" {
-                    opencode_config::remove_provider_config(
-                        trimmed,
-                        working_directory.as_deref(),
-                        opencode_config::ProviderScope::Project,
-                    )
-                    .await
-                } else if scope == "custom" {
-                    opencode_config::remove_provider_config(
-                        trimmed,
-                        working_directory.as_deref(),
-                        opencode_config::ProviderScope::Custom,
-                    )
-                    .await
-                } else if scope == "all" {
-                    let auth_removed = opencode_auth::remove_provider_auth(trimmed)
-                        .await
-                        .unwrap_or(false);
-                    let user_removed = opencode_config::remove_provider_config(
-                        trimmed,
-                        working_directory.as_deref(),
-                        opencode_config::ProviderScope::User,
-                    )
-                    .await
-                    .unwrap_or(false);
-                    let project_removed = if let Some(ref directory) = working_directory {
-                        opencode_config::remove_provider_config(
-                            trimmed,
-                            Some(directory),
-                            opencode_config::ProviderScope::Project,
-                        )
-                        .await
-                        .unwrap_or(false)
-                    } else {
-                        false
-                    };
-                    let custom_removed = opencode_config::remove_provider_config(
-                        trimmed,
-                        working_directory.as_deref(),
-                        opencode_config::ProviderScope::Custom,
-                    )
-                    .await
-                    .unwrap_or(false);
-
-                    Ok(auth_removed || user_removed || project_removed || custom_removed)
-                } else {
-                    return Ok(config_error_response(
-                        StatusCode::BAD_REQUEST,
-                        "Invalid scope",
-                    ));
-                };
-
-                match removal_result {
-                    Ok(removed) => {
-                        if removed {
-                            if let Err(resp) = refresh_opencode_after_config_change(
-                                &state,
-                                &format!("provider {} disconnected", trimmed),
-                            )
-                            .await
-                            {
-                                return Ok(resp);
-                            }
-                        }
-
-                        return Ok(json_response(
-                            StatusCode::OK,
-                            ConfigActionResponse {
-                                success: true,
-                                requires_reload: removed,
-                                message: if removed {
-                                    "Provider disconnected successfully".to_string()
-                                } else {
-                                    "Provider was not connected".to_string()
-                                },
-                                reload_delay_ms: if removed { CLIENT_RELOAD_DELAY_MS } else { 0 },
-                            },
-                        ));
-                    }
-                    Err(err) => {
-                        error!(
-                            "[desktop:config] Failed to disconnect provider {}: {}",
-                            trimmed, err
-                        );
-                        return Ok(config_error_response(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            err.to_string(),
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(StatusCode::NOT_FOUND.into_response())
-}
-
-async fn change_directory_handler(
-    State(state): State<ServerState>,
-    Json(payload): Json<DirectoryChangeRequest>,
-) -> Result<Json<DirectoryChangeResponse>, StatusCode> {
-    // Acquire lock to prevent concurrent directory changes
-    let _lock = state.directory_change_lock.lock().await;
-
-    let requested_path = payload.path.trim();
-    if requested_path.is_empty() {
-        warn!("[desktop:http] ERROR: Empty path provided");
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
-    let mut resolved_path = expand_tilde_path(requested_path);
-    if !resolved_path.is_absolute() {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-        resolved_path = home.join(resolved_path);
-    }
-
-    // Validate directory exists and is accessible
-    match fs::metadata(&resolved_path).await {
-        Ok(metadata) => {
-            if !metadata.is_dir() {
-                warn!(
-                    "[desktop:http] ERROR: Path is not a directory: {:?}",
-                    resolved_path
-                );
-                return Err(StatusCode::BAD_REQUEST);
-            }
-        }
-        Err(err) => {
-            warn!(
-                "[desktop:http] ERROR: Cannot access path: {:?} - {}",
-                resolved_path, err
-            );
-            return Err(StatusCode::NOT_FOUND);
-        }
-    }
-
-    if let Ok(canonicalized) = fs::canonicalize(&resolved_path).await {
-        resolved_path = canonicalized;
-    }
-
-    let path_value = resolved_path.to_string_lossy().to_string();
-
-    state
-        .settings
-        .update(|mut settings| {
-            if !settings.is_object() {
-                settings = Value::Object(Default::default());
-            }
-
-            let mut projects = settings
-                .get("projects")
-                .and_then(|value| value.as_array())
-                .cloned()
-                .unwrap_or_default();
-
-            let existing_index = projects.iter().position(|entry| {
-                entry
-                    .get("path")
-                    .and_then(|value| value.as_str())
-                    .map(|value| value == path_value)
-                    .unwrap_or(false)
-            });
-
-            let active_project_id = if let Some(index) = existing_index {
-                projects[index]
-                    .get("id")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("")
-                    .to_string()
-            } else {
-                let id = uuid::Uuid::new_v4().to_string();
-                let project = serde_json::json!({
-                    "id": id,
-                    "path": path_value,
-                    "addedAt": chrono::Utc::now().timestamp_millis(),
-                    "lastOpenedAt": chrono::Utc::now().timestamp_millis(),
-                });
-                projects.push(project);
-                id
-            };
-
-            let map = settings.as_object_mut().unwrap();
-            map.insert("projects".to_string(), Value::Array(projects));
-            map.insert(
-                "activeProjectId".to_string(),
-                Value::String(active_project_id.clone()),
-            );
-            map.insert(
-                "lastDirectory".to_string(),
-                Value::String(path_value.clone()),
-            );
-
-            settings
-        })
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json(DirectoryChangeResponse {
-        success: true,
-        restarted: false,
-        path: path_value,
-    }))
-}
-
-async fn proxy_to_opencode(
-    State(state): State<ServerState>,
-    req: Request,
-) -> Result<Response, axum::http::StatusCode> {
-    let origin_path = req.uri().path().to_string();
-    let method = req.method().clone();
-
-    // Check if this is a provider auth deletion request (DELETE /api/provider/:id/auth)
-    let is_provider_auth_delete = method == Method::DELETE
-        && origin_path.starts_with("/api/provider/")
-        && origin_path.ends_with("/auth")
-        && origin_path != "/api/provider/auth"; // Exclude GET /api/provider/auth
-
-    let is_provider_source_get = method == Method::GET
-        && origin_path.starts_with("/api/provider/")
-        && origin_path.ends_with("/source");
-
-    let is_desktop_config_route = origin_path.starts_with("/api/config/agents/")
-        || origin_path.starts_with("/api/config/commands/")
-        || origin_path.starts_with("/api/config/skills")
-        || origin_path == "/api/config/themes"
-        || origin_path == "/api/config/reload"
-        || is_provider_auth_delete
-        || is_provider_source_get;
-
-    if is_desktop_config_route {
-        return handle_config_routes(state, &origin_path, method, req).await;
-    }
-
-    let port = state.opencode.current_port().ok_or_else(|| {
-        error!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
-        StatusCode::SERVICE_UNAVAILABLE
-    })?;
-
-    let query = req.uri().query();
-    let rewritten_path = state.opencode.rewrite_path(&origin_path);
-    let mut target = format!("http://127.0.0.1:{port}{rewritten_path}");
-    if let Some(q) = query {
-        target.push('?');
-        target.push_str(q);
-    }
-
-    let (parts, body) = req.into_parts();
-    let method = parts.method.clone();
-    let mut builder = state.client.request(method, &target);
-
-    let mut headers = parts.headers;
-    headers.insert(header::HOST, format!("127.0.0.1:{port}").parse().unwrap());
-    if headers
-        .get(header::ACCEPT)
-        .and_then(|v| v.to_str().ok())
-        .map(|val| val.contains("text/event-stream"))
-        .unwrap_or(false)
-    {
-        headers.insert(header::CONNECTION, "keep-alive".parse().unwrap());
-    }
-
-    for (key, value) in headers.iter() {
-        if key == &header::CONTENT_LENGTH {
-            continue;
-        }
-        builder = builder.header(key, value);
-    }
-
-    let body_bytes = to_bytes(body, PROXY_BODY_LIMIT)
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
-
-    let response = if body_bytes.is_empty() {
-        builder.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?
-    } else {
-        builder
-            .body(ReqwestBody::from(body_bytes))
-            .send()
-            .await
-            .map_err(|_| StatusCode::BAD_GATEWAY)?
-    };
-
-    let status = response.status();
-    let mut resp_builder = Response::builder().status(status);
-    for (key, value) in response.headers() {
-        if key.as_str().eq_ignore_ascii_case("connection") {
-            continue;
-        }
-        resp_builder = resp_builder.header(key, value);
-    }
-
-    let stream = response.bytes_stream().map(|chunk| {
-        chunk
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
-            .map(axum::body::Bytes::from)
-    });
-    let body = Body::from_stream(stream);
-    resp_builder.body(body).map_err(|_| StatusCode::BAD_GATEWAY)
-}
-
-#[derive(Clone)]
-pub(crate) struct SettingsStore {
-    path: PathBuf,
-    guard: Arc<Mutex<()>>,
-}
-
-impl SettingsStore {
-    pub(crate) fn new() -> Result<Self> {
-        // Use ~/.config/openchamber for consistency with Electron/web versions
-        let home = dirs::home_dir().ok_or_else(|| anyhow!("No home directory"))?;
-        let mut dir = home;
-        dir.push(".config");
-        dir.push("openchamber");
-        std::fs::create_dir_all(&dir).ok();
-        dir.push("settings.json");
-        Ok(Self {
-            path: dir,
-            guard: Arc::new(Mutex::new(())),
-        })
-    }
-
-    pub(crate) async fn load(&self) -> Result<Value> {
-        let _lock = self.guard.lock().await;
-        match fs::read(&self.path).await {
-            Ok(bytes) => {
-                let value =
-                    serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default()));
-                Ok(value)
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                Ok(Value::Object(Default::default()))
-            }
-            Err(err) => Err(err.into()),
-        }
-    }
-
-    pub(crate) async fn update_with<R, F>(&self, f: F) -> Result<(Value, R)>
-    where
-        F: FnOnce(Value) -> (Value, R),
-    {
-        let _lock = self.guard.lock().await;
-
-        let current = match fs::read(&self.path).await {
-            Ok(bytes) => {
-                serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default()))
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                Value::Object(Default::default())
-            }
-            Err(err) => return Err(err.into()),
-        };
-
-        let current_snapshot = current.clone();
-        let (next, result) = f(current);
-
-        if next != current_snapshot {
-            if let Some(parent) = self.path.parent() {
-                fs::create_dir_all(parent).await.ok();
-            }
-            let bytes = serde_json::to_vec_pretty(&next)?;
-            fs::write(&self.path, bytes).await?;
-        }
-
-        Ok((next, result))
-    }
-
-    pub(crate) async fn update<F>(&self, f: F) -> Result<Value>
-    where
-        F: FnOnce(Value) -> Value,
-    {
-        let (next, _) = self.update_with(|current| (f(current), ())).await?;
-        Ok(next)
-    }
-
-    pub(crate) async fn last_directory(&self) -> Result<Option<PathBuf>> {
-        let settings = self.load().await?;
-        let candidate = settings
-            .get("lastDirectory")
-            .and_then(|value| value.as_str())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(expand_tilde_path);
-        Ok(candidate)
-    }
-}
-
-fn openchamber_user_config_root() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(home.join(".config").join("openchamber"))
-}
-
-fn openchamber_themes_dir() -> Option<PathBuf> {
-    openchamber_user_config_root().map(|root| root.join("themes"))
-}
-
-fn value_non_empty_string(value: &Value) -> Option<String> {
-    value
-        .as_str()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-}
-
-fn get_nested<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
-    let mut current = value;
-    for key in path {
-        current = current.get(*key)?;
-    }
-    Some(current)
-}
-
-fn has_required_theme_fields(theme: &Value) -> bool {
-    let required_paths: [&[&str]; 46] = [
-        &["metadata", "id"],
-        &["metadata", "name"],
-        &["metadata", "variant"],
-        &["colors", "primary", "base"],
-        &["colors", "primary", "foreground"],
-        &["colors", "surface", "background"],
-        &["colors", "surface", "foreground"],
-        &["colors", "surface", "muted"],
-        &["colors", "surface", "mutedForeground"],
-        &["colors", "surface", "elevated"],
-        &["colors", "surface", "elevatedForeground"],
-        &["colors", "surface", "subtle"],
-        &["colors", "interactive", "border"],
-        &["colors", "interactive", "selection"],
-        &["colors", "interactive", "selectionForeground"],
-        &["colors", "interactive", "focusRing"],
-        &["colors", "interactive", "hover"],
-        &["colors", "status", "error"],
-        &["colors", "status", "errorForeground"],
-        &["colors", "status", "errorBackground"],
-        &["colors", "status", "errorBorder"],
-        &["colors", "status", "warning"],
-        &["colors", "status", "warningForeground"],
-        &["colors", "status", "warningBackground"],
-        &["colors", "status", "warningBorder"],
-        &["colors", "status", "success"],
-        &["colors", "status", "successForeground"],
-        &["colors", "status", "successBackground"],
-        &["colors", "status", "successBorder"],
-        &["colors", "status", "info"],
-        &["colors", "status", "infoForeground"],
-        &["colors", "status", "infoBackground"],
-        &["colors", "status", "infoBorder"],
-        &["colors", "syntax", "base", "background"],
-        &["colors", "syntax", "base", "foreground"],
-        &["colors", "syntax", "base", "keyword"],
-        &["colors", "syntax", "base", "string"],
-        &["colors", "syntax", "base", "number"],
-        &["colors", "syntax", "base", "function"],
-        &["colors", "syntax", "base", "variable"],
-        &["colors", "syntax", "base", "type"],
-        &["colors", "syntax", "base", "comment"],
-        &["colors", "syntax", "base", "operator"],
-        &["colors", "syntax", "highlights", "diffAdded"],
-        &["colors", "syntax", "highlights", "diffRemoved"],
-        &["colors", "syntax", "highlights", "lineNumber"],
-    ];
-
-    for path in required_paths {
-        let Some(value) = get_nested(theme, path) else {
-            return false;
-        };
-        if value_non_empty_string(value).is_none() {
-            return false;
-        }
-    }
-
-    let variant = get_nested(theme, &["metadata", "variant"])
-        .and_then(value_non_empty_string)
-        .unwrap_or_default();
-    if variant != "light" && variant != "dark" {
-        return false;
-    }
-
-    true
-}
-
-fn normalize_theme_json(mut theme: Value) -> Option<Value> {
-    if !theme.is_object() {
-        return None;
-    }
-
-    if !has_required_theme_fields(&theme) {
-        return None;
-    }
-
-    let id = get_nested(&theme, &["metadata", "id"]).and_then(value_non_empty_string)?;
-    let name = get_nested(&theme, &["metadata", "name"]).and_then(value_non_empty_string)?;
-    let variant = get_nested(&theme, &["metadata", "variant"]).and_then(value_non_empty_string)?;
-
-    // Ensure metadata exists and is an object.
-    let metadata = theme
-        .get_mut("metadata")
-        .and_then(|v| v.as_object_mut())?;
-
-    metadata.insert("id".to_string(), Value::String(id.trim().to_string()));
-    metadata.insert("name".to_string(), Value::String(name.trim().to_string()));
-    metadata.insert("variant".to_string(), Value::String(variant));
-
-    if !metadata
-        .get("description")
-        .and_then(|v| v.as_str())
-        .is_some()
-    {
-        metadata.insert("description".to_string(), Value::String("".to_string()));
-    }
-
-    let version_ok = metadata
-        .get("version")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .is_some();
-    if !version_ok {
-        metadata.insert("version".to_string(), Value::String("1.0.0".to_string()));
-    }
-
-    if let Some(tags_value) = metadata.get_mut("tags") {
-        if let Some(tags) = tags_value.as_array_mut() {
-            tags.retain(|tag| tag.as_str().map(str::trim).filter(|s| !s.is_empty()).is_some());
-        } else {
-            *tags_value = Value::Array(vec![]);
-        }
-    } else {
-        metadata.insert("tags".to_string(), Value::Array(vec![]));
-    }
-
-    Some(theme)
-}
-
-async fn read_custom_themes_from_disk() -> Vec<Value> {
-    let Some(dir) = openchamber_themes_dir() else {
-        return vec![];
-    };
-
-    let mut results: Vec<Value> = vec![];
-    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    let mut entries = match fs::read_dir(&dir).await {
-        Ok(entries) => entries,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return vec![],
-        Err(err) => {
-            warn!("[desktop:themes] Failed to list themes dir {:?}: {}", dir, err);
-            return vec![];
-        }
-    };
-
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        let is_json = path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.eq_ignore_ascii_case("json"))
-            .unwrap_or(false);
-        if !is_json {
-            continue;
-        }
-
-        let metadata = match entry.metadata().await {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        if !metadata.is_file() {
-            continue;
-        }
-        if metadata.len() > MAX_THEME_JSON_BYTES {
-            warn!(
-                "[desktop:themes] Skip {:?}: too large ({} bytes)",
-                path,
-                metadata.len()
-            );
-            continue;
-        }
-
-        let bytes = match fs::read(&path).await {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                warn!("[desktop:themes] Failed to read {:?}: {}", path, err);
-                continue;
-            }
-        };
-
-        let parsed: Value = match serde_json::from_slice(&bytes) {
-            Ok(v) => v,
-            Err(err) => {
-                warn!("[desktop:themes] Invalid JSON {:?}: {}", path, err);
-                continue;
-            }
-        };
-
-        let normalized = match normalize_theme_json(parsed) {
-            Some(v) => v,
-            None => {
-                warn!("[desktop:themes] Invalid theme JSON {:?}", path);
-                continue;
-            }
-        };
-
-        let id = get_nested(&normalized, &["metadata", "id"])
-            .and_then(value_non_empty_string)
-            .unwrap_or_default();
-        if id.is_empty() || seen_ids.contains(&id) {
-            continue;
-        }
-        seen_ids.insert(id);
-
-        results.push(normalized);
-    }
-
-    results
 }

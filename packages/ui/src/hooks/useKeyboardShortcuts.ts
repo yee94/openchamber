@@ -3,11 +3,11 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { hasModifier } from '@/lib/utils';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { showOpenCodeStatus } from '@/lib/openCodeStatus';
 
 export const useKeyboardShortcuts = () => {
   const { openNewSessionDraft, abortCurrentOperation, armAbortPrompt, clearAbortPrompt, currentSessionId } = useSessionStore();
@@ -24,7 +24,6 @@ export const useKeyboardShortcuts = () => {
   const { working } = useAssistantStatus();
   const abortPrimedUntilRef = React.useRef<number | null>(null);
   const abortPrimedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isDownloadingLogsRef = React.useRef(false);
 
   const resetAbortPriming = React.useCallback(() => {
     if (abortPrimedTimeoutRef.current) {
@@ -44,35 +43,8 @@ export const useKeyboardShortcuts = () => {
       }
 
       if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 'l') {
-        const runtimeAPIs = getRegisteredRuntimeAPIs();
-        const diagnostics = runtimeAPIs?.diagnostics;
-        if (!diagnostics) {
-          return;
-        }
-
         e.preventDefault();
-        if (isDownloadingLogsRef.current) {
-          return;
-        }
-        isDownloadingLogsRef.current = true;
-
-        diagnostics
-          .downloadLogs()
-          .then(({ fileName, content }) => {
-            const finalFileName = fileName || 'openchamber.log';
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = finalFileName;
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            URL.revokeObjectURL(url);
-          })
-          .finally(() => {
-            isDownloadingLogsRef.current = false;
-          });
+        void showOpenCodeStatus();
         return;
       }
 

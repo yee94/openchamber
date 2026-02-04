@@ -1,6 +1,6 @@
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
-import { isWebRuntime } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -8,7 +8,9 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { GridLoader } from '@/components/ui/grid-loader';
 
 export const NotificationSettings: React.FC = () => {
-  const isWeb = isWebRuntime();
+  const isDesktop = React.useMemo(() => isDesktopShell(), []);
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const isBrowser = !isDesktop && !isVSCode;
   const nativeNotificationsEnabled = useUIStore(state => state.nativeNotificationsEnabled);
   const setNativeNotificationsEnabled = useUIStore(state => state.setNativeNotificationsEnabled);
   const notificationMode = useUIStore(state => state.notificationMode);
@@ -22,7 +24,7 @@ export const NotificationSettings: React.FC = () => {
   const [pushBusy, setPushBusy] = React.useState(false);
 
   React.useEffect(() => {
-    if (!isWeb) {
+    if (!isBrowser) {
       setPushSupported(false);
       setPushSubscribed(false);
       return;
@@ -58,10 +60,16 @@ export const NotificationSettings: React.FC = () => {
     };
 
     void refresh();
-  }, [isWeb]);
+  }, [isBrowser]);
 
   const handleToggleChange = async (checked: boolean) => {
-    if (!isWeb) {
+    if (isDesktop) {
+      setNativeNotificationsEnabled(checked);
+      return;
+    }
+
+    if (!isBrowser) {
+      setNativeNotificationsEnabled(checked);
       return;
     }
     if (checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -86,7 +94,7 @@ export const NotificationSettings: React.FC = () => {
     }
   };
 
-  const canShowNotifications = isWeb && typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  const canShowNotifications = isDesktop || (isBrowser && typeof Notification !== 'undefined' && Notification.permission === 'granted');
 
   const base64UrlToUint8Array = (base64Url: string): Uint8Array<ArrayBuffer> => {
     const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
@@ -365,92 +373,93 @@ export const NotificationSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* General Notification Settings */}
-      <div className="space-y-1">
+      <div className="space-y-1 pt-2">
         <h3 className="typography-ui-header font-semibold text-foreground">
-          Notification Preferences
+          When to notify
         </h3>
         <p className="typography-ui text-muted-foreground">
-          Configure how and when you receive notifications.
+          Customize when notifications show up.
         </p>
       </div>
 
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
           <span className="typography-ui text-foreground">
-            Notify for subtasks
+            Enable notifications
           </span>
           <p className="typography-micro text-muted-foreground">
-            When off, no notifications for child sessions created during multi-run.
+            Turns notifications on or off.
           </p>
         </div>
         <Switch
-          checked={notifyOnSubtasks}
-          onCheckedChange={(checked) => setNotifyOnSubtasks(checked)}
+          checked={nativeNotificationsEnabled && canShowNotifications}
+          onCheckedChange={handleToggleChange}
           className="data-[state=checked]:bg-status-info"
         />
       </div>
 
-      {isWeb && (
-        <>
-          {/* Foreground Notifications */}
-          <div className="space-y-1 pt-4">
-            <h3 className="typography-ui-header font-semibold text-foreground">
-              Foreground Notifications
-            </h3>
-            <p className="typography-ui text-muted-foreground">
-              Uses the browser Notification API while OpenChamber is open.
+      {isBrowser && (
+        <p className="typography-micro text-muted-foreground">
+          Your browser may ask for permission the first time.
+        </p>
+      )}
+
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="typography-ui text-foreground">
+              Include subagent results
+            </span>
+            <p className="typography-micro text-muted-foreground">
+              Also notify for child sessions started by the main one.
             </p>
           </div>
+          <Switch
+            checked={notifyOnSubtasks}
+            onCheckedChange={(checked) => setNotifyOnSubtasks(checked)}
+            className="data-[state=checked]:bg-status-info"
+          />
+        </div>
+      )}
 
-          <div className="flex items-center justify-between">
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
             <span className="typography-ui text-foreground">
-              Enable foreground notifications
+              Notify while app is focused
             </span>
-            <Switch
-              checked={nativeNotificationsEnabled && canShowNotifications}
-              onCheckedChange={handleToggleChange}
-              className="data-[state=checked]:bg-status-info"
-            />
+            <p className="typography-micro text-muted-foreground">
+              When off, only notify when you are not looking at OpenChamber.
+            </p>
           </div>
+          <Switch
+            checked={notificationMode === 'always'}
+            onCheckedChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
+            className="data-[state=checked]:bg-status-info"
+          />
+        </div>
+      )}
 
-          {nativeNotificationsEnabled && canShowNotifications && (
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="typography-ui text-foreground">
-                  Notify even when visible
-                </span>
-                <p className="typography-micro text-muted-foreground">
-                  When off, only notifies when the tab is hidden or the window is not focused.
-                </p>
-              </div>
-              <Switch
-                checked={notificationMode === 'always'}
-                onCheckedChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
-                className="data-[state=checked]:bg-status-info"
-              />
-            </div>
-          )}
-
+      {isBrowser && (
+        <>
           {notificationPermission === 'denied' && (
             <p className="typography-micro text-destructive">
-              Notification permission denied. Enable notifications in your browser settings.
+              Notification permission denied. Enable it in your browser settings.
             </p>
           )}
 
           {notificationPermission === 'granted' && !nativeNotificationsEnabled && (
             <p className="typography-micro text-muted-foreground">
-              Permission granted, but foreground notifications are disabled.
+              Permission granted, but notifications are disabled.
             </p>
           )}
 
-          {/* Background Notifications */}
           <div className="space-y-1 pt-4">
             <h3 className="typography-ui-header font-semibold text-foreground">
-              Background Notifications (Push)
+              Background (Push)
             </h3>
             <p className="typography-ui text-muted-foreground">
-              Uses push notifications; works when OpenChamber is closed.
+              Get notified even if this page is closed.
             </p>
           </div>
 
@@ -460,7 +469,7 @@ export const NotificationSettings: React.FC = () => {
             </p>
           ) : (
             <p className="typography-micro text-muted-foreground">
-              Desktop Chrome/Edge and Android support push in the browser. iOS requires an installed PWA.
+              Desktop Chrome/Edge and Android support push. iOS requires an installed PWA.
             </p>
           )}
 
@@ -468,10 +477,10 @@ export const NotificationSettings: React.FC = () => {
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <span className="typography-ui text-foreground">
-                  Enable background notifications
+                  Enable push notifications
                 </span>
                 <p className="typography-micro text-muted-foreground">
-                  Opens chat with /?session=&lt;id&gt; deep link.
+                  Clicking a notification opens the relevant session.
                 </p>
               </div>
 
@@ -498,6 +507,17 @@ export const NotificationSettings: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {isVSCode && (
+        <div className="space-y-1 pt-4">
+          <h3 className="typography-ui-header font-semibold text-foreground">
+            Delivery
+          </h3>
+          <p className="typography-ui text-muted-foreground">
+            VS Code runtime handles notifications separately.
+          </p>
+        </div>
       )}
     </div>
   );

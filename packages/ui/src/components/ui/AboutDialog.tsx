@@ -47,7 +47,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   React.useEffect(() => {
     if (!open) return;
 
-    const isDesktop = typeof window !== 'undefined' && !!window.opencodeDesktop;
+    const isDesktop = typeof window !== 'undefined' && Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
 
     if (isDesktop) {
       const fetchVersion = async () => {

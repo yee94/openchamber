@@ -34,6 +34,8 @@ interface UIStore {
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
   isAboutDialogOpen: boolean;
+  isOpenCodeStatusDialogOpen: boolean;
+  openCodeStatusText: string;
   isSessionCreateDialogOpen: boolean;
   isSettingsDialogOpen: boolean;
   isModelSelectorOpen: boolean;
@@ -89,6 +91,8 @@ interface UIStore {
   toggleHelpDialog: () => void;
   setHelpDialogOpen: (open: boolean) => void;
   setAboutDialogOpen: (open: boolean) => void;
+  setOpenCodeStatusDialogOpen: (open: boolean) => void;
+  setOpenCodeStatusText: (text: string) => void;
   setSessionCreateDialogOpen: (open: boolean) => void;
   setSettingsDialogOpen: (open: boolean) => void;
   setModelSelectorOpen: (open: boolean) => void;
@@ -133,6 +137,7 @@ interface UIStore {
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
 
+
 export const useUIStore = create<UIStore>()(
   devtools(
     persist(
@@ -154,6 +159,8 @@ export const useUIStore = create<UIStore>()(
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
         isAboutDialogOpen: false,
+        isOpenCodeStatusDialogOpen: false,
+        openCodeStatusText: '',
         isSessionCreateDialogOpen: false,
         isSettingsDialogOpen: false,
         isModelSelectorOpen: false,
@@ -334,6 +341,14 @@ export const useUIStore = create<UIStore>()(
 
         setAboutDialogOpen: (open) => {
           set({ isAboutDialogOpen: open });
+        },
+
+        setOpenCodeStatusDialogOpen: (open) => {
+          set({ isOpenCodeStatusDialogOpen: open });
+        },
+
+        setOpenCodeStatusText: (text) => {
+          set({ openCodeStatusText: text });
         },
 
         setSessionCreateDialogOpen: (open) => {

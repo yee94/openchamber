@@ -36,7 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         if (typeof window === 'undefined') {
             return false;
         }
-        return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+        return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
     });
 
 
@@ -45,8 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         if (typeof window === 'undefined') {
             return;
         }
-        const detected = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
-        setIsDesktopApp(detected);
+        setIsDesktopApp(Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__));
     }, []);
 
     React.useEffect(() => {
@@ -55,9 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         }
 
         const handleMenuUpdateCheck = () => {
-            const hasDesktopApi =
-                typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
-            if (!hasDesktopApi) {
+            if (!(window as unknown as { __TAURI__?: unknown }).__TAURI__) {
                 return;
             }
             pendingMenuUpdateCheckRef.current = true;

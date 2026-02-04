@@ -8,7 +8,6 @@ import type { ModelMetadata } from "@/types";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { SessionStore } from "./types/sessionTypes";
 import { filterVisibleAgents } from "./useAgentsStore";
-import { isDesktopRuntime, getDesktopSettings } from "@/lib/desktop";
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
 import { updateDesktopSettings } from "@/lib/persistence";
 import { useDirectoryStore } from "@/stores/useDirectoryStore";
@@ -30,19 +29,7 @@ interface OpenChamberDefaults {
 
 const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
     try {
-        // 1. Desktop runtime (Tauri)
-        if (isDesktopRuntime()) {
-            const settings = await getDesktopSettings();
-            return {
-                defaultModel: settings?.defaultModel,
-                defaultVariant: settings?.defaultVariant,
-                defaultAgent: settings?.defaultAgent,
-                autoCreateWorktree: settings?.autoCreateWorktree,
-                gitmojiEnabled: settings?.gitmojiEnabled,
-            };
-        }
-
-        // 2. Runtime settings API (VSCode)
+        // 1. Runtime settings API (VSCode)
         const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
         if (runtimeSettings) {
             try {
@@ -67,7 +54,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             }
         }
 
-        // 3. Fetch API (Web)
+        // 2. Fetch API (Web/server)
         const response = await fetch('/api/config/settings', {
             method: 'GET',
             headers: { Accept: 'application/json' },

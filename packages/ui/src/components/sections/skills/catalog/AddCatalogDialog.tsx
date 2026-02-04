@@ -21,7 +21,7 @@ import {
 import { RiGitRepositoryLine } from '@remixicon/react';
 
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { DesktopSettings, SkillCatalogConfig } from '@/lib/desktop';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
@@ -50,10 +50,6 @@ type IdentityOption = { id: string; name: string };
 
 const loadSettings = async (): Promise<DesktopSettings | null> => {
   try {
-    if (isDesktopRuntime()) {
-      return await getDesktopSettings();
-    }
-
     const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
     if (runtimeSettings) {
       const result = await runtimeSettings.load();

@@ -1,4 +1,3 @@
-import { isDesktopRuntime } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 
 export interface AppearancePreferences {
@@ -37,20 +36,14 @@ const extractRawAppearance = (data: unknown): RawAppearancePayload | null => {
 };
 
 export const saveAppearancePreferences = (preferences: AppearancePreferences): boolean => {
-  if (typeof window === 'undefined' || !isDesktopRuntime()) {
-    return false;
-  }
-
-  const api = window.opencodeAppearance;
-  if (!api || typeof api.save !== 'function') {
+  if (typeof window === 'undefined') {
     return false;
   }
 
   try {
-    void api.save(preferences);
+    localStorage.setItem('appearance-preferences', JSON.stringify(preferences));
     return true;
-  } catch (error) {
-    console.warn('Failed to save appearance preferences to desktop storage:', error);
+  } catch {
     return false;
   }
 };
@@ -66,22 +59,6 @@ export const applyAppearancePreferences = (preferences: AppearancePreferences): 
 export const loadAppearancePreferences = async (): Promise<AppearancePreferences | null> => {
   if (typeof window === 'undefined') {
     return null;
-  }
-
-  if (isDesktopRuntime()) {
-    const api = window.opencodeAppearance;
-    if (!api || typeof api.load !== 'function') {
-      return null;
-    }
-
-    try {
-      const raw = await api.load();
-      const payload = typeof raw === 'object' && raw !== null ? (raw as RawAppearancePayload) : null;
-      return sanitizePreferences(payload);
-    } catch (error) {
-      console.warn('Failed to load appearance preferences from desktop storage:', error);
-      return null;
-    }
   }
 
   const stored = localStorage.getItem('appearance-preferences');

@@ -4,13 +4,25 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { sessionEvents } from '@/lib/sessionEvents';
-import { isDesktopRuntime } from '@/lib/desktop';
+import { isTauriShell } from '@/lib/desktop';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { showOpenCodeStatus } from '@/lib/openCodeStatus';
 
 const MENU_ACTION_EVENT = 'openchamber:menu-action';
+const CHECK_FOR_UPDATES_EVENT = 'openchamber:check-for-updates';
+
+type TauriEventApi = {
+  listen?: (
+    event: string,
+    handler: (evt: { payload?: unknown }) => void
+  ) => Promise<() => void>;
+};
+
+type TauriGlobal = {
+  event?: TauriEventApi;
+};
 
 type MenuAction =
   | 'about'
@@ -21,6 +33,7 @@ type MenuAction =
   | 'change-workspace'
   | 'open-git-tab'
   | 'open-diff-tab'
+  | 'open-files-tab'
   | 'open-terminal-tab'
   | 'theme-light'
   | 'theme-dark'
@@ -46,10 +59,9 @@ export const useMenuActions = (
   const { addProject } = useProjectsStore();
   const { requestAccess, startAccessing } = useFileSystemAccess();
   const { setThemeMode } = useThemeSystem();
-  const isDownloadingLogsRef = React.useRef(false);
 
   const handleChangeWorkspace = React.useCallback(() => {
-    if (isDesktopRuntime()) {
+    if (isTauriShell()) {
       requestAccess('')
         .then(async (result) => {
           if (!result.success || !result.path) {
@@ -80,15 +92,13 @@ export const useMenuActions = (
           console.error('Desktop: Error selecting directory:', error);
           toast.error('Failed to select directory');
         });
-    } else {
-      sessionEvents.requestDirectoryDialog();
     }
+
+    sessionEvents.requestDirectoryDialog();
   }, [addProject, requestAccess, startAccessing]);
 
-  React.useEffect(() => {
-    const handleMenuAction = (event: Event) => {
-      const action = (event as CustomEvent<MenuAction>).detail;
-
+  const handleAction = React.useCallback(
+    (action: MenuAction) => {
       switch (action) {
         case 'about':
           setAboutDialogOpen(true);
@@ -130,6 +140,12 @@ export const useMenuActions = (
           break;
         }
 
+        case 'open-files-tab': {
+          const { activeMainTab } = useUIStore.getState();
+          setActiveMainTab(activeMainTab === 'files' ? 'chat' : 'files');
+          break;
+        }
+
         case 'open-terminal-tab': {
           const { activeMainTab } = useUIStore.getState();
           setActiveMainTab(activeMainTab === 'terminal' ? 'chat' : 'terminal');
@@ -161,54 +177,86 @@ export const useMenuActions = (
           break;
 
         case 'download-logs': {
-          const runtimeAPIs = getRegisteredRuntimeAPIs();
-          const diagnostics = runtimeAPIs?.diagnostics;
-          if (!diagnostics || isDownloadingLogsRef.current) {
-            break;
-          }
-
-          isDownloadingLogsRef.current = true;
-          diagnostics
-            .downloadLogs()
-            .then(({ fileName, content }) => {
-              const finalFileName = fileName || 'openchamber.log';
-              const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-              const url = URL.createObjectURL(blob);
-              const anchor = document.createElement('a');
-              anchor.href = url;
-              anchor.download = finalFileName;
-              document.body.appendChild(anchor);
-              anchor.click();
-              document.body.removeChild(anchor);
-              URL.revokeObjectURL(url);
-              toast.success('Logs saved', {
-                description: `Downloaded to ~/Downloads/${finalFileName}`,
-              });
-            })
-            .catch(() => {
-              toast.error('Failed to download logs');
-            })
-            .finally(() => {
-              isDownloadingLogsRef.current = false;
-            });
+          void showOpenCodeStatus().catch(() => {
+            toast.error('Failed to collect OpenCode status');
+          });
           break;
         }
       }
+    },
+    [
+      handleChangeWorkspace,
+      onToggleMemoryDebug,
+      openNewSessionDraft,
+      setAboutDialogOpen,
+      setActiveMainTab,
+      setSessionSwitcherOpen,
+      setSettingsDialogOpen,
+      setThemeMode,
+      toggleCommandPalette,
+      toggleHelpDialog,
+      toggleSidebar,
+    ]
+  );
+
+  React.useEffect(() => {
+    const handleMenuAction = (event: Event) => {
+      const action = (event as CustomEvent<MenuAction>).detail;
+      if (!action) return;
+      handleAction(action);
     };
 
     window.addEventListener(MENU_ACTION_EVENT, handleMenuAction);
     return () => window.removeEventListener(MENU_ACTION_EVENT, handleMenuAction);
-  }, [
-    openNewSessionDraft,
-    toggleCommandPalette,
-    toggleHelpDialog,
-    toggleSidebar,
-    setSessionSwitcherOpen,
-    setActiveMainTab,
-    setSettingsDialogOpen,
-    setAboutDialogOpen,
-    setThemeMode,
-    onToggleMemoryDebug,
-    handleChangeWorkspace,
-  ]);
+  }, [handleAction]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const listen = tauri?.event?.listen;
+    if (typeof listen !== 'function') return;
+
+    let unlistenMenu: null | (() => void | Promise<void>) = null;
+    let unlistenUpdate: null | (() => void | Promise<void>) = null;
+
+    listen('openchamber:menu-action', (evt) => {
+      const action = evt?.payload;
+      if (typeof action !== 'string') return;
+      handleAction(action as MenuAction);
+    })
+      .then((fn) => {
+        unlistenMenu = fn;
+      })
+      .catch(() => {
+        // ignore
+      });
+
+    listen('openchamber:check-for-updates', () => {
+      window.dispatchEvent(new Event(CHECK_FOR_UPDATES_EVENT));
+    })
+      .then((fn) => {
+        unlistenUpdate = fn;
+      })
+      .catch(() => {
+        // ignore
+      });
+
+    return () => {
+      const cleanup = async () => {
+        try {
+          const a = unlistenMenu?.();
+          if (a instanceof Promise) await a;
+        } catch {
+          // ignore
+        }
+        try {
+          const b = unlistenUpdate?.();
+          if (b instanceof Promise) await b;
+        } catch {
+          // ignore
+        }
+      };
+      void cleanup();
+    };
+  }, [handleAction]);
 };

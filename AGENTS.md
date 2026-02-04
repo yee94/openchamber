@@ -3,6 +3,11 @@
 ## Core purpose
 OpenChamber provides UI runtimes (web/desktop/VS Code) for interacting with an OpenCode server (local auto-start or remote URL). UI uses HTTP + SSE via `@opencode-ai/sdk`.
 
+## Runtime architecture (IMPORTANT)
+- `Desktop` is a thin Tauri shell that starts the web server sidecar and loads the web UI from `http://127.0.0.1:<port>`.
+- All backend logic lives in `packages/web/server/*` (and `packages/vscode/*` for the VS Code runtime). Desktop Rust is not a feature backend.
+- Tauri is used only for stable native integrations: menu, dialog (open folder), notifications, updater, deep-links.
+
 ## Tech stack (source of truth: `package.json`, resolved: `bun.lock`)
 - Runtime/tooling: Bun (`package.json` `packageManager`), Node >=20 (`package.json` `engines`)
 - UI: React, TypeScript, Vite, Tailwind v4
@@ -31,7 +36,7 @@ All scripts are in `package.json`.
 - Web bootstrap: `packages/web/src/main.tsx`
 - Web server: `packages/web/server/index.js`
 - Web CLI: `packages/web/bin/cli.js` (package bin: `packages/web/package.json`)
-- Desktop bootstrap: `packages/desktop/src/main.tsx`
+- Desktop: Tauri entry `packages/desktop/src-tauri/src/main.rs` (spawns web server sidecar + loads web UI)
 - Tauri backend: `packages/desktop/src-tauri/src/main.rs`
 - VS Code extension host: `packages/vscode/src/extension.ts`
 - VS Code webview bootstrap: `packages/vscode/webview/main.tsx`

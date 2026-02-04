@@ -10,7 +10,6 @@ import {
   discoverGitCredentials,
   getGlobalGitIdentity
 } from "@/lib/gitApi";
-import { getDesktopSettings, isDesktopRuntime } from "@/lib/desktop";
 import { updateDesktopSettings } from "@/lib/persistence";
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
 
@@ -145,10 +144,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           try {
             let defaultId: string | null = null;
 
-            if (isDesktopRuntime()) {
-              const settings = await getDesktopSettings();
-              defaultId = normalize((settings as { defaultGitIdentityId?: unknown } | null | undefined)?.defaultGitIdentityId);
-            } else {
+            if (defaultId === null) {
               const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
               if (runtimeSettings) {
                 try {
@@ -159,20 +155,20 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
                   // fall through
                 }
               }
+            }
 
-              if (defaultId === null) {
-                try {
-                  const response = await fetch('/api/config/settings', {
-                    method: 'GET',
-                    headers: { Accept: 'application/json' },
-                  });
-                  if (response.ok) {
-                    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-                    defaultId = normalize(data?.defaultGitIdentityId);
-                  }
-                } catch {
-                  // ignore
+            if (defaultId === null) {
+              try {
+                const response = await fetch('/api/config/settings', {
+                  method: 'GET',
+                  headers: { Accept: 'application/json' },
+                });
+                if (response.ok) {
+                  const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+                  defaultId = normalize(data?.defaultGitIdentityId);
                 }
+              } catch {
+                // ignore
               }
             }
 

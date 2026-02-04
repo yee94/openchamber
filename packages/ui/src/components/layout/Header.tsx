@@ -34,6 +34,8 @@ import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { UsageWindow } from '@/types';
 import type { GitHubAuthStatus } from '@/lib/api/types';
+import { DesktopHostSwitcherButton } from '@/components/desktop/DesktopHostSwitcher';
+import { isDesktopShell } from '@/lib/desktop';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -124,7 +126,7 @@ export const Header: React.FC = () => {
     if (typeof window === 'undefined') {
       return false;
     }
-    return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+    return isDesktopShell();
   });
 
   const isMacPlatform = React.useMemo(() => {
@@ -138,11 +140,12 @@ export const Header: React.FC = () => {
     if (typeof window === 'undefined') {
       return null;
     }
-    // Use Tauri-provided version if available (accurate), otherwise fall back to UA parsing
-    const desktopApi = (window as typeof window & { opencodeDesktop?: { macosMajorVersion?: number | null } }).opencodeDesktop;
-    if (desktopApi?.macosMajorVersion != null) {
-      return desktopApi.macosMajorVersion;
+
+    const injected = (window as unknown as { __OPENCHAMBER_MACOS_MAJOR__?: unknown }).__OPENCHAMBER_MACOS_MAJOR__;
+    if (typeof injected === 'number' && Number.isFinite(injected) && injected > 0) {
+      return injected;
     }
+
     // Fallback: WebKit reports "Mac OS X 10_15_7" format where 10 is legacy prefix
     if (typeof navigator === 'undefined') {
       return null;
@@ -163,8 +166,7 @@ export const Header: React.FC = () => {
     if (typeof window === 'undefined') {
       return;
     }
-    const detected = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
-    setIsDesktopApp(detected);
+    setIsDesktopApp(isDesktopShell());
   }, []);
 
   const currentModel = getCurrentModel();
@@ -625,6 +627,9 @@ export const Header: React.FC = () => {
       <div className="flex-1" />
 
       <div className="flex items-center gap-1 pr-3">
+        {isDesktopApp && (
+          <DesktopHostSwitcherButton headerIconButtonClass={headerIconButtonClass} />
+        )}
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>
             <button
@@ -770,7 +775,6 @@ export const Header: React.FC = () => {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-
         <McpDropdown headerIconButtonClass={headerIconButtonClass} />
 
         <Tooltip delayDuration={500}>

@@ -4,7 +4,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { RiCloseLine, RiDatabase2Line, RiDeleteBinLine, RiPulseLine } from '@remixicon/react';
-import { useDesktopServerInfo } from '@/hooks/useDesktopServerInfo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface MemoryDebugPanelProps {
@@ -20,7 +19,6 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
     trimToViewportWindow,
     evictLeastRecentlyUsed
   } = useSessionStore();
-  const desktopInfo = useDesktopServerInfo(4000);
 
   const totalMessages = React.useMemo(() => {
     let total = 0;
@@ -81,25 +79,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
           </div>
         </div>
 
-        {desktopInfo && (
-          <div className="grid grid-cols-2 gap-2 typography-meta border-t pt-2">
-            <div className="bg-muted/50 rounded p-2">
-              <div className="text-muted-foreground">Desktop Host</div>
-              <div className="typography-markdown font-mono text-xs">
-                {desktopInfo.host ?? 'unknown'}
-              </div>
-            </div>
-            <div className="bg-muted/50 rounded p-2">
-              <div className="text-muted-foreground">OpenCode Port</div>
-              <div className="typography-markdown font-semibold">
-                {desktopInfo.openCodePort ?? 'n/a'}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {desktopInfo.ready ? 'ready' : 'starting'}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        {null}
 
         {}
         <div className="typography-meta space-y-1 border-t pt-2">

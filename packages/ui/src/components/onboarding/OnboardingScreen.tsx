@@ -1,5 +1,6 @@
 import React from 'react';
 import { RiFileCopyLine, RiCheckLine, RiExternalLinkLine } from '@remixicon/react';
+import { isDesktopShell, isTauriShell } from '@/lib/desktop';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const POLL_INTERVAL_MS = 3000;
@@ -35,6 +36,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
   const [copied, setCopied] = React.useState(false);
   const [showHint, setShowHint] = React.useState(false);
   const [isDesktopApp, setIsDesktopApp] = React.useState(false);
+  const [isRetrying, setIsRetrying] = React.useState(false);
 
   React.useEffect(() => {
     const timer = setTimeout(() => setShowHint(true), HINT_DELAY_MS);
@@ -42,7 +44,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
   }, []);
 
   React.useEffect(() => {
-    setIsDesktopApp(typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined');
+    setIsDesktopApp(isDesktopShell());
   }, []);
 
   const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
@@ -50,7 +52,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
       return;
     }
     if (e.button !== 0) return;
-    if (isDesktopApp) {
+    if (isDesktopApp && isTauriShell()) {
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const window = getCurrentWindow();
@@ -66,9 +68,18 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
       const response = await fetch('/health');
       if (!response.ok) return false;
       const data = await response.json();
-      return data.cliAvailable === true;
+      return data.openCodeRunning === true || data.isOpenCodeReady === true;
     } catch {
       return false;
+    }
+  }, []);
+
+  const handleRetry = React.useCallback(async () => {
+    setIsRetrying(true);
+    try {
+      await fetch('/api/config/reload', { method: 'POST' });
+    } finally {
+      setTimeout(() => setIsRetrying(false), 1000);
     }
   }, []);
 
@@ -146,6 +157,17 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
         <p className="text-sm text-muted-foreground animate-pulse">
           Waiting for OpenCode installation...
         </p>
+
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={isRetrying}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isRetrying ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
       </div>
 
       {showHint && (
