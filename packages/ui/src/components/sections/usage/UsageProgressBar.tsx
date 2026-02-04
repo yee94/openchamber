@@ -4,12 +4,13 @@ import { clampPercent, resolveUsageTone } from '@/lib/quota';
 
 interface UsageProgressBarProps {
   percent: number | null;
+  tonePercent?: number | null;
   className?: string;
 }
 
-export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({ percent, className }) => {
+export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({ percent, tonePercent, className }) => {
   const clamped = clampPercent(percent) ?? 0;
-  const tone = resolveUsageTone(percent);
+  const tone = resolveUsageTone(tonePercent ?? percent);
 
   const fillStyle = tone === 'critical'
     ? { backgroundColor: 'var(--status-error)' }

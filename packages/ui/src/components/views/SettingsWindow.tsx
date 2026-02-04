@@ -13,6 +13,7 @@ interface SettingsWindowProps {
  * Used for desktop and web (non-mobile) environments.
  */
 export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChange }) => {
+  const descriptionId = React.useId();
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
@@ -20,6 +21,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md"
         />
         <DialogPrimitive.Content
+          aria-describedby={descriptionId}
           className={cn(
             'fixed z-50 top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]',
             'w-[90vw] max-w-[1200px] h-[85vh] max-h-[900px]',
@@ -27,6 +29,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
             'bg-background'
           )}
         >
+          <DialogPrimitive.Description id={descriptionId} className="sr-only">
+            OpenChamber settings window.
+          </DialogPrimitive.Description>
           <SettingsView onClose={() => onOpenChange(false)} isWindowed />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

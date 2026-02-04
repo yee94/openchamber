@@ -36,8 +36,10 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const isLoading = useQuotaStore((state) => state.isLoading);
   const usageAutoRefresh = useQuotaStore((state) => state.autoRefresh);
   const usageRefreshIntervalMs = useQuotaStore((state) => state.refreshIntervalMs);
+  const usageDisplayMode = useQuotaStore((state) => state.displayMode);
   const setUsageAutoRefresh = useQuotaStore((state) => state.setAutoRefresh);
   const setUsageRefreshInterval = useQuotaStore((state) => state.setRefreshInterval);
+  const setUsageDisplayMode = useQuotaStore((state) => state.setDisplayMode);
   const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
   const { isMobile } = useDeviceInfo();
 
@@ -57,7 +59,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
     void loadUsageSettings();
   }, [loadUsageSettings]);
 
-  const persistUsageSettings = React.useCallback(async (changes: { usageAutoRefresh?: boolean; usageRefreshIntervalMs?: number }) => {
+  const persistUsageSettings = React.useCallback(async (changes: { usageAutoRefresh?: boolean; usageRefreshIntervalMs?: number; usageDisplayMode?: 'usage' | 'remaining'; usageDropdownProviders?: string[] }) => {
     try {
       await updateDesktopSettings(changes);
     } catch (error) {
@@ -78,6 +80,17 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
     setUsageRefreshInterval(next);
     void persistUsageSettings({ usageRefreshIntervalMs: next });
   }, [persistUsageSettings, setUsageRefreshInterval]);
+
+  const handleUsageDisplayModeChange = React.useCallback((value: string) => {
+    if (value !== 'usage' && value !== 'remaining') {
+      return;
+    }
+    setUsageDisplayMode(value);
+    void persistUsageSettings({ usageDisplayMode: value });
+  }, [persistUsageSettings, setUsageDisplayMode]);
+
+
+
 
   const bgClass = isDesktopRuntime
     ? 'bg-transparent'
@@ -134,6 +147,22 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
             </Button>
           </div>
         </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="typography-micro text-muted-foreground">Display</span>
+          <Select value={usageDisplayMode} onValueChange={handleUsageDisplayModeChange}>
+            <SelectTrigger size="sm" className="min-w-[140px]">
+              <SelectValue placeholder="Display mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="usage" className="pr-2 [&>span:first-child]:hidden">
+                Usage
+              </SelectItem>
+              <SelectItem value="remaining" className="pr-2 [&>span:first-child]:hidden">
+                Quota remaining
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
@@ -173,11 +202,11 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
                   {provider.name}
                 </span>
-                {!configured && (
-                  <span className="typography-micro text-muted-foreground/60 flex-shrink-0">Not set</span>
-                )}
-              </button>
-            </div>
+              {!configured && (
+                <span className="typography-micro text-muted-foreground/60 flex-shrink-0">Not set</span>
+              )}
+            </button>
+          </div>
           );
         })}
       </ScrollableOverlay>

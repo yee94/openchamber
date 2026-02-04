@@ -357,6 +357,14 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
     result.usageRefreshIntervalMs = candidate.usageRefreshIntervalMs;
   }
+  if (candidate.usageDisplayMode === 'usage' || candidate.usageDisplayMode === 'remaining') {
+    result.usageDisplayMode = candidate.usageDisplayMode;
+  }
+  if (Array.isArray(candidate.usageDropdownProviders)) {
+    result.usageDropdownProviders = candidate.usageDropdownProviders.filter(
+      (entry): entry is string => typeof entry === 'string' && entry.length > 0
+    );
+  }
   if (
     typeof candidate.toolCallExpansion === 'string'
     && (candidate.toolCallExpansion === 'collapsed'

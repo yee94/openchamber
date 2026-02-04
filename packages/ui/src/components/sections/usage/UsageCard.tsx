@@ -2,6 +2,7 @@ import React from 'react';
 import type { UsageWindow } from '@/types';
 import { formatPercent, formatWindowLabel } from '@/lib/quota';
 import { UsageProgressBar } from './UsageProgressBar';
+import { useQuotaStore } from '@/stores/useQuotaStore';
 
 interface UsageCardProps {
   title: string;
@@ -10,8 +11,11 @@ interface UsageCardProps {
 }
 
 export const UsageCard: React.FC<UsageCardProps> = ({ title, window, subtitle }) => {
-  const percentLabel = formatPercent(window.usedPercent);
-  const resetLabel = window.resetAfterFormatted ?? window.resetAtFormatted ?? '-';
+  const displayMode = useQuotaStore((state) => state.displayMode);
+  const displayPercent = displayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
+  const barLabel = displayMode === 'remaining' ? 'remaining' : 'used';
+  const percentLabel = window.valueLabel ?? formatPercent(displayPercent);
+  const resetLabel = window.resetAfterFormatted ?? window.resetAtFormatted ?? '';
   const windowLabel = formatWindowLabel(title);
 
   return (
@@ -23,15 +27,18 @@ export const UsageCard: React.FC<UsageCardProps> = ({ title, window, subtitle })
             <div className="typography-micro text-muted-foreground truncate">{subtitle}</div>
           )}
         </div>
-        <div className="typography-ui-label text-foreground tabular-nums">{percentLabel}</div>
+        <div className="typography-ui-label text-foreground tabular-nums">{percentLabel === '-' ? '' : percentLabel}</div>
       </div>
 
       <div className="mt-3">
-        <UsageProgressBar percent={window.usedPercent} />
+        <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} />
+        <div className="mt-1 text-right typography-micro text-muted-foreground text-[10px]">
+          {barLabel}
+        </div>
       </div>
 
       <div className="mt-3 flex items-center justify-between text-muted-foreground">
-        <span className="typography-micro">Resets in</span>
+        <span className="typography-micro">Resets</span>
         <span className="typography-micro tabular-nums">{resetLabel}</span>
       </div>
     </div>

@@ -11,6 +11,8 @@ const DEFAULT_REFRESH_INTERVAL_MS = 60000;
 interface QuotaSettingsState {
   autoRefresh: boolean;
   refreshIntervalMs: number;
+  displayMode: 'usage' | 'remaining';
+  dropdownProviderIds: QuotaProviderId[];
 }
 
 interface QuotaStore extends QuotaSettingsState {
@@ -27,9 +29,12 @@ interface QuotaStore extends QuotaSettingsState {
   setSelectedProvider: (providerId: QuotaProviderId | null) => void;
   setAutoRefresh: (enabled: boolean) => void;
   setRefreshInterval: (intervalMs: number) => void;
+  setDisplayMode: (mode: 'usage' | 'remaining') => void;
+  setDropdownProviderIds: (providerIds: QuotaProviderId[]) => void;
 }
 
 const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState => {
+  const allProviderIds = QUOTA_PROVIDERS.map((provider) => provider.id);
   const autoRefresh = typeof data?.usageAutoRefresh === 'boolean'
     ? data.usageAutoRefresh
     : false;
@@ -38,7 +43,17 @@ const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState
       ? Math.max(30000, Math.min(300000, Math.round(data.usageRefreshIntervalMs)))
       : DEFAULT_REFRESH_INTERVAL_MS;
 
-  return { autoRefresh, refreshIntervalMs };
+  const displayMode = data?.usageDisplayMode === 'remaining' ? 'remaining' : 'usage';
+  const rawDropdownProviders = Array.isArray(data?.usageDropdownProviders)
+    ? data?.usageDropdownProviders
+    : null;
+  const dropdownProviderIds = rawDropdownProviders
+    ? rawDropdownProviders.filter((entry): entry is QuotaProviderId =>
+        typeof entry === 'string' && allProviderIds.includes(entry as QuotaProviderId)
+      )
+    : allProviderIds;
+
+  return { autoRefresh, refreshIntervalMs, displayMode, dropdownProviderIds };
 };
 
 const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
@@ -69,7 +84,12 @@ const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
     }
   }
 
-  return { autoRefresh: false, refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS };
+  return {
+    autoRefresh: false,
+    refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+    displayMode: 'usage',
+    dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id)
+  };
 };
 
 export const useQuotaStore = create<QuotaStore>()(
@@ -83,6 +103,8 @@ export const useQuotaStore = create<QuotaStore>()(
       error: null,
       autoRefresh: false,
       refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+      displayMode: 'usage',
+      dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id),
 
       loadSettings: async () => {
         try {
@@ -155,7 +177,9 @@ export const useQuotaStore = create<QuotaStore>()(
       setRefreshInterval: (intervalMs) => {
         const clamped = Math.max(30000, Math.min(300000, Math.round(intervalMs)));
         set({ refreshIntervalMs: clamped });
-      }
+      },
+      setDisplayMode: (mode) => set({ displayMode: mode }),
+      setDropdownProviderIds: (providerIds) => set({ dropdownProviderIds: providerIds })
     }),
     { name: 'quota-store' }
   )

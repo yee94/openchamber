@@ -984,6 +984,9 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
     result.usageRefreshIntervalMs = Math.max(30000, Math.min(300000, Math.round(candidate.usageRefreshIntervalMs)));
   }
+  if (Array.isArray(candidate.usageDropdownProviders)) {
+    result.usageDropdownProviders = normalizeStringArray(candidate.usageDropdownProviders);
+  }
   if (typeof candidate.autoDeleteEnabled === 'boolean') {
     result.autoDeleteEnabled = candidate.autoDeleteEnabled;
   }

@@ -13,6 +13,7 @@ type UsageWindow = {
   resetAt: number | null;
   resetAtFormatted: string | null;
   resetAfterFormatted: string | null;
+  valueLabel?: string | null;
 };
 
 type ProviderUsage = {
@@ -32,6 +33,10 @@ type OpenAiUsagePayload = {
       limit_window_seconds?: number;
       reset_at?: number;
     };
+  };
+  credits?: {
+    balance?: number | string;
+    unlimited?: boolean;
   };
 };
 
@@ -71,6 +76,7 @@ export type ProviderResult = {
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config', 'opencode');
 const OPENCODE_DATA_DIR = path.join(os.homedir(), '.local', 'share', 'opencode');
 const AUTH_FILE = path.join(OPENCODE_DATA_DIR, 'auth.json');
+
 
 const ANTIGRAVITY_ACCOUNTS_PATHS = [
   path.join(OPENCODE_CONFIG_DIR, 'antigravity-accounts.json'),
@@ -152,6 +158,29 @@ const normalizeAuthEntry = (entry: AuthEntry | null) => {
   return null;
 };
 
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toTimestamp = (value: unknown): number | null => {
+  if (!value) return null;
+  if (typeof value === 'number') {
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
+
 const formatResetTime = (timestamp: number) => {
   try {
     const resetDate = new Date(timestamp);
@@ -185,7 +214,7 @@ const calculateResetAfterSeconds = (resetAt: number | null) => {
   return delta < 0 ? 0 : delta;
 };
 
-const toUsageWindow = (data: { usedPercent: number | null; windowSeconds: number | null; resetAt: number | null }) => {
+const toUsageWindow = (data: { usedPercent: number | null; windowSeconds: number | null; resetAt: number | null; valueLabel?: string | null }) => {
   const resetAfterSeconds = calculateResetAfterSeconds(data.resetAt);
   const resetFormatted = data.resetAt ? formatResetTime(data.resetAt) : null;
   return {
@@ -196,6 +225,7 @@ const toUsageWindow = (data: { usedPercent: number | null; windowSeconds: number
     resetAt: data.resetAt,
     resetAtFormatted: resetFormatted,
     resetAfterFormatted: resetFormatted,
+    ...(data.valueLabel ? { valueLabel: data.valueLabel } : {}),
   } satisfies UsageWindow;
 };
 
@@ -216,13 +246,39 @@ const buildResult = (data: {
   fetchedAt: Date.now(),
 });
 
+const formatMoney = (value: number | null) => {
+  if (value === null || !Number.isFinite(value)) return null;
+  return value.toFixed(2);
+};
+
+const durationToLabel = (duration?: number, unit?: string) => {
+  if (!duration || !unit) return 'limit';
+  if (unit === 'TIME_UNIT_MINUTE') return `${duration}m`;
+  if (unit === 'TIME_UNIT_HOUR') return `${duration}h`;
+  if (unit === 'TIME_UNIT_DAY') return `${duration}d`;
+  return 'limit';
+};
+
+const durationToSeconds = (duration?: number, unit?: string) => {
+  if (!duration || !unit) return null;
+  if (unit === 'TIME_UNIT_MINUTE') return duration * 60;
+  if (unit === 'TIME_UNIT_HOUR') return duration * 3600;
+  if (unit === 'TIME_UNIT_DAY') return duration * 86400;
+  return null;
+};
+
 export const listConfiguredQuotaProviders = () => {
   const auth = readAuthFile();
   const configured = new Set<string>();
 
+  const anthropicAuth = normalizeAuthEntry(getAuthEntry(auth, ['anthropic', 'claude']));
+  if (anthropicAuth && ((anthropicAuth as Record<string, unknown>).access || (anthropicAuth as Record<string, unknown>).token)) {
+    configured.add('claude');
+  }
+
   const openaiAuth = normalizeAuthEntry(getAuthEntry(auth, ['openai', 'codex', 'chatgpt']));
   if (openaiAuth && ((openaiAuth as Record<string, unknown>).access || (openaiAuth as Record<string, unknown>).token)) {
-    configured.add('openai');
+    configured.add('codex');
   }
 
   const googleAuth = normalizeAuthEntry(getAuthEntry(auth, ['google', 'antigravity']));
@@ -235,9 +291,20 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('zai-coding-plan');
   }
 
-  const githubCopilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot']));
-  if (githubCopilotAuth && ((githubCopilotAuth as Record<string, unknown>).access || (githubCopilotAuth as Record<string, unknown>).token)) {
+  const kimiAuth = normalizeAuthEntry(getAuthEntry(auth, ['kimi-for-coding', 'kimi']));
+  if (kimiAuth && ((kimiAuth as Record<string, unknown>).key || (kimiAuth as Record<string, unknown>).token)) {
+    configured.add('kimi-for-coding');
+  }
+
+  const openrouterAuth = normalizeAuthEntry(getAuthEntry(auth, ['openrouter']));
+  if (openrouterAuth && ((openrouterAuth as Record<string, unknown>).key || (openrouterAuth as Record<string, unknown>).token)) {
+    configured.add('openrouter');
+  }
+
+  const copilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot', 'copilot']));
+  if (copilotAuth && ((copilotAuth as Record<string, unknown>).access || (copilotAuth as Record<string, unknown>).token)) {
     configured.add('github-copilot');
+    configured.add('github-copilot-addon');
   }
 
   for (const filePath of ANTIGRAVITY_ACCOUNTS_PATHS) {
@@ -252,15 +319,16 @@ export const listConfiguredQuotaProviders = () => {
   return Array.from(configured);
 };
 
-export const fetchOpenaiQuota = async (): Promise<ProviderResult> => {
+export const fetchCodexQuota = async (): Promise<ProviderResult> => {
   const auth = readAuthFile();
   const entry = normalizeAuthEntry(getAuthEntry(auth, ['openai', 'codex', 'chatgpt'])) as Record<string, unknown> | null;
   const accessToken = (entry?.access as string | undefined) ?? (entry?.token as string | undefined);
+  const accountId = entry?.accountId as string | undefined;
 
   if (!accessToken) {
     return buildResult({
-      providerId: 'openai',
-      providerName: 'OpenAI',
+      providerId: 'codex',
+      providerName: 'Codex',
       ok: false,
       configured: false,
       error: 'Not configured',
@@ -273,13 +341,14 @@ export const fetchOpenaiQuota = async (): Promise<ProviderResult> => {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
+        ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {}),
       },
     });
 
     if (!response.ok) {
       return buildResult({
-        providerId: 'openai',
-        providerName: 'OpenAI',
+        providerId: 'codex',
+        providerName: 'Codex',
         ok: false,
         configured: true,
         error: `API error: ${response.status}`,
@@ -289,34 +358,50 @@ export const fetchOpenaiQuota = async (): Promise<ProviderResult> => {
     const payload = await response.json() as OpenAiUsagePayload;
     const primary = payload?.rate_limit?.primary_window ?? null;
     const secondary = payload?.rate_limit?.secondary_window ?? null;
+    const credits = payload?.credits ?? null;
 
     const windows: Record<string, UsageWindow> = {};
     if (primary) {
       windows['5h'] = toUsageWindow({
-        usedPercent: typeof primary.used_percent === 'number' ? primary.used_percent : null,
-        windowSeconds: typeof primary.limit_window_seconds === 'number' ? primary.limit_window_seconds : null,
-        resetAt: primary.reset_at ? primary.reset_at * 1000 : null,
+        usedPercent: toNumber(primary.used_percent),
+        windowSeconds: toNumber(primary.limit_window_seconds),
+        resetAt: toTimestamp(primary.reset_at),
       });
     }
     if (secondary) {
       windows['weekly'] = toUsageWindow({
-        usedPercent: typeof secondary.used_percent === 'number' ? secondary.used_percent : null,
-        windowSeconds: typeof secondary.limit_window_seconds === 'number' ? secondary.limit_window_seconds : null,
-        resetAt: secondary.reset_at ? secondary.reset_at * 1000 : null,
+        usedPercent: toNumber(secondary.used_percent),
+        windowSeconds: toNumber(secondary.limit_window_seconds),
+        resetAt: toTimestamp(secondary.reset_at),
+      });
+    }
+    if (credits) {
+      const balance = toNumber(credits.balance);
+      const unlimited = Boolean(credits.unlimited);
+      const valueLabel = unlimited
+        ? 'Unlimited'
+        : balance !== null
+          ? `$${formatMoney(balance)} remaining`
+          : null;
+      windows.credits = toUsageWindow({
+        usedPercent: null,
+        windowSeconds: null,
+        resetAt: null,
+        valueLabel,
       });
     }
 
     return buildResult({
-      providerId: 'openai',
-      providerName: 'OpenAI',
+      providerId: 'codex',
+      providerName: 'Codex',
       ok: true,
       configured: true,
       usage: { windows },
     });
   } catch (error) {
     return buildResult({
-      providerId: 'openai',
-      providerName: 'OpenAI',
+      providerId: 'codex',
+      providerName: 'Codex',
       ok: false,
       configured: true,
       error: error instanceof Error ? error.message : 'Request failed',
@@ -502,6 +587,398 @@ export const fetchGoogleQuota = async (): Promise<ProviderResult> => {
   });
 };
 
+export const fetchClaudeQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['anthropic', 'claude'])) as Record<string, unknown> | null;
+  const accessToken = (entry?.access as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!accessToken) {
+    return buildResult({
+      providerId: 'claude',
+      providerName: 'Claude',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.anthropic.com/api/oauth/usage', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'anthropic-beta': 'oauth-2025-04-20',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'claude',
+        providerName: 'Claude',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const windows: Record<string, UsageWindow> = {};
+    const fiveHour = (payload as Record<string, unknown>).five_hour as Record<string, unknown> | undefined;
+    const sevenDay = (payload as Record<string, unknown>).seven_day as Record<string, unknown> | undefined;
+    const sevenDaySonnet = (payload as Record<string, unknown>).seven_day_sonnet as Record<string, unknown> | undefined;
+    const sevenDayOpus = (payload as Record<string, unknown>).seven_day_opus as Record<string, unknown> | undefined;
+
+    if (fiveHour) {
+      windows['5h'] = toUsageWindow({
+        usedPercent: toNumber(fiveHour.utilization),
+        windowSeconds: null,
+        resetAt: toTimestamp(fiveHour.resets_at),
+      });
+    }
+    if (sevenDay) {
+      windows['7d'] = toUsageWindow({
+        usedPercent: toNumber(sevenDay.utilization),
+        windowSeconds: null,
+        resetAt: toTimestamp(sevenDay.resets_at),
+      });
+    }
+    if (sevenDaySonnet) {
+      windows['7d-sonnet'] = toUsageWindow({
+        usedPercent: toNumber(sevenDaySonnet.utilization),
+        windowSeconds: null,
+        resetAt: toTimestamp(sevenDaySonnet.resets_at),
+      });
+    }
+    if (sevenDayOpus) {
+      windows['7d-opus'] = toUsageWindow({
+        usedPercent: toNumber(sevenDayOpus.utilization),
+        windowSeconds: null,
+        resetAt: toTimestamp(sevenDayOpus.resets_at),
+      });
+    }
+
+    return buildResult({
+      providerId: 'claude',
+      providerName: 'Claude',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'claude',
+      providerName: 'Claude',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+const buildCopilotWindows = (payload: Record<string, unknown>) => {
+  const quota = (payload.quota_snapshots as Record<string, unknown>) ?? {};
+  const resetAt = toTimestamp(payload.quota_reset_date);
+  const windows: Record<string, UsageWindow> = {};
+
+  const addWindow = (label: string, snapshot?: Record<string, unknown>) => {
+    if (!snapshot) return;
+    const entitlement = toNumber(snapshot.entitlement);
+    const remaining = toNumber(snapshot.remaining);
+    const usedPercent = entitlement && remaining !== null
+      ? Math.max(0, Math.min(100, 100 - (remaining / entitlement) * 100))
+      : null;
+    const valueLabel = entitlement !== null && remaining !== null
+      ? `${remaining.toFixed(0)} / ${entitlement.toFixed(0)} left`
+      : null;
+    windows[label] = toUsageWindow({
+      usedPercent,
+      windowSeconds: null,
+      resetAt,
+      valueLabel,
+    });
+  };
+
+  addWindow('chat', quota.chat as Record<string, unknown> | undefined);
+  addWindow('completions', quota.completions as Record<string, unknown> | undefined);
+  addWindow('premium', quota.premium_interactions as Record<string, unknown> | undefined);
+
+  return windows;
+};
+
+export const fetchCopilotQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot', 'copilot'])) as Record<string, unknown> | null;
+  const accessToken = (entry?.access as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!accessToken) {
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.github.com/copilot_internal/user', {
+      method: 'GET',
+      headers: {
+        Authorization: `token ${accessToken}`,
+        Accept: 'application/json',
+        'Editor-Version': 'vscode/1.96.2',
+        'X-Github-Api-Version': '2025-04-01',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'github-copilot',
+        providerName: 'GitHub Copilot',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: true,
+      configured: true,
+      usage: { windows: buildCopilotWindows(payload) },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+export const fetchCopilotAddonQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot', 'copilot'])) as Record<string, unknown> | null;
+  const accessToken = (entry?.access as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!accessToken) {
+    return buildResult({
+      providerId: 'github-copilot-addon',
+      providerName: 'GitHub Copilot Add-on',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.github.com/copilot_internal/user', {
+      method: 'GET',
+      headers: {
+        Authorization: `token ${accessToken}`,
+        Accept: 'application/json',
+        'Editor-Version': 'vscode/1.96.2',
+        'X-Github-Api-Version': '2025-04-01',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'github-copilot-addon',
+        providerName: 'GitHub Copilot Add-on',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const windows = buildCopilotWindows(payload);
+    const premium = windows.premium ? { premium: windows.premium } : windows;
+
+    return buildResult({
+      providerId: 'github-copilot-addon',
+      providerName: 'GitHub Copilot Add-on',
+      ok: true,
+      configured: true,
+      usage: { windows: premium },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'github-copilot-addon',
+      providerName: 'GitHub Copilot Add-on',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+export const fetchKimiQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['kimi-for-coding', 'kimi'])) as Record<string, unknown> | null;
+  const apiKey = (entry?.key as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!apiKey) {
+    return buildResult({
+      providerId: 'kimi-for-coding',
+      providerName: 'Kimi for Coding',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.kimi.com/coding/v1/usages', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'kimi-for-coding',
+        providerName: 'Kimi for Coding',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const windows: Record<string, UsageWindow> = {};
+    const usage = payload.usage as Record<string, unknown> | undefined;
+    if (usage) {
+      const limit = toNumber(usage.limit);
+      const remaining = toNumber(usage.remaining);
+      const usedPercent = limit && remaining !== null
+        ? Math.max(0, Math.min(100, 100 - (remaining / limit) * 100))
+        : null;
+      windows.weekly = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt: toTimestamp(usage.resetTime),
+      });
+    }
+
+    const limits = Array.isArray(payload.limits) ? payload.limits : [];
+    for (const limit of limits) {
+      const window = (limit as Record<string, unknown>)?.window as Record<string, unknown> | undefined;
+      const detail = (limit as Record<string, unknown>)?.detail as Record<string, unknown> | undefined;
+      const rawLabel = durationToLabel(window?.duration as number | undefined, window?.timeUnit as string | undefined);
+      const windowSeconds = durationToSeconds(window?.duration as number | undefined, window?.timeUnit as string | undefined);
+      const label = windowSeconds === 5 * 60 * 60 ? `Rate Limit (${rawLabel})` : rawLabel;
+      const total = toNumber(detail?.limit);
+      const remaining = toNumber(detail?.remaining);
+      const usedPercent = total && remaining !== null
+        ? Math.max(0, Math.min(100, 100 - (remaining / total) * 100))
+        : null;
+      windows[label] = toUsageWindow({
+        usedPercent,
+        windowSeconds,
+        resetAt: toTimestamp(detail?.resetTime),
+      });
+    }
+
+    return buildResult({
+      providerId: 'kimi-for-coding',
+      providerName: 'Kimi for Coding',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'kimi-for-coding',
+      providerName: 'Kimi for Coding',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+export const fetchOpenRouterQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['openrouter'])) as Record<string, unknown> | null;
+  const apiKey = (entry?.key as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!apiKey) {
+    return buildResult({
+      providerId: 'openrouter',
+      providerName: 'OpenRouter',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/credits', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'openrouter',
+        providerName: 'OpenRouter',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const credits = payload.data as Record<string, unknown> | undefined;
+    const totalCredits = toNumber(credits?.total_credits);
+    const totalUsage = toNumber(credits?.total_usage);
+    const remaining = totalCredits !== null && totalUsage !== null
+      ? Math.max(0, totalCredits - totalUsage)
+      : null;
+    const usedPercent = totalCredits && totalUsage !== null
+      ? Math.max(0, Math.min(100, (totalUsage / totalCredits) * 100))
+      : null;
+    const valueLabel = remaining !== null ? `$${formatMoney(remaining)} remaining` : null;
+
+    return buildResult({
+      providerId: 'openrouter',
+      providerName: 'OpenRouter',
+      ok: true,
+      configured: true,
+      usage: {
+        windows: {
+          credits: toUsageWindow({
+            usedPercent,
+            windowSeconds: null,
+            resetAt: null,
+            valueLabel,
+          }),
+        },
+      },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'openrouter',
+      providerName: 'OpenRouter',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+
 const normalizeTimestamp = (value: unknown) => {
   if (typeof value !== 'number') return null;
   return value < 1_000_000_000_000 ? value * 1000 : value;
@@ -595,133 +1072,24 @@ export const fetchZaiQuota = async (): Promise<ProviderResult> => {
   }
 };
 
-type CopilotSnapshot = {
-  unlimited?: boolean;
-  percent_remaining?: number;
-  entitlement?: number;
-  remaining?: number;
-  quota_remaining?: number;
-};
-
-type CopilotPayload = {
-  quota_snapshots?: {
-    premium_interactions?: CopilotSnapshot;
-  };
-  quota_reset_date_utc?: string;
-  quota_reset_date?: string;
-};
-
-export const fetchGitHubCopilotQuota = async (): Promise<ProviderResult> => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot'])) as Record<string, unknown> | null;
-  const accessToken = (entry?.access as string | undefined) ?? (entry?.token as string | undefined);
-
-  if (!accessToken) {
-    return buildResult({
-      providerId: 'github-copilot',
-      providerName: 'GitHub Copilot',
-      ok: false,
-      configured: false,
-      error: 'Not configured',
-    });
-  }
-
-  try {
-    const response = await fetch('https://api.github.com/copilot_internal/user', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'OpenChamber',
-      },
-    });
-
-    if (!response.ok) {
-      return buildResult({
-        providerId: 'github-copilot',
-        providerName: 'GitHub Copilot',
-        ok: false,
-        configured: true,
-        error: `API error: ${response.status}`,
-      });
-    }
-
-    const payload = await response.json() as CopilotPayload;
-    const snapshots = payload?.quota_snapshots ?? {};
-    const premiumInteractions = snapshots?.premium_interactions ?? null;
-
-    // Parse reset date
-    let resetAt: number | null = null;
-    const resetDateUtc = payload?.quota_reset_date_utc;
-    const resetDate = payload?.quota_reset_date;
-
-    if (resetDateUtc) {
-      resetAt = new Date(resetDateUtc).getTime();
-    } else if (resetDate) {
-      // Use the date as UTC midnight
-      resetAt = new Date(`${resetDate}T00:00:00Z`).getTime();
-    }
-
-    const windows: Record<string, UsageWindow> = {};
-
-    if (premiumInteractions) {
-      let usedPercent: number | null = null;
-
-      if (premiumInteractions.unlimited === true) {
-        usedPercent = null;
-      } else if (typeof premiumInteractions.percent_remaining === 'number') {
-        usedPercent = 100 - premiumInteractions.percent_remaining;
-      } else if (
-        typeof premiumInteractions.entitlement === 'number' &&
-        premiumInteractions.entitlement > 0
-      ) {
-        const remaining =
-          typeof premiumInteractions.remaining === 'number'
-            ? premiumInteractions.remaining
-            : typeof premiumInteractions.quota_remaining === 'number'
-              ? premiumInteractions.quota_remaining
-              : null;
-
-        if (remaining !== null) {
-          usedPercent = ((premiumInteractions.entitlement - remaining) / premiumInteractions.entitlement) * 100;
-        }
-      }
-
-      windows['premium_interactions'] = toUsageWindow({
-        usedPercent,
-        windowSeconds: null,
-        resetAt,
-      });
-    }
-
-    return buildResult({
-      providerId: 'github-copilot',
-      providerName: 'GitHub Copilot',
-      ok: true,
-      configured: true,
-      usage: { windows },
-    });
-  } catch (error) {
-    return buildResult({
-      providerId: 'github-copilot',
-      providerName: 'GitHub Copilot',
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed',
-    });
-  }
-};
-
 export const fetchQuotaForProvider = async (providerId: string): Promise<ProviderResult> => {
   switch (providerId) {
-    case 'openai':
-      return fetchOpenaiQuota();
+    case 'claude':
+      return fetchClaudeQuota();
+    case 'codex':
+      return fetchCodexQuota();
+    case 'github-copilot':
+      return fetchCopilotQuota();
+    case 'github-copilot-addon':
+      return fetchCopilotAddonQuota();
     case 'google':
       return fetchGoogleQuota();
+    case 'kimi-for-coding':
+      return fetchKimiQuota();
+    case 'openrouter':
+      return fetchOpenRouterQuota();
     case 'zai-coding-plan':
       return fetchZaiQuota();
-    case 'github-copilot':
-      return fetchGitHubCopilotQuota();
     default:
       return buildResult({
         providerId,

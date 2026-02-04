@@ -3,6 +3,9 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { UsageCard } from './UsageCard';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
+import { Switch } from '@/components/ui/switch';
+import { updateDesktopSettings } from '@/lib/persistence';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -25,6 +28,8 @@ export const UsagePage: React.FC = () => {
   const isLoading = useQuotaStore((state) => state.isLoading);
   const lastUpdated = useQuotaStore((state) => state.lastUpdated);
   const error = useQuotaStore((state) => state.error);
+  const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
+  const setDropdownProviderIds = useQuotaStore((state) => state.setDropdownProviderIds);
 
   useQuotaAutoRefresh();
 
@@ -32,6 +37,7 @@ export const UsagePage: React.FC = () => {
     void loadSettings();
     void fetchAllQuotas();
   }, [loadSettings, fetchAllQuotas]);
+
 
   React.useEffect(() => {
     if (selectedProviderId) {
@@ -46,6 +52,21 @@ export const UsagePage: React.FC = () => {
 
   const selectedResult = results.find((entry) => entry.providerId === selectedProviderId) ?? null;
 
+  const providerMeta = QUOTA_PROVIDERS.find((provider) => provider.id === selectedProviderId);
+  const providerName = providerMeta?.name ?? selectedProviderId ?? 'Usage';
+  const usage = selectedResult?.usage;
+  const showInDropdown = selectedProviderId ? dropdownProviderIds.includes(selectedProviderId) : false;
+  const handleDropdownToggle = React.useCallback((enabled: boolean) => {
+    if (!selectedProviderId) {
+      return;
+    }
+    const next = enabled
+      ? Array.from(new Set([...dropdownProviderIds, selectedProviderId]))
+      : dropdownProviderIds.filter((id) => id !== selectedProviderId);
+    setDropdownProviderIds(next);
+    void updateDesktopSettings({ usageDropdownProviders: next });
+  }, [dropdownProviderIds, selectedProviderId, setDropdownProviderIds]);
+
   if (!selectedProviderId) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -54,18 +75,30 @@ export const UsagePage: React.FC = () => {
     );
   }
 
-  const providerMeta = QUOTA_PROVIDERS.find((provider) => provider.id === selectedProviderId);
-  const providerName = providerMeta?.name ?? selectedProviderId;
-  const usage = selectedResult?.usage;
-
   return (
     <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
       <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="space-y-1">
-          <h1 className="typography-ui-header font-semibold text-lg">{providerName} Usage</h1>
-          <p className="typography-meta text-muted-foreground">
-            {isLoading ? 'Refreshing usage...' : `Last updated ${formatTime(lastUpdated)}`}
-          </p>
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <ProviderLogo providerId={selectedProviderId} className="h-5 w-5" />
+                <h1 className="typography-ui-header font-semibold text-lg">{providerName} Usage</h1>
+              </div>
+              <p className="typography-meta text-muted-foreground">
+                {isLoading ? 'Refreshing usage...' : `Last updated ${formatTime(lastUpdated)}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="typography-micro text-muted-foreground">Show in dropdown</span>
+            <Switch
+              checked={showInDropdown}
+              onCheckedChange={handleDropdownToggle}
+              aria-label={`Show ${providerName} in usage dropdown`}
+              className="data-[state=checked]:bg-[var(--status-info)]"
+            />
+          </div>
         </div>
 
         {!selectedResult && (

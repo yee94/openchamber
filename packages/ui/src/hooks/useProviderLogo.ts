@@ -15,6 +15,11 @@ const localLogoModules = import.meta.glob<string>('../assets/provider-logos/*.sv
 
 const LOCAL_PROVIDER_LOGO_MAP = new Map<string, string>();
 
+const LOGO_ALIAS = new Map<string, string>([
+    ['codex', 'openai'],
+    ['claude', 'anthropic'],
+]);
+
 for (const [path, url] of Object.entries(localLogoModules)) {
     const match = path.match(/provider-logos\/([^/]+)\.svg$/i);
     if (match?.[1] && url) {
@@ -24,20 +29,21 @@ for (const [path, url] of Object.entries(localLogoModules)) {
 
 export function useProviderLogo(providerId: string | null | undefined): UseProviderLogoReturn {
     const normalizedId = providerId?.toLowerCase() ?? null;
-    const hasLocalLogo = normalizedId ? LOCAL_PROVIDER_LOGO_MAP.has(normalizedId) : false;
-    const localLogoSrc = normalizedId ? LOCAL_PROVIDER_LOGO_MAP.get(normalizedId) ?? null : null;
+    const resolvedId = normalizedId ? LOGO_ALIAS.get(normalizedId) ?? normalizedId : null;
+    const hasLocalLogo = resolvedId ? LOCAL_PROVIDER_LOGO_MAP.has(resolvedId) : false;
+    const localLogoSrc = resolvedId ? LOCAL_PROVIDER_LOGO_MAP.get(resolvedId) ?? null : null;
 
     const [source, setSource] = useState<LogoSource>(hasLocalLogo ? 'local' : 'remote');
 
     useEffect(() => {
         setSource(hasLocalLogo ? 'local' : 'remote');
-    }, [hasLocalLogo, normalizedId]);
+    }, [hasLocalLogo, resolvedId]);
 
     const handleError = useCallback(() => {
         setSource((current) => (current === 'local' && hasLocalLogo ? 'remote' : 'none'));
     }, [hasLocalLogo]);
 
-    if (!normalizedId) {
+    if (!resolvedId) {
         return { src: null, onError: handleError, hasLogo: false };
     }
 
@@ -51,7 +57,7 @@ export function useProviderLogo(providerId: string | null | undefined): UseProvi
 
     if (source === 'remote') {
         return {
-            src: `https://models.dev/logos/${normalizedId}.svg`,
+            src: `https://models.dev/logos/${resolvedId}.svg`,
             onError: handleError,
             hasLogo: true,
         };
