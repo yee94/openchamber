@@ -308,7 +308,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 {changelog.kind === 'raw' ? (
                   <SimpleMarkdownRenderer
                     content={changelog.content}
-                    className="typography-markdown-body text-foreground/90 leading-relaxed pr-3"
+                    className="typography-markdown-body text-foreground/90 leading-relaxed pr-3 break-words"
                   />
                 ) : (
                   <div className="space-y-4 pr-3">
@@ -335,7 +335,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                         </div>
                         <SimpleMarkdownRenderer
                           content={section.content}
-                          className="typography-markdown-body text-foreground/90 leading-relaxed"
+                          className="typography-markdown-body text-foreground/90 leading-relaxed break-words"
                         />
                       </div>
                     ))}

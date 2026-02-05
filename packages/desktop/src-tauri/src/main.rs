@@ -673,6 +673,97 @@ fn is_nonempty_string(value: &str) -> bool {
     !value.trim().is_empty()
 }
 
+const CHANGELOG_URL: &str = "https://raw.githubusercontent.com/btriapitsyn/openchamber/main/CHANGELOG.md";
+
+fn parse_semver_num(value: &str) -> Option<u32> {
+    let trimmed = value.trim().trim_start_matches('v');
+    let mut parts = trimmed.split('.');
+    let major: u32 = parts.next()?.parse().ok()?;
+    let minor: u32 = parts.next()?.parse().ok()?;
+    let patch: u32 = parts.next()?.parse().ok()?;
+    Some(major.saturating_mul(10_000) + minor.saturating_mul(100) + patch)
+}
+
+fn is_placeholder_release_notes(body: &Option<String>) -> bool {
+    let Some(body) = body.as_ref() else {
+        return true;
+    };
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    trimmed
+        .to_ascii_lowercase()
+        .starts_with("see release notes at")
+}
+
+async fn fetch_changelog_notes(from_version: &str, to_version: &str) -> Option<String> {
+    let from_num = parse_semver_num(from_version)?;
+    let to_num = parse_semver_num(to_version)?;
+    if to_num <= from_num {
+        return None;
+    }
+
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .ok()?;
+
+    let response = client.get(CHANGELOG_URL).send().await.ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let changelog = response.text().await.ok()?;
+    if changelog.trim().is_empty() {
+        return None;
+    }
+
+    let mut markers: Vec<(usize, Option<u32>)> = Vec::new();
+    let mut offset: usize = 0;
+    for line in changelog.lines() {
+        let line_trimmed = line.trim_end_matches('\r');
+        if line_trimmed.starts_with("## [") {
+            let ver = line_trimmed
+                .strip_prefix("## [")
+                .and_then(|rest| rest.split(']').next())
+                .unwrap_or("");
+            markers.push((offset, parse_semver_num(ver)));
+        }
+        offset = offset.saturating_add(line.len().saturating_add(1));
+    }
+
+    if markers.is_empty() {
+        return None;
+    }
+
+    let mut relevant: Vec<String> = Vec::new();
+    for idx in 0..markers.len() {
+        let (start, ver_num) = markers[idx];
+        let end = markers.get(idx + 1).map(|m| m.0).unwrap_or_else(|| changelog.len());
+        let Some(ver_num) = ver_num else {
+            continue;
+        };
+        if ver_num <= from_num || ver_num > to_num {
+            continue;
+        }
+        if start >= changelog.len() || end <= start {
+            continue;
+        }
+        let end_clamped = end.min(changelog.len());
+        let section = changelog[start..end_clamped].trim();
+        if !section.is_empty() {
+            relevant.push(section.to_string());
+        }
+    }
+
+    if relevant.is_empty() {
+        None
+    } else {
+        Some(relevant.join("\n\n"))
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SidecarNotifyPayload {
@@ -992,11 +1083,17 @@ async fn desktop_check_for_updates(
 
     let info = if let Some(update) = update {
         *pending.0.lock().expect("pending update mutex") = Some(update.clone());
+        let mut body = update.body.clone();
+        if is_placeholder_release_notes(&body) {
+            if let Some(notes) = fetch_changelog_notes(&current_version, &update.version).await {
+                body = Some(notes);
+            }
+        }
         DesktopUpdateInfo {
             available: true,
             current_version,
             version: Some(update.version.clone()),
-            body: update.body.clone(),
+            body,
             date: update.date.map(|date| date.to_string()),
         }
     } else {
