@@ -1,3 +1,10 @@
+## [1.6.4] - 2026-02-5
+
+- Improved Windows PATH resolution and cold-start readiness checks to reduce "stuck loading" sessions.
+- Usage: expanded quota tracking with more providers (including GitHub Copilot) and a provider selector dropdown (thanks to @gsxdsm, @nelsonPires5).
+- Chat: select text in messages to quickly add it to your prompt or start a new session (thanks to @gsxdsm).
+
+
 ## [1.6.3] - 2026-02-2
 
 - Improved server health check with the proper health API endpoint and increased timeout for steadier startup (thanks to @wienans).

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "OpenChamber",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "identifier": "ai.opencode.openchamber",
   "build": {
     "beforeDevCommand": "node ./scripts/dev-web-server.mjs",
@@ -39,8 +39,12 @@
   },
   "bundle": {
     "active": true,
-    "externalBin": ["sidecars/openchamber-server"],
-    "resources": ["resources/web-dist/**/*"],
+    "externalBin": [
+      "sidecars/openchamber-server"
+    ],
+    "resources": [
+      "resources/web-dist/**/*"
+    ],
     "icon": [
       "icons/icon.icns",
       "icons/icon.png"
