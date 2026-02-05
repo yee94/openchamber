@@ -858,18 +858,52 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     let mut path_segments: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::<String>::new();
 
-    let resolved_home_dir = app
-        .path()
-        .home_dir()
-        .ok()
-        .and_then(|p| {
-            let s = p.to_string_lossy().to_string();
-            if s.trim().is_empty() {
-                None
-            } else {
-                Some(s)
-            }
-        });
+    let resolved_home_dir_path = app.path().home_dir().ok();
+    let resolved_home_dir = resolved_home_dir_path.as_ref().and_then(|p| {
+        let s = p.to_string_lossy().to_string();
+        if s.trim().is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    });
+
+    let opencode_binary_from_settings: Option<String> = (|| {
+        let data_dir = env::var("OPENCHAMBER_DATA_DIR")
+            .ok()
+            .and_then(|v| {
+                let t = v.trim().to_string();
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(PathBuf::from(t))
+                }
+            })
+            .or_else(|| {
+                resolved_home_dir_path
+                    .as_ref()
+                    .map(|home| home.join(".config").join("openchamber"))
+            });
+        let data_dir = data_dir?;
+        let settings_path = data_dir.join("settings.json");
+        let raw = fs::read_to_string(&settings_path).ok()?;
+        let json = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+        let value = json.get("opencodeBinary")?.as_str()?.trim();
+        if value.is_empty() {
+            return None;
+        }
+
+        let mut candidate = value.to_string();
+        if fs::metadata(&candidate).map(|m| m.is_dir()).unwrap_or(false) {
+            let bin_name = if cfg!(windows) { "opencode.exe" } else { "opencode" };
+            candidate = PathBuf::from(candidate)
+                .join(bin_name)
+                .to_string_lossy()
+                .to_string();
+        }
+
+        Some(candidate)
+    })();
 
     let mut push_unique = |value: String| {
         let trimmed = value.trim();
@@ -882,6 +916,16 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     };
 
     // Respect explicit binary overrides by adding their parent dir first.
+    if let Some(val) = opencode_binary_from_settings.as_deref() {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            let path = std::path::Path::new(trimmed);
+            if let Some(parent) = path.parent() {
+                push_unique(parent.to_string_lossy().to_string());
+            }
+        }
+    }
+
     for var in [
         "OPENCHAMBER_OPENCODE_PATH",
         "OPENCHAMBER_OPENCODE_BIN",
@@ -908,7 +952,7 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     push_unique("/usr/sbin".to_string());
     push_unique("/sbin".to_string());
 
-    if let Some(home) = resolved_home_dir.as_deref() {
+        if let Some(home) = resolved_home_dir.as_deref() {
             // OpenCode installer default.
             push_unique(format!("{home}/.opencode/bin"));
             push_unique(format!("{home}/.local/bin"));
@@ -946,6 +990,13 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
 
         if let Some(home) = resolved_home_dir.as_deref() {
             cmd = cmd.env("HOME", home);
+        }
+
+        if let Some(bin) = opencode_binary_from_settings.as_deref() {
+            let trimmed = bin.trim();
+            if !trimmed.is_empty() {
+                cmd = cmd.env("OPENCODE_BINARY", trimmed);
+            }
         }
 
         let (rx, child) = match cmd.spawn() {

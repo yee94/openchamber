@@ -221,7 +221,9 @@ function App({ apis }: AppProps) {
         if (!data || cancelled) return;
         const openCodeRunning = data.openCodeRunning === true;
         const err = typeof data.lastOpenCodeError === 'string' ? data.lastOpenCodeError : '';
-        const cliMissing = !openCodeRunning && /ENOENT|spawn\s+opencode|opencode(\.exe)?\s+not\s+found|not\s+found/i.test(err);
+        const cliMissing =
+          !openCodeRunning &&
+          /ENOENT|spawn\s+opencode|Unable\s+to\s+locate\s+the\s+opencode\s+CLI|OpenCode\s+CLI\s+not\s+found|opencode(\.exe)?\s+not\s+found|env:\s*(node|bun):\s*No\s+such\s+file\s+or\s+directory|(node|bun):\s*No\s+such\s+file\s+or\s+directory/i.test(err);
         setShowCliOnboarding(cliMissing);
       } catch {
         // ignore

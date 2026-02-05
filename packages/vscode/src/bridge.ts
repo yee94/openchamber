@@ -93,10 +93,39 @@ const CLIENT_RELOAD_DELAY_MS = 800;
 const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
+const OPENCHAMBER_SHARED_SETTINGS_PATH = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+
+const readSharedSettingsFromDisk = (): Record<string, unknown> => {
+  try {
+    const raw = fs.readFileSync(OPENCHAMBER_SHARED_SETTINGS_PATH, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+};
+
+const writeSharedSettingsToDisk = async (changes: Record<string, unknown>): Promise<void> => {
+  try {
+    await fs.promises.mkdir(path.dirname(OPENCHAMBER_SHARED_SETTINGS_PATH), { recursive: true });
+    const current = readSharedSettingsFromDisk();
+    const next: Record<string, unknown> = { ...current, ...changes };
+    // Keep empty-string sentinel (""), so other runtimes can detect explicit clears.
+    await fs.promises.writeFile(OPENCHAMBER_SHARED_SETTINGS_PATH, JSON.stringify(next, null, 2), 'utf8');
+  } catch {
+    // ignore
+  }
+};
+
 const readSettings = (ctx?: BridgeContext) => {
   const stored = ctx?.context?.globalState.get<Record<string, unknown>>(SETTINGS_KEY) || {};
   const restStored = { ...stored };
   delete (restStored as Record<string, unknown>).lastDirectory;
+  const shared = readSharedSettingsFromDisk();
+  const sharedOpencodeBinary = typeof shared.opencodeBinary === 'string' ? shared.opencodeBinary.trim() : '';
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
   const themeVariant =
     vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ||
@@ -108,6 +137,10 @@ const readSettings = (ctx?: BridgeContext) => {
     themeVariant,
     lastDirectory: workspaceFolder,
     ...restStored,
+    opencodeBinary:
+      typeof restStored.opencodeBinary === 'string'
+        ? String(restStored.opencodeBinary).trim()
+        : (sharedOpencodeBinary || undefined),
   };
 };
 
@@ -177,10 +210,13 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
   const restChanges = { ...(changes || {}) };
   delete restChanges.lastDirectory;
 
+  const keysToClear = new Set<string>();
+
   // Normalize empty-string clears to key removal (match web/desktop behavior)
-  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent', 'defaultGitIdentityId']) {
+  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent', 'defaultGitIdentityId', 'opencodeBinary']) {
     const value = restChanges[key];
     if (typeof value === 'string' && value.trim().length === 0) {
+      keysToClear.add(key);
       delete restChanges[key];
     }
   }
@@ -195,8 +231,18 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
     delete restChanges.usageRefreshIntervalMs;
   }
 
-  const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory };
+  const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory } as Record<string, unknown>;
+  for (const key of keysToClear) {
+    delete merged[key];
+  }
   await ctx?.context?.globalState.update(SETTINGS_KEY, merged);
+
+  if (keysToClear.has('opencodeBinary')) {
+    await writeSharedSettingsToDisk({ opencodeBinary: '' });
+  } else if (typeof restChanges.opencodeBinary === 'string') {
+    await writeSharedSettingsToDisk({ opencodeBinary: restChanges.opencodeBinary.trim() });
+  }
+
   return merged;
 };
 

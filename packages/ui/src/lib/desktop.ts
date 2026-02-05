@@ -37,6 +37,8 @@ export type DesktopSettings = {
   darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
+  // Optional absolute path to `opencode` binary.
+  opencodeBinary?: string;
   projects?: ProjectEntry[];
   activeProjectId?: string;
   approvedDirectories?: string[];

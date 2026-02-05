@@ -948,6 +948,14 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
     result.homeDirectory = candidate.homeDirectory;
   }
+
+  // Absolute path to the opencode CLI binary (optional override).
+  // Accept empty-string to clear (we persist an empty string sentinel so the running
+  // process can reliably drop a previously applied OPENCODE_BINARY override).
+  if (typeof candidate.opencodeBinary === 'string') {
+    const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
+    result.opencodeBinary = normalized;
+  }
   if (Array.isArray(candidate.projects)) {
     const projects = sanitizeProjects(candidate.projects);
     if (projects) {
@@ -1867,6 +1875,8 @@ const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
 let globalEventWatcherAbortController = null;
 
 let resolvedOpencodeBinary = null;
+let resolvedNodeBinary = null;
+let resolvedBunBinary = null;
 
 function isExecutable(filePath) {
   try {
@@ -2006,8 +2016,299 @@ function resolveOpencodeCliPath() {
   return null;
 }
 
+function resolveNodeCliPath() {
+  const explicit = [process.env.NODE_BINARY, process.env.OPENCHAMBER_NODE_BINARY]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean);
+
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  const resolvedFromPath = searchPathFor('node');
+  if (resolvedFromPath) {
+    return resolvedFromPath;
+  }
+
+  const unixFallbacks = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    '/bin/node',
+  ];
+  for (const candidate of unixFallbacks) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const result = spawnSync('where', ['node'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const lines = (result.stdout || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const found = lines.find((line) => isExecutable(line));
+        if (found) return found;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+  for (const shell of shells) {
+    if (!isExecutable(shell)) continue;
+    try {
+      const result = spawnSync(shell, ['-lic', 'command -v node'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
+        if (found && isExecutable(found)) {
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function resolveBunCliPath() {
+  const explicit = [process.env.BUN_BINARY, process.env.OPENCHAMBER_BUN_BINARY]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean);
+
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  const resolvedFromPath = searchPathFor('bun');
+  if (resolvedFromPath) {
+    return resolvedFromPath;
+  }
+
+  const home = os.homedir();
+  const unixFallbacks = [
+    path.join(home, '.bun', 'bin', 'bun'),
+    '/opt/homebrew/bin/bun',
+    '/usr/local/bin/bun',
+    '/usr/bin/bun',
+    '/bin/bun',
+  ];
+  for (const candidate of unixFallbacks) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (process.platform === 'win32') {
+    const userProfile = process.env.USERPROFILE || home;
+    const winFallbacks = [
+      path.join(userProfile, '.bun', 'bin', 'bun.exe'),
+      path.join(userProfile, '.bun', 'bin', 'bun.cmd'),
+    ];
+    for (const candidate of winFallbacks) {
+      if (isExecutable(candidate)) return candidate;
+    }
+
+    try {
+      const result = spawnSync('where', ['bun'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const lines = (result.stdout || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const found = lines.find((line) => isExecutable(line));
+        if (found) return found;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+  for (const shell of shells) {
+    if (!isExecutable(shell)) continue;
+    try {
+      const result = spawnSync(shell, ['-lic', 'command -v bun'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
+        if (found && isExecutable(found)) {
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function ensureBunCliEnv() {
+  if (resolvedBunBinary) {
+    return resolvedBunBinary;
+  }
+
+  const resolved = resolveBunCliPath();
+  if (resolved) {
+    prependToPath(path.dirname(resolved));
+    resolvedBunBinary = resolved;
+    return resolved;
+  }
+
+  return null;
+}
+
+function ensureNodeCliEnv() {
+  if (resolvedNodeBinary) {
+    return resolvedNodeBinary;
+  }
+
+  const resolved = resolveNodeCliPath();
+  if (resolved) {
+    prependToPath(path.dirname(resolved));
+    resolvedNodeBinary = resolved;
+    return resolved;
+  }
+
+  return null;
+}
+
+function readShebang(opencodePath) {
+  if (!opencodePath || typeof opencodePath !== 'string') {
+    return null;
+  }
+  try {
+    // Best effort: detect "#!/usr/bin/env <runtime>" without reading whole file.
+    const fd = fs.openSync(opencodePath, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      const bytes = fs.readSync(fd, buf, 0, buf.length, 0);
+      const head = buf.subarray(0, bytes).toString('utf8');
+      const firstLine = head.split(/\r?\n/, 1)[0] || '';
+      if (!firstLine.startsWith('#!')) {
+        return null;
+      }
+      const shebang = firstLine.slice(2).trim();
+      if (!shebang) {
+        return null;
+      }
+      return shebang;
+    } finally {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    return null;
+  }
+}
+
+function opencodeShimInterpreter(opencodePath) {
+  const shebang = readShebang(opencodePath);
+  if (!shebang) return null;
+  if (/\bnode\b/i.test(shebang)) return 'node';
+  if (/\bbun\b/i.test(shebang)) return 'bun';
+  return null;
+}
+
+function ensureOpencodeShimRuntime(opencodePath) {
+  const runtime = opencodeShimInterpreter(opencodePath);
+  if (runtime === 'node') {
+    ensureNodeCliEnv();
+  }
+  if (runtime === 'bun') {
+    ensureBunCliEnv();
+  }
+}
+
+function normalizeOpencodeBinarySetting(raw) {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const trimmed = normalizeDirectoryPath(raw).trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  try {
+    const stat = fs.statSync(trimmed);
+    if (stat.isDirectory()) {
+      const bin = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
+      return path.join(trimmed, bin);
+    }
+  } catch {
+    // ignore
+  }
+
+  return trimmed;
+}
+
+async function applyOpencodeBinaryFromSettings() {
+  try {
+    const settings = await readSettingsFromDiskMigrated();
+    if (!settings || typeof settings !== 'object') {
+      return null;
+    }
+    if (!Object.prototype.hasOwnProperty.call(settings, 'opencodeBinary')) {
+      return null;
+    }
+
+    const normalized = normalizeOpencodeBinarySetting(settings.opencodeBinary);
+
+    if (normalized === '') {
+      delete process.env.OPENCODE_BINARY;
+      resolvedOpencodeBinary = null;
+      return null;
+    }
+
+    if (normalized && isExecutable(normalized)) {
+      process.env.OPENCODE_BINARY = normalized;
+      prependToPath(path.dirname(normalized));
+      resolvedOpencodeBinary = normalized;
+      ensureOpencodeShimRuntime(normalized);
+      return normalized;
+    }
+
+    const raw = typeof settings.opencodeBinary === 'string' ? settings.opencodeBinary.trim() : '';
+    if (raw) {
+      console.warn(`Configured settings.opencodeBinary is not executable: ${raw}`);
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
 function ensureOpencodeCliEnv() {
   if (resolvedOpencodeBinary) {
+    ensureOpencodeShimRuntime(resolvedOpencodeBinary);
     return resolvedOpencodeBinary;
   }
 
@@ -2015,6 +2316,7 @@ function ensureOpencodeCliEnv() {
   if (existing && isExecutable(existing)) {
     resolvedOpencodeBinary = existing;
     prependToPath(path.dirname(existing));
+    ensureOpencodeShimRuntime(existing);
     return resolvedOpencodeBinary;
   }
 
@@ -2022,6 +2324,7 @@ function ensureOpencodeCliEnv() {
   if (resolved) {
     process.env.OPENCODE_BINARY = resolved;
     prependToPath(path.dirname(resolved));
+    ensureOpencodeShimRuntime(resolved);
     resolvedOpencodeBinary = resolved;
     console.log(`Resolved opencode CLI: ${resolved}`);
     return resolved;
@@ -2874,6 +3177,7 @@ async function startOpenCode() {
   );
   // Note: SDK starts in current process CWD. openCodeWorkingDirectory is tracked but not used for spawn in SDK.
 
+  await applyOpencodeBinaryFromSettings();
   ensureOpencodeCliEnv();
 
   try {
@@ -2913,10 +3217,11 @@ async function startOpenCode() {
       throw new Error('Server started but health check failed (timeout)');
     }
   } catch (error) {
-    lastOpenCodeError = error.message;
+    const message = error instanceof Error ? error.message : String(error);
+    lastOpenCodeError = message;
     openCodePort = null;
     syncToHmrState();
-    console.error(`Failed to start OpenCode: ${error.message}`);
+    console.error(`Failed to start OpenCode: ${message}`);
     throw error;
   }
 }
@@ -3162,6 +3467,11 @@ async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
   const { agentName } = options;
 
   console.log(`Refreshing OpenCode after ${reason}`);
+
+  // Settings might include a new opencodeBinary; drop cache before restart.
+  resolvedOpencodeBinary = null;
+  await applyOpencodeBinaryFromSettings();
+
   await restartOpenCode();
 
   try {
