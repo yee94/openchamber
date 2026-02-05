@@ -858,6 +858,19 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     let mut path_segments: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::<String>::new();
 
+    let resolved_home_dir = app
+        .path()
+        .home_dir()
+        .ok()
+        .and_then(|p| {
+            let s = p.to_string_lossy().to_string();
+            if s.trim().is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        });
+
     let mut push_unique = |value: String| {
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -895,16 +908,13 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     push_unique("/usr/sbin".to_string());
     push_unique("/sbin".to_string());
 
-    if let Ok(home) = env::var("HOME") {
-        let home = home.trim();
-        if !home.is_empty() {
+    if let Some(home) = resolved_home_dir.as_deref() {
             // OpenCode installer default.
             push_unique(format!("{home}/.opencode/bin"));
             push_unique(format!("{home}/.local/bin"));
             push_unique(format!("{home}/.bun/bin"));
             push_unique(format!("{home}/.cargo/bin"));
             push_unique(format!("{home}/bin"));
-        }
     }
 
     if let Ok(existing) = env::var("PATH") {
@@ -922,7 +932,7 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
         };
         let url = build_local_url(port);
 
-        let cmd = app
+        let mut cmd = app
             .shell()
             .sidecar(SIDECAR_NAME)
             .map_err(|err| anyhow!("Failed to resolve sidecar '{SIDECAR_NAME}': {err}"))?
@@ -933,6 +943,10 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
             .env("PATH", augmented_path.clone())
             .env("NO_PROXY", no_proxy)
             .env("no_proxy", no_proxy);
+
+        if let Some(home) = resolved_home_dir.as_deref() {
+            cmd = cmd.env("HOME", home);
+        }
 
         let (rx, child) = match cmd.spawn() {
             Ok(v) => v,

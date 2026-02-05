@@ -102,6 +102,7 @@ function resolveOpencodeCliPath(): string | null {
   const home = os.homedir();
   const unixFallbacks = [
     path.join(home, '.opencode', 'bin', 'opencode'),
+    path.join(home, '.bun', 'bin', 'opencode'),
     path.join(home, '.local', 'bin', 'opencode'),
     path.join(home, 'bin', 'opencode'),
   ];
