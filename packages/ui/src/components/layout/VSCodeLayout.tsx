@@ -6,8 +6,34 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { RiAddLine, RiArrowLeftLine, RiRobot2Line, RiSettings3Line } from '@remixicon/react';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
+import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS } from '@/lib/quota';
+import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
+import { updateDesktopSettings } from '@/lib/persistence';
+import type { UsageWindow } from '@/types';
+import { RiAddLine, RiArrowLeftLine, RiRefreshLine, RiRobot2Line, RiSettings3Line, RiTimerLine } from '@remixicon/react';
+
+const formatTime = (timestamp: number | null) => {
+  if (!timestamp) return '-';
+  try {
+    return new Date(timestamp).toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return '-';
+  }
+};
 
 // Width threshold for mobile vs desktop layout in settings
 const MOBILE_WIDTH_THRESHOLD = 550;
@@ -365,6 +391,7 @@ export const VSCodeLayout: React.FC = () => {
             onBack={handleBackToSessions}
             showMcp
             showContextUsage
+            showRateLimits
           />
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary>
@@ -386,11 +413,26 @@ interface VSCodeHeaderProps {
   onAgentManager?: () => void;
   showMcp?: boolean;
   showContextUsage?: boolean;
+  showRateLimits?: boolean;
 }
 
-const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, onNewSession, onSettings, onAgentManager, showMcp, showContextUsage }) => {
+const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, onNewSession, onSettings, onAgentManager, showMcp, showContextUsage, showRateLimits }) => {
   const { getCurrentModel } = useConfigStore();
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
+  const quotaResults = useQuotaStore((state) => state.results);
+  const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
+  const isQuotaLoading = useQuotaStore((state) => state.isLoading);
+  const quotaLastUpdated = useQuotaStore((state) => state.lastUpdated);
+  const quotaDisplayMode = useQuotaStore((state) => state.displayMode);
+  const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
+  const loadQuotaSettings = useQuotaStore((state) => state.loadSettings);
+  const setQuotaDisplayMode = useQuotaStore((state) => state.setDisplayMode);
+
+  useQuotaAutoRefresh();
+
+  React.useEffect(() => {
+    void loadQuotaSettings();
+  }, [loadQuotaSettings]);
 
   const currentModel = getCurrentModel();
   const limits = (currentModel?.limit && typeof currentModel.limit === 'object'
@@ -399,6 +441,38 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   const contextLimit = typeof limits?.context === 'number' ? limits.context : 0;
   const outputLimit = typeof limits?.output === 'number' ? limits.output : 0;
   const contextUsage = getContextUsage(contextLimit, outputLimit);
+
+  const rateLimitGroups = React.useMemo(() => {
+    const groups: Array<{
+      providerId: string;
+      providerName: string;
+      entries: Array<[string, UsageWindow]>;
+    }> = [];
+
+    for (const provider of QUOTA_PROVIDERS) {
+      if (!dropdownProviderIds.includes(provider.id)) {
+        continue;
+      }
+      const result = quotaResults.find((entry) => entry.providerId === provider.id);
+      const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>;
+      const entries = Object.entries(windows);
+      if (entries.length > 0) {
+        groups.push({ providerId: provider.id, providerName: provider.name, entries });
+      }
+    }
+
+    return groups;
+  }, [dropdownProviderIds, quotaResults]);
+  const hasRateLimits = rateLimitGroups.length > 0;
+
+  const handleDisplayModeChange = React.useCallback(async (mode: 'usage' | 'remaining') => {
+    setQuotaDisplayMode(mode);
+    try {
+      await updateDesktopSettings({ usageDisplayMode: mode });
+    } catch (error) {
+      console.warn('Failed to update usage display mode:', error);
+    }
+  }, [setQuotaDisplayMode]);
 
   return (
     <div className="flex items-center gap-1.5 pl-1 pr-2 py-1 border-b border-border bg-background shrink-0">
@@ -434,6 +508,130 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
         <McpDropdown
           headerIconButtonClass="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
+      )}
+      {showRateLimits && (
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open && quotaResults.length === 0) {
+              fetchAllQuotas();
+            }
+          }}
+        >
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Rate limits"
+              className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              disabled={isQuotaLoading}
+            >
+              <RiTimerLine className="h-5 w-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80 max-h-[70vh] overflow-y-auto overflow-x-hidden p-0">
+            <div className="sticky top-0 z-20 bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
+              <DropdownMenuLabel className="flex items-center justify-between gap-3 typography-ui-header font-semibold text-foreground">
+                <span>Rate limits</span>
+                <div className="flex items-center gap-1">
+                  <div className="flex items-center rounded-md border border-[var(--interactive-border)] p-0.5">
+                    <button
+                      type="button"
+                      className={
+                        `px-2 py-0.5 rounded-sm typography-micro text-[10px] transition-colors ${
+                          quotaDisplayMode === 'usage'
+                            ? 'bg-interactive-selection text-interactive-selection-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`
+                      }
+                      onClick={() => void handleDisplayModeChange('usage')}
+                      aria-label="Show used quota"
+                    >
+                      Used
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        `px-2 py-0.5 rounded-sm typography-micro text-[10px] transition-colors ${
+                          quotaDisplayMode === 'remaining'
+                            ? 'bg-interactive-selection text-interactive-selection-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`
+                      }
+                      onClick={() => void handleDisplayModeChange('remaining')}
+                      aria-label="Show remaining quota"
+                    >
+                      Remaining
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    onClick={() => fetchAllQuotas()}
+                    disabled={isQuotaLoading}
+                    aria-label="Refresh rate limits"
+                  >
+                    <RiRefreshLine className="h-4 w-4" />
+                  </button>
+                </div>
+              </DropdownMenuLabel>
+              <div className="px-2 pb-2 typography-micro text-muted-foreground text-[10px]">
+                Last updated {formatTime(quotaLastUpdated)}
+              </div>
+            </div>
+            {!hasRateLimits && (
+              <DropdownMenuItem className="cursor-default" onSelect={(event) => event.preventDefault()}>
+                <span className="typography-ui-label text-muted-foreground">No rate limits available.</span>
+              </DropdownMenuItem>
+            )}
+            {rateLimitGroups.map((group, index) => (
+              <React.Fragment key={group.providerId}>
+                <DropdownMenuLabel className="sticky top-[60px] z-10 flex items-center gap-2 bg-[var(--surface-elevated)] typography-ui-label text-foreground">
+                  <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
+                  {group.providerName}
+                </DropdownMenuLabel>
+                {group.entries.length === 0 ? (
+                  <DropdownMenuItem
+                    key={`${group.providerId}-empty`}
+                    className="cursor-default"
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    <span className="typography-ui-label text-muted-foreground">No rate limits reported.</span>
+                  </DropdownMenuItem>
+                ) : (
+                  group.entries.map(([label, window]) => (
+                    <DropdownMenuItem
+                      key={`${group.providerId}-${label}`}
+                      className="cursor-default items-start"
+                      onSelect={(event) => event.preventDefault()}
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-2">
+                        {(() => {
+                          const displayPercent = quotaDisplayMode === 'remaining'
+                            ? window.remainingPercent
+                            : window.usedPercent;
+                          return (
+                            <>
+                              <span className="flex min-w-0 items-center justify-between gap-3">
+                                <span className="truncate typography-micro text-muted-foreground">{formatWindowLabel(label)}</span>
+                                <span className="typography-ui-label text-foreground tabular-nums">
+                                  {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
+                                </span>
+                              </span>
+                              <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1" />
+                              <span className="flex items-center justify-between typography-micro text-muted-foreground text-[10px]">
+                                <span>{window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}</span>
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+                {index < rateLimitGroups.length - 1 && <DropdownMenuSeparator />}
+              </React.Fragment>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
       {onSettings && (
         <button
