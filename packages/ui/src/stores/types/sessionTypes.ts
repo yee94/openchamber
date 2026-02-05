@@ -144,6 +144,7 @@ export interface SessionStore {
     userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
 
     pendingInputText: string | null;
+    pendingInputMode: 'replace' | 'append';
 
     newSessionDraft: NewSessionDraftState;
 
@@ -241,6 +242,6 @@ export interface SessionStore {
      handleSlashUndo: (sessionId: string) => Promise<void>;
      handleSlashRedo: (sessionId: string) => Promise<void>;
      forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
-     setPendingInputText: (text: string | null) => void;
-     consumePendingInputText: () => string | null;
- }
+     setPendingInputText: (text: string | null, mode?: 'replace' | 'append') => void;
+     consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
+  }

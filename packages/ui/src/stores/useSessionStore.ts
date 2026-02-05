@@ -101,6 +101,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionStatus: new Map(),
             userSummaryTitles: new Map(),
             pendingInputText: null,
+            pendingInputMode: 'replace',
             newSessionDraft: { open: true, directoryOverride: null, parentID: null },
 
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {
@@ -607,7 +608,7 @@ export const useSessionStore = create<SessionStore>()(
 
                     // Set pending input text for ChatInput to consume
                     if (messageText) {
-                        set({ pendingInputText: messageText });
+                        set({ pendingInputText: messageText, pendingInputMode: 'replace' });
                     }
                 },
 
@@ -729,7 +730,7 @@ export const useSessionStore = create<SessionStore>()(
 
                         // 4. Show fork point as pending input (will populate ChatInput)
                         if (inputText) {
-                            set({ pendingInputText: inputText });
+                            set({ pendingInputText: inputText, pendingInputMode: 'replace' });
                         }
 
                         // Load the new session's messages
@@ -744,16 +745,20 @@ export const useSessionStore = create<SessionStore>()(
                     }
                 },
 
-                setPendingInputText: (text: string | null) => {
-                    set({ pendingInputText: text });
+                setPendingInputText: (text: string | null, mode: 'replace' | 'append' = 'replace') => {
+                    set({ pendingInputText: text, pendingInputMode: mode });
                 },
 
                 consumePendingInputText: () => {
                     const text = get().pendingInputText;
+                    const mode = get().pendingInputMode;
                     if (text !== null) {
-                        set({ pendingInputText: null });
+                        set({ pendingInputText: null, pendingInputMode: 'replace' });
                     }
-                    return text;
+                    if (text === null) {
+                        return null;
+                    }
+                    return { text, mode };
                 },
             }),
         {

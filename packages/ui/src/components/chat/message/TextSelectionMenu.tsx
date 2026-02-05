@@ -19,20 +19,47 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   const [position, setPosition] = React.useState<MenuPosition>({ x: 0, y: 0, show: false });
   const [selectedText, setSelectedText] = React.useState('');
   const [isDragging, setIsDragging] = React.useState(false);
+  const [isClosing, setIsClosing] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const pendingSelectionRef = React.useRef<{ text: string; rect: DOMRect } | null>(null);
+  const hideTimeoutRef = React.useRef<number | null>(null);
   const createSession = useSessionStore((state) => state.createSession);
   const setPendingInputText = useSessionStore((state) => state.setPendingInputText);
   const isMobile = useUIStore((state) => state.isMobile);
 
+  React.useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current !== null) {
+        window.clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const hideMenu = React.useCallback(() => {
-    setPosition((prev) => ({ ...prev, show: false }));
-    setSelectedText('');
-    pendingSelectionRef.current = null;
+    if (hideTimeoutRef.current !== null) {
+      window.clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+
+    setIsClosing(true);
+    hideTimeoutRef.current = window.setTimeout(() => {
+      setPosition((prev) => ({ ...prev, show: false }));
+      setSelectedText('');
+      pendingSelectionRef.current = null;
+      setIsClosing(false);
+      hideTimeoutRef.current = null;
+    }, 140);
   }, []);
 
   const showMenu = React.useCallback(() => {
     if (!pendingSelectionRef.current) return;
+
+    if (hideTimeoutRef.current !== null) {
+      window.clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setIsClosing(false);
 
     const { text, rect } = pendingSelectionRef.current;
 
@@ -147,13 +174,8 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
   const handleAddToChat = React.useCallback(() => {
     if (!selectedText) return;
-    
-    // Append to current input
-    const currentPending = useSessionStore.getState().pendingInputText || '';
-    const newText = currentPending 
-      ? `${currentPending} ${selectedText}` 
-      : selectedText;
-    setPendingInputText(newText);
+
+    setPendingInputText(selectedText, 'append');
     
     hideMenu();
     
@@ -166,7 +188,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
     const session = await createSession(undefined, null, null);
     if (session) {
-      setPendingInputText(selectedText);
+      setPendingInputText(selectedText, 'replace');
     }
 
     hideMenu();
@@ -197,18 +219,18 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           'fixed left-0 right-0 bottom-0 z-50',
           'flex items-center justify-center gap-4',
           'bg-[var(--surface-elevated)] border-t border-[var(--interactive-border)]',
-          'px-4 py-3',
+          'px-3 py-2',
           'safe-area-bottom',
-          'animate-in slide-in-from-bottom duration-200'
+          isClosing ? 'animate-out fade-out-0 duration-150 pointer-events-none' : 'animate-in fade-in-0 duration-150'
         )}
         style={{
-          paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+          paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
         <button
           onClick={handleAddToChat}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-lg',
+            'flex items-center gap-2 px-3 py-2 rounded-lg',
             'text-sm font-medium',
             'bg-[var(--primary-base)] text-[var(--primary-foreground)]',
             'active:opacity-80',
@@ -223,7 +245,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         <button
           onClick={handleCreateNewSession}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-lg',
+            'flex items-center gap-2 px-3 py-2 rounded-lg',
             'text-sm font-medium',
             'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]',
             'active:opacity-80',
@@ -238,7 +260,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         <button
           onClick={handleCopy}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-lg',
+            'flex items-center gap-2 px-3 py-2 rounded-lg',
             'text-sm font-medium',
             'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
             'active:opacity-80',
@@ -262,8 +284,8 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         'fixed z-50 flex items-center gap-1',
         'rounded-lg border border-[var(--interactive-border)]',
         'bg-[var(--surface-elevated)] shadow-lg',
-        'px-2 py-1.5',
-        'animate-in fade-in zoom-in-95 duration-150'
+        'px-1.5 py-1',
+        isClosing ? 'animate-out fade-out-0 duration-150 pointer-events-none' : 'animate-in fade-in-0 duration-150'
       )}
       style={{
         left: position.x,
