@@ -237,11 +237,6 @@ export const TerminalView: React.FC = () => {
 
                         switch (event.type) {
                             case 'connected': {
-                                if (event.runtime || event.ptyBackend) {
-                                    console.log(
-                                        `[Terminal] connected runtime=${event.runtime ?? 'unknown'} pty=${event.ptyBackend ?? 'unknown'}`
-                                    );
-                                }
                                 setConnecting(directory, tabId, false);
                                 setConnectionError(null);
                                 setIsFatalError(false);
