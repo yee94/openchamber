@@ -1064,6 +1064,12 @@ export async function removeWorktree(directory, worktreePath, options = {}) {
 
     return { success: true };
   } catch (error) {
+    // If the worktree doesn't exist or isn't recognized by git, treat as success
+    // since the goal (removing the worktree) is already achieved.
+    const errorMessage = String(error?.message || error || '');
+    if (errorMessage.includes('is not a working tree') || errorMessage.includes('is not a valid path')) {
+      return { success: true };
+    }
     console.error('Failed to remove worktree:', error);
     throw error;
   }
