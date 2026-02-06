@@ -157,21 +157,6 @@ const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefin
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       (project as unknown as Record<string, unknown>).sidebarCollapsed = candidate.sidebarCollapsed;
     }
-    // Preserve worktreeDefaults
-    if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
-      const wt = candidate.worktreeDefaults as Record<string, unknown>;
-      const defaults: Record<string, unknown> = {};
-      if (typeof wt.baseBranch === 'string' && wt.baseBranch.trim()) {
-        defaults.baseBranch = wt.baseBranch.trim();
-      }
-      if (typeof wt.autoCreateWorktree === 'boolean') {
-        defaults.autoCreateWorktree = wt.autoCreateWorktree;
-      }
-      if (Object.keys(defaults).length > 0) {
-        (project as unknown as Record<string, unknown>).worktreeDefaults = defaults;
-      }
-    }
-
     result.push(project);
   }
 

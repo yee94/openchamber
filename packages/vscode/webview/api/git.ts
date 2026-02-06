@@ -17,8 +17,6 @@ import type {
   GeneratedCommitMessage,
   GeneratedPullRequestDescription,
   GitWorktreeInfo,
-  GitAddWorktreePayload,
-  GitRemoveWorktreePayload,
   GitCommitResult,
   CreateGitCommitOptions,
   GitPushResult,
@@ -110,30 +108,6 @@ export const createVSCodeGitAPI = (): GitAPI => ({
 
   listGitWorktrees: async (directory: string): Promise<GitWorktreeInfo[]> => {
     return sendBridgeMessage<GitWorktreeInfo[]>('api:git/worktrees', { directory, method: 'GET' });
-  },
-
-  addGitWorktree: async (directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }> => {
-    return sendBridgeMessage<{ success: boolean; path: string; branch: string }>('api:git/worktrees', {
-      directory,
-      method: 'POST',
-      path: payload.path,
-      branch: payload.branch,
-      createBranch: payload.createBranch,
-      startPoint: payload.startPoint,
-    });
-  },
-
-  removeGitWorktree: async (directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }> => {
-    return sendBridgeMessage<{ success: boolean }>('api:git/worktrees', {
-      directory,
-      method: 'DELETE',
-      path: payload.path,
-      force: payload.force,
-    });
-  },
-
-  ensureOpenChamberIgnored: async (directory: string): Promise<void> => {
-    await sendBridgeMessage('api:git/ignore-openchamber', { directory });
   },
 
   createGitCommit: async (directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult> => {

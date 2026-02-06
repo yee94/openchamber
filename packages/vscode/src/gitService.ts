@@ -694,48 +694,6 @@ export async function getAvailableBranchesForWorktree(directory: string): Promis
   return availableBranches;
 }
 
-/**
- * Add a new worktree
- */
-export async function addGitWorktree(
-  directory: string, 
-  worktreePath: string, 
-  branch: string, 
-  createBranch = false
-): Promise<{ success: boolean; path: string; branch: string }> {
-  const args = ['worktree', 'add'];
-  
-  if (createBranch) {
-    args.push('-b', branch, worktreePath);
-  } else {
-    args.push(worktreePath, branch);
-  }
-
-  const result = await execGit(args, directory);
-  
-  return {
-    success: result.exitCode === 0,
-    path: worktreePath,
-    branch,
-  };
-}
-
-/**
- * Remove a worktree
- */
-export async function removeGitWorktree(
-  directory: string, 
-  worktreePath: string, 
-  force = false
-): Promise<{ success: boolean }> {
-  const args = ['worktree', 'remove'];
-  if (force) args.push('--force');
-  args.push(worktreePath);
-
-  const result = await execGit(args, directory);
-  return { success: result.exitCode === 0 };
-}
-
 // ============== Diff Operations ==============
 
 /**
@@ -1360,33 +1318,4 @@ export async function setGitIdentity(
   }
 
   return { success: true };
-}
-
-// ============== Utility Operations ==============
-
-/**
- * Ensure .openchamber is in git exclude
- */
-export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const excludeFile = path.join(directory, '.git', 'info', 'exclude');
-  
-  try {
-    const uri = vscode.Uri.file(excludeFile);
-    let content = '';
-    
-    try {
-      const bytes = await vscode.workspace.fs.readFile(uri);
-      content = Buffer.from(bytes).toString('utf8');
-    } catch {
-      // File doesn't exist, we'll create it
-    }
-    
-    if (!content.includes('.openchamber')) {
-      const newContent = content.trimEnd() + '\n.openchamber\n';
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(newContent, 'utf8'));
-    }
-  } catch (error) {
-    console.warn('[GitService] Failed to update git exclude:', error);
-  }
 }

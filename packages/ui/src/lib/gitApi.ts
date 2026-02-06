@@ -18,8 +18,6 @@ export type {
   GitLogEntry,
   GitLogResponse,
   GitWorktreeInfo,
-  GitAddWorktreePayload,
-  GitRemoveWorktreePayload,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   DiscoveredGitCredential,
@@ -119,25 +117,6 @@ export async function listGitWorktrees(directory: string): Promise<import('./api
   const runtime = getRuntimeGit();
   if (runtime) return runtime.listGitWorktrees(directory);
   return gitHttp.listGitWorktrees(directory);
-}
-
-export async function addGitWorktree(directory: string, payload: import('./api/types').GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }> {
-  const runtime = getRuntimeGit();
-  if (runtime) return runtime.addGitWorktree(directory, payload);
-  return gitHttp.addGitWorktree(directory, payload);
-}
-
-export async function removeGitWorktree(directory: string, payload: import('./api/types').GitRemoveWorktreePayload): Promise<{ success: boolean }> {
-  const runtime = getRuntimeGit();
-  if (runtime) return runtime.removeGitWorktree(directory, payload);
-  return gitHttp.removeGitWorktree(directory, payload);
-}
-
-export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const runtime = getRuntimeGit();
-  if (runtime) return runtime.ensureOpenChamberIgnored(directory);
-  return gitHttp.ensureOpenChamberIgnored(directory);
 }
 
 export async function createGitCommit(

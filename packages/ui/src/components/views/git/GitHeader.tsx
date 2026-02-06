@@ -10,6 +10,7 @@ import {
   RiGraduationCapLine,
   RiCodeLine,
   RiHeartLine,
+  RiGitRepositoryLine,
   RiUser3Line,
 } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ interface GitHeaderProps {
   onSelectIdentity: (profile: GitIdentityProfile) => void;
   isApplyingIdentity: boolean;
   isWorktreeMode: boolean;
+  onOpenBranchPicker?: () => void;
 }
 
 const IDENTITY_ICON_MAP: Record<
@@ -195,6 +197,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onSelectIdentity,
   isApplyingIdentity,
   isWorktreeMode,
+  onOpenBranchPicker,
 }) => {
   if (!status) {
     return null;
@@ -251,6 +254,23 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
       />
 
       <div className="flex-1" />
+
+      {onOpenBranchPicker ? (
+        <Tooltip delayDuration={1000}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2 py-1 h-8 typography-ui-label"
+              onClick={onOpenBranchPicker}
+            >
+              <RiGitRepositoryLine className="size-4" />
+              <span className="hidden sm:inline">Manage Branches</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={8}>Manage branches</TooltipContent>
+        </Tooltip>
+      ) : null}
 
       <IdentityDropdown
         activeProfile={activeIdentityProfile}

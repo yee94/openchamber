@@ -18,9 +18,6 @@ export const createWebGitAPI = (): GitAPI => ({
   generateCommitMessage: gitApiHttp.generateCommitMessage,
   generatePullRequestDescription: gitApiHttp.generatePullRequestDescription,
   listGitWorktrees: gitApiHttp.listGitWorktrees,
-  addGitWorktree: gitApiHttp.addGitWorktree as GitAPI['addGitWorktree'],
-  removeGitWorktree: gitApiHttp.removeGitWorktree as GitAPI['removeGitWorktree'],
-  ensureOpenChamberIgnored: gitApiHttp.ensureOpenChamberIgnored,
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions) {
     return gitApiHttp.createGitCommit(directory, message, options);
   },

@@ -230,18 +230,6 @@ export interface GitWorktreeInfo {
   branch?: string;
 }
 
-export interface GitAddWorktreePayload {
-  path: string;
-  branch: string;
-  createBranch?: boolean;
-  startPoint?: string;
-}
-
-export interface GitRemoveWorktreePayload {
-  path: string;
-  force?: boolean;
-}
-
 export interface GitDeleteBranchPayload {
   branch: string;
   force?: boolean;
@@ -290,9 +278,6 @@ export interface GitAPI {
     payload: { base: string; head: string; context?: string }
   ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
-  addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }>;
-  removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }>;
-  ensureOpenChamberIgnored(directory: string): Promise<void>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
   gitPull(directory: string, options?: { remote?: string; branch?: string }): Promise<GitPullResult>;
@@ -366,18 +351,12 @@ export interface FilesAPI {
   execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }
 
-export interface WorktreeDefaults {
-  baseBranch?: string;          // e.g. "main", "develop", or "HEAD"
-  autoCreateWorktree?: boolean; // future: skip dialog, create worktree automatically
-}
-
 export interface ProjectEntry {
   id: string;
   path: string;
   label?: string;
   addedAt?: number;
   lastOpenedAt?: number;
-  worktreeDefaults?: WorktreeDefaults;
   sidebarCollapsed?: boolean;
 }
 

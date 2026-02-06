@@ -78,7 +78,6 @@ export function GitHubIssuePickerDialog({
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
   const projectDirectory = activeProject?.path ?? null;
-  const baseBranch = activeProject?.worktreeDefaults?.baseBranch || 'main';
 
   const [query, setQuery] = React.useState('');
   const [createInWorktree, setCreateInWorktree] = React.useState(false);
@@ -302,8 +301,7 @@ export function GitHubIssuePickerDialog({
           const preferred = `issue-${issue.number}-${generateBranchSlug()}`;
           const created = await createWorktreeSessionForNewBranch(
             projectDirectory,
-            preferred,
-            baseBranch || 'main'
+            preferred
           );
           if (!created?.id) {
             throw new Error('Failed to create worktree session');
@@ -446,7 +444,7 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
     } finally {
       setStartingIssueNumber(null);
     }
-  }, [createInWorktree, github, onOpenChange, projectDirectory, baseBranch, resolveDefaultAgentName, resolveDefaultModelSelection, resolveDefaultVariant, startingIssueNumber]);
+  }, [createInWorktree, github, onOpenChange, projectDirectory, resolveDefaultAgentName, resolveDefaultModelSelection, resolveDefaultVariant, startingIssueNumber]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

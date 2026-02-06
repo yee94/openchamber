@@ -130,46 +130,6 @@ export async function isGitRepository(directory) {
   return fs.existsSync(gitDir);
 }
 
-export async function ensureOpenChamberIgnored(directory) {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const directoryPath = normalizeDirectoryPath(directory);
-  if (!directoryPath || !fs.existsSync(directoryPath)) {
-    return false;
-  }
-
-  const gitDir = path.join(directoryPath, '.git');
-  if (!fs.existsSync(gitDir)) {
-    return false;
-  }
-
-  const infoDir = path.join(gitDir, 'info');
-  const excludePath = path.join(infoDir, 'exclude');
-  const entry = '/.openchamber/';
-
-  try {
-    await fsp.mkdir(infoDir, { recursive: true });
-    let contents = '';
-    try {
-      contents = await fsp.readFile(excludePath, 'utf8');
-    } catch (readError) {
-      if (readError && readError.code !== 'ENOENT') {
-        throw readError;
-      }
-    }
-
-    const lines = contents.split(/\r?\n/).map((line) => line.trim());
-    if (!lines.includes(entry)) {
-      const prefix = contents.length > 0 && !contents.endsWith('\n') ? '\n' : '';
-      await fsp.appendFile(excludePath, `${prefix}${entry}\n`, 'utf8');
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Failed to ensure .openchamber ignore:', error);
-    throw error;
-  }
-}
-
 export async function getGlobalIdentity() {
   const git = await createGit();
 
@@ -1015,63 +975,6 @@ export async function getWorktrees(directory) {
   } catch (error) {
     console.warn('Failed to list worktrees, returning empty list:', error?.message || error);
     return [];
-  }
-}
-
-export async function addWorktree(directory, worktreePath, branch, options = {}) {
-  const git = await createGit(directory);
-
-  try {
-    const args = ['worktree', 'add'];
-    const startPoint = typeof options.startPoint === 'string' ? options.startPoint.trim() : '';
-
-    if (options.createBranch) {
-      args.push('-b', branch);
-    }
-
-    args.push(worktreePath);
-
-    if (!options.createBranch) {
-      args.push(branch);
-    } else if (startPoint) {
-      args.push(startPoint);
-    }
-
-    await git.raw(args);
-
-    return {
-      success: true,
-      path: worktreePath,
-      branch
-    };
-  } catch (error) {
-    console.error('Failed to add worktree:', error);
-    throw error;
-  }
-}
-
-export async function removeWorktree(directory, worktreePath, options = {}) {
-  const git = await createGit(directory);
-
-  try {
-    const args = ['worktree', 'remove', worktreePath];
-
-    if (options.force) {
-      args.push('--force');
-    }
-
-    await git.raw(args);
-
-    return { success: true };
-  } catch (error) {
-    // If the worktree doesn't exist or isn't recognized by git, treat as success
-    // since the goal (removing the worktree) is already achieved.
-    const errorMessage = String(error?.message || error || '');
-    if (errorMessage.includes('is not a working tree') || errorMessage.includes('is not a valid path')) {
-      return { success: true };
-    }
-    console.error('Failed to remove worktree:', error);
-    throw error;
   }
 }
 

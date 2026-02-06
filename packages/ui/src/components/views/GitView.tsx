@@ -1,10 +1,10 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import {
   useGitStore,
@@ -43,6 +43,8 @@ import { ChangesSection } from './git/ChangesSection';
 import { CommitSection } from './git/CommitSection';
 import { HistorySection } from './git/HistorySection';
 import { PullRequestSection } from './git/PullRequestSection';
+import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -185,6 +187,9 @@ const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): Git
 
 const gitViewSnapshots = new Map<string, GitViewSnapshot>();
 
+const normalizePath = (value?: string | null): string =>
+  (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+
 export const GitView: React.FC = () => {
   const { git } = useRuntimeAPIs();
   const currentDirectory = useEffectiveDirectory();
@@ -220,15 +225,56 @@ export const GitView: React.FC = () => {
   }, [currentDirectory]);
 
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+  const projects = useProjectsStore((state) => state.projects);
+  const [isBranchPickerOpen, setIsBranchPickerOpen] = React.useState(false);
+  const [rootBranchHint, setRootBranchHint] = React.useState<string | null>(null);
 
-  const activeProject = useProjectsStore((state) => state.getActiveProject());
-  const baseBranch = React.useMemo(() => {
-    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
-    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
-      return fromProject.trim();
+  const baseBranch = worktreeMetadata?.createdFromBranch || status?.current || 'HEAD';
+
+  React.useEffect(() => {
+    const projectRoot = worktreeMetadata?.projectDirectory;
+    if (!projectRoot) {
+      setRootBranchHint(null);
+      return;
     }
-    return 'main';
-  }, [activeProject?.worktreeDefaults?.baseBranch]);
+
+    let cancelled = false;
+    void getRootBranch(projectRoot)
+      .then((branch) => {
+        if (cancelled) return;
+        const normalized = branch.trim();
+        setRootBranchHint(normalized && normalized !== 'HEAD' ? normalized : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRootBranchHint(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [worktreeMetadata?.projectDirectory]);
+
+  const branchPickerProject = React.useMemo(() => {
+    const current = normalizePath(currentDirectory);
+    const worktreeRoot = normalizePath(worktreeMetadata?.projectDirectory);
+    const best = projects
+      .map((project) => ({
+        id: project.id,
+        path: project.path,
+        label: project.label,
+        normalizedPath: normalizePath(project.path),
+      }))
+      .sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)
+      .find((project) => {
+        if (!project.normalizedPath) return false;
+        if (worktreeRoot && project.normalizedPath === worktreeRoot) return true;
+        return current === project.normalizedPath || current.startsWith(`${project.normalizedPath}/`);
+      });
+
+    return best ?? null;
+  }, [currentDirectory, projects, worktreeMetadata?.projectDirectory]);
 
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
@@ -277,15 +323,31 @@ export const GitView: React.FC = () => {
   }, [status?.tracking]);
   const defaultTargetBranch = React.useMemo(() => {
     const fromMeta = worktreeMetadata?.createdFromBranch;
-    if (typeof fromMeta === 'string' && fromMeta.trim().length > 0) {
-      return fromMeta.trim();
+    const normalizedFromMeta = typeof fromMeta === 'string' ? fromMeta.trim() : '';
+    const current = typeof status?.current === 'string' ? status.current.trim() : '';
+    const normalizedRoot = typeof rootBranchHint === 'string' ? rootBranchHint.trim() : '';
+
+    if (normalizedFromMeta) {
+      const looksLikeCorruptedSelfTarget =
+        normalizedFromMeta === current &&
+        normalizedFromMeta.startsWith('opencode/') &&
+        normalizedRoot.length > 0 &&
+        normalizedRoot !== normalizedFromMeta;
+
+      if (looksLikeCorruptedSelfTarget) {
+        return normalizedRoot;
+      }
+
+      return normalizedFromMeta;
     }
-    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
-    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
-      return fromProject.trim();
+    if (normalizedRoot) {
+      return normalizedRoot;
     }
-    return 'main';
-  }, [worktreeMetadata?.createdFromBranch, activeProject?.worktreeDefaults?.baseBranch]);
+    if (current) {
+      return current;
+    }
+    return 'HEAD';
+  }, [worktreeMetadata?.createdFromBranch, status, rootBranchHint]);
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
@@ -1009,6 +1071,7 @@ export const GitView: React.FC = () => {
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
         isWorktreeMode={!!worktreeMetadata}
+        onOpenBranchPicker={branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
 
         <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-3">
@@ -1137,6 +1200,12 @@ export const GitView: React.FC = () => {
             </Command>
           </DialogContent>
         </Dialog>
+
+        <BranchPickerDialog
+          open={isBranchPickerOpen}
+          onOpenChange={setIsBranchPickerOpen}
+          project={branchPickerProject}
+        />
 
     </div>
   );

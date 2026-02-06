@@ -11,8 +11,6 @@ import type {
   GitDeleteRemoteBranchPayload,
   GeneratedCommitMessage,
   GitWorktreeInfo,
-  GitAddWorktreePayload,
-  GitRemoveWorktreePayload,
   CreateGitCommitOptions,
   GitCommitResult,
   GitPushResult,
@@ -289,56 +287,6 @@ export async function listGitWorktrees(directory: string): Promise<GitWorktreeIn
     throw new Error(error.error || 'Failed to list worktrees');
   }
   return response.json();
-}
-
-export async function addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }> {
-  if (!payload?.path || !payload?.branch) {
-    throw new Error('path and branch are required to add a worktree');
-  }
-
-  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to add worktree');
-  }
-
-  return response.json();
-}
-
-export async function removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }> {
-  if (!payload?.path) {
-    throw new Error('path is required to remove a worktree');
-  }
-
-  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to remove worktree');
-  }
-
-  return response.json();
-}
-
-export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const response = await fetch(buildUrl(`${API_BASE}/ignore-openchamber`, directory), {
-    method: 'POST',
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to update git ignore');
-  }
 }
 
 export async function createGitCommit(

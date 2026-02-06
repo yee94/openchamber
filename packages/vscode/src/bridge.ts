@@ -2171,42 +2171,12 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:git/worktrees': {
-        const { directory, method, path: worktreePath, branch, createBranch, force } = (payload || {}) as { 
-          directory?: string; 
-          method?: string;
-          path?: string;
-          branch?: string;
-          createBranch?: boolean;
-          force?: boolean;
-        };
+        const { directory } = (payload || {}) as { directory?: string };
         if (!directory) {
           return { id, type, success: false, error: 'Directory is required' };
         }
-
-        const normalizedMethod = typeof method === 'string' ? method.toUpperCase() : 'GET';
-
-        if (normalizedMethod === 'GET') {
-          const worktrees = await gitService.listGitWorktrees(directory);
-          return { id, type, success: true, data: worktrees };
-        }
-
-        if (normalizedMethod === 'POST') {
-          if (!worktreePath || !branch) {
-            return { id, type, success: false, error: 'Path and branch are required' };
-          }
-          const result = await gitService.addGitWorktree(directory, worktreePath, branch, createBranch);
-          return { id, type, success: true, data: result };
-        }
-
-        if (normalizedMethod === 'DELETE') {
-          if (!worktreePath) {
-            return { id, type, success: false, error: 'Path is required' };
-          }
-          const result = await gitService.removeGitWorktree(directory, worktreePath, force);
-          return { id, type, success: true, data: result };
-        }
-
-        return { id, type, success: false, error: `Unsupported method: ${normalizedMethod}` };
+        const worktrees = await gitService.listGitWorktrees(directory);
+        return { id, type, success: true, data: worktrees };
       }
 
       case 'api:git/diff': {
@@ -2436,16 +2406,6 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         return { id, type, success: false, error: `Unsupported method: ${normalizedMethod}` };
-      }
-
-      case 'api:git/ignore-openchamber': {
-        // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-        const { directory } = (payload || {}) as { directory?: string };
-        if (!directory) {
-          return { id, type, success: false, error: 'Directory is required' };
-        }
-        await gitService.ensureOpenChamberIgnored(directory);
-        return { id, type, success: true, data: { success: true } };
       }
 
       default:

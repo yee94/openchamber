@@ -891,24 +891,6 @@ const sanitizeProjects = (input) => {
       ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
     };
 
-    // Preserve worktreeDefaults
-    if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
-      const wt = candidate.worktreeDefaults;
-      const defaults = {};
-      if (typeof wt.branchPrefix === 'string' && wt.branchPrefix.trim()) {
-        defaults.branchPrefix = wt.branchPrefix.trim();
-      }
-      if (typeof wt.baseBranch === 'string' && wt.baseBranch.trim()) {
-        defaults.baseBranch = wt.baseBranch.trim();
-      }
-      if (typeof wt.autoCreateWorktree === 'boolean') {
-        defaults.autoCreateWorktree = wt.autoCreateWorktree;
-      }
-      if (Object.keys(defaults).length > 0) {
-        project.worktreeDefaults = defaults;
-      }
-    }
-
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
     }
@@ -7108,65 +7090,6 @@ Context:
       console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
       res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
       res.json([]);
-    }
-  });
-
-  app.post('/api/git/worktrees', async (req, res) => {
-    const { addWorktree } = await getGitLibraries();
-    try {
-      const directory = req.query.directory;
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
-      const { path, branch, createBranch, startPoint } = req.body;
-      if (!path || !branch) {
-        return res.status(400).json({ error: 'path and branch are required' });
-      }
-
-      const result = await addWorktree(directory, path, branch, { createBranch, startPoint });
-      res.json(result);
-    } catch (error) {
-      console.error('Failed to add worktree:', error);
-      res.status(500).json({ error: error.message || 'Failed to add worktree' });
-    }
-  });
-
-  app.delete('/api/git/worktrees', async (req, res) => {
-    const { removeWorktree } = await getGitLibraries();
-    try {
-      const directory = req.query.directory;
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
-      const { path, force } = req.body;
-      if (!path) {
-        return res.status(400).json({ error: 'path is required' });
-      }
-
-      const result = await removeWorktree(directory, path, { force });
-      res.json(result);
-    } catch (error) {
-      console.error('Failed to remove worktree:', error);
-      res.status(500).json({ error: error.message || 'Failed to remove worktree' });
-    }
-  });
-
-  app.post('/api/git/ignore-openchamber', async (req, res) => {
-    // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-    const { ensureOpenChamberIgnored } = await getGitLibraries();
-    try {
-      const directory = req.query.directory;
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
-      await ensureOpenChamberIgnored(directory);
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Failed to ignore .openchamber directory:', error);
-      res.status(500).json({ error: error.message || 'Failed to update git ignore' });
     }
   });
 
