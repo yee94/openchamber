@@ -587,7 +587,7 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
 
         <div className="mt-4 p-3 bg-muted/30 rounded-lg">
           <p className="typography-meta text-muted-foreground font-medium mb-2">Actions</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
             <div
               className="flex items-center gap-2 cursor-pointer"
               role="button"
@@ -618,20 +618,22 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
                 )}
               </button>
               <span className="typography-meta text-muted-foreground">Create in worktree</span>
-              <span className="typography-meta text-muted-foreground/70">(issue-&lt;number&gt;-&lt;slug&gt;)</span>
+              <span className="typography-meta text-muted-foreground/70 hidden sm:inline">(issue-&lt;number&gt;-&lt;slug&gt;)</span>
             </div>
-            <div className="flex-1" />
-            {repoUrl ? (
-              <Button variant="outline" size="sm" asChild>
-                <a href={repoUrl} target="_blank" rel="noopener noreferrer">
-                  <RiExternalLinkLine className="size-4" />
-                  Open Repo
-                </a>
+            <div className="hidden sm:block sm:flex-1" />
+            <div className="flex items-center gap-2">
+              {repoUrl ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={repoUrl} target="_blank" rel="noopener noreferrer">
+                    <RiExternalLinkLine className="size-4" />
+                    Open Repo
+                  </a>
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading || Boolean(startingIssueNumber)}>
+                Refresh
               </Button>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading || Boolean(startingIssueNumber)}>
-              Refresh
-            </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

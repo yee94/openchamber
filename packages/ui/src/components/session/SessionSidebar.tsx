@@ -1800,19 +1800,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
                       }
-                      setActiveMainTab('chat');
-                      if (mobileVariant) {
-                        setSessionSwitcherOpen(false);
-                      }
                       setIssuePickerOpen(true);
                     }}
                     onNewSessionFromGitHubPR={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
-                      }
-                      setActiveMainTab('chat');
-                      if (mobileVariant) {
-                        setSessionSwitcherOpen(false);
                       }
                       setPullRequestPickerOpen(true);
                     }}
@@ -1870,12 +1862,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       <GitHubIssuePickerDialog
         open={issuePickerOpen}
-        onOpenChange={setIssuePickerOpen}
+        onOpenChange={(open) => {
+          setIssuePickerOpen(open);
+          if (!open && mobileVariant) {
+            setActiveMainTab('chat');
+            setSessionSwitcherOpen(false);
+          }
+        }}
       />
 
       <GitHubPullRequestPickerDialog
         open={pullRequestPickerOpen}
-        onOpenChange={setPullRequestPickerOpen}
+        onOpenChange={(open) => {
+          setPullRequestPickerOpen(open);
+          if (!open && mobileVariant) {
+            setActiveMainTab('chat');
+            setSessionSwitcherOpen(false);
+          }
+        }}
       />
     </div>
   );
