@@ -14,7 +14,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
-import { RiCheckLine, RiClipboardLine, RiFileCopy2Line, RiMoreLine, RiDeleteBinLine } from '@remixicon/react';
+import { RiCheckLine, RiClipboardLine, RiFileCopy2Line, RiMoreLine, RiDeleteBinLine, RiEditLine } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { createPortal } from 'react-dom';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -96,9 +97,11 @@ export const PlanView: React.FC = () => {
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
+  const [editorView, setEditorView] = React.useState<EditorView | null>(null);
 
   // Inline comment drafts
   const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
+  const updateDraft = useInlineCommentDraftStore((state) => state.updateDraft);
   const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
   const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
 
@@ -134,6 +137,9 @@ export const PlanView: React.FC = () => {
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = React.useState('');
+  const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
+  const [pendingFocus, setPendingFocus] = React.useState(false);
+  const commentInputRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
 
@@ -173,7 +179,24 @@ export const PlanView: React.FC = () => {
   React.useEffect(() => {
     setLineSelection(null);
     setCommentText('');
+    setEditingDraftId(null);
+    setPendingFocus(false);
   }, [content]);
+
+  React.useEffect(() => {
+    if (!pendingFocus || !lineSelection || isMobile) return;
+    if (typeof window === 'undefined') return;
+    const frame = window.requestAnimationFrame(() => {
+      const input = commentInputRef.current;
+      input?.focus();
+      if (input) {
+        const length = input.value.length;
+        input.setSelectionRange(length, length);
+      }
+      setPendingFocus(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingFocus, lineSelection, isMobile]);
 
   React.useEffect(() => {
     if (!lineSelection) return;
@@ -186,6 +209,8 @@ export const PlanView: React.FC = () => {
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
       setLineSelection(null);
       setCommentText('');
+      setEditingDraftId(null);
+      setPendingFocus(false);
     };
 
     const timeoutId = window.setTimeout(() => {
@@ -209,6 +234,8 @@ export const PlanView: React.FC = () => {
   const handleCancelComment = React.useCallback(() => {
     setCommentText('');
     setLineSelection(null);
+    setEditingDraftId(null);
+    setPendingFocus(false);
   }, []);
 
   const handleSaveComment = React.useCallback(() => {
@@ -224,22 +251,34 @@ export const PlanView: React.FC = () => {
     const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
     const language = resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown';
 
-    addDraft({
-      sessionKey,
-      source: 'plan',
-      fileLabel,
-      startLine: lineSelection.start,
-      endLine: lineSelection.end,
-      code,
-      language,
-      text: commentText.trim(),
-    });
+    if (editingDraftId) {
+      updateDraft(sessionKey, editingDraftId, {
+        fileLabel,
+        startLine: lineSelection.start,
+        endLine: lineSelection.end,
+        code,
+        language,
+        text: commentText.trim(),
+      });
+    } else {
+      addDraft({
+        sessionKey,
+        source: 'plan',
+        fileLabel,
+        startLine: lineSelection.start,
+        endLine: lineSelection.end,
+        code,
+        language,
+        text: commentText.trim(),
+      });
+    }
 
     setCommentText('');
     setLineSelection(null);
+    setEditingDraftId(null);
 
-    toast.success('Comment saved');
-  }, [lineSelection, commentText, content, displayPath, resolvedPath, addDraft, getSessionKey, extractSelectedCode]);
+    toast.success(editingDraftId ? 'Comment updated' : 'Comment saved');
+  }, [lineSelection, commentText, content, displayPath, resolvedPath, addDraft, updateDraft, getSessionKey, extractSelectedCode, editingDraftId]);
 
   const editorExtensions = React.useMemo(() => {
     const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
@@ -358,6 +397,7 @@ export const PlanView: React.FC = () => {
       >
         <div className="w-full rounded-xl border bg-background flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
           <Textarea
+            ref={commentInputRef}
             value={commentText}
             onChange={(e) => {
               setCommentText(e.target.value);
@@ -414,7 +454,7 @@ export const PlanView: React.FC = () => {
                   color: currentTheme?.colors?.status?.successForeground,
                 }}
               >
-                Comment
+                {editingDraftId ? 'Save' : 'Comment'}
               </Button>
             </div>
           </div>
@@ -426,6 +466,7 @@ export const PlanView: React.FC = () => {
   // Render saved comment cards
   const renderSavedComments = () => {
     if (mdViewMode === 'preview') return null;
+    if (!editorView) return null;
 
     const sessionKey = getSessionKey();
     if (!sessionKey) return null;
@@ -436,13 +477,13 @@ export const PlanView: React.FC = () => {
 
     if (fileDrafts.length === 0) return null;
 
-    return (
+    return createPortal(
       <div className="absolute inset-0 pointer-events-none z-40">
         {fileDrafts.map((draft) => {
-          // For CodeMirror, we need to position based on line
-          // This is a simplified version - in production, you'd query the editor's DOM
-          const lineHeight = 24; // Approximate line height in pixels
-          const top = (draft.startLine - 1) * lineHeight;
+          const maxLine = editorView.state.doc.lines;
+          const safeLine = Math.min(Math.max(1, draft.startLine), maxLine);
+          const line = editorView.state.doc.line(safeLine);
+          const top = editorView.lineBlockAt(line.from).top;
 
           return (
             <div
@@ -477,7 +518,21 @@ export const PlanView: React.FC = () => {
                         <RiMoreLine className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent
+                      align="end"
+                      onCloseAutoFocus={(event) => event.preventDefault()}
+                    >
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setLineSelection({ start: draft.startLine, end: draft.endLine });
+                          setCommentText(draft.text);
+                          setEditingDraftId(draft.id);
+                          setPendingFocus(true);
+                        }}
+                      >
+                        <RiEditLine className="h-4 w-4 mr-2" />
+                        Edit comment
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => removeDraft(draft.sessionKey, draft.id)}
                         className="text-destructive"
@@ -492,7 +547,8 @@ export const PlanView: React.FC = () => {
             </div>
           );
         })}
-      </div>
+      </div>,
+      editorView.scrollDOM
     );
   };
 
@@ -611,8 +667,10 @@ export const PlanView: React.FC = () => {
                           // read-only
                         }}
                         readOnly={true}
-                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
+                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)] [&_.cm-scroller]:relative"
                         extensions={editorExtensions}
+                        onViewReady={setEditorView}
+                        onViewDestroy={() => setEditorView(null)}
                         highlightLines={lineSelection
                           ? {
                             start: Math.min(lineSelection.start, lineSelection.end),
