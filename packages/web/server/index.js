@@ -1875,6 +1875,7 @@ const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
 let globalEventWatcherAbortController = null;
 
 let resolvedOpencodeBinary = null;
+let resolvedOpencodeBinarySource = null;
 let resolvedNodeBinary = null;
 let resolvedBunBinary = null;
 
@@ -1927,12 +1928,14 @@ function resolveOpencodeCliPath() {
 
   for (const candidate of explicit) {
     if (isExecutable(candidate)) {
+      resolvedOpencodeBinarySource = 'env';
       return candidate;
     }
   }
 
   const resolvedFromPath = searchPathFor('opencode');
   if (resolvedFromPath) {
+    resolvedOpencodeBinarySource = 'path';
     return resolvedFromPath;
   }
 
@@ -1970,6 +1973,7 @@ function resolveOpencodeCliPath() {
   const fallbacks = process.platform === 'win32' ? winFallbacks : unixFallbacks;
   for (const candidate of fallbacks) {
     if (isExecutable(candidate)) {
+      resolvedOpencodeBinarySource = 'fallback';
       return candidate;
     }
   }
@@ -1986,7 +1990,10 @@ function resolveOpencodeCliPath() {
           .map((line) => line.trim())
           .filter(Boolean);
         const found = lines.find((line) => isExecutable(line));
-        if (found) return found;
+        if (found) {
+          resolvedOpencodeBinarySource = 'where';
+          return found;
+        }
       }
     } catch {
       // ignore
@@ -2005,6 +2012,7 @@ function resolveOpencodeCliPath() {
       if (result.status === 0) {
         const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
         if (found && isExecutable(found)) {
+          resolvedOpencodeBinarySource = 'shell';
           return found;
         }
       }
@@ -2284,6 +2292,7 @@ async function applyOpencodeBinaryFromSettings() {
     if (normalized === '') {
       delete process.env.OPENCODE_BINARY;
       resolvedOpencodeBinary = null;
+      resolvedOpencodeBinarySource = null;
       return null;
     }
 
@@ -2291,6 +2300,7 @@ async function applyOpencodeBinaryFromSettings() {
       process.env.OPENCODE_BINARY = normalized;
       prependToPath(path.dirname(normalized));
       resolvedOpencodeBinary = normalized;
+      resolvedOpencodeBinarySource = 'settings';
       ensureOpencodeShimRuntime(normalized);
       return normalized;
     }
@@ -2315,6 +2325,7 @@ function ensureOpencodeCliEnv() {
   const existing = typeof process.env.OPENCODE_BINARY === 'string' ? process.env.OPENCODE_BINARY.trim() : '';
   if (existing && isExecutable(existing)) {
     resolvedOpencodeBinary = existing;
+    resolvedOpencodeBinarySource = resolvedOpencodeBinarySource || 'env';
     prependToPath(path.dirname(existing));
     ensureOpencodeShimRuntime(existing);
     return resolvedOpencodeBinary;
@@ -2326,6 +2337,7 @@ function ensureOpencodeCliEnv() {
     prependToPath(path.dirname(resolved));
     ensureOpencodeShimRuntime(resolved);
     resolvedOpencodeBinary = resolved;
+    resolvedOpencodeBinarySource = resolvedOpencodeBinarySource || 'unknown';
     console.log(`Resolved opencode CLI: ${resolved}`);
     return resolved;
   }
@@ -3511,6 +3523,7 @@ function setupProxy(app) {
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/push') ||
       req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/opencode-resolution') ||
       req.path.startsWith('/config/settings') ||
       req.path.startsWith('/config/skills') ||
       req.path === '/config/reload' ||
@@ -3544,6 +3557,7 @@ function setupProxy(app) {
     if (
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/opencode-resolution') ||
       req.path.startsWith('/config/settings') ||
       req.path.startsWith('/config/skills') ||
       req.path === '/health'
@@ -3720,7 +3734,12 @@ async function main(options = {}) {
       openCodeApiPrefix: '',
       openCodeApiPrefixDetected: true,
       isOpenCodeReady,
-      lastOpenCodeError
+      lastOpenCodeError,
+      opencodeBinaryResolved: resolvedOpencodeBinary || null,
+      opencodeBinarySource: resolvedOpencodeBinarySource || null,
+      opencodeShimInterpreter: resolvedOpencodeBinary ? opencodeShimInterpreter(resolvedOpencodeBinary) : null,
+      nodeBinaryResolved: resolvedNodeBinary || null,
+      bunBinaryResolved: resolvedBunBinary || null,
     });
   });
 
@@ -4302,6 +4321,50 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to load settings:', error);
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load settings' });
+    }
+  });
+
+  app.get('/api/config/opencode-resolution', async (_req, res) => {
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const configured = typeof settings?.opencodeBinary === 'string' ? settings.opencodeBinary : null;
+
+      const previousSource = resolvedOpencodeBinarySource;
+      const detectedNow = resolveOpencodeCliPath();
+      const rawDetectedSourceNow = resolvedOpencodeBinarySource;
+      resolvedOpencodeBinarySource = previousSource;
+
+      // Best-effort: apply configured override (if any) and resolve.
+      await applyOpencodeBinaryFromSettings();
+      ensureOpencodeCliEnv();
+
+      const resolved = resolvedOpencodeBinary || null;
+      const source = resolvedOpencodeBinarySource || null;
+      const detectedSourceNow =
+        detectedNow &&
+        resolved &&
+        detectedNow === resolved &&
+        rawDetectedSourceNow === 'env' &&
+        source &&
+        source !== 'env'
+          ? source
+          : rawDetectedSourceNow;
+      const shim = resolved ? opencodeShimInterpreter(resolved) : null;
+
+      res.json({
+        configured,
+        resolved,
+        resolvedDir: resolved ? path.dirname(resolved) : null,
+        source,
+        detectedNow,
+        detectedSourceNow,
+        shim,
+        node: resolvedNodeBinary || null,
+        bun: resolvedBunBinary || null,
+      });
+    } catch (error) {
+      console.error('Failed to build opencode resolution snapshot:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to build snapshot' });
     }
   });
 

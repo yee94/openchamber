@@ -1482,6 +1482,14 @@ fn main() {
                     *state.focused.lock().expect("focus mutex") = *focused;
                 }
             }
+
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Ensure sidecar is not left running when users close the main window.
+                let app = window.app_handle();
+                kill_sidecar(app.clone());
+                app.exit(0);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             desktop_notify,
