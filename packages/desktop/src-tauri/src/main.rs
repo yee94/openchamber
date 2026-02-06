@@ -1504,7 +1504,6 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // Always ensure local server is running for escape hatch.
                 let local_url = if cfg!(debug_assertions) {
                     let dev_url = "http://127.0.0.1:3001";
                     if wait_for_health(dev_url).await {
@@ -1528,29 +1527,41 @@ fn main() {
                     }
                 };
 
+                let local_ui_url = if cfg!(debug_assertions) {
+                    let vite_url = "http://127.0.0.1:5173";
+                    if wait_for_health(vite_url).await {
+                        vite_url.to_string()
+                    } else {
+                        log::warn!("[desktop] Vite dev server not ready, using local API UI at {local_url}");
+                        local_url.clone()
+                    }
+                } else {
+                    local_url.clone()
+                };
+
                 // Ensure local URL is always available to desktop commands,
                 // even when we are using the Vite dev server (no sidecar child).
                 if let Some(state) = handle.try_state::<SidecarState>() {
                     *state.url.lock().expect("sidecar url mutex") = Some(local_url.clone());
                 }
 
-                let local_origin = url::Url::parse(&local_url)
+                let local_origin = url::Url::parse(&local_ui_url)
                     .ok()
                     .map(|u| u.origin().ascii_serialization())
-                    .unwrap_or_else(|| local_url.clone());
+                    .unwrap_or_else(|| local_ui_url.clone());
 
                 // Selected host: env override first, then desktop default host, else local.
                 let env_target = std::env::var("OPENCHAMBER_SERVER_URL")
                     .ok()
                     .and_then(|raw| normalize_server_url(&raw));
 
-                let mut initial_url = env_target.unwrap_or_else(|| local_url.clone());
+                let mut initial_url = env_target.unwrap_or_else(|| local_ui_url.clone());
 
-                if initial_url == local_url {
+                if initial_url == local_ui_url {
                     let cfg = read_desktop_hosts_config_from_disk();
                     if let Some(default_id) = cfg.default_host_id {
                         if default_id == LOCAL_HOST_ID {
-                            initial_url = local_url.clone();
+                            initial_url = local_ui_url.clone();
                         } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
                             initial_url = host.url;
                         }
