@@ -7323,6 +7323,166 @@ Context:
     }
   });
 
+  app.get('/api/git/remotes', async (req, res) => {
+    const { getRemotes } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const remotes = await getRemotes(directory);
+      res.json(remotes);
+    } catch (error) {
+      console.error('Failed to get remotes:', error);
+      res.status(500).json({ error: error.message || 'Failed to get remotes' });
+    }
+  });
+
+  app.post('/api/git/rebase', async (req, res) => {
+    const { rebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await rebase(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to rebase' });
+    }
+  });
+
+  app.post('/api/git/rebase/abort', async (req, res) => {
+    const { abortRebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await abortRebase(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to abort rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to abort rebase' });
+    }
+  });
+
+  app.post('/api/git/merge', async (req, res) => {
+    const { merge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await merge(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge' });
+    }
+  });
+
+  app.post('/api/git/merge/abort', async (req, res) => {
+    const { abortMerge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await abortMerge(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to abort merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to abort merge' });
+    }
+  });
+
+  app.post('/api/git/rebase/continue', async (req, res) => {
+    const { continueRebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await continueRebase(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to continue rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to continue rebase' });
+    }
+  });
+
+  app.post('/api/git/merge/continue', async (req, res) => {
+    const { continueMerge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await continueMerge(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to continue merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to continue merge' });
+    }
+  });
+
+  app.get('/api/git/conflict-details', async (req, res) => {
+    const { getConflictDetails } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await getConflictDetails(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to get conflict details:', error);
+      res.status(500).json({ error: error.message || 'Failed to get conflict details' });
+    }
+  });
+
+  app.post('/api/git/stash', async (req, res) => {
+    const { stash } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await stash(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to stash:', error);
+      res.status(500).json({ error: error.message || 'Failed to stash' });
+    }
+  });
+
+  app.post('/api/git/stash/pop', async (req, res) => {
+    const { stashPop } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await stashPop(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to pop stash:', error);
+      res.status(500).json({ error: error.message || 'Failed to pop stash' });
+    }
+  });
+
   app.post('/api/git/commit', async (req, res) => {
     const { commit } = await getGitLibraries();
     try {
