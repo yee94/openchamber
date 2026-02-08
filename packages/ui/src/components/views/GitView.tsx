@@ -925,6 +925,35 @@ export const GitView: React.FC = () => {
       .sort();
   }, [branches]);
 
+  const effectiveRemotes = React.useMemo<GitRemote[]>(() => {
+    if (remotes.length > 0) {
+      return remotes;
+    }
+
+    const inferredNames = new Set<string>();
+    const tracking = status?.tracking?.trim();
+    if (tracking && tracking.includes('/')) {
+      inferredNames.add(tracking.split('/')[0]);
+    }
+
+    for (const branchName of remoteBranches) {
+      const slashIndex = branchName.indexOf('/');
+      if (slashIndex > 0) {
+        inferredNames.add(branchName.slice(0, slashIndex));
+      }
+    }
+
+    if (inferredNames.size === 0 && remoteUrl) {
+      inferredNames.add('origin');
+    }
+
+    return Array.from(inferredNames).map((name) => ({
+      name,
+      fetchUrl: remoteUrl ?? '',
+      pushUrl: remoteUrl ?? '',
+    }));
+  }, [remotes, remoteBranches, remoteUrl, status?.tracking]);
+
   const baseBranch = React.useMemo(() => {
     const fromMeta = typeof worktreeMetadata?.createdFromBranch === 'string'
       ? worktreeMetadata.createdFromBranch.trim()
@@ -1520,7 +1549,7 @@ export const GitView: React.FC = () => {
         remoteBranches={remoteBranches}
         branchInfo={branches?.branches}
         syncAction={syncAction}
-        remotes={remotes}
+        remotes={effectiveRemotes}
         onFetch={(remote) => handleSyncAction('fetch', remote)}
         onPull={(remote) => handleSyncAction('pull', remote)}
         onPush={(remote) => handleSyncAction('push', remote)}
@@ -1573,8 +1602,8 @@ export const GitView: React.FC = () => {
                 <GitEmptyState
                   behind={status?.behind ?? 0}
                   onPull={() => {
-                    if (remotes.length > 0) {
-                      handleSyncAction('pull', remotes[0]);
+                    if (effectiveRemotes.length > 0) {
+                      handleSyncAction('pull', effectiveRemotes[0]);
                     } else {
                       toast.error('No remotes configured');
                     }
