@@ -237,9 +237,16 @@ export const Header: React.FC = () => {
     return normalize(raw || '');
   }, [currentSession?.directory]);
 
+  const draftDirectory = useSessionStore((state) => {
+    if (!state.newSessionDraft?.open) {
+      return '';
+    }
+    return normalize(state.newSessionDraft.directoryOverride ?? '');
+  });
+
   const openDirectory = React.useMemo(() => {
-    return worktreeDirectory || sessionDirectory;
-  }, [sessionDirectory, worktreeDirectory]);
+    return worktreeDirectory || sessionDirectory || draftDirectory;
+  }, [draftDirectory, sessionDirectory, worktreeDirectory]);
 
 
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);

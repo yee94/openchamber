@@ -73,8 +73,6 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   }
   if (typeof settings.openInAppId === 'string' && settings.openInAppId.length > 0) {
     localStorage.setItem('openInAppId', settings.openInAppId);
-  } else {
-    localStorage.removeItem('openInAppId');
   }
 };
 

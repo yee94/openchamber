@@ -463,9 +463,15 @@ html:not(.dark) .chat-scroll {
 :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
   display: inline;
 }
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
+  display: inline;
+}
 
 @media (max-width: 940px) {
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
+    display: none;
+  }
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
     display: none;
   }
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-badge {

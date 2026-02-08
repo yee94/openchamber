@@ -1094,6 +1094,12 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.filesViewShowGitignored === 'boolean') {
     result.filesViewShowGitignored = candidate.filesViewShowGitignored;
   }
+  if (typeof candidate.openInAppId === 'string') {
+    const trimmed = candidate.openInAppId.trim();
+    if (trimmed.length > 0) {
+      result.openInAppId = trimmed;
+    }
+  }
 
   // Memory limits for message viewport management
   if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {
