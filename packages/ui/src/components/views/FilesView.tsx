@@ -647,6 +647,7 @@ export const FilesView: React.FC = () => {
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const isSelectingRef = React.useRef(false);
   const selectionStartRef = React.useRef<number | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
 
   // Session/config for sending comments
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -663,6 +664,7 @@ export const FilesView: React.FC = () => {
     const handleGlobalMouseUp = () => {
       isSelectingRef.current = false;
       selectionStartRef.current = null;
+      setIsDragging(false);
     };
     document.addEventListener('mouseup', handleGlobalMouseUp);
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
@@ -1805,10 +1807,10 @@ export const FilesView: React.FC = () => {
     });
 
     // Add input for new comment
-    if (lineSelection && !editingDraftId) {
+    if (lineSelection && !editingDraftId && !isDragging) {
       widgets.push({
         afterLine: lineSelection.end,
-        id: 'new-comment-input',
+        id: 'files-new-comment-input',
         content: (
           <InlineCommentInput
             lineRange={lineSelection}
@@ -1820,7 +1822,7 @@ export const FilesView: React.FC = () => {
     }
 
     return widgets;
-  }, [selectedFile, currentSessionId, allDrafts, editingDraftId, lineSelection, handleSaveComment, removeDraft]);
+  }, [selectedFile, currentSessionId, allDrafts, editingDraftId, lineSelection, handleSaveComment, removeDraft, isDragging]);
 
   const fileViewer = (
     <div
@@ -2205,19 +2207,21 @@ export const FilesView: React.FC = () => {
                       const lineNumber = view.state.doc.lineAt(line.from).number;
 
                       // Mobile: tap-to-extend selection
-                      if (isMobile && lineSelection && !event.shiftKey) {
-                        const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                        const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
-                        setLineSelection({ start, end });
-                        isSelectingRef.current = false;
-                        selectionStartRef.current = null;
-                        return true;
-                      }
+                        if (isMobile && lineSelection && !event.shiftKey) {
+                          const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+                          const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                          setLineSelection({ start, end });
+                          isSelectingRef.current = false;
+                          selectionStartRef.current = null;
+                          setIsDragging(false);
+                          return true;
+                        }
 
-                      isSelectingRef.current = true;
-                      selectionStartRef.current = lineNumber;
+                        isSelectingRef.current = true;
+                        selectionStartRef.current = lineNumber;
+                        setIsDragging(true);
 
-                      if (lineSelection && event.shiftKey) {
+                        if (lineSelection && event.shiftKey) {
                         const start = Math.min(lineSelection.start, lineNumber);
                         const end = Math.max(lineSelection.end, lineNumber);
                         setLineSelection({ start, end });
@@ -2239,17 +2243,19 @@ export const FilesView: React.FC = () => {
                       }
 
                       const lineNumber = view.state.doc.lineAt(line.from).number;
-                      const start = Math.min(selectionStartRef.current, lineNumber);
-                      const end = Math.max(selectionStartRef.current, lineNumber);
-                      setLineSelection({ start, end });
-                      return false;
+                        const start = Math.min(selectionStartRef.current, lineNumber);
+                        const end = Math.max(selectionStartRef.current, lineNumber);
+                        setLineSelection({ start, end });
+                        setIsDragging(true);
+                        return false;
+                      },
+                      mouseup: () => {
+                        isSelectingRef.current = false;
+                        selectionStartRef.current = null;
+                        setIsDragging(false);
+                        return false;
+                      },
                     },
-                    mouseup: () => {
-                      isSelectingRef.current = false;
-                      selectionStartRef.current = null;
-                      return false;
-                    },
-                  },
                 }}
               />
             </div>

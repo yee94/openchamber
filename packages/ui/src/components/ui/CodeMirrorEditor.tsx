@@ -39,22 +39,19 @@ const highlightLinesCompartment = new Compartment();
 const blockWidgetsCompartment = new Compartment();
 const searchCompartment = new Compartment();
 
-// Map to store widget container elements by ID
-// This allows us to render portals into them even if they are created by CM
-const widgetContainers = new Map<string, HTMLElement>();
-
+// BlockWidget class definition moved inside helper or adapted to take map
 class BlockWidget extends WidgetType {
-  constructor(readonly id: string) {
+  constructor(readonly id: string, readonly containerMap: Map<string, HTMLElement>) {
     super();
   }
 
   toDOM() {
-    let div = widgetContainers.get(this.id);
+    let div = this.containerMap.get(this.id);
     if (!div) {
       div = document.createElement('div');
       div.className = 'oc-block-widget';
       div.dataset.widgetId = this.id;
-      widgetContainers.set(this.id, div);
+      this.containerMap.set(this.id, div);
     }
     return div;
   }
@@ -64,17 +61,13 @@ class BlockWidget extends WidgetType {
   }
   
   destroy() {
-    // Optional: cleanup if needed, but we might want to keep the element for React to unmount gracefully?
-    // Actually, if CM destroys the DOM, React portal might complain if we don't unmount.
-    // But since we render portals based on the 'blockWidgets' prop, if the widget is removed from prop, 
-    // the portal will be removed by React.
-    // If CM removes it because it's out of viewport, we still want the container to exist in our map?
-    // No, if CM removes it, we should probably let it go.
-    // But for now let's keep it simple.
+    // We do NOT remove from map here because CM might destroy the widget
+    // when it scrolls out of view, but we want to reuse the same container (and Portal)
+    // when it scrolls back in.
   }
 }
 
-const createBlockWidgetsExtension = (widgets?: BlockWidgetDef[]) => {
+const createBlockWidgetsExtension = (widgets: BlockWidgetDef[] | undefined, containerMap: Map<string, HTMLElement>) => {
   if (!widgets || widgets.length === 0) return [];
 
   return StateField.define<DecorationSet>({
@@ -90,7 +83,7 @@ const createBlockWidgetsExtension = (widgets?: BlockWidgetDef[]) => {
         const line = state.doc.line(w.afterLine);
         // Add widget decoration
         builder.add(line.to, line.to, Decoration.widget({
-          widget: new BlockWidget(w.id),
+          widget: new BlockWidget(w.id, containerMap),
           block: true,
           side: 1, 
         }));
@@ -98,16 +91,8 @@ const createBlockWidgetsExtension = (widgets?: BlockWidgetDef[]) => {
       return builder.finish();
     },
     update(deco, tr) {
-      // Always rebuild decorations when doc changes or widgets config changes
-      // But here we only see transaction. 
-      // Since we reconfigure the compartment when props change, this update might mostly handle doc changes.
-      // For simplicity, we can map existing decorations or rebuild.
-      // Let's rebuild to ensure correct line placement.
-      // Wait, we can't access 'widgets' prop here easily unless we use a closure or effect.
-      // The `create` method runs when state is created.
-      // When we reconfigure the compartment, `create` might run again or we need `provide`.
-      
-      // Actually, standard pattern is to map decorations.
+      // If the doc changed, map the decorations.
+      // If the widgets prop changed, the compartment reconfigure will handle it (create() will run).
       return deco.map(tr.changes);
     },
     provide: f => EditorView.decorations.from(f)
@@ -168,6 +153,9 @@ export function CodeMirrorEditor({
   const onViewReadyRef = React.useRef(onViewReady);
   const onViewDestroyRef = React.useRef(onViewDestroy);
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
+  
+  // Scoped map for widget containers to avoid global collisions and memory leaks
+  const widgetContainersRef = React.useRef(new Map<string, HTMLElement>());
 
   React.useEffect(() => {
     valueRef.current = value;
@@ -209,7 +197,7 @@ export function CodeMirrorEditor({
         editableCompartment.of(EditorView.editable.of(!readOnly)),
         externalExtensionsCompartment.of(extensions ?? []),
         highlightLinesCompartment.of(createHighlightLinesExtension(highlightLines)),
-        blockWidgetsCompartment.of(createBlockWidgetsExtension(blockWidgets)),
+        blockWidgetsCompartment.of(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
         searchCompartment.of(enableSearch ? [search({ top: true }), keymap.of(searchKeymap)] : []),
       ],
     });
@@ -243,10 +231,14 @@ export function CodeMirrorEditor({
         editableCompartment.reconfigure(EditorView.editable.of(!readOnly)),
         externalExtensionsCompartment.reconfigure(extensions ?? []),
         highlightLinesCompartment.reconfigure(createHighlightLinesExtension(highlightLines)),
-        blockWidgetsCompartment.reconfigure(createBlockWidgetsExtension(blockWidgets)),
+        blockWidgetsCompartment.reconfigure(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
         searchCompartment.reconfigure(enableSearch ? [search({ top: true }), keymap.of(searchKeymap)] : []),
       ],
     });
+
+    // Force a re-render to ensure Portals can find the new widget containers in the DOM
+    // The containers are created synchronously by CodeMirror during dispatch -> toDOM
+    forceUpdate();
   }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch]);
 
   React.useEffect(() => {
@@ -288,10 +280,10 @@ export function CodeMirrorEditor({
         )}
       />
       {blockWidgets?.map((w) => {
-        // Look for the widget container in the editor DOM
-        // Since we store them in a map too (as backup/optimization), we could check there,
-        // but querySelector is safer to ensure it's actually in the DOM
-        const container = viewRef.current?.dom.querySelector(`[data-widget-id="${w.id}"]`);
+        // Look for the widget container in our scoped map
+        // We prefer the map over querySelector because the container might be created but not yet attached,
+        // or detached temporarily by CM (virtual scrolling). Keeping the portal mounted preserves state.
+        const container = widgetContainersRef.current.get(w.id);
         if (!container) return null;
         return createPortal(w.content, container, w.id);
       })}
