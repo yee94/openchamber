@@ -2278,6 +2278,7 @@ async function isOpenCodeProcessHealthy() {
   try {
     const response = await fetch(`http://127.0.0.1:${openCodePort}/session`, {
       method: 'GET',
+      headers: getOpenCodeAuthHeaders(),
       signal: AbortSignal.timeout(2000),
     });
     return response.ok;
@@ -2313,10 +2314,14 @@ const ENV_OPENCODE_SERVER_PASSWORD = (() => {
  * Uses Basic Auth with username "opencode" and the password from the env variable.
  */
 function getOpenCodeAuthHeaders() {
-  if (!ENV_OPENCODE_SERVER_PASSWORD) {
+  // Re-read from env each time in case it wasn't set at module load (HMR issue)
+  const password = ENV_OPENCODE_SERVER_PASSWORD || process.env.OPENCODE_SERVER_PASSWORD;
+  
+  if (!password) {
     return {};
   }
-  const credentials = Buffer.from(`opencode:${ENV_OPENCODE_SERVER_PASSWORD}`).toString('base64');
+  
+  const credentials = Buffer.from(`opencode:${password}`).toString('base64');
   return { Authorization: `Basic ${credentials}` };
 }
 
@@ -4047,6 +4052,7 @@ function setupProxy(app) {
     next();
   });
 
+
   const proxyMiddleware = createProxyMiddleware({
     target: openCodePort ? `http://localhost:${openCodePort}` : 'http://127.0.0.1:0',
     router: () => {
@@ -4066,40 +4072,43 @@ function setupProxy(app) {
       return suffix;
     },
     ws: false,
-    onError: (err, req, res) => {
-      console.error(`Proxy error: ${err.message}`);
-      if (!res.headersSent) {
-        res.status(503).json({ error: 'OpenCode service unavailable' });
-      }
-    },
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+    // v3.x API: callbacks go in 'on' object
+    on: {
+      error: (err, req, res) => {
+        console.error(`Proxy error: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(503).json({ error: 'OpenCode service unavailable' });
+        }
+      },
+      proxyReq: (proxyReq, req, res) => {
+        console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+        const authHeaders = getOpenCodeAuthHeaders();
+        if (authHeaders.Authorization) {
+          proxyReq.setHeader('Authorization', authHeaders.Authorization);
+        }
 
-      const authHeaders = getOpenCodeAuthHeaders();
-      if (authHeaders.Authorization) {
-        proxyReq.setHeader('Authorization', authHeaders.Authorization);
-      }
+        if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+          proxyReq.setHeader('Accept', 'text/event-stream');
+          proxyReq.setHeader('Cache-Control', 'no-cache');
+          proxyReq.setHeader('Connection', 'keep-alive');
+        }
+      },
+      proxyRes: (proxyRes, req, res) => {
+        // Strip WWW-Authenticate to prevent browser's native Basic Auth popup
+        if (proxyRes.headers['www-authenticate']) {
+          delete proxyRes.headers['www-authenticate'];
+        }
 
-      if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
-        console.log(`[SSE] Setting up SSE proxy for ${req.method} ${req.path}`);
-        proxyReq.setHeader('Accept', 'text/event-stream');
-        proxyReq.setHeader('Cache-Control', 'no-cache');
-        proxyReq.setHeader('Connection', 'keep-alive');
+        if (req.url?.includes('/event')) {
+          proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+          proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
+          proxyRes.headers['Content-Type'] = 'text/event-stream';
+          proxyRes.headers['Cache-Control'] = 'no-cache';
+          proxyRes.headers['Connection'] = 'keep-alive';
+          proxyRes.headers['X-Accel-Buffering'] = 'no';
+          proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
+        }
       }
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      if (req.url?.includes('/event')) {
-        console.log(`[SSE] Proxy response for ${req.method} ${req.url} - Status: ${proxyRes.statusCode}`);
-        proxyRes.headers['Access-Control-Allow-Origin'] = '*';
-        proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
-        proxyRes.headers['Content-Type'] = 'text/event-stream';
-        proxyRes.headers['Cache-Control'] = 'no-cache';
-        proxyRes.headers['Connection'] = 'keep-alive';
-        proxyRes.headers['X-Accel-Buffering'] = 'no';
-        proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
-      }
-
-
     }
   });
 
