@@ -151,9 +151,7 @@ export const ChatContainer: React.FC = () => {
         }
 
         const hasSessionMessages = messages.has(currentSessionId);
-        const existingMessages = hasSessionMessages ? messages.get(currentSessionId) ?? [] : [];
-
-        if (existingMessages.length > 0) {
+        if (hasSessionMessages) {
             return;
         }
 

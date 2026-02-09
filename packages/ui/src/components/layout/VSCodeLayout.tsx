@@ -272,11 +272,15 @@ export const VSCodeLayout: React.FC = () => {
         return;
       }
 
-      const hasMessages = messages.has(currentSessionId) && (messages.get(currentSessionId)?.length || 0) > 0;
-      if (!hasMessages) {
-        try {
-          await loadMessages(currentSessionId);
-        } catch { /* ignored */ }
+      const hasMessagesEntry = messages.has(currentSessionId);
+      if (hasMessagesEntry) {
+        return;
+      }
+
+      try {
+        await loadMessages(currentSessionId);
+      } catch {
+        /* ignored */
       }
     };
 
