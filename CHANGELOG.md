@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.6] - 2026-02-9
+
+- Desktop: redesigned the main workspace with a dedicated Git sidebar and bottom terminal dock, so Git and terminal actions stay in reach while chatting.
+- Desktop: added an `Open In` button to open the current workspace in Finder, Terminal, and supported editors with remembered app preference (thanks to @yulia-ivashko).
+- Header: combined Instance, Usage, and MCP into one services menu for faster access to runtime controls and rate limits while decluttering the header space.
+- Git: added push/pull with remote selection, plus in-app rebase/merge flows with improved remote inference and clearer conflict handling (thanks to @gsxdsm).
+- Git: reorganized the Git workspace with improved in-app PR workflows.
+- Files: improved editing with breadcrumbs, better draft handling, smoother editor interactions, and more reliable directory navigation from file context (thanks to @nelsonPires5).
+- Sessions: improved status behavior, faster mobile session switching with running/unread indicators, and clearer worktree labels when branch name differs (thanks to @Jovines, @gsxdsm).
+- Notifications: added smarter templates with concise summaries, so completion alerts are easier to scan (thanks to @gsxdsm).
+- Usage: added per-model quota breakdowns with collapsible groups, and fixed provider dropdown scrolling (thanks to @nelsonPires5, @gsxdsm).
+- Terminal: improved input responsiveness with a persistent low-latency transport for steadier typing (thanks to @shekohex).
+- Mobile: fixed chat input layout issues on small screens (thanks to @nelsonPires5).
+- Reliability: fixed OpenCode auth pass-through and proxy env handling to reduce intermittent connection/auth issues (thanks to @gsxdsm).
+
+
 ## [1.6.5] - 2026-02-6
 
 - Settings: added an OpenCode CLI path override so you can point OpenChamber at a custom/local CLI install.

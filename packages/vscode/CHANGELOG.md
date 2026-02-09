@@ -1,3 +1,8 @@
+## [1.6.6] - 2026-02-9
+
+- Usage: added per-model quota groups in the header and fixed provider dropdown scrolling for easier usage tracking (thanks to @nelsonPires5, @gsxdsm).
+- Reliability: fixed OpenCode auth pass-through/proxy behavior to reduce failed extension requests (thanks to @gsxdsm).
+
 ## [1.6.5] - 2026-02-6
 
 - Settings: added an OpenCode CLI path override so you can use a custom/local CLI install.
