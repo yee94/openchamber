@@ -28,3 +28,25 @@ local-dev*
 *.sw?
 .opencode/plans/*
 .hive
+
+# Build outputs
+build/
+.gradle/
+
+# Built webview assets (generated during build)
+src/main/resources/webview/
+
+# IDE
+*.iml
+*.ipr
+*.iws
+
+# Local env
+.env
+.env.local
+
+# IntelliJ plugin (separate project)
+packages/intellij/
+
+# OS
+Thumbs.db
