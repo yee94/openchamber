@@ -267,8 +267,6 @@ export const PlanView: React.FC = () => {
     setCommentText('');
     setLineSelection(null);
     setEditingDraftId(null);
-
-    toast.success(editingDraftId ? 'Comment updated' : 'Comment saved');
   }, [lineSelection, content, displayPath, resolvedPath, addDraft, updateDraft, getSessionKey, extractSelectedCode, editingDraftId]);
 
 

@@ -745,7 +745,6 @@ export const FilesView: React.FC = () => {
         startLine: finalRange.start,
         endLine: finalRange.end,
       });
-      toast.success('Comment updated');
     } else {
       addDraft({
         sessionKey,
@@ -757,7 +756,6 @@ export const FilesView: React.FC = () => {
         language: getLanguageFromExtension(selectedFile.path) || 'text',
         text: text.trim(),
       });
-      toast.success('Comment saved');
     }
 
     setLineSelection(null);
