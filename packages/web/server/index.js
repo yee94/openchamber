@@ -5424,12 +5424,20 @@ async function main(options = {}) {
         // Use defaults
       }
 
+      const isWindows = process.platform === 'win32';
+
       // Build restart command with stored options
       let restartCmd = `openchamber serve --port ${storedOptions.port} --daemon`;
       if (storedOptions.uiPassword) {
-        // Escape password for shell
-        const escapedPw = storedOptions.uiPassword.replace(/'/g, "'\\''");
-        restartCmd += ` --ui-password '${escapedPw}'`;
+        if (isWindows) {
+          // Escape for cmd.exe quoted argument
+          const escapedPw = storedOptions.uiPassword.replace(/"/g, '""');
+          restartCmd += ` --ui-password "${escapedPw}"`;
+        } else {
+          // Escape for POSIX single-quoted argument
+          const escapedPw = storedOptions.uiPassword.replace(/'/g, "'\\''");
+          restartCmd += ` --ui-password '${escapedPw}'`;
+        }
       }
 
       // Respond immediately - update will happen after response
@@ -5449,20 +5457,34 @@ async function main(options = {}) {
         // 1. Wait for current process to exit
         // 2. Run the update
         // 3. Restart the server with original options
-        const script = `
-          sleep 2
-          ${updateCmd}
-          if [ $? -eq 0 ]; then
-            echo "Update successful, restarting OpenChamber..."
-            ${restartCmd}
-          else
-            echo "Update failed"
-            exit 1
-          fi
-        `;
+        const shell = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'sh';
+        const shellFlag = isWindows ? '/c' : '-c';
+        const script = isWindows
+          ? `
+            timeout /t 2 /nobreak >nul
+            ${updateCmd}
+            if %ERRORLEVEL% EQU 0 (
+              echo Update successful, restarting OpenChamber...
+              ${restartCmd}
+            ) else (
+              echo Update failed
+              exit /b 1
+            )
+          `
+          : `
+            sleep 2
+            ${updateCmd}
+            if [ $? -eq 0 ]; then
+              echo "Update successful, restarting OpenChamber..."
+              ${restartCmd}
+            else
+              echo "Update failed"
+              exit 1
+            fi
+          `;
 
         // Spawn detached shell to run update after we exit
-        const child = spawnChild('sh', ['-c', script], {
+        const child = spawnChild(shell, [shellFlag, script], {
           detached: true,
           stdio: 'ignore',
           env: process.env,
