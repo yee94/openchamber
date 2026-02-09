@@ -537,13 +537,13 @@ export const useConfigStore = create<ConfigStore>()(
                     }
                     return true;
                 })(),
-                // Voice mode enabled - load from localStorage or default to true
+                // Voice mode enabled - load from localStorage or default to false
                 voiceModeEnabled: (() => {
                     if (typeof window !== 'undefined') {
                         const saved = localStorage.getItem('voiceModeEnabled');
-                        if (saved === 'false') return false;
+                        if (saved === 'true') return true;
                     }
-                    return true;
+                    return false;
                 })(),
                 // Summarization settings
                 summarizeMessageTTS: (() => {
