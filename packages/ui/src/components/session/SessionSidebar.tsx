@@ -1978,6 +1978,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const allGroupSessions = collectGroupSessions(group.sessions);
       const normalizedGroupDirectory = normalizePath(group.directory ?? null);
       const isGitProject = Boolean(projectId && projectRepoStatus.get(projectId));
+      const showBranchSubtitle = !group.isMain && isBranchDifferentFromLabel(group.branch, group.label);
       const isActiveGroup = Boolean(
         normalizedGroupDirectory
           && currentSessionDirectory
@@ -1987,7 +1988,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return (
         <div className="oc-group">
           <div
-            className="group/gh flex items-start justify-between gap-2 py-1 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
+            className="group/gh flex items-center justify-between gap-2 py-1 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
             onClick={() => {
               setCollapsedGroups((prev) => {
                 const next = new Set(prev);
@@ -2017,20 +2018,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             }}
             aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
           >
-            <div className="min-w-0 flex items-start gap-1.5 px-0 pt-0.5">
+            <div className="min-w-0 flex items-center gap-1.5 px-0">
               {isCollapsed ? (
-                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
+                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
               ) : (
-                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
+                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
               )}
               {!group.isMain || isGitProject ? (
-                <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
+                <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
               ) : null}
-              <div className="min-w-0 flex flex-col">
+              <div className="min-w-0 flex flex-col justify-center">
                 <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
                   {group.label}
                 </p>
-                {!group.isMain && isBranchDifferentFromLabel(group.branch, group.label) ? (
+                {showBranchSubtitle ? (
                   <span className="text-[10px] sm:text-[11px] text-muted-foreground/80 truncate leading-tight">
                     {group.branch}
                   </span>
