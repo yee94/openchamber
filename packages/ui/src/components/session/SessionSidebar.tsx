@@ -41,6 +41,7 @@ import {
   RiFileCopyLine,
   RiFolderAddLine,
   RiGitBranchLine,
+  RiGitPullRequestLine,
   RiLinkUnlinkM,
 
   RiGithubLine,
@@ -68,6 +69,7 @@ import { useGitStore } from '@/stores/useGitStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
+import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -194,6 +196,7 @@ interface SortableProjectItemProps {
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
   onNewSessionFromGitHubIssue?: () => void;
+  onNewSessionFromGitHubPR?: () => void;
   onOpenMultiRunLauncher: () => void;
   onRenameStart: () => void;
   onRenameSave: () => void;
@@ -226,6 +229,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onNewSession,
   onNewWorktreeSession,
   onNewSessionFromGitHubIssue,
+  onNewSessionFromGitHubPR,
   onOpenMultiRunLauncher,
   onRenameStart,
   onRenameSave,
@@ -384,6 +388,12 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     New session from GitHub issue
                   </DropdownMenuItem>
                 )}
+                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
+                  <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
+                    <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
+                    New session from GitHub PR
+                  </DropdownMenuItem>
+                )}
                 {showCreateButtons && isRepo && !hideDirectoryControls && (
                   <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                     <ArrowsMerge className="mr-1.5 h-4 w-4" />
@@ -534,6 +544,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
+  const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
@@ -2312,6 +2323,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    onClick={() => setPullRequestPickerOpen(true)}
+                    className={headerActionButtonClass}
+                    aria-label="New from PR"
+                  >
+                    <RiGitPullRequestLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New from PR</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
                     onClick={openMultiRunLauncher}
                     className={headerActionButtonClass}
                     aria-label="New multi-run"
@@ -2419,6 +2443,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       setIssuePickerOpen(true);
                     }}
+                    onNewSessionFromGitHubPR={() => {
+                      if (projectKey !== activeProjectId) {
+                        setActiveProject(projectKey);
+                      }
+                      setPullRequestPickerOpen(true);
+                    }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
@@ -2519,6 +2549,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         open={issuePickerOpen}
         onOpenChange={(open) => {
           setIssuePickerOpen(open);
+          if (!open && mobileVariant) {
+            setActiveMainTab('chat');
+            setSessionSwitcherOpen(false);
+          }
+        }}
+      />
+
+      <GitHubPullRequestPickerDialog
+        open={pullRequestPickerOpen}
+        onOpenChange={(open) => {
+          setPullRequestPickerOpen(open);
           if (!open && mobileVariant) {
             setActiveMainTab('chat');
             setSessionSwitcherOpen(false);
