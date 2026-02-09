@@ -6673,6 +6673,7 @@ async function main(options = {}) {
     try {
       const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
       const branch = typeof req.query?.branch === 'string' ? req.query.branch.trim() : '';
+      const remote = typeof req.query?.remote === 'string' ? req.query.remote.trim() : 'origin';
       if (!directory || !branch) {
         return res.status(400).json({ error: 'directory and branch are required' });
       }
@@ -6684,17 +6685,43 @@ async function main(options = {}) {
       }
 
       const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
-      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      const { repo } = await resolveGitHubRepoFromDirectory(directory, remote);
       if (!repo) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
       }
 
-       const listByHead = async (state) => {
+       // Determine the head owner for PR search
+       // Priority: 1) tracking branch remote, 2) origin (if different from target), 3) target repo owner
+       let headOwnerForSearch = null;
+       
+       // First, check the branch's tracking info to see which remote it's on
+       const { getStatus } = await import('./lib/git-service.js');
+       const status = await getStatus(directory).catch(() => null);
+       if (status?.tracking) {
+         const trackingRemote = status.tracking.split('/')[0];
+         if (trackingRemote && trackingRemote !== remote) {
+           // Branch is tracked on a different remote - get that remote's owner
+           const { repo: trackingRepo } = await resolveGitHubRepoFromDirectory(directory, trackingRemote);
+           if (trackingRepo && trackingRepo.owner !== repo.owner) {
+             headOwnerForSearch = trackingRepo.owner;
+           }
+         }
+       }
+       
+       // Fallback: if targeting non-origin, check if origin has a different owner (fork scenario)
+       if (!headOwnerForSearch && remote !== 'origin') {
+         const { repo: originRepo } = await resolveGitHubRepoFromDirectory(directory, 'origin');
+         if (originRepo && originRepo.owner !== repo.owner) {
+           headOwnerForSearch = originRepo.owner;
+         }
+       }
+
+       const listByHead = async (state, headOwner = repo.owner) => {
          const resp = await octokit.rest.pulls.list({
            owner: repo.owner,
            repo: repo.repo,
            state,
-           head: `${repo.owner}:${branch}`,
+           head: `${headOwner}:${branch}`,
            per_page: 10,
          });
          return Array.isArray(resp?.data) ? resp.data[0] : null;
@@ -6716,9 +6743,20 @@ async function main(options = {}) {
        // PR status by branch:
        // - Prefer open PRs.
        // - If none, also surface closed/merged PRs.
-       // - Fork PR support: head owner != base owner -> head filter yields empty; fall back to matching head.ref.
-       let first = await listByHead('open');
+       // - For cross-repo PRs: first try with head owner, then fall back to target owner, then ref match.
+       let first = null;
+       
+       // For cross-repo workflows, try head owner first
+       if (headOwnerForSearch) {
+         first = await listByHead('open', headOwnerForSearch);
+         if (!first) first = await listByHead('closed', headOwnerForSearch);
+       }
+       
+       // Try with target repo owner (same-repo PRs)
+       if (!first) first = await listByHead('open');
        if (!first) first = await listByHead('closed');
+       
+       // Fall back to matching head.ref directly (handles edge cases)
        if (!first) first = await listByHeadRef('open');
        if (!first) first = await listByHeadRef('closed');
       if (!first) {
@@ -6858,6 +6896,10 @@ async function main(options = {}) {
       const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
       const body = typeof req.body?.body === 'string' ? req.body.body : undefined;
       const draft = typeof req.body?.draft === 'boolean' ? req.body.draft : undefined;
+      // remote = target repo (where PR is created, e.g., 'upstream' for forks)
+      const remote = typeof req.body?.remote === 'string' ? req.body.remote.trim() : 'origin';
+      // headRemote = source repo (where head branch lives, e.g., 'origin' for forks)
+      const headRemote = typeof req.body?.headRemote === 'string' ? req.body.headRemote.trim() : '';
       if (!directory || !title || !head || !base) {
         return res.status(400).json({ error: 'directory, title, head, base are required' });
       }
@@ -6869,16 +6911,78 @@ async function main(options = {}) {
       }
 
       const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
-      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      const { repo } = await resolveGitHubRepoFromDirectory(directory, remote);
       if (!repo) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
+      }
+
+      // Determine the source remote for the head branch
+      // Priority: 1) explicit headRemote, 2) tracking branch remote, 3) 'origin' if targeting non-origin
+      let sourceRemote = headRemote;
+      
+      // If no explicit headRemote, check the branch's tracking info
+      if (!sourceRemote) {
+        const { getStatus } = await import('./lib/git-service.js');
+        const status = await getStatus(directory).catch(() => null);
+        if (status?.tracking) {
+          // tracking is like "gsxdsm/fix/multi-remote-branch-creation" or "origin/main"
+          const trackingRemote = status.tracking.split('/')[0];
+          if (trackingRemote) {
+            sourceRemote = trackingRemote;
+          }
+        }
+      }
+      
+      // Fallback: if targeting non-origin and no tracking info, try 'origin'
+      if (!sourceRemote && remote !== 'origin') {
+        sourceRemote = 'origin';
+      }
+
+      // For fork workflows: we need to determine the correct head reference
+      let headRef = head;
+      
+      if (sourceRemote && sourceRemote !== remote) {
+        // The branch is on a different remote than the target - this is a cross-repo PR
+        const { repo: headRepo } = await resolveGitHubRepoFromDirectory(directory, sourceRemote);
+        if (headRepo) {
+          // Always use owner:branch format for cross-repo PRs
+          // GitHub API requires this when head is from a different repo/fork
+          if (headRepo.owner !== repo.owner || headRepo.repo !== repo.repo) {
+            headRef = `${headRepo.owner}:${head}`;
+          }
+        }
+      }
+
+      // For cross-repo PRs, verify the branch exists on the head repo first
+      if (headRef.includes(':')) {
+        const [headOwner] = headRef.split(':');
+        const headRepoName = sourceRemote 
+          ? (await resolveGitHubRepoFromDirectory(directory, sourceRemote)).repo?.repo 
+          : repo.repo;
+        
+        if (headRepoName) {
+          try {
+            await octokit.rest.repos.getBranch({
+              owner: headOwner,
+              repo: headRepoName,
+              branch: head,
+            });
+          } catch (branchError) {
+            if (branchError?.status === 404) {
+              return res.status(400).json({
+                error: `Branch "${head}" not found on ${headOwner}/${headRepoName}. Please push your branch first: git push ${sourceRemote || 'origin'} ${head}`,
+              });
+            }
+            // For other errors, continue - let the PR create attempt handle it
+          }
+        }
       }
 
       const created = await octokit.rest.pulls.create({
         owner: repo.owner,
         repo: repo.repo,
         title,
-        head,
+        head: headRef,
         base,
         ...(typeof body === 'string' ? { body } : {}),
         ...(typeof draft === 'boolean' ? { draft } : {}),
@@ -6904,6 +7008,20 @@ async function main(options = {}) {
       });
     } catch (error) {
       console.error('Failed to create GitHub PR:', error);
+      
+      // Check for head validation error (common with fork PRs)
+      const errorMessage = error.message || '';
+      const isHeadValidationError = 
+        errorMessage.includes('Validation Failed') && 
+        errorMessage.includes('"field":"head"') &&
+        errorMessage.includes('"code":"invalid"');
+      
+      if (isHeadValidationError) {
+        return res.status(400).json({ 
+          error: 'Unable to create PR: You must have write access to the source repository. Make sure you have pushed your branch to a repository you own (your fork), and that the branch exists on the remote.' 
+        });
+      }
+      
       return res.status(500).json({ error: error.message || 'Failed to create GitHub PR' });
     }
   });
