@@ -95,20 +95,59 @@ const sortNodes = (items: FileNode[]) =>
     return a.name.localeCompare(b.name);
   });
 
-const normalizePath = (value: string): string => value.replace(/\\/g, '/');
+const normalizePath = (value: string): string => {
+  if (!value) return '';
+
+  const raw = value.replace(/\\/g, '/');
+  const hadUncPrefix = raw.startsWith('//');
+
+  let normalized = raw.replace(/\/+/g, '/');
+  if (hadUncPrefix && !normalized.startsWith('//')) {
+    normalized = `/${normalized}`;
+  }
+
+  const isUnixRoot = normalized === '/';
+  const isWindowsDriveRoot = /^[A-Za-z]:\/$/.test(normalized);
+  if (!isUnixRoot && !isWindowsDriveRoot) {
+    normalized = normalized.replace(/\/+$/, '');
+  }
+
+  return normalized;
+};
+
+const isAbsolutePath = (value: string): boolean => {
+  return value.startsWith('/') || value.startsWith('//') || /^[A-Za-z]:\//.test(value);
+};
+
+const toComparablePath = (value: string): string => {
+  if (/^[A-Za-z]:\//.test(value)) {
+    return value.toLowerCase();
+  }
+  return value;
+};
+
+const isPathWithinRoot = (path: string, root: string): boolean => {
+  const normalizedRoot = normalizePath(root);
+  const normalizedPath = normalizePath(path);
+  if (!normalizedRoot || !normalizedPath) return false;
+
+  const comparableRoot = toComparablePath(normalizedRoot);
+  const comparablePath = toComparablePath(normalizedPath);
+  return comparablePath === comparableRoot || comparablePath.startsWith(`${comparableRoot}/`);
+};
 
 const getAncestorPaths = (filePath: string, root: string): string[] => {
   const normalizedRoot = normalizePath(root);
   const normalizedFile = normalizePath(filePath);
-  
+
   // Ensure file is within root
-  if (!normalizedFile.startsWith(normalizedRoot)) return [];
-  
+  if (!isPathWithinRoot(normalizedFile, normalizedRoot)) return [];
+
   const relative = normalizedFile.slice(normalizedRoot.length).replace(/^\//, '');
   const parts = relative.split('/');
   const ancestors: string[] = [];
   let current = normalizedRoot;
-  
+
   for (let i = 0; i < parts.length - 1; i++) {
     current = current ? `${current}/${parts[i]}` : parts[i];
     ancestors.push(current);
@@ -183,6 +222,12 @@ const shouldIgnoreEntryName = (name: string): boolean => DEFAULT_IGNORED_DIR_NAM
 const shouldIgnorePath = (path: string): boolean => {
   const normalized = normalizePath(path);
   return normalized === 'node_modules' || normalized.endsWith('/node_modules') || normalized.includes('/node_modules/');
+};
+
+const isDirectoryReadError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  return normalized.includes('is a directory') || normalized.includes('eisdir');
 };
 
 const MAX_VIEW_CHARS = 200_000;
@@ -531,7 +576,6 @@ export const FilesView: React.FC = () => {
   const removeOpenPathsByPrefix = useFilesViewTabsStore((state) => state.removeOpenPathsByPrefix);
   const setSelectedPath = useFilesViewTabsStore((state) => state.setSelectedPath);
   const toggleExpandedPath = useFilesViewTabsStore((state) => state.toggleExpandedPath);
-  const expandPath = useFilesViewTabsStore((state) => state.expandPath);
   const expandPaths = useFilesViewTabsStore((state) => state.expandPaths);
 
   const toFileNode = React.useCallback((path: string): FileNode => {
@@ -725,7 +769,12 @@ export const FilesView: React.FC = () => {
       .filter((entry) => showGitignored || !shouldIgnoreEntryName(entry.name))
       .map<FileNode>((entry) => {
         const name = entry.name;
-        const path = normalizePath(entry.path || `${dirPath}/${name}`);
+        const normalizedEntryPath = normalizePath(entry.path || '');
+        const path = normalizedEntryPath
+          ? (isAbsolutePath(normalizedEntryPath)
+            ? normalizedEntryPath
+            : normalizePath(`${dirPath}/${normalizedEntryPath}`))
+          : normalizePath(`${dirPath}/${name}`);
         const type = entry.isDirectory ? 'directory' : 'file';
         const extension = type === 'file' && name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined;
         return {
@@ -1211,13 +1260,60 @@ export const FilesView: React.FC = () => {
         ? `${content.slice(0, MAX_VIEW_CHARS)}\n\n… truncated …`
         : content);
     } catch (error) {
+      if (isDirectoryReadError(error)) {
+        if (root) {
+          setSelectedPath(root, null);
+        }
+        setFileError(null);
+        setFileContent('');
+        setDraftContent('');
+        setLoadedFilePath(null);
+        if (searchQuery.trim().length > 0) {
+          setSearchQuery('');
+        }
+        if (isMobile) {
+          setShowMobilePageContent(false);
+        }
+        if (root) {
+          const ancestors = getAncestorPaths(node.path, root);
+          const pathsToExpand = [...ancestors, node.path];
+          if (pathsToExpand.length > 0) {
+            expandPaths(root, pathsToExpand);
+          }
+          for (const path of pathsToExpand) {
+            if (!loadedDirsRef.current.has(path)) {
+              void loadDirectory(path);
+            }
+          }
+        }
+        return;
+      }
       setFileContent('');
       setDraftContent('');
       setFileError(error instanceof Error ? error.message : 'Failed to read file');
     } finally {
       setFileLoading(false);
     }
-  }, [isMobile, readFile, runtime.isDesktop]);
+  }, [expandPaths, isMobile, loadDirectory, readFile, root, runtime.isDesktop, searchQuery, setSelectedPath]);
+
+  const ensurePathVisible = React.useCallback(async (targetPath: string, includeTarget: boolean) => {
+    if (!root) {
+      return;
+    }
+
+    const ancestors = getAncestorPaths(targetPath, root);
+    const pathsToExpand = includeTarget ? [...ancestors, targetPath] : ancestors;
+
+    if (pathsToExpand.length > 0) {
+      expandPaths(root, pathsToExpand);
+    }
+
+    for (const path of pathsToExpand) {
+      if (!loadedDirsRef.current.has(path)) {
+        await loadDirectory(path);
+      }
+    }
+  }, [expandPaths, loadDirectory, root]);
 
   const getNextOpenFile = React.useCallback((path: string, filesList: FileNode[]) => {
     const index = filesList.findIndex((file) => file.path === path);
@@ -1239,21 +1335,7 @@ export const FilesView: React.FC = () => {
     if (root) {
       setSelectedPath(root, node.path);
       addOpenPath(root, node.path);
-      
-      // Auto-expand parents
-      const ancestors = getAncestorPaths(node.path, root);
-      if (ancestors.length > 0) {
-        expandPaths(root, ancestors);
-        
-        // Ensure ancestor directories are loaded
-        for (const ancestor of ancestors) {
-          if (!loadedDirsRef.current.has(ancestor)) {
-            // Load sequentially to ensure order (though loadDirectory is async)
-            // We use void to fire and forget but they will update state when done
-            void loadDirectory(ancestor);
-          }
-        }
-      }
+      void ensurePathVisible(node.path, false);
     }
 
     setFileError(null);
@@ -1264,7 +1346,15 @@ export const FilesView: React.FC = () => {
     if (isMobile) {
       setShowMobilePageContent(true);
     }
-  }, [addOpenPath, isDirty, isMobile, root, setSelectedPath, expandPaths, loadDirectory]);
+  }, [addOpenPath, ensurePathVisible, isDirty, isMobile, root, setSelectedPath]);
+
+  React.useEffect(() => {
+    if (!selectedFile?.path) {
+      return;
+    }
+
+    void ensurePathVisible(selectedFile.path, false);
+  }, [ensurePathVisible, selectedFile?.path]);
 
   React.useEffect(() => {
     if (!selectedFile) {
@@ -1461,9 +1551,14 @@ export const FilesView: React.FC = () => {
 
   const handleBreadcrumbNavigate = React.useCallback((dirPath: string) => {
     if (!root) return;
-    expandPath(root, dirPath);
-    void loadDirectory(dirPath);
-  }, [root, expandPath, loadDirectory]);
+    if (searchQuery.trim().length > 0) {
+      setSearchQuery('');
+    }
+    if (isMobile) {
+      setShowMobilePageContent(false);
+    }
+    void ensurePathVisible(dirPath, true);
+  }, [ensurePathVisible, isMobile, root, searchQuery]);
 
   const renderTree = React.useCallback((dirPath: string, depth: number): React.ReactNode => {
     const nodes = childrenByDir[dirPath] ?? [];
@@ -1515,7 +1610,7 @@ export const FilesView: React.FC = () => {
   const getDisplayPath = React.useCallback((path: string): string => {
     if (!path) return '';
     const normalizedFilePath = normalizePath(path);
-    if (root && normalizedFilePath.startsWith(root)) {
+    if (root && isPathWithinRoot(normalizedFilePath, root)) {
       const relative = normalizedFilePath.slice(root.length);
       return relative.startsWith('/') ? relative.slice(1) : relative;
     }
