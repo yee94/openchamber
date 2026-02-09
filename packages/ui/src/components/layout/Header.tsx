@@ -826,7 +826,7 @@ export const Header: React.FC = () => {
                 <p>Instance / Usage / MCP</p>
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end" className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-hidden p-0">
+            <DropdownMenuContent align="end" className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto p-0">
               <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-2">
                 <AnimatedTabs<'instance' | 'usage' | 'mcp'>
                   value={desktopServicesTab}
@@ -855,7 +855,7 @@ export const Header: React.FC = () => {
               )}
 
               {desktopServicesTab === 'usage' && (
-                <div className="max-h-[calc(75vh-3.25rem)] overflow-y-auto overflow-x-hidden">
+                <div className="overflow-x-hidden">
                   <div className="sticky top-0 z-20 bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
                     <DropdownMenuLabel className="flex items-center justify-between gap-3 py-2.5">
                       <div className="flex min-w-0 items-center gap-2">
