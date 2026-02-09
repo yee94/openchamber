@@ -41,10 +41,6 @@ import {
   RiFileCopyLine,
   RiFolderAddLine,
   RiGitBranchLine,
-  RiGitClosePullRequestLine,
-  RiGitMergeLine,
-  RiGitPrDraftLine,
-  RiGitPullRequestLine,
   RiLinkUnlinkM,
 
   RiGithubLine,
@@ -71,10 +67,7 @@ import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { useGitStore } from '@/stores/useGitStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import type { GitHubPullRequestStatus } from '@/lib/api/types';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
-import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -87,9 +80,6 @@ const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
 const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
-const PR_REVALIDATE_TTL_MS = 90_000;
-const PR_REVALIDATE_INTERVAL_MS = 90_000;
-const PR_REVALIDATE_CONCURRENCY = 3;
 
 const formatDateLabel = (value: string | number) => {
   const targetDate = new Date(value);
@@ -150,58 +140,6 @@ const toFiniteNumber = (value: unknown): number | undefined => {
   return undefined;
 };
 
-const getPrVisualState = (status: GitHubPullRequestStatus | null): 'draft' | 'open' | 'blocked' | 'merged' | 'closed' | null => {
-  const pr = status?.pr;
-  if (!pr) {
-    return null;
-  }
-  if (pr.state === 'merged') {
-    return 'merged';
-  }
-  if (pr.state === 'closed') {
-    return 'closed';
-  }
-  if (pr.draft) {
-    return 'draft';
-  }
-  const checksFailed = status?.checks?.state === 'failure';
-  const notMergeable = status?.canMerge === false || pr.mergeable === false;
-  if (checksFailed || notMergeable) {
-    return 'blocked';
-  }
-  return 'open';
-};
-
-const getPrTooltipLabel = (status: GitHubPullRequestStatus | null): string => {
-  const pr = status?.pr;
-  if (!pr) {
-    return 'Open pull request';
-  }
-  const parts: string[] = [`PR #${pr.number}`];
-  if (pr.state === 'merged') {
-    parts.push('Merged');
-  } else if (pr.state === 'closed') {
-    parts.push('Closed');
-  } else if (pr.draft) {
-    parts.push('Draft');
-  } else {
-    parts.push('Open');
-  }
-  if (status?.checks?.state === 'failure') {
-    parts.push('Checks failing');
-  }
-  if (status?.canMerge === false || pr.mergeable === false) {
-    parts.push('Merge blocked');
-  }
-  return parts.join(' · ');
-};
-
-type TauriShell = {
-  shell?: {
-    open?: (url: string) => Promise<unknown>;
-  };
-};
-
 const centerDragOverlayUnderPointer: Modifier = ({ transform, activeNodeRect, activatorEvent }) => {
   if (!(activatorEvent instanceof MouseEvent) || !activeNodeRect) {
     return transform;
@@ -256,7 +194,6 @@ interface SortableProjectItemProps {
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
   onNewSessionFromGitHubIssue?: () => void;
-  onNewSessionFromGitHubPR?: () => void;
   onOpenMultiRunLauncher: () => void;
   onRenameStart: () => void;
   onRenameSave: () => void;
@@ -289,7 +226,6 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onNewSession,
   onNewWorktreeSession,
   onNewSessionFromGitHubIssue,
-  onNewSessionFromGitHubPR,
   onOpenMultiRunLauncher,
   onRenameStart,
   onRenameSave,
@@ -448,12 +384,6 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     New session from GitHub issue
                   </DropdownMenuItem>
                 )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
-                  <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
-                    <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
-                    New session from GitHub PR
-                  </DropdownMenuItem>
-                )}
                 {showCreateButtons && isRepo && !hideDirectoryControls && (
                   <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                     <ArrowsMerge className="mr-1.5 h-4 w-4" />
@@ -604,8 +534,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
-  const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
-  const [worktreePrByGroupKey, setWorktreePrByGroupKey] = React.useState<Map<string, GitHubPullRequestStatus>>(new Map());
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
@@ -661,7 +589,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [isProjectRenameInline, setIsProjectRenameInline] = React.useState(false);
   const [projectRenameDraft, setProjectRenameDraft] = React.useState('');
   const [projectRootBranches, setProjectRootBranches] = React.useState<Map<string, string>>(new Map());
-  const worktreePrLastCheckedAtRef = React.useRef<Map<string, number>>(new Map());
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
   const persistCollapsedProjectsTimer = React.useRef<number | null>(null);
@@ -682,8 +609,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
-  const { github, git } = useRuntimeAPIs();
-
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const gitDirectories = useGitStore((state) => state.directories);
@@ -708,24 +633,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
-  const openExternal = React.useCallback(async (url: string) => {
-    if (typeof window === 'undefined') return;
-    const tauri = (window as unknown as { __TAURI__?: TauriShell }).__TAURI__;
-    if (tauri?.shell?.open) {
-      try {
-        await tauri.shell.open(url);
-        return;
-      } catch {
-        // fall through
-      }
-    }
-    try {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {
-      // ignore
-    }
-  }, []);
 
   const flushCollapsedProjectsPersist = React.useCallback(() => {
     if (isVSCode) {
@@ -1493,219 +1400,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
   const reserveHeaderActionsSpace = activeProjectRepoState !== false;
 
-  const worktreePrInFlight = React.useRef<Set<string>>(new Set());
-  const visibleWorktreeGroups = React.useMemo(() => {
-    return visibleProjectSections.flatMap((section) =>
-      section.groups
-        .filter((group) => !group.isMain)
-        .map((group) => ({
-          key: `${section.project.id}:${group.id}`,
-          directory: group.directory,
-          label: group.label,
-          worktree: group.worktree,
-        }))
-    );
-  }, [visibleProjectSections]);
-
-  React.useEffect(() => {
-    const validKeys = new Set<string>();
-    projectSections.forEach((section) => {
-      section.groups.forEach((group) => {
-        if (!group.isMain) {
-          validKeys.add(`${section.project.id}:${group.id}`);
-        }
-      });
-    });
-    setWorktreePrByGroupKey((prev) => {
-      if (prev.size === 0) return prev;
-      const next = new Map(prev);
-      let mutated = false;
-      Array.from(next.keys()).forEach((key) => {
-        if (!validKeys.has(key)) {
-          next.delete(key);
-          mutated = true;
-        }
-      });
-      return mutated ? next : prev;
-    });
-    Array.from(worktreePrLastCheckedAtRef.current.keys()).forEach((key) => {
-      if (!validKeys.has(key)) {
-        worktreePrLastCheckedAtRef.current.delete(key);
-      }
-    });
-  }, [projectSections]);
-
-  const ensureWorktreePrLoaded = React.useCallback(async (
-    groupKey: string,
-    directory: string | null,
-    label: string,
-    worktree?: WorktreeMetadata | null,
-    options?: { force?: boolean },
-  ) => {
-    if (!github?.prStatus || !directory || worktreePrInFlight.current.has(groupKey)) {
-      return;
-    }
-    const lastCheckedAt = worktreePrLastCheckedAtRef.current.get(groupKey) ?? 0;
-    const isFresh = Date.now() - lastCheckedAt < PR_REVALIDATE_TTL_MS;
-    if (!options?.force && isFresh) {
-      return;
-    }
-
-    const resolvedBranchFromDirectory = await git.getGitStatus(directory)
-      .then((status) => status?.current ?? '')
-      .catch(() => '');
-    const normalizeBranchCandidate = (value: string) => value
-      .replace(/^refs\/heads\//, '')
-      .replace(/^remotes\//, '')
-      .replace(/^origin\//, '')
-      .trim();
-    const branches = [resolvedBranchFromDirectory, worktree?.branch, worktree?.name, worktree?.label, label]
-      .map((value) => (value || '').trim())
-      .map(normalizeBranchCandidate)
-      .filter((value) => value.length > 0);
-    const uniqueBranches = Array.from(new Set(branches));
-    if (uniqueBranches.length === 0) {
-      worktreePrLastCheckedAtRef.current.set(groupKey, Date.now());
-      return;
-    }
-
-    worktreePrInFlight.current.add(groupKey);
-    try {
-      let matched: GitHubPullRequestStatus | null = null;
-      for (const branch of uniqueBranches) {
-        const status = await github.prStatus(directory, branch);
-        const hasPr = status?.connected !== false && Boolean(status?.pr);
-        if (hasPr) {
-          matched = status;
-          break;
-        }
-      }
-      setWorktreePrByGroupKey((prev) => {
-        const current = prev.get(groupKey);
-        if (!matched) {
-          if (!current) {
-            return prev;
-          }
-          const next = new Map(prev);
-          next.delete(groupKey);
-          return next;
-        }
-
-        const currentPr = current?.pr;
-        const nextPr = matched.pr;
-        const unchanged = Boolean(
-          currentPr
-            && nextPr
-            && currentPr.number === nextPr.number
-            && currentPr.state === nextPr.state
-            && currentPr.draft === nextPr.draft
-            && currentPr.mergeable === nextPr.mergeable
-            && current?.canMerge === matched.canMerge
-            && current?.checks?.state === matched.checks?.state
-            && current?.checks?.failure === matched.checks?.failure
-            && current?.checks?.pending === matched.checks?.pending
-            && current?.checks?.success === matched.checks?.success
-        );
-
-        if (unchanged) {
-          return prev;
-        }
-
-        const next = new Map(prev);
-        next.set(groupKey, matched);
-        return next;
-      });
-    } catch {
-      setWorktreePrByGroupKey((prev) => {
-        if (!prev.has(groupKey)) {
-          return prev;
-        }
-        const next = new Map(prev);
-        next.delete(groupKey);
-        return next;
-      });
-    } finally {
-      worktreePrLastCheckedAtRef.current.set(groupKey, Date.now());
-      worktreePrInFlight.current.delete(groupKey);
-    }
-  }, [github, git]);
-
-  const revalidateVisibleWorktreePrs = React.useCallback(async (options?: { force?: boolean; onlyExistingPr?: boolean }) => {
-    const targetGroups = visibleWorktreeGroups.filter((group) => {
-      if (!group.directory) {
-        return false;
-      }
-      if (options?.onlyExistingPr && !worktreePrByGroupKey.has(group.key)) {
-        return false;
-      }
-      return true;
-    });
-    if (targetGroups.length === 0) {
-      return;
-    }
-
-    let cursor = 0;
-    const workerCount = Math.min(PR_REVALIDATE_CONCURRENCY, targetGroups.length);
-    await Promise.all(
-      Array.from({ length: workerCount }).map(async () => {
-        while (cursor < targetGroups.length) {
-          const index = cursor;
-          cursor += 1;
-          const group = targetGroups[index];
-          await ensureWorktreePrLoaded(group.key, group.directory, group.label, group.worktree, { force: options?.force });
-        }
-      })
-    );
-  }, [visibleWorktreeGroups, worktreePrByGroupKey, ensureWorktreePrLoaded]);
-
-  React.useEffect(() => {
-    if (visibleWorktreeGroups.length === 0) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      void revalidateVisibleWorktreePrs();
-    }, 120);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [visibleWorktreeGroups, revalidateVisibleWorktreePrs]);
-
-  React.useEffect(() => {
-    if (!activeProjectId) {
-      return;
-    }
-    void revalidateVisibleWorktreePrs();
-  }, [activeProjectId, revalidateVisibleWorktreePrs]);
-
-  React.useEffect(() => {
-    const onFocus = () => {
-      void revalidateVisibleWorktreePrs();
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        void revalidateVisibleWorktreePrs();
-      }
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [revalidateVisibleWorktreePrs]);
-
-  React.useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
-      void revalidateVisibleWorktreePrs({ onlyExistingPr: true });
-    }, PR_REVALIDATE_INTERVAL_MS);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [revalidateVisibleWorktreePrs]);
-
   const projectSessionMeta = React.useMemo(() => {
     const metaByProject = new Map<string, Map<string, { directory: string | null }>>();
     const firstSessionByProject = new Map<string, { id: string; directory: string | null }>();
@@ -2273,17 +1967,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const allGroupSessions = collectGroupSessions(group.sessions);
       const normalizedGroupDirectory = normalizePath(group.directory ?? null);
       const isGitProject = Boolean(projectId && projectRepoStatus.get(projectId));
-      const groupPrStatus = projectId ? worktreePrByGroupKey.get(groupKey) ?? null : null;
-      const groupPr = groupPrStatus?.pr ?? null;
-      const prVisualState = getPrVisualState(groupPrStatus);
-      const prColorVar = prVisualState ? `var(--pr-${prVisualState})` : 'var(--status-info)';
-      const PrStateIcon = prVisualState === 'draft'
-        ? RiGitPrDraftLine
-        : prVisualState === 'merged'
-          ? RiGitMergeLine
-          : prVisualState === 'closed'
-            ? RiGitClosePullRequestLine
-            : RiGitPullRequestLine;
       const isActiveGroup = Boolean(
         normalizedGroupDirectory
           && currentSessionDirectory
@@ -2294,15 +1977,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         <div className="oc-group">
           <div
             className="group/gh flex items-start justify-between gap-2 py-1 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
-            onMouseEnter={() => {
-              if (!group.isMain) {
-                void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
-              }
-            }}
             onClick={() => {
-              if (!group.isMain) {
-                void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
-              }
               setCollapsedGroups((prev) => {
                 const next = new Set(prev);
                 if (next.has(groupKey)) {
@@ -2318,9 +1993,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                if (!group.isMain) {
-                  void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
-                }
                 setCollapsedGroups((prev) => {
                   const next = new Set(prev);
                   if (next.has(groupKey)) {
@@ -2341,31 +2013,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
               )}
               {!group.isMain || isGitProject ? (
-                !group.isMain && groupPr?.url ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (groupPr?.url) {
-                            void openExternal(groupPr.url);
-                          }
-                        }}
-                        className="inline-flex h-4 w-4 items-center justify-center rounded-sm hover:bg-interactive-hover/50 mt-1"
-                        style={{ color: prColorVar }}
-                        aria-label={getPrTooltipLabel(groupPrStatus)}
-                      >
-                        <PrStateIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={4}>
-                      <p>{getPrTooltipLabel(groupPrStatus)}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
-                )
+                <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
               ) : null}
               <div className="min-w-0 flex flex-col">
                 <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
@@ -2472,9 +2120,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       hideDirectoryControls,
       currentSessionDirectory,
       projectRepoStatus,
-      worktreePrByGroupKey,
-      openExternal,
-      ensureWorktreePrLoaded,
       renderSessionNode,
       toggleGroupSessionLimit,
       activeProjectId,
@@ -2667,19 +2312,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => setPullRequestPickerOpen(true)}
-                    className={headerActionButtonClass}
-                    aria-label="New from PR"
-                  >
-                    <RiGitPullRequestLine className="h-4.5 w-4.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>New from PR</p></TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
                     onClick={openMultiRunLauncher}
                     className={headerActionButtonClass}
                     aria-label="New multi-run"
@@ -2787,12 +2419,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       setIssuePickerOpen(true);
                     }}
-                    onNewSessionFromGitHubPR={() => {
-                      if (projectKey !== activeProjectId) {
-                        setActiveProject(projectKey);
-                      }
-                      setPullRequestPickerOpen(true);
-                    }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
@@ -2893,17 +2519,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         open={issuePickerOpen}
         onOpenChange={(open) => {
           setIssuePickerOpen(open);
-          if (!open && mobileVariant) {
-            setActiveMainTab('chat');
-            setSessionSwitcherOpen(false);
-          }
-        }}
-      />
-
-      <GitHubPullRequestPickerDialog
-        open={pullRequestPickerOpen}
-        onOpenChange={(open) => {
-          setPullRequestPickerOpen(open);
           if (!open && mobileVariant) {
             setActiveMainTab('chat');
             setSessionSwitcherOpen(false);
