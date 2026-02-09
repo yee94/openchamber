@@ -1,4 +1,5 @@
 import React from 'react';
+import { RiFullscreenExitLine, RiFullscreenLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -16,12 +17,58 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
   const bottomTerminalHeight = useUIStore((state) => state.bottomTerminalHeight);
   const setBottomTerminalHeight = useUIStore((state) => state.setBottomTerminalHeight);
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [fullscreenHeight, setFullscreenHeight] = React.useState<number | null>(null);
   const [isResizing, setIsResizing] = React.useState(false);
+  const dockRef = React.useRef<HTMLElement | null>(null);
   const startYRef = React.useRef(0);
   const startHeightRef = React.useRef(bottomTerminalHeight || 300);
+  const previousHeightRef = React.useRef(bottomTerminalHeight || 300);
+
+  const standardHeight = React.useMemo(
+    () => Math.min(BOTTOM_DOCK_MAX_HEIGHT, Math.max(BOTTOM_DOCK_MIN_HEIGHT, bottomTerminalHeight || 300)),
+    [bottomTerminalHeight],
+  );
 
   React.useEffect(() => {
-    if (isMobile || !isResizing) {
+    if (!isOpen) {
+      setIsFullscreen(false);
+      setFullscreenHeight(null);
+      setIsResizing(false);
+    }
+  }, [isOpen]);
+
+  React.useEffect(() => {
+    if (isMobile || !isOpen || !isFullscreen) {
+      return;
+    }
+
+    const updateFullscreenHeight = () => {
+      const parentHeight = dockRef.current?.parentElement?.getBoundingClientRect().height;
+      if (!parentHeight || parentHeight <= 0) {
+        return;
+      }
+      const next = Math.round(parentHeight);
+      setFullscreenHeight((prev) => (prev === next ? prev : next));
+    };
+
+    updateFullscreenHeight();
+
+    const parent = dockRef.current?.parentElement;
+    if (!parent) {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateFullscreenHeight);
+    observer.observe(parent);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isFullscreen, isMobile, isOpen]);
+
+  React.useEffect(() => {
+    if (isMobile || !isResizing || isFullscreen) {
       return;
     }
 
@@ -49,26 +96,41 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isMobile, isResizing, setBottomTerminalHeight, setBottomTerminalOpen]);
+  }, [isFullscreen, isMobile, isResizing, setBottomTerminalHeight, setBottomTerminalOpen]);
 
   if (isMobile) {
     return null;
   }
 
   const appliedHeight = isOpen
-    ? Math.min(BOTTOM_DOCK_MAX_HEIGHT, Math.max(BOTTOM_DOCK_MIN_HEIGHT, bottomTerminalHeight || 300))
+    ? (isFullscreen ? Math.max(standardHeight, fullscreenHeight ?? standardHeight) : standardHeight)
     : 0;
 
   const handlePointerDown = (event: React.PointerEvent) => {
-    if (!isOpen) return;
+    if (!isOpen || isFullscreen) return;
     setIsResizing(true);
     startYRef.current = event.clientY;
     startHeightRef.current = appliedHeight;
     event.preventDefault();
   };
 
+  const toggleFullscreen = () => {
+    if (!isOpen) return;
+
+    if (isFullscreen) {
+      setIsFullscreen(false);
+      const restoreHeight = Math.min(BOTTOM_DOCK_MAX_HEIGHT, Math.max(BOTTOM_DOCK_MIN_HEIGHT, previousHeightRef.current));
+      setBottomTerminalHeight(restoreHeight);
+      return;
+    }
+
+    previousHeightRef.current = standardHeight;
+    setIsFullscreen(true);
+  };
+
   return (
     <section
+      ref={dockRef}
       className={cn(
         'relative flex overflow-hidden border-t border-border bg-sidebar',
         isResizing ? 'transition-none' : 'transition-[height] duration-300 ease-in-out',
@@ -81,7 +143,7 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
       }}
       aria-hidden={!isOpen || appliedHeight === 0}
     >
-      {isOpen && (
+      {isOpen && !isFullscreen && (
         <div
           className={cn(
             'absolute left-0 top-0 z-20 h-[4px] w-full cursor-row-resize hover:bg-primary/50 transition-colors',
@@ -92,6 +154,18 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
           aria-orientation="horizontal"
           aria-label="Resize terminal panel"
         />
+      )}
+
+      {isOpen && (
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          className="absolute right-2 top-2 z-30 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--surface-muted-foreground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          title={isFullscreen ? 'Restore terminal panel height' : 'Expand terminal panel'}
+          aria-label={isFullscreen ? 'Restore terminal panel height' : 'Expand terminal panel'}
+        >
+          {isFullscreen ? <RiFullscreenExitLine className="h-5 w-5" /> : <RiFullscreenLine className="h-5 w-5" />}
+        </button>
       )}
 
       <div
