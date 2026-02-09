@@ -264,7 +264,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       return;
     }
 
-    const fileLabel = fileName ? fileName.split('/').pop() || 'unknown' : 'unknown';
     // Pierre selection range: { start, end, side }
     // Store needs { startLine, endLine, side: 'original'|'modified' }
     // Pierre side: 'additions' (right) | 'deletions' (left)
@@ -275,7 +274,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
     if (editingDraftId) {
       updateDraft(sessionKey, editingDraftId, {
-        fileLabel,
+        fileLabel: fileName || 'unknown',
         startLine: targetRange.start,
         endLine: targetRange.end,
         side: storeSide,
@@ -287,7 +286,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       addDraft({
         sessionKey,
         source: 'diff',
-        fileLabel,
+        fileLabel: fileName || 'unknown',
         startLine: targetRange.start,
         endLine: targetRange.end,
         side: storeSide,
@@ -436,7 +435,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
     const sessionDrafts = allDrafts[sessionKey] ?? [];
     // Match file label logic - use basename
-    const fileLabel = fileName ? fileName.split('/').pop() || 'unknown' : 'unknown';
+    const fileLabel = fileName || 'unknown';
     const fileDrafts = sessionDrafts.filter((d) => d.source === 'diff' && d.fileLabel === fileLabel);
 
     const anns: DiffLineAnnotation<AnnotationData>[] = [];
