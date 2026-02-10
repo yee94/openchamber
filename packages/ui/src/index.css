@@ -33,6 +33,143 @@ textarea[data-chat-input="true"]:focus-visible {
   font-family: "IBM Plex Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
+/* Codemirror syntax fallback for classHighlighter tokens */
+.cm-editor .tok-comment,
+.cm-editor .tok-docComment,
+.cm-editor .tok-meta,
+.cm-editor .tok-documentMeta {
+  color: var(--syntax-comment);
+}
+
+.cm-editor .tok-keyword,
+.cm-editor .tok-controlKeyword,
+.cm-editor .tok-definitionKeyword,
+.cm-editor .tok-modifier,
+.cm-editor .tok-moduleKeyword {
+  color: var(--syntax-keyword);
+}
+
+.cm-editor .tok-operator,
+.cm-editor .tok-operatorKeyword,
+.cm-editor .tok-derefOperator,
+.cm-editor .tok-updateOperator,
+.cm-editor .tok-definitionOperator,
+.cm-editor .tok-typeOperator,
+.cm-editor .tok-controlOperator,
+.cm-editor .tok-logicOperator,
+.cm-editor .tok-bitwiseOperator,
+.cm-editor .tok-arithmeticOperator,
+.cm-editor .tok-compareOperator {
+  color: var(--syntax-operator);
+}
+
+.cm-editor .tok-string,
+.cm-editor .tok-special.tok-string,
+.cm-editor .tok-escape,
+.cm-editor .tok-regexp,
+.cm-editor .tok-attributeValue,
+.cm-editor .tok-monospace {
+  color: var(--syntax-string);
+}
+
+.cm-editor .tok-number,
+.cm-editor .tok-bool,
+.cm-editor .tok-atom,
+.cm-editor .tok-null,
+.cm-editor .tok-self {
+  color: var(--syntax-number);
+}
+
+.cm-editor .tok-function.tok-variableName,
+.cm-editor .tok-function.tok-propertyName,
+.cm-editor .tok-standard.tok-variableName,
+.cm-editor .tok-special.tok-variableName {
+  color: var(--syntax-function);
+}
+
+.cm-editor .tok-variableName,
+.cm-editor .tok-definition.tok-variableName,
+.cm-editor .tok-local.tok-variableName,
+.cm-editor .tok-constant.tok-variableName,
+.cm-editor .tok-propertyName,
+.cm-editor .tok-attributeName {
+  color: var(--syntax-variable);
+}
+
+.cm-editor .tok-className,
+.cm-editor .tok-typeName,
+.cm-editor .tok-namespace {
+  color: var(--syntax-type);
+}
+
+.cm-editor .tok-tagName,
+.cm-editor .tok-labelName,
+.cm-editor .tok-annotation,
+.cm-editor .tok-macroName {
+  color: var(--syntax-keyword);
+}
+
+.cm-editor .tok-link {
+  color: var(--syntax-function);
+  text-decoration: underline;
+}
+
+.cm-editor .tok-punctuation,
+.cm-editor .tok-separator,
+.cm-editor .tok-bracket,
+.cm-editor .tok-paren,
+.cm-editor .tok-brace,
+.cm-editor .tok-squareBracket,
+.cm-editor .tok-angleBracket {
+  color: color-mix(in srgb, var(--syntax-comment) 85%, var(--syntax-foreground) 15%);
+}
+
+/* Codemirror syntax fallback for class-based HighlightStyle tokens */
+.cm-editor .cm-comment,
+.cm-editor .cm-meta {
+  color: var(--syntax-comment);
+}
+
+.cm-editor .cm-keyword,
+.cm-editor .cm-tag {
+  color: var(--syntax-keyword);
+}
+
+.cm-editor .cm-operator {
+  color: var(--syntax-operator);
+}
+
+.cm-editor .cm-string,
+.cm-editor .cm-string-2,
+.cm-editor .cm-link {
+  color: var(--syntax-string);
+}
+
+.cm-editor .cm-number,
+.cm-editor .cm-atom {
+  color: var(--syntax-number);
+}
+
+.cm-editor .cm-builtin,
+.cm-editor .cm-def {
+  color: var(--syntax-function);
+}
+
+.cm-editor .cm-variable,
+.cm-editor .cm-variable-2,
+.cm-editor .cm-property,
+.cm-editor .cm-attribute {
+  color: var(--syntax-variable);
+}
+
+.cm-editor .cm-variable-3 {
+  color: var(--syntax-type);
+}
+
+.cm-editor .cm-punctuation {
+  color: color-mix(in srgb, var(--syntax-comment) 85%, var(--syntax-foreground) 15%);
+}
+
 :root.vscode-runtime textarea[data-chat-input="true"]::placeholder {
   color: color-mix(in srgb, var(--vscode-input-placeholderForeground, var(--muted-foreground)) 65%, transparent);
 }

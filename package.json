@@ -60,8 +60,6 @@
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/commands": "^6.10.1",
-    "@codemirror/highlight": "^0.19.8",
-    "@codemirror/history": "^0.19.2",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.11",
     "@codemirror/lang-javascript": "^6.2.4",

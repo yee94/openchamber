@@ -1,8 +1,8 @@
 import type { Extension } from '@codemirror/state';
 
 import { EditorView } from '@codemirror/view';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { tags as t } from '@lezer/highlight';
+import { HighlightStyle, defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { classHighlighter, tags as t } from '@lezer/highlight';
 
 import type { Theme } from '@/types/theme';
 
@@ -41,6 +41,12 @@ export function createFlexokiCodeMirrorTheme(theme: Theme): Extension {
     '.cm-number': {
       color: theme.colors.syntax.base.number,
     },
+    '.cm-operator': {
+      color: theme.colors.syntax.base.operator,
+    },
+    '.cm-punctuation': {
+      color: tokens.punctuation || theme.colors.syntax.base.comment,
+    },
     '.cm-atom': {
       color: tokens.boolean || theme.colors.syntax.base.number,
     },
@@ -76,6 +82,7 @@ export function createFlexokiCodeMirrorTheme(theme: Theme): Extension {
       color: tokens.url || theme.colors.syntax.base.keyword,
       textDecoration: 'underline',
     },
+
     '.cm-content': {
       caretColor: theme.colors.interactive.cursor,
     },
@@ -121,73 +128,32 @@ export function createFlexokiCodeMirrorTheme(theme: Theme): Extension {
   }, { dark: isDark });
 
   const syntax = HighlightStyle.define([
-    { tag: t.comment, color: theme.colors.syntax.base.comment },
-    { tag: t.docComment, color: tokens.commentDoc || theme.colors.syntax.base.comment },
+    { tag: [t.comment, t.docComment, t.meta, t.documentMeta], class: 'cm-comment' },
+    { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.definitionKeyword, t.modifier], class: 'cm-keyword' },
+    { tag: [t.operatorKeyword, t.operator, t.derefOperator, t.updateOperator, t.definitionOperator, t.typeOperator, t.controlOperator, t.logicOperator, t.bitwiseOperator, t.arithmeticOperator, t.compareOperator], class: 'cm-operator' },
+    { tag: [t.punctuation, t.separator, t.bracket, t.paren, t.brace, t.squareBracket, t.angleBracket], class: 'cm-punctuation' },
 
-    { tag: t.keyword, color: theme.colors.syntax.base.keyword },
-    { tag: t.controlKeyword, color: theme.colors.syntax.base.keyword },
-    { tag: t.operatorKeyword, color: theme.colors.syntax.base.operator },
-    { tag: t.moduleKeyword, color: tokens.keywordImport || theme.colors.syntax.base.keyword },
-    { tag: [t.definitionKeyword, t.modifier], color: tokens.storageModifier || theme.colors.syntax.base.keyword },
+    { tag: [t.string, t.regexp, t.attributeValue, t.special(t.string), t.monospace], class: 'cm-string' },
+    { tag: t.escape, class: 'cm-string-2' },
+    { tag: [t.number, t.bool, t.atom, t.null, t.self], class: 'cm-number' },
 
-    { tag: t.atom, color: tokens.boolean || theme.colors.syntax.base.number },
-    { tag: [t.null, t.self], color: theme.colors.syntax.base.number },
-    { tag: [t.meta, t.documentMeta], color: theme.colors.syntax.base.comment },
+    { tag: [t.function(t.variableName), t.function(t.definition(t.variableName)), t.function(t.propertyName), t.standard(t.variableName), t.special(t.variableName)], class: 'cm-builtin' },
+    { tag: t.definition(t.variableName), class: 'cm-def' },
+    { tag: [t.variableName, t.local(t.variableName), t.constant(t.variableName), t.literal], class: 'cm-variable' },
+    { tag: t.propertyName, class: 'cm-property' },
+    { tag: t.attributeName, class: 'cm-attribute' },
 
-    { tag: t.string, color: theme.colors.syntax.base.string },
-    { tag: t.escape, color: tokens.stringEscape || theme.colors.syntax.base.foreground },
-    { tag: t.regexp, color: tokens.regex || theme.colors.syntax.base.string },
+    { tag: [t.className, t.typeName, t.namespace], class: 'cm-variable-3' },
+    { tag: [t.tagName, t.labelName, t.annotation, t.macroName], class: 'cm-tag' },
+    { tag: t.link, class: 'cm-link' },
 
-    { tag: t.number, color: theme.colors.syntax.base.number },
-    { tag: t.bool, color: tokens.boolean || theme.colors.syntax.base.number },
-
-    // Operators + punctuation
-    { tag: t.operator, color: theme.colors.syntax.base.operator },
-    { tag: [t.derefOperator, t.updateOperator, t.definitionOperator, t.typeOperator, t.controlOperator], color: theme.colors.syntax.base.operator },
-    { tag: [t.logicOperator, t.bitwiseOperator, t.arithmeticOperator], color: theme.colors.syntax.base.operator },
-    { tag: [t.compareOperator], color: tokens.diffModified || theme.colors.syntax.base.operator },
-    { tag: [t.punctuation, t.separator, t.bracket, t.paren, t.brace, t.squareBracket, t.angleBracket], color: tokens.punctuation || theme.colors.syntax.base.comment },
-
-    // Calls vs definitions
-    { tag: t.function(t.variableName), color: tokens.functionCall || theme.colors.syntax.base.function },
-    { tag: t.function(t.definition(t.variableName)), color: theme.colors.syntax.base.function },
-    { tag: t.function(t.propertyName), color: tokens.method || tokens.functionCall || theme.colors.syntax.base.function },
-
-    // Names
-    { tag: t.namespace, color: tokens.namespace || theme.colors.syntax.base.type },
-    { tag: t.moduleKeyword, color: tokens.module || theme.colors.syntax.base.keyword },
-    { tag: t.macroName, color: tokens.macro || theme.colors.syntax.base.keyword },
-    { tag: t.labelName, color: tokens.label || theme.colors.syntax.base.keyword },
-    { tag: t.annotation, color: tokens.decorator || theme.colors.syntax.base.keyword },
-
-    // Variables/properties
-    { tag: t.propertyName, color: tokens.variableProperty || theme.colors.syntax.base.keyword },
-    { tag: t.attributeName, color: tokens.tagAttribute || theme.colors.syntax.base.keyword },
-
-    // StreamLanguage/legacy token tags resolve to these
-    { tag: t.standard(t.variableName), color: tokens.method || theme.colors.syntax.base.function },
-    { tag: t.definition(t.variableName), color: theme.colors.syntax.base.variable },
-    { tag: t.local(t.variableName), color: theme.colors.syntax.base.variable },
-    { tag: t.special(t.variableName), color: tokens.variableOther || theme.colors.syntax.base.function },
-    { tag: t.variableName, color: theme.colors.syntax.base.variable },
-    { tag: t.special(t.string), color: theme.colors.syntax.base.string },
-
-    // Types/constants
-    { tag: t.className, color: tokens.className || theme.colors.syntax.base.type },
-    { tag: t.typeName, color: theme.colors.syntax.base.type },
-    { tag: t.constant(t.variableName), color: tokens.constant || theme.colors.syntax.base.variable },
-    { tag: t.literal, color: tokens.constant || theme.colors.syntax.base.variable },
-
-    // Markup
-    { tag: t.tagName, color: tokens.tag || theme.colors.syntax.base.keyword },
-    { tag: t.attributeValue, color: tokens.tagAttributeValue || theme.colors.syntax.base.string },
-
-    // Markdown-ish
-    { tag: [t.heading, t.heading1, t.heading2, t.heading3, t.heading4, t.heading5, t.heading6], color: theme.colors.syntax.base.keyword, fontWeight: '600' },
-    { tag: t.monospace, color: theme.colors.syntax.base.string },
-
-    { tag: t.link, color: tokens.url || theme.colors.syntax.base.keyword, textDecoration: 'underline' },
+    { tag: [t.heading, t.heading1, t.heading2, t.heading3, t.heading4, t.heading5, t.heading6], class: 'cm-keyword' },
   ]);
 
-  return [ui, syntaxHighlighting(syntax)];
+  return [
+    ui,
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    syntaxHighlighting(classHighlighter),
+    syntaxHighlighting(syntax),
+  ];
 }

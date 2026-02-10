@@ -4,7 +4,7 @@ import type { Extension } from '@codemirror/state';
 import { Compartment, EditorState, RangeSetBuilder, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, type KeyBinding, ViewPlugin, WidgetType, gutters, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands';
-import { indentUnit } from '@codemirror/language';
+import { forceParsing, indentUnit } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel } from '@codemirror/search';
 import { createPortal } from 'react-dom';
 
@@ -182,9 +182,18 @@ export function CodeMirrorEditor({
       return;
     }
 
+    const cspNonce = (() => {
+      if (typeof document === 'undefined') return null;
+      const metaNonce = document.querySelector('meta[name="csp-nonce"]')?.getAttribute('content');
+      if (metaNonce) return metaNonce;
+      const windowNonce = (window as Window & { __OPENCHAMBER_CSP_NONCE__?: string }).__OPENCHAMBER_CSP_NONCE__;
+      return typeof windowNonce === 'string' && windowNonce.length > 0 ? windowNonce : null;
+    })();
+
     const state = EditorState.create({
       doc: valueRef.current,
       extensions: [
+        ...(cspNonce ? [EditorView.cspNonce.of(cspNonce)] : []),
         gutters({ fixed: true }),
         lineNumbersCompartment.of(lineNumbers(lineNumbersConfig)),
         history(),
@@ -214,6 +223,9 @@ export function CodeMirrorEditor({
       parent: hostRef.current,
     });
 
+    forceParsing(viewRef.current, viewRef.current.state.doc.length, 200);
+    viewRef.current.requestMeasure();
+
     if (viewRef.current) {
       onViewReadyRef.current?.(viewRef.current);
     }
@@ -242,6 +254,9 @@ export function CodeMirrorEditor({
         searchCompartment.reconfigure(enableSearch ? [search({ top: true }), keymap.of(toViewKeyBindings(searchKeymap))] : []),
       ],
     });
+
+    forceParsing(view, view.state.doc.length, 200);
+    view.requestMeasure();
 
     // Force a re-render to ensure Portals can find the new widget containers in the DOM
     // The containers are created synchronously by CodeMirror during dispatch -> toDOM
