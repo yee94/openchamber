@@ -6,19 +6,50 @@ use serde::{Deserialize, Serialize};
 use std::{
     net::TcpListener,
     process::Command,
-    sync::Mutex,
+    sync::{atomic::{AtomicU64, Ordering}, Mutex},
     time::Duration,
 };
 use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::utils::config::BackgroundThrottlingPolicy;
 
-fn eval_in_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, script: &str) {
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    let _ = window.eval(script);
+/// Global counter for generating unique window labels.
+static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+fn next_window_label() -> String {
+    let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
+    if n == 1 {
+        "main".to_string()
+    } else {
+        format!("main-{n}")
+    }
+}
+
+/// Evaluate a script in all open webview windows.
+fn eval_in_all_windows<R: tauri::Runtime>(app: &tauri::AppHandle<R>, script: &str) {
+    for window in app.webview_windows().values() {
+        let _ = window.eval(script);
+    }
+}
+
+/// Evaluate a script in the currently focused window, falling back to any window.
+fn eval_in_focused_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, script: &str) {
+    let windows = app.webview_windows();
+    // Try the focused window first.
+    for window in windows.values() {
+        if window.is_focused().unwrap_or(false) {
+            let _ = window.eval(script);
+            return;
+        }
+    }
+    // Fallback: try "main", then any window.
+    if let Some(window) = windows.get("main") {
+        let _ = window.eval(script);
+    } else if let Some(window) = windows.values().next() {
+        let _ = window.eval(script);
+    }
 }
 
 fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action: &str) {
@@ -28,7 +59,7 @@ fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action: &s
         .unwrap_or_else(|_| "\"openchamber:menu-action\"".into());
     let detail = serde_json::to_string(action).unwrap_or_else(|_| "\"\"".into());
     let script = format!("window.dispatchEvent(new CustomEvent({event}, {{ detail: {detail} }}));");
-    eval_in_main_window(app, &script);
+    eval_in_focused_window(app, &script);
 }
 
 fn dispatch_check_for_updates<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
@@ -37,7 +68,7 @@ fn dispatch_check_for_updates<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let event = serde_json::to_string("openchamber:check-for-updates")
         .unwrap_or_else(|_| "\"openchamber:check-for-updates\"".into());
     let script = format!("window.dispatchEvent(new Event({event}));");
-    eval_in_main_window(app, &script);
+    eval_in_all_windows(app, &script);
 }
 use tauri_plugin_shell::{process::CommandChild, process::CommandEvent, ShellExt};
 use tauri_plugin_updater::UpdaterExt;
@@ -46,6 +77,8 @@ use tauri_plugin_updater::UpdaterExt;
 const MENU_ITEM_ABOUT_ID: &str = "menu_about";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_CHECK_FOR_UPDATES_ID: &str = "menu_check_for_updates";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_NEW_WINDOW_ID: &str = "menu_new_window";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_SETTINGS_ID: &str = "menu_settings";
 #[cfg(target_os = "macos")]
@@ -136,6 +169,14 @@ fn build_macos_menu<R: tauri::Runtime>(
         "Command Palette",
         true,
         Some("Cmd+K"),
+    )?;
+
+    let new_window = MenuItem::with_id(
+        app,
+        MENU_ITEM_NEW_WINDOW_ID,
+        "New Window",
+        true,
+        Some("Cmd+Shift+Alt+N"),
     )?;
 
     let new_session = MenuItem::with_id(
@@ -286,6 +327,8 @@ fn build_macos_menu<R: tauri::Runtime>(
                 "File",
                 true,
                 &[
+                    &new_window,
+                    &PredefinedMenuItem::separator(app)?,
                     &new_session,
                     &worktree_creator,
                     &PredefinedMenuItem::separator(app)?,
@@ -715,7 +758,7 @@ fn dispatch_installed_apps_update(app: &tauri::AppHandle, apps: &[InstalledAppIn
         .unwrap_or_else(|_| "\"openchamber:installed-apps-updated\"".into());
     let detail = serde_json::to_string(apps).unwrap_or_else(|_| "[]".into());
     let script = format!("window.dispatchEvent(new CustomEvent({event}, {{ detail: {detail} }}));");
-    eval_in_main_window(app, &script);
+    eval_in_all_windows(app, &script);
 }
 
 #[cfg(target_os = "macos")]
@@ -896,20 +939,48 @@ struct SidecarState {
     url: Mutex<Option<String>>,
 }
 
+/// Holds the initialization script and local origin, shared across all windows.
 #[derive(Default)]
 struct DesktopUiInjectionState {
     script: Mutex<Option<String>>,
+    local_origin: Mutex<Option<String>>,
+    /// Host URLs that were probed unreachable (e.g. at startup).
+    /// `open_new_window` checks this to avoid opening windows at dead hosts.
+    unreachable_hosts: Mutex<HashSet<String>>,
 }
 
+/// Tracks the set of currently-focused window labels.
+/// Notification suppression triggers when ANY window is focused.
 struct WindowFocusState {
-    focused: Mutex<bool>,
+    focused_windows: Mutex<HashSet<String>>,
 }
 
 impl Default for WindowFocusState {
     fn default() -> Self {
         Self {
-            focused: Mutex::new(true),
+            focused_windows: Mutex::new(HashSet::new()),
         }
+    }
+}
+
+impl WindowFocusState {
+    fn any_focused(&self) -> bool {
+        let guard = self.focused_windows.lock().expect("focus mutex");
+        !guard.is_empty()
+    }
+
+    fn set_focused(&self, label: &str, focused: bool) {
+        let mut guard = self.focused_windows.lock().expect("focus mutex");
+        if focused {
+            guard.insert(label.to_string());
+        } else {
+            guard.remove(label);
+        }
+    }
+
+    fn remove_window(&self, label: &str) {
+        let mut guard = self.focused_windows.lock().expect("focus mutex");
+        guard.remove(label);
     }
 }
 
@@ -1291,11 +1362,11 @@ struct SidecarNotifyPayload {
 fn maybe_show_sidecar_notification(app: &tauri::AppHandle, payload: SidecarNotifyPayload) {
     let require_hidden = payload.require_hidden.unwrap_or(false);
     if require_hidden {
-        let focused = app
+        let any_focused = app
             .try_state::<WindowFocusState>()
-            .map(|state| *state.focused.lock().expect("focus mutex"))
+            .map(|state| state.any_focused())
             .unwrap_or(false);
-        if focused {
+        if any_focused {
             return;
         }
     }
@@ -1740,51 +1811,83 @@ fn desktop_restart(app: tauri::AppHandle) {
     app.restart();
 }
 
-fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Result<()> {
-    let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
+/// Create a new desktop window from the UI layer.
+///
+/// IMPORTANT: This command MUST remain synchronous (not `async`). Tauri runs
+/// sync commands on the main thread, which is required on macOS for
+/// `WebviewWindowBuilder::build()`. Making this `async` would move execution
+/// to the Tokio thread pool and risk crashes or undefined behavior.
+#[tauri::command]
+fn desktop_new_window(app: tauri::AppHandle) -> Result<(), String> {
+    open_new_window(&app);
+    Ok(())
+}
 
-    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
-    #[cfg(target_os = "macos")]
-    fn macos_major_version() -> Option<u32> {
-        fn cmd_stdout(cmd: &str, args: &[&str]) -> Option<String> {
-            let output = Command::new(cmd).args(args).output().ok()?;
-            if !output.status.success() {
-                return None;
-            }
-            String::from_utf8(output.stdout).ok()
+/// Open a new window pointed at a specific URL (used by the host switcher UI).
+///
+/// IMPORTANT: Must remain synchronous -- see `desktop_new_window` doc comment.
+#[tauri::command]
+fn desktop_new_window_at_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    // Validate scheme to prevent file://, data:, javascript: etc.
+    let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
+    match parsed.scheme() {
+        "http" | "https" => {}
+        scheme => return Err(format!("Unsupported URL scheme: {scheme}")),
+    }
+
+    let local_origin = app
+        .try_state::<DesktopUiInjectionState>()
+        .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone())
+        .ok_or_else(|| "Local origin not yet known (sidecar may still be starting)".to_string())?;
+
+    create_window(&app, &url, &local_origin).map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_major_version() -> Option<u32> {
+    fn cmd_stdout(cmd: &str, args: &[&str]) -> Option<String> {
+        let output = Command::new(cmd).args(args).output().ok()?;
+        if !output.status.success() {
+            return None;
         }
+        String::from_utf8(output.stdout).ok()
+    }
 
-        // Use marketing version (sw_vers), but map legacy 10.x to minor (10.15 -> 15).
-        // This matches WebKit UA fallback logic in the UI.
-        if let Some(raw) = cmd_stdout("/usr/bin/sw_vers", &["-productVersion"]).or_else(|| cmd_stdout("sw_vers", &["-productVersion"])) {
-            let raw = raw.trim();
-            let mut parts = raw.split('.');
-            let major = parts.next().and_then(|v| v.parse::<u32>().ok())?;
-            let minor = parts.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
-            return Some(if major == 10 { minor } else { major });
-        }
-
-        // Fallback: derive from Darwin major (kern.osrelease major).
-        let raw = cmd_stdout("/usr/sbin/sysctl", &["-n", "kern.osrelease"])
-            .or_else(|| cmd_stdout("sysctl", &["-n", "kern.osrelease"]))
-            .or_else(|| cmd_stdout("/usr/bin/uname", &["-r"]))
-            .or_else(|| cmd_stdout("uname", &["-r"]))?;
+    // Use marketing version (sw_vers), but map legacy 10.x to minor (10.15 -> 15).
+    // This matches WebKit UA fallback logic in the UI.
+    if let Some(raw) = cmd_stdout("/usr/bin/sw_vers", &["-productVersion"]).or_else(|| cmd_stdout("sw_vers", &["-productVersion"])) {
         let raw = raw.trim();
-        let major = raw.split('.').next()?.parse::<u32>().ok()?;
-        if major >= 20 {
-            return Some(major - 9);
-        }
-        if major >= 15 {
-            return Some(major - 4);
-        }
-        Some(major)
+        let mut parts = raw.split('.');
+        let major = parts.next().and_then(|v| v.parse::<u32>().ok())?;
+        let minor = parts.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        return Some(if major == 10 { minor } else { major });
     }
 
-    #[cfg(not(target_os = "macos"))]
-    fn macos_major_version() -> Option<u32> {
-        None
+    // Fallback: derive from Darwin major (kern.osrelease major).
+    let raw = cmd_stdout("/usr/sbin/sysctl", &["-n", "kern.osrelease"])
+        .or_else(|| cmd_stdout("sysctl", &["-n", "kern.osrelease"]))
+        .or_else(|| cmd_stdout("/usr/bin/uname", &["-r"]))
+        .or_else(|| cmd_stdout("uname", &["-r"]))?;
+    let raw = raw.trim();
+    let major = raw.split('.').next()?.parse::<u32>().ok()?;
+    if major >= 20 {
+        return Some(major - 9);
     }
+    if major >= 15 {
+        return Some(major - 4);
+    }
+    Some(major)
+}
 
+#[cfg(not(target_os = "macos"))]
+fn macos_major_version() -> Option<u32> {
+    None
+}
+
+/// Build the initialization script injected into every webview window.
+/// This is computed once and reused for all windows.
+fn build_init_script(local_origin: &str) -> String {
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     let macos_major = macos_major_version().unwrap_or(0);
 
     let home_json = serde_json::to_string(&home).unwrap_or_else(|_| "\"\"".into());
@@ -1802,16 +1905,29 @@ fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> 
         init_script.push_str("\ntry{document.addEventListener('contextmenu',function(e){e.preventDefault();},true);}catch(_e){}");
     }
 
+    init_script
+}
+
+/// Create a new window with a unique label, pointing at the given URL.
+fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Result<()> {
+    let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
+    let label = next_window_label();
+
+    let init_script = build_init_script(local_origin);
+
+    // Store the init script and local origin so new windows and page reloads can reuse it.
     if let Some(state) = app.try_state::<DesktopUiInjectionState>() {
         *state.script.lock().expect("desktop ui injection mutex") = Some(init_script.clone());
+        *state.local_origin.lock().expect("desktop local origin mutex") = Some(local_origin.to_string());
     }
 
-    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+    let mut builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(parsed))
         .title("OpenChamber")
         .inner_size(1280.0, 800.0)
         .decorations(true)
         .visible(false)
         .initialization_script(&init_script)
+        .background_throttling(BackgroundThrottlingPolicy::Disabled)
         ;
 
     #[cfg(target_os = "macos")]
@@ -1828,6 +1944,78 @@ fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> 
     let _ = window.set_focus();
 
     Ok(())
+}
+
+/// Open a new window pointed at the default host (local or configured default).
+///
+/// Known multi-window limitations (acceptable for v1):
+///
+/// - **localStorage conflicts**: Windows sharing the same origin (e.g. both on local)
+///   share `localStorage`. Zustand `persist` middleware writes full state blobs on every
+///   change with no cross-tab sync, so concurrent windows can overwrite each other's
+///   persisted UI preferences, session selections, and model/agent choices.
+///   Server-side data is unaffected. Scoping storage keys per window or adding
+///   `storage` event listeners would fix this in a future iteration.
+///
+/// - **Duplicate SSE connections**: Each window opens its own SSE connection to
+///   `/api/global/event`, resulting in N connections for N windows. Each window
+///   independently processes all events and may show duplicate toast notifications.
+///   A SharedWorker, BroadcastChannel leader-election, or Rust-side SSE relay
+///   would consolidate this in a future iteration.
+///
+/// - **Startup race**: If called before the sidecar finishes starting (local_origin
+///   not yet set), this function silently bails with a log warning. The user sees
+///   no feedback from clicking the dock icon during the startup window (~0-20s).
+fn open_new_window(app: &tauri::AppHandle) {
+    let local_origin = app
+        .try_state::<DesktopUiInjectionState>()
+        .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone());
+
+    let Some(local_origin) = local_origin else {
+        log::warn!("[desktop] cannot open new window: local origin not yet known (sidecar may still be starting)");
+        return;
+    };
+
+    // Resolve the URL the same way as initial setup: default host or local.
+    let local_url = app
+        .try_state::<SidecarState>()
+        .and_then(|state| state.url.lock().expect("sidecar url mutex").clone())
+        .unwrap_or_else(|| local_origin.clone());
+
+    let local_ui_url = if cfg!(debug_assertions) {
+        // In dev mode, prefer the Vite dev server if it was used as local origin.
+        local_origin.clone()
+    } else {
+        local_url.clone()
+    };
+
+    let mut target_url = local_ui_url.clone();
+
+    let cfg = read_desktop_hosts_config_from_disk();
+    if let Some(default_id) = cfg.default_host_id {
+        if default_id == LOCAL_HOST_ID {
+            target_url = local_ui_url.clone();
+        } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
+            target_url = host.url;
+        }
+    }
+
+    // If this host was previously probed unreachable (e.g. at startup), fall back to local.
+    if target_url != local_ui_url {
+        let is_cached_unreachable = app
+            .try_state::<DesktopUiInjectionState>()
+            .map(|state| state.unreachable_hosts.lock().expect("unreachable hosts mutex").contains(&target_url))
+            .unwrap_or(false);
+
+        if is_cached_unreachable {
+            log::info!("[desktop] new window: default host ({}) cached as unreachable, using local", target_url);
+            target_url = local_ui_url;
+        }
+    }
+
+    if let Err(err) = create_window(app, &target_url, &local_origin) {
+        log::error!("[desktop] failed to create new window: {err}");
+    }
 }
 
 fn main() {
@@ -1880,7 +2068,12 @@ fn main() {
                 #[cfg(debug_assertions)]
                 {
                     let msg = serde_json::to_string(id).unwrap_or_else(|_| "\"(unserializable)\"".into());
-                    eval_in_main_window(app, &format!("console.log('[menu] id=', {});", msg));
+                    eval_in_focused_window(app, &format!("console.log('[menu] id=', {});", msg));
+                }
+
+                if id == MENU_ITEM_NEW_WINDOW_ID {
+                    open_new_window(app);
+                    return;
                 }
 
                 if id == MENU_ITEM_CHECK_FOR_UPDATES_ID {
@@ -1991,19 +2184,27 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
+            let app = window.app_handle();
+            let label = window.label().to_string();
+
             if let tauri::WindowEvent::Focused(focused) = event {
-                let app = window.app_handle();
                 if let Some(state) = app.try_state::<WindowFocusState>() {
-                    *state.focused.lock().expect("focus mutex") = *focused;
+                    state.set_focused(&label, *focused);
                 }
             }
 
-            #[cfg(target_os = "macos")]
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                // Ensure sidecar is not left running when users close the main window.
-                let app = window.app_handle();
-                kill_sidecar(app.clone());
-                app.exit(0);
+            if let tauri::WindowEvent::Destroyed = event {
+                // Clean up focus tracking for the destroyed window.
+                if let Some(state) = app.try_state::<WindowFocusState>() {
+                    state.remove_window(&label);
+                }
+
+                // If this was the last window, kill the sidecar and exit.
+                let remaining = app.webview_windows().len();
+                if remaining == 0 {
+                    kill_sidecar(app.clone());
+                    app.exit(0);
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -2011,6 +2212,8 @@ fn main() {
             desktop_check_for_updates,
             desktop_download_and_install_update,
             desktop_restart,
+            desktop_new_window,
+            desktop_new_window_at_url,
             desktop_set_auto_worktree_menu,
             desktop_open_path,
             desktop_filter_installed_apps,
@@ -2088,6 +2291,7 @@ fn main() {
                 }
 
                 if initial_url != local_ui_url {
+                    let failed_url = initial_url.clone();
                     match desktop_host_probe(initial_url.clone()).await {
                         Ok(probe) if probe.status != "unreachable" => {}
                         Ok(_) => {
@@ -2097,6 +2301,10 @@ fn main() {
                                 local_ui_url
                             );
                             initial_url = local_ui_url.clone();
+                            // Cache the failure so open_new_window skips this host.
+                            if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
+                                state.unreachable_hosts.lock().expect("unreachable hosts mutex").insert(failed_url);
+                            }
                         }
                         Err(err) => {
                             log::warn!(
@@ -2106,11 +2314,14 @@ fn main() {
                                 local_ui_url
                             );
                             initial_url = local_ui_url.clone();
+                            if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
+                                state.unreachable_hosts.lock().expect("unreachable hosts mutex").insert(failed_url);
+                            }
                         }
                     }
                 }
 
-                if let Err(err) = create_main_window(&handle, &initial_url, &local_origin) {
+                if let Err(err) = create_window(&handle, &initial_url, &local_origin) {
                     log::error!("[desktop] failed to create window: {err}");
                 }
             });
@@ -2131,6 +2342,13 @@ fn main() {
             }
             tauri::RunEvent::Exit => {
                 kill_sidecar(app_handle.clone());
+            }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows, .. } => {
+                // macOS: clicking dock icon when no windows are open opens a new one.
+                if !has_visible_windows {
+                    open_new_window(app_handle);
+                }
             }
             _ => {}
         }
