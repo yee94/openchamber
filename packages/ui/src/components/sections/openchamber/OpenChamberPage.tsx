@@ -155,5 +155,8 @@ const NotificationSectionContent: React.FC = () => {
 
 // Voice section: Language selection and continuous mode
 const VoiceSectionContent: React.FC = () => {
+    if (isVSCodeRuntime()) {
+        return null;
+    }
     return <VoiceSettings />;
 };

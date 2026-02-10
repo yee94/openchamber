@@ -62,6 +62,7 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     label: 'Voice',
     items: ['Language', 'Continuous Mode'],
     badge: 'experimental',
+    hideInVSCode: true,
   },
 ];
 
