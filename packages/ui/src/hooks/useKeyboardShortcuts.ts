@@ -192,6 +192,15 @@ export const useKeyboardShortcuts = () => {
       }
 
       if (e.key === 'Escape') {
+        const target = e.target as Element | null;
+        const isInsideDialog = Boolean(target?.closest('[role="dialog"]'));
+        const isSettingsMounted = Boolean(document.querySelector('[data-settings-view="true"]'));
+
+        if (isInsideDialog || isSettingsMounted) {
+          resetAbortPriming();
+          return;
+        }
+
         const {
           isSettingsDialogOpen,
           isCommandPaletteOpen,

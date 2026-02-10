@@ -1,11 +1,10 @@
 import React from 'react';
-import { RiDiscordFill, RiDownloadLine, RiGithubFill, RiLoaderLine, RiRestartLine, RiTwitterXFill } from '@remixicon/react';
+import { RiDiscordFill, RiDownloadLine, RiGithubFill, RiLoaderLine, RiTwitterXFill } from '@remixicon/react';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { useDeviceInfo } from '@/lib/device';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 const GITHUB_URL = 'https://github.com/btriapitsyn/openchamber';
 
@@ -46,15 +45,6 @@ export const AboutSettings: React.FC = () => {
   if (isMobile) {
     return (
       <div className="w-full space-y-2">
-        {/* Reload OpenCode Configuration */}
-        <button
-          onClick={() => reloadOpenCodeConfiguration()}
-          className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <RiRestartLine className="h-3.5 w-3.5" />
-          <span>Reload OpenCode Configuration</span>
-        </button>
-
         {/* Version row with update status */}
         <div className="flex items-center justify-between">
           <span className="typography-meta text-muted-foreground">

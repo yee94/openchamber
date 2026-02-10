@@ -15,8 +15,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
-import { RiAddLine, RiChatAi3Line, RiCheckLine, RiCodeLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiRestartLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine, RiTimeLine } from '@remixicon/react';
-import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
+import { RiAddLine, RiChatAi3Line, RiCheckLine, RiCodeLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine, RiTimeLine } from '@remixicon/react';
 import { getModifierLabel } from '@/lib/utils';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 
@@ -106,11 +105,6 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
-  const handleReloadConfiguration = () => {
-    reloadOpenCodeConfiguration();
-    handleClose();
-  };
-
   const handleOpenTimeline = () => {
     setTimelineDialogOpen(true);
     handleClose();
@@ -176,10 +170,6 @@ export const CommandPalette: React.FC = () => {
             <RiSettings3Line className="mr-2 h-4 w-4" />
             <span>Open Settings</span>
             <CommandShortcut>{getModifierLabel()} + ,</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={handleReloadConfiguration}>
-            <RiRestartLine className="mr-2 h-4 w-4" />
-            <span>Reload OpenCode Configuration</span>
           </CommandItem>
         </CommandGroup>
 

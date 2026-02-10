@@ -290,13 +290,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     switch (activeTab) {
       case 'settings':
         return (
-          <OpenChamberSidebar
-            selectedSection={selectedOpenChamberSection}
-            onSelectSection={(section) => {
-              setSelectedOpenChamberSection(section);
-              handleMobileSidebarClick();
-            }}
-          />
+          <div className="h-full">
+            <OpenChamberSidebar
+              selectedSection={selectedOpenChamberSection}
+              onSelectSection={(section) => {
+                setSelectedOpenChamberSection(section);
+                handleMobileSidebarClick();
+              }}
+            />
+          </div>
         );
       case 'agents':
         return <AgentsSidebar onItemSelect={handleMobileSidebarClick} />;
@@ -354,7 +356,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
 
   return (
-    <div ref={containerRef} className={cn('flex h-full flex-col overflow-hidden bg-background')}>
+    <div ref={containerRef} data-settings-view="true" className={cn('flex h-full flex-col overflow-hidden bg-background')}>
       {/* Header with tabs and close button */}
       <div
         onMouseDown={!isMobile ? handleDragStart : undefined}
@@ -521,7 +523,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             </div>
           ) : (
             <div className={cn('flex-1 overflow-hidden', isVSCode ? 'bg-background' : 'bg-sidebar')}>
-              <ErrorBoundary>{renderSidebarContent()}</ErrorBoundary>
+              <div className="flex h-full min-h-0 flex-col">
+                <ErrorBoundary>{renderSidebarContent()}</ErrorBoundary>
+              </div>
             </div>
           )
         ) : (
@@ -530,7 +534,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             {hasSidebar && (
               <div
                 className={cn(
-                  'relative overflow-hidden border-r',
+                  'relative flex h-full min-h-0 flex-col overflow-hidden border-r',
                   isDesktopApp
                     ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
                     : isVSCode
@@ -555,7 +559,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   aria-orientation="vertical"
                   aria-label="Resize settings sidebar"
                 />
-                <ErrorBoundary>{renderSidebarContent()}</ErrorBoundary>
+                <div className="flex h-full min-h-0 flex-col">
+                  <ErrorBoundary>{renderSidebarContent()}</ErrorBoundary>
+                </div>
               </div>
             )}
 

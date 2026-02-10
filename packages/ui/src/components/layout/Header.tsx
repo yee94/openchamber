@@ -26,7 +26,7 @@ import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
-import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
+import { cn, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 import { McpDropdown, McpDropdownContent } from '@/components/mcp/McpDropdown';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -52,6 +52,7 @@ import type { GitHubAuthStatus } from '@/lib/api/types';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { isDesktopShell } from '@/lib/desktop';
+import { desktopHostsGet } from '@/lib/desktopHosts';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -112,7 +113,6 @@ export const Header: React.FC = () => {
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
-  const toggleCommandPalette = useUIStore((state) => state.toggleCommandPalette);
   const activeMainTab = useUIStore((state) => state.activeMainTab);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
 
@@ -201,6 +201,7 @@ export const Header: React.FC = () => {
   const [isMobileRateLimitsOpen, setIsMobileRateLimitsOpen] = React.useState(false);
   const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
   const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false);
+  const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
   const [desktopServicesTab, setDesktopServicesTab] = React.useState<'instance' | 'usage' | 'mcp'>(
     isDesktopApp ? 'instance' : 'usage'
   );
@@ -209,6 +210,65 @@ export const Header: React.FC = () => {
       setDesktopServicesTab('usage');
     }
   }, [desktopServicesTab, isDesktopApp]);
+
+  const refreshCurrentInstanceLabel = React.useCallback(async () => {
+    if (typeof window === 'undefined' || !isDesktopApp) {
+      return;
+    }
+
+    const normalizeHostUrl = (raw: string): string | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      try {
+        const url = new URL(trimmed);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+          return null;
+        }
+        return url.origin;
+      } catch {
+        try {
+          const url = new URL(trimmed.endsWith('/') ? trimmed : `${trimmed}/`);
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            return null;
+          }
+          return url.origin;
+        } catch {
+          return null;
+        }
+      }
+    };
+
+    try {
+      const cfg = await desktopHostsGet();
+      const currentOrigin = window.location.origin;
+      const localOrigin = window.__OPENCHAMBER_LOCAL_ORIGIN__ || currentOrigin;
+      const normalizedCurrent = normalizeHostUrl(currentOrigin) || currentOrigin;
+      const normalizedLocal = normalizeHostUrl(localOrigin) || localOrigin;
+
+      if (normalizedCurrent && normalizedLocal && normalizedCurrent === normalizedLocal) {
+        setCurrentInstanceLabel('Local');
+        return;
+      }
+
+      const match = cfg.hosts.find((host) => {
+        const normalized = normalizeHostUrl(host.url);
+        return normalized && normalized === normalizedCurrent;
+      });
+
+      if (match?.label?.trim()) {
+        setCurrentInstanceLabel(match.label.trim());
+        return;
+      }
+
+      setCurrentInstanceLabel('Instance');
+    } catch {
+      setCurrentInstanceLabel('Local');
+    }
+  }, [isDesktopApp]);
+
+  useEffect(() => {
+    void refreshCurrentInstanceLabel();
+  }, [refreshCurrentInstanceLabel]);
   useQuotaAutoRefresh();
   const selectedModels = useQuotaStore((state) => state.selectedModels);
   const expandedFamilies = useQuotaStore((state) => state.expandedFamilies);
@@ -809,8 +869,11 @@ export const Header: React.FC = () => {
             open={isDesktopServicesOpen}
             onOpenChange={(open) => {
               setIsDesktopServicesOpen(open);
-              if (open && desktopServicesTab === 'usage' && quotaResults.length === 0) {
-                fetchAllQuotas();
+              if (open) {
+                void refreshCurrentInstanceLabel();
+                if (desktopServicesTab === 'usage' && quotaResults.length === 0) {
+                  fetchAllQuotas();
+                }
               }
             }}
           >
@@ -819,15 +882,19 @@ export const Header: React.FC = () => {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label="Open instance, usage and MCP"
-                    className={headerIconButtonClass}
+                    aria-label={`Open instance, usage and MCP (current: ${currentInstanceLabel})`}
+                    className={cn(
+                      headerIconButtonClass,
+                      'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5'
+                    )}
                   >
                     <RiStackLine className="h-5 w-5" />
+                    <span className="truncate text-base font-normal">{currentInstanceLabel}</span>
                   </button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Instance / Usage / MCP</p>
+                <p>Current instance: {currentInstanceLabel}</p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent
@@ -1045,22 +1112,6 @@ export const Header: React.FC = () => {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleCommandPalette}
-              aria-label="Open command palette"
-              className={headerIconButtonClass}
-            >
-              <RiCommandLine className="h-5 w-5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Command Palette ({getModifierLabel()}+K)</p>
-          </TooltipContent>
-        </Tooltip>
-
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>
             <button
