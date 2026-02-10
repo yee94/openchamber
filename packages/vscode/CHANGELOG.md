@@ -1,12 +1,8 @@
-## [Unreleased]
+## [1.6.7] - 2026-02-10
 
-- Added built-in voice input and read-aloud responses with multiple providers, so you can run chats more naturally without constant typing (thanks to @gsxdsm).
 - Added usage pace and prediction indicators in the header and settings to make quota usage trends easier to track (thanks to @gsxdsm).
-- Improved plan/file comment workflows with safer draft identity and better multi-line editing, reducing lost drafts during review (thanks to @nelsonPires5).
-- Reduced noisy completion notifications by skipping alerts for comment draft add/edit/remove actions during review loops (thanks to @nelsonPires5).
 - Added confirmation dialogs for destructive delete/reset actions to reduce accidental mistakes in settings and management flows.
-- Refined header and settings layout, plus host-switch behavior, for a cleaner extension experience with faster context changes.
-- Improved reliability for message loading and voice mode persistence, so sessions recover more predictably after reloads.
+- Improved reliability for message loading so sessions recover more predictably after reloads.
 
 ## [1.6.6] - 2026-02-9
 

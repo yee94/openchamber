@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.6.7] - 2026-02-10
 
 - Voice: added built-in voice input and read-aloud responses with multiple providers, so you can drive chats hands-free when typing is slower (thanks to @gsxdsm).
 - Git: added multi-remote push selection and smarter fork-aware pull request creation to reduce manual branch/remote setup (thanks to @gsxdsm).
