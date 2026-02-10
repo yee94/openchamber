@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Voice: added built-in voice input and read-aloud responses with multiple providers, so you can drive chats hands-free when typing is slower (thanks to @gsxdsm).
+- Git: added multi-remote push selection and smarter fork-aware pull request creation to reduce manual branch/remote setup (thanks to @gsxdsm).
+- Usage: added usage pace and prediction indicators in the header and settings, so it is easier to see how quickly quota is moving (thanks to @gsxdsm).
+- Diff/Plans: fixed comment draft collisions and improved multi-line comment editing in plan and file workflows, so feedback is less likely to get lost (thanks to @nelsonPires5).
+- Notifications: stopped firing completion notifications for comment draft edits to reduce noisy alerts during review-heavy sessions (thanks to @nelsonPires5).
+- Settings: added confirmation dialogs for destructive delete/reset actions to prevent accidental data loss.
+- UI: refreshed header and settings layout, improved host switching, and upgraded the editor for smoother day-to-day navigation and editing.
+- Desktop: added multi-window support with a dedicated "New Window" action for parallel work across projects (thanks to @yulia-ivashko).
+- Reliability: fixed message loading edge cases, stabilized voice-mode persistence across restarts, and improved update flow behavior across platforms.
+
 ## [1.6.6] - 2026-02-9
 
 - Desktop: redesigned the main workspace with a dedicated Git sidebar and bottom terminal dock, so Git and terminal actions stay in reach while chatting.
