@@ -310,7 +310,12 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 placeholder="Rename project"
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') {
+                    event.stopPropagation();
                     onRenameCancel();
+                    return;
+                  }
+                  if (event.key === ' ' || event.key === 'Enter') {
+                    event.stopPropagation();
                   }
                 }}
               />
@@ -1669,7 +1674,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   autoFocus
                   placeholder="Rename session"
                   onKeyDown={(event) => {
-                    if (event.key === 'Escape') handleCancelEdit();
+                    if (event.key === 'Escape') {
+                      event.stopPropagation();
+                      handleCancelEdit();
+                      return;
+                    }
+                    if (event.key === ' ' || event.key === 'Enter') {
+                      event.stopPropagation();
+                    }
                   }}
                 />
                 <button
@@ -2233,6 +2245,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         className="h-7 flex-1 rounded border border-border bg-transparent px-2 typography-ui-label text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                         placeholder="Rename project"
                         autoFocus
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            event.stopPropagation();
+                            setIsProjectRenameInline(false);
+                            return;
+                          }
+                          if (event.key === ' ' || event.key === 'Enter') {
+                            event.stopPropagation();
+                          }
+                        }}
                       />
                       <button type="submit" className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground">
                         <RiCheckLine className="h-4 w-4" />
