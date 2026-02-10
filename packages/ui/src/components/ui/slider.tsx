@@ -28,8 +28,6 @@ export const Slider: React.FC<SliderProps> = ({
   label,
   valueFormatter = (v) => v.toFixed(1),
 }) => {
-  const percentage = ((value - min) / (max - min)) * 100;
-
   return (
     <div className={cn('flex items-center gap-3', className)}>
       <div className="flex-1 relative">
@@ -42,7 +40,7 @@ export const Slider: React.FC<SliderProps> = ({
           onChange={(e) => onChange(parseFloat(e.target.value))}
           disabled={disabled}
           className={cn(
-            'w-full h-2 rounded-full appearance-none cursor-pointer bg-muted-foreground/20',
+            'w-full h-2 rounded-lg appearance-none cursor-pointer bg-muted',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'disabled:cursor-not-allowed disabled:opacity-50',
             '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4',
@@ -52,9 +50,6 @@ export const Slider: React.FC<SliderProps> = ({
             '[&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full',
             '[&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:shadow-md'
           )}
-          style={{
-            background: `linear-gradient(to right, hsl(var(--primary)) ${percentage}%, hsl(var(--muted-foreground) / 0.2) ${percentage}%)`,
-          }}
           aria-label={label}
           aria-valuemin={min}
           aria-valuemax={max}
