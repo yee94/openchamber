@@ -529,13 +529,13 @@ export const useConfigStore = create<ConfigStore>()(
                     }
                     return '';
                 })(),
-                // Show TTS buttons on messages - load from localStorage or default to true
+                // Show TTS buttons on messages - disabled by default until user enables it
                 showMessageTTSButtons: (() => {
                     if (typeof window !== 'undefined') {
                         const saved = localStorage.getItem('showMessageTTSButtons');
-                        if (saved === 'false') return false;
+                        if (saved === 'true') return true;
                     }
-                    return true;
+                    return false;
                 })(),
                 // Voice mode enabled - load from localStorage or default to false
                 voiceModeEnabled: (() => {
