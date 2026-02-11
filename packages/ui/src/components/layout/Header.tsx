@@ -1063,8 +1063,7 @@ export const Header: React.FC = () => {
                                             const displayPercent = quotaDisplayMode === 'remaining'
                                               ? window.remainingPercent
                                               : window.usedPercent;
-                                            // For model-level quotas, use '5h' as typical window label for Google models
-                                            const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, '5h');
+                                            const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
                                             const expectedMarker = paceInfo?.dailyAllocationPercent != null
                                               ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
                                               : null;
@@ -1509,8 +1508,7 @@ export const Header: React.FC = () => {
                                         const displayPercent = quotaDisplayMode === 'remaining'
                                           ? window.remainingPercent
                                           : window.usedPercent;
-                                        // For model-level quotas, use '5h' as typical window label for Google models
-                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, '5h');
+                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
                                         const expectedMarker = paceInfo?.dailyAllocationPercent != null
                                           ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
                                           : null;
