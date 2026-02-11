@@ -998,7 +998,9 @@ export const Header: React.FC = () => {
                                 : window.usedPercent;
                               const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
                               const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                ? (quotaDisplayMode === 'remaining' 
+                                    ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                    : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                 : null;
                               return (
                               <DropdownMenuItem
@@ -1065,7 +1067,9 @@ export const Header: React.FC = () => {
                                               : window.usedPercent;
                                             const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
                                             const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                              ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                              ? (quotaDisplayMode === 'remaining'
+                                                  ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                                  : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                               : null;
                                             return (
                                             <div
@@ -1450,7 +1454,9 @@ export const Header: React.FC = () => {
                             : window.usedPercent;
                           const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
                           const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                            ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                            ? (quotaDisplayMode === 'remaining'
+                                ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                             : null;
                           return (
                             <div key={`${group.providerId}-${label}`} className="px-3 py-2">
@@ -1510,7 +1516,9 @@ export const Header: React.FC = () => {
                                           : window.usedPercent;
                                         const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
                                         const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                          ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                          ? (quotaDisplayMode === 'remaining'
+                                              ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                              : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                           : null;
                                         return (
                                           <div key={`${group.providerId}-${modelName}`} className="py-1.5">
