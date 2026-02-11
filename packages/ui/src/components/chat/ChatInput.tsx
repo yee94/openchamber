@@ -224,6 +224,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [currentSessionId, persistChatDraft, message]);
 
+    // Focus textarea when new session draft is opened
+    const prevNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen);
+    React.useEffect(() => {
+        if (!prevNewSessionDraftOpenRef.current && newSessionDraftOpen) {
+            // New session draft just opened - focus the textarea
+            requestAnimationFrame(() => {
+                if (isMobile) {
+                    // On mobile, use preventScroll to avoid viewport jumping
+                    textareaRef.current?.focus({ preventScroll: true });
+                } else {
+                    textareaRef.current?.focus();
+                }
+            });
+        }
+        prevNewSessionDraftOpenRef.current = newSessionDraftOpen;
+    }, [newSessionDraftOpen, isMobile]);
+
     // Persist chat input draft to localStorage (only if setting enabled)
     React.useEffect(() => {
         if (!persistChatDraft) {

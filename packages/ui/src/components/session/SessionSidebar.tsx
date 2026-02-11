@@ -908,6 +908,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ],
   );
 
+  const handleSessionDoubleClick = React.useCallback(() => {
+    // On double-click/tap, switch to the Chat tab
+    setActiveMainTab('chat');
+  }, [setActiveMainTab]);
+
   const handleSaveEdit = React.useCallback(async () => {
     if (editingId && editTitle.trim()) {
       await updateSessionTitle(editingId, editTitle.trim());
@@ -1788,6 +1793,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 type="button"
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleSessionDoubleClick();
+                }}
                 className={cn(
                   'flex min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
                 )}
@@ -1981,6 +1990,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       handleCancelEdit,
       toggleParent,
       handleSessionSelect,
+      handleSessionDoubleClick,
       handleShareSession,
       handleCopyShareUrl,
       handleUnshareSession,

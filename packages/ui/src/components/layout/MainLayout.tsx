@@ -430,22 +430,19 @@ export const MainLayout: React.FC = () => {
                         style={{ paddingTop: 'var(--oc-header-height, 56px)' }}
                     >
                         {/* Mobile drill-down: show sessions sidebar OR main content */}
-                        {isSessionSwitcherOpen ? (
-                            <div className="flex-1 overflow-hidden bg-sidebar">
-                                <ErrorBoundary><SessionSidebar mobileVariant /></ErrorBoundary>
+                        <div className={cn('flex-1 overflow-hidden bg-sidebar', !isSessionSwitcherOpen && 'hidden')}>
+                            <ErrorBoundary><SessionSidebar mobileVariant /></ErrorBoundary>
+                        </div>
+                        <main className={cn('flex-1 overflow-hidden bg-background relative', isSessionSwitcherOpen && 'hidden')}>
+                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
+                                <ErrorBoundary><ChatView /></ErrorBoundary>
                             </div>
-                        ) : (
-                            <main className="flex-1 overflow-hidden bg-background relative">
-                                <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                    <ErrorBoundary><ChatView /></ErrorBoundary>
+                            {secondaryView && (
+                                <div className="absolute inset-0">
+                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
                                 </div>
-                                {secondaryView && (
-                                    <div className="absolute inset-0">
-                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                    </div>
-                                )}
-                            </main>
-                        )}
+                            )}
+                        </main>
                     </div>
 
                     {/* Mobile multi-run launcher: full screen */}

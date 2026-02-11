@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -377,41 +378,43 @@ export const VSCodeLayout: React.FC = () => {
             </div>
           </div>
         </div>
-      ) : currentView === 'sessions' ? (
-        // Compact layout: sessions list (drill-down)
-        <div className="flex flex-col h-full">
-          <VSCodeHeader
-            title="Sessions"
-          />
-          <div className="flex-1 overflow-hidden">
-            <SessionSidebar
-              mobileVariant
-              allowReselect
-              onSessionSelected={() => setCurrentView('chat')}
-              hideDirectoryControls
-              showOnlyMainWorkspace
-            />
-          </div>
-        </div>
       ) : (
-        // Compact layout: chat view (drill-down)
-        <div className="flex flex-col h-full">
-          <VSCodeHeader
-            title={newSessionDraftOpen && !currentSessionId
-              ? 'New session'
-              : sessions.find((session) => session.id === currentSessionId)?.title || 'Chat'}
-            showBack
-            onBack={handleBackToSessions}
-            showMcp
-            showContextUsage
-            showRateLimits
-          />
-          <div className="flex-1 overflow-hidden">
-            <ErrorBoundary>
-              <ChatView />
-            </ErrorBoundary>
+        // Compact layout: drill-down between sessions list and chat
+        <>
+          {/* Sessions list view */}
+          <div className={cn('flex flex-col h-full', currentView !== 'sessions' && 'hidden')}>
+            <VSCodeHeader
+              title="Sessions"
+            />
+            <div className="flex-1 overflow-hidden">
+              <SessionSidebar
+                mobileVariant
+                allowReselect
+                onSessionSelected={() => setCurrentView('chat')}
+                hideDirectoryControls
+                showOnlyMainWorkspace
+              />
+            </div>
           </div>
-        </div>
+          {/* Chat view */}
+          <div className={cn('flex flex-col h-full', currentView !== 'chat' && 'hidden')}>
+            <VSCodeHeader
+              title={newSessionDraftOpen && !currentSessionId
+                ? 'New session'
+                : sessions.find((session) => session.id === currentSessionId)?.title || 'Chat'}
+              showBack
+              onBack={handleBackToSessions}
+              showMcp
+              showContextUsage
+              showRateLimits
+            />
+            <div className="flex-1 overflow-hidden">
+              <ErrorBoundary>
+                <ChatView />
+              </ErrorBoundary>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
