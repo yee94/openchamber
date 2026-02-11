@@ -1466,13 +1466,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [projectSections]);
 
   const previousActiveProjectRef = React.useRef<string | null>(null);
+  const lastSeenActiveProjectRef = React.useRef<string | null>(null);
   React.useLayoutEffect(() => {
-    // While a new session draft is open, keep the sidebar from auto-selecting remembered/fallback sessions.
-    // This is especially important in VS Code where the sidebar view is frequently mounted/unmounted.
-    if (newSessionDraftOpen) {
+    if (!activeProjectId) {
       return;
     }
-    if (!activeProjectId || previousActiveProjectRef.current === activeProjectId) {
+
+    const previousSeenProjectId = lastSeenActiveProjectRef.current;
+    const isProjectSwitch = Boolean(previousSeenProjectId && previousSeenProjectId !== activeProjectId);
+    // Always record the active project so we can detect real project switches even if we early-return.
+    lastSeenActiveProjectRef.current = activeProjectId;
+
+    // While a new session draft is open, keep the sidebar from auto-selecting remembered/fallback sessions.
+    // Exception (web/desktop only): when the user switches projects, prefer the last selected session
+    // for the target project instead of carrying the draft across.
+    // In VS Code, keep existing behavior (sidebar frequently mounts/unmounts and draft should stay put).
+    if (newSessionDraftOpen && (isVSCode || !isProjectSwitch)) {
+      return;
+    }
+
+    if (previousActiveProjectRef.current === activeProjectId) {
       return;
     }
     const section = projectSections.find((item) => item.project.id === activeProjectId);
@@ -1521,6 +1534,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     activeSessionByProject,
     currentSessionId,
     handleSessionSelect,
+    isVSCode,
     newSessionDraftOpen,
     mobileVariant,
     openNewSessionDraft,
