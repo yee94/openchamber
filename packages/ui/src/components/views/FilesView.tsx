@@ -619,6 +619,7 @@ export const FilesView: React.FC = () => {
   const skipDirtyOnceRef = React.useRef(false);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
+  const editorViewRef = React.useRef<EditorView | null>(null);
 
   const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
   const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
@@ -1626,6 +1627,63 @@ export const FilesView: React.FC = () => {
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
   const canEdit = Boolean(selectedFile && !isSelectedImage && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
 
+  const nudgeEditorSelectionAboveKeyboard = React.useCallback((view: EditorView | null) => {
+    if (!isMobile || !view || !view.hasFocus || typeof window === 'undefined') {
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    if (!viewport) {
+      return;
+    }
+
+    const rootStyles = getComputedStyle(document.documentElement);
+    const keyboardInset = Number.parseFloat(rootStyles.getPropertyValue('--oc-keyboard-inset')) || 0;
+    const keyboardHomeIndicator = Number.parseFloat(rootStyles.getPropertyValue('--oc-keyboard-home-indicator')) || 0;
+    const occludedBottom = keyboardInset + keyboardHomeIndicator;
+    if (occludedBottom <= 0) {
+      return;
+    }
+
+    const head = view.state.selection.main.head;
+    const cursorRect = view.coordsAtPos(head);
+    if (!cursorRect) {
+      return;
+    }
+
+    const visibleBottom = Math.round(viewport.offsetTop + viewport.height);
+    const clearance = 20;
+    const overlap = cursorRect.bottom + clearance - visibleBottom;
+    if (overlap <= 0) {
+      return;
+    }
+
+    view.scrollDOM.scrollTop += overlap;
+  }, [isMobile]);
+
+  React.useEffect(() => {
+    if (!isMobile || typeof window === 'undefined') {
+      return;
+    }
+
+    const runNudge = () => {
+      window.requestAnimationFrame(() => {
+        nudgeEditorSelectionAboveKeyboard(editorViewRef.current);
+      });
+    };
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', runNudge);
+    viewport?.addEventListener('scroll', runNudge);
+    document.addEventListener('selectionchange', runNudge);
+
+    return () => {
+      viewport?.removeEventListener('resize', runNudge);
+      viewport?.removeEventListener('scroll', runNudge);
+      document.removeEventListener('selectionchange', runNudge);
+    };
+  }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
+
   const editorExtensions = React.useMemo(() => {
     if (!selectedFile?.path) {
       return [createFlexokiCodeMirrorTheme(currentTheme)];
@@ -1639,8 +1697,22 @@ export const FilesView: React.FC = () => {
     if (wrapLines) {
       extensions.push(EditorView.lineWrapping);
     }
+    if (isMobile) {
+      extensions.push(EditorView.updateListener.of((update) => {
+        if (!update.view.hasFocus) {
+          return;
+        }
+        if (!(update.selectionSet || update.focusChanged || update.viewportChanged || update.geometryChanged)) {
+          return;
+        }
+
+        window.requestAnimationFrame(() => {
+          nudgeEditorSelectionAboveKeyboard(update.view);
+        });
+      }));
+    }
     return extensions;
-  }, [currentTheme, selectedFile?.path, wrapLines]);
+  }, [currentTheme, selectedFile?.path, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   const imageSrc = selectedFile?.path && isSelectedImage
     ? (runtime.isDesktop
@@ -2172,15 +2244,27 @@ export const FilesView: React.FC = () => {
               </ErrorBoundary>
             </div>
           ) : (
-            <div className="h-full">
+            <div
+              className="h-full"
+              data-keyboard-avoid="none"
+              style={isMobile ? { height: 'calc(100% - var(--oc-keyboard-inset, 0px))' } : undefined}
+            >
               <CodeMirrorEditor
                 value={draftContent}
                 onChange={setDraftContent}
                 extensions={editorExtensions}
-                className={cn(
-                  "h-full",
-                  isMobile && "[&_.cm-scroller]:pb-[var(--oc-keyboard-inset,0px)]"
-                )}
+                className="h-full"
+                onViewReady={(view) => {
+                  editorViewRef.current = view;
+                  window.requestAnimationFrame(() => {
+                    nudgeEditorSelectionAboveKeyboard(view);
+                  });
+                }}
+                onViewDestroy={() => {
+                  if (editorViewRef.current) {
+                    editorViewRef.current = null;
+                  }
+                }}
                 enableSearch
                 searchOpen={isSearchOpen}
                 onSearchOpenChange={setIsSearchOpen}
@@ -2543,6 +2627,17 @@ export const FilesView: React.FC = () => {
                 onChange={setDraftContent}
                 extensions={editorExtensions}
                 className="h-full"
+                onViewReady={(view) => {
+                  editorViewRef.current = view;
+                  window.requestAnimationFrame(() => {
+                    nudgeEditorSelectionAboveKeyboard(view);
+                  });
+                }}
+                onViewDestroy={() => {
+                  if (editorViewRef.current) {
+                    editorViewRef.current = null;
+                  }
+                }}
               />
             </div>
           )}

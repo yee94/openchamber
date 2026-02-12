@@ -208,6 +208,11 @@ export const MainLayout: React.FC = () => {
             }
             const markedTarget = active.closest('[data-keyboard-avoid]') as HTMLElement | null;
             if (markedTarget) {
+                // data-keyboard-avoid="none" opts out of translateY avoidance entirely.
+                // Used by components with their own scroll (e.g. CodeMirror).
+                if (markedTarget.getAttribute('data-keyboard-avoid') === 'none') {
+                    return null;
+                }
                 return markedTarget;
             }
             if (active.classList.contains('overlay-scrollbar-container')) {
@@ -335,17 +340,21 @@ export const MainLayout: React.FC = () => {
         viewport?.addEventListener('scroll', updateVisualViewport);
         window.addEventListener('resize', updateVisualViewport);
         window.addEventListener('orientationchange', updateVisualViewport);
+        const isTextInputTarget = (element: HTMLElement | null) => {
+            if (!element) {
+                return false;
+            }
+            const tagName = element.tagName;
+            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+            return isInput || element.isContentEditable;
+        };
+
         // Reset ignoreOpenUntilZero when focus moves to a text input.
         // This allows keyboard detection to work when user taps input quickly
         // while keyboard is still closing (common on Android).
         const handleFocusIn = (event: FocusEvent) => {
             const target = event.target as HTMLElement | null;
-            if (!target) {
-                return;
-            }
-            const tagName = target.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            if (isInput || target.isContentEditable) {
+            if (isTextInputTarget(target)) {
                 ignoreOpenUntilZero = false;
             }
             updateVisualViewport();
@@ -354,22 +363,40 @@ export const MainLayout: React.FC = () => {
 
         const handleFocusOut = (event: FocusEvent) => {
             const target = event.target as HTMLElement | null;
-            if (!target) {
+            if (!isTextInputTarget(target)) {
                 return;
             }
 
-            const tagName = target.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            if (isInput || target.isContentEditable) {
-                // Check if focus is moving to another input - if so, don't close keyboard
-                const related = event.relatedTarget as HTMLElement | null;
-                const relatedTag = related?.tagName;
-                const relatedIsInput = relatedTag === 'INPUT' || relatedTag === 'TEXTAREA' || relatedTag === 'SELECT' || related?.isContentEditable;
-                if (relatedIsInput) {
+            // Check if focus is moving to another input - if so, don't close keyboard
+            const related = event.relatedTarget as HTMLElement | null;
+            if (isTextInputTarget(related)) {
+                return;
+            }
+
+            // On mobile contenteditable editors (CodeMirror), focus can momentarily
+            // leave and return during drag-selection handles. Defer closing until the
+            // next frame and only close when no text target is focused and the
+            // visual viewport inset is actually zero.
+            window.requestAnimationFrame(() => {
+                if (isTextInputTarget(document.activeElement as HTMLElement | null)) {
                     return;
                 }
+
+                const currentViewport = window.visualViewport;
+                const height = currentViewport ? Math.round(currentViewport.height) : window.innerHeight;
+                const offsetTop = currentViewport ? Math.max(0, Math.round(currentViewport.offsetTop)) : 0;
+                const layoutHeight = Math.round(root.clientHeight || window.innerHeight);
+                const viewportSum = height + offsetTop;
+                const rawInset = Math.max(0, layoutHeight - viewportSum);
+
+                if (rawInset > 0) {
+                    updateVisualViewport();
+                    return;
+                }
+
                 forceKeyboardClosed();
-            }
+                updateVisualViewport();
+            });
         };
 
         document.addEventListener('focusout', handleFocusOut, true);
