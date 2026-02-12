@@ -65,11 +65,24 @@ interface TerminalViewportProps {
   className?: string;
   enableTouchScroll?: boolean;
   autoFocus?: boolean;
+  keyboardAvoidTargetId?: string;
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
   (
-    { sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className, enableTouchScroll, autoFocus = true },
+    {
+      sessionKey,
+      chunks,
+      onInput,
+      onResize,
+      theme,
+      fontFamily,
+      fontSize,
+      className,
+      enableTouchScroll,
+      autoFocus = true,
+      keyboardAvoidTargetId,
+    },
     ref
   ) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -1443,6 +1456,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
+                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
                 aria-label="Terminal input"
                 aria-hidden="true"
                 style={{
@@ -1470,6 +1484,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
+                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
                 aria-label="Terminal input"
                 aria-hidden="true"
                 style={{

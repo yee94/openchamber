@@ -206,6 +206,13 @@ export const MainLayout: React.FC = () => {
             if (!active) {
                 return null;
             }
+            const explicitTargetId = active.getAttribute('data-keyboard-avoid-target-id');
+            if (explicitTargetId) {
+                const explicitTarget = document.getElementById(explicitTargetId);
+                if (explicitTarget instanceof HTMLElement) {
+                    return explicitTarget;
+                }
+            }
             const markedTarget = active.closest('[data-keyboard-avoid]') as HTMLElement | null;
             if (markedTarget) {
                 // data-keyboard-avoid="none" opts out of translateY avoidance entirely.
