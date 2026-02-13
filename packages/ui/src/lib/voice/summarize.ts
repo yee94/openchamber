@@ -33,12 +33,13 @@ export async function summarizeText(
     }
     
     try {
+        const zenModel = store.settingsZenModel;
         const response = await fetch('/api/tts/summarize', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ text, threshold, maxLength }),
+            body: JSON.stringify({ text, threshold, maxLength, ...(zenModel ? { zenModel } : {}) }),
         });
         
         if (!response.ok) {

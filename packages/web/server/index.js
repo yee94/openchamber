@@ -588,7 +588,76 @@ const shouldApplyResolvedTemplateMessage = (template, resolved, variables) => {
   return true;
 };
 
-const summarizeText = async (text, targetLength) => {
+const ZEN_DEFAULT_MODEL = 'gpt-5-nano';
+
+/**
+ * Validated fallback zen model determined at startup by checking available free
+ * models from the zen API. When `null`, startup validation hasn't run yet (or
+ * failed), so `resolveZenModel` falls back to `ZEN_DEFAULT_MODEL`.
+ */
+let validatedZenFallback = null;
+
+/** Cached free zen models response and timestamp (shared by startup + endpoint). */
+let cachedZenModels = null;
+let cachedZenModelsTimestamp = 0;
+const ZEN_MODELS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch free models from the zen API with caching. Returns an array of
+ * `{ id, owned_by }` objects (may be empty on failure). Results are cached
+ * for `ZEN_MODELS_CACHE_TTL` ms.
+ */
+const fetchFreeZenModels = async () => {
+  const now = Date.now();
+  if (cachedZenModels && now - cachedZenModelsTimestamp < ZEN_MODELS_CACHE_TTL) {
+    return cachedZenModels.models;
+  }
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
+  try {
+    const response = await fetch('https://opencode.ai/zen/v1/models', {
+      signal: controller?.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`zen/v1/models responded with status ${response.status}`);
+    }
+    const data = await response.json();
+    const allModels = Array.isArray(data?.data) ? data.data : [];
+    const freeModels = allModels
+      .filter((m) => typeof m?.id === 'string' && m.id.endsWith('-free'))
+      .map((m) => ({ id: m.id, owned_by: m.owned_by }));
+
+    cachedZenModels = { models: freeModels };
+    cachedZenModelsTimestamp = Date.now();
+    return freeModels;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+};
+
+/**
+ * Resolve the zen model to use. Checks the provided override first,
+ * then falls back to the stored zenModel setting, then to the validated
+ * startup fallback, then to the hardcoded default.
+ */
+const resolveZenModel = async (override) => {
+  if (typeof override === 'string' && override.trim().length > 0) {
+    return override.trim();
+  }
+  try {
+    const settings = await readSettingsFromDisk();
+    if (typeof settings?.zenModel === 'string' && settings.zenModel.trim().length > 0) {
+      return settings.zenModel.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return validatedZenFallback || ZEN_DEFAULT_MODEL;
+};
+
+const summarizeText = async (text, targetLength, zenModel) => {
   if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
 
   try {
@@ -601,7 +670,7 @@ const summarizeText = async (text, targetLength) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gpt-5-nano',
+          model: zenModel || ZEN_DEFAULT_MODEL,
           input: [{ role: 'user', content: prompt }],
           max_output_tokens: 1000,
           stream: false,
@@ -1450,6 +1519,10 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.gitmojiEnabled === 'boolean') {
     result.gitmojiEnabled = candidate.gitmojiEnabled;
+  }
+  if (typeof candidate.zenModel === 'string') {
+    const trimmed = candidate.zenModel.trim();
+    result.zenModel = trimmed.length > 0 ? trimmed : undefined;
   }
   if (typeof candidate.toolCallExpansion === 'string') {
     const mode = candidate.toolCallExpansion.trim();
@@ -3901,10 +3974,11 @@ const maybeSendPushForTrigger = async (payload) => {
           lastMessage = await fetchLastAssistantMessageText(sessionId, messageId);
         }
 
+        const notifZenModel = await resolveZenModel(settings?.zenModel);
         variables.last_message = await prepareNotificationLastMessage({
           message: lastMessage,
           settings,
-          summarize: summarizeText,
+          summarize: (text, len) => summarizeText(text, len, notifZenModel),
         });
 
         const resolvedTitle = resolveNotificationTemplate(completionTemplate.title, variables);
@@ -3961,10 +4035,11 @@ const maybeSendPushForTrigger = async (payload) => {
           lastMessage = await fetchLastAssistantMessageText(sessionId, errorMessageId);
         }
 
+        const errZenModel = await resolveZenModel(settings?.zenModel);
         variables.last_message = await prepareNotificationLastMessage({
           message: lastMessage,
           settings,
-          summarize: summarizeText,
+          summarize: (text, len) => summarizeText(text, len, errZenModel),
         });
 
         const errorTemplate = (settings.notificationTemplates || {}).error || { title: 'Tool error', message: '{last_message}' };
@@ -5159,6 +5234,36 @@ async function main(options = {}) {
     sayTTSCapability = { available: false, voices: [], reason: 'Not macOS' };
   }
 
+  // Validate stored zen model at startup – best-effort, never blocks startup
+  try {
+    const freeModels = await fetchFreeZenModels();
+    const freeModelIds = freeModels.map((m) => m.id);
+
+    if (freeModelIds.length > 0) {
+      // Set the validated fallback to the first available free model
+      validatedZenFallback = freeModelIds[0];
+
+      const settings = await readSettingsFromDisk();
+      const storedModel = typeof settings?.zenModel === 'string' ? settings.zenModel.trim() : '';
+
+      if (!storedModel || !freeModelIds.includes(storedModel)) {
+        const fallback = freeModelIds[0];
+        console.log(
+          storedModel
+            ? `[zen] Stored model "${storedModel}" not found in free models, falling back to "${fallback}"`
+            : `[zen] No model configured, setting default to "${fallback}"`
+        );
+        await persistSettings({ zenModel: fallback });
+      } else {
+        console.log(`[zen] Stored model "${storedModel}" verified as available`);
+      }
+    } else {
+      console.warn('[zen] No free models returned from API, skipping validation');
+    }
+  } catch (error) {
+    console.warn('[zen] Startup model validation failed (non-blocking):', error?.message || error);
+  }
+
   const app = express();
   app.set('trust proxy', true);
   expressApp = app;
@@ -5417,7 +5522,8 @@ async function main(options = {}) {
       if (summarize && textToSpeak.length > threshold) {
         try {
           const { summarizeText } = await import('./lib/summarization-service.js');
-          const result = await summarizeText({ text: textToSpeak, threshold, maxLength });
+          const speakZenModel = await resolveZenModel(typeof req.body?.zenModel === 'string' ? req.body.zenModel : undefined);
+          const result = await summarizeText({ text: textToSpeak, threshold, maxLength, zenModel: speakZenModel });
           
           if (result.summarized && result.summary) {
             textToSpeak = result.summary;
@@ -5485,7 +5591,8 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Text is required' });
       }
 
-      const result = await summarizeText({ text, threshold, maxLength });
+      const sumZenModel = await resolveZenModel(typeof req.body?.zenModel === 'string' ? req.body.zenModel : undefined);
+      const result = await summarizeText({ text, threshold, maxLength, zenModel: sumZenModel });
 
       return res.json(result);
     } catch (error) {
@@ -5850,6 +5957,25 @@ async function main(options = {}) {
     } finally {
       if (timeout) {
         clearTimeout(timeout);
+      }
+    }
+  });
+
+  // Zen models endpoint - returns available free models from the zen API
+  app.get('/api/zen/models', async (_req, res) => {
+    try {
+      const models = await fetchFreeZenModels();
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.json({ models });
+    } catch (error) {
+      console.warn('Failed to fetch zen models:', error);
+      // Serve stale cache if available
+      if (cachedZenModels) {
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.json(cachedZenModels);
+      } else {
+        const statusCode = error?.name === 'AbortError' ? 504 : 502;
+        res.status(statusCode).json({ error: 'Failed to retrieve zen models' });
       }
     }
   });
@@ -8811,7 +8937,7 @@ highlights:
 Diff summary (may be truncated):
 ${diffSummaries}`;
 
-      const model = 'gpt-5-nano';
+      const model = await resolveZenModel(typeof req.body?.zenModel === 'string' ? req.body.zenModel : undefined);
 
       const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;
@@ -8924,7 +9050,7 @@ Context:
 
       prompt += `\n\nDiff summary:\n${diffSummaries}`;
 
-      const model = 'gpt-5-nano';
+      const model = await resolveZenModel(typeof req.body?.zenModel === 'string' ? req.body.zenModel : undefined);
 
       const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;

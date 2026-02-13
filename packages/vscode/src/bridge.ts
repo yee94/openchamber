@@ -2540,11 +2540,14 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         const prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:\n- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")\n- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes\n- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names\n- Testing: bullet list ("- Not tested" allowed)\n- Notes: bullet list; include breaking/rollout notes only when relevant\n\nContext:\n- base branch: ${base}\n- head branch: ${head}\n\nDiff summary:\n${diffSummaries}`;
 
         try {
+          const zenSettings = readSettings(ctx) as Record<string, unknown>;
+          const zenModelRaw = typeof zenSettings?.zenModel === 'string' ? (zenSettings.zenModel as string).trim() : '';
+          const zenModel = zenModelRaw.length > 0 ? zenModelRaw : 'gpt-5-nano';
           const response = await fetch('https://opencode.ai/zen/v1/responses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              model: 'gpt-5-nano',
+              model: zenModel,
               input: [{ role: 'user', content: prompt }],
               max_output_tokens: 1200,
               stream: false,

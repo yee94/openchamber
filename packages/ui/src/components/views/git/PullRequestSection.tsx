@@ -951,10 +951,12 @@ export const PullRequestSection: React.FC<{
     if (!directory) return;
     setIsGenerating(true);
     try {
+      const zenModel = useConfigStore.getState().settingsZenModel;
       const generated = await generatePullRequestDescription(directory, {
         base: baseBranch,
         head: branch,
         context: additionalContext,
+        ...(zenModel ? { zenModel } : {}),
       });
 
       if (generated.title?.trim()) {

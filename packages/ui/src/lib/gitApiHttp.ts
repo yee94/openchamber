@@ -205,16 +205,22 @@ export async function deleteRemoteBranch(directory: string, payload: GitDeleteRe
 
 export async function generateCommitMessage(
   directory: string,
-  files: string[]
+  files: string[],
+  options?: { zenModel?: string }
 ): Promise<{ message: GeneratedCommitMessage }> {
   if (!Array.isArray(files) || files.length === 0) {
     throw new Error('No files provided to generate commit message');
   }
 
+  const body: Record<string, unknown> = { files };
+  if (options?.zenModel) {
+    body.zenModel = options.zenModel;
+  }
+
   const response = await fetch(buildUrl(`${API_BASE}/commit-message`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -249,16 +255,19 @@ export async function generateCommitMessage(
 
 export async function generatePullRequestDescription(
   directory: string,
-  payload: { base: string; head: string; context?: string }
+  payload: { base: string; head: string; context?: string; zenModel?: string }
 ): Promise<{ title: string; body: string }> {
-  const { base, head, context } = payload;
+  const { base, head, context, zenModel } = payload;
   if (!base || !head) {
     throw new Error('base and head are required');
   }
 
-  const requestBody: { base: string; head: string; context?: string } = { base, head };
+  const requestBody: { base: string; head: string; context?: string; zenModel?: string } = { base, head };
   if (context?.trim()) {
     requestBody.context = context.trim();
+  }
+  if (zenModel) {
+    requestBody.zenModel = zenModel;
   }
 
   const response = await fetch(buildUrl(`${API_BASE}/pr-description`, directory), {

@@ -91,6 +91,7 @@ export type DesktopSettings = {
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
+  zenModel?: string;
   toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
   fontSize?: number;
   terminalFontSize?: number;

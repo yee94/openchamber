@@ -11,6 +11,11 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
 
+interface ZenModel {
+  id: string;
+  owned_by?: string;
+}
+
 const FALLBACK_PROVIDER_ID = 'opencode';
 const FALLBACK_MODEL_ID = 'big-pickle';
 
@@ -48,12 +53,16 @@ export const DefaultsSettings: React.FC = () => {
   const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
   const setSettingsAutoCreateWorktree = useConfigStore((state) => state.setSettingsAutoCreateWorktree);
+  const settingsZenModel = useConfigStore((state) => state.settingsZenModel);
+  const setSettingsZenModel = useConfigStore((state) => state.setSettingsZenModel);
   const providers = useConfigStore((state) => state.providers);
 
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
   const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
   const [isLoading, setIsLoading] = React.useState(true);
+  const [zenModels, setZenModels] = React.useState<ZenModel[]>([]);
+  const [zenModelsLoading, setZenModelsLoading] = React.useState(true);
 
   const parsedModel = React.useMemo(() => {
     return getDisplayModel(defaultModel, providers);
@@ -61,11 +70,43 @@ export const DefaultsSettings: React.FC = () => {
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
+  // Load zen models list
+  React.useEffect(() => {
+    const loadZenModels = async () => {
+      try {
+        const response = await fetch('/api/zen/models', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        });
+        if (response.ok) {
+          const data = await response.json() as { models?: ZenModel[] };
+          if (Array.isArray(data?.models)) {
+            setZenModels(data.models);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load zen models:', error);
+      } finally {
+        setZenModelsLoading(false);
+      }
+    };
+    loadZenModels();
+  }, []);
+
+  // Resolve which zen model to display as selected
+  const selectedZenModel = React.useMemo(() => {
+    if (settingsZenModel && zenModels.some((m) => m.id === settingsZenModel)) {
+      return settingsZenModel;
+    }
+    // Default to first free model in the list
+    return zenModels[0]?.id ?? '';
+  }, [settingsZenModel, zenModels]);
+
   // Load current settings
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
-        let data: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string } | null = null;
+        let data: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string; zenModel?: string } | null = null;
 
         // 1. Runtime settings API (VSCode)
         if (!data) {
@@ -79,6 +120,7 @@ export const DefaultsSettings: React.FC = () => {
                   defaultModel: typeof settings.defaultModel === 'string' ? settings.defaultModel : undefined,
                   defaultVariant: typeof (settings as Record<string, unknown>).defaultVariant === 'string' ? ((settings as Record<string, unknown>).defaultVariant as string) : undefined,
                   defaultAgent: typeof settings.defaultAgent === 'string' ? settings.defaultAgent : undefined,
+                  zenModel: typeof (settings as Record<string, unknown>).zenModel === 'string' ? ((settings as Record<string, unknown>).zenModel as string) : undefined,
                 };
               }
             } catch {
@@ -102,6 +144,7 @@ export const DefaultsSettings: React.FC = () => {
            const model = typeof data.defaultModel === 'string' && data.defaultModel.trim().length > 0 ? data.defaultModel.trim() : undefined;
            const variant = typeof data.defaultVariant === 'string' && data.defaultVariant.trim().length > 0 ? data.defaultVariant.trim() : undefined;
            const agent = typeof data.defaultAgent === 'string' && data.defaultAgent.trim().length > 0 ? data.defaultAgent.trim() : undefined;
+           const zen = typeof data.zenModel === 'string' && data.zenModel.trim().length > 0 ? data.zenModel.trim() : undefined;
 
            if (model !== undefined) {
              setDefaultModel(model);
@@ -112,6 +155,9 @@ export const DefaultsSettings: React.FC = () => {
            if (agent !== undefined) {
              setDefaultAgent(agent);
            }
+           if (zen !== undefined) {
+             setSettingsZenModel(zen);
+           }
          }
       } catch (error) {
         console.warn('Failed to load defaults settings:', error);
@@ -120,7 +166,7 @@ export const DefaultsSettings: React.FC = () => {
       }
     };
     loadSettings();
-  }, []);
+  }, [setSettingsZenModel]);
 
 
   const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
@@ -241,6 +287,16 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [setSettingsAutoCreateWorktree]);
 
+  const handleZenModelChange = React.useCallback(async (modelId: string) => {
+    setSettingsZenModel(modelId);
+    try {
+      await updateDesktopSettings({
+        zenModel: modelId,
+      });
+    } catch (error) {
+      console.warn('Failed to save zen model setting:', error);
+    }
+  }, [setSettingsZenModel]);
 
   if (isLoading) {
     return null;
@@ -333,6 +389,47 @@ export const DefaultsSettings: React.FC = () => {
           </p>
         </div>
       )}
+
+      <div className="border-t border-border/40 pt-4 mt-4 space-y-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h3 className="typography-ui-header font-semibold text-foreground">Zen Model</h3>
+            <Tooltip delayDuration={1000}>
+              <TooltipTrigger asChild>
+                <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent sideOffset={8} className="max-w-xs">
+                The free model used for lightweight internal tasks like commit message generation, PR descriptions, notification summarization, and TTS text summarization.
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <p className="typography-meta text-muted-foreground">
+            Used for commit messages, PR descriptions, and text summarization.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="typography-ui-label text-muted-foreground">Model</label>
+          {zenModelsLoading ? (
+            <span className="typography-meta text-muted-foreground">Loading models...</span>
+          ) : zenModels.length > 0 ? (
+            <Select value={selectedZenModel} onValueChange={handleZenModelChange}>
+              <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {zenModels.map((model) => (
+                  <SelectItem key={model.id} value={model.id} className="pr-2 [&>span:first-child]:hidden">
+                    {model.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="typography-meta text-muted-foreground">No free models available</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

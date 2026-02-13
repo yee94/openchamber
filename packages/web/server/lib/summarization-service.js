@@ -78,18 +78,20 @@ function extractZenOutputText(data) {
 }
 
 /**
- * Summarize text using the opencode.ai zen API with gpt-5-nano
+ * Summarize text using the opencode.ai zen API
  * 
  * @param {Object} options
  * @param {string} options.text - The text to summarize
  * @param {number} options.threshold - Character threshold (don't summarize if under this length)
  * @param {number} options.maxLength - Maximum character length for the summary output (50-2000)
+ * @param {string} [options.zenModel] - Override zen model (defaults to gpt-5-nano)
  * @returns {Promise<{summary: string, summarized: boolean, reason?: string}>}
  */
 export async function summarizeText({
   text,
   threshold = 200,
   maxLength = 500,
+  zenModel,
 }) {
   // Don't summarize if text is under threshold
   if (!text || text.length <= threshold) {
@@ -110,7 +112,7 @@ export async function summarizeText({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-5-nano',
+        model: zenModel || 'gpt-5-nano',
         input: [
           { role: 'user', content: `${prompt}\n\nText to summarize:\n${text}` },
         ],

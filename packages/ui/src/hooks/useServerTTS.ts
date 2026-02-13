@@ -78,7 +78,7 @@ export function useServerTTS(): UseServerTTSReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
   
   // Get current model, threshold, and max length from config store for summarization
-  const { currentProviderId, currentModelId, summarizeCharacterThreshold, summarizeMaxLength, openaiApiKey } = useConfigStore();
+  const { currentProviderId, currentModelId, summarizeCharacterThreshold, summarizeMaxLength, openaiApiKey, settingsZenModel } = useConfigStore();
 
   // Check if server TTS is available
   const checkAvailability = useCallback(async (): Promise<boolean> => {
@@ -209,6 +209,7 @@ export function useServerTTS(): UseServerTTSReturn {
           maxLength: summarizeMaxLength ?? 500,
           // Send API key from settings if available
           apiKey: openaiApiKey || undefined,
+          ...(settingsZenModel ? { zenModel: settingsZenModel } : {}),
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -258,7 +259,7 @@ export function useServerTTS(): UseServerTTSReturn {
       options?.onError?.(errorMsg);
       setIsPlaying(false);
     }
-  }, [stop, currentProviderId, currentModelId, summarizeCharacterThreshold, summarizeMaxLength, openaiApiKey]);
+  }, [stop, currentProviderId, currentModelId, summarizeCharacterThreshold, summarizeMaxLength, openaiApiKey, settingsZenModel]);
 
   // Cleanup on unmount
   useEffect(() => {

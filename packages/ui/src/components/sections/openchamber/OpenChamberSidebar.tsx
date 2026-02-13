@@ -38,7 +38,7 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
   {
     id: 'sessions',
     label: 'Sessions',
-    items: ['Defaults', 'Retention'],
+    items: ['Defaults', 'Zen Model', 'Retention'],
   },
   {
     id: 'git',

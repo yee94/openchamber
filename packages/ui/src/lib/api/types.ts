@@ -332,10 +332,10 @@ export interface GitAPI {
   getGitBranches(directory: string): Promise<GitBranch>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
   deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }>;
-  generateCommitMessage(directory: string, files: string[]): Promise<{ message: GeneratedCommitMessage }>;
+  generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string }): Promise<{ message: GeneratedCommitMessage }>;
   generatePullRequestDescription(
     directory: string,
-    payload: { base: string; head: string; context?: string }
+    payload: { base: string; head: string; context?: string; zenModel?: string }
   ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;

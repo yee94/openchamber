@@ -99,16 +99,17 @@ export async function deleteRemoteBranch(directory: string, payload: import('./a
 
 export async function generateCommitMessage(
   directory: string,
-  files: string[]
+  files: string[],
+  options?: { zenModel?: string }
 ): Promise<{ message: import('./api/types').GeneratedCommitMessage }> {
   const runtime = getRuntimeGit();
   if (runtime) return runtime.generateCommitMessage(directory, files);
-  return gitHttp.generateCommitMessage(directory, files);
+  return gitHttp.generateCommitMessage(directory, files, options);
 }
 
 export async function generatePullRequestDescription(
   directory: string,
-  payload: { base: string; head: string; context?: string }
+  payload: { base: string; head: string; context?: string; zenModel?: string }
 ): Promise<import('./api/types').GeneratedPullRequestDescription> {
   const runtime = getRuntimeGit();
   if (runtime?.generatePullRequestDescription) {
