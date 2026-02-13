@@ -112,6 +112,44 @@ const branchToTitle = (branch: string): string => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+const normalizeBranchRef = (value: string): string => {
+  let normalized = value.trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized.startsWith('refs/heads/')) {
+    normalized = normalized.slice('refs/heads/'.length);
+  }
+  if (normalized.startsWith('heads/')) {
+    normalized = normalized.slice('heads/'.length);
+  }
+  if (normalized.startsWith('remotes/')) {
+    normalized = normalized.slice('remotes/'.length);
+  }
+  return normalized;
+};
+
+const remoteBranchToName = (value: string, remoteName: string | null): string => {
+  const normalized = normalizeBranchRef(value);
+  if (!normalized || normalized.includes('->')) {
+    return '';
+  }
+
+  if (remoteName) {
+    const prefix = `${remoteName}/`;
+    if (normalized.startsWith(prefix)) {
+      return normalized.slice(prefix.length).trim();
+    }
+    return '';
+  }
+
+  const slashIndex = normalized.indexOf('/');
+  if (slashIndex > 0) {
+    return normalized.slice(slashIndex + 1).trim();
+  }
+  return normalized;
+};
+
 const getPullRequestSnapshotKey = (directory: string, branch: string): string => `${directory}::${branch}`;
 
 type PullRequestDraftSnapshot = {
@@ -119,6 +157,7 @@ type PullRequestDraftSnapshot = {
   body: string;
   draft: boolean;
   additionalContext: string;
+  targetBaseBranch?: string;
 };
 
 type TimelineCommentItem = {
@@ -175,9 +214,10 @@ export const PullRequestSection: React.FC<{
   branch: string;
   baseBranch: string;
   remotes?: GitRemote[];
+  remoteBranches?: string[];
   variant?: 'framed' | 'plain';
   onGeneratedDescription?: () => void;
-}> = ({ directory, branch, baseBranch, remotes = [], variant = 'framed', onGeneratedDescription }) => {
+}> = ({ directory, branch, baseBranch, remotes = [], remoteBranches = [], variant = 'framed', onGeneratedDescription }) => {
   const { github } = useRuntimeAPIs();
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
@@ -211,6 +251,15 @@ export const PullRequestSection: React.FC<{
   const [body, setBody] = React.useState(() => initialSnapshot?.body ?? '');
   const [draft, setDraft] = React.useState(() => initialSnapshot?.draft ?? false);
   const [additionalContext, setAdditionalContext] = React.useState(() => initialSnapshot?.additionalContext ?? '');
+  const [targetBaseBranch, setTargetBaseBranch] = React.useState(() => {
+    const fromSnapshot = typeof initialSnapshot?.targetBaseBranch === 'string'
+      ? normalizeBranchRef(initialSnapshot.targetBaseBranch)
+      : '';
+    if (fromSnapshot) {
+      return fromSnapshot;
+    }
+    return normalizeBranchRef(baseBranch);
+  });
   const [mergeMethod, setMergeMethod] = React.useState<MergeMethod>('squash');
 
   const [isGenerating, setIsGenerating] = React.useState(false);
@@ -227,6 +276,31 @@ export const PullRequestSection: React.FC<{
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [selectedRemote, setSelectedRemote] = React.useState<GitRemote | null>(() => remotes[0] ?? null);
 
+  const availableBaseBranches = React.useMemo(() => {
+    const selectedRemoteName = selectedRemote?.name?.trim() || null;
+    const unique = new Set<string>();
+
+    for (const remoteBranch of remoteBranches) {
+      const branchName = remoteBranchToName(remoteBranch, selectedRemoteName);
+      if (!branchName || branchName === 'HEAD') {
+        continue;
+      }
+      unique.add(branchName);
+    }
+
+    const defaultBase = normalizeBranchRef(baseBranch);
+    if (defaultBase && defaultBase !== 'HEAD') {
+      unique.add(defaultBase);
+    }
+
+    const currentTarget = normalizeBranchRef(targetBaseBranch);
+    if (currentTarget && currentTarget !== 'HEAD') {
+      unique.add(currentTarget);
+    }
+
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  }, [baseBranch, remoteBranches, selectedRemote?.name, targetBaseBranch]);
+
   const hasMultipleRemotes = remotes.length > 1;
 
   // Update selected remote when remotes change
@@ -235,6 +309,27 @@ export const PullRequestSection: React.FC<{
       setSelectedRemote(remotes[0]);
     }
   }, [remotes, selectedRemote]);
+
+  React.useEffect(() => {
+    const normalizedBase = normalizeBranchRef(baseBranch);
+    if (!targetBaseBranch && normalizedBase) {
+      setTargetBaseBranch(normalizedBase);
+      return;
+    }
+
+    if (availableBaseBranches.length === 0) {
+      return;
+    }
+
+    if (!availableBaseBranches.includes(targetBaseBranch)) {
+      const fallback = availableBaseBranches.includes(normalizedBase)
+        ? normalizedBase
+        : availableBaseBranches[0];
+      if (fallback) {
+        setTargetBaseBranch(fallback);
+      }
+    }
+  }, [availableBaseBranches, baseBranch, targetBaseBranch]);
 
   const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
   const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
@@ -863,11 +958,12 @@ export const PullRequestSection: React.FC<{
     setTitle(snapshot?.title ?? branchToTitle(branch));
     setBody(snapshot?.body ?? '');
     setDraft(snapshot?.draft ?? false);
+    setTargetBaseBranch(snapshot?.targetBaseBranch ? normalizeBranchRef(snapshot.targetBaseBranch) : normalizeBranchRef(baseBranch));
     setStatus(statusSnapshot);
     setError(null);
     setIsInitialStatusResolved(Boolean(statusSnapshot));
     void refresh({ force: true, markInitialResolved: true });
-  }, [branch, refresh, snapshotKey]);
+  }, [baseBranch, branch, refresh, snapshotKey]);
 
   // Refetch when selected remote changes
   React.useEffect(() => {
@@ -936,8 +1032,9 @@ export const PullRequestSection: React.FC<{
       body,
       draft,
       additionalContext,
+      targetBaseBranch,
     });
-  }, [snapshotKey, title, body, draft, additionalContext, directory, branch]);
+  }, [snapshotKey, title, body, draft, additionalContext, targetBaseBranch, directory, branch]);
 
   React.useEffect(() => {
     if (!status) {
@@ -953,7 +1050,7 @@ export const PullRequestSection: React.FC<{
     try {
       const zenModel = useConfigStore.getState().settingsZenModel;
       const generated = await generatePullRequestDescription(directory, {
-        base: baseBranch,
+        base: targetBaseBranch,
         head: branch,
         context: additionalContext,
         ...(zenModel ? { zenModel } : {}),
@@ -972,7 +1069,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsGenerating(false);
     }
-  }, [baseBranch, branch, directory, isGenerating, additionalContext, onGeneratedDescription]);
+  }, [branch, directory, isGenerating, additionalContext, onGeneratedDescription, targetBaseBranch]);
 
   const createPr = React.useCallback(async () => {
     if (!github?.prCreate) {
@@ -985,6 +1082,16 @@ export const PullRequestSection: React.FC<{
       return;
     }
 
+    const trimmedBase = targetBaseBranch.trim();
+    if (!trimmedBase) {
+      toast.error('Base branch is required');
+      return;
+    }
+    if (trimmedBase === branch) {
+      toast.error('Base branch must differ from head branch');
+      return;
+    }
+
     setIsCreating(true);
     try {
       // Let the server determine the head source from tracking info
@@ -993,7 +1100,7 @@ export const PullRequestSection: React.FC<{
         directory,
         title: trimmedTitle,
         head: branch,
-        base: baseBranch,
+        base: trimmedBase,
         ...(body.trim() ? { body } : {}),
         draft,
         ...(selectedRemote ? { remote: selectedRemote.name } : {}),
@@ -1007,7 +1114,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [baseBranch, body, branch, directory, draft, github, refresh, selectedRemote, title]);
+  }, [body, branch, directory, draft, github, refresh, selectedRemote, targetBaseBranch, title]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1469,7 +1576,7 @@ export const PullRequestSection: React.FC<{
                   <div className="min-w-0">
                     <div className="typography-ui-label text-foreground">Create PR</div>
                     <div className="typography-micro text-muted-foreground truncate">
-                      {branch} → {baseBranch}
+                      {branch} → {targetBaseBranch}
                     </div>
                   </div>
                   {repoUrl ? (
@@ -1492,6 +1599,28 @@ export const PullRequestSection: React.FC<{
                     autoCapitalize={hasTouchInput ? "sentences" : "off"}
                     spellCheck={hasTouchInput}
                   />
+                </label>
+
+                <label className="space-y-1">
+                  <div className="typography-micro text-muted-foreground">Base branch</div>
+                  {availableBaseBranches.length > 0 ? (
+                    <Select value={targetBaseBranch} onValueChange={setTargetBaseBranch}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select base branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBaseBranches.map((candidate) => (
+                          <SelectItem key={candidate} value={candidate}>{candidate}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={targetBaseBranch}
+                      onChange={(e) => setTargetBaseBranch(e.target.value)}
+                      placeholder="main"
+                    />
+                  )}
                 </label>
 
                 <label className="space-y-1">
@@ -1632,7 +1761,7 @@ export const PullRequestSection: React.FC<{
                     size="sm"
                     className="min-w-[7.5rem] justify-center gap-2"
                     onClick={createPr}
-                    disabled={isCreating || !isConnected}
+                    disabled={isCreating || !isConnected || !targetBaseBranch.trim() || targetBaseBranch.trim() === branch}
                   >
                     <span className="inline-flex size-4 items-center justify-center">
                       {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitPullRequestLine className="size-4" />}

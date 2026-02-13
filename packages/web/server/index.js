@@ -7591,14 +7591,14 @@ async function main(options = {}) {
       const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
       const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
       const head = typeof req.body?.head === 'string' ? req.body.head.trim() : '';
-      const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
+      const requestedBase = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
       const body = typeof req.body?.body === 'string' ? req.body.body : undefined;
       const draft = typeof req.body?.draft === 'boolean' ? req.body.draft : undefined;
       // remote = target repo (where PR is created, e.g., 'upstream' for forks)
       const remote = typeof req.body?.remote === 'string' ? req.body.remote.trim() : 'origin';
       // headRemote = source repo (where head branch lives, e.g., 'origin' for forks)
       const headRemote = typeof req.body?.headRemote === 'string' ? req.body.headRemote.trim() : '';
-      if (!directory || !title || !head || !base) {
+      if (!directory || !title || !head || !requestedBase) {
         return res.status(400).json({ error: 'directory, title, head, base are required' });
       }
 
@@ -7614,13 +7614,42 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
       }
 
+      const normalizeBranchRef = (value, remoteNames = new Set()) => {
+        if (!value) {
+          return value;
+        }
+        let normalized = value.trim();
+        if (normalized.startsWith('refs/heads/')) {
+          normalized = normalized.substring('refs/heads/'.length);
+        }
+        if (normalized.startsWith('heads/')) {
+          normalized = normalized.substring('heads/'.length);
+        }
+        if (normalized.startsWith('remotes/')) {
+          normalized = normalized.substring('remotes/'.length);
+        }
+
+        const slashIndex = normalized.indexOf('/');
+        if (slashIndex > 0) {
+          const maybeRemote = normalized.slice(0, slashIndex);
+          if (remoteNames.has(maybeRemote)) {
+            const withoutRemotePrefix = normalized.slice(slashIndex + 1).trim();
+            if (withoutRemotePrefix) {
+              normalized = withoutRemotePrefix;
+            }
+          }
+        }
+
+        return normalized;
+      };
+
       // Determine the source remote for the head branch
       // Priority: 1) explicit headRemote, 2) tracking branch remote, 3) 'origin' if targeting non-origin
       let sourceRemote = headRemote;
+      const { getStatus, getRemotes } = await import('./lib/git-service.js');
       
       // If no explicit headRemote, check the branch's tracking info
       if (!sourceRemote) {
-        const { getStatus } = await import('./lib/git-service.js');
         const status = await getStatus(directory).catch(() => null);
         if (status?.tracking) {
           // tracking is like "gsxdsm/fix/multi-remote-branch-creation" or "origin/main"
@@ -7634,6 +7663,22 @@ async function main(options = {}) {
       // Fallback: if targeting non-origin and no tracking info, try 'origin'
       if (!sourceRemote && remote !== 'origin') {
         sourceRemote = 'origin';
+      }
+
+      const remoteNames = new Set([remote]);
+      const remotes = await getRemotes(directory).catch(() => []);
+      for (const item of remotes) {
+        if (item?.name) {
+          remoteNames.add(item.name);
+        }
+      }
+      if (sourceRemote) {
+        remoteNames.add(sourceRemote);
+      }
+
+      const base = normalizeBranchRef(requestedBase, remoteNames);
+      if (!base) {
+        return res.status(400).json({ error: 'Invalid base branch name' });
       }
 
       // For fork workflows: we need to determine the correct head reference

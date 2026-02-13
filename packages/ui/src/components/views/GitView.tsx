@@ -995,19 +995,58 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   }, [remotes, remoteBranches, remoteUrl, status?.tracking]);
 
   const baseBranch = React.useMemo(() => {
-    const fromMeta = typeof worktreeMetadata?.createdFromBranch === 'string'
-      ? worktreeMetadata.createdFromBranch.trim()
-      : '';
-    if (fromMeta && fromMeta !== 'HEAD') return fromMeta;
+    const remoteNames = new Set(effectiveRemotes.map((remote) => remote.name));
+    const normalizeBaseCandidate = (value: string): string => {
+      if (!value) {
+        return '';
+      }
 
-    const fromHint = typeof rootBranchHint === 'string' ? rootBranchHint.trim() : '';
-    if (fromHint && fromHint !== 'HEAD') return fromHint;
+      let normalized = value.trim();
+      if (!normalized || normalized === 'HEAD') {
+        return '';
+      }
+
+      if (localBranches.includes(normalized)) {
+        return normalized;
+      }
+
+      if (normalized.startsWith('refs/heads/')) {
+        normalized = normalized.slice('refs/heads/'.length);
+      }
+      if (normalized.startsWith('heads/')) {
+        normalized = normalized.slice('heads/'.length);
+      }
+      if (normalized.startsWith('remotes/')) {
+        normalized = normalized.slice('remotes/'.length);
+      }
+
+      const slashIndex = normalized.indexOf('/');
+      if (slashIndex > 0) {
+        const maybeRemote = normalized.slice(0, slashIndex);
+        if (remoteNames.has(maybeRemote)) {
+          const withoutRemote = normalized.slice(slashIndex + 1).trim();
+          if (withoutRemote) {
+            normalized = withoutRemote;
+          }
+        }
+      }
+
+      return normalized;
+    };
+
+    const fromMeta = normalizeBaseCandidate(
+      typeof worktreeMetadata?.createdFromBranch === 'string' ? worktreeMetadata.createdFromBranch : ''
+    );
+    if (fromMeta) return fromMeta;
+
+    const fromHint = normalizeBaseCandidate(typeof rootBranchHint === 'string' ? rootBranchHint : '');
+    if (fromHint) return fromHint;
 
     if (localBranches.includes('main')) return 'main';
     if (localBranches.includes('master')) return 'master';
     if (localBranches.includes('develop')) return 'develop';
     return 'main';
-  }, [localBranches, rootBranchHint, worktreeMetadata?.createdFromBranch]);
+  }, [effectiveRemotes, localBranches, rootBranchHint, worktreeMetadata?.createdFromBranch]);
 
   const availableIdentities = React.useMemo(() => {
     const unique = new Map<string, GitIdentityProfile>();
@@ -1755,6 +1794,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                     branch={pullRequestProps.branch}
                     baseBranch={baseBranch}
                     remotes={remotes}
+                    remoteBranches={remoteBranches}
                     onGeneratedDescription={scrollActionPanelToBottom}
                   />
                 ) : (
