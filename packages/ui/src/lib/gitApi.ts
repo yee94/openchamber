@@ -18,6 +18,11 @@ export type {
   GitLogEntry,
   GitLogResponse,
   GitWorktreeInfo,
+  CreateGitWorktreePayload,
+  GitWorktreeCreateResult,
+  RemoveGitWorktreePayload,
+  GitWorktreeValidationError,
+  GitWorktreeValidationResult,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   DiscoveredGitCredential,
@@ -120,9 +125,63 @@ export async function generatePullRequestDescription(
 
 export async function listGitWorktrees(directory: string): Promise<import('./api/types').GitWorktreeInfo[]> {
   const runtime = getRuntimeGit();
+  if (runtime?.worktree?.list) {
+    return runtime.worktree.list(directory);
+  }
   if (runtime) return runtime.listGitWorktrees(directory);
   return gitHttp.listGitWorktrees(directory);
 }
+
+export async function validateGitWorktree(
+  directory: string,
+  payload: import('./api/types').CreateGitWorktreePayload
+): Promise<import('./api/types').GitWorktreeValidationResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.validate) {
+    return runtime.worktree.validate(directory, payload);
+  }
+  if (runtime?.validateGitWorktree) {
+    return runtime.validateGitWorktree(directory, payload);
+  }
+  return gitHttp.validateGitWorktree(directory, payload);
+}
+
+export async function createGitWorktree(
+  directory: string,
+  payload: import('./api/types').CreateGitWorktreePayload
+): Promise<import('./api/types').GitWorktreeCreateResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.create) {
+    return runtime.worktree.create(directory, payload);
+  }
+  if (runtime?.createGitWorktree) {
+    return runtime.createGitWorktree(directory, payload);
+  }
+  return gitHttp.createGitWorktree(directory, payload);
+}
+
+export async function deleteGitWorktree(
+  directory: string,
+  payload: import('./api/types').RemoveGitWorktreePayload
+): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.remove) {
+    return runtime.worktree.remove(directory, payload);
+  }
+  if (runtime?.deleteGitWorktree) {
+    return runtime.deleteGitWorktree(directory, payload);
+  }
+  return gitHttp.deleteGitWorktree(directory, payload);
+}
+
+export const git = {
+  worktree: {
+    list: listGitWorktrees,
+    validate: validateGitWorktree,
+    create: createGitWorktree,
+    remove: deleteGitWorktree,
+  },
+};
 
 export async function createGitCommit(
   directory: string,

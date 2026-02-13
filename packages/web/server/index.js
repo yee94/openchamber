@@ -281,7 +281,10 @@ const resolveWorkspacePathFromWorktrees = async (targetPath, baseDirectory) => {
     const worktrees = await getWorktrees(resolvedBase);
 
     for (const worktree of worktrees) {
-      const candidate = typeof worktree?.worktree === 'string' ? normalizeDirectoryPath(worktree.worktree) : '';
+      const candidatePath = typeof worktree?.path === 'string'
+        ? worktree.path
+        : (typeof worktree?.worktree === 'string' ? worktree.worktree : '');
+      const candidate = normalizeDirectoryPath(candidatePath);
       if (!candidate) {
         continue;
       }
@@ -8093,6 +8096,7 @@ async function main(options = {}) {
               repo: pr.head.repo.name,
               url: pr.head.repo.html_url,
               cloneUrl: pr.head.repo.clone_url,
+              sshUrl: pr.head.repo.ssh_url,
             }
           : null;
         return {
@@ -8160,6 +8164,7 @@ async function main(options = {}) {
             repo: prData.head.repo.name,
             url: prData.head.repo.html_url,
             cloneUrl: prData.head.repo.clone_url,
+            sshUrl: prData.head.repo.ssh_url,
           }
         : null;
 
@@ -9482,6 +9487,74 @@ Context:
       console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
       res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
       res.json([]);
+    }
+  });
+
+  app.post('/api/git/worktrees/validate', async (req, res) => {
+    const { validateWorktreeCreate } = await getGitLibraries();
+    if (typeof validateWorktreeCreate !== 'function') {
+      return res.status(501).json({ error: 'Worktree validation is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await validateWorktreeCreate(directory, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to validate worktree creation:', error);
+      res.status(500).json({ error: error.message || 'Failed to validate worktree creation' });
+    }
+  });
+
+  app.post('/api/git/worktrees', async (req, res) => {
+    const { createWorktree } = await getGitLibraries();
+    if (typeof createWorktree !== 'function') {
+      return res.status(501).json({ error: 'Worktree creation is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const created = await createWorktree(directory, req.body || {});
+      res.json(created);
+    } catch (error) {
+      console.error('Failed to create worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to create worktree' });
+    }
+  });
+
+  app.delete('/api/git/worktrees', async (req, res) => {
+    const { removeWorktree } = await getGitLibraries();
+    if (typeof removeWorktree !== 'function') {
+      return res.status(501).json({ error: 'Worktree removal is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const worktreeDirectory = typeof req.body?.directory === 'string' ? req.body.directory : '';
+      if (!worktreeDirectory) {
+        return res.status(400).json({ error: 'worktree directory is required' });
+      }
+
+      const result = await removeWorktree(directory, {
+        directory: worktreeDirectory,
+        deleteLocalBranch: req.body?.deleteLocalBranch === true,
+      });
+      res.json({ success: Boolean(result) });
+    } catch (error) {
+      console.error('Failed to remove worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to remove worktree' });
     }
   });
 

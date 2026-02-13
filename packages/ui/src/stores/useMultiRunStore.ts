@@ -3,7 +3,8 @@ import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { opencodeClient } from '@/lib/opencode/client';
 import { saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
-import { createSdkWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
+import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
+import { createWorktreeWithDefaults, resolveRootTrackingRemote } from '@/lib/worktrees/worktreeCreate';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
@@ -31,8 +32,8 @@ const toModelSlug = (providerID: string, modelID: string): string => {
 };
 
 /**
- * Seed name for SDK worktree creation.
- * Uses slashes for readability; SDK will slugify.
+ * Seed name for worktree creation.
+ * Uses slashes for readability; create payload will slugify.
  */
 const generateWorktreeNameSeed = (groupSlug: string, modelSlug: string): string => {
   return `${groupSlug}/${modelSlug}`;
@@ -123,6 +124,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
 
           const groupSlug = toGitSafeSlug(groupName);
           const rootBranch = await getRootBranch(directory);
+          const rootTrackingRemote = await resolveRootTrackingRemote(directory);
 
           const createdRuns: Array<{
             sessionId: string;
@@ -156,11 +158,16 @@ export const useMultiRunStore = create<MultiRunStore>()(
             const preferredName = count > 1
               ? generateWorktreeNameSeed(groupSlug, `${modelSlug}/${index}`)
               : generateWorktreeNameSeed(groupSlug, modelSlug);
-
             try {
-              const worktreeMetadata = await createSdkWorktree(project, {
+              const worktreeMetadata = await createWorktreeWithDefaults(project, {
                 preferredName,
+                mode: 'new',
+                branchName: preferredName,
+                worktreeName: preferredName,
+                startRef: params.worktreeBaseBranch || 'HEAD',
                 setupCommands: commandsToRun,
+              }, {
+                resolvedRootTrackingRemote: rootTrackingRemote,
               });
 
               const enrichedMetadata = {

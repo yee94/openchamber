@@ -1,7 +1,13 @@
-import { opencodeClient } from '@/lib/opencode/client';
 import { substituteCommandVariables } from '@/lib/openchamberConfig';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { deleteRemoteBranch, getGitStatus } from '@/lib/gitApi';
+import {
+  deleteRemoteBranch,
+  git,
+} from '@/lib/gitApi';
+import type {
+  CreateGitWorktreePayload,
+  GitWorktreeValidationResult,
+} from '@/lib/api/types';
 
 export type ProjectRef = { id: string; path: string };
 
@@ -16,21 +22,24 @@ const normalizePath = (value: string): string => {
 const slugifyWorktreeName = (value: string): string => {
   return value
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^refs\/heads\//, '')
+    .replace(/^heads\//, '')
+    .replace(/\s+/g, '-')
+    .replace(/^\/+|\/+$/g, '')
+    .split('/').join('-')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
 };
 
-const unwrapSdkData = (value: unknown): unknown => {
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  const record = value as Record<string, unknown>;
-  if ('data' in record) {
-    return record.data;
-  }
-  return value;
+const normalizeBranchName = (value: string): string => {
+  return value
+    .trim()
+    .replace(/^refs\/heads\//, '')
+    .replace(/^heads\//, '')
+    .replace(/\s+/g, '-')
+    .replace(/^\/+|\/+$/g, '');
 };
 
 const deriveSdkWorktreeNameFromDirectory = (directory: string): string => {
@@ -57,106 +66,73 @@ export const buildSdkStartCommand = (args: {
   return joined.trim().length > 0 ? joined : undefined;
 };
 
-const waitForSdkWorktreeReady = async (directory: string, timeoutMs = 60_000): Promise<void> => {
-  const target = normalizePath(directory);
-  if (!target) {
-    return;
-  }
+const toCreatePayload = (args: {
+  preferredName?: string;
+  setupCommands?: string[];
+  mode?: 'new' | 'existing';
+  worktreeName?: string;
+  branchName?: string;
+  existingBranch?: string;
+  startRef?: string;
+  setUpstream?: boolean;
+  upstreamRemote?: string;
+  upstreamBranch?: string;
+  ensureRemoteName?: string;
+  ensureRemoteUrl?: string;
+}, projectDirectory: string): CreateGitWorktreePayload => {
+  const mode = args.mode === 'existing' ? 'existing' : 'new';
 
-  await new Promise<void>((resolve, reject) => {
-    let done = false;
-    let unsubscribe = () => {};
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const cleanup = () => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      try {
-        unsubscribe();
-      } catch {
-        // ignore
-      }
-    };
-    const finish = (result?: { error?: string }) => {
-      if (done) return;
-      done = true;
-      cleanup();
-      if (result?.error) {
-        reject(new Error(result.error));
-      } else {
-        resolve();
-      }
-    };
+  const worktreeNameSeed = args.worktreeName ?? args.preferredName ?? '';
+  const worktreeName = slugifyWorktreeName(worktreeNameSeed);
 
-    timeout = setTimeout(() => {
-      finish({ error: 'Worktree startup timed out' });
-    }, timeoutMs);
+  const branchNameSeed = args.branchName ?? (mode === 'new' ? args.preferredName : undefined) ?? '';
+  const branchName = normalizeBranchName(branchNameSeed);
 
-    unsubscribe = opencodeClient.subscribeToGlobalEvents(
-      (event) => {
-        const payload = event.payload as { type?: string; properties?: Record<string, unknown> };
-        if (payload?.type === 'worktree.ready') {
-          finish();
-          return;
-        }
-        if (payload?.type === 'worktree.failed') {
-          const message = typeof payload.properties?.message === 'string'
-            ? payload.properties.message
-            : 'Worktree failed to start';
-          finish({ error: message });
-        }
-      },
-      undefined,
-      undefined,
-      { directory: target }
-    );
+  const existingBranch = normalizeBranchName(args.existingBranch ?? args.branchName ?? '');
+  const startRef = (args.startRef || '').trim();
+
+  const commands = Array.isArray(args.setupCommands) ? args.setupCommands : [];
+  const startCommand = buildSdkStartCommand({
+    projectDirectory,
+    setupCommands: commands,
   });
+
+  return {
+    mode,
+    ...(worktreeName ? { worktreeName } : {}),
+    ...(branchName ? { branchName } : {}),
+    ...(existingBranch ? { existingBranch } : {}),
+    ...(startRef ? { startRef } : {}),
+    ...(startCommand ? { startCommand } : {}),
+    ...(args.setUpstream ? { setUpstream: true } : {}),
+    ...(args.upstreamRemote ? { upstreamRemote: args.upstreamRemote } : {}),
+    ...(args.upstreamBranch ? { upstreamBranch: args.upstreamBranch } : {}),
+    ...(args.ensureRemoteName ? { ensureRemoteName: args.ensureRemoteName } : {}),
+    ...(args.ensureRemoteUrl ? { ensureRemoteUrl: args.ensureRemoteUrl } : {}),
+  };
 };
 
 export async function listProjectWorktrees(project: ProjectRef): Promise<WorktreeMetadata[]> {
   const projectDirectory = project.path;
-  const scoped = opencodeClient.getScopedApiClient(projectDirectory);
+  const normalizedProjectDirectory = normalizePath(projectDirectory);
 
-  const results: WorktreeMetadata[] = [];
-
-  // SDK worktrees
-  try {
-    const raw = await scoped.worktree.list();
-    const data = unwrapSdkData(raw);
-    const directories = Array.isArray(data) ? data : [];
-
-    for (const entry of directories) {
-      if (typeof entry !== 'string' || entry.trim().length === 0) {
-        continue;
-      }
-      const directory = normalizePath(entry);
-      const name = deriveSdkWorktreeNameFromDirectory(directory);
-      results.push({
-        source: 'sdk',
-        name,
-        path: directory,
+  const worktrees = await git.worktree.list(projectDirectory).catch(() => []);
+  const results: WorktreeMetadata[] = worktrees
+    .filter((entry) => typeof entry.path === 'string' && entry.path.trim().length > 0)
+    .map((entry) => {
+      const worktreePath = normalizePath(entry.path);
+      const branch = (entry.branch || '').replace(/^refs\/heads\//, '').trim();
+      const name = (entry.name || '').trim();
+      return {
+        source: 'sdk' as const,
+        name: name || deriveSdkWorktreeNameFromDirectory(worktreePath),
+        path: worktreePath,
         projectDirectory,
-        branch: '',
-        label: name,
-      });
-    }
-  } catch {
-    // ignore
-  }
-
-  // Enrich worktrees with branch information from git status
-  await Promise.all(
-    results.map(async (worktree) => {
-      try {
-        const status = await getGitStatus(worktree.path);
-        if (status?.current) {
-          worktree.branch = status.current;
-        }
-      } catch {
-        // ignore - branch will remain empty
-      }
+        branch,
+        label: branch || name || deriveSdkWorktreeNameFromDirectory(worktreePath),
+      };
     })
-  );
+    .filter((entry) => normalizePath(entry.path) !== normalizedProjectDirectory);
 
   return results.sort((a, b) => {
     const aLabel = (a.label || a.branch || a.path).toLowerCase();
@@ -165,71 +141,67 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
   });
 }
 
-export async function createSdkWorktree(project: ProjectRef, args: {
+export type CreateWorktreeArgs = {
   preferredName?: string;
   setupCommands?: string[];
-}): Promise<WorktreeMetadata> {
+  mode?: 'new' | 'existing';
+  worktreeName?: string;
+  branchName?: string;
+  existingBranch?: string;
+  startRef?: string;
+  setUpstream?: boolean;
+  upstreamRemote?: string;
+  upstreamBranch?: string;
+  ensureRemoteName?: string;
+  ensureRemoteUrl?: string;
+};
+
+export async function createWorktree(project: ProjectRef, args: CreateWorktreeArgs): Promise<WorktreeMetadata> {
   const projectDirectory = project.path;
-  const scoped = opencodeClient.getScopedApiClient(projectDirectory);
+  const payload = toCreatePayload(args, projectDirectory);
 
-  const baseName = typeof args.preferredName === 'string' ? slugifyWorktreeName(args.preferredName) : '';
-  const seed = baseName || undefined;
+  const created = await git.worktree.create(projectDirectory, payload);
+  const returnedName = typeof created?.name === 'string' ? created.name : '';
+  const returnedBranch = typeof created?.branch === 'string' ? created.branch : '';
+  const returnedPath = typeof created?.path === 'string' ? created.path : '';
 
-  const commands = Array.isArray(args.setupCommands) ? args.setupCommands : [];
-  const startCommand = buildSdkStartCommand({
-    projectDirectory,
-    setupCommands: commands,
-  });
-
-  const name = seed || undefined;
-  const raw = await scoped.worktree.create({
-    worktreeCreateInput: {
-      ...(name ? { name } : {}),
-      ...(startCommand ? { startCommand } : {}),
-    },
-  });
-
-  const data = unwrapSdkData(raw);
-  if (!data || typeof data !== 'object') {
-    throw new Error('Invalid worktree.create response');
-  }
-
-  const record = data as Record<string, unknown>;
-  const returnedName = typeof record.name === 'string' ? record.name : name;
-  const returnedBranch = typeof record.branch === 'string' ? record.branch : (returnedName ? `opencode/${returnedName}` : '');
-  const returnedDirectory = typeof record.directory === 'string' ? record.directory : '';
-
-  if (!returnedName || !returnedDirectory) {
-    throw new Error('Worktree create missing name/directory');
+  if (!returnedName || !returnedPath) {
+    throw new Error('Worktree create missing name/path');
   }
 
   const metadata: WorktreeMetadata = {
     source: 'sdk',
     name: returnedName,
-    path: normalizePath(returnedDirectory),
+    path: normalizePath(returnedPath),
     projectDirectory,
     branch: returnedBranch,
-    label: returnedName,
+    label: returnedBranch || returnedName,
   };
-
-  await waitForSdkWorktreeReady(metadata.path);
 
   return metadata;
 }
 
+export async function validateWorktreeCreate(project: ProjectRef, args: CreateWorktreeArgs): Promise<GitWorktreeValidationResult> {
+  const projectDirectory = project.path;
+  const payload = toCreatePayload(args, projectDirectory);
+  return git.worktree.validate(projectDirectory, payload);
+}
+
 export async function removeProjectWorktree(project: ProjectRef, worktree: WorktreeMetadata, options?: {
   deleteRemoteBranch?: boolean;
+  deleteLocalBranch?: boolean;
   remoteName?: string;
-  force?: boolean;
 }): Promise<void> {
   const projectDirectory = project.path;
 
   const deleteRemote = Boolean(options?.deleteRemoteBranch);
+  const deleteLocalBranch = options?.deleteLocalBranch === true;
   const remoteName = options?.remoteName;
-  const scoped = opencodeClient.getScopedApiClient(projectDirectory);
-  const raw = await scoped.worktree.remove({ worktreeRemoveInput: { directory: worktree.path } });
-  const ok = unwrapSdkData(raw);
-  if (ok !== true) {
+  const raw = await git.worktree.remove(projectDirectory, {
+    directory: worktree.path,
+    deleteLocalBranch,
+  });
+  if (!raw?.success) {
     throw new Error('Worktree removal failed');
   }
 

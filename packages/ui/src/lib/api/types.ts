@@ -285,9 +285,59 @@ export interface GitCommitFilesResponse {
 }
 
 export interface GitWorktreeInfo {
-  worktree: string;
-  head?: string;
-  branch?: string;
+  head: string;
+  name: string;
+  branch: string;
+  path: string;
+}
+
+export interface GitWorktreeValidationError {
+  code: string;
+  message: string;
+}
+
+export interface GitWorktreeValidationResult {
+  ok: boolean;
+  errors: GitWorktreeValidationError[];
+  resolved?: {
+    mode?: 'new' | 'existing';
+    localBranch?: string | null;
+  };
+}
+
+export interface CreateGitWorktreePayload {
+  mode?: 'new' | 'existing';
+  /** Worktree folder name (falls back to OpenCode name generation when omitted). */
+  worktreeName?: string;
+  /** Backward-compatible alias for worktreeName. */
+  name?: string;
+  /** New local branch name for mode=new. */
+  branchName?: string;
+  /** Existing local/remote branch for mode=existing. */
+  existingBranch?: string;
+  /** Start ref for mode=new (local/remote branch or commit SHA). */
+  startRef?: string;
+  /** Additional startup script to run after project startup script. */
+  startCommand?: string;
+  /** Configure upstream tracking for the created/attached local branch. */
+  setUpstream?: boolean;
+  upstreamRemote?: string;
+  upstreamBranch?: string;
+  /** Optional remote provisioning (used for fork PR workflows). */
+  ensureRemoteName?: string;
+  ensureRemoteUrl?: string;
+}
+
+export interface GitWorktreeCreateResult {
+  head: string;
+  name: string;
+  branch: string;
+  path: string;
+}
+
+export interface RemoveGitWorktreePayload {
+  directory: string;
+  deleteLocalBranch?: boolean;
 }
 
 export interface GitDeleteBranchPayload {
@@ -322,6 +372,13 @@ export interface GeneratedPullRequestDescription {
   body: string;
 }
 
+export interface GitWorktreeAPI {
+  list(directory: string): Promise<GitWorktreeInfo[]>;
+  validate?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
+  create?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
+  remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+}
+
 export interface GitAPI {
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string): Promise<GitStatus>;
@@ -338,6 +395,9 @@ export interface GitAPI {
     payload: { base: string; head: string; context?: string; zenModel?: string }
   ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
+  validateGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
+  createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
+  deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
   gitPull(directory: string, options?: { remote?: string; branch?: string }): Promise<GitPullResult>;
@@ -367,6 +427,7 @@ export interface GitAPI {
   stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
   stashPop(directory: string): Promise<{ success: boolean }>;
   getConflictDetails(directory: string): Promise<MergeConflictDetails>;
+  worktree?: GitWorktreeAPI;
 }
 
 export interface FileListEntry {
@@ -633,6 +694,7 @@ export type GitHubPullRequestHeadRepo = {
   repo: string;
   url: string;
   cloneUrl?: string;
+  sshUrl?: string;
 };
 
 export type GitHubPullRequestSummary = GitHubPullRequest & {
