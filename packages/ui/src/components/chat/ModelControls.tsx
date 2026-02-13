@@ -1762,9 +1762,27 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 open={activeMobilePanel === 'agent'}
                 onClose={closeMobilePanel}
                 title="Select agent"
+                contentMaxHeightClassName="max-h-[min(52dvh,360px)]"
+                footer={(
+                    <div className="flex items-center justify-between">
+                        <span
+                            className={cn(
+                                'typography-meta font-medium',
+                                approveEditsDisabled ? 'text-muted-foreground' : 'text-foreground'
+                            )}
+                        >
+                            Auto-approve edits
+                        </span>
+                        <Switch
+                            checked={approveEditsChecked}
+                            disabled={approveEditsDisabled}
+                            onCheckedChange={handleApproveEditsToggle}
+                        />
+                    </div>
+                )}
             >
-                <div className="flex flex-col gap-1.5">
-                    {primaryAgents.map((agent) => {
+                <div className="flex flex-col gap-2">
+                    {selectableDesktopAgents.map((agent) => {
                         const isSelected = agent.name === uiAgentName;
                         const agentColor = getAgentColor(agent.name);
                         return (
@@ -1772,46 +1790,36 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 key={agent.name}
                                 type="button"
                                 className={cn(
-                                    'flex w-full flex-col gap-1 rounded-xl border px-2 py-1.5 text-left',
-                                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary agent-list-item',
-                                    'touch-manipulation cursor-pointer',
-                                    agentColor.class,
-                                    isSelected ? 'active' : 'border-border/40'
+                                    'flex w-full flex-col gap-1.5 rounded-xl border px-3 py-2.5 text-left',
+                                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                                    'touch-manipulation cursor-pointer transition-colors',
+                                    'active:bg-interactive-hover',
+                                    isSelected 
+                                        ? 'border-primary/50 bg-interactive-selection/20' 
+                                        : 'border-border/40 hover:bg-interactive-hover/50'
                                 )}
                                 onClick={() => handleAgentChange(agent.name)}
                             >
-                                <div className="flex items-center gap-1.5">
-                                    <div className={cn('h-2 w-2 rounded-full', agentColor.class)} />
+                                <div className="flex items-center gap-2">
+                                    <div className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', agentColor.class)} />
                                     <span
-                                        className="typography-meta font-medium text-foreground"
+                                        className="typography-ui-label font-semibold"
                                         style={isSelected ? { color: `var(${agentColor.var})` } : undefined}
                                     >
                                         {capitalizeAgentName(agent.name)}
                                     </span>
+                                    {isSelected && (
+                                        <RiCheckLine className="h-4 w-4 text-primary ml-auto flex-shrink-0" />
+                                    )}
                                 </div>
                                 {agent.description && (
-                                    <span className="typography-micro text-muted-foreground">
+                                    <span className="typography-meta text-muted-foreground pl-4.5">
                                         {agent.description}
                                     </span>
                                 )}
                             </button>
                         );
                     })}
-                    <div className="rounded-xl bg-transparent">
-                        <div className="flex items-center justify-between px-2 py-2">
-                            <span className={cn(
-                                'typography-meta font-medium',
-                                approveEditsDisabled ? 'text-muted-foreground' : 'text-foreground'
-                            )}>
-                                Auto-approve edits
-                            </span>
-                            <Switch
-                                checked={approveEditsChecked}
-                                disabled={approveEditsDisabled}
-                                onCheckedChange={handleApproveEditsToggle}
-                            />
-                        </div>
-                    </div>
                 </div>
             </MobileOverlayPanel>
         );
