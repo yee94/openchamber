@@ -365,6 +365,11 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('openrouter');
   }
 
+  const nanopgAuth = normalizeAuthEntry(getAuthEntry(auth, ['nano-gpt', 'nanogpt', 'nano_gpt']));
+  if (nanopgAuth && ((nanopgAuth as Record<string, unknown>).key || (nanopgAuth as Record<string, unknown>).token)) {
+    configured.add('nano-gpt');
+  }
+
   const copilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot', 'copilot']));
   if (copilotAuth && ((copilotAuth as Record<string, unknown>).access || (copilotAuth as Record<string, unknown>).token)) {
     configured.add('github-copilot');
@@ -1254,6 +1259,111 @@ export const fetchZaiQuota = async (): Promise<ProviderResult> => {
   }
 };
 
+const NANO_GPT_DAILY_WINDOW_SECONDS = 86400;
+
+export const fetchNanoGptQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['nano-gpt', 'nanogpt', 'nano_gpt'])) as Record<string, unknown> | null;
+  const apiKey = (entry?.key as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!apiKey) {
+    return buildResult({
+      providerId: 'nano-gpt',
+      providerName: 'NanoGPT',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://nano-gpt.com/api/subscription/v1/usage', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'nano-gpt',
+        providerName: 'NanoGPT',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const windows: Record<string, UsageWindow> = {};
+    const period = payload.period as Record<string, unknown> | undefined;
+    const daily = payload.daily as Record<string, unknown> | undefined;
+    const monthly = payload.monthly as Record<string, unknown> | undefined;
+    const state = (payload.state as string) ?? 'active';
+
+    if (daily) {
+      let usedPercent: number | null = null;
+      const percentUsed = daily.percentUsed as number | undefined;
+      if (typeof percentUsed === 'number') {
+        usedPercent = Math.max(0, Math.min(100, percentUsed * 100));
+      } else {
+        const used = toNumber(daily.used);
+        const limit = toNumber((daily.limit as number | undefined) ?? (daily.limits as Record<string, unknown>)?.daily);
+        if (used !== null && limit !== null && limit > 0) {
+          usedPercent = Math.max(0, Math.min(100, (used / limit) * 100));
+        }
+      }
+      const resetAt = toTimestamp(daily.resetAt);
+      const valueLabel = state !== 'active' ? `(${state})` : null;
+      windows['daily'] = toUsageWindow({
+        usedPercent,
+        windowSeconds: NANO_GPT_DAILY_WINDOW_SECONDS,
+        resetAt,
+        valueLabel,
+      });
+    }
+
+    if (monthly) {
+      let usedPercent: number | null = null;
+      const percentUsed = monthly.percentUsed as number | undefined;
+      if (typeof percentUsed === 'number') {
+        usedPercent = Math.max(0, Math.min(100, percentUsed * 100));
+      } else {
+        const used = toNumber(monthly.used);
+        const limit = toNumber((monthly.limit as number | undefined) ?? (monthly.limits as Record<string, unknown>)?.monthly);
+        if (used !== null && limit !== null && limit > 0) {
+          usedPercent = Math.max(0, Math.min(100, (used / limit) * 100));
+        }
+      }
+      const resetAt = toTimestamp((monthly.resetAt as string | number | undefined) ?? (period as Record<string, unknown>)?.currentPeriodEnd);
+      const valueLabel = state !== 'active' ? `(${state})` : null;
+      windows['monthly'] = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt,
+        valueLabel,
+      });
+    }
+
+    return buildResult({
+      providerId: 'nano-gpt',
+      providerName: 'NanoGPT',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'nano-gpt',
+      providerName: 'NanoGPT',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
 export const fetchQuotaForProvider = async (providerId: string): Promise<ProviderResult> => {
   switch (providerId) {
     case 'claude':
@@ -1268,6 +1378,8 @@ export const fetchQuotaForProvider = async (providerId: string): Promise<Provide
       return fetchGoogleQuota();
     case 'kimi-for-coding':
       return fetchKimiQuota();
+    case 'nano-gpt':
+      return fetchNanoGptQuota();
     case 'openrouter':
       return fetchOpenRouterQuota();
     case 'zai-coding-plan':
