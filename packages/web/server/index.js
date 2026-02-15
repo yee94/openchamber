@@ -7111,7 +7111,7 @@ async function main(options = {}) {
   let quotaProviders = null;
   const getQuotaProviders = async () => {
     if (!quotaProviders) {
-      quotaProviders = await import('./lib/quota-providers.js');
+      quotaProviders = await import('./lib/quota/index.js');
     }
     return quotaProviders;
   };
