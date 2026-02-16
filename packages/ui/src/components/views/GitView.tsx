@@ -1640,7 +1640,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
         isWorktreeMode={!!worktreeMetadata}
         isSidebarMode={isSidebarMode}
         onOpenHistory={() => setIsHistoryDialogOpen(true)}
-        onOpenBranchPicker={branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
+        onOpenBranchPicker={!isSidebarMode && branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
 
       {/* In-progress operation banner */}
@@ -1662,10 +1662,11 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
           <div className={cn('min-w-0 min-h-0 h-full bg-muted/10 flex flex-col', isSidebarMode && 'border-t border-border/40')}>
-            <div className="px-3 py-3">
+            <div className="px-3 py-1.5">
               <AnimatedTabs<ActionTab>
                 value={actionTab}
                 onValueChange={setActionTab}
+                size="sm"
                 collapseLabelsOnSmall
                 collapseLabelsOnNarrow={isSidebarMode}
                 tabs={[
@@ -1700,7 +1701,13 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                         onToggleFile={toggleFileSelection}
                         onSelectAll={selectAll}
                         onClearSelection={clearSelection}
-                        onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
+                        onViewDiff={(path) => {
+                          if (isSidebarMode && currentDirectory) {
+                            useUIStore.getState().openContextDiff(currentDirectory, path);
+                            return;
+                          }
+                          useUIStore.getState().navigateToDiff(path);
+                        }}
                         onRevertFile={handleRevertFile}
                       />
 
@@ -1793,6 +1800,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                     directory={pullRequestProps.directory}
                     branch={pullRequestProps.branch}
                     baseBranch={baseBranch}
+                    trackingBranch={status?.tracking ?? undefined}
                     remotes={remotes}
                     remoteBranches={remoteBranches}
                     onGeneratedDescription={scrollActionPanelToBottom}

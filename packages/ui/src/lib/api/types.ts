@@ -143,6 +143,7 @@ export interface GitFileDiffResponse {
   original: string;
   modified: string;
   path: string;
+  isBinary?: boolean;
 }
 
 export interface GetGitFileDiffOptions {
@@ -486,6 +487,8 @@ export interface ProjectEntry {
   id: string;
   path: string;
   label?: string;
+  icon?: string | null;
+  color?: string | null;
   addedAt?: number;
   lastOpenedAt?: number;
   sidebarCollapsed?: boolean;

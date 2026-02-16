@@ -564,33 +564,25 @@ html:not(.dark) .chat-scroll {
 /* Pierre diff viewer styling */
 .pierre-diff-wrapper {
   --diffs-font-family: var(--font-mono, 'IBM Plex Mono', monospace);
-  --diffs-font-size: var(--text-code, 13px);
-  --diffs-line-height: 1.5;
+  --diffs-font-size: var(--text-code);
+  --diffs-line-height: 24px;
   --diffs-tab-size: 2;
   --diffs-header-font-family: var(--font-sans, 'IBM Plex Sans', sans-serif);
   --diffs-min-number-column-width: 4ch;
   --diffs-gap-inline: 0;
   --diffs-gap-block: 0;
+
+  /* Prevent browser scroll anchoring jumps during async highlight/virtualization */
+  overflow-anchor: none;
+}
+
+/* Prevent scroll anchoring in stacked diff scroll container */
+[data-diff-virtual-root] {
+  overflow-anchor: none;
 }
 
 /* Desktop: slightly smaller diff code text */
-:root:not(.mobile-pointer) .pierre-diff-wrapper {
-  --diffs-font-size: 0.8125rem;
-}
-
-/* WebKit scroll rendering optimizations */
-/* Note: avoid will-change and contain as they break resize behavior */
-.pierre-diff-wrapper,
-.pierre-diff-wrapper diffs-container {
-  /* Force GPU compositing layer */
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-
-  /* WebKit touch scroll optimization */
-  -webkit-overflow-scrolling: touch;
-}
+ 
 
 .pierre-diff-wrapper diffs-container {
   display: block;
@@ -684,6 +676,17 @@ html:not(.dark) .chat-scroll {
   .commit-actions__btn {
     padding-inline: 0.5rem;
   }
+}
+
+/* Utility: hide scrollbars without affecting layout */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* Git right-sidebar header/actions collapse to icon-only when narrow. */
@@ -952,11 +955,9 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
 @keyframes grid-pulse {
   0%, 100% {
     opacity: 0.2;
-    transform: scale(0.8);
   }
   50% {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
