@@ -1,5 +1,5 @@
 import { Octokit } from '@octokit/rest';
-import { getGitHubAuth } from './github-auth.js';
+import { getGitHubAuth } from './auth.js';
 
 export function getOctokitOrNull() {
   const auth = getGitHubAuth();
