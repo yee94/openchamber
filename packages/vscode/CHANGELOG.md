@@ -1,3 +1,9 @@
+## [1.6.9] - 2026-02-16
+
+- Agent Manager / Worktrees: switched to an upstream-first worktree flow with stronger branch tracking, making worktree sessions more predictable (thanks to @yulia-ivashko).
+- Usage: added NanoGPT quota provider support and improved provider wiring for steadier usage reporting (thanks to @nelsonPires5).
+- UI: compact model info in selection (price + capabilities), making model selection faster and more cost-aware (thanks to @nelsonPires5).
+
 ## [1.6.8] - 2026-02-12
 
 - Chat: added drag-and-drop attachments with inline image previews, so sending screenshots and files from the editor is faster and much more reliable.

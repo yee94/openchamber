@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.9] - 2026-02-16
+
+- **UI: redesigned the workspace shell with a context panel, tabbed sidebars, and quicker navigation across chat, files, and reviews, so daily workflows feel more focused.**
+- UI: compact model info in selection (price + capabilities), making model selection faster and more cost-aware (thanks to @nelsonPires5).
+- Chat: fixed files attachment issue and added displaying of excided quota information.
+- Diff: improved large diff rendering and interaction performance for smoother reviews on heavy changesets.
+- Worktrees: shipped an upstream-first flow across supported runtimes, making branch tracking and worktree session setup more predictable (thanks to @yulia-ivashko).
+- Git: improved pull request branch normalization and base/remote resolution to reduce PR setup mismatches (thanks to @gsxdsm).
+- Sessions: added a persistent project notes and todos panel, so key context and follow-ups stay attached to each project (thanks to @gsxdsm).
+- Sessions: introduced the ability to pin sessions within your groups for easy access.
+- Settings: added a configurable Zen model for commit messages generation and summarization of notifications (thanks to @gsxdsm).
+- Usage: added NanoGPT quota support and hardened provider handling for more reliable usage tracking (thanks to @nelsonPires5).
+- Reliability: startup now auto-detects and safely connects to an existing OpenCode server, reducing duplicate-server conflicts (thanks to @ruslan-kurchenko).
+- Desktop: improved day-to-day polish with restored desktop window geometry and posiotion (thanks to @yulia-ivashko).
+- Mobile: fixes for small-screen editor, terminal, and layout overlap issues (thanks to @gsxdsm, @nelsonPires5).
+
+
 ## [1.6.8] - 2026-02-12
 
 - Chat: added drag-and-drop attachments with inline image previews, so sharing screenshots and files in prompts feels much faster and more reliable.
@@ -12,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - Chat: improved agent/model picking with fuzzy search across names and descriptions, making long lists easier to filter.
 - Usage: corrected Gemini and Antigravity quota source mapping and labels for more accurate usage tracking (thanks to @gsxdsm).
 - Usage: when using remaining-quota mode, usage markers now invert direction to better match how remaining capacity is interpreted (thanks to @gsxdsm).
- - Desktop: fixed project selection in opened remote instances.  
+- Desktop: fixed project selection in opened remote instances.
 - Desktop: fixed opened remote instances that use HTTP (helpful for instances under tunneling).
 
 
