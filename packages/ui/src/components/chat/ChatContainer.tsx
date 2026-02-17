@@ -341,10 +341,10 @@ export const ChatContainer: React.FC = () => {
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {
-                        scrollToBottom();
+                        scrollToBottom({ instant: true });
                     } else {
                         window.requestAnimationFrame(() => {
-                            scrollToBottom();
+                            scrollToBottom({ instant: true });
                         });
                     }
                 }
@@ -372,7 +372,7 @@ export const ChatContainer: React.FC = () => {
                 style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
             >
                 <div className="flex-1 flex items-center justify-center">
-                    <ChatEmptyState />
+                    <ChatEmptyState showDraftContext />
                 </div>
                 <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
                     <ChatInput scrollToBottom={scrollToBottom} />
