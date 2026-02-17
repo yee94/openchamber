@@ -50,25 +50,20 @@ openchamber update                   # Update to latest version
 
 ### Core UI
 
-- Integrated terminal
-- Git operations with identity management and AI commit message generation
-- Smart tool visualization (inline diffs, file trees, results highlighting)
-- Rich permission cards with syntax-highlighted operation previews
-- Per-agent permission modes (ask/allow/full) per session
-- Multi-agent runs from a single prompt (isolated worktrees)
-- Branchable conversations: start a new session from any assistant response
-- Task tracker UI with live progress and tool summaries
-- Model selection UX: favorites, recents, and configurable tool output density
-- UI scaling controls (font size and spacing)
-- Session auto-cleanup with configurable retention
-- Memory optimizations with LRU eviction
+- Branchable chat timeline with `/undo`, `/redo`, and one-click forks from earlier turns
+- Smart tool UIs for diffs, file operations, permissions, and long-running task progress
+- Multi-agent runs from one prompt with isolated worktrees for safe comparisons
+- Git workflows in-app: identities, commits, PR creation, checks, and merge actions
+- Context visibility tools (token/cost breakdowns, raw message inspection, and activity summaries)
+- Integrated terminal with per-directory sessions and stable performance on heavy output
 
 ### Web / PWA
 
-- Mobile-first UI with gestures and optimized terminal controls
-- Remote access from any device via browser (works alongside the OpenCode TUI)
-- Self-serve updates (`openchamber update`) without reinstalling
-- Update + restart keeps previous server settings (port/password)
+- Cloudflare Quick Tunnel for instant remote access (`--try-cf-tunnel`)
+- One-scan onboarding with tunnel QR + password URL helpers
+- Mobile-first experience: optimized chat controls, keyboard-safe layouts, and attachment-friendly UI
+- Background notifications plus reliable cross-tab session activity tracking
+- Built-in self-update + restart flow that keeps your server settings intact
 
 ## License
 

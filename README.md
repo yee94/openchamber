@@ -42,39 +42,43 @@ The whole project was built entirely with AI coding agents under my supervision.
 
 ## Features
 
-### Core (all apps versions)
+### Core (all app versions)
 
-- Integrated terminal
-- Git operations with identity management and AI commit message generation
-- Smart tool visualization (inline diffs, file trees, results highlighting)
-- Rich permission cards with syntax-highlighted operation previews
-- Per-agent permission modes (ask/allow/full) per session
-- Multi-agent runs from a single prompt (isolated worktrees; Web/PWA + Desktop)
-- Branchable conversations: start a new session from any assistant response
-- Task tracker UI with live progress and tool summaries
-- Model selection UX: favorites, recents, and configurable tool output density
-- UI scaling controls (font size and spacing)
-- Session auto-cleanup with configurable retention
-- Memory optimizations with LRU eviction
+- Branchable chat timeline with `/undo`, `/redo`, and one-click forks from earlier turns
+- Smart tool UIs for diffs, file operations, permissions, and long-running task progress
+- Voice mode with speech input and read-aloud responses for hands-free workflows
+- Multi-agent runs from one prompt with isolated worktrees for safe side-by-side comparisons
+- Git workflows in-app: identities, commits, PR creation, checks, and merge actions
+- GitHub-native workflows: start sessions from issues and pull requests with context already attached
+- Plan/Build mode with a dedicated plan view for drafting and iterating implementation steps
+- Inline comment drafts on diffs, files, and plans that can be sent back to the agent
+- Context visibility tools (token/cost breakdowns, raw message inspection, and activity summaries)
+- Integrated terminal with per-directory sessions and stable performance on heavy output
+- Built-in skills catalog and local skill management for reusable automation workflows
 
 ### Web / PWA
 
-- Mobile-first UI with gestures and optimized terminal controls
-- Self-serve web updates (no CLI required)
-- Update and restart keeps previous server settings (port/password)
-- Cloudflare Quick Tunnel support for easy remote access (`--try-cf-tunnel`)
-- QR code generation for quick mobile access (`--tunnel-qr`)
-- Auto-login URL with embedded password (`--tunnel-password-url`)
+- Cloudflare Quick Tunnel for instant remote access (`--try-cf-tunnel`)
+- One-scan onboarding with tunnel QR + password URL helpers
+- Mobile-first experience: optimized chat controls, keyboard-safe layouts, and attachment-friendly UI
+- Background notifications plus reliable cross-tab session activity tracking
+- Built-in self-update + restart flow that keeps your server settings intact
 
 ### Desktop (macOS)
 
-- Native macOS menu bar integration with app actions
-- First-launch directory picker to minimize permission prompts
+- Native macOS menu integration with polished app actions and deep-link handling
+- Multi-window support for parallel project/session workflows
+- "Open In" shortcuts for Finder, Terminal, and your preferred editor
+- Fast switching between local and remote instances
+- Workspace-first startup flow with directory picker and steadier window restore behavior
 
 ### VS Code Extension
 
-- Editor-integrated file picker and click-to-open from tool output
-- In-extension Settings access and theme mapping
+- Editor-native workflow: open files directly from tool output and keep sessions beside your code
+- Agent Manager for parallel multi-model runs from a single prompt
+- Right-click actions to add context, explain selections, and improve code in-place
+- In-extension settings, responsive layout, and theme mapping that matches your editor
+- Hardened runtime lifecycle and health checks for faster startup and fewer stuck reconnect states
 
 ### GitHub Actions (Cloud Usage)
 

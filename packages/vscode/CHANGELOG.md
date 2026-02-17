@@ -1,3 +1,10 @@
+## [1.7.0] - 2026-02-17
+
+- Chat: improved live streaming responsiveness with part-delta updates and smarter auto-follow scrolling during generation.
+- Chat: Mermaid diagrams now render directly in messages, with quick copy/download actions for easier reuse.
+**- Reliability: managed runtime startup now rotates secure auth credentials and hardens API proxy auth forwarding for safer local connections (thanks to @yulia-ivashko).**
+**- Reliability: extension startup/shutdown handling is more predictable, reducing stuck states during reconnects.**
+
 ## [1.6.9] - 2026-02-16
 
 - Agent Manager / Worktrees: switched to an upstream-first worktree flow with stronger branch tracking, making worktree sessions more predictable (thanks to @yulia-ivashko).

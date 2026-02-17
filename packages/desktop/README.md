@@ -23,29 +23,25 @@ Currently available for macOS (Apple Silicon).
 ## Prerequisites
 
 - [OpenCode CLI](https://opencode.ai) installed (`opencode`)
-- OpenCode server running (`opencode serve`)
 
 ## Features
 
 ### Core UI
 
-- Integrated terminal
-- Git operations with identity management and AI commit message generation
-- Smart tool visualization (inline diffs, file trees, results highlighting)
-- Rich permission cards with syntax-highlighted operation previews
-- Per-agent permission modes (ask/allow/full) per session
-- Multi-agent runs from a single prompt (isolated worktrees)
-- Branchable conversations: start a new session from any assistant response
-- Task tracker UI with live progress and tool summaries
-- Model selection UX: favorites, recents, and configurable tool output density
-- UI scaling controls (font size and spacing)
-- Session auto-cleanup with configurable retention
-- Memory optimizations with LRU eviction
+- Branchable chat timeline with `/undo`, `/redo`, and one-click forks from earlier turns
+- Smart tool UIs for diffs, file operations, permissions, and long-running task progress
+- Multi-agent runs from one prompt with isolated worktrees for safe comparisons
+- Git workflows in-app: identities, commits, PR creation, checks, and merge actions
+- Context visibility tools (token/cost breakdowns, raw message inspection, and activity summaries)
+- Integrated terminal with per-directory sessions and stable performance on heavy output
 
 ### Desktop (macOS)
 
-- Native macOS menu bar integration with app actions
-- First-launch directory picker to minimize permission prompts
+- Native macOS menu integration with polished app actions and deep-link handling
+- Multi-window support for parallel project/session workflows
+- "Open In" shortcuts for Finder, Terminal, and your preferred editor
+- Fast switching between local and remote instances
+- Workspace-first startup flow with directory picker and steadier window restore behavior
 
 ## Development
 

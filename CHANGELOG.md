@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+
+## [1.7.0] - 2026-02-17
+
+- Chat: improved live streaming with part-delta updates and smarter auto-follow scrolling, so long responses stay readable while they generate.
+- Chat: Mermaid diagrams now render inline in assistant messages, with quick copy/download actions for easier sharing.
+- UI: added a context overview panel with token usage, cost breakdown, and raw message inspection to make session debugging easier.
+- Sessions: project icon and color customizations now persist reliably across restarts.
+**- Reliability: managed local OpenCode runtimes now use rotated secure auth and tighter lifecycle control across runtimes, reducing stale-process and reconnect issues (thanks to @yulia-ivashko).**
+- Git/GitHub: improved backend reliability for repository and auth operations, helping branch and PR flows stay more predictable (thanks to @nelsonPires5).
+
+
 ## [1.6.9] - 2026-02-16
 
 - **UI: redesigned the workspace shell with a context panel, tabbed sidebars, and quicker navigation across chat, files, and reviews, so daily workflows feel more focused.**

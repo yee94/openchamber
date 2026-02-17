@@ -16,23 +16,22 @@ OpenChamber inside VS Code: embeds the OpenChamber chat UI in the activity bar a
 
 ### OpenChamber UI
 
-- Smart tool visualization (inline diffs, file trees, results highlighting)
-- Rich permission cards with syntax-highlighted operation previews
-- Per-agent permission modes (ask/allow/full) per session
-- Branchable conversations: start a new session from any assistant response
-- Task tracker UI with live progress and tool summaries
+- Branchable chat timeline with `/undo`, `/redo`, and one-click forks from earlier turns
+- Smart tool UIs for diffs, file operations, permissions, and long-running task progress
+- Live streaming updates with smoother auto-follow for long assistant responses
+- Mermaid diagrams rendered inline in chat with quick copy/download actions
+- Context visibility tools (token/cost breakdowns and raw message inspection)
 - Model selection UX (favorites, recents, and configurable tool output density)
-- UI scaling controls (font size and spacing)
 
 ### VS Code Integration
 
-- Chat UI in activity bar
-- Session management with history
-- File attachments via native VS Code file picker (10MB limit)
-- Click-to-open files from tool output
-- Auto-start `opencode` instance if not running
-- Workspace-isolated OpenCode instances (different workspaces get unique instances)
-- Adapts to VS Code's light/dark/high-contrast themes
+- Chat UI embedded in VS Code with responsive layouts for narrow/wide panels
+- Agent Manager for parallel multi-model runs from one prompt
+- Session editor panel to keep chats open beside your code
+- Right-click actions to add context, explain selections, and improve code in-place
+- Click-to-open files and native file attachments from within the extension
+- Managed runtime startup with hardened health checks and secure auth forwarding
+- Adapts to VS Code light/dark/high-contrast themes
 
 ## Commands
 
