@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
+import net from 'net';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import os from 'os';
@@ -20,7 +21,6 @@ import {
   pruneRebindTimestamps,
   readTerminalInputWsControlFrame,
 } from './lib/terminal-input-ws-protocol.js';
-import { createOpencodeServer } from '@opencode-ai/sdk/server';
 import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2734,14 +2734,29 @@ const getHmrState = () => {
     globalThis[HMR_STATE_KEY] = {
       openCodeProcess: null,
       openCodePort: null,
-      openCodeWorkingDirectory: os.homedir(),
-      isShuttingDown: false,
-      signalsAttached: false,
-    };
+        openCodeWorkingDirectory: os.homedir(),
+        isShuttingDown: false,
+        signalsAttached: false,
+        userProvidedOpenCodePassword: undefined,
+        openCodeAuthPassword: null,
+        openCodeAuthSource: null,
+      };
   }
   return globalThis[HMR_STATE_KEY];
 };
 const hmrState = getHmrState();
+
+const normalizeOpenCodePassword = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+};
+
+if (typeof hmrState.userProvidedOpenCodePassword === 'undefined') {
+  const initialPassword = normalizeOpenCodePassword(process.env.OPENCODE_SERVER_PASSWORD);
+  hmrState.userProvidedOpenCodePassword = initialPassword || null;
+}
 
 // Non-HMR state (safe to reset on reload)
 let healthCheckInterval = null;
@@ -2762,6 +2777,18 @@ let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
 let terminalInputWsServer = null;
+const userProvidedOpenCodePassword =
+  typeof hmrState.userProvidedOpenCodePassword === 'string' && hmrState.userProvidedOpenCodePassword.length > 0
+    ? hmrState.userProvidedOpenCodePassword
+    : null;
+let openCodeAuthPassword =
+  typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
+    ? hmrState.openCodeAuthPassword
+    : userProvidedOpenCodePassword;
+let openCodeAuthSource =
+  typeof hmrState.openCodeAuthSource === 'string' && hmrState.openCodeAuthSource.length > 0
+    ? hmrState.openCodeAuthSource
+    : (userProvidedOpenCodePassword ? 'user-env' : null);
 
 // Sync helper - call after modifying any HMR state variable
 const syncToHmrState = () => {
@@ -2770,6 +2797,8 @@ const syncToHmrState = () => {
   hmrState.isShuttingDown = isShuttingDown;
   hmrState.signalsAttached = signalsAttached;
   hmrState.openCodeWorkingDirectory = openCodeWorkingDirectory;
+  hmrState.openCodeAuthPassword = openCodeAuthPassword;
+  hmrState.openCodeAuthSource = openCodeAuthSource;
 };
 
 // Sync helper - call to restore state from HMR (e.g., on module reload)
@@ -2779,6 +2808,14 @@ const syncFromHmrState = () => {
   isShuttingDown = hmrState.isShuttingDown;
   signalsAttached = hmrState.signalsAttached;
   openCodeWorkingDirectory = hmrState.openCodeWorkingDirectory;
+  openCodeAuthPassword =
+    typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
+      ? hmrState.openCodeAuthPassword
+      : userProvidedOpenCodePassword;
+  openCodeAuthSource =
+    typeof hmrState.openCodeAuthSource === 'string' && hmrState.openCodeAuthSource.length > 0
+      ? hmrState.openCodeAuthSource
+      : (userProvidedOpenCodePassword ? 'user-env' : null);
 };
 
 // Module-level variables that shadow HMR state
@@ -2858,18 +2895,13 @@ const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
 const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
 
 // OpenCode server authentication (Basic Auth with username "opencode")
-const ENV_OPENCODE_SERVER_PASSWORD = (() => {
-  const pwd = process.env.OPENCODE_SERVER_PASSWORD;
-  return typeof pwd === 'string' && pwd.length > 0 ? pwd : null;
-})();
 
 /**
  * Returns auth headers for OpenCode server requests if OPENCODE_SERVER_PASSWORD is set.
  * Uses Basic Auth with username "opencode" and the password from the env variable.
  */
 function getOpenCodeAuthHeaders() {
-  // Re-read from env each time in case it wasn't set at module load (HMR issue)
-  const password = ENV_OPENCODE_SERVER_PASSWORD || process.env.OPENCODE_SERVER_PASSWORD;
+  const password = normalizeOpenCodePassword(openCodeAuthPassword || process.env.OPENCODE_SERVER_PASSWORD || '');
   
   if (!password) {
     return {};
@@ -2877,6 +2909,60 @@ function getOpenCodeAuthHeaders() {
   
   const credentials = Buffer.from(`opencode:${password}`).toString('base64');
   return { Authorization: `Basic ${credentials}` };
+}
+
+function isOpenCodeConnectionSecure() {
+  return Object.prototype.hasOwnProperty.call(getOpenCodeAuthHeaders(), 'Authorization');
+}
+
+function generateSecureOpenCodePassword() {
+  return crypto
+    .randomBytes(32)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function isValidOpenCodePassword(password) {
+  return typeof password === 'string' && password.trim().length > 0;
+}
+
+function setOpenCodeAuthState(password, source) {
+  const normalized = normalizeOpenCodePassword(password);
+  if (!isValidOpenCodePassword(normalized)) {
+    openCodeAuthPassword = null;
+    openCodeAuthSource = null;
+    delete process.env.OPENCODE_SERVER_PASSWORD;
+    syncToHmrState();
+    return null;
+  }
+
+  openCodeAuthPassword = normalized;
+  openCodeAuthSource = source;
+  process.env.OPENCODE_SERVER_PASSWORD = normalized;
+  syncToHmrState();
+  return normalized;
+}
+
+async function ensureLocalOpenCodeServerPassword({ rotateManaged = false } = {}) {
+  if (isValidOpenCodePassword(userProvidedOpenCodePassword)) {
+    return setOpenCodeAuthState(userProvidedOpenCodePassword, 'user-env');
+  }
+
+  if (rotateManaged) {
+    const rotatedPassword = setOpenCodeAuthState(generateSecureOpenCodePassword(), 'rotated');
+    console.log('Rotated secure password for managed local OpenCode instance');
+    return rotatedPassword;
+  }
+
+  if (isValidOpenCodePassword(openCodeAuthPassword)) {
+    return setOpenCodeAuthState(openCodeAuthPassword, openCodeAuthSource || 'generated');
+  }
+
+  const generatedPassword = setOpenCodeAuthState(generateSecureOpenCodePassword(), 'generated');
+  console.log('Generated secure password for managed local OpenCode instance');
+  return generatedPassword;
 }
 
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
@@ -4422,7 +4508,6 @@ function parseArgs(argv = process.argv.slice(2)) {
 function killProcessOnPort(port) {
   if (!port) return;
   try {
-    // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
     // Kill any process listening on our port to clean up orphaned children.
     const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', timeout: 5000 });
     const output = result.stdout || '';
@@ -4442,27 +4527,143 @@ function killProcessOnPort(port) {
   }
 }
 
+async function createManagedOpenCodeServerProcess({
+  hostname,
+  port,
+  timeout,
+  cwd,
+  env,
+}) {
+  const binary = (process.env.OPENCODE_BINARY || 'opencode').trim() || 'opencode';
+  const args = ['serve', '--hostname', hostname, '--port', String(port)];
+  const child = spawn(binary, args, {
+    cwd,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const url = await new Promise((resolve, reject) => {
+    let output = '';
+    let done = false;
+    const finish = (handler, value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      child.stdout?.off('data', onStdout);
+      child.stderr?.off('data', onStderr);
+      child.off('exit', onExit);
+      child.off('error', onError);
+      handler(value);
+    };
+
+    const onStdout = (chunk) => {
+      output += chunk.toString();
+      const lines = output.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('opencode server listening')) continue;
+        const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
+        if (!match) {
+          finish(reject, new Error(`Failed to parse server url from output: ${line}`));
+          return;
+        }
+        finish(resolve, match[1]);
+        return;
+      }
+    };
+
+    const onStderr = (chunk) => {
+      output += chunk.toString();
+    };
+
+    const onExit = (code) => {
+      finish(reject, new Error(`OpenCode exited with code ${code}. Output: ${output}`));
+    };
+
+    const onError = (error) => {
+      finish(reject, error);
+    };
+
+    const timer = setTimeout(() => {
+      finish(reject, new Error(`Timeout waiting for OpenCode to start after ${timeout}ms`));
+    }, timeout);
+
+    child.stdout?.on('data', onStdout);
+    child.stderr?.on('data', onStderr);
+    child.on('exit', onExit);
+    child.on('error', onError);
+  });
+
+  return {
+    url,
+    close() {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
+async function resolveManagedOpenCodePort(requestedPort) {
+  if (typeof requestedPort === 'number' && Number.isFinite(requestedPort) && requestedPort > 0) {
+    return requestedPort;
+  }
+
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    const cleanup = () => {
+      server.removeAllListeners('error');
+      server.removeAllListeners('listening');
+    };
+
+    server.once('error', (error) => {
+      cleanup();
+      reject(error);
+    });
+
+    server.once('listening', () => {
+      const address = server.address();
+      const port = address && typeof address === 'object' ? address.port : 0;
+      server.close(() => {
+        cleanup();
+        if (port > 0) {
+          resolve(port);
+          return;
+        }
+        reject(new Error('Failed to allocate OpenCode port'));
+      });
+    });
+
+    server.listen(0, '127.0.0.1');
+  });
+}
+
 async function startOpenCode() {
   const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? 0;
+  const spawnPort = await resolveManagedOpenCodePort(desiredPort);
   console.log(
     desiredPort > 0
       ? `Starting OpenCode on requested port ${desiredPort}...`
-      : 'Starting OpenCode with dynamic port assignment...'
+      : `Starting OpenCode on allocated port ${spawnPort}...`
   );
-  // Note: SDK starts in current process CWD. openCodeWorkingDirectory is tracked but not used for spawn in SDK.
 
   await applyOpencodeBinaryFromSettings();
   ensureOpencodeCliEnv();
+  const openCodePassword = await ensureLocalOpenCodeServerPassword({
+    rotateManaged: true,
+  });
 
   try {
-    const serverInstance = await createOpencodeServer({
+    const serverInstance = await createManagedOpenCodeServerProcess({
       hostname: '127.0.0.1',
-      port: desiredPort,
+      port: spawnPort,
       timeout: 30000,
+      cwd: openCodeWorkingDirectory,
       env: {
         ...process.env,
-        // Pass minimal config to avoid pollution, but inherit PATH etc
-      }
+        OPENCODE_SERVER_PASSWORD: openCodePassword,
+      },
     });
 
     if (!serverInstance || !serverInstance.url) {
@@ -5350,6 +5551,8 @@ async function main(options = {}) {
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
       openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
+      openCodeSecureConnection: isOpenCodeConnectionSecure(),
+      openCodeAuthSource: openCodeAuthSource || null,
       openCodeApiPrefix: '',
       openCodeApiPrefixDetected: true,
       isOpenCodeReady,
@@ -5359,6 +5562,13 @@ async function main(options = {}) {
       opencodeShimInterpreter: resolvedOpencodeBinary ? opencodeShimInterpreter(resolvedOpencodeBinary) : null,
       nodeBinaryResolved: resolvedNodeBinary || null,
       bunBinaryResolved: resolvedBunBinary || null,
+    });
+  });
+
+  app.post('/api/system/shutdown', (req, res) => {
+    res.json({ ok: true });
+    gracefulShutdown({ exitProcess: false }).catch((error) => {
+      console.error('Shutdown request failed:', error?.message || error);
     });
   });
 

@@ -362,10 +362,11 @@ export async function activate(context: vscode.ExtensionContext) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         const startedAt = Date.now();
+        const openCodeAuthHeaders = openCodeManager?.getOpenCodeAuthHeaders() || {};
         try {
           const resp = await fetch(input, {
             method: 'GET',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', ...openCodeAuthHeaders },
             signal: controller.signal,
           });
           const elapsedMs = Date.now() - startedAt;
@@ -465,7 +466,13 @@ export async function activate(context: vscode.ExtensionContext) {
           ? `OpenCode mode: ${debug.mode} (starts=${debug.startCount}, restarts=${debug.restartCount})`
           : `OpenCode mode: (unknown)`,
         debug
-          ? `OpenCode CLI path: ${debug.cliPath || '(not found - SDK manages process)'}`
+          ? `Secure OpenCode connection: ${debug.secureConnection ? 'true' : 'false'}`
+          : `Secure OpenCode connection: (unknown)`,
+        debug
+          ? `OpenCode auth source: ${debug.authSource ?? '(none)'}`
+          : `OpenCode auth source: (unknown)`,
+        debug
+          ? `OpenCode CLI path: ${debug.cliPath || '(not found)'}`
           : `OpenCode CLI path: (unknown)`,
         debug
           ? `OpenCode detected port: ${debug.detectedPort ?? '(none)'}`
