@@ -111,6 +111,14 @@ type AgentPartInputLite = {
   };
 };
 
+type FileInputLite = {
+  id?: string;
+  type: 'file';
+  mime: string;
+  filename?: string;
+  url: string;
+};
+
 export type DirectorySwitchResult = {
   success: boolean;
   restarted: boolean;
@@ -139,6 +147,7 @@ class OpencodeService {
   private scopedClients: Map<string, OpencodeClient> = new Map();
   private sseAbortControllers: Map<string, AbortController> = new Map();
   private currentDirectory: string | undefined = undefined;
+  private directoryContextQueue: Promise<void> = Promise.resolve();
 
   private globalSseAbortController: AbortController | null = null;
   private globalSseTask: Promise<void> | null = null;
@@ -250,17 +259,27 @@ class OpencodeService {
   }
 
   async withDirectory<T>(directory: string | undefined | null, fn: () => Promise<T>): Promise<T> {
-    if (directory === undefined || directory === null) {
-      return fn();
-    }
+    const runWithContext = async (): Promise<T> => {
+      if (directory === undefined || directory === null) {
+        return fn();
+      }
 
-    const previousDirectory = this.currentDirectory;
-    this.currentDirectory = directory;
-    try {
-      return await fn();
-    } finally {
-      this.currentDirectory = previousDirectory;
-    }
+      const previousDirectory = this.currentDirectory;
+      this.currentDirectory = directory;
+      try {
+        return await fn();
+      } finally {
+        this.currentDirectory = previousDirectory;
+      }
+    };
+
+    const queuedRun = this.directoryContextQueue.then(runWithContext, runWithContext);
+    this.directoryContextQueue = queuedRun.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return queuedRun;
   }
 
   // Get the raw API client for direct access
@@ -571,6 +590,17 @@ class OpencodeService {
     };
   }
 
+  private async toNormalizedFilePartInput(file: FileInputLite): Promise<FilePartInput> {
+    const normalized = await this.normalizeFilePart(file);
+    return {
+      ...(file.id ? { id: file.id } : {}),
+      type: 'file',
+      mime: normalized.mime,
+      filename: normalized.filename,
+      url: normalized.url,
+    };
+  }
+
   async sendMessage(params: {
     id: string;
     providerID: string;
@@ -580,24 +610,12 @@ class OpencodeService {
     prefaceTextSynthetic?: boolean;
     agent?: string;
     variant?: string;
-    files?: Array<{
-      id?: string;
-      type: 'file';
-      mime: string;
-      filename?: string;
-      url: string;
-    }>;
+    files?: Array<FileInputLite>;
     /** Additional text/file parts to include (for batch sending queued messages) */
     additionalParts?: Array<{
       text: string;
       synthetic?: boolean;
-      files?: Array<{
-        id?: string;
-        type: 'file';
-        mime: string;
-        filename?: string;
-        url: string;
-      }>;
+      files?: Array<FileInputLite>;
     }>;
     messageId?: string;
     agentMentions?: Array<{ name: string; source?: { value: string; start: number; end: number } }>;
@@ -630,14 +648,7 @@ class OpencodeService {
     // Add file parts if provided (normalizing MIME types for compatibility)
     if (params.files && params.files.length > 0) {
       for (const file of params.files) {
-        const normalized = await this.normalizeFilePart(file);
-        const filePart: FilePartInput = {
-          ...(file.id ? { id: file.id } : {}),
-          type: 'file',
-          mime: normalized.mime,
-          filename: normalized.filename,
-          url: normalized.url
-        };
+        const filePart = await this.toNormalizedFilePartInput(file);
         parts.push(filePart);
       }
     }
@@ -654,14 +665,7 @@ class OpencodeService {
         }
         if (additional.files && additional.files.length > 0) {
           for (const file of additional.files) {
-            const normalized = await this.normalizeFilePart(file);
-            const filePart: FilePartInput = {
-              ...(file.id ? { id: file.id } : {}),
-              type: 'file',
-              mime: normalized.mime,
-              filename: normalized.filename,
-              url: normalized.url
-            };
+            const filePart = await this.toNormalizedFilePartInput(file);
             parts.push(filePart);
           }
         }
@@ -669,12 +673,12 @@ class OpencodeService {
     }
 
     if (params.agentMentions && params.agentMentions.length > 0) {
-      const [first] = params.agentMentions;
-      if (first?.name) {
+      for (const mention of params.agentMentions) {
+        if (!mention?.name) continue;
         parts.push({
           type: 'agent',
-          name: first.name,
-          ...(first.source ? { source: first.source } : {}),
+          name: mention.name,
+          ...(mention.source ? { source: mention.source } : {}),
         });
       }
     }
@@ -723,6 +727,66 @@ class OpencodeService {
 
     // Return temporary ID for optimistic UI
     // Real messageID will come from server via SSE events
+    return tempMessageId;
+  }
+
+  async sendCommand(params: {
+    id: string;
+    providerID: string;
+    modelID: string;
+    command: string;
+    arguments?: string;
+    agent?: string;
+    variant?: string;
+    files?: Array<FileInputLite>;
+    messageId?: string;
+  }): Promise<string> {
+    const baseTimestamp = Date.now();
+    const tempMessageId = params.messageId ?? `temp_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
+
+    const parts: FilePartInput[] = [];
+    if (params.files && params.files.length > 0) {
+      for (const file of params.files) {
+        parts.push(await this.toNormalizedFilePartInput(file));
+      }
+    }
+
+    const base = this.baseUrl.replace(/\/+$/, '');
+    const url = new URL(`${base}/session/${encodeURIComponent(params.id)}/command`);
+    if (this.currentDirectory) {
+      url.searchParams.set('directory', this.currentDirectory);
+    }
+
+    const payload: Record<string, unknown> = {
+      command: params.command,
+      arguments: params.arguments ?? '',
+      model: `${params.providerID}/${params.modelID}`,
+      ...(params.agent ? { agent: params.agent } : {}),
+      ...(params.variant ? { variant: params.variant } : {}),
+      ...(parts.length > 0 ? { parts } : {}),
+      ...(params.messageId ? { messageID: params.messageId } : {}),
+    };
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        detail = await response.text();
+      } catch {
+        // ignore
+      }
+      const suffix = detail && detail.trim().length > 0 ? `: ${detail.trim()}` : '';
+      throw new Error(`Failed to run command (${response.status})${suffix}`);
+    }
+
     return tempMessageId;
   }
 

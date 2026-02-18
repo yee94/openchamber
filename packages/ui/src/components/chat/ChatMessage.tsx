@@ -160,6 +160,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             const trimmed = text.trim();
             if (trimmed.startsWith('User has requested to enter plan mode')) return true;
             if (trimmed.startsWith('The plan at ')) return true;
+            if (trimmed.startsWith('The following tool was executed by the user')) return true;
             return false;
         };
 
@@ -175,6 +176,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             const rawPart = part as Record<string, unknown>;
             if (rawPart.type === 'compaction') {
                 return { type: 'text', text: '/compact' } as Part;
+            }
+            if (rawPart.type === 'text') {
+                const text = typeof rawPart.text === 'string' ? rawPart.text.trim() : '';
+                if (text.startsWith('The following tool was executed by the user')) {
+                    return { type: 'text', text: '/shell' } as Part;
+                }
             }
             return part;
         });
@@ -460,9 +467,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
         const rawValue = partWithName.source && typeof partWithName.source.value === 'string' && partWithName.source.value.trim().length > 0
             ? partWithName.source.value
-            : `#${name}`;
+            : `@${name}`;
         return { name, token: rawValue } satisfies AgentMentionInfo;
     }, [isUser, message.parts]);
+
+    const shouldHideUserMessage = isUser && displayParts.length === 0;
 
     // Message is considered to have an "open step" if info.finish is not yet present
     const hasOpenStep = typeof messageFinish !== 'string';
@@ -642,6 +651,30 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const messageTextContent = React.useMemo(() => {
         if (isUser) {
+            const shellOutputs = displayParts
+                .filter((part): part is Part & { type: 'text'; shellAction?: { output?: unknown } } => part.type === 'text')
+                .map((part) => {
+                    const output = part.shellAction?.output;
+                    return typeof output === 'string' ? output.trim() : '';
+                })
+                .filter((output) => output.length > 0);
+
+            if (shellOutputs.length > 0) {
+                return shellOutputs.join('\n\n');
+            }
+
+            const shellCommands = displayParts
+                .filter((part): part is Part & { type: 'text'; shellAction?: { command?: unknown } } => part.type === 'text')
+                .map((part) => {
+                    const command = part.shellAction?.command;
+                    return typeof command === 'string' ? command.trim() : '';
+                })
+                .filter((command) => command.length > 0);
+
+            if (shellCommands.length > 0) {
+                return shellCommands.join('\n');
+            }
+
             const textParts = displayParts
                 .filter((part): part is Part & { type: 'text'; text?: string; content?: string } => part.type === 'text')
                 .map((part) => {
@@ -884,6 +917,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             observer.disconnect();
         };
     }, [allowAnimation, isUser, resolvedAnimationHandlers, shouldReserveAnimationSpace]);
+
+    if (shouldHideUserMessage) {
+        return null;
+    }
 
     return (
         <>
