@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-02-18
+
+- Chat: slash commands now follow server command semantics (including multiline arguments), so command behavior is more consistent with OpenCode CLI.
+- Chat: added a shell mode triggered by leading `!`, with inline output visibility/copy.
+- Chat: improved delegated-task clarity with richer subtask bubbles, better task-detail rendering, and parent-chat surfacing for child permission/question requests.
+- Chat: improved `@` mention autocomplete by prioritizing agents and cleaning up ordering for faster picks.
+- Skills: discovery now uses OpenCode API as the source of truth with safer fallback scanning, improving installed-state accuracy.
+- Skills: upgraded editing/install UX with better code editing, syntax-aware related files, and clearer location targeting across user/project .opencode and .agents scopes.
+- Mobile: fixed accidental abort right after tapping Send on touch devices, reducing interrupted responses (thanks to @shekohex).
+- Maintenance: removed deprecated GitHub Actions cloud runtime assets and docs to reduce setup confusion (thanks to @yulia-ivashko).
+
 
 ## [1.7.0] - 2026-02-17
 

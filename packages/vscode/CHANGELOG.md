@@ -1,3 +1,12 @@
+## [1.7.1] - 2026-02-18
+
+- Chat: slash commands now follow server command semantics (including multiline arguments), so command behavior is more consistent with OpenCode CLI.
+- Chat: added a shell mode triggered by leading `!`, with inline output visibility/copy.
+- Chat: improved delegated-task clarity with richer subtask bubbles, better task-detail rendering, and parent-chat surfacing for child permission/question requests.
+- Chat: improved `@` mention autocomplete by prioritizing agents and cleaning up ordering for faster picks.
+- Skills: discovery now uses OpenCode API as the source of truth with safer fallback scanning, improving installed-state accuracy.
+- Skills: upgraded editing/install UX with better code editing, syntax-aware related files, and clearer location targeting across user/project .opencode and .agents scopes.
+
 ## [1.7.0] - 2026-02-17
 
 - Chat: improved live streaming responsiveness with part-delta updates and smarter auto-follow scrolling during generation.
