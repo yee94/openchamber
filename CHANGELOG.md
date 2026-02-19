@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-02-20
+
+- Chat: question prompts now guide you to unanswered items before submit, making tool-question flows faster.
+- Chat: fixed auto-send queue to wait for the active session to be idle before sending, reducing misfires during agent messages.
+- Chat: improved streaming activity rendering and session attention indicators, so active progress and unread signals stay more consistent.
+- UI: added Plan view in the context sidebar panel for quicker access to plan content while you work (thanks to @nelsonPires5).
+- Settings: model variant options now refresh correctly in draft/new-session flows, avoiding stale selections.
+- Reliability: provider auth failures now show clearer re-auth guidance when tokens expire, making recovery faster (thanks to @yulia-ivashko).
+
+
 ## [1.7.1] - 2026-02-18
 
 - Chat: slash commands now follow server command semantics (including multiline arguments), so command behavior is more consistent with OpenCode CLI.
