@@ -2969,6 +2969,166 @@ async function ensureLocalOpenCodeServerPassword({ rotateManaged = false } = {})
   return generatedPassword;
 }
 
+let cachedLoginShellEnvSnapshot = undefined;
+
+function parseNullSeparatedEnvSnapshot(raw) {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return null;
+  }
+
+  const result = {};
+  const entries = raw.split('\0');
+  for (const entry of entries) {
+    if (!entry) {
+      continue;
+    }
+    const idx = entry.indexOf('=');
+    if (idx <= 0) {
+      continue;
+    }
+    const key = entry.slice(0, idx);
+    const value = entry.slice(idx + 1);
+    result[key] = value;
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function getLoginShellEnvSnapshot() {
+  if (cachedLoginShellEnvSnapshot !== undefined) {
+    return cachedLoginShellEnvSnapshot;
+  }
+
+  if (process.platform === 'win32') {
+    const windowsSnapshot = getWindowsShellEnvSnapshot();
+    cachedLoginShellEnvSnapshot = windowsSnapshot;
+    return windowsSnapshot;
+  }
+
+  const shellCandidates = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+
+  for (const shellPath of shellCandidates) {
+    if (!isExecutable(shellPath)) {
+      continue;
+    }
+
+    try {
+      const result = spawnSync(shellPath, ['-lic', 'env -0'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        maxBuffer: 10 * 1024 * 1024,
+      });
+
+      if (result.status !== 0) {
+        continue;
+      }
+
+      const parsed = parseNullSeparatedEnvSnapshot(result.stdout || '');
+      if (parsed) {
+        cachedLoginShellEnvSnapshot = parsed;
+        return parsed;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  cachedLoginShellEnvSnapshot = null;
+  return null;
+}
+
+function getWindowsShellEnvSnapshot() {
+  const parseResult = (stdout) => parseNullSeparatedEnvSnapshot(typeof stdout === 'string' ? stdout : '');
+
+  const psScript =
+    "Get-ChildItem Env: | ForEach-Object { [Console]::Out.Write($_.Name); [Console]::Out.Write('='); [Console]::Out.Write($_.Value); [Console]::Out.Write([char]0) }";
+
+  const powershellCandidates = [
+    'pwsh.exe',
+    'powershell.exe',
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+  ];
+
+  for (const shellPath of powershellCandidates) {
+    try {
+      const result = spawnSync(shellPath, ['-NoLogo', '-Command', psScript], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      if (result.status !== 0) {
+        continue;
+      }
+      const parsed = parseResult(result.stdout);
+      if (parsed) {
+        return parsed;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const comspec = process.env.ComSpec || 'cmd.exe';
+  try {
+    const result = spawnSync(comspec, ['/d', '/s', '/c', 'set'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    if (result.status === 0 && typeof result.stdout === 'string' && result.stdout.length > 0) {
+      return parseNullSeparatedEnvSnapshot(result.stdout.replace(/\r?\n/g, '\0'));
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+function mergePathValues(preferred, fallback) {
+  const merged = new Set();
+
+  const addSegments = (value) => {
+    if (typeof value !== 'string' || !value) {
+      return;
+    }
+    for (const segment of value.split(path.delimiter)) {
+      if (segment) {
+        merged.add(segment);
+      }
+    }
+  };
+
+  addSegments(preferred);
+  addSegments(fallback);
+
+  return Array.from(merged).join(path.delimiter);
+}
+
+function applyLoginShellEnvSnapshot() {
+  const snapshot = getLoginShellEnvSnapshot();
+  if (!snapshot) {
+    return;
+  }
+
+  const skipKeys = new Set(['PWD', 'OLDPWD', 'SHLVL', '_']);
+
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (skipKeys.has(key)) {
+      continue;
+    }
+    const existing = process.env[key];
+    if (typeof existing === 'string' && existing.length > 0) {
+      continue;
+    }
+    process.env[key] = value;
+  }
+
+  process.env.PATH = mergePathValues(snapshot.PATH || '', process.env.PATH || '');
+}
+
+applyLoginShellEnvSnapshot();
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
@@ -3604,42 +3764,12 @@ async function waitForOpenCodePort(timeoutMs = 15000) {
   throw new Error('Timed out waiting for OpenCode port');
 }
 
-let cachedLoginShellPath = undefined;
-
 function getLoginShellPath() {
-  if (cachedLoginShellPath !== undefined) {
-    return cachedLoginShellPath;
-  }
-
-  if (process.platform === 'win32') {
-    cachedLoginShellPath = null;
+  const snapshot = getLoginShellEnvSnapshot();
+  if (!snapshot || typeof snapshot.PATH !== 'string' || snapshot.PATH.length === 0) {
     return null;
   }
-
-  const shell = process.env.SHELL || '/bin/zsh';
-  const shellName = path.basename(shell);
-
-  // Nushell requires different flag syntax and PATH access
-  const isNushell = shellName === 'nu' || shellName === 'nushell';
-  const args = isNushell
-    ? ['-l', '-i', '-c', '$env.PATH | str join (char esep)']
-    : ['-lic', 'echo -n "$PATH"'];
-
-  try {
-    const result = spawnSync(shell, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    if (result.status === 0 && typeof result.stdout === 'string') {
-      const value = result.stdout.trim();
-      if (value) {
-        cachedLoginShellPath = value;
-        return value;
-      }
-    }
-  } catch (error) {
-    // ignore
-  }
-
-  cachedLoginShellPath = null;
-  return null;
+  return snapshot.PATH;
 }
 
 function buildAugmentedPath() {
