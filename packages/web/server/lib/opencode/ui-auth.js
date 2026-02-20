@@ -4,18 +4,15 @@ const SESSION_COOKIE_NAME = 'oc_ui_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 
-// Login rate limit configuration
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const RATE_LIMIT_MAX_ATTEMPTS = Number(process.env.OPENCHAMBER_RATE_LIMIT_MAX_ATTEMPTS) || 10;
 const RATE_LIMIT_LOCKOUT_MS = 15 * 60 * 1000;
 const RATE_LIMIT_CLEANUP_MS = 60 * 60 * 1000;
 const RATE_LIMIT_NO_IP_MAX_ATTEMPTS = Number(process.env.OPENCHAMBER_RATE_LIMIT_NO_IP_MAX_ATTEMPTS) || 3;
 
-// Rate limit tracker: IP -> { count, lastAttempt, lockedUntil }
 const loginRateLimiter = new Map();
 let rateLimitCleanupTimer = null;
 
-// Concurrency control: key -> Promise<void>
 const rateLimitLocks = new Map();
 
 const getClientIp = (req) => {
