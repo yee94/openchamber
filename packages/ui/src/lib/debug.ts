@@ -5,6 +5,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
+import { copyTextToClipboard as copyPlainTextToClipboard } from '@/lib/clipboard';
 
 export interface DebugMessageInfo {
   messageId: string;
@@ -373,13 +374,14 @@ export const debugUtils = {
     return JSON.stringify(report, null, 2);
   },
 
+  async copyTextToClipboard(text: string) {
+    return copyPlainTextToClipboard(text);
+  },
+
   async copyDiagnosticsReport() {
     const report = await this.buildDiagnosticsReport();
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(report);
-      return { ok: true, report } as const;
-    }
-    return { ok: false, report } as const;
+    const result = await this.copyTextToClipboard(report);
+    return { ...result, report } as const;
   },
 
    checkLastMessage() {
