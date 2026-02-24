@@ -21,12 +21,11 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { useDrawerSwipe } from '@/hooks/useDrawerSwipe';
 import { cn } from '@/lib/utils';
 
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
 
-// 移动端抽屉宽度（占屏幕比例）
+// Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
 
 const normalizeDirectoryKey = (value: string): string => {
@@ -46,26 +45,6 @@ const normalizeDirectoryKey = (value: string): string => {
     }
 
     return normalized;
-};
-
-const MobileDrawerGestureSurface: React.FC<{
-    className?: string;
-    style?: React.CSSProperties;
-    children: React.ReactNode;
-}> = ({ className, style, children }) => {
-    const { handleTouchStart, handleTouchMove, handleTouchEnd } = useDrawerSwipe();
-
-    return (
-        <div
-            className={className}
-            style={style}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-        >
-            {children}
-        </div>
-    );
 };
 
 export const MainLayout: React.FC = () => {
@@ -104,19 +83,19 @@ export const MainLayout: React.FC = () => {
     const bottomTerminalAutoClosedRef = React.useRef(false);
     const leftSidebarAutoClosedByContextRef = React.useRef(false);
 
-    // 移动端抽屉状态
+    // Mobile drawer state
     const [mobileLeftDrawerOpen, setMobileLeftDrawerOpen] = React.useState(false);
     const mobileRightDrawerOpenRef = React.useRef(false);
 
-    // 左抽屉 motion value
+    // Left drawer motion value
     const leftDrawerX = useMotionValue(0);
     const leftDrawerWidth = useRef(0);
 
-    // 右抽屉 motion value
+    // Right drawer motion value
     const rightDrawerX = useMotionValue(0);
     const rightDrawerWidth = useRef(0);
 
-    // 计算抽屉宽度
+    // Compute drawer width
     useEffect(() => {
         if (isMobile) {
             leftDrawerWidth.current = window.innerWidth * (MOBILE_DRAWER_WIDTH_PERCENT / 100);
@@ -124,7 +103,7 @@ export const MainLayout: React.FC = () => {
         }
     }, [isMobile]);
 
-    // 同步左抽屉 state 和 motion value
+    // Sync left drawer state and motion value
     useEffect(() => {
         if (!isMobile) return;
         const targetX = mobileLeftDrawerOpen ? 0 : -leftDrawerWidth.current;
@@ -136,7 +115,7 @@ export const MainLayout: React.FC = () => {
         });
     }, [mobileLeftDrawerOpen, isMobile, leftDrawerX]);
 
-    // 同步右抽屉 state 和 motion value
+    // Sync right drawer state and motion value
     useEffect(() => {
         if (!isMobile) return;
         mobileRightDrawerOpenRef.current = isRightSidebarOpen;
@@ -149,14 +128,14 @@ export const MainLayout: React.FC = () => {
         });
     }, [isMobile, isRightSidebarOpen, rightDrawerX]);
 
-    // 同步 session switcher 状态到左抽屉 (单向同步，避免循环)
+    // Sync session switcher state to left drawer (one-way)
     useEffect(() => {
         if (isMobile) {
             setMobileLeftDrawerOpen(isSessionSwitcherOpen);
         }
     }, [isSessionSwitcherOpen, isMobile]);
 
-    // 同步右抽屉和 git sidebar 状态
+    // Sync right drawer and git sidebar state
     useEffect(() => {
         if (isMobile) {
             mobileRightDrawerOpenRef.current = isRightSidebarOpen;
@@ -607,7 +586,7 @@ export const MainLayout: React.FC = () => {
                     setMobileLeftDrawerOpen,
                     setRightSidebarOpen,
                 }}>
-                    {/* Mobile: Header + Drawer 模式 */}
+                    {/* Mobile: header + drawer mode */}
                     {!(isSettingsDialogOpen || isMultiRunLauncherOpen) && <Header 
                         onToggleLeftDrawer={() => {
                             if (isRightSidebarOpen) {
@@ -625,7 +604,7 @@ export const MainLayout: React.FC = () => {
                         rightDrawerOpen={isRightSidebarOpen}
                     />}
                     
-                    {/* 遮罩层 */}
+                    {/* Backdrop */}
                     <motion.button
                         type="button"
                         initial={false}
@@ -641,7 +620,7 @@ export const MainLayout: React.FC = () => {
                         aria-label="Close drawer"
                     />
                     
-                    {/* 左抽屉（Session） */}
+                    {/* Left drawer (Session) */}
                     <motion.aside
                         drag="x"
                         dragElastic={0.08}
@@ -702,7 +681,7 @@ export const MainLayout: React.FC = () => {
                         </div>
                     </motion.aside>
                     
-                    {/* 右抽屉（Git） */}
+                    {/* Right drawer (Git) */}
                     <motion.aside
                         drag="x"
                         dragElastic={0.08}
@@ -748,8 +727,8 @@ export const MainLayout: React.FC = () => {
                         </div>
                     </motion.aside>
                     
-                    {/* 主内容区（固定） */}
-                    <MobileDrawerGestureSurface
+                    {/* Main content area (fixed) */}
+                    <div
                         className={cn(
                             'flex flex-1 overflow-hidden relative',
                             (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
@@ -766,7 +745,7 @@ export const MainLayout: React.FC = () => {
                                 </div>
                             )}
                         </main>
-                    </MobileDrawerGestureSurface>
+                    </div>
 
                     {/* Mobile multi-run launcher: full screen */}
                     {isMultiRunLauncherOpen && (
