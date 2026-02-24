@@ -909,18 +909,134 @@ const sanitizeForwardHeaders = (input: Record<string, string> | undefined): Reco
   return headers;
 };
 
+const getFsAccessRoot = (): string => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+
+const getFsMimeType = (filePath: string): string => {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.txt': 'text/plain; charset=utf-8',
+    '.md': 'text/markdown; charset=utf-8',
+    '.markdown': 'text/markdown; charset=utf-8',
+    '.mmd': 'text/plain; charset=utf-8',
+    '.mermaid': 'text/plain; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.pdf': 'application/pdf',
+  };
+  return mimeMap[ext] || 'application/octet-stream';
+};
+
+type FsReadPathResolution =
+  | { ok: true; resolvedPath: string }
+  | { ok: false; status: number; error: string };
+
+const resolveFileReadPath = async (targetPath: string): Promise<FsReadPathResolution> => {
+  const trimmed = targetPath.trim();
+  if (!trimmed) {
+    return { ok: false, status: 400, error: 'Path is required' };
+  }
+
+  const baseRoot = getFsAccessRoot();
+  const resolved = resolveUserPath(trimmed, baseRoot);
+  if (!resolved) {
+    return { ok: false, status: 400, error: 'Path is required' };
+  }
+
+  try {
+    const [canonicalPath, canonicalBase] = await Promise.all([
+      fs.promises.realpath(resolved),
+      fs.promises.realpath(baseRoot).catch(() => path.resolve(baseRoot)),
+    ]);
+
+    if (!isPathInside(canonicalPath, canonicalBase)) {
+      return { ok: false, status: 403, error: 'Access to file denied' };
+    }
+
+    return { ok: true, resolvedPath: canonicalPath };
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err?.code === 'ENOENT') {
+      return { ok: false, status: 404, error: 'File not found' };
+    }
+    return { ok: false, status: 500, error: 'Failed to resolve file path' };
+  }
+};
+
+const buildProxyJsonError = (status: number, error: string): ApiProxyResponsePayload => ({
+  status,
+  headers: { 'content-type': 'application/json' },
+  bodyBase64: base64EncodeUtf8(JSON.stringify({ error })),
+});
+
+const tryHandleLocalFsProxy = async (method: string, requestPath: string): Promise<ApiProxyResponsePayload | null> => {
+  let parsed: URL;
+  try {
+    parsed = new URL(requestPath, 'https://openchamber.local');
+  } catch {
+    return buildProxyJsonError(400, 'Invalid request path');
+  }
+
+  if (parsed.pathname !== '/api/fs/read' && parsed.pathname !== '/api/fs/raw') {
+    return null;
+  }
+
+  if (method !== 'GET' && method !== 'HEAD') {
+    return buildProxyJsonError(405, 'Method not allowed');
+  }
+
+  const targetPath = parsed.searchParams.get('path') || '';
+  const resolution = await resolveFileReadPath(targetPath);
+  if (!resolution.ok) {
+    return buildProxyJsonError(resolution.status, resolution.error);
+  }
+
+  try {
+    const stats = await fs.promises.stat(resolution.resolvedPath);
+    if (!stats.isFile()) {
+      return buildProxyJsonError(400, 'Specified path is not a file');
+    }
+
+    if (parsed.pathname === '/api/fs/read') {
+      const content = await fs.promises.readFile(resolution.resolvedPath, 'utf8');
+      return {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+        },
+        bodyBase64: base64EncodeUtf8(content),
+      };
+    }
+
+    const raw = await fs.promises.readFile(resolution.resolvedPath);
+    return {
+      status: 200,
+      headers: {
+        'content-type': getFsMimeType(resolution.resolvedPath),
+        'cache-control': 'no-store',
+      },
+      bodyBase64: Buffer.from(raw).toString('base64'),
+    };
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err?.code === 'ENOENT') {
+      return buildProxyJsonError(404, 'File not found');
+    }
+    return buildProxyJsonError(500, 'Unable to read file');
+  }
+};
+
 export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeContext): Promise<BridgeResponse> {
   const { id, type, payload } = message;
 
   try {
     switch (type) {
       case 'api:proxy': {
-        const apiUrl = ctx?.manager?.getApiUrl();
-        if (!apiUrl) {
-          const data = buildUnavailableApiResponse();
-          return { id, type, success: true, data };
-        }
-
         const { method, path: requestPath, headers, bodyBase64 } = (payload || {}) as ApiProxyRequestPayload;
         const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
         const normalizedPath =
@@ -929,6 +1045,17 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
               ? requestPath.trim()
               : `/${requestPath.trim()}`
             : '/';
+
+        const localFsResponse = await tryHandleLocalFsProxy(normalizedMethod, normalizedPath);
+        if (localFsResponse) {
+          return { id, type, success: true, data: localFsResponse };
+        }
+
+        const apiUrl = ctx?.manager?.getApiUrl();
+        if (!apiUrl) {
+          const data = buildUnavailableApiResponse();
+          return { id, type, success: true, data };
+        }
 
         const base = `${apiUrl.replace(/\/+$/, '')}/`;
         const targetUrl = new URL(normalizedPath.replace(/^\/+/, ''), base).toString();
@@ -1145,13 +1272,15 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         if (!target) {
           return { id, type, success: false, error: 'Path is required' };
         }
+
+        const resolution = await resolveFileReadPath(target);
+        if (!resolution.ok) {
+          return { id, type, success: false, error: resolution.error };
+        }
+
         try {
-          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
-          const resolvedPath = resolveUserPath(target, workspaceRoot);
-          const uri = vscode.Uri.file(resolvedPath);
-          const bytes = await vscode.workspace.fs.readFile(uri);
-          const content = Buffer.from(bytes).toString('utf8');
-          return { id, type, success: true, data: { content, path: normalizeFsPath(resolvedPath) } };
+          const content = await fs.promises.readFile(resolution.resolvedPath, 'utf8');
+          return { id, type, success: true, data: { content, path: normalizeFsPath(resolution.resolvedPath) } };
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read file';
           return { id, type, success: false, error: message };
