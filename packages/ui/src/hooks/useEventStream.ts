@@ -132,7 +132,6 @@ export const useEventStream = () => {
   } = useSessionStore();
 
   const { checkConnection } = useConfigStore();
-  const nativeNotificationsEnabled = useUIStore((state) => state.nativeNotificationsEnabled);
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const activeSessionDirectory = React.useMemo(() => {
@@ -378,6 +377,7 @@ export const useEventStream = () => {
   const questionToastShownRef = React.useRef<Set<string>>(new Set());
   const notifiedMessagesRef = React.useRef<Set<string>>(new Set());
   const notifiedQuestionsRef = React.useRef<Set<string>>(new Set());
+  const serverNotificationEventSeenRef = React.useRef(false);
   const modeSwitchToastShownRef = React.useRef<Set<string>>(new Set());
   const lastUserAgentSelectionRef = React.useRef<Map<string, { created: number; messageId: string }>>(new Map());
 
@@ -402,6 +402,50 @@ export const useEventStream = () => {
     (sessionId: string, reason: string, limit?: number) => Promise<void>
   >(() => Promise.resolve());
   const scheduleReconnectRef = React.useRef<(hint?: string) => void>(() => {});
+
+  const isNotificationContextHidden = React.useCallback((isVSCodeRuntime: boolean): boolean => {
+    if (visibilityStateRef.current === 'hidden') {
+      return true;
+    }
+    if (isVSCodeRuntime && typeof document !== 'undefined') {
+      return !document.hasFocus();
+    }
+    return false;
+  }, []);
+
+  const dispatchRuntimeNotification = React.useCallback((payload: {
+    title: string;
+    body?: string;
+    tag?: string;
+    requireHidden?: boolean;
+  }) => {
+    const runtimeAPIs = getRegisteredRuntimeAPIs();
+    if (!runtimeAPIs?.notifications) {
+      return;
+    }
+
+    const title = typeof payload.title === 'string' ? payload.title.trim() : '';
+    if (!title) {
+      return;
+    }
+
+    const settings = useUIStore.getState();
+    if (!settings.nativeNotificationsEnabled) {
+      return;
+    }
+
+    const isVSCodeRuntime = Boolean(runtimeAPIs.runtime?.isVSCode);
+    const shouldRequireHidden = Boolean(payload.requireHidden) || settings.notificationMode === 'hidden-only';
+    if (shouldRequireHidden && !isNotificationContextHidden(isVSCodeRuntime)) {
+      return;
+    }
+
+    void runtimeAPIs.notifications.notifyAgentCompletion({
+      title,
+      body: typeof payload.body === 'string' ? payload.body : '',
+      tag: typeof payload.tag === 'string' ? payload.tag : undefined,
+    });
+  }, [isNotificationContextHidden]);
 
   const maybeBootstrapIfStale = React.useCallback(
     (reason: string) => {
@@ -1253,8 +1297,9 @@ export const useEventStream = () => {
         const finishCandidate = (message as { finish?: unknown }).finish;
         const finish = typeof finishCandidate === 'string' ? finishCandidate : null;
         const eventHasStopFinish = finish === 'stop';
+        const eventHasErrorFinish = finish === 'error';
 
-        if (!hasParts && !completedFromServer && !hasCompletedStatus && !eventHasStopFinish) break;
+        if (!hasParts && !completedFromServer && !hasCompletedStatus && !eventHasStopFinish && !eventHasErrorFinish) break;
 
         if ((messageExt as { role?: unknown }).role === 'assistant' && hasParts) {
           const hasQuestionTool = partsArray.some((part) => (
@@ -1276,6 +1321,44 @@ export const useEventStream = () => {
         }
 
         updateMessageInfo(sessionId, messageId, message as unknown as Message);
+
+        const messageRole = typeof (message as { role?: unknown }).role === 'string'
+          ? (message as { role: string }).role
+          : null;
+        const runtimeAPIs = getRegisteredRuntimeAPIs();
+        const shouldSynthesizeNotifications = Boolean(runtimeAPIs?.runtime?.isVSCode) && !serverNotificationEventSeenRef.current;
+        if (shouldSynthesizeNotifications && messageRole === 'assistant') {
+          const settings = useUIStore.getState();
+          const sessionInfo = useSessionStore.getState().sessions.find((entry) => entry.id === sessionId);
+          const sessionTitle = typeof sessionInfo?.title === 'string' ? sessionInfo.title.trim() : '';
+
+          if (eventHasStopFinish && settings.notifyOnCompletion !== false) {
+            const isSubtask = Boolean(sessionInfo?.parentID);
+            if (!(settings.notifyOnSubtasks === false && isSubtask)) {
+              const notificationKey = `ready:${sessionId}:${messageId}`;
+              if (!notifiedMessagesRef.current.has(notificationKey)) {
+                notifiedMessagesRef.current.add(notificationKey);
+                dispatchRuntimeNotification({
+                  title: 'Agent is ready',
+                  body: sessionTitle || 'Task completed',
+                  tag: `ready-${sessionId}`,
+                });
+              }
+            }
+          }
+
+          if (eventHasErrorFinish && settings.notifyOnError !== false) {
+            const notificationKey = `error:${sessionId}:${messageId}`;
+            if (!notifiedMessagesRef.current.has(notificationKey)) {
+              notifiedMessagesRef.current.add(notificationKey);
+              dispatchRuntimeNotification({
+                title: 'Tool error',
+                body: sessionTitle || 'An error occurred',
+                tag: `error-${sessionId}`,
+              });
+            }
+          }
+        }
 
         if (hasParts && (messageExt as { role?: unknown }).role !== 'user') {
           const storeState = useSessionStore.getState();
@@ -1445,6 +1528,25 @@ export const useEventStream = () => {
 
         addPermission(request);
 
+        const runtimeAPIs = getRegisteredRuntimeAPIs();
+        if (runtimeAPIs?.runtime?.isVSCode && !serverNotificationEventSeenRef.current) {
+          const settings = useUIStore.getState();
+          if (settings.notifyOnQuestion !== false) {
+            const notificationKey = `permission:${request.sessionID}:${request.id}`;
+            if (!notifiedQuestionsRef.current.has(notificationKey)) {
+              notifiedQuestionsRef.current.add(notificationKey);
+              const sessionTitle =
+                useSessionStore.getState().sessions.find((s) => s.id === request.sessionID)?.title ||
+                'Agent is waiting for your approval';
+              dispatchRuntimeNotification({
+                title: 'Permission required',
+                body: sessionTitle,
+                tag: `permission-${request.sessionID}:${request.id}`,
+              });
+            }
+          }
+        }
+
         // Notify if permission is for another session (common with child sessions).
         const toastKey = `${request.sessionID}:${request.id}`;
         if (!permissionToastShownRef.current.has(toastKey)) {
@@ -1515,9 +1617,28 @@ export const useEventStream = () => {
         const request = props as unknown as QuestionRequest;
         addQuestion(request);
 
+        const runtimeAPIs = getRegisteredRuntimeAPIs();
+        if (runtimeAPIs?.runtime?.isVSCode && !serverNotificationEventSeenRef.current) {
+          const settings = useUIStore.getState();
+          if (settings.notifyOnQuestion !== false) {
+            const notificationKey = `question:${request.sessionID}:${request.id}`;
+            if (!notifiedQuestionsRef.current.has(notificationKey)) {
+              notifiedQuestionsRef.current.add(notificationKey);
+              const firstQuestion = Array.isArray(request.questions) ? request.questions[0] : undefined;
+              const questionHeader = typeof firstQuestion?.header === 'string' ? firstQuestion.header.trim() : '';
+              const questionText = typeof firstQuestion?.question === 'string' ? firstQuestion.question.trim() : '';
+              dispatchRuntimeNotification({
+                title: questionHeader || 'Input needed',
+                body: questionText || 'Agent is waiting for your response',
+                tag: `question-${request.sessionID}:${request.id}`,
+              });
+            }
+          }
+        }
+
         const toastKey = `${request.sessionID}:${request.id}`;
 
-	        // notifications are emitted server-side (see openchamber:notification)
+	        // web/desktop use server-emitted notifications; VS Code may synthesize locally
 
         if (!questionToastShownRef.current.has(toastKey)) {
           setTimeout(() => {
@@ -1586,14 +1707,11 @@ export const useEventStream = () => {
       }
 
       case 'openchamber:notification': {
+        serverNotificationEventSeenRef.current = true;
         const title = typeof (props as { title?: unknown }).title === 'string' ? (props as { title: string }).title : '';
         const body = typeof (props as { body?: unknown }).body === 'string' ? (props as { body: string }).body : '';
         const tag = typeof (props as { tag?: unknown }).tag === 'string' ? (props as { tag: string }).tag : undefined;
         const requireHidden = Boolean((props as { requireHidden?: unknown }).requireHidden);
-
-        if (requireHidden && visibilityStateRef.current !== 'hidden') {
-          break;
-        }
 
         // When the sidecar stdout notification channel is active (production desktop builds),
         // skip this SSE notification to avoid duplicating the native notification already
@@ -1603,14 +1721,7 @@ export const useEventStream = () => {
           break;
         }
 
-        if (!nativeNotificationsEnabled) {
-          break;
-        }
-
-        const runtimeAPIs = getRegisteredRuntimeAPIs();
-        if (runtimeAPIs?.notifications && title) {
-          void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag });
-        }
+        dispatchRuntimeNotification({ title, body, tag, requireHidden });
 
         break;
       }
@@ -1629,7 +1740,6 @@ export const useEventStream = () => {
     }
   }, [
     currentSessionId,
-    nativeNotificationsEnabled,
     addStreamingPart,
     completeStreamingMessage,
     updateMessageInfo,
@@ -1650,6 +1760,7 @@ export const useEventStream = () => {
     bootstrapState,
     effectiveDirectory,
     updateSessionStatus,
+    dispatchRuntimeNotification,
   ]);
 
   // --- Stable callback refs (Part A) ---
@@ -2109,6 +2220,7 @@ export const useEventStream = () => {
       notifiedMessagesRef.current.clear();
       // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value at cleanup time
       notifiedQuestionsRef.current.clear();
+      serverNotificationEventSeenRef.current = false;
 
       pendingResumeRef.current = false;
       visibilityStateRef.current = resolveVisibilityState();

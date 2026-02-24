@@ -173,7 +173,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('cornerRadius') || shouldShow('inputBarOffset');
     const hasBehaviorSettings = shouldShow('toolOutput')
         || shouldShow('diffLayout')
-        || shouldShow('mobileStatusBar')
+        || (shouldShow('mobileStatusBar') && isMobile)
         || shouldShow('dotfiles')
         || shouldShow('reasoning')
         || shouldShow('queueMode')
@@ -548,9 +548,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </section>
                             )}
 
-                            {(shouldShow('mobileStatusBar') || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
+                            {((shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
                                 <section className="p-2 space-y-0.5">
-                                    {shouldShow('mobileStatusBar') && (
+                                    {shouldShow('mobileStatusBar') && isMobile && (
                                         <div
                                             className="group flex cursor-pointer items-center gap-2 py-1.5"
                                             role="button"

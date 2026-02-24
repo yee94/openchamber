@@ -79,6 +79,16 @@ type ApiProxyResponsePayload = {
   bodyBase64: string;
 };
 
+type NotificationBridgePayload = {
+  title?: string;
+  body?: string;
+  tag?: string;
+};
+
+type NotificationsNotifyRequestPayload = {
+  payload?: NotificationBridgePayload;
+};
+
 interface FileEntry {
   name: string;
   path: string;
@@ -2790,6 +2800,28 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           const errorMessage = error instanceof Error ? error.message : String(error);
           return { id, type, success: false, error: errorMessage };
         }
+      }
+
+      case 'notifications:can-notify': {
+        return { id, type, success: true, data: true };
+      }
+
+      case 'notifications:notify': {
+        const request = (payload || {}) as NotificationsNotifyRequestPayload;
+        const notification = request.payload || {};
+        const title = typeof notification.title === 'string' ? notification.title.trim() : '';
+        const body = typeof notification.body === 'string' ? notification.body.trim() : '';
+
+        const message = title && body
+          ? `${title}: ${body}`
+          : title || body;
+
+        if (!message) {
+          return { id, type, success: true, data: { shown: false } };
+        }
+
+        void vscode.window.showInformationMessage(message);
+        return { id, type, success: true, data: { shown: true } };
       }
 
       // ============== Git Operations ==============
