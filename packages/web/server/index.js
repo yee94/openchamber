@@ -1706,6 +1706,9 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
     result.usageRefreshIntervalMs = Math.max(30000, Math.min(300000, Math.round(candidate.usageRefreshIntervalMs)));
   }
+  if (candidate.usageDisplayMode === 'usage' || candidate.usageDisplayMode === 'remaining') {
+    result.usageDisplayMode = candidate.usageDisplayMode;
+  }
   if (Array.isArray(candidate.usageDropdownProviders)) {
     result.usageDropdownProviders = normalizeStringArray(candidate.usageDropdownProviders);
   }
