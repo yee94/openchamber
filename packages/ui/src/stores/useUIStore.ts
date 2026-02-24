@@ -220,7 +220,9 @@ interface UIStore {
 
   showTerminalQuickKeysOnDesktop: boolean;
   persistChatDraft: boolean;
+  showMobileSessionStatusBar: boolean;
   isMobileSessionStatusBarCollapsed: boolean;
+  viewPagerPage: 'left' | 'center' | 'right';
 
   isExpandedInput: boolean;
 
@@ -313,7 +315,9 @@ interface UIStore {
   setSummaryLength: (value: number) => void;
   setMaxLastMessageLength: (value: number) => void;
   setPersistChatDraft: (value: boolean) => void;
+  setShowMobileSessionStatusBar: (value: boolean) => void;
   setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
+  setViewPagerPage: (page: 'left' | 'center' | 'right') => void;
   toggleExpandedInput: () => void;
   setExpandedInput: (value: boolean) => void;
   openMultiRunLauncher: () => void;
@@ -412,6 +416,7 @@ export const useUIStore = create<UIStore>()(
 
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
+        showMobileSessionStatusBar: true,
         isMobileSessionStatusBarCollapsed: false,
         isExpandedInput: false,
         shortcutOverrides: {},
@@ -1194,8 +1199,22 @@ export const useUIStore = create<UIStore>()(
         setPersistChatDraft: (value) => {
           set({ persistChatDraft: value });
         },
+        setShowMobileSessionStatusBar: (value) => {
+          set({ showMobileSessionStatusBar: value });
+        },
         setIsMobileSessionStatusBarCollapsed: (value) => {
           set({ isMobileSessionStatusBarCollapsed: value });
+        },
+        viewPagerPage: 'center',
+        setViewPagerPage: (page: 'left' | 'center' | 'right') => {
+          set({ viewPagerPage: page });
+          if (page === 'left') {
+            set({ isSessionSwitcherOpen: true, isRightSidebarOpen: false });
+          } else if (page === 'right') {
+            set({ isRightSidebarOpen: true, isSessionSwitcherOpen: false });
+          } else {
+            set({ isSessionSwitcherOpen: false, isRightSidebarOpen: false });
+          }
         },
 
         setShortcutOverride: (actionId, combo) => {
@@ -1347,6 +1366,7 @@ export const useUIStore = create<UIStore>()(
           summaryLength: state.summaryLength,
           maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
+          showMobileSessionStatusBar: state.showMobileSessionStatusBar,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
           shortcutOverrides: state.shortcutOverrides,
         })
