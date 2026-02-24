@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-02-24
+
+- Settings: redesigned the settings workspace with flatter, more consistent page layouts so configuration is faster to scan and edit.
+- Settings: improved agents and skills navigation by grouping entries by subfolder for easier management at scale (thanks to @nguyenngothuong).
+- Chat: improved streaming smoothness and stability with buffered updates and runtime fixes, reducing lag, stuck spinners, memory growth, and timeout-related interruptions in long runs (thanks to @nguyenngothuong).
+- Chat: added fullscreen Mermaid preview, persisted default thinking variant selection, and hardened file-preview safety checks for a safer, more predictable message experience (thanks to @yulia-ivashko).
+- Chat: draft text now persists per session, and the input supports an expanded focus mode for longer prompts (thanks to @nguyenngothuong).
+- Sessions: expanded folder management with subfolders, cleaner organization actions, and clearer delete confirmations (thanks to @nguyenngothuong).
+- Settings: added an MCP config manager UI to simplify editing and validating MCP server configuration (thanks to @nguyenngothuong).
+- Git/PR: moved commit-message and PR-description generation to active-session structured output, so generation uses current session context and avoids fragile backend polling.
+- Chat Activity: improved Structured Output tool rendering with dedicated title/icon, clearer result descriptions, and more reliable detailed expansion defaults.
+- Notifications/Voice: moved utility model controls into AI Summarization as a Zen-only Summarization Model setting.
+- Mobile: refreshed drawer and session-status layouts for better small-screen usability (thanks to @Jovines).
+- Desktop: improved remote instance URL handling for more reliable host/query matching (thanks to @shekohex).
+- Files: added C, C++, and Go language support for syntax-aware rendering in code-heavy workflows (thanks to @fomenks).
+
+
 ## [1.7.3] - 2026-02-21
 
 - Settings: added customizable keyboard shortcuts for chat actions, panel toggles, and services, so you can better match OpenChamber to your workflow (thanks to @nelsonPires5).
