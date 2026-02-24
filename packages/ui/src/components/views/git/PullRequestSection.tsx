@@ -1128,23 +1128,12 @@ export const PullRequestSection: React.FC<{
     if (!directory) return;
     setIsGenerating(true);
     try {
-      const { getResolvedGitGenerationModel, settingsZenModel } = useConfigStore.getState();
-      const resolvedModel = getResolvedGitGenerationModel();
-      const payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string } = {
+      const payload: { base: string; head: string; context?: string; files?: string[] } = {
         base: targetBaseBranch,
         head: branch,
       };
       if (additionalContext) {
         payload.context = additionalContext;
-      }
-      if (resolvedModel) {
-        payload.providerId = resolvedModel.providerId;
-        payload.modelId = resolvedModel.modelId;
-        if (resolvedModel.providerId === 'zen') {
-          payload.zenModel = resolvedModel.modelId;
-        }
-      } else if (settingsZenModel) {
-        payload.zenModel = settingsZenModel;
       }
       const generated = await generatePullRequestDescription(directory, payload);
 
@@ -1161,7 +1150,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsGenerating(false);
     }
-  }, [branch, directory, isGenerating, additionalContext, onGeneratedDescription, targetBaseBranch]);
+  }, [additionalContext, branch, directory, isGenerating, onGeneratedDescription, targetBaseBranch]);
 
   const createPr = React.useCallback(async () => {
     if (!github?.prCreate) {

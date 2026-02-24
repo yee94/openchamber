@@ -29,7 +29,7 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
-const DETAILED_DEFAULT_TOOLS = new Set(['task', 'edit', 'multiedit', 'write', 'bash']);
+const DETAILED_DEFAULT_TOOLS = new Set(['task', 'edit', 'multiedit', 'write', 'apply_patch', 'bash', 'todowrite']);
 
 const isDetailedDefaultTool = (toolName: unknown): boolean =>
     typeof toolName === 'string' && DETAILED_DEFAULT_TOOLS.has(toolName.toLowerCase());
@@ -437,8 +437,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 }
 
                 const toolPart = activity.part as unknown as { id?: string; tool?: unknown };
-                if (toolPart.id && isDetailedDefaultTool(toolPart.tool)) {
-                    defaultExpandedToolIds.add(toolPart.id);
+                if (isDetailedDefaultTool(toolPart.tool)) {
+                    if (toolPart.id) {
+                        defaultExpandedToolIds.add(toolPart.id);
+                    }
+                    if (activity.id) {
+                        defaultExpandedToolIds.add(activity.id);
+                    }
                 }
             }
         }

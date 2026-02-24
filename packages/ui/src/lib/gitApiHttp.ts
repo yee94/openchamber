@@ -235,7 +235,15 @@ export async function generateCommitMessage(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to generate commit message');
+    console.error('[git-generation][browser] http error', {
+      status: response.status,
+      statusText: response.statusText,
+      error,
+    });
+    const traceSuffix = typeof error?.traceId === 'string' && error.traceId
+      ? ` (traceId: ${error.traceId})`
+      : '';
+    throw new Error(`${error.error || 'Failed to generate commit message'}${traceSuffix}`);
   }
 
   const data = await response.json();

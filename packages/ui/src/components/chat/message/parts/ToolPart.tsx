@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileList2Line, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileList2Line, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck2, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -87,6 +87,9 @@ export const getToolIcon = (toolName: string) => {
     }
     if (tool === 'todowrite' || tool === 'todoread') {
         return <RiListCheck3 className={iconClass} />;
+    }
+    if (tool === 'structuredoutput' || tool === 'structured_output') {
+        return <RiListCheck2 className={iconClass} />;
     }
     if (tool === 'skill') {
         return <RiBookLine className={iconClass} />;
@@ -189,6 +192,11 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
     const input = stateWithData.input;
+    const tool = part.tool.toLowerCase();
+
+    if (tool === 'structuredoutput' || tool === 'structured_output') {
+        return 'Result';
+    }
 
     if (part.tool === 'apply_patch') {
         const files = Array.isArray(metadata?.files) ? metadata?.files : [];
@@ -1391,7 +1399,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
                 <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
                     {justificationText && (
-                        <span className={cn("truncate italic", isMobile && "max-w-[120px]")} style={{ color: 'var(--tools-description)', opacity: 0.8 }}>
+                        <span className={cn("truncate", isMobile && "max-w-[120px]")} style={{ color: 'var(--tools-description)', opacity: 0.8 }}>
                             {justificationText}
                         </span>
                     )}

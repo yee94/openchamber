@@ -445,7 +445,7 @@ interface MessageState {
 
 interface MessageActions {
     loadMessages: (sessionId: string, limit?: number) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode?: 'normal' | 'shell') => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode?: 'normal' | 'shell', format?: { type: 'json_schema'; schema: Record<string, unknown>; retryCount?: number }) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -670,7 +670,7 @@ export const useMessageStore = create<MessageStore>()(
                         });
                 },
 
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode: 'normal' | 'shell' = 'normal') => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode: 'normal' | 'shell' = 'normal', format?: { type: 'json_schema'; schema: Record<string, unknown>; retryCount?: number }) => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
@@ -840,6 +840,17 @@ export const useMessageStore = create<MessageStore>()(
                                         files: filePayloads.length > 0 ? filePayloads : undefined,
                                     });
                                 } else {
+                                    if (format) {
+                                        console.info('[git-generation][browser] dispatch structured sendMessage', {
+                                            sessionId,
+                                            providerID,
+                                            modelID,
+                                            agent,
+                                            variant,
+                                            directory,
+                                            formatType: format.type,
+                                        });
+                                    }
                                     await opencodeClient.sendMessage({
                                         id: sessionId,
                                         providerID,
@@ -847,6 +858,7 @@ export const useMessageStore = create<MessageStore>()(
                                         text: content,
                                         agent,
                                         variant,
+                                        ...(format ? { format } : {}),
                                         files: filePayloads.length > 0 ? filePayloads : undefined,
                                         additionalParts: additionalPartsPayload && additionalPartsPayload.length > 0 ? additionalPartsPayload : undefined,
                                         agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,

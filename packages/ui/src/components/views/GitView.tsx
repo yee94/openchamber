@@ -62,6 +62,7 @@ import type { GitRemote } from '@/lib/gitApi';
 import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { cn } from '@/lib/utils';
+import { generateCommitMessage as generateSessionCommitMessage } from '@/lib/gitApi';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -820,25 +821,14 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
+    console.error('[git-generation][browser] generate button clicked', {
+      directory: currentDirectory,
+      selectedFiles: selectedPaths.size,
+    });
+
     setIsGeneratingMessage(true);
     try {
-      const { getResolvedGitGenerationModel, settingsZenModel } = useConfigStore.getState();
-      const resolvedModel = getResolvedGitGenerationModel();
-      const options: { zenModel?: string; providerId?: string; modelId?: string } = {};
-      if (resolvedModel) {
-        options.providerId = resolvedModel.providerId;
-        options.modelId = resolvedModel.modelId;
-        if (resolvedModel.providerId === 'zen') {
-          options.zenModel = resolvedModel.modelId;
-        }
-      } else if (settingsZenModel) {
-        options.zenModel = settingsZenModel;
-      }
-      const { message } = await git.generateCommitMessage(
-        currentDirectory,
-        Array.from(selectedPaths),
-        Object.keys(options).length > 0 ? options : undefined
-      );
+      const { message } = await generateSessionCommitMessage(currentDirectory, Array.from(selectedPaths));
       const subject = message.subject?.trim() ?? '';
       const highlights = Array.isArray(message.highlights) ? message.highlights : [];
 
@@ -859,13 +849,17 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
 
       scrollActionPanelToBottom();
     } catch (error) {
+      console.error('[git-generation][browser] GitView generate handler failed', {
+        message: error instanceof Error ? error.message : String(error),
+        error,
+      });
       const message =
         error instanceof Error ? error.message : 'Failed to generate commit message';
       toast.error(message);
     } finally {
       setIsGeneratingMessage(false);
     }
-  }, [currentDirectory, selectedPaths, git, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom]);
+  }, [currentDirectory, selectedPaths, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom]);
 
   const handleCreateBranch = async (branchName: string, remote?: GitRemote) => {
     if (!currentDirectory || !status) return;

@@ -119,7 +119,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
                 {summary && (
                     <div className="flex-1 min-w-0 typography-meta text-muted-foreground/70">
-                        <span className="truncate block">{summary}</span>
+                        <span className="truncate block italic">{summary}</span>
                     </div>
                 )}
             </div>

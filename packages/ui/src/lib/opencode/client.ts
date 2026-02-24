@@ -620,6 +620,11 @@ class OpencodeService {
     }>;
     messageId?: string;
     agentMentions?: Array<{ name: string; source?: { value: string; start: number; end: number } }>;
+    format?: {
+      type: 'json_schema';
+      schema: Record<string, unknown>;
+      retryCount?: number;
+    };
   }): Promise<string> {
     // Generate a temporary client-side ID for optimistic UI
     // This ID won't be sent to the server - server will generate its own
@@ -693,27 +698,67 @@ class OpencodeService {
     // for model work (SSE will deliver output/status).
     // This avoids 504s from proxy timeouts on long-running turns.
     const base = this.baseUrl.replace(/\/+$/, '');
-    const url = new URL(`${base}/session/${encodeURIComponent(params.id)}/prompt_async`);
-    if (this.currentDirectory) {
-      url.searchParams.set('directory', this.currentDirectory);
+    let url: URL;
+    try {
+      url = new URL(`${base}/session/${encodeURIComponent(params.id)}/prompt_async`);
+      if (this.currentDirectory) {
+        url.searchParams.set('directory', this.currentDirectory);
+      }
+    } catch (error) {
+      console.error('[git-generation][browser] failed to build prompt_async URL', {
+        baseUrl: this.baseUrl,
+        normalizedBase: base,
+        sessionId: params.id,
+        directory: this.currentDirectory,
+        message: error instanceof Error ? error.message : String(error),
+        error,
+      });
+      throw error;
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({
-        model: {
-          providerID: params.providerID,
-          modelID: params.modelID,
-        },
+    if (params.format) {
+      console.info('[git-generation][browser] send structured message', {
+        sessionId: params.id,
+        providerID: params.providerID,
+        modelID: params.modelID,
         agent: params.agent,
         variant: params.variant,
-        parts,
-      }),
-    });
+        directory: this.currentDirectory,
+        baseUrl: this.baseUrl,
+        formatType: params.format.type,
+      });
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({
+          model: {
+            providerID: params.providerID,
+            modelID: params.modelID,
+          },
+          agent: params.agent,
+          variant: params.variant,
+          ...(params.format ? { format: params.format } : {}),
+          parts,
+        }),
+      });
+    } catch (error) {
+      console.error('[git-generation][browser] prompt_async request failed before response', {
+        sessionId: params.id,
+        url: url.toString(),
+        directory: this.currentDirectory,
+        hasFormat: Boolean(params.format),
+        message: error instanceof Error ? error.message : String(error),
+        error,
+      });
+      throw error;
+    }
 
     if (!response.ok) {
       let detail = '';
