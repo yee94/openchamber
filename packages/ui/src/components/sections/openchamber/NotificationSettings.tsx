@@ -1,8 +1,10 @@
 import React from 'react';
-import { RiRestartLine } from '@remixicon/react';
+import { RiInformationLine, RiRestartLine } from '@remixicon/react';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -10,6 +12,8 @@ import { GridLoader } from '@/components/ui/grid-loader';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { ButtonSmall } from '@/components/ui/button-small';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_NOTIFICATION_TEMPLATES = {
@@ -18,6 +22,10 @@ const DEFAULT_NOTIFICATION_TEMPLATES = {
   question: { title: 'Input needed', message: '{last_message}' },
   subtask: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
 } as const;
+
+const UTILITY_PROVIDER_ID = 'zen';
+const UTILITY_PREFERRED_MODEL_ID = 'big-pickle';
+const UTILITY_NOT_SELECTED_VALUE = '__not_selected__';
 
 const DEFAULT_SUMMARY_THRESHOLD = 200;
 const DEFAULT_SUMMARY_LENGTH = 100;
@@ -50,11 +58,105 @@ export const NotificationSettings: React.FC = () => {
   const setSummaryLength = useUIStore(state => state.setSummaryLength);
   const maxLastMessageLength = useUIStore(state => state.maxLastMessageLength);
   const setMaxLastMessageLength = useUIStore(state => state.setMaxLastMessageLength);
+  const providers = useConfigStore((state) => state.providers);
+  const settingsZenModel = useConfigStore((state) => state.settingsZenModel);
+  const setSettingsZenModel = useConfigStore((state) => state.setSettingsZenModel);
 
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission>('default');
   const [pushSupported, setPushSupported] = React.useState(false);
   const [pushSubscribed, setPushSubscribed] = React.useState(false);
   const [pushBusy, setPushBusy] = React.useState(false);
+  const [fetchedZenModels, setFetchedZenModels] = React.useState<Array<{ id: string; name: string }>>([]);
+
+  const providerZenModels = React.useMemo(() => {
+    const zenProvider = providers.find((provider) => provider.id === UTILITY_PROVIDER_ID);
+    const models = Array.isArray(zenProvider?.models) ? zenProvider.models : [];
+    return models
+      .map((model: Record<string, unknown>) => {
+        const id = typeof model.id === 'string' ? model.id.trim() : '';
+        if (!id) {
+          return null;
+        }
+        const name = typeof model.name === 'string' && model.name.trim().length > 0 ? model.name.trim() : id;
+        return { id, name };
+      })
+      .filter((model): model is { id: string; name: string } => model !== null);
+  }, [providers]);
+
+  React.useEffect(() => {
+    if (providerZenModels.length > 0) {
+      setFetchedZenModels([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    void fetch('/api/zen/models', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return [] as Array<{ id: string; name: string }>;
+        }
+        const payload = await response.json().catch(() => ({}));
+        const models = Array.isArray(payload?.models) ? payload.models : [];
+        return models
+          .map((entry: unknown) => {
+            const id = typeof (entry as { id?: unknown })?.id === 'string'
+              ? (entry as { id: string }).id.trim()
+              : '';
+            if (!id) {
+              return null;
+            }
+            return { id, name: id };
+          })
+          .filter((entry: { id: string; name: string } | null): entry is { id: string; name: string } => entry !== null);
+      })
+      .then((models) => {
+        setFetchedZenModels(models);
+      })
+      .catch((error) => {
+        if (error?.name !== 'AbortError') {
+          console.warn('Failed to load zen utility models:', error);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [providerZenModels]);
+
+  const utilityModelOptions = React.useMemo(() => {
+    return providerZenModels.length > 0 ? providerZenModels : fetchedZenModels;
+  }, [fetchedZenModels, providerZenModels]);
+
+  const utilitySelectedModelId = React.useMemo(() => {
+    if (settingsZenModel && utilityModelOptions.some((model) => model.id === settingsZenModel)) {
+      return settingsZenModel;
+    }
+    if (utilityModelOptions.some((model) => model.id === UTILITY_PREFERRED_MODEL_ID)) {
+      return UTILITY_PREFERRED_MODEL_ID;
+    }
+    return utilityModelOptions[0]?.id ?? '';
+  }, [settingsZenModel, utilityModelOptions]);
+
+  const handleUtilityModelChange = React.useCallback(
+    async (value: string) => {
+      const modelId = value === UTILITY_NOT_SELECTED_VALUE ? undefined : value;
+      setSettingsZenModel(modelId);
+      try {
+        await updateDesktopSettings({
+          zenModel: modelId ?? '',
+          gitProviderId: '',
+          gitModelId: '',
+        });
+      } catch (error) {
+        console.warn('Failed to save utility model setting:', error);
+      }
+    },
+    [setSettingsZenModel]
+  );
 
   React.useEffect(() => {
     if (!isBrowser) {
@@ -646,6 +748,40 @@ export const NotificationSettings: React.FC = () => {
                     ariaLabel="Summarize last message"
                   />
                   <span className="typography-ui-label text-foreground">Summarize Last Message</span>
+                </div>
+
+                <div className={cn("flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:gap-8")}>
+                  <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="typography-ui-label text-foreground">Summarization Model</span>
+                      <Tooltip delayDuration={1000}>
+                        <TooltipTrigger asChild>
+                          <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8} className="max-w-xs">
+                          Used for notification and voice summaries.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
+                    <Select
+                      value={utilitySelectedModelId || UTILITY_NOT_SELECTED_VALUE}
+                      onValueChange={handleUtilityModelChange}
+                    >
+                      <SelectTrigger className="w-fit min-w-[220px]">
+                        <SelectValue placeholder="Not selected" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={UTILITY_NOT_SELECTED_VALUE}>Not selected</SelectItem>
+                        {utilityModelOptions.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {summarizeLastMessage ? (

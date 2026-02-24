@@ -12,9 +12,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel, cn } from '@/lib/utils';
 
-const UTILITY_PROVIDER_ID = 'zen';
-const UTILITY_PREFERRED_MODEL_ID = 'big-pickle';
-
 const getDisplayModel = (
   storedModel: string | undefined
 ): { providerId: string; modelId: string } => {
@@ -23,45 +20,6 @@ const getDisplayModel = (
     if (parts.length === 2 && parts[0] && parts[1]) {
       return { providerId: parts[0], modelId: parts[1] };
     }
-  }
-
-  return { providerId: '', modelId: '' };
-};
-
-const getUtilityDisplayModel = (
-  storedGitProviderId: string | undefined,
-  storedGitModelId: string | undefined,
-  zenModel: string | undefined,
-  providers: Array<{ id: string; models: Array<{ id: string }> }>
-): { providerId: string; modelId: string } => {
-  if (storedGitProviderId && storedGitModelId) {
-    const provider = providers.find((p) => p.id === storedGitProviderId);
-    if (provider?.models.some((m) => m.id === storedGitModelId)) {
-      return { providerId: storedGitProviderId, modelId: storedGitModelId };
-    }
-  }
-
-  const utilityProvider = providers.find((p) => p.id === UTILITY_PROVIDER_ID);
-  if (zenModel && utilityProvider?.models.some((m) => m.id === zenModel)) {
-    return { providerId: UTILITY_PROVIDER_ID, modelId: zenModel };
-  }
-
-  const preferredUtilityModel = utilityProvider?.models.find((m) => m.id === UTILITY_PREFERRED_MODEL_ID);
-  if (preferredUtilityModel) {
-    return { providerId: UTILITY_PROVIDER_ID, modelId: preferredUtilityModel.id };
-  }
-
-  if (utilityProvider?.models.length) {
-    const randomIndex = Math.floor(Math.random() * utilityProvider.models.length);
-    const randomModel = utilityProvider.models[randomIndex];
-    if (randomModel?.id) {
-      return { providerId: UTILITY_PROVIDER_ID, modelId: randomModel.id };
-    }
-  }
-
-  const firstProvider = providers[0];
-  if (firstProvider?.models[0]) {
-    return { providerId: firstProvider.id, modelId: firstProvider.models[0].id };
   }
 
   return { providerId: '', modelId: '' };
@@ -77,12 +35,6 @@ export const DefaultsSettings: React.FC = () => {
   const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
   const setSettingsAutoCreateWorktree = useConfigStore((state) => state.setSettingsAutoCreateWorktree);
-  const settingsZenModel = useConfigStore((state) => state.settingsZenModel);
-  const setSettingsZenModel = useConfigStore((state) => state.setSettingsZenModel);
-  const settingsGitProviderId = useConfigStore((state) => state.settingsGitProviderId);
-  const settingsGitModelId = useConfigStore((state) => state.settingsGitModelId);
-  const setSettingsGitProviderId = useConfigStore((state) => state.setSettingsGitProviderId);
-  const setSettingsGitModelId = useConfigStore((state) => state.setSettingsGitModelId);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
   const providers = useConfigStore((state) => state.providers);
@@ -93,9 +45,6 @@ export const DefaultsSettings: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(true);
 
   const parsedModel = React.useMemo(() => getDisplayModel(defaultModel), [defaultModel]);
-  const utilityDisplayModel = React.useMemo(() => {
-    return getUtilityDisplayModel(settingsGitProviderId, settingsGitModelId, settingsZenModel, providers);
-  }, [settingsGitProviderId, settingsGitModelId, settingsZenModel, providers]);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   React.useEffect(() => {
@@ -105,9 +54,6 @@ export const DefaultsSettings: React.FC = () => {
           defaultModel?: string;
           defaultVariant?: string;
           defaultAgent?: string;
-          zenModel?: string;
-          gitProviderId?: string;
-          gitModelId?: string;
         } | null = null;
 
         if (!data) {
@@ -124,18 +70,6 @@ export const DefaultsSettings: React.FC = () => {
                       ? ((settings as Record<string, unknown>).defaultVariant as string)
                       : undefined,
                   defaultAgent: typeof settings.defaultAgent === 'string' ? settings.defaultAgent : undefined,
-                  zenModel:
-                    typeof (settings as Record<string, unknown>).zenModel === 'string'
-                      ? ((settings as Record<string, unknown>).zenModel as string)
-                      : undefined,
-                  gitProviderId:
-                    typeof (settings as Record<string, unknown>).gitProviderId === 'string'
-                      ? ((settings as Record<string, unknown>).gitProviderId as string)
-                      : undefined,
-                  gitModelId:
-                    typeof (settings as Record<string, unknown>).gitModelId === 'string'
-                      ? ((settings as Record<string, unknown>).gitModelId as string)
-                      : undefined,
                 };
               }
             } catch {
@@ -167,25 +101,10 @@ export const DefaultsSettings: React.FC = () => {
             typeof data.defaultAgent === 'string' && data.defaultAgent.trim().length > 0
               ? data.defaultAgent.trim()
               : undefined;
-          const zen =
-            typeof data.zenModel === 'string' && data.zenModel.trim().length > 0
-              ? data.zenModel.trim()
-              : undefined;
-          const gitProviderId =
-            typeof data.gitProviderId === 'string' && data.gitProviderId.trim().length > 0
-              ? data.gitProviderId.trim()
-              : undefined;
-          const gitModelId =
-            typeof data.gitModelId === 'string' && data.gitModelId.trim().length > 0
-              ? data.gitModelId.trim()
-              : undefined;
 
           if (model !== undefined) setDefaultModel(model);
           if (variant !== undefined) setDefaultVariant(variant);
           if (agent !== undefined) setDefaultAgent(agent);
-          if (zen !== undefined) setSettingsZenModel(zen);
-          if (gitProviderId !== undefined) setSettingsGitProviderId(gitProviderId);
-          if (gitModelId !== undefined) setSettingsGitModelId(gitModelId);
         }
       } catch (error) {
         console.warn('Failed to load defaults settings:', error);
@@ -194,7 +113,7 @@ export const DefaultsSettings: React.FC = () => {
       }
     };
     loadSettings();
-  }, [setSettingsGitModelId, setSettingsGitProviderId, setSettingsZenModel]);
+  }, []);
 
   const handleModelChange = React.useCallback(
     async (providerId: string, modelId: string) => {
@@ -303,26 +222,6 @@ export const DefaultsSettings: React.FC = () => {
     [setSettingsAutoCreateWorktree]
   );
 
-  const handleUtilityModelChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      setSettingsGitProviderId(providerId);
-      setSettingsGitModelId(modelId);
-      if (providerId === UTILITY_PROVIDER_ID) {
-        setSettingsZenModel(modelId);
-      }
-      try {
-        await updateDesktopSettings({
-          gitProviderId: providerId,
-          gitModelId: modelId,
-          ...(providerId === UTILITY_PROVIDER_ID ? { zenModel: modelId } : {}),
-        });
-      } catch (error) {
-        console.warn('Failed to save utility model setting:', error);
-      }
-    },
-    [setSettingsGitModelId, setSettingsGitProviderId, setSettingsZenModel]
-  );
-
   if (isLoading) {
     return null;
   }
@@ -390,29 +289,6 @@ export const DefaultsSettings: React.FC = () => {
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
             <AgentSelector agentName={defaultAgent || ''} onChange={handleAgentChange} />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:gap-8">
-          <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="typography-ui-label text-foreground">Utility Model</span>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  The model used for lightweight background tasks like commit messages, PR descriptions, and summarization.
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
-            <ModelSelector
-              providerId={utilityDisplayModel.providerId}
-              modelId={utilityDisplayModel.modelId}
-              onChange={handleUtilityModelChange}
-            />
           </div>
         </div>
 

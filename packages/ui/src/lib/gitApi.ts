@@ -116,7 +116,7 @@ export async function generateCommitMessage(
   const generationSession = resolveSessionGenerationContext();
 
   if (!generationSession) {
-    throw new Error('Select an active session for generation');
+    throw new Error('Select existing session for generation');
   }
 
   console.info('[git-generation][browser] request', {
@@ -205,7 +205,7 @@ export async function generatePullRequestDescription(
   const startedAt = Date.now();
   const generationSession = resolveSessionGenerationContext();
   if (!generationSession) {
-    throw new Error('Select an active session for generation');
+    throw new Error('Select existing session for generation');
   }
 
   const commitLog = await getGitLog(directory, {
