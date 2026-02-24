@@ -36,6 +36,108 @@ const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
 const lastContentRegistry = new Map<string, string>();
 const streamingCooldownTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// --- rAF batching for streaming parts ---
+// Buffer incoming streaming parts and flush them in a single requestAnimationFrame
+// callback. This coalesces N SSE tokens per frame into one synchronous flush,
+// which React 18 + Zustand batch into a single re-render.
+interface QueuedStreamingPart {
+    sessionId: string;
+    messageId: string;
+    part: Part;
+    role?: string;
+    currentSessionId?: string;
+}
+const streamingPartQueue: QueuedStreamingPart[] = [];
+let streamingFlushScheduled = false;
+let streamingFlushRafId: number | null = null;
+let streamingFlushTimeoutId: ReturnType<typeof setTimeout> | null = null;
+const STREAMING_FLUSH_TIMEOUT_MS = 50;
+const STREAMING_QUEUE_HARD_LIMIT = 3000;
+
+type StreamingPartImmediateHandler = (
+    sessionId: string,
+    messageId: string,
+    part: Part,
+    role?: string,
+    currentSessionId?: string,
+) => void;
+
+const cancelScheduledStreamingFlush = (): void => {
+    if (streamingFlushRafId !== null) {
+        cancelAnimationFrame(streamingFlushRafId);
+        streamingFlushRafId = null;
+    }
+    if (streamingFlushTimeoutId !== null) {
+        clearTimeout(streamingFlushTimeoutId);
+        streamingFlushTimeoutId = null;
+    }
+    streamingFlushScheduled = false;
+};
+
+const flushQueuedStreamingParts = (immediateHandler: StreamingPartImmediateHandler): void => {
+    if (streamingPartQueue.length === 0) {
+        cancelScheduledStreamingFlush();
+        return;
+    }
+
+    cancelScheduledStreamingFlush();
+
+    const batch = streamingPartQueue.splice(0);
+    if (batch.length === 0) {
+        return;
+    }
+
+    for (const entry of batch) {
+        immediateHandler(entry.sessionId, entry.messageId, entry.part, entry.role, entry.currentSessionId);
+    }
+};
+
+const discardQueuedStreamingPartsForSession = (sessionId: string): void => {
+    if (streamingPartQueue.length === 0) {
+        return;
+    }
+
+    for (let i = streamingPartQueue.length - 1; i >= 0; i--) {
+        if (streamingPartQueue[i].sessionId === sessionId) {
+            streamingPartQueue.splice(i, 1);
+        }
+    }
+
+    if (streamingPartQueue.length === 0) {
+        cancelScheduledStreamingFlush();
+    }
+};
+
+const scheduleStreamingFlush = (flush: () => void): void => {
+    if (streamingFlushScheduled) {
+        return;
+    }
+
+    streamingFlushScheduled = true;
+
+    const shouldUseRaf =
+        typeof requestAnimationFrame === "function" &&
+        (typeof document === "undefined" || !document.hidden);
+
+    if (shouldUseRaf) {
+        streamingFlushRafId = requestAnimationFrame(() => {
+            streamingFlushRafId = null;
+            if (!streamingFlushScheduled) {
+                return;
+            }
+            flush();
+        });
+    }
+
+    streamingFlushTimeoutId = setTimeout(() => {
+        streamingFlushTimeoutId = null;
+        if (!streamingFlushScheduled) {
+            return;
+        }
+        flush();
+    }, STREAMING_FLUSH_TIMEOUT_MS);
+};
+
 const MIN_SORTABLE_LENGTH = 10;
 
 const extractSortableId = (id: unknown): string | null => {
@@ -831,6 +933,8 @@ export const useMessageStore = create<MessageStore>()(
                         return;
                     }
 
+                    discardQueuedStreamingPartsForSession(currentSessionId);
+
                     const stateSnapshot = get();
                     const { abortControllers, messages: storeMessages } = stateSnapshot;
 
@@ -1474,7 +1578,18 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
-                    get()._addStreamingPartImmediate(sessionId, messageId, part, role, currentSessionId);
+                    streamingPartQueue.push({ sessionId, messageId, part, role, currentSessionId });
+
+                    const flushQueuedParts = () => {
+                        flushQueuedStreamingParts(get()._addStreamingPartImmediate);
+                    };
+
+                    if (streamingPartQueue.length >= STREAMING_QUEUE_HARD_LIMIT) {
+                        flushQueuedParts();
+                        return;
+                    }
+
+                    scheduleStreamingFlush(flushQueuedParts);
                 },
 
                 forceCompleteMessage: (sessionId: string | null | undefined, messageId: string, source: "timeout" | "cooldown" = "timeout") => {
@@ -1958,6 +2073,8 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 completeStreamingMessage: (sessionId: string, messageId: string) => {
+                    flushQueuedStreamingParts(get()._addStreamingPartImmediate);
+
                     const state = get();
 
                     (window as any).__messageTracker?.(
