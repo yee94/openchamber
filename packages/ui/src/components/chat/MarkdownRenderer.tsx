@@ -733,10 +733,11 @@ export const SimpleMarkdownRenderer: React.FC<{
   content: string;
   className?: string;
   variant?: MarkdownVariant;
+  disableLinkSafety?: boolean;
   onShowPopup?: (content: ToolPopupContent) => void;
   mermaidControls?: MermaidControlOptions;
   allowMermaidWheelZoom?: boolean;
-}> = ({ content, className, variant = 'assistant', onShowPopup, mermaidControls, allowMermaidWheelZoom = false }) => {
+}> = ({ content, className, variant = 'assistant', disableLinkSafety, onShowPopup, mermaidControls, allowMermaidWheelZoom = false }) => {
   const streamdownContainerRef = React.useRef<HTMLDivElement>(null);
   const mermaidBlocks = React.useMemo(() => extractMermaidBlocks(content), [content]);
   useMermaidInlineInteractions({
@@ -767,6 +768,8 @@ export const SimpleMarkdownRenderer: React.FC<{
         plugins={streamdownPlugins}
         mermaid={mermaidOptions}
         components={streamdownComponents}
+        // @ts-expect-error Streamdown type missing linkSafety in older minor
+        linkSafety={disableLinkSafety ? { enabled: false } : undefined}
       >
         {content}
       </Streamdown>
