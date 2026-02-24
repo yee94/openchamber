@@ -188,6 +188,55 @@ const parseQuestionOutput = (output: string): Array<{ question: string; answer: 
     return pairs.length > 0 ? pairs : null;
 };
 
+const formatStructuredOutputDescription = (input: Record<string, unknown> | undefined, output: unknown, isMobile: boolean): string => {
+    if (typeof output === 'string' && output.trim().length > 0) {
+        const maxLength = isMobile ? 50 : 100;
+        const text = output.trim();
+        return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+    }
+
+    if (!input || typeof input !== 'object') {
+        return 'Result';
+    }
+
+    const rawValue = Object.prototype.hasOwnProperty.call(input, 'result') ? input.result : input;
+
+    const toPreview = (value: unknown): string => {
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        if (Array.isArray(value)) {
+            const joined = value
+                .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+                .join(', ');
+            return joined;
+        }
+        if (value && typeof value === 'object') {
+            const record = value as Record<string, unknown>;
+            if (typeof record.subject === 'string' && record.subject.trim().length > 0) {
+                return record.subject;
+            }
+            if (typeof record.title === 'string' && record.title.trim().length > 0) {
+                return record.title;
+            }
+            return JSON.stringify(value);
+        }
+        return '';
+    };
+
+    const preview = toPreview(rawValue).trim();
+    if (!preview) {
+        return 'Result';
+    }
+
+    const maxLength = isMobile ? 50 : 100;
+    const truncated = preview.length > maxLength ? `${preview.substring(0, maxLength)}...` : preview;
+    return truncated;
+};
+
 const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile: boolean, currentDirectory: string): string => {
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
@@ -195,7 +244,7 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     const tool = part.tool.toLowerCase();
 
     if (tool === 'structuredoutput' || tool === 'structured_output') {
-        return 'Result';
+        return formatStructuredOutputDescription(input, stateWithData.output, isMobile);
     }
 
     if (part.tool === 'apply_patch') {
@@ -1307,6 +1356,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const justificationText = React.useMemo(() => {
         if (!showTextJustificationActivity) return null;
         if (part.tool === 'apply_patch') return null;
+        if (part.tool.toLowerCase() === 'structuredoutput' || part.tool.toLowerCase() === 'structured_output') return null;
         // Get title or description from state - this is the "yapping" text like "Shows system information"
         const title = (stateWithData as { title?: string }).title;
         if (typeof title === 'string' && title.trim().length > 0) {
