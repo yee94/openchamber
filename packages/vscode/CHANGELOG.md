@@ -1,3 +1,8 @@
+## [1.7.5] - 2026-02-25
+
+- Sessions: improved switching performance so moving between chats feels more immediate.
+- Chat: fixed cases where messages could duplicate or disappear during active conversations.
+
 ## [1.7.4] - 2026-02-24
 
 - Settings: redesigned the settings workspace with flatter, more consistent layouts so key options are easier to find.

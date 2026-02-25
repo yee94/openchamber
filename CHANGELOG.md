@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-02-25
+
+- UI: moved projects into a dedicated sidebar rail and tightened the layout so switching projects and sessions feels faster.
+- Chat: fixed an issue where messages could occasionally duplicate or disappear during active conversations.
+- Sessions: reduced session-switching overhead to make chat context changes feel more immediate.
+- Reliability/Auth: migrated session auth storage to signed JWTs with a persistent secret, reducing unexpected auth-state drift after reconnects or reloads (thanks to @Jovines).
+- Mobile: pending permission prompts now recover after reconnect/resume instead of getting lost mid-run (thanks to @nelsonPires5).
+- Mobile/Chat: refined message spacing and removed the top scroll shadow for a cleaner small-screen reading experience (thanks to @Jovines).
+- Web: added `OPENCODE_HOST` support so you can connect directly to an external OpenCode server using a full base URL (thanks to @colinmollenhour).
+- Web/Mobile: fixed in-app update flow in containerized setups so updates apply correctly.
+
+
 ## [1.7.4] - 2026-02-24
 
 - Settings: redesigned the settings workspace with flatter, more consistent page layouts so configuration is faster to scan and edit.
