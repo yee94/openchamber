@@ -21,29 +21,46 @@ const CHANGELOG_URL = 'https://raw.githubusercontent.com/btriapitsyn/openchamber
 export function detectPackageManager() {
   // Strategy 1: Check user agent (most reliable during install)
   const userAgent = process.env.npm_config_user_agent || '';
-  if (userAgent.startsWith('pnpm')) return 'pnpm';
-  if (userAgent.startsWith('yarn')) return 'yarn';
-  if (userAgent.startsWith('bun')) return 'bun';
-  if (userAgent.startsWith('npm')) return 'npm';
+  let hintedPm = null;
+  if (userAgent.startsWith('pnpm')) hintedPm = 'pnpm';
+  else if (userAgent.startsWith('yarn')) hintedPm = 'yarn';
+  else if (userAgent.startsWith('bun')) hintedPm = 'bun';
+  else if (userAgent.startsWith('npm')) hintedPm = 'npm';
 
   // Strategy 2: Check execpath
   const execPath = process.env.npm_execpath || '';
-  if (execPath.includes('pnpm')) return 'pnpm';
-  if (execPath.includes('yarn')) return 'yarn';
-  if (execPath.includes('bun')) return 'bun';
+  if (!hintedPm) {
+    if (execPath.includes('pnpm')) hintedPm = 'pnpm';
+    else if (execPath.includes('yarn')) hintedPm = 'yarn';
+    else if (execPath.includes('bun')) hintedPm = 'bun';
+    else if (execPath.includes('npm')) hintedPm = 'npm';
+  }
 
   // Strategy 3: Analyze package location for PM-specific patterns
-  try {
-    const pkgPath = path.resolve(__dirname, '..', '..');
-    if (pkgPath.includes('.pnpm')) return 'pnpm';
-    if (pkgPath.includes('/.yarn/') || pkgPath.includes('\\.yarn\\')) return 'yarn';
-    if (pkgPath.includes('/.bun/') || pkgPath.includes('\\.bun\\')) return 'bun';
-  } catch {
-    // Ignore path resolution errors
+  if (!hintedPm) {
+    try {
+      const pkgPath = path.resolve(__dirname, '..', '..');
+      if (pkgPath.includes('.pnpm')) hintedPm = 'pnpm';
+      else if (pkgPath.includes('/.yarn/') || pkgPath.includes('\\.yarn\\')) hintedPm = 'yarn';
+      else if (pkgPath.includes('/.bun/') || pkgPath.includes('\\.bun\\')) hintedPm = 'bun';
+    } catch {
+      // Ignore path resolution errors
+    }
+  }
+
+  // Validate the hinted PM actually owns the global install.
+  // This avoids false positives (for example running via bunx while installed with npm).
+  if (hintedPm && isCommandAvailable(hintedPm) && isPackageInstalledWith(hintedPm)) {
+    return hintedPm;
+  }
+
+  if (isCommandAvailable('npm') && isPackageInstalledWith('npm')) {
+    return 'npm';
   }
 
   // Strategy 4: Check which PM binaries are available and preferred
   const pmChecks = [
+    { name: 'npm', check: () => isCommandAvailable('npm') },
     { name: 'pnpm', check: () => isCommandAvailable('pnpm') },
     { name: 'yarn', check: () => isCommandAvailable('yarn') },
     { name: 'bun', check: () => isCommandAvailable('bun') },

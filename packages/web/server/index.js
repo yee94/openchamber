@@ -6255,6 +6255,36 @@ async function main(options = {}) {
 
       const pm = detectPackageManager();
       const updateCmd = getUpdateCommand(pm);
+      const isContainer =
+        fs.existsSync('/.dockerenv') ||
+        Boolean(process.env.CONTAINER) ||
+        process.env.container === 'docker';
+
+      if (isContainer) {
+        res.json({
+          success: true,
+          message: 'Update starting, server will stay online',
+          version: updateInfo.version,
+          packageManager: pm,
+          autoRestart: false,
+        });
+
+        setTimeout(() => {
+          console.log(`\nInstalling update using ${pm} (container mode)...`);
+          console.log(`Running: ${updateCmd}`);
+
+          const shell = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'sh';
+          const shellFlag = process.platform === 'win32' ? '/c' : '-c';
+          const child = spawnChild(shell, [shellFlag, updateCmd], {
+            detached: true,
+            stdio: 'ignore',
+            env: process.env,
+          });
+          child.unref();
+        }, 500);
+
+        return;
+      }
 
       // Get current server port for restart
       const currentPort = server.address()?.port || 3000;
@@ -6292,6 +6322,7 @@ async function main(options = {}) {
         message: 'Update starting, server will restart shortly',
         version: updateInfo.version,
         packageManager: pm,
+        autoRestart: true,
       });
 
       // Give time for response to be sent

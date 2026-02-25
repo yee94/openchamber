@@ -108,7 +108,13 @@ function parseChangelogSections(body: string): ChangelogSection[] {
 }
 
 
-async function installWebUpdate(): Promise<{ success: boolean; error?: string }> {
+type InstallWebUpdateResult = {
+  success: boolean;
+  error?: string;
+  autoRestart?: boolean;
+};
+
+async function installWebUpdate(): Promise<InstallWebUpdateResult> {
   try {
     const response = await fetch('/api/openchamber/update-install', {
       method: 'POST',
@@ -120,21 +126,31 @@ async function installWebUpdate(): Promise<{ success: boolean; error?: string }>
       return { success: false, error: data.error || `Server error: ${response.status}` };
     }
 
-    return { success: true };
+    const data = await response.json().catch(() => ({}));
+    return {
+      success: true,
+      autoRestart: data.autoRestart !== false,
+    };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to install update' };
   }
 }
 
-async function waitForServerRestart(maxAttempts = 30, intervalMs = 2000): Promise<boolean> {
+async function waitForUpdateApplied(maxAttempts = 40, intervalMs = 2000): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const response = await fetch('/health', { method: 'GET' });
+      const response = await fetch('/api/openchamber/update-check', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
       if (response.ok) {
-        return true;
+        const data = await response.json().catch(() => null);
+        if (data && data.available === false) {
+          return true;
+        }
       }
     } catch {
-      // Server not ready yet
+      // Server may be restarting
     }
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
@@ -217,22 +233,20 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
       return;
     }
 
-    // Server will restart, wait for it to come back
-    setWebUpdateState('restarting');
-
-    // Wait a bit for server to shut down
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (result.autoRestart) {
+      setWebUpdateState('restarting');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 
     setWebUpdateState('reconnecting');
 
-    const serverBack = await waitForServerRestart();
+    const applied = await waitForUpdateApplied();
 
-    if (serverBack) {
-      // Reload the page to get the new version
+    if (applied) {
       window.location.reload();
     } else {
       setWebUpdateState('error');
-      setWebError('Server did not restart. Please refresh manually or run: openchamber restart');
+      setWebError('Update did not apply. Refresh and try again, or run: openchamber update');
     }
   }, []);
 
