@@ -530,7 +530,7 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
             modifiers={[restrictToYAxis]}
           >
           <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col items-center gap-3 px-1 py-3">
+          <div className="flex flex-col items-center gap-3 px-1 pt-1 pb-3">
             {projects.map((project) => {
               const isActive = project.id === activeProjectId;
               const indicators = projectIndicators.get(project.id);
