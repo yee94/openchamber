@@ -321,7 +321,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         className={cn(
           'flex items-center gap-1',
           'rounded-lg border border-[var(--interactive-border)]',
-          'bg-[var(--surface-elevated)] shadow-lg',
+          'bg-[var(--surface-elevated)] shadow-none',
           'px-1.5 py-1',
           'transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform]',
           isClosing

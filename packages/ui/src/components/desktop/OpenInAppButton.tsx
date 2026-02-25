@@ -315,7 +315,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
     <div
         className={cn(
           'app-region-no-drag inline-flex h-7 items-center self-center rounded-md border border-[var(--interactive-border)]',
-          'bg-[var(--surface-elevated)] shadow-sm overflow-hidden',
+          'bg-[var(--surface-elevated)] shadow-none overflow-hidden',
           className
         )}
     >

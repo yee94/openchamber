@@ -285,7 +285,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
 
   if (useTwoRowHeader) {
     return (
-      <header className="@container/git-header border-b border-border/40 px-3 py-2 bg-background">
+      <header className={`@container/git-header border-b border-border/40 px-3 py-2 ${isSidebarMode ? 'bg-transparent' : 'bg-background'}`}>
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="min-w-0 flex-1">
             {isWorktreeMode ? (
@@ -320,7 +320,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   }
 
   return (
-    <header className="@container/git-header flex items-center gap-2 border-b border-border/40 px-3 py-2 bg-background">
+    <header className={`@container/git-header flex items-center gap-2 border-b border-border/40 px-3 py-2 ${isSidebarMode ? 'bg-transparent' : 'bg-background'}`}>
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         {isWorktreeMode ? (
           <WorktreeBranchDisplay

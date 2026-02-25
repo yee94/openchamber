@@ -1,4 +1,5 @@
 import React from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button } from '@/components/ui/button';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
@@ -18,7 +19,11 @@ interface ChangesSectionProps {
   onRevertFile: (path: string) => void;
   variant?: 'framed' | 'plain';
   maxListHeightClassName?: string;
+  onVisiblePathsChange?: (paths: string[]) => void;
 }
+
+const CHANGE_LIST_VIRTUALIZE_THRESHOLD = 120;
+const CHANGE_ROW_ESTIMATE_PX = 34;
 
 export const ChangesSection: React.FC<ChangesSectionProps> = ({
   changeEntries,
@@ -32,10 +37,43 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
   onRevertFile,
   variant = 'framed',
   maxListHeightClassName,
+  onVisiblePathsChange,
 }) => {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCount = selectedPaths.size;
   const totalCount = changeEntries.length;
+  const shouldVirtualize = totalCount >= CHANGE_LIST_VIRTUALIZE_THRESHOLD;
+
+  const rowVirtualizer = useVirtualizer({
+    count: totalCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => CHANGE_ROW_ESTIMATE_PX,
+    overscan: 10,
+    enabled: shouldVirtualize,
+  });
+
+  const virtualRows = React.useMemo(
+    () => (shouldVirtualize ? rowVirtualizer.getVirtualItems() : []),
+    [rowVirtualizer, shouldVirtualize],
+  );
+
+  React.useEffect(() => {
+    if (!onVisiblePathsChange) {
+      return;
+    }
+
+    if (totalCount === 0) {
+      onVisiblePathsChange([]);
+      return;
+    }
+
+    if (!shouldVirtualize) {
+      onVisiblePathsChange(changeEntries.slice(0, Math.min(30, totalCount)).map((entry) => entry.path));
+      return;
+    }
+
+    onVisiblePathsChange(virtualRows.map((row) => changeEntries[row.index]?.path).filter((value): value is string => Boolean(value)));
+  }, [changeEntries, onVisiblePathsChange, shouldVirtualize, totalCount, virtualRows]);
 
   const containerClassName =
     variant === 'framed'
@@ -86,20 +124,54 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
           ref={scrollRef}
           className="overlay-scrollbar-target overlay-scrollbar-container flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden"
         >
-          <ul className="divide-y divide-border/60">
-            {changeEntries.map((file) => (
-              <ChangeRow
-                key={file.path}
-                file={file}
-                checked={selectedPaths.has(file.path)}
-                stats={diffStats?.[file.path]}
-                onToggle={() => onToggleFile(file.path)}
-                onViewDiff={() => onViewDiff(file.path)}
-                onRevert={() => onRevertFile(file.path)}
-                isReverting={revertingPaths.has(file.path)}
-              />
-            ))}
-          </ul>
+          {shouldVirtualize ? (
+            <div
+              className="relative w-full divide-y divide-border/60"
+              style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+            >
+              {virtualRows.map((row) => {
+                const file = changeEntries[row.index];
+                if (!file) {
+                  return null;
+                }
+
+                return (
+                  <div
+                    key={file.path}
+                    ref={rowVirtualizer.measureElement}
+                    data-index={row.index}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ transform: `translateY(${row.start}px)` }}
+                  >
+                    <ChangeRow
+                      file={file}
+                      checked={selectedPaths.has(file.path)}
+                      stats={diffStats?.[file.path]}
+                      onToggle={() => onToggleFile(file.path)}
+                      onViewDiff={() => onViewDiff(file.path)}
+                      onRevert={() => onRevertFile(file.path)}
+                      isReverting={revertingPaths.has(file.path)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60" role="list" aria-label="Changed files">
+              {changeEntries.map((file) => (
+                <ChangeRow
+                  key={file.path}
+                  file={file}
+                  checked={selectedPaths.has(file.path)}
+                  stats={diffStats?.[file.path]}
+                  onToggle={() => onToggleFile(file.path)}
+                  onViewDiff={() => onViewDiff(file.path)}
+                  onRevert={() => onRevertFile(file.path)}
+                  isReverting={revertingPaths.has(file.path)}
+                />
+              ))}
+            </div>
+          )}
         </ScrollShadow>
         <OverlayScrollbar containerRef={scrollRef} disableHorizontal />
       </div>

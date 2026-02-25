@@ -176,8 +176,8 @@ export const ChatContainer: React.FC = () => {
     const [turnStart, setTurnStart] = React.useState(0);
     const turnHandleRef = React.useRef<number | null>(null);
     const turnIdleRef = React.useRef(false);
-    const TURN_INIT = 20;
-    const TURN_BATCH = 20;
+    const TURN_INIT = 5;
+    const TURN_BATCH = 8;
 
     const userTurnIndexes = React.useMemo(() => {
         const indexes: number[] = [];
@@ -304,7 +304,7 @@ export const ChatContainer: React.FC = () => {
 
     const hasMoreAbove = React.useMemo(() => {
         if (!memoryState) {
-            return false;
+            return sessionMessages.length >= getMemoryLimits().HISTORICAL_MESSAGES;
         }
         if (memoryState.historyComplete === true) {
             return false;
@@ -323,6 +323,13 @@ export const ChatContainer: React.FC = () => {
 
         return false;
     }, [memoryState, sessionMessages.length]);
+
+    const hasHistoryMetadata = React.useMemo(() => {
+        if (!memoryState) {
+            return false;
+        }
+        return memoryState.hasMoreAbove !== undefined || memoryState.historyComplete !== undefined;
+    }, [memoryState]);
     const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
     React.useEffect(() => {
         setIsLoadingOlder(false);
@@ -384,7 +391,7 @@ export const ChatContainer: React.FC = () => {
         }
 
         const hasSessionMessages = hasSessionMessagesEntry;
-        if (hasSessionMessages) {
+        if (hasSessionMessages && hasHistoryMetadata) {
             return;
         }
 
@@ -410,7 +417,7 @@ export const ChatContainer: React.FC = () => {
         };
 
         void load();
-    }, [currentSessionId, hasSessionMessagesEntry, isPinned, loadMessages, scrollToBottom, sessionMessages.length, sessionStatusForCurrent.type]);
+    }, [currentSessionId, hasHistoryMetadata, hasSessionMessagesEntry, isPinned, loadMessages, scrollToBottom, sessionMessages.length, sessionStatusForCurrent.type]);
 
     if (!currentSessionId && !draftOpen) {
         return (

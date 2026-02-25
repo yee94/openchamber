@@ -303,7 +303,7 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
         {copied ? <RiCheckLine className="size-3.5" /> : <RiFileCopyLine className="size-3.5" />}
       </button>
       {showMenu && (
-        <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-lg">
+        <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-none">
           <button
             className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleCopy('csv')}
@@ -364,7 +364,7 @@ const TableDownloadButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement |
         <RiDownloadLine className="size-3.5" />
       </button>
       {showMenu && (
-        <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-lg">
+        <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-none">
           <button
             className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleDownload('csv')}

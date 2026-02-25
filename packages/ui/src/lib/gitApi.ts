@@ -128,7 +128,6 @@ export async function generateCommitMessage(
     providerId: generationSession.providerID,
     modelId: generationSession.modelID,
     agent: generationSession.agent,
-    variant: generationSession.variant,
   });
 
   const prompt = `You are generating a Conventional Commits subject line using session context and selected file paths.
@@ -251,7 +250,6 @@ export async function generatePullRequestDescription(
     providerId: generationSession.providerID,
     modelId: generationSession.modelID,
     agent: generationSession.agent,
-    variant: generationSession.variant,
     base: payload.base,
     head: payload.head,
     commits: commits.length,
@@ -324,7 +322,6 @@ type SessionGenerationContext = {
   providerID: string;
   modelID: string;
   agent?: string;
-  variant?: string;
 };
 
 const resolveSessionGenerationContext = (): SessionGenerationContext | null => {
@@ -347,16 +344,11 @@ const resolveSessionGenerationContext = (): SessionGenerationContext | null => {
     return null;
   }
 
-  const variant = agent
-    ? context.getAgentModelVariantForSession(sessionId, agent, selectedModel.providerId, selectedModel.modelId)
-    : (config.currentVariant || undefined);
-
   return {
     sessionId,
     providerID: selectedModel.providerId,
     modelID: selectedModel.modelId,
     agent,
-    variant,
   };
 };
 
@@ -381,7 +373,6 @@ const runStructuredGenerationInActiveSession = async ({
     providerID: generationSession.providerID,
     modelID: generationSession.modelID,
     agent: generationSession.agent,
-    variant: generationSession.variant,
   });
   const trimmedDirectory = typeof directory === 'string' ? directory.trim() : '';
   const firstNewlineIndex = prompt.indexOf('\n');
@@ -407,7 +398,6 @@ const runStructuredGenerationInActiveSession = async ({
         modelID: generationSession.modelID,
       },
       ...(generationSession.agent ? { agent: generationSession.agent } : {}),
-      ...(generationSession.variant ? { variant: generationSession.variant } : {}),
       format: {
         type: 'json_schema',
         schema,

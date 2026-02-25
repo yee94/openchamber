@@ -96,14 +96,13 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
   );
 
   return (
-    <li>
-      <div
-        className="group flex items-center gap-2 px-3 py-1.5 hover:bg-sidebar/40 cursor-pointer"
-        role="button"
-        tabIndex={0}
-        onClick={onViewDiff}
-        onKeyDown={handleKeyDown}
-      >
+    <div
+      className="group flex items-center gap-2 px-3 py-1.5 hover:bg-sidebar/40 cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={onViewDiff}
+      onKeyDown={handleKeyDown}
+    >
         <button
           type="button"
           onClick={handleToggleClick}
@@ -175,7 +174,6 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
           </TooltipTrigger>
           <TooltipContent sideOffset={8}>Revert changes</TooltipContent>
         </Tooltip>
-      </div>
-    </li>
+    </div>
   );
 });

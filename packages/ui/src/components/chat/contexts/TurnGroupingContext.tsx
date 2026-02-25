@@ -510,6 +510,26 @@ const getMessageRole = (message: ChatMessageEntry): string => {
     return typeof role === 'string' ? role : '';
 };
 
+const hasSameTurnStructure = (prev: ChatMessageEntry[], next: ChatMessageEntry[]): boolean => {
+    if (prev === next) {
+        return true;
+    }
+    if (prev.length !== next.length) {
+        return false;
+    }
+
+    for (let index = 0; index < prev.length; index += 1) {
+        if (prev[index]?.info?.id !== next[index]?.info?.id) {
+            return false;
+        }
+        if (getMessageRole(prev[index]) !== getMessageRole(next[index])) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
 const getStructureKey = (messages: ChatMessageEntry[]): string => {
     if (messages.length === 0) return '';
     return messages
@@ -517,13 +537,116 @@ const getStructureKey = (messages: ChatMessageEntry[]): string => {
         .join('|');
 };
 
+const isAppendOnlyChange = (prev: ChatMessageEntry[], next: ChatMessageEntry[]): boolean => {
+    if (prev.length > next.length) {
+        return false;
+    }
+
+    for (let index = 0; index < prev.length; index += 1) {
+        if (prev[index]?.info?.id !== next[index]?.info?.id) {
+            return false;
+        }
+        if (getMessageRole(prev[index]) !== getMessageRole(next[index])) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
+const appendTurnsIncremental = (prevTurns: Turn[], appendedMessages: ChatMessageEntry[]): Turn[] => {
+    if (appendedMessages.length === 0) {
+        return prevTurns;
+    }
+
+    const nextTurns = prevTurns.length > 0
+        ? [
+            ...prevTurns.slice(0, -1),
+            {
+                ...prevTurns[prevTurns.length - 1],
+                assistantMessages: [...prevTurns[prevTurns.length - 1].assistantMessages],
+            },
+        ]
+        : [];
+
+    let currentTurn = nextTurns.length > 0 ? nextTurns[nextTurns.length - 1] : null;
+
+    appendedMessages.forEach((message) => {
+        const role = getMessageRole(message);
+        if (role === 'user') {
+            currentTurn = {
+                turnId: message.info.id,
+                userMessage: message,
+                assistantMessages: [],
+            };
+            nextTurns.push(currentTurn);
+            return;
+        }
+
+        if (role === 'assistant' && currentTurn) {
+            currentTurn.assistantMessages.push(message);
+        }
+    });
+
+    return nextTurns;
+};
+
+const appendNeighborsIncremental = (
+    prevNeighbors: Map<string, NeighborInfo>,
+    prevMessages: ChatMessageEntry[],
+    nextMessages: ChatMessageEntry[],
+): Map<string, NeighborInfo> => {
+    if (nextMessages.length <= prevMessages.length) {
+        return prevNeighbors;
+    }
+
+    const appended = nextMessages.slice(prevMessages.length);
+    if (appended.length === 0) {
+        return prevNeighbors;
+    }
+
+    const nextNeighbors = new Map(prevNeighbors);
+    const previousTail = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
+    if (previousTail) {
+        nextNeighbors.set(previousTail.info.id, {
+            previousMessage: prevMessages.length > 1 ? prevMessages[prevMessages.length - 2] : undefined,
+            nextMessage: appended[0],
+        });
+    }
+
+    appended.forEach((message, index) => {
+        const previousMessage = index === 0 ? previousTail : appended[index - 1];
+        const nextMessage = index < appended.length - 1 ? appended[index + 1] : undefined;
+        nextNeighbors.set(message.info.id, {
+            previousMessage,
+            nextMessage,
+        });
+    });
+
+    return nextNeighbors;
+};
+
 export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ messages, children }) => {
     const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
     const toolCallExpansion = useUIStore((state) => state.toolCallExpansion);
     const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
     const defaultActivityExpanded = toolCallExpansion === 'activity' || toolCallExpansion === 'detailed';
-    const structureKey = React.useMemo(() => getStructureKey(messages), [messages]);
+    const structureKeyCacheRef = React.useRef<{ messages: ChatMessageEntry[]; key: string } | null>(null);
+    const structureKey = React.useMemo(() => {
+        const cached = structureKeyCacheRef.current;
+        if (cached && hasSameTurnStructure(cached.messages, messages)) {
+            return cached.key;
+        }
+
+        const key = getStructureKey(messages);
+        structureKeyCacheRef.current = {
+            messages,
+            key,
+        };
+        return key;
+    }, [messages]);
     const staticCacheRef = React.useRef<{
+        messages: ChatMessageEntry[];
         structureKey: string;
         defaultActivityExpanded: boolean;
         showTextJustificationActivity: boolean;
@@ -540,6 +663,76 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
             cached.showTextJustificationActivity === showTextJustificationActivity
         ) {
             return cached.value;
+        }
+
+        if (
+            cached &&
+            cached.defaultActivityExpanded === defaultActivityExpanded &&
+            cached.showTextJustificationActivity === showTextJustificationActivity &&
+            isAppendOnlyChange(cached.messages, messages)
+        ) {
+            const appendedMessages = messages.slice(cached.messages.length);
+            const turns = appendTurnsIncremental(cached.value.turns, appendedMessages);
+            const lastTurnId = turns.length > 0 ? turns[turns.length - 1]!.turnId : null;
+
+            const messageToTurn = new Map(cached.value.messageToTurn);
+            let currentTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+            appendedMessages.forEach((message) => {
+                const role = getMessageRole(message);
+                if (role === 'user') {
+                    currentTurn = turns.find((turn) => turn.turnId === message.info.id) ?? null;
+                    if (currentTurn) {
+                        messageToTurn.set(message.info.id, currentTurn);
+                    }
+                    return;
+                }
+                if (role === 'assistant' && currentTurn) {
+                    messageToTurn.set(message.info.id, currentTurn);
+                }
+            });
+
+            const turnActivityInfo = new Map(cached.value.turnActivityInfo);
+            const previousLastTurnId = cached.value.lastTurnId;
+            if (previousLastTurnId && previousLastTurnId !== lastTurnId) {
+                const finalizedTurn = turns.find((turn) => turn.turnId === previousLastTurnId);
+                if (finalizedTurn) {
+                    turnActivityInfo.set(previousLastTurnId, getTurnActivityInfo(finalizedTurn, showTextJustificationActivity));
+                }
+            }
+            if (lastTurnId) {
+                turnActivityInfo.delete(lastTurnId);
+            }
+
+            const messageNeighbors = appendNeighborsIncremental(cached.value.messageNeighbors, cached.messages, messages);
+
+            const lastTurnMessageIds = new Set<string>();
+            if (turns.length > 0) {
+                const lastTurn = turns[turns.length - 1]!;
+                lastTurnMessageIds.add(lastTurn.userMessage.info.id);
+                lastTurn.assistantMessages.forEach((msg) => {
+                    lastTurnMessageIds.add(msg.info.id);
+                });
+            }
+
+            const value: TurnGroupingStaticData = {
+                turns,
+                messageToTurn,
+                turnActivityInfo,
+                lastTurnId,
+                lastTurnMessageIds,
+                defaultActivityExpanded,
+                messageNeighbors,
+            };
+
+            staticCacheRef.current = {
+                messages,
+                structureKey,
+                defaultActivityExpanded,
+                showTextJustificationActivity,
+                value,
+            };
+
+            return value;
         }
 
         const turns = detectTurns(messages);
@@ -582,6 +775,7 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
         };
 
         staticCacheRef.current = {
+            messages,
             structureKey,
             defaultActivityExpanded,
             showTextJustificationActivity,
@@ -601,12 +795,29 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
         if (!lastTurn) return undefined;
         // Re-slice assistant messages from the live `messages` array so that
         // streamed part updates are reflected without re-detecting all turns.
-        const userIdx = messages.findIndex((m) => m.info.id === lastTurn.userMessage.info.id);
-        if (userIdx < 0) return getTurnActivityInfo(lastTurn, showTextJustificationActivity);
-        const liveAssistant = messages.slice(userIdx + 1).filter((m) => {
-            const role = (m.info as { clientRole?: string | null }).clientRole ?? m.info.role;
-            return role === 'assistant';
-        });
+        const lastTurnUserId = lastTurn.userMessage.info.id;
+        const liveAssistant: ChatMessageEntry[] = [];
+        for (let index = messages.length - 1; index >= 0; index -= 1) {
+            const candidate = messages[index];
+            if (!candidate) {
+                continue;
+            }
+
+            if (candidate.info.id === lastTurnUserId) {
+                break;
+            }
+
+            const role = (candidate.info as { clientRole?: string | null }).clientRole ?? candidate.info.role;
+            if (role === 'assistant') {
+                liveAssistant.push(candidate);
+            }
+        }
+
+        if (liveAssistant.length === 0 && messages.every((message) => message.info.id !== lastTurnUserId)) {
+            return getTurnActivityInfo(lastTurn, showTextJustificationActivity);
+        }
+
+        liveAssistant.reverse();
         const liveTurn: Turn = { ...lastTurn, assistantMessages: liveAssistant };
         return getTurnActivityInfo(liveTurn, showTextJustificationActivity);
     }, [staticValue, messages, showTextJustificationActivity]);

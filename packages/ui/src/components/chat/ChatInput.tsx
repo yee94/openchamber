@@ -1820,7 +1820,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
     const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
 
-    const iconButtonBaseClass = 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0';
+    const iconButtonBaseClass = 'flex items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0';
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
 
     // Send button - respects queue mode setting
@@ -1981,8 +1981,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     type="button"
                     className={cn(
                         footerIconButtonClass,
-                        'rounded-md text-muted-foreground',
-                        'hover:bg-interactive-hover/40 hover:text-foreground'
+                        'rounded-md',
+                        'hover:bg-interactive-hover/40'
                     )}
                     onPointerDownCapture={(event) => {
                         if (event.pointerType === 'touch') {
@@ -2288,7 +2288,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                                     'rounded-md',
                                                     isExpandedInput
                                                         ? 'text-primary'
-                                                        : 'text-muted-foreground hover:bg-[var(--interactive-hover)]/40 hover:text-foreground'
+                                                        : 'text-foreground hover:bg-[var(--interactive-hover)]/40'
                                                 )}
                                                 onMouseDown={(event) => {
                                                     event.preventDefault();

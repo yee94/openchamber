@@ -185,7 +185,7 @@ export const HelpDialog: React.FC = () => {
         },
         {
           keys: [`${mod} + 1...9`],
-          description: "Switch Project or Main Tab",
+          description: "Switch Project",
           icon: RiLayoutLeftLine,
         },
         {

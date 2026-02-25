@@ -77,6 +77,81 @@ const readSessionSelectionMap = (): SessionSelectionMap => {
 };
 
 let sessionSelectionCache: SessionSelectionMap | null = null;
+let loadSessionsRequestSeq = 0;
+
+type ProjectSessionResult = {
+    projectId: string;
+    projectPath: string | null;
+    sessions: Session[];
+    discoveredWorktrees: WorktreeMetadata[];
+    validPaths: Set<string>;
+};
+
+type ProjectSessionCacheEntry = {
+    cachedAt: number;
+    result: ProjectSessionResult;
+};
+
+type ProjectRepoCacheEntry = {
+    cachedAt: number;
+    isGitRepo: boolean;
+};
+
+const PROJECT_SESSION_CACHE_TTL_MS = 30_000;
+const PROJECT_REPO_STATUS_CACHE_TTL_MS = 120_000;
+const projectSessionCache = new Map<string, ProjectSessionCacheEntry>();
+const projectRepoStatusCache = new Map<string, ProjectRepoCacheEntry>();
+
+const getFreshProjectSessionCache = (projectPath: string): ProjectSessionResult | null => {
+    const key = normalizePath(projectPath) ?? projectPath;
+    const cached = projectSessionCache.get(key);
+    if (!cached) {
+        return null;
+    }
+    if (Date.now() - cached.cachedAt > PROJECT_SESSION_CACHE_TTL_MS) {
+        projectSessionCache.delete(key);
+        return null;
+    }
+    return cached.result;
+};
+
+const setProjectSessionCache = (projectPath: string, result: ProjectSessionResult) => {
+    const key = normalizePath(projectPath) ?? projectPath;
+    projectSessionCache.set(key, { cachedAt: Date.now(), result });
+};
+
+const pruneProjectCaches = (validProjectPaths: Iterable<string>) => {
+    const valid = new Set<string>();
+    for (const path of validProjectPaths) {
+        const normalized = normalizePath(path) ?? path;
+        if (normalized) {
+            valid.add(normalized);
+        }
+    }
+
+    for (const key of projectSessionCache.keys()) {
+        if (!valid.has(key)) {
+            projectSessionCache.delete(key);
+        }
+    }
+    for (const key of projectRepoStatusCache.keys()) {
+        if (!valid.has(key)) {
+            projectRepoStatusCache.delete(key);
+        }
+    }
+};
+
+const getProjectRepoStatus = async (projectPath: string): Promise<boolean> => {
+    const key = normalizePath(projectPath) ?? projectPath;
+    const cached = projectRepoStatusCache.get(key);
+    if (cached && Date.now() - cached.cachedAt <= PROJECT_REPO_STATUS_CACHE_TTL_MS) {
+        return cached.isGitRepo;
+    }
+
+    const isGitRepo = await checkIsGitRepository(key).catch(() => false);
+    projectRepoStatusCache.set(key, { cachedAt: Date.now(), isGitRepo });
+    return isGitRepo;
+};
 
 const getSessionSelectionMap = (): SessionSelectionMap => {
     if (!sessionSelectionCache) {
@@ -262,7 +337,8 @@ const getSessionDirectory = (sessions: Session[], sessionId: string): string | n
 const hydrateSessionWorktreeMetadata = async (
     sessions: Session[],
     projectDirectory: string | null,
-    existingMetadata: Map<string, WorktreeMetadata>
+    existingMetadata: Map<string, WorktreeMetadata>,
+    preloadedWorktrees?: WorktreeMetadata[]
 ): Promise<Map<string, WorktreeMetadata> | null> => {
     const normalizedProject = normalizePath(projectDirectory);
     if (!normalizedProject || sessions.length === 0) {
@@ -278,11 +354,15 @@ const hydrateSessionWorktreeMetadata = async (
     }
 
     let worktreeEntries: WorktreeMetadata[];
-    try {
-        worktreeEntries = await listProjectWorktrees({ id: `path:${normalizedProject}`, path: normalizedProject });
-    } catch (error) {
-        console.debug("Failed to hydrate worktree metadata from worktree list:", error);
-        return null;
+    if (Array.isArray(preloadedWorktrees)) {
+        worktreeEntries = preloadedWorktrees;
+    } else {
+        try {
+            worktreeEntries = await listProjectWorktrees({ id: `path:${normalizedProject}`, path: normalizedProject });
+        } catch (error) {
+            console.debug("Failed to hydrate worktree metadata from worktree list:", error);
+            return null;
+        }
     }
 
     if (!Array.isArray(worktreeEntries) || worktreeEntries.length === 0) {
@@ -377,6 +457,8 @@ export const useSessionStore = create<SessionStore>()(
                 availableWorktreesByProject: new Map(),
 
                 loadSessions: async () => {
+                    const requestSeq = ++loadSessionsRequestSeq;
+                    const isLatestRequest = () => requestSeq === loadSessionsRequestSeq;
                     set({ isLoading: true, error: null });
                     try {
                         const directoryStore = useDirectoryStore.getState();
@@ -548,15 +630,148 @@ export const useSessionStore = create<SessionStore>()(
                             ? projectsStore.projects
                             : (legacyRoot ? [{ id: 'legacy', path: legacyRoot }] : []);
 
-                        type ProjectSessionResult = {
-                            projectId: string;
-                            projectPath: string | null;
-                            sessions: Session[];
-                            discoveredWorktrees: WorktreeMetadata[];
-                            validPaths: Set<string>;
+                        const applyProjectResults = async (projectResults: ProjectSessionResult[]) => {
+                            const sessionsByDirectory = new Map<string, Session[]>();
+                            projectResults.forEach((result) => {
+                                if (!result.projectPath) {
+                                    return;
+                                }
+
+                                result.validPaths.forEach((directory) => {
+                                    const directoryKey = normalizePath(directory) ?? directory;
+                                    const directorySessions = result.sessions.filter((session) => {
+                                        const dir = normalizePath((session as { directory?: string | null }).directory ?? null) ?? directoryKey;
+                                        return dir === directoryKey;
+                                    });
+                                    sessionsByDirectory.set(directoryKey, dedupeSessionsById(directorySessions));
+                                });
+                            });
+
+                            const mergedSessions: Session[] = dedupeSessionsById(Array.from(sessionsByDirectory.values()).flat());
+                            const stateSnapshot = get();
+
+                            let nextWorktreeMetadata = stateSnapshot.worktreeMetadata;
+                            for (const result of projectResults) {
+                                if (!result.projectPath) {
+                                    continue;
+                                }
+                                try {
+                                    const hydratedMetadata = await hydrateSessionWorktreeMetadata(
+                                        result.sessions,
+                                        result.projectPath,
+                                        nextWorktreeMetadata,
+                                        result.discoveredWorktrees
+                                    );
+                                    if (hydratedMetadata) {
+                                        nextWorktreeMetadata = hydratedMetadata;
+                                    }
+                                } catch (metadataError) {
+                                    console.debug("Failed to refresh worktree metadata during session load:", metadataError);
+                                }
+                            }
+
+                            const worktreesByProject = new Map<string, WorktreeMetadata[]>();
+                            projectResults.forEach((result) => {
+                                if (result.projectPath) {
+                                    worktreesByProject.set(result.projectPath, result.discoveredWorktrees);
+                                }
+                            });
+
+                            const allValidPaths = new Set<string>();
+                            projectResults.forEach((result) => {
+                                result.validPaths.forEach((value) => {
+                                    const key = normalizePath(value) ?? value;
+                                    if (key) {
+                                        allValidPaths.add(key);
+                                    }
+                                });
+                            });
+
+                            const activeDirectoryCandidate = normalizedFallback ?? activeProjectRoot ?? null;
+                            const activeDirectory = activeDirectoryCandidate && allValidPaths.has(activeDirectoryCandidate)
+                                ? activeDirectoryCandidate
+                                : (activeProjectRoot ?? activeDirectoryCandidate);
+
+                            const activeDirectorySessions = activeDirectory
+                                ? sessionsByDirectory.get(activeDirectory) ?? []
+                                : mergedSessions;
+
+                            const validSessionIds = new Set(mergedSessions.map((session) => session.id));
+
+                            // Keep directory-scoped stored selections tidy.
+                            for (const [directoryKey, directorySessions] of sessionsByDirectory.entries()) {
+                                clearInvalidSessionSelection(directoryKey, directorySessions.map((session) => session.id));
+                            }
+
+                            const directoryChanged = (activeDirectory ?? null) !== (stateSnapshot.lastLoadedDirectory ?? null);
+
+                            let nextCurrentId = stateSnapshot.currentSessionId;
+                            const currentSessionInActiveDirectory = Boolean(
+                                nextCurrentId && activeDirectorySessions.some((session) => session.id === nextCurrentId)
+                            );
+                            if (!nextCurrentId || !validSessionIds.has(nextCurrentId) || (directoryChanged && !currentSessionInActiveDirectory)) {
+                                nextCurrentId = activeDirectorySessions[0]?.id ?? mergedSessions[0]?.id ?? null;
+                            }
+
+                            if (activeDirectory) {
+                                const storedSelection = getStoredSessionForDirectory(activeDirectory);
+                                if (storedSelection && validSessionIds.has(storedSelection)) {
+                                    nextCurrentId = storedSelection;
+                                }
+                            }
+
+                            const resolvedDirectoryForCurrent = (() => {
+                                if (!nextCurrentId) {
+                                    return activeDirectory ?? null;
+                                }
+                                const metadataPath = nextWorktreeMetadata.get(nextCurrentId)?.path;
+                                if (metadataPath) {
+                                    return normalizePath(metadataPath) ?? metadataPath;
+                                }
+                                const sessionDir = getSessionDirectory(mergedSessions, nextCurrentId);
+                                if (sessionDir) {
+                                    return sessionDir;
+                                }
+                                return activeDirectory ?? null;
+                            })();
+
+                            if (!isLatestRequest()) {
+                                return;
+                            }
+
+                            try {
+                                opencodeClient.setDirectory(resolvedDirectoryForCurrent ?? undefined);
+                            } catch (error) {
+                                console.warn("Failed to sync OpenCode directory after session load:", error);
+                            }
+
+                            const activeWorktrees = activeProjectRoot
+                                ? projectResults.find((result) => result.projectPath === activeProjectRoot)?.discoveredWorktrees ?? []
+                                : [];
+
+                            set({
+                                sessions: mergedSessions,
+                                sessionsByDirectory,
+                                currentSessionId: nextCurrentId,
+                                lastLoadedDirectory: activeDirectory ?? null,
+                                isLoading: false,
+                                worktreeMetadata: nextWorktreeMetadata,
+                                availableWorktrees: activeWorktrees,
+                                availableWorktreesByProject: worktreesByProject,
+                            });
+
+                            if (activeDirectory) {
+                                storeSessionForDirectory(activeDirectory, nextCurrentId);
+                            }
+                            if (resolvedDirectoryForCurrent && resolvedDirectoryForCurrent !== activeDirectory) {
+                                storeSessionForDirectory(resolvedDirectoryForCurrent, nextCurrentId);
+                            }
                         };
 
                         if (projectEntries.length === 0) {
+                            if (!isLatestRequest()) {
+                                return;
+                            }
                             set({
                                 sessions: [],
                                 sessionsByDirectory: new Map(),
@@ -568,6 +783,29 @@ export const useSessionStore = create<SessionStore>()(
                                 availableWorktreesByProject: new Map(),
                             });
                             return;
+                        }
+
+                        pruneProjectCaches(projectEntries.map((entry) => entry.path));
+
+                        const activeProjectId = projectsStore.activeProjectId;
+                        const cachedProjectResults: ProjectSessionResult[] = [];
+                        projectEntries.forEach((project) => {
+                            const normalizedProject = normalizePath(project.path);
+                            if (!normalizedProject) {
+                                return;
+                            }
+                            const cached = getFreshProjectSessionCache(normalizedProject);
+                            if (cached) {
+                                cachedProjectResults.push(cached);
+                            }
+                        });
+
+                        const hasCachedActiveProject = cachedProjectResults.some(
+                            (result) => result.projectId === activeProjectId
+                        );
+
+                        if (hasCachedActiveProject && isLatestRequest()) {
+                            await applyProjectResults(cachedProjectResults);
                         }
 
                         const projectResults: ProjectSessionResult[] = await Promise.all(
@@ -583,7 +821,13 @@ export const useSessionStore = create<SessionStore>()(
                                     };
                                 }
 
-                                const isGitRepo = await checkIsGitRepository(normalizedProject).catch(() => false);
+                                const cached = getFreshProjectSessionCache(normalizedProject);
+                                const isActiveProject = project.id === activeProjectId;
+                                if (cached && !isActiveProject) {
+                                    return cached;
+                                }
+
+                                const isGitRepo = await getProjectRepoStatus(normalizedProject);
                                 const parentSessions = await fetchSessionsForDirectory(normalizedProject || null);
                                 vscodeDebugLog("projectSessions", {
                                     projectId: project.id,
@@ -634,144 +878,23 @@ export const useSessionStore = create<SessionStore>()(
 
                                 const mergedSessions = dedupeSessionsById([...parentSessions, ...subdirectorySessions]);
 
-                                return {
+                                const result: ProjectSessionResult = {
                                     projectId: project.id,
                                     projectPath: normalizedProject,
                                     sessions: mergedSessions,
                                     discoveredWorktrees,
                                     validPaths,
                                 };
+
+                                setProjectSessionCache(normalizedProject, result);
+                                return result;
                             })
                         );
-
-                        const sessionsByDirectory = new Map<string, Session[]>();
-                        projectResults.forEach((result) => {
-                            if (!result.projectPath) {
-                                return;
-                            }
-
-                            result.validPaths.forEach((directory) => {
-                                const directoryKey = normalizePath(directory) ?? directory;
-                                const directorySessions = result.sessions.filter((session) => {
-                                    const dir = normalizePath((session as { directory?: string | null }).directory ?? null) ?? directoryKey;
-                                    return dir === directoryKey;
-                                });
-                                sessionsByDirectory.set(directoryKey, dedupeSessionsById(directorySessions));
-                            });
-                        });
-
-                        const mergedSessions: Session[] = dedupeSessionsById(Array.from(sessionsByDirectory.values()).flat());
-                        const stateSnapshot = get();
-
-                        let nextWorktreeMetadata = stateSnapshot.worktreeMetadata;
-                        for (const result of projectResults) {
-                            if (!result.projectPath) {
-                                continue;
-                            }
-                            try {
-                                const hydratedMetadata = await hydrateSessionWorktreeMetadata(
-                                    result.sessions,
-                                    result.projectPath,
-                                    nextWorktreeMetadata
-                                );
-                                if (hydratedMetadata) {
-                                    nextWorktreeMetadata = hydratedMetadata;
-                                }
-                            } catch (metadataError) {
-                                console.debug("Failed to refresh worktree metadata during session load:", metadataError);
-                            }
-                        }
-
-                        const worktreesByProject = new Map<string, WorktreeMetadata[]>();
-                        projectResults.forEach((result) => {
-                            if (result.projectPath) {
-                                worktreesByProject.set(result.projectPath, result.discoveredWorktrees);
-                            }
-                        });
-
-                        const allValidPaths = new Set<string>();
-                        projectResults.forEach((result) => {
-                            result.validPaths.forEach((value) => {
-                                const key = normalizePath(value) ?? value;
-                                if (key) {
-                                    allValidPaths.add(key);
-                                }
-                            });
-                        });
-
-                        const activeDirectoryCandidate = normalizedFallback ?? activeProjectRoot ?? null;
-                        const activeDirectory = activeDirectoryCandidate && allValidPaths.has(activeDirectoryCandidate)
-                            ? activeDirectoryCandidate
-                            : (activeProjectRoot ?? activeDirectoryCandidate);
-
-                        const activeDirectorySessions = activeDirectory
-                            ? sessionsByDirectory.get(activeDirectory) ?? []
-                            : mergedSessions;
-
-                        const validSessionIds = new Set(mergedSessions.map((session) => session.id));
-
-                        // Keep directory-scoped stored selections tidy.
-                        for (const [directoryKey, directorySessions] of sessionsByDirectory.entries()) {
-                            clearInvalidSessionSelection(directoryKey, directorySessions.map((session) => session.id));
-                        }
-
-                        const directoryChanged = (activeDirectory ?? null) !== (stateSnapshot.lastLoadedDirectory ?? null);
-
-                        let nextCurrentId = stateSnapshot.currentSessionId;
-                        if (!nextCurrentId || !validSessionIds.has(nextCurrentId) || directoryChanged) {
-                            nextCurrentId = activeDirectorySessions[0]?.id ?? mergedSessions[0]?.id ?? null;
-                        }
-
-                        if (activeDirectory) {
-                            const storedSelection = getStoredSessionForDirectory(activeDirectory);
-                            if (storedSelection && validSessionIds.has(storedSelection)) {
-                                nextCurrentId = storedSelection;
-                            }
-                        }
-
-                        const resolvedDirectoryForCurrent = (() => {
-                            if (!nextCurrentId) {
-                                return activeDirectory ?? null;
-                            }
-                            const metadataPath = nextWorktreeMetadata.get(nextCurrentId)?.path;
-                            if (metadataPath) {
-                                return normalizePath(metadataPath) ?? metadataPath;
-                            }
-                            const sessionDir = getSessionDirectory(mergedSessions, nextCurrentId);
-                            if (sessionDir) {
-                                return sessionDir;
-                            }
-                            return activeDirectory ?? null;
-                        })();
-
-                        try {
-                            opencodeClient.setDirectory(resolvedDirectoryForCurrent ?? undefined);
-                        } catch (error) {
-                            console.warn("Failed to sync OpenCode directory after session load:", error);
-                        }
-
-                        const activeWorktrees = activeProjectRoot
-                            ? projectResults.find((result) => result.projectPath === activeProjectRoot)?.discoveredWorktrees ?? []
-                            : [];
-
-                        set({
-                            sessions: mergedSessions,
-                            sessionsByDirectory,
-                            currentSessionId: nextCurrentId,
-                            lastLoadedDirectory: activeDirectory ?? null,
-                            isLoading: false,
-                            worktreeMetadata: nextWorktreeMetadata,
-                            availableWorktrees: activeWorktrees,
-                            availableWorktreesByProject: worktreesByProject,
-                        });
-
-                        if (activeDirectory) {
-                            storeSessionForDirectory(activeDirectory, nextCurrentId);
-                        }
-                        if (resolvedDirectoryForCurrent && resolvedDirectoryForCurrent !== activeDirectory) {
-                            storeSessionForDirectory(resolvedDirectoryForCurrent, nextCurrentId);
-                        }
+                        await applyProjectResults(projectResults);
                     } catch (error) {
+                        if (!isLatestRequest()) {
+                            return;
+                        }
                         set({
                             error: error instanceof Error ? error.message : "Failed to load sessions",
                             isLoading: false,

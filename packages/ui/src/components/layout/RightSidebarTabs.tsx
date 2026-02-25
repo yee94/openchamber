@@ -13,8 +13,8 @@ export const RightSidebarTabs: React.FC = () => {
   const setRightSidebarTab = useUIStore((state) => state.setRightSidebarTab);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar">
-      <div className="border-b border-border/40 bg-background px-3 py-1.5">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <div className="border-b border-border/40 bg-transparent px-3 py-1.5">
         <AnimatedTabs<RightTab>
           value={rightSidebarTab}
           onValueChange={setRightSidebarTab}

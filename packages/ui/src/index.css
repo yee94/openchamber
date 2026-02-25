@@ -1040,6 +1040,63 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
   animation: attention-diamond-pulse 2.3s ease-in-out infinite;
 }
 
+@keyframes navrail-dot-wave {
+  0%, 100% {
+    transform: scale(0.72);
+    opacity: 0.52;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-navrail-dot-wave {
+  animation: navrail-dot-wave 1.2s ease-in-out infinite;
+}
+
+@keyframes border-glow-pulse {
+  0%, 100% {
+    border-color: var(--interactive-border);
+    outline-color: transparent;
+  }
+  12.5% {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  }
+  25% {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  37.5% {
+    border-color: color-mix(in srgb, var(--primary) 62%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 26%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--primary) 78%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  }
+  62.5% {
+    border-color: color-mix(in srgb, var(--primary) 62%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 26%, transparent);
+  }
+  75% {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  87.5% {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  }
+}
+
+.animate-border-glow-pulse {
+  outline: 1px solid transparent;
+  outline-offset: 1px;
+  will-change: border-color, outline-color;
+  animation: border-glow-pulse 3.8s linear infinite;
+}
+
 @keyframes marquee-scroll {
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }

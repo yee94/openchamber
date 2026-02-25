@@ -25,7 +25,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
           className={cn(
             'fixed z-50 top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]',
             'w-[90vw] max-w-[960px] h-[85vh] max-h-[900px]',
-            'rounded-xl border shadow-2xl overflow-hidden',
+            'rounded-xl border shadow-none overflow-hidden',
             'bg-background'
           )}
         >

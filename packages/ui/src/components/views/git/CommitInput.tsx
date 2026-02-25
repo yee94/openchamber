@@ -45,7 +45,7 @@ export const CommitInput: React.FC<CommitInputProps> = ({
       autoCapitalize={hasTouchInput ? 'sentences' : 'off'}
       spellCheck={hasTouchInput ? true : false}
       className={cn(
-        'rounded-lg bg-background/80 resize-none overflow-y-auto',
+        'rounded-lg bg-transparent resize-none overflow-y-auto',
         disabled && 'opacity-50'
       )}
       style={{ minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT }}

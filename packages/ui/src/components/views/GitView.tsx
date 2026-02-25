@@ -97,6 +97,8 @@ type GitmojiCachePayload = {
 const GITMOJI_CACHE_KEY = 'gitmojiCache';
 const GITMOJI_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const GITMOJI_CACHE_VERSION = '1';
+const GIT_DIFF_PRIORITY_PREFETCH_LIMIT = 40;
+const GIT_DIFF_PRIORITY_BASELINE_LIMIT = 20;
 const GITMOJI_SOURCE_URL =
   'https://raw.githubusercontent.com/carloscuesta/gitmoji/master/packages/gitmojis/src/gitmojis.json';
 
@@ -245,6 +247,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     fetchBranches,
     fetchLog,
     fetchIdentity,
+    prefetchDiffs,
     setLogMaxCount,
   } = useGitStore();
   const isMobile = useUIStore((state) => state.isMobile);
@@ -310,6 +313,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
   );
+  const [visibleChangePaths, setVisibleChangePaths] = React.useState<string[]>([]);
   const [isGitmojiPickerOpen, setIsGitmojiPickerOpen] = React.useState(false);
   const actionPanelScrollRef = React.useRef<HTMLElement | null>(null);
   const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
@@ -620,10 +624,12 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
 
       const dirState = useGitStore.getState().directories.get(currentDirectory);
       if (!dirState?.status) {
-        fetchAll(currentDirectory, git, { force: true });
+        void fetchAll(currentDirectory, git, { force: true });
+      } else {
+        void fetchStatus(currentDirectory, git, { silent: true });
       }
     }
-  }, [currentDirectory, setActiveDirectory, fetchAll, git]);
+  }, [currentDirectory, setActiveDirectory, fetchAll, fetchStatus, git]);
 
   const refreshStatusAndBranches = React.useCallback(
     async (showErrors = true) => {
@@ -705,6 +711,39 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
 
     return Array.from(unique.values()).sort((a, b) => a.path.localeCompare(b.path));
   }, [status]);
+
+  React.useEffect(() => {
+    if (!currentDirectory || changeEntries.length === 0) {
+      return;
+    }
+
+    const orderedPaths: string[] = [];
+    const seen = new Set<string>();
+
+    const pushPath = (path: string) => {
+      if (!path || seen.has(path)) {
+        return;
+      }
+      seen.add(path);
+      orderedPaths.push(path);
+    };
+
+    Array.from(selectedPaths).forEach(pushPath);
+    visibleChangePaths.forEach(pushPath);
+    changeEntries.slice(0, GIT_DIFF_PRIORITY_BASELINE_LIMIT).forEach((entry) => pushPath(entry.path));
+
+    if (orderedPaths.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void prefetchDiffs(currentDirectory, git, orderedPaths, { maxFiles: GIT_DIFF_PRIORITY_PREFETCH_LIMIT });
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [changeEntries, currentDirectory, git, prefetchDiffs, selectedPaths, visibleChangePaths]);
 
 
   React.useEffect(() => {
@@ -1628,7 +1667,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background" data-keyboard-avoid="true">
+    <div className={cn('flex h-full flex-col overflow-hidden', isSidebarMode ? 'bg-transparent' : 'bg-background')} data-keyboard-avoid="true">
       <GitHeader
         status={status}
         localBranches={localBranches}
@@ -1670,7 +1709,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
-          <div className={cn('min-w-0 min-h-0 h-full bg-muted/10 flex flex-col', isSidebarMode && 'border-t border-border/40')}>
+          <div className={cn('min-w-0 min-h-0 h-full flex flex-col', isSidebarMode ? 'bg-transparent border-t border-border/40' : 'bg-muted/10')}>
             <div className="px-3 py-1.5">
               <AnimatedTabs<ActionTab>
                 value={actionTab}
@@ -1704,6 +1743,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                         variant="plain"
                         maxListHeightClassName="max-h-[40vh]"
                         changeEntries={changeEntries}
+                        onVisiblePathsChange={setVisibleChangePaths}
                         selectedPaths={selectedPaths}
                         diffStats={status?.diffStats}
                         revertingPaths={revertingPaths}

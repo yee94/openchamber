@@ -698,7 +698,7 @@ export const PullRequestSection: React.FC<{
           </div>
         ) : null}
         {run.output?.text ? (
-          <div className="rounded border border-border/40 bg-background/40 px-2 py-2 typography-micro text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
+          <div className="rounded border border-border/40 bg-transparent px-2 py-2 typography-micro text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
             {run.output.text}
           </div>
         ) : null}
@@ -776,7 +776,7 @@ export const PullRequestSection: React.FC<{
                       {step.conclusion ? <span className="ml-auto flex-shrink-0">{step.conclusion}</span> : null}
                     </button>
                     <CollapsibleContent>
-                      <div className="ml-6 mt-1 rounded border border-border/40 bg-background/40 px-2 py-2 typography-micro text-muted-foreground space-y-1">
+                      <div className="ml-6 mt-1 rounded border border-border/40 bg-transparent px-2 py-2 typography-micro text-muted-foreground space-y-1">
                         {typeof step.number === 'number' ? <div>Step: {step.number}</div> : null}
                         {step.status ? <div>Status: {step.status}</div> : null}
                         {step.conclusion ? <div>Conclusion: {step.conclusion}</div> : null}
@@ -1304,7 +1304,7 @@ export const PullRequestSection: React.FC<{
 
   const containerClassName =
     variant === 'framed'
-      ? 'rounded-xl border border-border/60 bg-background/70 overflow-hidden'
+      ? 'rounded-xl border border-border/60 bg-transparent overflow-hidden'
       : 'border-0 bg-transparent rounded-none';
   const headerClassName =
     variant === 'framed'

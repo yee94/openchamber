@@ -61,7 +61,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children }) 
   return (
     <aside
       className={cn(
-        'relative flex h-full overflow-hidden border-l border-border bg-sidebar',
+        'relative flex h-full overflow-hidden border-l border-border/40 bg-sidebar/50',
         isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
         !isOpen && 'border-l-0'
       )}

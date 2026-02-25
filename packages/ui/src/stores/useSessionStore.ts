@@ -45,6 +45,19 @@ const normalizePath = (value?: string | null): string | null => {
     return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced;
 };
 
+const sessionChoiceAnalysisSignature = new Map<string, string>();
+const ENABLE_ACTIVE_SESSION_TRIM = false;
+
+const buildSessionChoiceAnalysisSignature = (messages: Array<{ info: Message; parts: Part[] }>): string => {
+    const lastMessage = messages[messages.length - 1];
+    const lastMessageId = typeof lastMessage?.info?.id === 'string' ? lastMessage.info.id : '';
+    const lastAssistant = [...messages]
+        .reverse()
+        .find((message) => message.info?.role === 'assistant');
+    const lastAssistantId = typeof lastAssistant?.info?.id === 'string' ? lastAssistant.info.id : '';
+    return `${messages.length}:${lastMessageId}:${lastAssistantId}`;
+};
+
 const resolveSessionDirectory = (
     sessions: Session[],
     sessionId: string | null | undefined,
@@ -319,7 +332,9 @@ export const useSessionStore = create<SessionStore>()(
                             await get().loadMessages(id);
                         }
 
-                        get().trimToViewportWindow(id, getMessageLimit());
+                        if (ENABLE_ACTIVE_SESSION_TRIM) {
+                            get().trimToViewportWindow(id, getMessageLimit());
+                        }
 
                         // Analyze session messages to extract agent/model/variant choices
                         // This ensures context is available even when ModelControls isn't mounted
@@ -327,12 +342,18 @@ export const useSessionStore = create<SessionStore>()(
                         if (sessionMessages && sessionMessages.length > 0) {
                             const agents = useConfigStore.getState().agents;
                             if (agents.length > 0) {
+                                const analysisSignature = buildSessionChoiceAnalysisSignature(sessionMessages);
+                                if (sessionChoiceAnalysisSignature.get(id) === analysisSignature) {
+                                    get().evictLeastRecentlyUsed();
+                                    return;
+                                }
                                 try {
                                     await useContextStore.getState().analyzeAndSaveExternalSessionChoices(
                                         id,
                                         agents,
                                         get().messages
                                     );
+                                    sessionChoiceAnalysisSignature.set(id, analysisSignature);
                                 } catch (error) {
                                     console.warn('Failed to analyze session choices:', error);
                                 }

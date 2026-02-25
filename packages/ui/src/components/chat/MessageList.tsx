@@ -45,6 +45,34 @@ const getMessageParentId = (message: ChatMessageEntry): string | null => {
     return typeof parentID === 'string' && parentID.trim().length > 0 ? parentID : null;
 };
 
+const hasSameTurnStructure = (prev: ChatMessageEntry[], next: ChatMessageEntry[]): boolean => {
+    if (prev === next) {
+        return true;
+    }
+    if (prev.length !== next.length) {
+        return false;
+    }
+
+    for (let index = 0; index < prev.length; index += 1) {
+        const prevMessage = prev[index];
+        const nextMessage = next[index];
+
+        if (prevMessage.info.id !== nextMessage.info.id) {
+            return false;
+        }
+
+        if (resolveMessageRole(prevMessage) !== resolveMessageRole(nextMessage)) {
+            return false;
+        }
+
+        if (getMessageParentId(prevMessage) !== getMessageParentId(nextMessage)) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
 const isUserShellMarkerMessage = (message: ChatMessageEntry | undefined): boolean => {
     if (!message) return false;
     if (resolveMessageRole(message) !== 'user') return false;
@@ -423,6 +451,13 @@ const MessageList: React.FC<MessageListProps> = ({
     scrollToBottom,
 }) => {
     const { isMobile } = useDeviceInfo();
+    const turnStructureCacheRef = React.useRef<{
+        messages: ChatMessageEntry[];
+        turns: Turn[];
+        ungroupedMessages: ChatMessageEntry[];
+    } | null>(null);
+    const normalizedMessageCacheRef = React.useRef<Map<string, { source: ChatMessageEntry; normalized: ChatMessageEntry }>>(new Map());
+
     React.useEffect(() => {
         if (permissions.length === 0 && questions.length === 0) {
             return;
@@ -432,6 +467,7 @@ const MessageList: React.FC<MessageListProps> = ({
 
     const baseDisplayMessages = React.useMemo(() => {
         const seenIds = new Set<string>();
+        const nextNormalizedCache = new Map<string, { source: ChatMessageEntry; normalized: ChatMessageEntry }>();
         const normalizedMessages = messages
             .filter((message) => {
                 const messageId = message.info?.id;
@@ -443,18 +479,29 @@ const MessageList: React.FC<MessageListProps> = ({
                 }
                 return true;
             })
-            .map((message) => {
-                const filteredParts = filterSyntheticParts(message.parts);
-                // Optimization: If parts haven't changed, return the original message object.
-                // This preserves referential equality and prevents unnecessary re-renders of ChatMessage (which is memoized).
-                if (filteredParts === message.parts) {
-                    return message;
+            .map((message, index) => {
+                const messageId = typeof message.info?.id === 'string' && message.info.id.length > 0
+                    ? message.info.id
+                    : `__idx_${index}`;
+                const cacheKey = `${messageId}:${resolveMessageRole(message) ?? 'unknown'}`;
+                const cached = normalizedMessageCacheRef.current.get(cacheKey);
+                if (cached && cached.source === message) {
+                    nextNormalizedCache.set(cacheKey, cached);
+                    return cached.normalized;
                 }
-                return {
-                    ...message,
-                    parts: filteredParts,
-                };
+
+                const filteredParts = filterSyntheticParts(message.parts);
+                const normalized = filteredParts === message.parts
+                    ? message
+                    : {
+                        ...message,
+                        parts: filteredParts,
+                    };
+                nextNormalizedCache.set(cacheKey, { source: message, normalized });
+                return normalized;
             });
+
+        normalizedMessageCacheRef.current = nextNormalizedCache;
 
         const output: ChatMessageEntry[] = [];
 
@@ -573,6 +620,14 @@ const MessageList: React.FC<MessageListProps> = ({
     }, [activeRetryStatus, baseDisplayMessages]);
 
     const { turns, ungroupedMessages } = React.useMemo(() => {
+        const cached = turnStructureCacheRef.current;
+        if (cached && hasSameTurnStructure(cached.messages, displayMessages)) {
+            return {
+                turns: cached.turns,
+                ungroupedMessages: cached.ungroupedMessages,
+            };
+        }
+
         const groupedTurns = detectTurns(displayMessages);
         const groupedMessageIds = new Set<string>();
 
@@ -584,11 +639,18 @@ const MessageList: React.FC<MessageListProps> = ({
         });
 
         const ungrouped = displayMessages.filter((message) => !groupedMessageIds.has(message.info.id));
-
-        return {
+        const nextValue = {
             turns: groupedTurns,
             ungroupedMessages: ungrouped,
         };
+
+        turnStructureCacheRef.current = {
+            messages: displayMessages,
+            turns: groupedTurns,
+            ungroupedMessages: ungrouped,
+        };
+
+        return nextValue;
     }, [displayMessages]);
 
     return (

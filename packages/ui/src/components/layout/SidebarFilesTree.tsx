@@ -744,7 +744,7 @@ export const SidebarFilesTree: React.FC = () => {
             <>
               <span className="absolute top-3.5 left-[-12px] w-3 h-px bg-border/40" />
               {isLast && (
-                <span className="absolute top-3.5 bottom-0 left-[-13px] w-[2px] bg-background" />
+                <span className="absolute top-3.5 bottom-0 left-[-13px] w-[2px] bg-sidebar/50" />
               )}
             </>
           )}
@@ -770,12 +770,12 @@ export const SidebarFilesTree: React.FC = () => {
         </li>
       );
     });
-  }, [childrenByDir, expandedPaths, handleOpenFile, selectedPath, toggleDirectory, handleOpenDialog, canCreateFile, canCreateFolder, canRename, canDelete, contextMenuPath, getFileStatus, getFolderBadge]);
+  }, [childrenByDir, expandedPaths, handleOpenFile, selectedPath, toggleDirectory, handleOpenDialog, canCreateFile, canCreateFolder, canRename, canDelete, canReveal, contextMenuPath, getFileStatus, getFolderBadge, handleRevealPath]);
 
   const hasTree = Boolean(root && childrenByDir[root]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
       <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
         <div className="relative min-w-0 flex-1">
           <RiSearchLine className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />

@@ -92,7 +92,7 @@ export function AnimatedTabs<T extends string>({
         <div
           ref={indicatorRef}
           className={cn(
-            'absolute top-0.5 bottom-0.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm',
+            'absolute top-0.5 bottom-0.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-none',
             animate && isReadyToAnimate ? 'transition-[transform,width] duration-200 ease-out' : null
           )}
           style={{ width: 0, transform: 'translateX(0)' }}
