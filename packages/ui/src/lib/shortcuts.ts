@@ -120,7 +120,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'open_status',
-    defaultCombo: 'mod+shift+l',
+    defaultCombo: 'mod+shift+o',
     label: 'Open OpenCode status',
     description: 'Open the OpenCode status dialog',
   },
@@ -156,6 +156,13 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     defaultCombo: 'mod+l',
     label: 'Toggle sidebar',
     description: 'Toggle the session sidebar',
+    customizable: true,
+  },
+  {
+    id: 'toggle_nav_rail',
+    defaultCombo: 'mod+shift+l',
+    label: 'Toggle project rail',
+    description: 'Expand or collapse the project navigation rail',
     customizable: true,
   },
   {
