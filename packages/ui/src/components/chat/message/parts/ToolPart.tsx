@@ -670,21 +670,120 @@ interface DiffPreviewProps {
     diffViewMode: DiffViewMode;
 }
 
+const TOOL_DIFF_UNSAFE_CSS = `
+  [data-diff-header],
+  [data-diff] {
+    [data-separator] {
+      height: 24px !important;
+    }
+  }
+`;
+
+const TOOL_DIFF_METRICS = {
+    hunkLineCount: 50,
+    lineHeight: 24,
+    diffHeaderHeight: 44,
+    hunkSeparatorHeight: 24,
+    fileGap: 0,
+};
+
+type DiffPatchEntry = {
+    id: string;
+    title: string;
+    patch: string;
+};
+
+const renderPathLikeGitChanges = (path: string) => {
+    const lastSlash = path.lastIndexOf('/');
+    if (lastSlash === -1) {
+        return <span className="truncate text-foreground">{path}</span>;
+    }
+
+    const dir = path.slice(0, lastSlash);
+    const name = path.slice(lastSlash + 1);
+
+    return (
+        <span className="flex min-w-0 items-baseline overflow-hidden" title={path}>
+            <span className="min-w-0 truncate text-muted-foreground" style={{ direction: 'rtl', textAlign: 'left' }}>
+                {dir}
+            </span>
+            <span className="flex-shrink-0">
+                <span className="text-muted-foreground">/</span>
+                <span className="text-foreground">{name}</span>
+            </span>
+        </span>
+    );
+};
+
+const getDiffPatchEntries = (
+    metadata: Record<string, unknown> | undefined,
+    fallbackDiff: string,
+    currentDirectory: string,
+    isMobile: boolean,
+): DiffPatchEntry[] => {
+    const files = Array.isArray(metadata?.files) ? metadata.files : [];
+
+    const entries = files
+        .map((file, index) => {
+            if (!file || typeof file !== 'object') {
+                return null;
+            }
+
+            const record = file as { relativePath?: unknown; filePath?: unknown; diff?: unknown };
+            const patch = typeof record.diff === 'string' ? record.diff.trim() : '';
+            if (!patch) {
+                return null;
+            }
+
+            const rawPath = typeof record.relativePath === 'string'
+                ? record.relativePath
+                : typeof record.filePath === 'string'
+                    ? record.filePath
+                    : `File ${index + 1}`;
+
+            const title = typeof rawPath === 'string'
+                ? getRelativePath(rawPath, currentDirectory, isMobile)
+                : `File ${index + 1}`;
+
+            return {
+                id: `${title}-${index}`,
+                title,
+                patch,
+            } satisfies DiffPatchEntry;
+        })
+        .filter((entry): entry is DiffPatchEntry => entry !== null);
+
+    if (entries.length > 0) {
+        return entries;
+    }
+
+    return [
+        {
+            id: 'diff-0',
+            title: 'Diff',
+            patch: fallbackDiff,
+        },
+    ];
+};
+
 const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, pierreTheme, pierreThemeType, diffViewMode }) => {
     return (
         <div className="typography-code px-1 pb-1 pt-0">
             <PatchDiff
                 patch={diff}
+                metrics={TOOL_DIFF_METRICS}
                 options={{
                     diffStyle: diffViewMode === 'side-by-side' ? 'split' : 'unified',
                     diffIndicators: 'none',
                     hunkSeparators: 'line-info-basic',
                     lineDiffType: 'none',
+                    disableFileHeader: true,
                     maxLineDiffLength: 1000,
                     expansionLineCount: 20,
                     overflow: 'wrap',
                     theme: pierreTheme,
                     themeType: pierreThemeType,
+                    unsafeCSS: TOOL_DIFF_UNSAFE_CSS,
                 }}
                 className="block w-full"
             />
@@ -894,6 +993,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const outputString = typeof rawOutput === 'string' ? rawOutput : '';
 
     const diffContent = typeof metadata?.diff === 'string' ? (metadata.diff as string) : null;
+    const diffEntries = React.useMemo(
+        () => (diffContent ? getDiffPatchEntries(metadata, diffContent, currentDirectory, isMobile) : []),
+        [currentDirectory, diffContent, isMobile, metadata]
+    );
     const writeFilePath = part.tool === 'write'
         ? typeof input?.filePath === 'string'
             ? input.filePath
@@ -1085,14 +1188,25 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             );
         }
 
-        if ((part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') && diffContent) {
+        if ((part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') && diffEntries.length > 0) {
             return renderScrollableBlock(
-                <DiffPreview
-                    diff={diffContent}
-                    pierreTheme={pierreTheme}
-                    pierreThemeType={pierreThemeType}
-                    diffViewMode={diffViewMode}
-                />,
+                <div className="space-y-3">
+                    {diffEntries.map((entry) => (
+                        <div key={entry.id} className="w-full min-w-0">
+                            {diffEntries.length > 1 ? (
+                                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground rounded-lg mb-1" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
+                                    {renderPathLikeGitChanges(entry.title)}
+                                </div>
+                            ) : null}
+                            <DiffPreview
+                                diff={entry.patch}
+                                pierreTheme={pierreTheme}
+                                pierreThemeType={pierreThemeType}
+                                diffViewMode={diffViewMode}
+                            />
+                        </div>
+                    ))}
+                </div>,
                 { className: 'p-1' }
             );
         }

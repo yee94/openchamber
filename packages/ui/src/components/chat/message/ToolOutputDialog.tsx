@@ -97,6 +97,23 @@ type PierreThemeConfig = {
     themeType: 'light' | 'dark';
 };
 
+const TOOL_DIFF_UNSAFE_CSS = `
+  [data-diff-header],
+  [data-diff] {
+    [data-separator] {
+      height: 24px !important;
+    }
+  }
+`;
+
+const TOOL_DIFF_METRICS = {
+    hunkLineCount: 50,
+    lineHeight: 24,
+    diffHeaderHeight: 44,
+    hunkSeparatorHeight: 24,
+    fileGap: 0,
+};
+
 const usePierreThemeConfig = (): PierreThemeConfig => {
     const themeSystem = useOptionalThemeSystem();
     const fallbackLightTheme = React.useMemo(() => getDefaultTheme(false), []);
@@ -500,16 +517,19 @@ const DialogUnifiedDiff: React.FC<{
         <div className="typography-code">
             <PatchDiff
                 patch={patchContent}
+                metrics={TOOL_DIFF_METRICS}
                 options={{
                     diffStyle: diffViewMode === 'unified' ? 'unified' : 'split',
                     diffIndicators: 'none',
                     hunkSeparators: 'line-info-basic',
                     lineDiffType: 'none',
+                    disableFileHeader: true,
                     maxLineDiffLength: 1000,
                     expansionLineCount: 20,
                     overflow: 'wrap',
                     theme: pierreThemeConfig.theme,
                     themeType: pierreThemeConfig.themeType,
+                    unsafeCSS: TOOL_DIFF_UNSAFE_CSS,
                 }}
                 className="block w-full"
             />
