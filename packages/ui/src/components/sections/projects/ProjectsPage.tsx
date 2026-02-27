@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { PROJECT_COLORS, PROJECT_ICONS, PROJECT_COLOR_MAP as COLOR_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
 import { RiCloseLine } from '@remixicon/react';
 import { WorktreeSectionContent } from '@/components/sections/openchamber/WorktreeSectionContent';
+import { ProjectActionsSection } from '@/components/sections/projects/ProjectActionsSection';
 
 export const ProjectsPage: React.FC = () => {
   const projects = useProjectsStore((state) => state.projects);
@@ -44,6 +45,13 @@ export const ProjectsPage: React.FC = () => {
   const [isDiscoveringIcon, setIsDiscoveringIcon] = React.useState(false);
   const [previewImageFailed, setPreviewImageFailed] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const selectedProjectRef = React.useMemo(() => {
+    if (!selectedProject) {
+      return null;
+    }
+    return { id: selectedProject.id, path: selectedProject.path };
+  }, [selectedProject]);
 
   React.useEffect(() => {
     if (!selectedProject) {
@@ -149,7 +157,6 @@ export const ProjectsPage: React.FC = () => {
       </ScrollableOverlay>
     );
   }
-
   return (
     <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
       <div className="mx-auto w-full max-w-4xl p-3 sm:p-6 sm:pt-8">
@@ -372,13 +379,20 @@ export const ProjectsPage: React.FC = () => {
 
         {/* Worktree Group */}
         <div className="mb-8">
+          <section className="px-2 pb-2 pt-0">
+            {selectedProjectRef && <ProjectActionsSection projectRef={selectedProjectRef} />}
+          </section>
+        </div>
+
+        {/* Worktree Group */}
+        <div className="mb-8">
           <div className="mb-1 px-1">
             <h3 className="typography-ui-header font-medium text-foreground">
               Worktree
             </h3>
           </div>
           <section className="px-2 pb-2 pt-0">
-            <WorktreeSectionContent projectRef={{ id: selectedProject.id, path: selectedProject.path }} />
+            {selectedProjectRef && <WorktreeSectionContent projectRef={selectedProjectRef} />}
           </section>
         </div>
 
