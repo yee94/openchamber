@@ -167,6 +167,10 @@ export const createTunnelAuth = () => {
       return 'local';
     }
 
+    if (!activeTunnelId) {
+      return 'local';
+    }
+
     return 'unknown-public';
   };
 
