@@ -2698,7 +2698,7 @@ fn main() {
                 schedule_window_state_persist(window.clone(), false);
             }
 
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
                 schedule_window_state_persist(window.clone(), true);
             }
         })
