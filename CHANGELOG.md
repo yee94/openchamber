@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-03-01
+
+- Updates: hardened the self-update flow with safer release handling and fallback behavior, reducing failed or stuck updates.
+- Chat: added a new "Share as image" action so you can quickly export and share important messages (thanks to @Jovines).
+- Chat: improved message readability with cleaner tool/reasoning rendering and less noisy activity timing in busy conversations (thanks to @nelsonPires5).
+- Desktop/Chat: permission toasts now include session context and a clearer permission preview, making approvals more accessible outside of a session (thanks to @nelsonPires5).
+- VSCode: fixed live streaming edge cases for event endpoints with query/trailing-slash variants, improving real-time updates in chat, session editor, and agent-manager views.
+- Reliability: improved event-stream/session visibility handling when the app is hidden or restored, reducing stale activity states and missed updates.
+- Windows: fixed CLI/runtime path and spawn edge cases to reduce startup and command failures on Windows (thanks to @plfavreau).
+- Notifications/Voice: consolidated TTS and summarization service wiring for steadier text-to-speech and summary flows (thanks to @nelsonPires5).
+- Deployment: fixed Docker build/runtime issues for more reliable containerized setups (thanks to @nzlov).
+
+
 ## [1.8.1] - 2026-02-28
 
 - Web/Auth: fixed an issue where non-tunnel browser sessions could incorrectly show a tunnel-only lock screen; normal auth flow now appears unless a tunnel is actually active.

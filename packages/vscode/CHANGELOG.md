@@ -1,3 +1,10 @@
+## [1.8.2] - 2026-03-01
+
+- Chat: improved message readability with cleaner tool/reasoning rendering and more polished markdown presentation in long responses.
+- Chat Activity: timing display is now less noisy, with detailed end timestamps shown on hover when you need them (thanks to @nelsonPires5).
+- Reliability: improved panel visibility/reconnect handling so session activity stays more consistent after hiding and reopening the extension.
+- Reliability: fixed live-streaming edge cases for event endpoints with query/trailing-slash variants, improving real-time updates across chat, session editor, and agent-manager views.
+
 ## [1.8.1] - 2026-02-28
 
 - No notable changes.
