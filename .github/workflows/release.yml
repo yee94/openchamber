@@ -437,6 +437,8 @@ jobs:
   finalize-release:
     needs: [create-release, build-desktop-macos, publish-npm, combine-manifests]
     runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -447,10 +449,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Send release to Discord
-        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        if: ${{ env.DISCORD_WEBHOOK_URL != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           VERSION: ${{ needs.create-release.outputs.version }}
           REPOSITORY: ${{ github.repository }}
         run: |
