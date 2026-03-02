@@ -1275,7 +1275,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       // Always return early if same session is selected to avoid unnecessary store operations
       if (sessionId === currentSessionId) {
-        if (!allowReselect) {
+        if (allowReselect) {
           onSessionSelected?.(sessionId);
         }
         return;
