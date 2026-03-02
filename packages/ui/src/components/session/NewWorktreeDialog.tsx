@@ -109,6 +109,64 @@ const slugifyWorktreeName = (value: string): string => {
 
 const LAST_SOURCE_BRANCH_KEY = 'oc:lastWorktreeSourceBranch';
 
+const sanitizeRemoteName = (value: string): string => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'pr-head';
+};
+
+const resolvePrWorktreeConfig = (pr: GitHubPullRequestSummary, remoteBranches: string[]) => {
+  const headBranch = normalizeBranchName(pr.head || '');
+  if (!headBranch) {
+    throw new Error('PR head branch is missing');
+  }
+
+  const availableRemoteBranch = remoteBranches.find((remoteBranch) => {
+    const slashIndex = remoteBranch.indexOf('/');
+    if (slashIndex <= 0 || slashIndex >= remoteBranch.length - 1) {
+      return false;
+    }
+    return remoteBranch.slice(slashIndex + 1) === headBranch;
+  });
+
+  if (availableRemoteBranch) {
+    const slashIndex = availableRemoteBranch.indexOf('/');
+    const remoteName = availableRemoteBranch.slice(0, slashIndex);
+    return {
+      existingBranch: `remotes/${availableRemoteBranch}`,
+      setUpstream: true as const,
+      upstreamRemote: remoteName,
+      upstreamBranch: headBranch,
+      ensureRemoteName: undefined,
+      ensureRemoteUrl: undefined,
+      sourceLabel: `${remoteName}/${headBranch}`,
+    };
+  }
+
+  const ownerFromLabel = String(pr.headLabel || '').split(':')[0]?.trim();
+  const remoteSeed = pr.headRepo?.owner || ownerFromLabel || 'pr-head';
+  const remoteName = `pr-${sanitizeRemoteName(remoteSeed)}`;
+  const remoteUrl = pr.headRepo?.sshUrl || pr.headRepo?.cloneUrl || '';
+
+  if (!remoteUrl) {
+    throw new Error('PR head repository URL is unavailable');
+  }
+
+  return {
+    existingBranch: `remotes/${remoteName}/${headBranch}`,
+    setUpstream: true as const,
+    upstreamRemote: remoteName,
+    upstreamBranch: headBranch,
+    ensureRemoteName: remoteName,
+    ensureRemoteUrl: remoteUrl,
+    sourceLabel: `${remoteName}/${headBranch}`,
+  };
+};
+
 interface NewWorktreeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -730,36 +788,55 @@ Nice-to-have:
     
     try {
       const setupCommands = await getWorktreeSetupCommands(projectRef);
-      
-      // Determine source branch - use PR base if PR is selected, otherwise use selected source branch
-      const effectiveSourceBranch = newBranchState.linkedPr 
-        ? newBranchState.linkedPr.base 
-        : newBranchState.sourceBranch;
-      
-      const args = {
-        preferredName: normalizedBranch || normalizedWorktree,
-        mode: mode === 'existing-branch' ? 'existing' as const : 'new' as const,
-        branchName: mode === 'existing-branch' ? undefined : normalizedBranch,
-        worktreeName: normalizedWorktree,
-        existingBranch: mode === 'existing-branch' ? normalizedBranch : undefined,
-        setupCommands,
-        ...(effectiveSourceBranch && mode === 'new-branch' ? { startRef: effectiveSourceBranch } : {}),
-      };
+      const linkedPr = mode === 'new-branch' ? newBranchState.linkedPr : null;
+      const sourceBranch = newBranchState.sourceBranch;
+
+      let sourceLabel = '';
+      const args = (() => {
+        if (linkedPr) {
+          const prConfig = resolvePrWorktreeConfig(linkedPr, remoteBranches);
+          sourceLabel = prConfig.sourceLabel;
+          return {
+            preferredName: normalizedBranch || normalizedWorktree,
+            mode: 'existing' as const,
+            branchName: normalizedBranch,
+            worktreeName: normalizedWorktree,
+            existingBranch: prConfig.existingBranch,
+            setupCommands,
+            setUpstream: prConfig.setUpstream,
+            upstreamRemote: prConfig.upstreamRemote,
+            upstreamBranch: prConfig.upstreamBranch,
+            ...(prConfig.ensureRemoteName ? { ensureRemoteName: prConfig.ensureRemoteName } : {}),
+            ...(prConfig.ensureRemoteUrl ? { ensureRemoteUrl: prConfig.ensureRemoteUrl } : {}),
+          };
+        }
+
+        sourceLabel = mode === 'new-branch' ? sourceBranch : '';
+        return {
+          preferredName: normalizedBranch || normalizedWorktree,
+          mode: mode === 'existing-branch' ? 'existing' as const : 'new' as const,
+          branchName: mode === 'existing-branch' ? undefined : normalizedBranch,
+          worktreeName: normalizedWorktree,
+          existingBranch: mode === 'existing-branch' ? normalizedBranch : undefined,
+          setupCommands,
+          ...(sourceBranch && mode === 'new-branch' ? { startRef: sourceBranch } : {}),
+        };
+      })();
       
       const resolvedArgs = await withWorktreeUpstreamDefaults(projectDirectory, args);
       const metadata = await createWorktree(projectRef, resolvedArgs);
 
       const linkedIssue = mode === 'new-branch' ? newBranchState.linkedIssue : null;
-      const linkedPr = mode === 'new-branch' ? newBranchState.linkedPr : null;
+      const linkedPrState = mode === 'new-branch' ? newBranchState.linkedPr : null;
       const includePrDiff = mode === 'new-branch' ? newBranchState.includePrDiff : false;
 
       let createdSessionId: string | null = null;
 
-      if (linkedIssue || linkedPr) {
+      if (linkedIssue || linkedPrState) {
         const sessionTitle = linkedIssue
           ? `#${linkedIssue.number} ${linkedIssue.title}`.trim()
-          : linkedPr
-            ? `#${linkedPr.number} ${linkedPr.title}`.trim()
+          : linkedPrState
+            ? `#${linkedPrState.number} ${linkedPrState.title}`.trim()
             : 'New session';
 
         const session = await useSessionStore.getState().createSession(sessionTitle, metadata.path, null);
@@ -783,7 +860,7 @@ Nice-to-have:
       }
       
       toast.success('Worktree created', {
-        description: `${metadata.branch || metadata.name}${effectiveSourceBranch ? ` from ${effectiveSourceBranch}` : ''}`,
+        description: `${metadata.branch || metadata.name}${sourceLabel ? ` from ${sourceLabel}` : ''}`,
       });
 
       try {
@@ -799,7 +876,7 @@ Nice-to-have:
         void sendLinkedContextMessage({
           sessionId: createdSessionId,
           issue: linkedIssue,
-          pr: linkedPr,
+          pr: linkedPrState,
           includeDiff: includePrDiff,
         }).catch((error) => {
           const message = error instanceof Error ? error.message : 'Failed to send GitHub context';
