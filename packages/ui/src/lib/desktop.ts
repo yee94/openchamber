@@ -111,6 +111,8 @@ export type DesktopSettings = {
   gitProviderId?: string;
   gitModelId?: string;
   toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
+  userMessageRenderingMode?: 'markdown' | 'plain';
+  stickyUserHeader?: boolean;
   fontSize?: number;
   terminalFontSize?: number;
   padding?: number;

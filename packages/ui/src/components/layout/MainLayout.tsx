@@ -76,7 +76,9 @@ export const MainLayout: React.FC = () => {
             return false;
         }
         const panelState = state.contextPanelByDirectory[directoryKey];
-        return Boolean(panelState?.isOpen && panelState?.mode);
+        const tabs = panelState?.tabs ?? [];
+        const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1];
+        return Boolean(panelState?.isOpen && activeTab);
     });
     const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
     const rightSidebarAutoClosedRef = React.useRef(false);

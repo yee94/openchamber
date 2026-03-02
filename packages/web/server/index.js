@@ -1971,6 +1971,15 @@ const sanitizeSettingsUpdate = (payload) => {
       result.toolCallExpansion = mode;
     }
   }
+  if (typeof candidate.userMessageRenderingMode === 'string') {
+    const mode = candidate.userMessageRenderingMode.trim();
+    if (mode === 'markdown' || mode === 'plain') {
+      result.userMessageRenderingMode = mode;
+    }
+  }
+  if (typeof candidate.stickyUserHeader === 'boolean') {
+    result.stickyUserHeader = candidate.stickyUserHeader;
+  }
   if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
     result.fontSize = Math.max(50, Math.min(200, Math.round(candidate.fontSize)));
   }

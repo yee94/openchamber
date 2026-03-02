@@ -50,6 +50,7 @@ import {
   RiAddLine,
   RiArrowDownSLine,
   RiArrowRightSLine,
+  RiChat4Line,
   RiCheckboxBlankLine,
   RiCheckboxLine,
   RiCheckLine,
@@ -859,6 +860,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const renameProject = useProjectsStore((state) => state.renameProject);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
   const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
@@ -2552,6 +2554,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </>
                       );
                     })() : null}
+                    <DropdownMenuItem
+                      disabled={!sessionDirectory}
+                      onClick={() => {
+                        if (!sessionDirectory) {
+                          return;
+                        }
+
+                        openContextPanelTab(sessionDirectory, {
+                          mode: 'chat',
+                          dedupeKey: `session:${session.id}`,
+                          label: sessionTitle,
+                        });
+                      }}
+                      className="[&>svg]:mr-1"
+                    >
+                      <RiChat4Line className="mr-1 h-4 w-4" />
+                      <span className="truncate">Open in Side Panel</span>
+                      <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">
+                        beta
+                      </span>
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive [&>svg]:mr-1"
@@ -2604,6 +2627,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       addSessionToFolder,
       removeSessionFromFolder,
       createFolderAndStartRename,
+      openContextPanelTab,
       notifyOnSubtasks,
     ],
   );

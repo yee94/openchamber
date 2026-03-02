@@ -1743,19 +1743,57 @@ export async function commit(directory, message, options = {}) {
   const git = await createGit(directory);
 
   try {
+    const requestedFiles = Array.isArray(options.files)
+      ? options.files
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+      : [];
+    let filesToCommit = requestedFiles;
 
     if (options.addAll) {
       await git.add('.');
-    } else if (Array.isArray(options.files) && options.files.length > 0) {
-      await git.add(options.files);
+    } else if (requestedFiles.length > 0) {
+      const status = await git.status();
+      const fileStatusByPath = new Map(status.files.map((file) => [file.path, file]));
+      filesToCommit = requestedFiles.filter((filePath) => fileStatusByPath.has(filePath));
+
+      if (filesToCommit.length === 0) {
+        throw new Error('No selected files are available to commit. Refresh git status and try again.');
+      }
+
+      const filesNeedingAdd = filesToCommit.filter((filePath) => {
+        const fileStatus = fileStatusByPath.get(filePath);
+        if (!fileStatus) {
+          return false;
+        }
+
+        const alreadyFullyStaged = fileStatus.index !== ' ' && fileStatus.working_dir === ' ';
+        return !alreadyFullyStaged;
+      });
+
+      if (filesNeedingAdd.length > 0) {
+        await git.add(filesNeedingAdd);
+      }
     }
 
     const commitArgs =
-      !options.addAll && Array.isArray(options.files) && options.files.length > 0
-        ? options.files
+      !options.addAll && filesToCommit.length > 0
+        ? filesToCommit
         : undefined;
 
-    const result = await git.commit(message, commitArgs);
+    let result;
+    try {
+      result = await git.commit(message, commitArgs);
+    } catch (error) {
+      const gitErrorText = parseGitErrorText(error);
+      const isPathspecError = gitErrorText.includes('pathspec') && gitErrorText.includes('did not match any files');
+      if (!isPathspecError || !commitArgs || commitArgs.length === 0) {
+        throw error;
+      }
+
+      // Fallback for deleted/stale selections: commit currently staged changes.
+      result = await git.commit(message);
+    }
 
     return {
       success: true,
