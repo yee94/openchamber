@@ -22,8 +22,8 @@ import {
   RiFolderAddLine,
   RiDeleteBinLine,
   RiEditLine,
-  RiEyeLine,
   RiFileCopyLine,
+  RiFileTransferFill,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -74,6 +74,8 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
+import { openDesktopPath, openDesktopProjectInApp } from '@/lib/desktop';
+import { getDefaultOpenInApp, getOpenInAppById, OPEN_DIRECTORY_APP_IDS, type OpenInApp } from '@/lib/openInApps';
 
 type FileNode = {
   name: string;
@@ -86,6 +88,37 @@ type FileNode = {
 type SelectedLineRange = {
   start: number;
   end: number;
+};
+
+const getSelectedOpenInApp = (): OpenInApp => {
+  const stored = typeof window !== 'undefined' ? window.localStorage.getItem('openInAppId') : null;
+  const selected = getOpenInAppById(stored);
+  if (selected) {
+    return selected;
+  }
+  return getDefaultOpenInApp();
+};
+
+const getParentDirectoryPath = (path: string): string => {
+  const normalized = normalizePath(path);
+  if (!normalized) return '';
+  if (normalized === '/' || /^[A-Za-z]:\/$/.test(normalized)) {
+    return normalized;
+  }
+
+  const lastSlash = normalized.lastIndexOf('/');
+  if (lastSlash < 0) {
+    return normalized;
+  }
+  if (lastSlash === 0) {
+    return '/';
+  }
+
+  const parent = normalized.slice(0, lastSlash);
+  if (/^[A-Za-z]:$/.test(parent)) {
+    return `${parent}/`;
+  }
+  return parent;
 };
 
 const sortNodes = (items: FileNode[]) =>
@@ -413,6 +446,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [textViewMode, setTextViewMode] = React.useState<'view' | 'edit'>('edit');
+  const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
 
   const lightTheme = React.useMemo(
     () => availableThemes.find((theme) => theme.metadata.id === lightThemeId) ?? getDefaultTheme(false),
@@ -527,9 +561,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
 
-  // Markdown view mode (global, not per-file)
-  const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
-
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
   const canRename = Boolean(files.rename);
@@ -542,6 +573,38 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       toast.error('Failed to reveal path');
     });
   }, [files]);
+
+  const handleOpenInSelectedApp = React.useCallback(async () => {
+    if (!selectedFile?.path || !root) {
+      return;
+    }
+
+    const selectedApp = getSelectedOpenInApp();
+    const fileDirectory = getParentDirectoryPath(selectedFile.path) || root;
+
+    if (OPEN_DIRECTORY_APP_IDS.has(selectedApp.id)) {
+      const openedDirectory = await openDesktopPath(fileDirectory, selectedApp.appName);
+      if (!openedDirectory) {
+        toast.error(`Failed to open in ${selectedApp.appName}`);
+      }
+      return;
+    }
+
+    const openedInApp = await openDesktopProjectInApp(root, selectedApp.id, selectedApp.appName, selectedFile.path);
+    if (openedInApp) {
+      return;
+    }
+
+    const openedFile = await openDesktopPath(selectedFile.path, selectedApp.appName);
+    if (openedFile) {
+      return;
+    }
+
+    const openedDirectory = await openDesktopPath(fileDirectory, selectedApp.appName);
+    if (!openedDirectory) {
+      toast.error(`Failed to open in ${selectedApp.appName}`);
+    }
+  }, [root, selectedFile?.path]);
 
   const handleOpenDialog = React.useCallback((type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => {
     setActiveDialog(type);
@@ -775,37 +838,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       void loadDirectory(root);
     }
   }, [loadDirectory, root, showGitignored, showHidden]);
-
-  const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
-
-  // Load markdown view mode preference from localStorage on mount
-  React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem(MD_VIEWER_MODE_KEY);
-      if (stored === 'preview') {
-        setMdViewMode('preview');
-      } else if (stored === 'edit') {
-        setMdViewMode('edit');
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
-
-  // Save markdown view mode preference to localStorage
-const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
-  setMdViewMode(mode);
-  try {
-    localStorage.setItem(MD_VIEWER_MODE_KEY, mode);
-  } catch {
-    // Ignore localStorage errors
-  }
-}, []);
-
-  // Get the view mode for a markdown file (from state, default to 'edit')
-  const getMdViewMode = React.useCallback((): 'preview' | 'edit' => {
-    return mdViewMode;
-  }, [mdViewMode]);
 
   const handleDialogSubmit = React.useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1614,6 +1646,34 @@ const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
     setTextViewMode('edit');
   }, [selectedFile?.path]);
 
+  const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
+
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem(MD_VIEWER_MODE_KEY);
+      if (stored === 'preview') {
+        setMdViewMode('preview');
+      } else if (stored === 'edit') {
+        setMdViewMode('edit');
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
+    setMdViewMode(mode);
+    try {
+      localStorage.setItem(MD_VIEWER_MODE_KEY, mode);
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  const getMdViewMode = React.useCallback((): 'preview' | 'edit' => {
+    return mdViewMode;
+  }, [mdViewMode]);
+
   React.useEffect(() => {
     if (!pendingFileNavigation || !root) {
       return;
@@ -2196,23 +2256,19 @@ const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
               </Button>
             )}
 
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleOpenInSelectedApp()}
+              className="h-5 w-5 p-0 text-muted-foreground opacity-70 hover:opacity-100"
+              title="Open in selected app"
+              aria-label="Open in selected app"
+            >
+              <RiFileTransferFill className="h-4 w-4" />
+            </Button>
+
             {canEdit && !isSelectedImage && (
               <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
-            )}
-
-            {canUseShikiFileView && canEdit && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setTextViewMode((prev) => (prev === 'view' ? 'edit' : 'view'))}
-                className={cn(
-                  'h-5 w-5 p-0 transition-opacity',
-                  textViewMode === 'edit' ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-70 hover:opacity-100'
-                )}
-                title={textViewMode === 'view' ? 'Switch to edit mode' : 'Switch to highlighted view'}
-              >
-                {textViewMode === 'view' ? <RiEditLine className="size-4" /> : <RiEyeLine className="size-4" />}
-              </Button>
             )}
 
             {!isSelectedImage && (
@@ -2367,7 +2423,7 @@ const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
             <div className="h-full overflow-auto p-3">
               {fileContent.length > 500 * 1024 && (
                 <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
-                  ⚠️ This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
+                  This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
                 </div>
               )}
               <ErrorBoundary
@@ -2637,23 +2693,19 @@ const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
             </Button>
           )}
 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleOpenInSelectedApp()}
+            className="h-6 w-6 p-0 text-muted-foreground opacity-70 hover:opacity-100"
+            title="Open in selected app"
+            aria-label="Open in selected app"
+          >
+            <RiFileTransferFill className="h-4 w-4" />
+          </Button>
+
           {canEdit && !isSelectedImage && (
             <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
-          )}
-
-          {canUseShikiFileView && canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setTextViewMode((prev) => (prev === 'view' ? 'edit' : 'view'))}
-              className={cn(
-                'h-6 w-6 p-0 transition-opacity',
-                textViewMode === 'edit' ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-70 hover:opacity-100'
-              )}
-              title={textViewMode === 'view' ? 'Switch to edit mode' : 'Switch to highlighted view'}
-            >
-              {textViewMode === 'view' ? <RiEditLine className="size-4" /> : <RiEyeLine className="size-4" />}
-            </Button>
           )}
 
           {!isSelectedImage && (

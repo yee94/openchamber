@@ -489,6 +489,181 @@ fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
     }
 }
 
+#[cfg(target_os = "macos")]
+#[derive(Clone)]
+struct OpenCommandSpec {
+    program: &'static str,
+    args: Vec<String>,
+}
+
+#[cfg(target_os = "macos")]
+fn run_open_command_chain(specs: &[OpenCommandSpec]) -> Result<(), String> {
+    let mut failures: Vec<String> = Vec::new();
+
+    for spec in specs {
+        match Command::new(spec.program).args(&spec.args).status() {
+            Ok(status) if status.success() => return Ok(()),
+            Ok(status) => failures.push(format!(
+                "{} {} exited with status {}",
+                spec.program,
+                spec.args.join(" "),
+                status
+            )),
+            Err(error) => failures.push(format!(
+                "{} {} failed: {}",
+                spec.program,
+                spec.args.join(" "),
+                error
+            )),
+        }
+    }
+
+    if failures.is_empty() {
+        return Err("No launch strategies available".to_string());
+    }
+
+    Err(failures.join("; "))
+}
+
+#[cfg(target_os = "macos")]
+fn is_jetbrains_app_id(app_id: &str) -> bool {
+    matches!(
+        app_id,
+        "pycharm"
+            | "intellij"
+            | "webstorm"
+            | "phpstorm"
+            | "rider"
+            | "rustrover"
+            | "android-studio"
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn cli_for_app_id(app_id: &str) -> Option<&'static str> {
+    match app_id {
+        "vscode" => Some("code"),
+        "cursor" => Some("cursor"),
+        "vscodium" => Some("codium"),
+        "windsurf" => Some("windsurf"),
+        "zed" => Some("zed"),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+fn desktop_open_in_app(
+    project_path: String,
+    app_id: String,
+    app_name: String,
+    file_path: Option<String>,
+) -> Result<(), String> {
+    let trimmed_project_path = project_path.trim();
+    if trimmed_project_path.is_empty() {
+        return Err("Project path is required".to_string());
+    }
+
+    let trimmed_app_id = app_id.trim().to_lowercase();
+    if trimmed_app_id.is_empty() {
+        return Err("App id is required".to_string());
+    }
+
+    let trimmed_app_name = app_name.trim();
+    if trimmed_app_name.is_empty() {
+        return Err("App name is required".to_string());
+    }
+
+    let normalized_file_path = file_path
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+
+    #[cfg(target_os = "macos")]
+    {
+        let project = trimmed_project_path.to_string();
+        let app_name_owned = trimmed_app_name.to_string();
+        let file = normalized_file_path.map(|value| value.to_string());
+        let mut specs: Vec<OpenCommandSpec> = Vec::new();
+
+        if trimmed_app_id == "finder" {
+            specs.push(OpenCommandSpec {
+                program: "open",
+                args: vec![project.clone()],
+            });
+            return run_open_command_chain(&specs);
+        }
+
+        if matches!(trimmed_app_id.as_str(), "terminal" | "iterm2" | "ghostty") {
+            specs.push(OpenCommandSpec {
+                program: "open",
+                args: vec!["-a".to_string(), app_name_owned.clone(), project.clone()],
+            });
+            return run_open_command_chain(&specs);
+        }
+
+        if let Some(cli) = cli_for_app_id(trimmed_app_id.as_str()) {
+            let mut cli_args = vec!["-n".to_string(), project.clone()];
+            if let Some(file_path) = file.as_ref() {
+                cli_args.push("-g".to_string());
+                cli_args.push(file_path.clone());
+            }
+            specs.push(OpenCommandSpec {
+                program: cli,
+                args: cli_args,
+            });
+        }
+
+        if is_jetbrains_app_id(trimmed_app_id.as_str()) {
+            let mut args = vec![
+                "-na".to_string(),
+                app_name_owned.clone(),
+                "--args".to_string(),
+                project.clone(),
+            ];
+            if let Some(file_path) = file.as_ref() {
+                args.push(file_path.clone());
+            }
+            specs.push(OpenCommandSpec {
+                program: "open",
+                args,
+            });
+        }
+
+        if let Some(file_path) = file.as_ref() {
+            specs.push(OpenCommandSpec {
+                program: "open",
+                args: vec![
+                    "-na".to_string(),
+                    app_name_owned.clone(),
+                    "--args".to_string(),
+                    project.clone(),
+                    file_path.clone(),
+                ],
+            });
+        }
+
+        specs.push(OpenCommandSpec {
+            program: "open",
+            args: vec!["-a".to_string(), app_name_owned.clone(), project.clone()],
+        });
+
+        if let Some(file_path) = file {
+            specs.push(OpenCommandSpec {
+                program: "open",
+                args: vec!["-a".to_string(), app_name_owned, file_path],
+            });
+        }
+
+        return run_open_command_chain(&specs);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = normalized_file_path;
+        Err("desktop_open_in_app is only supported on macOS".to_string())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct InstalledAppInfo {
@@ -2655,6 +2830,7 @@ fn main() {
             desktop_new_window_at_url,
             desktop_clear_cache,
             desktop_open_path,
+            desktop_open_in_app,
             desktop_filter_installed_apps,
             desktop_get_installed_apps,
             desktop_fetch_app_icons,
