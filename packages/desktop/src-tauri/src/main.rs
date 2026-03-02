@@ -151,21 +151,8 @@ fn build_macos_menu<R: tauri::Runtime>(
 
     let pkg_info = app.package_info();
 
-    let auto_worktree = app
-        .try_state::<MenuRuntimeState>()
-        .map(|state| *state.auto_worktree.lock().expect("menu state mutex"))
-        .unwrap_or(false);
-
-    let new_session_shortcut = if auto_worktree {
-        "Cmd+Shift+N"
-    } else {
-        "Cmd+N"
-    };
-    let new_worktree_shortcut = if auto_worktree {
-        "Cmd+N"
-    } else {
-        "Cmd+Shift+N"
-    };
+    let new_session_shortcut = "Cmd+N";
+    let new_worktree_shortcut = "Cmd+Shift+N";
 
     let about = MenuItem::with_id(
         app,
@@ -440,43 +427,6 @@ fn build_macos_menu<R: tauri::Runtime>(
             &help_menu,
         ],
     )
-}
-
-#[tauri::command]
-fn desktop_set_auto_worktree_menu(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let Some(state) = app.try_state::<MenuRuntimeState>() else {
-        return Ok(());
-    };
-
-    {
-        let mut guard = state.auto_worktree.lock().expect("menu state mutex");
-        *guard = enabled;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        use tauri::menu::MenuItemKind;
-
-        let new_session_shortcut = if enabled { "Cmd+Shift+N" } else { "Cmd+N" };
-        let new_worktree_shortcut = if enabled { "Cmd+N" } else { "Cmd+Shift+N" };
-
-        if let Some(menu) = app.menu() {
-            if let Some(MenuItemKind::MenuItem(item)) = menu.get(MENU_ITEM_NEW_SESSION_ID) {
-                item.set_accelerator(Some(new_session_shortcut))
-                    .map_err(|err| err.to_string())?;
-            }
-            if let Some(MenuItemKind::MenuItem(item)) = menu.get(MENU_ITEM_WORKTREE_CREATOR_ID) {
-                item.set_accelerator(Some(new_worktree_shortcut))
-                    .map_err(|err| err.to_string())?;
-            }
-        } else {
-            // Should not happen on macOS, but keep as fallback.
-            let menu = build_macos_menu(&app).map_err(|err| err.to_string())?;
-            app.set_menu(menu).map_err(|err| err.to_string())?;
-        }
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -1100,11 +1050,6 @@ impl WindowFocusState {
         let mut guard = self.focused_windows.lock().expect("focus mutex");
         guard.remove(label);
     }
-}
-
-#[derive(Default)]
-struct MenuRuntimeState {
-    auto_worktree: Mutex<bool>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -2502,7 +2447,6 @@ fn main() {
         .manage(DesktopUiInjectionState::default())
         .manage(WindowFocusState::default())
         .manage(WindowGeometryDebounceState::default())
-        .manage(MenuRuntimeState::default())
         .manage(DesktopSshManagerState::default())
         .manage(PendingUpdate(Mutex::new(None)))
         .plugin(tauri_plugin_shell::init())
@@ -2709,7 +2653,6 @@ fn main() {
             desktop_restart,
             desktop_new_window,
             desktop_new_window_at_url,
-            desktop_set_auto_worktree_menu,
             desktop_clear_cache,
             desktop_open_path,
             desktop_filter_installed_apps,

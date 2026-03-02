@@ -714,7 +714,7 @@ export const MainLayout: React.FC = () => {
                     >
                         <div className="h-full overflow-hidden flex flex-col bg-background shadow-none drawer-safe-area">
                             <ErrorBoundary>
-                                <GitView mode="sidebar" />
+                                <GitView />
                             </ErrorBoundary>
                         </div>
                     </motion.aside>

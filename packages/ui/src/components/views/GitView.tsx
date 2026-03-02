@@ -1,7 +1,6 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
@@ -59,7 +58,6 @@ import { StashDialog } from './git/StashDialog';
 import { InProgressOperationBanner } from './git/InProgressOperationBanner';
 import { BranchIntegrationSection, type OperationLogEntry } from './git/BranchIntegrationSection';
 import type { GitRemote } from '@/lib/gitApi';
-import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { cn } from '@/lib/utils';
 import { generateCommitMessage as generateSessionCommitMessage } from '@/lib/gitApi';
@@ -217,11 +215,7 @@ const gitViewSnapshots = new Map<string, GitViewSnapshot>();
 const normalizePath = (value?: string | null): string =>
   (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
 
-interface GitViewProps {
-  mode?: 'full' | 'sidebar';
-}
-
-export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
+export const GitView: React.FC = () => {
   const { git } = useRuntimeAPIs();
   const currentDirectory = useEffectiveDirectory();
   const {
@@ -295,8 +289,6 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   }, [currentDirectory]);
 
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
-  const projects = useProjectsStore((state) => state.projects);
-  const [isBranchPickerOpen, setIsBranchPickerOpen] = React.useState(false);
   const [rootBranchHint, setRootBranchHint] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -324,26 +316,6 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     };
   }, [worktreeMetadata?.projectDirectory]);
 
-  const branchPickerProject = React.useMemo(() => {
-    const current = normalizePath(currentDirectory);
-    const worktreeRoot = normalizePath(worktreeMetadata?.projectDirectory);
-    const best = projects
-      .map((project) => ({
-        id: project.id,
-        path: project.path,
-        label: project.label,
-        normalizedPath: normalizePath(project.path),
-      }))
-      .sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)
-      .find((project) => {
-        if (!project.normalizedPath) return false;
-        if (worktreeRoot && project.normalizedPath === worktreeRoot) return true;
-        return current === project.normalizedPath || current.startsWith(`${project.normalizedPath}/`);
-      });
-
-    return best ?? null;
-  }, [currentDirectory, projects, worktreeMetadata?.projectDirectory]);
-
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
   );
@@ -355,7 +327,6 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   const [logMaxCountLocal, setLogMaxCountLocal] = React.useState<number>(25);
   const [isSettingIdentity, setIsSettingIdentity] = React.useState(false);
   const { triggerFireworks } = useFireworksCelebration();
-  const isSidebarMode = mode === 'sidebar';
 
   const autoAppliedDefaultRef = React.useRef<Map<string, string>>(new Map());
   const identityApplyCountRef = React.useRef(0);
@@ -1759,7 +1730,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   }
 
   return (
-    <div className={cn('flex h-full flex-col overflow-hidden', isSidebarMode ? 'bg-transparent' : 'bg-background')} data-keyboard-avoid="true">
+    <div className={cn('flex h-full flex-col overflow-hidden', 'bg-transparent')} data-keyboard-avoid="true">
       <GitHeader
         status={status}
         localBranches={localBranches}
@@ -1778,9 +1749,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
         isWorktreeMode={!!worktreeMetadata}
-        isSidebarMode={isSidebarMode}
         onOpenHistory={() => setIsHistoryDialogOpen(true)}
-        onOpenBranchPicker={!isSidebarMode && branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
 
       {/* In-progress operation banner */}
@@ -1801,7 +1770,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
-          <div className={cn('min-w-0 min-h-0 h-full flex flex-col', isSidebarMode ? 'bg-transparent' : 'bg-muted/10')}>
+          <div className={cn('min-w-0 min-h-0 h-full flex flex-col', 'bg-transparent')}>
             <div className={cn(isMobile ? 'h-10 px-1.5' : 'h-8 px-2')}>
               <SortableTabsStrip
                 items={actionTabItems}
@@ -1809,17 +1778,16 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                 onSelect={(tabID) => setActionTab(tabID as ActionTab)}
                 layoutMode="fit"
                 variant="active-pill"
-                inactiveTabsIconOnly={isSidebarMode && isMobile}
+                inactiveTabsIconOnly={isMobile}
                 className="h-full"
               />
             </div>
-            {!isSidebarMode ? <div className="h-px bg-border/40" /> : null}
 
             <ScrollableOverlay
               as={ScrollShadow}
               ref={actionPanelScrollRef}
               outerClassName="flex-1 min-h-0"
-              className={cn('px-4', isSidebarMode ? 'pt-1 pb-4' : 'py-4')}
+              className={cn('px-4', 'pt-1 pb-4')}
               disableHorizontal
               preventOverscroll
             >
@@ -1840,12 +1808,12 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                         onClearSelection={clearSelection}
                         onRevertAll={handleRevertAll}
                         onViewDiff={(path) => {
-                          if (isSidebarMode && currentDirectory && !isMobile) {
+                          if (currentDirectory && !isMobile) {
                             openContextDiff(currentDirectory, path);
                             return;
                           }
                           navigateToDiff(path);
-                          if (isSidebarMode && isMobile) {
+                          if (isMobile) {
                             setRightSidebarOpen(false);
                           }
                         }}
@@ -2049,12 +2017,6 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
         operation={stashDialogOperation}
         targetBranch={stashDialogBranch}
         onConfirm={handleStashAndRetry}
-      />
-
-      <BranchPickerDialog
-        open={isBranchPickerOpen}
-        onOpenChange={setIsBranchPickerOpen}
-        project={branchPickerProject}
       />
 
     </div>

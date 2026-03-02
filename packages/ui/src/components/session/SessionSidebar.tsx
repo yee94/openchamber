@@ -61,14 +61,9 @@ import {
   RiFolderAddLine,
   RiFolderLine,
   RiGitBranchLine,
-  RiGitPullRequestLine,
-  RiGitRepositoryLine,
   RiNodeTree,
   RiStickyNoteLine,
   RiLinkUnlinkM,
-
-  RiGithubLine,
-
   RiMore2Line,
   RiPencilAiLine,
   RiPushpinLine,
@@ -88,16 +83,14 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
-import { createWorktreeOnly, createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
-import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
+import { NewWorktreeDialog } from './NewWorktreeDialog';
 import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
-import { BranchPickerDialog } from './BranchPickerDialog';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { SessionFolderItem } from './SessionFolderItem';
 
@@ -404,8 +397,6 @@ interface SortableProjectItemProps {
   onHoverChange: (hovered: boolean) => void;
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
-  onNewSessionFromGitHubIssue?: () => void;
-  onNewSessionFromGitHubPR?: () => void;
   onOpenMultiRunLauncher: () => void;
   onRenameStart: () => void;
   onRenameSave: () => void;
@@ -437,8 +428,6 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onHoverChange,
   onNewSession,
   onNewWorktreeSession,
-  onNewSessionFromGitHubIssue,
-  onNewSessionFromGitHubPR,
   onOpenMultiRunLauncher,
   onRenameStart,
   onRenameSave,
@@ -602,18 +591,6 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     New Session in Worktree
                   </DropdownMenuItem>
                 )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
-                  <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
-                    <RiGithubLine className="mr-1.5 h-4 w-4" />
-                    New session from GitHub issue
-                  </DropdownMenuItem>
-                )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
-                  <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
-                    <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
-                    New session from GitHub PR
-                  </DropdownMenuItem>
-                )}
                 {showCreateButtons && isRepo && !hideDirectoryControls && (
                   <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                     <ArrowsMerge className="mr-1.5 h-4 w-4" />
@@ -760,9 +737,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
-  const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
-  const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
-  const [isBranchPickerOpen, setIsBranchPickerOpen] = React.useState(false);
+  const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
@@ -1893,17 +1868,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       : null),
     [activeProjectForHeader],
   );
-  const branchPickerProject = React.useMemo(() => {
-    if (!activeProjectForHeader) {
-      return null;
-    }
-    return {
-      id: activeProjectForHeader.id,
-      path: activeProjectForHeader.path,
-      normalizedPath: activeProjectForHeader.normalizedPath,
-      label: activeProjectForHeader.label,
-    };
-  }, [activeProjectForHeader]);
 
   const activeProjectIsRepo = React.useMemo(
     () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
@@ -3167,15 +3131,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       if (activeProjectForHeader.id !== activeProjectId) {
                         setActiveProjectIdOnly(activeProjectForHeader.id);
                       }
-                      const newWorktreePath = await createWorktreeOnly();
-                      if (!newWorktreePath) {
-                        return;
-                      }
-                      setActiveMainTab('chat');
-                      if (mobileVariant) {
-                        setSessionSwitcherOpen(false);
-                      }
-                      openNewSessionDraft({ directoryOverride: newWorktreePath });
+                      setNewWorktreeDialogOpen(true);
                     }}
                     className={headerActionButtonClass}
                     aria-label="New worktree"
@@ -3184,32 +3140,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>New worktree</p></TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setIssuePickerOpen(true)}
-                    className={headerActionButtonClass}
-                    aria-label="New from issue"
-                  >
-                    <RiGithubLine className={headerActionIconClass} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>New from issue</p></TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setPullRequestPickerOpen(true)}
-                    className={headerActionButtonClass}
-                    aria-label="New from PR"
-                  >
-                    <RiGitPullRequestLine className={headerActionIconClass} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>New from PR</p></TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -3225,21 +3155,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
                 </>
-              ) : null}
-              {stableActiveProjectIsRepo && branchPickerProject ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setIsBranchPickerOpen(true)}
-                      className={headerActionButtonClass}
-                      aria-label="Manage branches"
-                    >
-                      <RiGitRepositoryLine className={headerActionIconClass} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={4}><p>Manage branches</p></TooltipContent>
-                </Tooltip>
               ) : null}
               {useMobileNotesPanel ? (
                 <Tooltip>
@@ -3373,18 +3288,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       createWorktreeSession();
                     }}
-                    onNewSessionFromGitHubIssue={() => {
-                      if (projectKey !== activeProjectId) {
-                        setActiveProjectIdOnly(projectKey);
-                      }
-                      setIssuePickerOpen(true);
-                    }}
-                    onNewSessionFromGitHubPR={() => {
-                      if (projectKey !== activeProjectId) {
-                        setActiveProjectIdOnly(projectKey);
-                      }
-                      setPullRequestPickerOpen(true);
-                    }}
                     onOpenMultiRunLauncher={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProjectIdOnly(projectKey);
@@ -3459,32 +3362,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         )}
       </ScrollableOverlay>
 
-      <GitHubIssuePickerDialog
-        open={issuePickerOpen}
-        onOpenChange={(open) => {
-          setIssuePickerOpen(open);
-          if (!open && mobileVariant) {
-            setActiveMainTab('chat');
+      <NewWorktreeDialog
+        open={newWorktreeDialogOpen}
+        onOpenChange={setNewWorktreeDialogOpen}
+        onWorktreeCreated={(worktreePath, options) => {
+          setActiveMainTab('chat');
+          if (mobileVariant) {
             setSessionSwitcherOpen(false);
           }
-        }}
-      />
-
-      <GitHubPullRequestPickerDialog
-        open={pullRequestPickerOpen}
-        onOpenChange={(open) => {
-          setPullRequestPickerOpen(open);
-          if (!open && mobileVariant) {
-            setActiveMainTab('chat');
-            setSessionSwitcherOpen(false);
+          if (options?.sessionId) {
+            setCurrentSession(options.sessionId);
+            return;
           }
+          openNewSessionDraft({ directoryOverride: worktreePath });
         }}
-      />
-
-      <BranchPickerDialog
-        open={isBranchPickerOpen}
-        onOpenChange={setIsBranchPickerOpen}
-        project={branchPickerProject}
       />
 
       {useMobileNotesPanel ? (

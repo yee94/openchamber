@@ -39,7 +39,7 @@ export const RightSidebarTabs: React.FC = () => {
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {rightSidebarTab === 'git' ? <GitView mode="sidebar" /> : <SidebarFilesTree />}
+        {rightSidebarTab === 'git' ? <GitView /> : <SidebarFilesTree />}
       </div>
     </div>
   );
