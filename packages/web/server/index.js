@@ -63,8 +63,6 @@ const OPENCHAMBER_VERSION = (() => {
   return 'unknown';
 })();
 const fsPromises = fs.promises;
-const DEFAULT_FILE_SEARCH_LIMIT = 60;
-const MAX_FILE_SEARCH_LIMIT = 400;
 const FILE_SEARCH_MAX_CONCURRENCY = 5;
 const FILE_SEARCH_EXCLUDED_DIRS = new Set([
   'node_modules',
@@ -1997,7 +1995,7 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.toolCallExpansion === 'string') {
     const mode = candidate.toolCallExpansion.trim();
-    if (mode === 'collapsed' || mode === 'activity' || mode === 'detailed') {
+    if (mode === 'collapsed' || mode === 'activity' || mode === 'detailed' || mode === 'changes') {
       result.toolCallExpansion = mode;
     }
   }
@@ -12361,53 +12359,6 @@ async function main(options = {}) {
         return res.status(403).json({ error: 'Access to directory denied' });
       }
       res.status(500).json({ error: (error && error.message) || 'Failed to list directory' });
-    }
-  });
-
-  app.get('/api/fs/search', async (req, res) => {
-    const rawRoot = typeof req.query.root === 'string' && req.query.root.trim().length > 0
-      ? req.query.root.trim()
-      : typeof req.query.directory === 'string' && req.query.directory.trim().length > 0
-        ? req.query.directory.trim()
-        : os.homedir();
-  const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
-  const includeHidden = req.query.includeHidden === 'true';
-  const respectGitignore = req.query.respectGitignore !== 'false';
-  const limitParam = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined;
-    const parsedLimit = Number.isFinite(limitParam) ? Number(limitParam) : DEFAULT_FILE_SEARCH_LIMIT;
-    const limit = Math.max(1, Math.min(parsedLimit, MAX_FILE_SEARCH_LIMIT));
-
-    try {
-      const resolvedRoot = path.resolve(normalizeDirectoryPath(rawRoot));
-      const stats = await fsPromises.stat(resolvedRoot);
-      if (!stats.isDirectory()) {
-        return res.status(400).json({ error: 'Specified root is not a directory' });
-      }
-
-      const files = await searchFilesystemFiles(resolvedRoot, {
-        limit,
-        query: rawQuery || '',
-        includeHidden,
-        respectGitignore,
-      });
-      res.json({
-        root: resolvedRoot,
-        count: files.length,
-        files
-      });
-    } catch (error) {
-      console.error('Failed to search filesystem:', error);
-      const err = error;
-      if (err && typeof err === 'object' && 'code' in err) {
-        const code = err.code;
-        if (code === 'ENOENT') {
-          return res.status(404).json({ error: 'Directory not found' });
-        }
-        if (code === 'EACCES') {
-          return res.status(403).json({ error: 'Access to directory denied' });
-        }
-      }
-      res.status(500).json({ error: (error && error.message) || 'Failed to search files' });
     }
   });
 

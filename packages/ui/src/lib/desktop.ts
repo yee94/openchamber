@@ -111,7 +111,7 @@ export type DesktopSettings = {
   gitProviderId?: string;
   gitModelId?: string;
   pwaAppName?: string;
-  toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
+  toolCallExpansion?: 'collapsed' | 'activity' | 'detailed' | 'changes';
   userMessageRenderingMode?: 'markdown' | 'plain';
   stickyUserHeader?: boolean;
   fontSize?: number;
