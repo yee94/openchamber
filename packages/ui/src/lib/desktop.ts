@@ -110,6 +110,7 @@ export type DesktopSettings = {
   zenModel?: string;
   gitProviderId?: string;
   gitModelId?: string;
+  pwaAppName?: string;
   toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
   userMessageRenderingMode?: 'markdown' | 'plain';
   stickyUserHeader?: boolean;

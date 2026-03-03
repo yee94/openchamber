@@ -537,6 +537,7 @@ export interface SettingsPayload {
   openInAppId?: string;
   gitProviderId?: string;
   gitModelId?: string;
+  pwaAppName?: string;
 
   [key: string]: unknown;
 }

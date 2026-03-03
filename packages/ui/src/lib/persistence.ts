@@ -74,6 +74,14 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   if (typeof settings.openInAppId === 'string' && settings.openInAppId.length > 0) {
     localStorage.setItem('openInAppId', settings.openInAppId);
   }
+  if (typeof settings.pwaAppName === 'string') {
+    const normalized = settings.pwaAppName.trim().replace(/\s+/g, ' ').slice(0, 64);
+    if (normalized.length > 0) {
+      localStorage.setItem('openchamber.pwaName', normalized);
+    } else {
+      localStorage.removeItem('openchamber.pwaName');
+    }
+  }
 };
 
 type PersistApi = {
@@ -783,6 +791,10 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.openInAppId === 'string' && candidate.openInAppId.length > 0) {
     result.openInAppId = candidate.openInAppId;
+  }
+  if (typeof candidate.pwaAppName === 'string') {
+    const normalized = candidate.pwaAppName.trim().replace(/\s+/g, ' ').slice(0, 64);
+    result.pwaAppName = normalized.length > 0 ? normalized : '';
   }
 
   if (typeof candidate.messageLimit === 'number' && Number.isFinite(candidate.messageLimit)) {
