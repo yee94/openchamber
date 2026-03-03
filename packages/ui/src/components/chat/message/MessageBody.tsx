@@ -617,6 +617,12 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         });
     }, [toolParts]);
 
+    const isActiveTool = React.useCallback((toolPart: ToolPartType): boolean => {
+        const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
+        const status = state?.status;
+        return status === 'pending' || status === 'running' || status === 'started';
+    }, []);
+
     const isToolFinalized = React.useCallback((toolPart: ToolPartType) => {
         const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
         const status = state?.status;
@@ -634,6 +640,10 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         }
         return true;
     }, []);
+
+    const shouldShowTool = React.useCallback((toolPart: ToolPartType): boolean => {
+        return isActiveTool(toolPart) || isToolFinalized(toolPart);
+    }, [isActiveTool, isToolFinalized]);
 
     const allToolsFinalized = React.useMemo(() => {
         if (toolParts.length === 0) {
@@ -881,10 +891,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             if (isActivityStandaloneTool(toolPart.tool)) {
                 return false;
             }
-            if (shouldHoldTools) {
-                return false;
-            }
-            return isToolFinalized(toolPart);
+            return shouldShowTool(toolPart);
         });
 
         displayableTools.forEach((toolPart, index) => {
@@ -895,7 +902,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         });
 
         return connections;
-    }, [toolParts, shouldHoldTools, isToolFinalized]);
+    }, [toolParts, shouldShowTool]);
 
     const activityPartsForTurn = React.useMemo(() => {
         return turnGroupingContext?.activityParts ?? [];
@@ -1063,22 +1070,21 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             let endTime: number | null = null;
             let element: React.ReactNode | null = null;
 
-            if (!shouldShowActivityGroup) {
-                if (activity.kind === 'tool') {
-                    const toolPart = part as ToolPartType;
+                if (!shouldShowActivityGroup) {
+                    if (activity.kind === 'tool') {
+                        const toolPart = part as ToolPartType;
 
-                    if (isActivityStandaloneTool(toolPart.tool)) {
-                        return;
-                    }
+                        if (isActivityStandaloneTool(toolPart.tool)) {
+                            return;
+                        }
 
-                    const toolState = (toolPart as { state?: { time?: { end?: number | null | undefined } | null | undefined } | null | undefined }).state;
-                    const time = toolState?.time;
-                    const isFinalized = isToolFinalized(toolPart);
-                    const shouldShowTool = !shouldHoldTools && isFinalized;
+                        const toolState = (toolPart as { state?: { time?: { end?: number | null | undefined } | null | undefined } | null | undefined }).state;
+                        const time = toolState?.time;
+                        const isFinalized = isToolFinalized(toolPart);
 
-                    if (!shouldShowTool) {
-                        return;
-                    }
+                        if (!shouldShowTool(toolPart)) {
+                            return;
+                        }
 
                     const connection = toolConnections[toolPart.id];
 
@@ -1158,7 +1164,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         onContentChange,
         onShowPopup,
         onToggleTool,
-        shouldHoldTools,
+        shouldShowTool,
         shouldShowActivityGroup,
         showReasoningTraces,
         syntaxTheme,

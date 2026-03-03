@@ -1432,8 +1432,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const isTaskTool = part.tool.toLowerCase() === 'task';
 
-    const isFinalized = state.status === 'completed' || state.status === 'error';
-    const isActive = state.status === 'running' || state.status === 'pending';
+    const status = state.status as string | undefined;
+    const isFinalized = status === 'completed' || status === 'error';
+    const isActive = status === 'running' || status === 'pending' || status === 'started';
     const isError = state.status === 'error';
 
 
@@ -1454,18 +1455,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const input = stateWithData.input;
     const time = stateWithData.time;
 
-    const [pinnedTaskTime, setPinnedTaskTime] = React.useState<{ start?: number; end?: number }>({});
+    const [pinnedTime, setPinnedTime] = React.useState<{ start?: number; end?: number }>({});
 
     React.useEffect(() => {
-        setPinnedTaskTime({});
+        setPinnedTime({});
     }, [part.id]);
 
     React.useEffect(() => {
-        if (!isTaskTool) {
-            return;
-        }
-
-        setPinnedTaskTime((prev) => {
+        setPinnedTime((prev) => {
             const next = { ...prev };
             let changed = false;
 
@@ -1481,10 +1478,10 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
             return changed ? next : prev;
         });
-    }, [isTaskTool, time?.end, time?.start]);
+    }, [time?.end, time?.start]);
 
-    const effectiveTimeStart = isTaskTool ? (pinnedTaskTime.start ?? time?.start) : time?.start;
-    const effectiveTimeEnd = isTaskTool ? (pinnedTaskTime.end ?? time?.end) : time?.end;
+    const effectiveTimeStart = pinnedTime.start ?? time?.start;
+    const effectiveTimeEnd = pinnedTime.end ?? time?.end;
 
     const endedTimestampText = React.useMemo(() => {
         if (typeof effectiveTimeEnd !== 'number' || !Number.isFinite(effectiveTimeEnd)) {
@@ -1670,7 +1667,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         handleMainClick(event);
     };
 
-    if (!isFinalized && !isTaskTool) {
+    if (!isFinalized && !isActive && !isTaskTool) {
         return null;
     }
 
@@ -1757,7 +1754,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 <LiveDuration
                                     start={effectiveTimeStart}
                                     end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
-                                    active={Boolean(isTaskTool && isActive && typeof effectiveTimeEnd !== 'number')}
+                                    active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
                                 />
                             </span>
                             {!isMobile && endedTimestampText ? (
