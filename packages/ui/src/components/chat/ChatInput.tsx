@@ -2625,7 +2625,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 : undefined}
                         />
                     )}
-                    <div className="relative overflow-hidden">
+                    <div className={cn("relative overflow-hidden", isDesktopExpanded && 'flex-1 min-h-0')}>
                         {highlightedComposerContent && (
                             <div
                                 aria-hidden
@@ -2706,7 +2706,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     </div>
                     <div
                         className={cn(
-                            'bg-transparent',
+                            'bg-transparent flex-shrink-0',
                             footerPaddingClass,
                             isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
                         )}
