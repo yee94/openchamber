@@ -158,6 +158,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'general',
     kind: 'single',
     keywords: ['keyboard', 'hotkeys', 'shortcuts', 'bindings'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'sessions',

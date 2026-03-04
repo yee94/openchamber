@@ -418,7 +418,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 <div className={cn('py-1.5', isMobile ? 'space-y-2' : 'flex items-center gap-8')}>
                                     <div className={cn('flex min-w-0 flex-col', isMobile ? 'w-full' : 'w-56 shrink-0')}>
                                         <span className="typography-ui-label text-foreground">Install App Name</span>
-                                        <span className="typography-meta text-muted-foreground">Used by Chrome install prompt before install.</span>
+                                        <span className="typography-meta text-muted-foreground">Used by PWA installation process.</span>
                                     </div>
                                     <div className={cn('flex items-center gap-2', isMobile ? 'w-full' : 'w-fit min-w-[22rem]')}>
                                         <Input
