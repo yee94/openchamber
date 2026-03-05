@@ -6,9 +6,9 @@
 [![Discord](https://img.shields.io/badge/Discord-join.svg?style=flat&labelColor=100F0F&color=8B7EC8&logo=discord&logoColor=FFFCF0)](https://discord.gg/ZYRSdnwwKA)
 [![Support the project](https://img.shields.io/badge/Support-Project-black?style=flat&labelColor=100F0F&color=EC8B49&logo=ko-fi&logoColor=FFFCF0)](https://ko-fi.com/G2G41SAWNS)
 
-**OpenCode, everywhere.** Desktop. Browser. Phone.
+## **OpenCode, everywhere.** Desktop. Browser. Phone.
 
-A GUI for [OpenCode](https://opencode.ai) that works alongside the TUI — start a session in your terminal, pick it up on your phone, finish it on your laptop. Same conversation, any screen.
+### A rich interface for [OpenCode](https://opencode.ai). Review diffs, manage agents, run dev servers, and keep the big picture while your AI codes.
 
 ![OpenChamber Chat](docs/references/chat_example.png)
 
@@ -27,12 +27,6 @@ A GUI for [OpenCode](https://opencode.ai) that works alongside the TUI — start
 </p>
 
 </details>
-
-## Why a GUI?
-
-OpenCode's TUI is excellent. OpenChamber is for those moments when you want a visual workspace — reviewing diffs side-by-side, keeping an eye on multiple agents at once, or just continuing a session from your phone while away from the keyboard.
-
-They share the same sessions. Use whatever feels right.
 
 ## Highlights
 
