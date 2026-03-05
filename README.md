@@ -30,21 +30,24 @@
 
 ## Highlights
 
-- **Use it from anywhere** — Cloudflare tunnel with QR code onboarding. Scan, connect, code from your couch.
-- **Branchable chat timeline** — Undo, redo, fork from any turn. Explore different approaches without losing your place.
-- **GitHub-native workflows** — Start sessions from issues and PRs with context already attached. Review checks, merge — all in-app.
-- **Project Actions** — Run dev servers, configure SSH port forwarding, open remote URLs locally. Your project commands, one click away.
-- **Connect to remote machines** — Desktop app connects to remote OpenChamber instances over SSH, with dedicated lifecycle and UX flows.
+- **Use it from anywhere** - Cloudflare tunnel with QR code onboarding. Scan, connect, code from your couch.
+- **Branchable chat timeline** - Undo, redo, fork from any turn. Explore different approaches without losing your place.
+- **GitHub-native workflows** - Start sessions from issues and PRs with context already attached. Review checks, merge - all in-app.
+- **Project Actions** - Run dev servers, configure SSH port forwarding, open remote URLs locally. Your project commands, one click away.
+- **Connect to remote machines** - Desktop app connects to remote OpenChamber instances over SSH, with dedicated lifecycle and UX flows.
 
 ## Quick Start
 
 > **Prerequisite:** [OpenCode CLI](https://opencode.ai) installed.
 
-**Desktop (macOS)** — Download from [Releases](https://github.com/btriapitsyn/openchamber/releases).
+### **Desktop (macOS)**
+Download from [Releases](https://github.com/btriapitsyn/openchamber/releases).
 
-**VS Code** — Install from [Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.openchamber) or search "OpenChamber" in Extensions.
+### **VS Code**
+Install from [Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.openchamber) or search "OpenChamber" in Extensions.
 
-**CLI (Web + PWA)** — requires Node.js 20+
+### **CLI (Web + PWA)**
+_requires Node.js 20+_
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/btriapitsyn/openchamber/main/scripts/install.sh | bash
@@ -132,7 +135,7 @@ For reliable long-lived access with a custom hostname from your Cloudflare accou
 - Multi-agent runs from one prompt with isolated worktrees for safe side-by-side comparisons
 - Voice mode with speech input and read-aloud responses for hands-free workflows
 - Plan/Build mode with a dedicated plan view for drafting and iterating steps
-- Inline comment drafts on diffs, files, and plans — send feedback back to the agent
+- Inline comment drafts on diffs, files, and plans - send feedback back to the agent
 - Shell mode via leading `!` with inline output
 - Share messages as images
 - Mermaid diagrams render inline with copy/download actions
@@ -158,7 +161,7 @@ For reliable long-lived access with a custom hostname from your Cloudflare accou
 - Workspace file browser with inline editing, syntax highlighting, and markdown preview
 - Beautiful diff viewer with stacked/inline modes, lazy loading for large changesets
 - Integrated terminal with per-directory sessions, tabbed interface, and stable heavy-output performance
-- Clickable file paths in messages — jump to exact line locations
+- Clickable file paths in messages - jump to exact line locations
 - File-type icons across all views for faster visual scanning
 
 </details>
@@ -201,7 +204,7 @@ For reliable long-lived access with a custom hostname from your Cloudflare accou
 <summary><strong>Customization</strong></summary>
 
 - 18+ built-in themes with light/dark variants
-- Custom themes via JSON files in `~/.config/openchamber/themes/` — hot reload, no restart
+- Custom themes via JSON files in `~/.config/openchamber/themes/` - hot reload, no restart
 - Configurable keyboard shortcuts for chat, panels, and services
 - Font size, spacing, corner radius, and layout controls
 - Customizable project icons with upload and automatic favicon discovery
@@ -230,7 +233,7 @@ Active development. Here's what's being worked on or planned:
 - Windows and Linux desktop apps
 - Mobile app with remote instance and laptop connectivity
 - More built-in tunneling options
-- Kanban board for multi-agent management — keeping the human in the loop and in control
+- Kanban board for multi-agent management - keeping the human in the loop and in control
 - Custom OpenCode plugins/tools built-in catalog
 - Linear integration
 - Built-in browser for running dev apps with agent integration
@@ -241,13 +244,13 @@ Independent project, not affiliated with the OpenCode team.
 
 **Special thanks to:**
 
-- [OpenCode](https://opencode.ai) — For the excellent API and extensible architecture.
-- [Flexoki](https://github.com/kepano/flexoki) — Beautiful color scheme by [Steph Ango](https://stephango.com/flexoki).
-- [Pierre](https://pierrejs-docs.vercel.app/) — Fast, beautiful diff viewer with syntax highlighting.
-- [Tauri](https://github.com/tauri-apps/tauri) — Desktop application framework.
-- [Ghostty-web](https://github.com/coder/ghostty-web) — Great implementation of a Ghostty web renderer.
-- [David Hill](https://x.com/iamdavidhill) — Who inspired me to release this without [overthinking](https://x.com/iamdavidhill/status/1993648326450020746).
-- [My wife](https://github.com/yulia-ivashko), who — with zero AI background — sat down with the app for the first time and built the firework celebration that plays on every successful push.
+- [OpenCode](https://opencode.ai) - For the excellent API and extensible architecture.
+- [Flexoki](https://github.com/kepano/flexoki) - Beautiful color scheme by [Steph Ango](https://stephango.com/flexoki).
+- [Pierre](https://pierrejs-docs.vercel.app/) - Fast, beautiful diff viewer with syntax highlighting.
+- [Tauri](https://github.com/tauri-apps/tauri) - Desktop application framework.
+- [Ghostty-web](https://github.com/coder/ghostty-web) - Great implementation of a Ghostty web renderer.
+- [David Hill](https://x.com/iamdavidhill) - Who inspired me to release this without [overthinking](https://x.com/iamdavidhill/status/1993648326450020746).
+- [My wife](https://github.com/yulia-ivashko), who - with zero AI background - sat down with the app for the first time and built the firework celebration that plays on every successful push.
 - Every contributor who shaped this project with their PRs, ideas, and attention to detail.
 
 ## Contributing

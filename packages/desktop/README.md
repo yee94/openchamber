@@ -4,7 +4,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/btriapitsyn/openchamber?style=flat&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgZmlsbD0iI2YxZWNlYyIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjxwYXRoIGQ9Ik0xMjgsMTI5LjA5VjIzMmE4LDgsMCwwLDEtMy44NC0xbC04OC00OC4xOGE4LDgsMCwwLDEtNC4xNi03VjgwLjE4YTgsOCwwLDAsMSwuNy0zLjI1WiIgb3BhY2l0eT0iMC4yIj48L3BhdGg%2BPHBhdGggZD0iTTIyMy42OCw2Ni4xNSwxMzUuNjgsMThhMTUuODgsMTUuODgsMCwwLDAtMTUuMzYsMGwtODgsNDguMTdhMTYsMTYsMCwwLDAtOC4zMiwxNHY5NS42NGExNiwxNiwwLDAsMCw4LjMyLDE0bDg4LDQ4LjE3YTE1Ljg4LDE1Ljg4LDAsMCwwLDE1LjM2LDBsODgtNDguMTdhMTYsMTYsMCwwLDAsOC4zMi0xNFY4MC4xOEExNiwxNiwwLDAsMCwyMjMuNjgsNjYuMTVaTTEyOCwzMmw4MC4zNCw0NC0yOS43NywxNi4zLTgwLjM1LTQ0Wk0xMjgsMTIwLDQ3LjY2LDc2bDMzLjktMTguNTYsODAuMzQsNDRaTTQwLDkwbDgwLDQzLjc4djg1Ljc5TDQwLDE3NS44MlptMTc2LDg1Ljc4aDBsLTgwLDQzLjc5VjEzMy44MmwzMi0xNy41MVYxNTJhOCw4LDAsMCwwLDE2LDBWMTA3LjU1TDIxNiw5MHY4NS43N1oiPjwvcGF0aD48L3N2Zz4%3D&logoColor=FFFCF0&labelColor=100F0F&color=205EA6)](https://github.com/btriapitsyn/openchamber/releases/latest)
 [![Discord](https://img.shields.io/badge/Discord-join.svg?style=flat&labelColor=100F0F&color=8B7EC8&logo=discord&logoColor=FFFCF0)](https://discord.gg/ZYRSdnwwKA)
 
-A native macOS app for [OpenCode](https://opencode.ai). Feels like home — multiple windows, SSH remotes, project actions, and everything running locally.
+A native macOS app for [OpenCode](https://opencode.ai). Feels like home - multiple windows, SSH remotes, project actions, and everything running locally.
 
 Full project overview, screenshots, and all features: [github.com/btriapitsyn/openchamber](https://github.com/btriapitsyn/openchamber)
 
@@ -16,12 +16,12 @@ Download from [Releases](https://github.com/btriapitsyn/openchamber/releases). A
 
 ## What makes the desktop app special
 
-- **Remote instances over SSH** — connect to remote OpenChamber servers with dedicated lifecycle and UX flows
-- **Project Actions** — run dev servers, configure SSH port forwarding, open remote URLs locally
-- **Multi-window** — work on several projects in parallel, each in its own window
-- **"Open In" shortcuts** — open workspace in Finder, Terminal, or your editor of choice
-- **Local + remote switching** — jump between local and remote OpenChamber instances
-- **Native macOS integration** — menus, deep-links, auto-update, and polished window management
+- **Remote instances over SSH** - connect to remote OpenChamber servers with dedicated lifecycle and UX flows
+- **Project Actions** - run dev servers, configure SSH port forwarding, open remote URLs locally
+- **Multi-window** - work on several projects in parallel, each in its own window
+- **"Open In" shortcuts** - open workspace in Finder, Terminal, or your editor of choice
+- **Local + remote switching** - jump between local and remote OpenChamber instances
+- **Native macOS integration** - menus, deep-links, auto-update, and polished window management
 
 Plus everything from the shared OpenChamber UI: branchable timeline, Git sidebar, terminal, voice mode, and more.
 

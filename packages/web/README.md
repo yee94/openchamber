@@ -91,11 +91,11 @@ openchamber stop        # Stop background server
 
 ## What makes the web version special
 
-- **Remote access** — Cloudflare tunnel with QR onboarding. Scan from your phone, start coding.
-- **Mobile-first PWA** — optimized chat controls, keyboard-safe layouts, drag-to-reorder projects
-- **Background notifications** — know when your agent finishes, even from another tab
-- **Self-update** — update and restart from the UI, server settings stay intact
-- **Cross-tab tracking** — session activity stays in sync across browser tabs
+- **Remote access** - Cloudflare tunnel with QR onboarding. Scan from your phone, start coding.
+- **Mobile-first PWA** - optimized chat controls, keyboard-safe layouts, drag-to-reorder projects
+- **Background notifications** - know when your agent finishes, even from another tab
+- **Self-update** - update and restart from the UI, server settings stay intact
+- **Cross-tab tracking** - session activity stays in sync across browser tabs
 
 Plus everything from the shared OpenChamber UI: branchable timeline, Git sidebar, terminal, voice mode, and more.
 
