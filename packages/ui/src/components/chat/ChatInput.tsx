@@ -2195,7 +2195,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }}
             className={cn(
                 footerIconButtonClass,
-                'absolute bottom-full left-1/2 -translate-x-1/2 mb-1',
+                'absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1',
                 hasContent && currentSessionId
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
@@ -2625,7 +2625,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 : undefined}
                         />
                     )}
-                    <div className={cn("relative overflow-hidden", isDesktopExpanded && 'flex-1 min-h-0')}>
+                    <div className={cn("relative overflow-hidden", isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         {highlightedComposerContent && (
                             <div
                                 aria-hidden
@@ -2683,6 +2683,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             autoCorrect={isMobile ? "on" : "off"}
                             autoCapitalize={isMobile ? "sentences" : "off"}
                             spellCheck={isMobile}
+                            fillContainer={isDesktopExpanded}
                             outerClassName={cn('focus-within:ring-0', isDesktopExpanded && 'flex-1 min-h-0')}
                             className={cn(
                                 'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent relative z-10',
