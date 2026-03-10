@@ -550,6 +550,7 @@ interface UIStore {
 
   showTerminalQuickKeysOnDesktop: boolean;
   persistChatDraft: boolean;
+  inputSpellcheckEnabled: boolean;
   mermaidRenderingMode: MermaidRenderingMode;
   userMessageRenderingMode: UserMessageRenderingMode;
   stickyUserHeader: boolean;
@@ -660,6 +661,7 @@ interface UIStore {
   setSummaryLength: (value: number) => void;
   setMaxLastMessageLength: (value: number) => void;
   setPersistChatDraft: (value: boolean) => void;
+  setInputSpellcheckEnabled: (value: boolean) => void;
   setMermaidRenderingMode: (value: MermaidRenderingMode) => void;
   setUserMessageRenderingMode: (value: UserMessageRenderingMode) => void;
   setStickyUserHeader: (value: boolean) => void;
@@ -770,6 +772,7 @@ export const useUIStore = create<UIStore>()(
 
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
+        inputSpellcheckEnabled: false,
         mermaidRenderingMode: 'svg',
         userMessageRenderingMode: 'markdown',
         stickyUserHeader: true,
@@ -1668,6 +1671,9 @@ export const useUIStore = create<UIStore>()(
         setPersistChatDraft: (value) => {
           set({ persistChatDraft: value });
         },
+        setInputSpellcheckEnabled: (value) => {
+          set({ inputSpellcheckEnabled: value });
+        },
         setMermaidRenderingMode: (value) => {
           set({ mermaidRenderingMode: value });
         },
@@ -1854,6 +1860,7 @@ export const useUIStore = create<UIStore>()(
           summaryLength: state.summaryLength,
           maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
+          inputSpellcheckEnabled: state.inputSpellcheckEnabled,
           mermaidRenderingMode: state.mermaidRenderingMode,
           userMessageRenderingMode: state.userMessageRenderingMode,
           stickyUserHeader: state.stickyUserHeader,
