@@ -312,21 +312,10 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     }
   }
 
-  // Apply server-persisted message limit. Ignore stale legacy values.
-  const STALE_LIMITS = new Set([90, 120, 180, 220]);
-  if (typeof settings.messageLimit === 'number' && Number.isFinite(settings.messageLimit)) {
-    if (!STALE_LIMITS.has(settings.messageLimit)) {
-      store.setMessageLimit(settings.messageLimit);
-    }
-  }
-
   if (typeof settings.queueModeEnabled === 'boolean' && settings.queueModeEnabled !== queueStore.queueModeEnabled) {
     queueStore.setQueueMode(settings.queueModeEnabled);
   }
 
-  if (typeof settings.showTextJustificationActivity === 'boolean' && settings.showTextJustificationActivity !== store.showTextJustificationActivity) {
-    store.setShowTextJustificationActivity(settings.showTextJustificationActivity);
-  }
   if (typeof settings.showDeletionDialog === 'boolean' && settings.showDeletionDialog !== store.showDeletionDialog) {
     store.setShowDeletionDialog(settings.showDeletionDialog);
   }
@@ -365,17 +354,35 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.maxLastMessageLength === 'number' && Number.isFinite(settings.maxLastMessageLength)) {
     store.setMaxLastMessageLength(settings.maxLastMessageLength);
   }
-  if (typeof settings.toolCallExpansion === 'string'
-    && (settings.toolCallExpansion === 'collapsed'
-      || settings.toolCallExpansion === 'activity'
-      || settings.toolCallExpansion === 'detailed'
-      || settings.toolCallExpansion === 'changes')) {
-    if (settings.toolCallExpansion !== store.toolCallExpansion) {
-      store.setToolCallExpansion(settings.toolCallExpansion);
-    }
-  }
   if (typeof settings.inputSpellcheckEnabled === 'boolean' && settings.inputSpellcheckEnabled !== store.inputSpellcheckEnabled) {
     store.setInputSpellcheckEnabled(settings.inputSpellcheckEnabled);
+  }
+  if (typeof settings.showToolFileIcons === 'boolean' && settings.showToolFileIcons !== store.showToolFileIcons) {
+    store.setShowToolFileIcons(settings.showToolFileIcons);
+  }
+  if (typeof settings.showExpandedBashTools === 'boolean' && settings.showExpandedBashTools !== store.showExpandedBashTools) {
+    store.setShowExpandedBashTools(settings.showExpandedBashTools);
+  }
+  if (typeof settings.showExpandedEditTools === 'boolean' && settings.showExpandedEditTools !== store.showExpandedEditTools) {
+    store.setShowExpandedEditTools(settings.showExpandedEditTools);
+  }
+  if (typeof settings.chatRenderMode === 'string'
+    && (settings.chatRenderMode === 'sorted' || settings.chatRenderMode === 'live')) {
+    if (settings.chatRenderMode !== store.chatRenderMode) {
+      store.setChatRenderMode(settings.chatRenderMode);
+    }
+  }
+  if (typeof settings.activityRenderMode === 'string'
+    && (settings.activityRenderMode === 'collapsed' || settings.activityRenderMode === 'summary')) {
+    if (settings.activityRenderMode !== store.activityRenderMode) {
+      store.setActivityRenderMode(settings.activityRenderMode);
+    }
+  }
+  if (typeof settings.mermaidRenderingMode === 'string'
+    && (settings.mermaidRenderingMode === 'svg' || settings.mermaidRenderingMode === 'ascii')) {
+    if (settings.mermaidRenderingMode !== store.mermaidRenderingMode) {
+      store.setMermaidRenderingMode(settings.mermaidRenderingMode);
+    }
   }
   if (typeof settings.userMessageRenderingMode === 'string'
     && (settings.userMessageRenderingMode === 'markdown' || settings.userMessageRenderingMode === 'plain')) {
@@ -576,9 +583,6 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
   }
-  if (typeof candidate.showTextJustificationActivity === 'boolean') {
-    result.showTextJustificationActivity = candidate.showTextJustificationActivity;
-  }
   if (typeof candidate.showDeletionDialog === 'boolean') {
     result.showDeletionDialog = candidate.showDeletionDialog;
   }
@@ -747,17 +751,29 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     }
   }
 
-  if (
-    typeof candidate.toolCallExpansion === 'string'
-    && (candidate.toolCallExpansion === 'collapsed'
-      || candidate.toolCallExpansion === 'activity'
-      || candidate.toolCallExpansion === 'detailed'
-      || candidate.toolCallExpansion === 'changes')
-  ) {
-    result.toolCallExpansion = candidate.toolCallExpansion;
-  }
   if (typeof candidate.inputSpellcheckEnabled === 'boolean') {
     result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
+  }
+  if (typeof candidate.showToolFileIcons === 'boolean') {
+    result.showToolFileIcons = candidate.showToolFileIcons;
+  }
+  if (typeof candidate.showExpandedBashTools === 'boolean') {
+    result.showExpandedBashTools = candidate.showExpandedBashTools;
+  }
+  if (typeof candidate.showExpandedEditTools === 'boolean') {
+    result.showExpandedEditTools = candidate.showExpandedEditTools;
+  }
+  if (typeof candidate.chatRenderMode === 'string'
+    && (candidate.chatRenderMode === 'sorted' || candidate.chatRenderMode === 'live')) {
+    result.chatRenderMode = candidate.chatRenderMode;
+  }
+  if (typeof candidate.activityRenderMode === 'string'
+    && (candidate.activityRenderMode === 'collapsed' || candidate.activityRenderMode === 'summary')) {
+    result.activityRenderMode = candidate.activityRenderMode;
+  }
+  if (typeof candidate.mermaidRenderingMode === 'string'
+    && (candidate.mermaidRenderingMode === 'svg' || candidate.mermaidRenderingMode === 'ascii')) {
+    result.mermaidRenderingMode = candidate.mermaidRenderingMode;
   }
   if (typeof candidate.userMessageRenderingMode === 'string'
     && (candidate.userMessageRenderingMode === 'markdown' || candidate.userMessageRenderingMode === 'plain')) {
@@ -817,10 +833,6 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.pwaAppName === 'string') {
     const normalized = candidate.pwaAppName.trim().replace(/\s+/g, ' ').slice(0, 64);
     result.pwaAppName = normalized.length > 0 ? normalized : '';
-  }
-
-  if (typeof candidate.messageLimit === 'number' && Number.isFinite(candidate.messageLimit)) {
-    result.messageLimit = candidate.messageLimit;
   }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);

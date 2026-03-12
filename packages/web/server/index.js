@@ -2129,6 +2129,33 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.inputSpellcheckEnabled === 'boolean') {
     result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
   }
+  if (typeof candidate.showToolFileIcons === 'boolean') {
+    result.showToolFileIcons = candidate.showToolFileIcons;
+  }
+  if (typeof candidate.showExpandedBashTools === 'boolean') {
+    result.showExpandedBashTools = candidate.showExpandedBashTools;
+  }
+  if (typeof candidate.showExpandedEditTools === 'boolean') {
+    result.showExpandedEditTools = candidate.showExpandedEditTools;
+  }
+  if (typeof candidate.chatRenderMode === 'string') {
+    const mode = candidate.chatRenderMode.trim();
+    if (mode === 'sorted' || mode === 'live') {
+      result.chatRenderMode = mode;
+    }
+  }
+  if (typeof candidate.activityRenderMode === 'string') {
+    const mode = candidate.activityRenderMode.trim();
+    if (mode === 'collapsed' || mode === 'summary') {
+      result.activityRenderMode = mode;
+    }
+  }
+  if (typeof candidate.mermaidRenderingMode === 'string') {
+    const mode = candidate.mermaidRenderingMode.trim();
+    if (mode === 'svg' || mode === 'ascii') {
+      result.mermaidRenderingMode = mode;
+    }
+  }
   if (typeof candidate.userMessageRenderingMode === 'string') {
     const mode = candidate.userMessageRenderingMode.trim();
     if (mode === 'markdown' || mode === 'plain') {
@@ -3034,6 +3061,7 @@ const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
 
   const now = Date.now();
   const existing = sessionStates.get(sessionId);
+  const existingAttentionState = sessionAttentionStates.get(sessionId);
 
   // Only update if this is a newer event (simple ordering protection)
   if (existing && existing.lastUpdateAt > now - 5000 && status === existing.status) {
@@ -3050,13 +3078,14 @@ const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
 
   // Update attention tracking state (must be called before broadcasting)
   updateSessionAttentionStatus(sessionId, status, eventId);
+  const attentionState = sessionAttentionStates.get(sessionId);
 
   // Broadcast status change to connected web clients via SSE
   // This enables real-time updates without polling
   // Include needsAttention in the same event to ensure atomic updates
-  if (uiNotificationClients.size > 0 && (!existing || existing.status !== status)) {
+  const attentionChanged = !!attentionState && existingAttentionState?.needsAttention !== attentionState.needsAttention;
+  if (uiNotificationClients.size > 0 && (!existing || existing.status !== status || attentionChanged)) {
     const state = sessionStates.get(sessionId);
-    const attentionState = sessionAttentionStates.get(sessionId);
     for (const res of uiNotificationClients) {
       try {
         writeSseEvent(res, {
@@ -8440,10 +8469,11 @@ async function main(options = {}) {
 
     const forwardBlock = (block) => {
       if (!block) return;
+      const payload = parseSseDataPayload(block);
+
       res.write(`${block}
 
 `);
-      const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (global stream)
       maybeCacheSessionInfoFromEvent(payload);
 
@@ -8582,10 +8612,11 @@ async function main(options = {}) {
 
     const forwardBlock = (block) => {
       if (!block) return;
+      const payload = parseSseDataPayload(block);
+
       res.write(`${block}
 
 `);
-      const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (per-session stream)
       maybeCacheSessionInfoFromEvent(payload);
 
