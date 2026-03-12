@@ -1,3 +1,11 @@
+## [Unreleased]
+
+- Sessions: worktrees with active chats are now prioritized in the sidebar, so in-progress work is easier to resume (thanks to @GhostFlying).
+- Chat: fixed modified Enter send shortcuts in narrow layouts, so Ctrl/Cmd+Enter send works more consistently when the panel is compact (thanks to @eengad).
+- Chat: fixed queue button behavior and focus-mode composer sizing so input actions stay visible during longer prompts (thanks to @shekohex).
+- Reliability: improved session sidebar stability during heavy session switching and background status updates.
+- Docs: updated extension setup and security docs for clearer onboarding and usage guidance.
+
 ## [1.8.5] - 2026-03-04
 
 - Chat/Files: edit-style tool results now open in a VS Code diff editor with focus on the first changed line, making review and follow-up edits much faster.

@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- GitHub: improved pull request status tracking and refresh behavior, so PR state stays more accurate in active workflows.
+- Sessions: worktrees with active sessions now surface earlier in the sidebar, making it faster to jump back into in-progress work (thanks to @GhostFlying).
+- Chat: fixed narrow-layout send behavior for modified Enter shortcuts, so keyboard sending is more reliable in compact views (thanks to @eengad).
+- Chat: fixed queue-button behavior and focus-mode composer sizing, keeping input controls reachable in long prompts (thanks to @shekohex).
+- Projects: project action inputs now submit with Enter for a quicker run flow (thanks to @DocterZed).
+- Desktop/Settings: added a spell-check toggle so you can choose whether inline spelling assistance is enabled while typing (thanks to @DocterZed).
+- Mobile/PWA: install metadata now honors orientation lock more consistently, improving expected behavior on rotation-restricted devices (thanks to @atgehrhardt).
+- Docs: refreshed project documentation and security guidance to make setup and onboarding easier.
+
 ## [1.8.5] - 2026-03-04
 
 - Desktop: startup now opens the app shell much earlier while background services continue loading, so the app feels ready faster after launch.
