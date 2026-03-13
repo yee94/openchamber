@@ -193,20 +193,6 @@ chown -R 1000:1000 data/
 
 </details>
 
-<details>
-<summary>Named Cloudflare Tunnel (persistent hostname)</summary>
-
-- [OpenCode CLI](https://opencode.ai) installed
-- Node.js 20+ (for web version)
-- [cloudflared](https://github.com/cloudflare/cloudflared/releases) (required for Cloudflare tunnel modes)
-For reliable long-lived access with a custom hostname from your Cloudflare account:
-
-- Configure in-app at **Settings > OpenChamber > Tunnel**, switch to **Named** mode.
-- Requires a domain in your Cloudflare account.
-- [Cloudflare setup guide](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)
-- CLI `--tunnel <config.yml>` support is coming very soon.
-
-</details>
 
 ## Features
 
