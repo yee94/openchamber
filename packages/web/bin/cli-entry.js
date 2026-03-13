@@ -15,8 +15,16 @@ function normalizeCliEntryPath(filePath, realpath = fs.realpathSync) {
   }
 }
 
-function isModuleCliExecution(entryPath = process.argv[1], moduleUrl = import.meta.url, realpath = fs.realpathSync) {
+function isModuleCliExecution(
+  entryPath = process.argv[1],
+  moduleUrl,
+  realpath = fs.realpathSync,
+  expectedBinName,
+) {
   if (typeof entryPath !== 'string' || entryPath.trim().length === 0) {
+    return false;
+  }
+  if (typeof moduleUrl !== 'string' || moduleUrl.trim().length === 0) {
     return false;
   }
 
@@ -26,7 +34,16 @@ function isModuleCliExecution(entryPath = process.argv[1], moduleUrl = import.me
     if (!normalizedEntryPath || !normalizedModulePath) {
       return false;
     }
-    return pathToFileURL(normalizedEntryPath).href === pathToFileURL(normalizedModulePath).href;
+    if (pathToFileURL(normalizedEntryPath).href === pathToFileURL(normalizedModulePath).href) {
+      return true;
+    }
+
+    if (typeof expectedBinName === 'string' && expectedBinName.trim().length > 0) {
+      const parsedEntryName = path.parse(normalizedEntryPath).name.toLowerCase();
+      return parsedEntryName === expectedBinName.trim().toLowerCase();
+    }
+
+    return false;
   } catch {
     return false;
   }

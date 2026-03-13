@@ -4616,7 +4616,7 @@ async function main() {
   await commands[command](options);
 }
 
-const isCliExecution = isModuleCliExecution();
+const isCliExecution = isModuleCliExecution(process.argv[1], import.meta.url, fs.realpathSync, 'openchamber');
 
 if (isCliExecution) {
   let isHandlingSigint = false;

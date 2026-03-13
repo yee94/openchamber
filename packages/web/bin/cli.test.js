@@ -36,6 +36,15 @@ describe('cli entry detection', () => {
     expect(isModuleCliExecution('', moduleUrl)).toBe(false);
   });
 
+  it('returns false when module url is not provided', () => {
+    expect(isModuleCliExecution(modulePath)).toBe(false);
+  });
+
+  it('accepts wrapper binary name fallback when requested', () => {
+    const wrapperPath = '/home/user/.local/bin/openchamber';
+    expect(isModuleCliExecution(wrapperPath, moduleUrl, undefined, 'openchamber')).toBe(true);
+  });
+
   it('normalizes direct paths when realpath fails', () => {
     const unresolvedPath = './packages/web/bin/cli.js';
     const realpath = () => {
