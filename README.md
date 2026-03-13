@@ -11,6 +11,10 @@
 > We rotated the desktop updater signing key after moving the repository to the organization, so in-app auto-update from older desktop builds may fail signature verification.
 > This is a one-time reinstall and does not affect app functionality.
 
+> [!IMPORTANT]
+> **CLI users:** A startup regression in global npm/bun installs (symlink/wrapper entrypoints) is fixed in **OpenChamber v1.8.7**.
+> If `openchamber` exited without output on `--version`/`status`, update to **v1.8.7** from npm: `npm i -g @openchamber/web@1.8.7` or `bun add -g @openchamber/web@1.8.7`.
+
 ## **OpenCode, everywhere.** Desktop. Browser. Phone.
 
 ### A rich interface for [OpenCode](https://opencode.ai). Review diffs, manage agents, run dev servers, and keep the big picture while your AI codes.

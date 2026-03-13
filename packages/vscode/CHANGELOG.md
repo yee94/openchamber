@@ -1,3 +1,7 @@
+## [1.8.7] - 2026-03-13
+
+- No notable changes.
+
 ## [1.8.6] - 2026-03-13
 
 - Chat: completed a turn-based render pipeline with steadier streaming, smoother auto-follow, and more stable activity/tool progress behavior during long responses.

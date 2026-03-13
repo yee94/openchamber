@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.7] - 2026-03-13
+
+- CLI: fixed a startup regression in global npm/bun installs where wrapper or symlinked `openchamber` entrypoints could exit without output on commands like `--version` or `status`.
+- CLI: hardened entrypoint detection across direct, symlinked, and shim-based launches to keep startup behavior consistent across package managers (thanks to @shekohex).
+- Windows/Web: daemon startup and Git operations no longer flash extra console windows, making background workflows less distracting (thanks to @SergioChan).
+- Deployment/Docker: improved `docker run` startup behavior and entrypoint handling so containerized installs start more reliably (thanks to @nzlov).
+
+
+
 ## [1.8.6] - 2026-03-13
 
 - Tunnel/CLI: rebuilt tunnel workflows around clearer managed modes and provider-aware lifecycle commands, with safer startup checks, improved diagnostics, and cleaner CLI output for everyday remote access (thanks to @yulia-ivashko).
