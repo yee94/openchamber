@@ -978,21 +978,20 @@ const renderPathLikeGitChanges = (path: string, grow = true) => {
     );
 };
 
-const renderAnimatedPathWithIcon = (path: string, animate = true, grow = true, showFileIcons = true) => {
+const renderAnimatedPathWithIcon = (path: string, _animate = true, grow = true, showFileIcons = true) => {
+    void _animate;
     const lastSlash = path.lastIndexOf('/');
 
     if (lastSlash === -1) {
         return (
-            <span className={cn('min-w-0 inline-flex items-center gap-1', grow && 'flex-1')} title={path}>
+            <span className={cn('min-w-0 inline-flex items-center gap-1 overflow-hidden', grow && 'flex-1')} title={path}>
                 {showFileIcons ? <FileTypeIcon filePath={path} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
-                <Text
-                    key={animate ? `path-full-${path}` : undefined}
-                    variant={animate ? 'generate-effect' : undefined}
-                    className="min-w-0 truncate typography-meta"
+                <span
+                    className={cn('min-w-0 truncate whitespace-nowrap typography-meta', grow && 'flex-1')}
                     style={{ color: 'var(--tools-title)' }}
                 >
                     {path}
-                </Text>
+                </span>
             </span>
         );
     }
@@ -1004,26 +1003,19 @@ const renderAnimatedPathWithIcon = (path: string, animate = true, grow = true, s
         <span className={cn('min-w-0 inline-flex items-center gap-1 overflow-hidden', grow && 'flex-1')} title={path}>
             {showFileIcons ? <FileTypeIcon filePath={path} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
             <span className={cn('min-w-0 inline-flex items-baseline overflow-hidden typography-meta', grow && 'flex-1')}>
-                <Text
-                    key={animate ? `path-dir-${dir}` : undefined}
-                    variant={animate ? 'generate-effect' : undefined}
-                    className="min-w-0 truncate typography-meta"
-                    style={{ color: 'var(--tools-description)', direction: 'rtl', textAlign: 'left' }}
+                <span
+                    className="min-w-0 flex-1 truncate whitespace-nowrap"
+                    style={{
+                        color: 'var(--tools-description)',
+                        direction: 'rtl',
+                        textAlign: 'left',
+                    }}
                 >
                     {dir}
-                </Text>
-                <span className="flex-shrink-0 inline-flex items-baseline">
-                    <Text variant={animate ? 'generate-effect' : undefined} className="typography-meta" style={{ color: 'var(--tools-description)' }}>
-                        /
-                    </Text>
-                    <Text
-                        key={animate ? `path-name-${name}` : undefined}
-                        variant={animate ? 'generate-effect' : undefined}
-                        className="typography-meta"
-                        style={{ color: 'var(--tools-title)' }}
-                    >
-                        {name}
-                    </Text>
+                </span>
+                <span className="flex-shrink-0" style={{ color: 'var(--tools-description)' }}>/</span>
+                <span className="flex-shrink-0" style={{ color: 'var(--tools-title)' }}>
+                    {name}
                 </span>
             </span>
         </span>
@@ -1763,6 +1755,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
     
     // Tool title/description — shown inline as context
     const justificationText = React.useMemo(() => {
+        if (normalizedPartTool === 'bash') {
+            return null;
+        }
         if (normalizedPartTool === 'apply_patch') {
             return null;
         }
@@ -1846,15 +1841,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
             {}
             <div
                 className={cn(
-                    'group/tool flex gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer',
-                    isMultiFileApplyPatch ? 'flex-wrap items-start' : 'items-center'
-                )}
+                'group/tool flex gap-1.5 pr-2 pl-px py-2 rounded-xl cursor-pointer',
+                isMultiFileApplyPatch ? 'flex-wrap items-start' : 'items-center'
+            )}
                 onClick={handleMainClick}
                 onKeyDown={handleMainKeyDown}
                 role="button"
                 tabIndex={0}
             >
-                <div className={cn('flex gap-2', isMultiFileApplyPatch ? 'w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5' : 'items-center flex-shrink-0')}>
+                <div className={cn('flex gap-1.5', isMultiFileApplyPatch ? 'w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5' : 'items-center flex-shrink-0')}>
                     {}
                     <div
                         className="relative h-3.5 w-3.5 flex-shrink-0 cursor-pointer"
@@ -1893,15 +1888,6 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             >
                                 {displayName}
                             </MinDurationShineText>
-                            {typeof effectiveTimeStart === 'number' ? (
-                                <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
-                                    <LiveDuration
-                                        start={effectiveTimeStart}
-                                        end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
-                                        active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
-                                    />
-                                </span>
-                            ) : null}
                             {getMultiFileDescription(metadata, animateTailText, showToolFileIcons)}
                         </>
                     ) : (
@@ -1917,7 +1903,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                     {displayName}
                                 </MinDurationShineText>
                             </div>
-                            {typeof effectiveTimeStart === 'number' ? (
+                            {normalizedPartTool === 'bash' && typeof effectiveTimeStart === 'number' ? (
                                 <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
                                     <LiveDuration
                                         start={effectiveTimeStart}
