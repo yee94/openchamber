@@ -144,23 +144,39 @@ export const MainLayout: React.FC = () => {
         }
     }, [isRightSidebarOpen, isMobile]);
 
-    // Trigger initial update check shortly after mount, then every hour.
+    // Trigger initial update check shortly after mount, then repeat using server-suggested cadence.
     const checkForUpdates = useUpdateStore((state) => state.checkForUpdates);
     React.useEffect(() => {
         const initialDelayMs = 3000;
-        const periodicIntervalMs = 60 * 60 * 1000;
+        const defaultIntervalMs = 60 * 60 * 1000;
+        const minIntervalMs = 5 * 60 * 1000;
+        const maxIntervalMs = 24 * 60 * 60 * 1000;
+        let disposed = false;
+        let timer: number | null = null;
 
-        const timer = window.setTimeout(() => {
-            checkForUpdates();
-        }, initialDelayMs);
+        const clampIntervalMs = (seconds: number): number => {
+            const ms = Math.round(seconds * 1000);
+            return Math.max(minIntervalMs, Math.min(maxIntervalMs, ms));
+        };
 
-        const interval = window.setInterval(() => {
-            checkForUpdates();
-        }, periodicIntervalMs);
+        const scheduleNext = (delayMs: number) => {
+            if (disposed) return;
+            timer = window.setTimeout(async () => {
+                const suggestedSec = await checkForUpdates();
+                const nextDelay = typeof suggestedSec === 'number' && Number.isFinite(suggestedSec)
+                    ? clampIntervalMs(suggestedSec)
+                    : defaultIntervalMs;
+                scheduleNext(nextDelay);
+            }, delayMs);
+        };
+
+        scheduleNext(initialDelayMs);
 
         return () => {
-            window.clearTimeout(timer);
-            window.clearInterval(interval);
+            disposed = true;
+            if (timer !== null) {
+                window.clearTimeout(timer);
+            }
         };
     }, [checkForUpdates]);
 
