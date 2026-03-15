@@ -329,6 +329,8 @@ Independent project, not affiliated with the OpenCode team.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
+Docs source lives in [`packages/docs`](packages/docs/README.md).
+
 ## License
 
 MIT
