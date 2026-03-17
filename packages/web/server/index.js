@@ -7782,28 +7782,13 @@ async function main(options = {}) {
         if (value.includes('mobi') || value.includes('android') || value.includes('iphone')) return 'mobile';
         return 'desktop';
       };
-      const inferArch = (ua) => {
-        const value = (ua || '').toLowerCase();
-        if (!value) return 'unknown';
-        if (value.includes('aarch64') || value.includes('arm64') || value.includes(' arm;') || value.includes('armv')) return 'arm64';
-        if (value.includes('x86_64') || value.includes('x64') || value.includes('amd64') || value.includes('win64') || value.includes('x86-64')) return 'x64';
-        return 'unknown';
-      };
-      const inferPlatform = (ua) => {
-        const value = (ua || '').toLowerCase();
-        if (!value) return undefined;
-        if (value.includes('mac os') || value.includes('macintosh') || value.includes('darwin')) return 'macos';
-        if (value.includes('windows') || value.includes('win32') || value.includes('win64')) return 'windows';
-        if (value.includes('linux') || value.includes('x11')) return 'linux';
-        return 'web';
-      };
       const userAgent = typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : '';
 
       const updateInfo = await checkForUpdates({
         appType: parseString(req.query.appType),
         deviceClass: parseString(req.query.deviceClass) || inferDeviceClass(userAgent),
-        platform: parseString(req.query.platform) || inferPlatform(userAgent),
-        arch: parseString(req.query.arch) || inferArch(userAgent),
+        platform: parseString(req.query.platform),
+        arch: parseString(req.query.arch),
         instanceMode: parseString(req.query.instanceMode),
         currentVersion: parseString(req.query.currentVersion),
         reportUsage: parseReportUsage(parseString(req.query.reportUsage)),

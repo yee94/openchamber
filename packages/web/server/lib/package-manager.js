@@ -86,11 +86,15 @@ function normalizeArch(value) {
 async function checkForUpdatesFromApi(currentVersion, options = {}) {
   try {
     const appType = normalizeAppType(options.appType);
+    const hostPlatform = mapPlatform(process.platform);
+    const hostArch = mapArch(process.arch);
+    const platform = appType === 'vscode' ? normalizePlatform(options.platform) : hostPlatform;
+    const arch = appType === 'vscode' ? normalizeArch(options.arch) : hostArch;
     const payload = {
       appType,
       deviceClass: normalizeDeviceClass(options.deviceClass),
-      platform: normalizePlatform(options.platform),
-      arch: normalizeArch(options.arch),
+      platform,
+      arch,
       channel: 'stable',
       currentVersion,
       installId: getOrCreateInstallId(appType),
