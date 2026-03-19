@@ -240,6 +240,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const isMobile = forceMobile ?? deviceInfo.isMobile;
 
   const settingsPageRaw = useUIStore((state) => state.settingsPage);
+  const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const settingsSlug = resolveSettingsSlug(settingsPageRaw);
 
@@ -322,25 +323,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   // Load stores when project changes or when a page becomes active.
   React.useEffect(() => {
+    if (!isSettingsDialogOpen && !runtimeCtx.isVSCode) {
+      return;
+    }
+
     if (settingsSlug === 'agents') {
-      setTimeout(() => void useAgentsStore.getState().loadAgents(), 0);
+      void useAgentsStore.getState().loadAgents();
       return;
     }
     if (settingsSlug === 'commands') {
-      setTimeout(() => void useCommandsStore.getState().loadCommands(), 0);
+      void useCommandsStore.getState().loadCommands();
       return;
     }
     if (settingsSlug === 'mcp') {
-      setTimeout(() => void useMcpConfigStore.getState().loadMcpConfigs(), 0);
+      void useMcpConfigStore.getState().loadMcpConfigs();
       return;
     }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
-      setTimeout(() => {
-        void useSkillsStore.getState().loadSkills();
-        void useSkillsCatalogStore.getState().loadCatalog();
-      }, 0);
+      void useSkillsStore.getState().loadSkills();
+      void useSkillsCatalogStore.getState().loadCatalog();
     }
-  }, [activeProjectId, settingsSlug]);
+  }, [activeProjectId, isSettingsDialogOpen, runtimeCtx.isVSCode, settingsSlug]);
 
   const openPage = React.useCallback((slug: SettingsPageSlug) => {
     setSettingsPage(slug);
@@ -579,7 +582,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const renderMobileStage = () => {
     if (mobileStage === 'nav') {
       return (
-        <div className={cn('flex-1 overflow-hidden', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')}>
+        <div className={cn('flex-1 min-h-0 overflow-hidden', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')}>
           <div className="flex h-full min-h-0 flex-col">
             <ErrorBoundary>{renderSettingsNav(false)}</ErrorBoundary>
           </div>
@@ -596,13 +599,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         // No sidebar available; fall back to direct content.
         const fallback = renderPageContent(settingsSlug);
         return (
-          <div className="flex-1 overflow-hidden bg-background" data-keyboard-avoid="true">
+          <div className="flex-1 min-h-0 overflow-hidden bg-background" data-keyboard-avoid="true">
             <ErrorBoundary>{fallback}</ErrorBoundary>
           </div>
         );
       }
       return (
-        <div className={cn('flex-1 overflow-hidden', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')}>
+        <div className={cn('flex-1 min-h-0 overflow-hidden', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')}>
           <ErrorBoundary>
             {renderPageSidebar(settingsSlug, { onItemSelect: () => setMobileStage('page-content') })}
           </ErrorBoundary>
@@ -614,7 +617,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     const content = renderPageContent(settingsSlug);
 
     return (
-      <div className="flex-1 overflow-hidden bg-background" data-keyboard-avoid="true">
+      <div className="flex-1 min-h-0 overflow-hidden bg-background" data-keyboard-avoid="true">
         <ErrorBoundary>{content}</ErrorBoundary>
       </div>
     );
@@ -646,7 +649,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   };
 
   return (
-    <div ref={containerRef} data-settings-view="true" className={cn('relative flex h-full flex-col overflow-hidden bg-background')}>
+    <div ref={containerRef} data-settings-view="true" className={cn('relative flex h-full min-h-0 flex-col overflow-hidden bg-background')}>
       {isMobile ? (
         <div
           className={cn(
@@ -724,7 +727,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         </>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {isMobile ? (
           renderMobileStage()
         ) : (
@@ -733,7 +736,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               className={cn(
                 'relative flex h-full min-h-0 flex-col overflow-hidden border-r',
                 isDesktopApp
-                  ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                  ? 'bg-[color:var(--sidebar-overlay-strong)] supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
                   : runtimeCtx.isVSCode
                     ? 'bg-background'
                     : 'bg-sidebar',

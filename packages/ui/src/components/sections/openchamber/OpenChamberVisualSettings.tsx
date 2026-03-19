@@ -7,7 +7,7 @@ import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { cn, getModifierLabel } from '@/lib/utils';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NumberInput } from '@/components/ui/number-input';
 import { Radio } from '@/components/ui/radio';
@@ -143,7 +143,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'activityRenderMode' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'showToolFileIcons' | 'expandedTools' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck';
+export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'activityRenderMode' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'showToolFileIcons' | 'expandedTools' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -173,8 +173,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
     const padding = useUIStore(state => state.padding);
     const setPadding = useUIStore(state => state.setPadding);
-    const cornerRadius = useUIStore(state => state.cornerRadius);
-    const setCornerRadius = useUIStore(state => state.setCornerRadius);
     const inputBarOffset = useUIStore(state => state.inputBarOffset);
     const setInputBarOffset = useUIStore(state => state.setInputBarOffset);
     const diffLayoutPreference = useUIStore(state => state.diffLayoutPreference);
@@ -195,10 +193,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setShowExpandedBashTools = useUIStore(state => state.setShowExpandedBashTools);
     const showExpandedEditTools = useUIStore(state => state.showExpandedEditTools);
     const setShowExpandedEditTools = useUIStore(state => state.setShowExpandedEditTools);
-    const isNavRailExpanded = useUIStore(state => state.isNavRailExpanded);
-    const setNavRailExpanded = useUIStore(state => state.setNavRailExpanded);
     const showMobileSessionStatusBar = useUIStore(state => state.showMobileSessionStatusBar);
     const setShowMobileSessionStatusBar = useUIStore(state => state.setShowMobileSessionStatusBar);
+    const isSettingsDialogOpen = useUIStore(state => state.isSettingsDialogOpen);
     const {
         themeMode,
         setThemeMode,
@@ -214,7 +211,14 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const [themesReloading, setThemesReloading] = React.useState(false);
     const [chatRenderPreviewTick, setChatRenderPreviewTick] = React.useState(0);
 
+    const shouldAnimateChatPreview = isSettingsDialogOpen
+        && (visibleSettings ? visibleSettings.includes('chatRenderMode') : true);
+
     React.useEffect(() => {
+        if (!shouldAnimateChatPreview) {
+            return;
+        }
+
         const intervalId = setInterval(() => {
             setChatRenderPreviewTick((prev) => (prev + 1) % 24);
         }, 420);
@@ -222,7 +226,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         return () => {
             clearInterval(intervalId);
         };
-    }, []);
+    }, [shouldAnimateChatPreview]);
 
     const handleUserMessageRenderingModeChange = React.useCallback((mode: 'markdown' | 'plain') => {
         setUserMessageRenderingMode(mode);
@@ -305,8 +309,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
     const isVSCode = isVSCodeRuntime();
     const hasAppearanceSettings = (shouldShow('theme') || shouldShow('pwaInstallName')) && !isVSCode;
-    const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('cornerRadius') || shouldShow('inputBarOffset');
-    const hasNavigationSettings = (!isMobile && shouldShow('navRail')) || (shouldShow('terminalQuickKeys') && !isMobile);
+    const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('inputBarOffset');
+    const hasNavigationSettings = shouldShow('terminalQuickKeys') && !isMobile;
     const hasBehaviorSettings = shouldShow('mermaidRendering')
         || shouldShow('userMessageRendering')
         || shouldShow('chatRenderMode')
@@ -402,7 +406,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     <span className="typography-ui-header font-medium text-foreground">Color Mode</span>
                                     <div className="flex flex-wrap items-center gap-1">
                                         {THEME_MODE_OPTIONS.map((option) => (
-                                            <ButtonSmall
+                                            <Button
                                                 key={option.value}
                                                 variant="outline"
                                                 size="xs"
@@ -415,7 +419,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 onClick={() => setThemeMode(option.value)}
                                             >
                                                 {option.label}
-                                            </ButtonSmall>
+                                            </Button>
                                         ))}
                                     </div>
                                 </div>
@@ -516,7 +520,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             maxLength={64}
                                             aria-label="PWA install app name"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => {
@@ -528,7 +532,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -558,7 +562,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             aria-label="Font size percentage"
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setFontSize(100)}
@@ -568,7 +572,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -587,7 +591,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={1}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setTerminalFontSize(13)}
@@ -597,7 +601,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -616,7 +620,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={5}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setPadding(100)}
@@ -626,36 +630,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
-                                    </div>
-                                </div>
-                            )}
-
-                            {shouldShow('cornerRadius') && (
-                                <div className={cn("py-1", isMobile ? "flex flex-col gap-3" : "flex items-center gap-8")}>
-                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-56 shrink-0")}>
-                                        <span className="typography-ui-label text-foreground">Corner Radius</span>
-                                    </div>
-                                    <div className={cn("flex items-center gap-2", isMobile ? "w-full" : "w-fit")}>
-                                        <NumberInput
-                                            value={cornerRadius}
-                                            onValueChange={setCornerRadius}
-                                            min={0}
-                                            max={32}
-                                            step={1}
-                                            className="w-16"
-                                        />
-                                        <ButtonSmall
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => setCornerRadius(12)}
-                                            disabled={cornerRadius === 12}
-                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
-                                            aria-label="Reset corner radius"
-                                            title="Reset"
-                                        >
-                                            <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -684,7 +659,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={5}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setInputBarOffset(0)}
@@ -694,7 +669,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -710,38 +685,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     <div className="space-y-3">
                         <section className="px-2 pb-2 pt-0">
                             <h4 className="typography-ui-header font-medium text-foreground">Navigation</h4>
-                            {shouldShow('navRail') && !isMobile && (
-                                <div
-                                    className="group mt-1.5 flex cursor-pointer items-center gap-2 py-1.5"
-                                    role="button"
-                                    tabIndex={0}
-                                    onClick={() => setNavRailExpanded(!isNavRailExpanded)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                            e.preventDefault();
-                                            setNavRailExpanded(!isNavRailExpanded);
-                                        }
-                                    }}
-                                >
-                                    <Checkbox
-                                        checked={isNavRailExpanded}
-                                        onChange={setNavRailExpanded}
-                                        ariaLabel="Expand project rail by default"
-                                    />
-                                    <div className="flex min-w-0 items-center gap-1.5">
-                                        <span className="typography-ui-label text-foreground">Expand project rail</span>
-                                        <Tooltip delayDuration={1000}>
-                                            <TooltipTrigger asChild>
-                                                <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                                            </TooltipTrigger>
-                                            <TooltipContent sideOffset={8} className="max-w-xs">
-                                                Show project names in the left rail when multiple projects are open. Auto-collapses with a single project.
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </div>
-                                </div>
-                            )}
-
                             {shouldShow('terminalQuickKeys') && !isMobile && (
                                 <div
                                     className="group flex cursor-pointer items-center gap-2 py-1.5"
