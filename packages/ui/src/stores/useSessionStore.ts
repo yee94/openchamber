@@ -23,6 +23,7 @@ import { markPendingUserSendAnimation } from "@/lib/userSendAnimation";
 import { flattenAssistantTextParts } from "@/lib/messages/messageText";
 import { normalizeMessageRecordsForProjection } from "./utils/messageProjectors";
 import type { ProjectEntry } from "@/lib/api/types";
+import type { WorktreeMetadata } from "@/types/worktree";
 
 export type { AttachedFile, EditPermissionMode };
 export { MEMORY_LIMITS, ACTIVE_SESSION_WINDOW } from "./types/sessionTypes";
@@ -104,6 +105,69 @@ const resolveProjectForDirectory = (projects: ProjectEntry[], directory: string 
         }
     }
     return bestMatch;
+};
+
+const resolveProjectFromWorktreeDirectory = (
+    projects: ProjectEntry[],
+    availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
+    directory: string | null,
+): ProjectEntry | null => {
+    const normalizedDirectory = normalizePath(directory);
+    if (!normalizedDirectory) {
+        return null;
+    }
+
+    let matchedWorktree: WorktreeMetadata | null = null;
+    let matchedProjectPath: string | null = null;
+    let bestPathLength = -1;
+
+    for (const [projectPath, worktrees] of availableWorktreesByProject.entries()) {
+        for (const worktree of worktrees) {
+            const worktreePath = normalizePath(worktree.path);
+            if (!worktreePath) {
+                continue;
+            }
+            const isExact = normalizedDirectory === worktreePath;
+            const isNested = normalizedDirectory.startsWith(`${worktreePath}/`);
+            if (!isExact && !isNested) {
+                continue;
+            }
+            if (worktreePath.length > bestPathLength) {
+                bestPathLength = worktreePath.length;
+                matchedWorktree = worktree;
+                matchedProjectPath = normalizePath(projectPath);
+            }
+        }
+    }
+
+    if (!matchedWorktree) {
+        return null;
+    }
+
+    const normalizedMetadataProjectPath = normalizePath(matchedWorktree.projectDirectory);
+    const candidates = [normalizedMetadataProjectPath, matchedProjectPath].filter((value): value is string => Boolean(value));
+
+    for (const candidatePath of candidates) {
+        const exact = projects.find((project) => normalizePath(project.path) === candidatePath) ?? null;
+        if (exact) {
+            return exact;
+        }
+        const nested = resolveProjectForDirectory(projects, candidatePath);
+        if (nested) {
+            return nested;
+        }
+    }
+
+    return null;
+};
+
+const resolveDraftProjectForDirectory = (
+    projects: ProjectEntry[],
+    availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
+    directory: string | null,
+): ProjectEntry | null => {
+    return resolveProjectFromWorktreeDirectory(projects, availableWorktreesByProject, directory)
+        ?? resolveProjectForDirectory(projects, directory);
 };
 
 const buildSessionChoiceAnalysisSignature = (messages: Array<{ info: Message; parts: Part[] }>): string => {
@@ -209,6 +273,7 @@ export const useSessionStore = create<SessionStore>()(
                 openNewSessionDraft: (options) => {
                     const projectsState = useProjectsStore.getState();
                     const projects = projectsState.projects;
+                    const availableWorktreesByProject = get().availableWorktreesByProject;
                     const activeProject = projectsState.getActiveProject();
                     const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory ?? null);
                     const persistedTarget = readPersistedDraftTarget();
@@ -220,7 +285,7 @@ export const useSessionStore = create<SessionStore>()(
                         ? projects.find((project) => project.id === options.projectId) ?? null
                         : null;
 
-                    const inferredProjectFromDirectory = resolveProjectForDirectory(projects, explicitDirectory);
+                    const inferredProjectFromDirectory = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, explicitDirectory);
                     const fallbackProject = (() => {
                         if (activeProject) {
                             return activeProject;
@@ -234,8 +299,8 @@ export const useSessionStore = create<SessionStore>()(
                     const persistedProjectById = persistedTarget?.projectId
                         ? projects.find((project) => project.id === persistedTarget.projectId) ?? null
                         : null;
-                    const persistedProjectByDirectory = resolveProjectForDirectory(projects, persistedTarget?.directory ?? null);
-                    const currentDirectoryProject = resolveProjectForDirectory(projects, currentDirectory);
+                    const persistedProjectByDirectory = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, persistedTarget?.directory ?? null);
+                    const currentDirectoryProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, currentDirectory);
 
                     const selectedProject = (() => {
                         if (explicitProject || explicitDirectory !== null) {
@@ -1209,7 +1274,11 @@ useDirectoryStore.subscribe((state, prevState) => {
     }
 
     const projects = useProjectsStore.getState().projects;
-    const resolvedProject = resolveProjectForDirectory(projects, nextDirectory);
+    const resolvedProject = resolveDraftProjectForDirectory(
+        projects,
+        useSessionStore.getState().availableWorktreesByProject,
+        nextDirectory,
+    );
 
     useSessionStore.setState((store) => ({
         newSessionDraft: {
