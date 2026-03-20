@@ -619,6 +619,7 @@ export interface EditorAPI {
 export interface VSCodeAPI {
   executeCommand(command: string, ...args: unknown[]): Promise<unknown>;
   openAgentManager(): Promise<void>;
+  openExternalUrl(url: string): Promise<void>;
 }
 
 export interface PushSubscribePayload {

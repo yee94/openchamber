@@ -3139,6 +3139,21 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
       }
 
+      case 'vscode:openExternalUrl': {
+        const { url } = (payload || {}) as { url?: string };
+        const target = typeof url === 'string' ? url.trim() : '';
+        if (!target) {
+          return { id, type, success: false, error: 'URL is required' };
+        }
+        try {
+          await vscode.env.openExternal(vscode.Uri.parse(target));
+          return { id, type, success: true, data: { opened: true } };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
       case 'notifications:can-notify': {
         return { id, type, success: true, data: true };
       }
