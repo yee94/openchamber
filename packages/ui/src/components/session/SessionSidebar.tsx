@@ -36,12 +36,14 @@ import { useSessionFolderCleanup } from './sidebar/hooks/useSessionFolderCleanup
 import { useStickyProjectHeaders } from './sidebar/hooks/useStickyProjectHeaders';
 import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
+import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { SessionGroupSection } from './sidebar/SessionGroupSection';
 import { SidebarHeader } from './sidebar/SidebarHeader';
 import { SidebarActivitySections } from './sidebar/SidebarActivitySections';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
 import { SessionNodeItem } from './sidebar/SessionNodeItem';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 import type { SortableDragHandleProps } from './sidebar/sortableItems';
 import {
   FolderDeleteConfirmDialog,
@@ -170,6 +172,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [openSidebarMenuKey, setOpenSidebarMenuKey] = React.useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
@@ -315,6 +318,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const prStatusEntries = useGitHubPrStatusStore((state) => state.entries);
+  const updateStore = useUpdateStore();
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -584,6 +588,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const openNewWorktreeDialog = React.useCallback(() => {
     setNewWorktreeDialogOpen(true);
   }, []);
+
+  const handleOpenUpdateDialog = React.useCallback(() => {
+    const current = useUpdateStore.getState();
+    if (current.available && current.info) {
+      setUpdateDialogOpen(true);
+      return;
+    }
+
+    void updateStore.checkForUpdates().then(() => {
+      const { available, error } = useUpdateStore.getState();
+      if (error) {
+        toast.error('Failed to check for updates', { description: error });
+        return;
+      }
+      if (!available) {
+        toast.success('You are on the latest version');
+        return;
+      }
+      setUpdateDialogOpen(true);
+    });
+  }, [updateStore]);
+
+  const showSidebarUpdateButton =
+    updateStore.available &&
+    (updateStore.runtimeType === 'desktop' || updateStore.runtimeType === 'web');
 
   const deleteSession = useSessionStore((state) => state.deleteSession);
   const deleteSessions = useSessionStore((state) => state.deleteSessions);
@@ -1366,6 +1395,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         onOpenSettings={() => setSettingsDialogOpen(true)}
         onOpenShortcuts={toggleHelpDialog}
         onOpenAbout={() => setAboutDialogOpen(true)}
+        onOpenUpdate={handleOpenUpdateDialog}
+        showUpdateButton={showSidebarUpdateButton}
+      />
+
+      <UpdateDialog
+        open={updateDialogOpen}
+        onOpenChange={setUpdateDialogOpen}
+        info={updateStore.info}
+        downloading={updateStore.downloading}
+        downloaded={updateStore.downloaded}
+        progress={updateStore.progress}
+        error={updateStore.error}
+        onDownload={updateStore.downloadUpdate}
+        onRestart={updateStore.restartToUpdate}
+        runtimeType={updateStore.runtimeType}
       />
 
       {editingProject ? (

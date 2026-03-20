@@ -1,16 +1,25 @@
 import React from 'react';
 import { RiInformationLine, RiQuestionLine, RiSettings3Line } from '@remixicon/react';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Props = {
   onOpenSettings: () => void;
   onOpenShortcuts: () => void;
   onOpenAbout: () => void;
+  onOpenUpdate: () => void;
+  showUpdateButton?: boolean;
 };
 
 const footerButtonClassName = 'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
 
-export function SidebarFooter({ onOpenSettings, onOpenShortcuts, onOpenAbout }: Props): React.ReactNode {
+export function SidebarFooter({
+  onOpenSettings,
+  onOpenShortcuts,
+  onOpenAbout,
+  onOpenUpdate,
+  showUpdateButton = true,
+}: Props): React.ReactNode {
   return (
     <div className="flex shrink-0 items-center justify-start gap-1 px-2.5 py-2">
       <Tooltip>
@@ -37,6 +46,17 @@ export function SidebarFooter({ onOpenSettings, onOpenShortcuts, onOpenAbout }: 
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}><p>About OpenChamber</p></TooltipContent>
       </Tooltip>
+      {showUpdateButton ? (
+        <Button
+          type="button"
+          variant="default"
+          size="xs"
+          className="ml-auto border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)] hover:bg-[var(--status-info-background)]/80 hover:text-[var(--status-info)]"
+          onClick={onOpenUpdate}
+        >
+          Update
+        </Button>
+      ) : null}
     </div>
   );
 }

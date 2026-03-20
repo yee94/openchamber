@@ -51,7 +51,6 @@ import { UsagePage } from '@/components/sections/usage/UsagePage';
 import { GitPage } from '@/components/sections/git-identities/GitPage';
 import type { OpenChamberSection } from '@/components/sections/openchamber/types';
 import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
-import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
 import { McpIcon } from '@/components/icons/McpIcon';
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
@@ -568,11 +567,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               </Tooltip>
             )}
 
-            {isMobile && runtimeCtx.isWeb && (
-              <div className="px-1.5 pt-2">
-                <AboutSettings />
-              </div>
-            )}
           </div>
         </div>
       </div>
