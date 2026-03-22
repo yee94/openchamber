@@ -5,6 +5,10 @@ import {
   deleteRemoteBranch,
   git,
 } from '@/lib/gitApi';
+import {
+  clearWorktreeBootstrapState,
+  markWorktreeBootstrapPending,
+} from '@/lib/worktrees/worktreeBootstrap';
 import type {
   CreateGitWorktreePayload,
   GitWorktreeValidationResult,
@@ -241,6 +245,8 @@ export async function createWorktree(project: ProjectRef, args: CreateWorktreeAr
     label: returnedBranch || returnedName,
   };
 
+  markWorktreeBootstrapPending(metadata.path);
+
   return metadata;
 }
 
@@ -267,6 +273,8 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   if (!raw?.success) {
     throw new Error('Worktree removal failed');
   }
+
+  clearWorktreeBootstrapState(worktree.path);
 
   const branchName = (worktree.branch || '').replace(/^refs\/heads\//, '').trim();
   if (deleteRemote && branchName) {

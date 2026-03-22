@@ -3323,6 +3323,24 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: result };
       }
 
+      case 'api:git/worktrees/bootstrap-status': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.getWorktreeBootstrapStatus(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/worktrees/preview': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.previewWorktreeCreate(directory, (payload || {}) as gitService.CreateGitWorktreePayload);
+        return { id, type, success: true, data: result };
+      }
+
       case 'api:git/diff': {
         const { directory, path: filePath, staged, contextLines } = (payload || {}) as { 
           directory?: string; 

@@ -18,6 +18,7 @@ import {
   RiExpandUpDownLine,
   RiStickyNoteLine,
 } from '@remixicon/react';
+import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ProjectRef } from '@/lib/openchamberConfig';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { ProjectNotesTodoPanel } from '../ProjectNotesTodoPanel';
@@ -31,6 +32,8 @@ type Props = {
   setProjectNotesPanelOpen: (open: boolean) => void;
   activeProjectRefForHeader: ProjectRef | null;
   activeProjectLabelForHeader: string | null;
+  canOpenMultiRun: boolean;
+  openMultiRunLauncher: () => void;
   stableActiveProjectIsRepo: boolean;
   headerActionIconClass: string;
   reserveHeaderActionsSpace: boolean;
@@ -56,6 +59,8 @@ export function SidebarHeader(props: Props): React.ReactNode {
     setProjectNotesPanelOpen,
     activeProjectRefForHeader,
     activeProjectLabelForHeader,
+    canOpenMultiRun,
+    openMultiRunLauncher,
     stableActiveProjectIsRepo,
     headerActionIconClass,
     reserveHeaderActionsSpace,
@@ -113,6 +118,21 @@ export function SidebarHeader(props: Props): React.ReactNode {
             </div>
 
             <div className="flex items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={openMultiRunLauncher}
+                    className={headerActionButtonClass}
+                    aria-label="New multi-run"
+                    disabled={!canOpenMultiRun}
+                  >
+                    <ArrowsMerge className={headerActionIconClass} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
+              </Tooltip>
+
               {useMobileNotesPanel ? (
                 <Tooltip>
                   <TooltipTrigger asChild>

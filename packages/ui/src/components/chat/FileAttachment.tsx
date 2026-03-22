@@ -347,13 +347,13 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
     return filename || path;
   };
 
-  const resolveDisplayName = (file: FilePart): string => {
+  const resolveDisplayName = React.useCallback((file: FilePart): string => {
     const isGitHubLink = getGitHubLinkKind(file) !== null;
     if (isGitHubLink && typeof file.filename === 'string' && file.filename.trim().length > 0) {
       return file.filename.trim();
     }
     return extractFilename(file.filename || file.url);
-  };
+  }, []);
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return '';
@@ -377,7 +377,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
           size: file.size,
         }];
       }),
-    [imageFiles]
+    [imageFiles, resolveDisplayName]
   );
 
   const handleImageClick = React.useCallback((index: number) => {

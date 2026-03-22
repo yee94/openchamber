@@ -15,6 +15,7 @@ import type {
 } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
+import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap";
 type StreamEvent<TData> = {
   data: TData;
   event?: string;
@@ -699,6 +700,10 @@ class OpencodeService {
     // Ensure we have at least one part
     if (parts.length === 0) {
       throw new Error('Message must have at least one part (text or file)');
+    }
+
+    if (this.currentDirectory) {
+      await waitForWorktreeBootstrap(this.currentDirectory);
     }
 
     // Use async prompt endpoint so the client doesn't block waiting

@@ -1293,6 +1293,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     openNewSessionDraft();
   }, [mobileVariant, openNewSessionDraft, setActiveMainTab, setSessionSwitcherOpen]);
 
+  const handleOpenMultiRunFromHeader = React.useCallback(() => {
+    setActiveMainTab('chat');
+    if (mobileVariant) {
+      setSessionSwitcherOpen(false);
+    }
+    openMultiRunLauncher();
+  }, [mobileVariant, openMultiRunLauncher, setActiveMainTab, setSessionSwitcherOpen]);
+
   return (
     <div
       ref={sessionSearchContainerRef}
@@ -1336,6 +1344,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setProjectNotesPanelOpen={setProjectNotesPanelOpen}
         activeProjectRefForHeader={activeProjectRefForHeader}
         activeProjectLabelForHeader={activeProjectLabelForHeader}
+        canOpenMultiRun={projects.length > 0}
+        openMultiRunLauncher={handleOpenMultiRunFromHeader}
         stableActiveProjectIsRepo={stableActiveProjectIsRepo}
         headerActionIconClass={headerActionIconClass}
         reserveHeaderActionsSpace={reserveHeaderActionsSpace}
@@ -1376,7 +1386,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setSessionSwitcherOpen={setSessionSwitcherOpen}
         openNewSessionDraft={openNewSessionDraft}
         openNewWorktreeDialog={openNewWorktreeDialog}
-        openMultiRunLauncher={openMultiRunLauncher}
         openProjectEditDialog={setEditingProjectDialogId}
         removeProject={removeProject}
         projectHeaderSentinelRefs={projectHeaderSentinelRefs}

@@ -24,6 +24,8 @@ import { flattenAssistantTextParts } from "@/lib/messages/messageText";
 import { normalizeMessageRecordsForProjection } from "./utils/messageProjectors";
 import type { ProjectEntry } from "@/lib/api/types";
 import type { WorktreeMetadata } from "@/types/worktree";
+import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap";
+import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree";
 
 export type { AttachedFile, EditPermissionMode };
 export { MEMORY_LIMITS, ACTIVE_SESSION_WINDOW } from "./types/sessionTypes";
@@ -242,7 +244,7 @@ export const useSessionStore = create<SessionStore>()(
             pendingInputText: null,
             pendingInputMode: 'replace',
             pendingSyntheticParts: null,
-            newSessionDraft: { open: true, selectedProjectId: null, directoryOverride: null, parentID: null },
+            newSessionDraft: { open: true, selectedProjectId: null, directoryOverride: null, pendingWorktreeRequestId: null, bootstrapPendingDirectory: null, preserveDirectoryOverride: false, parentID: null },
 
             // Voice state (initialized to disconnected/idle)
             voiceStatus: 'disconnected',
@@ -338,6 +340,9 @@ export const useSessionStore = create<SessionStore>()(
                             open: true,
                             selectedProjectId: selectedProject?.id ?? null,
                             directoryOverride: directory,
+                            pendingWorktreeRequestId: options?.pendingWorktreeRequestId ?? null,
+                            bootstrapPendingDirectory: normalizePath(options?.bootstrapPendingDirectory ?? null),
+                            preserveDirectoryOverride: options?.preserveDirectoryOverride === true,
                             parentID: options?.parentID ?? null,
                             title: options?.title,
                             initialPrompt: options?.initialPrompt,
@@ -376,7 +381,52 @@ export const useSessionStore = create<SessionStore>()(
                     }
                 },
 
-                setNewSessionDraftTarget: ({ projectId, directoryOverride }) => {
+                overrideNewSessionDraftTarget: (options) => {
+                    const projectsState = useProjectsStore.getState();
+                    const projects = projectsState.projects;
+                    const availableWorktreesByProject = get().availableWorktreesByProject;
+                    const explicitDirectory = normalizePath(options?.directoryOverride ?? null);
+                    const explicitProject = options?.projectId
+                        ? projects.find((project) => project.id === options.projectId) ?? null
+                        : null;
+                    const inferredProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, explicitDirectory);
+                    const fallbackProject = explicitProject ?? inferredProject ?? projectsState.getActiveProject() ?? projects[0] ?? null;
+                    const selectedProject = explicitProject ?? inferredProject ?? fallbackProject;
+                    const nextDirectory = explicitDirectory ?? normalizePath(selectedProject?.path ?? null);
+
+                    persistDraftTarget({
+                        projectId: selectedProject?.id ?? null,
+                        directory: nextDirectory,
+                    });
+
+                    set((state) => {
+                        const previousDraft = state.newSessionDraft;
+                        const hasPendingWorktreeRequestId = Object.prototype.hasOwnProperty.call(options, 'pendingWorktreeRequestId');
+                        const hasBootstrapPendingDirectory = Object.prototype.hasOwnProperty.call(options, 'bootstrapPendingDirectory');
+                        return {
+                            newSessionDraft: {
+                                ...previousDraft,
+                                open: true,
+                                selectedProjectId: selectedProject?.id ?? null,
+                                directoryOverride: nextDirectory,
+                                pendingWorktreeRequestId: hasPendingWorktreeRequestId
+                                    ? (options.pendingWorktreeRequestId ?? null)
+                                    : (previousDraft.pendingWorktreeRequestId ?? null),
+                                bootstrapPendingDirectory: hasBootstrapPendingDirectory
+                                    ? normalizePath(options.bootstrapPendingDirectory ?? null)
+                                    : (previousDraft.bootstrapPendingDirectory ?? null),
+                                preserveDirectoryOverride: options?.preserveDirectoryOverride === true,
+                                title: options?.title ?? previousDraft.title,
+                                initialPrompt: options?.initialPrompt ?? previousDraft.initialPrompt,
+                            },
+                            currentSessionId: null,
+                            error: null,
+                            ...(options?.initialPrompt ? { pendingInputText: options.initialPrompt, pendingInputMode: 'replace' as const } : {}),
+                        };
+                    });
+                },
+
+                setNewSessionDraftTarget: ({ projectId, directoryOverride }, options) => {
                     const projects = useProjectsStore.getState().projects;
                     const project = projectId
                         ? projects.find((entry) => entry.id === projectId) ?? null
@@ -385,6 +435,52 @@ export const useSessionStore = create<SessionStore>()(
                     const normalizedProjectPath = normalizePath(project?.path ?? null);
                     const nextDirectory = normalizedDirectory ?? normalizedProjectPath ?? null;
 
+                    let didUpdate = false;
+                    set((state) => {
+                        if (!state.newSessionDraft?.open) {
+                            return state;
+                        }
+                        if (
+                            options?.force !== true
+                            && (
+                                state.newSessionDraft.pendingWorktreeRequestId
+                                || state.newSessionDraft.bootstrapPendingDirectory
+                                || state.newSessionDraft.preserveDirectoryOverride
+                            )
+                        ) {
+                            return state;
+                        }
+                        didUpdate = true;
+                        return {
+                            newSessionDraft: {
+                                ...state.newSessionDraft,
+                                selectedProjectId: project?.id ?? null,
+                                directoryOverride: nextDirectory,
+                                pendingWorktreeRequestId: null,
+                                bootstrapPendingDirectory: null,
+                                preserveDirectoryOverride: false,
+                                parentID: null,
+                            },
+                        };
+                    });
+
+                    if (didUpdate) {
+                        persistDraftTarget({
+                            projectId: project?.id ?? null,
+                            directory: nextDirectory,
+                        });
+                    }
+                },
+
+                closeNewSessionDraft: () => {
+                    const realCurrentSessionId = useSessionManagementStore.getState().currentSessionId;
+                    set({
+                        newSessionDraft: { open: false, selectedProjectId: null, directoryOverride: null, pendingWorktreeRequestId: null, bootstrapPendingDirectory: null, preserveDirectoryOverride: false, parentID: null, title: undefined, initialPrompt: undefined, syntheticParts: undefined, targetFolderId: undefined },
+                        currentSessionId: realCurrentSessionId,
+                    });
+                },
+
+                setPendingDraftWorktreeRequest: (requestId) => {
                     set((state) => {
                         if (!state.newSessionDraft?.open) {
                             return state;
@@ -392,24 +488,55 @@ export const useSessionStore = create<SessionStore>()(
                         return {
                             newSessionDraft: {
                                 ...state.newSessionDraft,
-                                selectedProjectId: project?.id ?? null,
-                                directoryOverride: nextDirectory,
-                                parentID: null,
+                                pendingWorktreeRequestId: requestId,
                             },
                         };
                     });
+                },
 
-                    persistDraftTarget({
-                        projectId: project?.id ?? null,
-                        directory: nextDirectory,
+                resolvePendingDraftWorktreeTarget: (requestId, directory, options) => {
+                    set((state) => {
+                        if (!state.newSessionDraft?.open || state.newSessionDraft.pendingWorktreeRequestId !== requestId) {
+                            return state;
+                        }
+                        return {
+                            newSessionDraft: {
+                                ...state.newSessionDraft,
+                                selectedProjectId: options?.projectId ?? state.newSessionDraft.selectedProjectId ?? null,
+                                directoryOverride: normalizePath(directory),
+                                pendingWorktreeRequestId: null,
+                                bootstrapPendingDirectory: normalizePath(options?.bootstrapPendingDirectory ?? state.newSessionDraft.bootstrapPendingDirectory ?? null),
+                                preserveDirectoryOverride: options?.preserveDirectoryOverride ?? true,
+                            },
+                        };
                     });
                 },
 
-                closeNewSessionDraft: () => {
-                    const realCurrentSessionId = useSessionManagementStore.getState().currentSessionId;
-                    set({
-                        newSessionDraft: { open: false, selectedProjectId: null, directoryOverride: null, parentID: null, title: undefined, initialPrompt: undefined, syntheticParts: undefined, targetFolderId: undefined },
-                        currentSessionId: realCurrentSessionId,
+                setDraftBootstrapPendingDirectory: (directory) => {
+                    set((state) => {
+                        if (!state.newSessionDraft?.open) {
+                            return state;
+                        }
+                        return {
+                            newSessionDraft: {
+                                ...state.newSessionDraft,
+                                bootstrapPendingDirectory: normalizePath(directory),
+                            },
+                        };
+                    });
+                },
+
+                setDraftPreserveDirectoryOverride: (value) => {
+                    set((state) => {
+                        if (!state.newSessionDraft?.open) {
+                            return state;
+                        }
+                        return {
+                            newSessionDraft: {
+                                ...state.newSessionDraft,
+                                preserveDirectoryOverride: value,
+                            },
+                        };
                     });
                 },
 
@@ -579,8 +706,13 @@ export const useSessionStore = create<SessionStore>()(
 
                     if (draft?.open) {
                         const draftTargetFolderId = draft.targetFolderId;
-                        const draftDirectoryOverride = draft.directoryOverride ?? null;
+                        let draftDirectoryOverride = draft.bootstrapPendingDirectory ?? draft.directoryOverride ?? null;
                         const draftProjectId = draft.selectedProjectId ?? null;
+
+                        if (draft.pendingWorktreeRequestId) {
+                            draftDirectoryOverride = await waitForPendingDraftWorktreeRequest(draft.pendingWorktreeRequestId);
+                            get().resolvePendingDraftWorktreeTarget(draft.pendingWorktreeRequestId, draftDirectoryOverride);
+                        }
 
                         const created = await useSessionManagementStore
                             .getState()
@@ -647,6 +779,7 @@ export const useSessionStore = create<SessionStore>()(
                         const draftSyntheticParts = draft.syntheticParts;
 
                         get().closeNewSessionDraft();
+                        await get().setCurrentSession(created.id);
 
                         // Assign to target folder if session was created from folder's + button
                         if (draftTargetFolderId) {
@@ -662,6 +795,11 @@ export const useSessionStore = create<SessionStore>()(
                         const mergedAdditionalParts = draftSyntheticParts?.length
                             ? [...(additionalParts || []), ...draftSyntheticParts]
                             : additionalParts;
+
+                        const createdDirectory = normalizePath(draftDirectoryOverride ?? created.directory ?? null);
+                        if (createdDirectory) {
+                            await waitForWorktreeBootstrap(createdDirectory);
+                        }
 
                         try {
                             markPendingUserSendAnimation(created.id);
@@ -713,6 +851,13 @@ export const useSessionStore = create<SessionStore>()(
                             });
                             set({ sessionMemoryState: newMemoryState });
                         }
+                    }
+
+                    const currentSessionDirectory = currentSessionId
+                        ? normalizePath(useSessionManagementStore.getState().getDirectoryForSession(currentSessionId))
+                        : null;
+                    if (currentSessionDirectory) {
+                        await waitForWorktreeBootstrap(currentSessionDirectory);
                     }
 
                     // Notify server that user sent a message in this session
@@ -1265,6 +1410,10 @@ useDirectoryStore.subscribe((state, prevState) => {
 
     const draft = useSessionStore.getState().newSessionDraft;
     if (!draft?.open) {
+        return;
+    }
+
+    if (draft.pendingWorktreeRequestId || draft.bootstrapPendingDirectory || draft.preserveDirectoryOverride) {
         return;
     }
 

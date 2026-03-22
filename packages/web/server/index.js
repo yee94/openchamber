@@ -12529,6 +12529,46 @@ async function main(options = {}) {
     }
   });
 
+  app.post('/api/git/worktrees/preview', async (req, res) => {
+    const { previewWorktreeCreate } = await getGitLibraries();
+    if (typeof previewWorktreeCreate !== 'function') {
+      return res.status(501).json({ error: 'Worktree preview is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const preview = await previewWorktreeCreate(directory, req.body || {});
+      res.json(preview);
+    } catch (error) {
+      console.error('Failed to preview worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to preview worktree' });
+    }
+  });
+
+  app.get('/api/git/worktrees/bootstrap-status', async (req, res) => {
+    const { getWorktreeBootstrapStatus } = await getGitLibraries();
+    if (typeof getWorktreeBootstrapStatus !== 'function') {
+      return res.status(501).json({ error: 'Worktree bootstrap status is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const status = await getWorktreeBootstrapStatus(directory);
+      res.json(status);
+    } catch (error) {
+      console.error('Failed to get worktree bootstrap status:', error);
+      res.status(500).json({ error: error.message || 'Failed to get worktree bootstrap status' });
+    }
+  });
+
   app.delete('/api/git/worktrees', async (req, res) => {
     const { removeWorktree } = await getGitLibraries();
     if (typeof removeWorktree !== 'function') {

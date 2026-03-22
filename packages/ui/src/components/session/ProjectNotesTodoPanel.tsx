@@ -20,7 +20,7 @@ import {
 } from '@/lib/openchamberConfig';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { createWorktreeOnly } from '@/lib/worktreeSessionCreator';
+import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { cn } from '@/lib/utils';
 
 interface ProjectNotesTodoPanelProps {
@@ -228,22 +228,18 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       }
       setSendingTodoId(todoId);
       try {
-        const newWorktreePath = await createWorktreeOnly();
+        routeToChat();
+        const newWorktreePath = await createWorktreeDraft({ initialPrompt: todoText });
         if (!newWorktreePath) {
           return;
         }
-        routeToChat();
-        openNewSessionDraft({
-          directoryOverride: newWorktreePath,
-          initialPrompt: todoText,
-        });
         toast.success('Todo sent to new worktree session');
         onActionComplete?.();
       } finally {
         setSendingTodoId(null);
       }
     },
-    [canCreateWorktree, onActionComplete, openNewSessionDraft, projectRef, routeToChat]
+    [canCreateWorktree, onActionComplete, projectRef, routeToChat]
   );
 
   if (!projectRef) {
