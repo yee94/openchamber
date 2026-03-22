@@ -2448,6 +2448,11 @@ const sanitizeSettingsUpdate = (payload) => {
     }
   }
 
+  // Usage reporting opt-out (default: true/enabled)
+  if (typeof candidate.reportUsage === 'boolean') {
+    result.reportUsage = candidate.reportUsage;
+  }
+
   return result;
 };
 
