@@ -17,12 +17,13 @@ fi
 
 if [ ! -f "${SSH_PRIVATE_KEY_PATH}" ] || [ ! -f "${SSH_PUBLIC_KEY_PATH}" ]; then
   if [ ! -w "${SSH_DIR}" ]; then
-    echo "[entrypoint] error: ssh key missing and ${SSH_DIR} is not writable" >&2
-    exit 1
+    echo "[entrypoint] warning: ssh key missing and ${SSH_DIR} is not writable, continuing without SSH key" >&2
+  else
+    echo "[entrypoint] generating SSH key..."
+    if ! ssh-keygen -t ed25519 -N "" -f "${SSH_PRIVATE_KEY_PATH}" >/dev/null 2>&1; then
+      echo "[entrypoint] warning: failed to generate SSH key, continuing without SSH key" >&2
+    fi
   fi
-
-  echo "[entrypoint] generating SSH key..."
-  ssh-keygen -t ed25519 -N "" -f "${SSH_PRIVATE_KEY_PATH}" >/dev/null
 fi
 
 if ! chmod 600 "${SSH_PRIVATE_KEY_PATH}" 2>/dev/null; then
@@ -33,8 +34,10 @@ if ! chmod 644 "${SSH_PUBLIC_KEY_PATH}" 2>/dev/null; then
   echo "[entrypoint] warning: cannot chmod ${SSH_PUBLIC_KEY_PATH}, continuing"
 fi
 
-echo "[entrypoint] SSH public key:"
-cat "${SSH_PUBLIC_KEY_PATH}"
+if [ -f "${SSH_PUBLIC_KEY_PATH}" ]; then
+  echo "[entrypoint] SSH public key:"
+  cat "${SSH_PUBLIC_KEY_PATH}"
+fi
 
 # Handle UI password environment variable
 if [ -n "${UI_PASSWORD:-}" ]; then
