@@ -55,6 +55,10 @@ if [ "${OH_MY_OPENCODE:-false}" = "true" ]; then
   fi
 fi
 
+# Docker containers need to listen on all interfaces for port mapping to work.
+OPENCHAMBER_HOST="${OPENCHAMBER_HOST:-0.0.0.0}"
+export OPENCHAMBER_HOST
+
 echo "[entrypoint] starting..."
 
 if [ "$#" -gt 0 ]; then
@@ -67,4 +71,4 @@ if [ -n "${UI_PASSWORD:-}" ]; then
 fi
 "$@"
 
-bun packages/web/bin/cli.js logs
+exec bun packages/web/bin/cli.js logs

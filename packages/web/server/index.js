@@ -5788,6 +5788,7 @@ function parseArgs(argv = process.argv.slice(2)) {
 
   const options = {
     port: DEFAULT_PORT,
+    host: undefined,
     uiPassword: envPassword,
     tryCfTunnel: envCfTunnel,
     tunnelProvider: envTunnelProvider,
@@ -5823,6 +5824,13 @@ function parseArgs(argv = process.argv.slice(2)) {
       i = nextIndex;
       const parsedPort = parseInt(value ?? '', 10);
       options.port = Number.isFinite(parsedPort) ? parsedPort : DEFAULT_PORT;
+      continue;
+    }
+
+    if (optionName === 'host') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.host = typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
       continue;
     }
 
@@ -7095,6 +7103,7 @@ async function gracefulShutdown(options = {}) {
 
 async function main(options = {}) {
   const port = Number.isFinite(options.port) && options.port >= 0 ? Math.trunc(options.port) : DEFAULT_PORT;
+  const host = typeof options.host === 'string' && options.host.length > 0 ? options.host : undefined;
   const tryCfTunnel = options.tryCfTunnel === true;
   const shouldUseCanonicalTunnelConfig = typeof options.tunnelMode === 'string'
     || typeof options.tunnelProvider === 'string'
@@ -14235,9 +14244,10 @@ async function main(options = {}) {
 
   let activePort = port;
 
-  const bindHost = typeof process.env.OPENCHAMBER_HOST === 'string' && process.env.OPENCHAMBER_HOST.trim().length > 0
-    ? process.env.OPENCHAMBER_HOST.trim()
-    : null;
+  const bindHost = host
+    || (typeof process.env.OPENCHAMBER_HOST === 'string' && process.env.OPENCHAMBER_HOST.trim().length > 0
+      ? process.env.OPENCHAMBER_HOST.trim()
+      : '127.0.0.1');
 
   await new Promise((resolve, reject) => {
     const onError = (error) => {
@@ -14256,9 +14266,12 @@ async function main(options = {}) {
         // ignore
       }
 
-      console.log(`OpenChamber server running on port ${activePort}`);
-      console.log(`Health check: http://localhost:${activePort}/health`);
-      console.log(`Web interface: http://localhost:${activePort}`);
+      const displayHost = (bindHost === '0.0.0.0' || bindHost === '::' || bindHost === '[::]')
+        ? 'localhost'
+        : (bindHost.includes(':') ? `[${bindHost}]` : bindHost);
+      console.log(`OpenChamber server listening on ${bindHost}:${activePort}`);
+      console.log(`Health check: http://${displayHost}:${activePort}/health`);
+      console.log(`Web interface: http://${displayHost}:${activePort}`);
 
       if (startupTunnelRequest) {
         const startupModeLabel = startupTunnelRequest.mode === TUNNEL_MODE_QUICK
@@ -14308,11 +14321,7 @@ async function main(options = {}) {
       resolve();
     };
 
-    if (bindHost) {
-      server.listen(port, bindHost, onListening);
-    } else {
-      server.listen(port, onListening);
-    }
+    server.listen(port, bindHost, onListening);
   });
 
   if (attachSignals && !signalsAttached) {
@@ -14355,6 +14364,7 @@ if (isCliExecution) {
   exitOnShutdown = true;
   main({
     port: cliOptions.port,
+    host: cliOptions.host,
     tryCfTunnel: cliOptions.tryCfTunnel,
     tunnelProvider: cliOptions.tunnelProvider,
     tunnelMode: cliOptions.tunnelMode,
