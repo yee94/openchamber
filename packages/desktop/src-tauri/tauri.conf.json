@@ -28,8 +28,7 @@
           "y": 26
         },
         "dragDropEnabled": false,
-        "visible": false,
-        "backgroundThrottling": "disabled"
+        "visible": false
       }
     ],
     "security": {
