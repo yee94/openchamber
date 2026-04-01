@@ -1,3 +1,12 @@
+## [Unreleased]
+
+- Security/Chat: user messages now escape raw HTML by default, so pasted markup is shown as text instead of being interpreted in chat (thanks to @kalac2232).
+- Sessions/Drafts: draft chat config now stays aligned with the active draft target directory, reducing model/agent mismatch when switching draft context (thanks to @hkay-dev).
+- Files/Markdown: added filesystem stat support in the extension bridge to validate markdown targets more reliably before file handling flows (thanks to @geekifan).
+- Chat/Models: added arrow-key navigation for thinking-mode selection in model controls, making keyboard model tuning faster while composing prompts (thanks to @daveotero).
+- Reliability/Streaming: proxy handling now normalizes identity encoding, strips conflicting compression headers and hop-by-hop response headers, and suppresses expected upstream SSE close errors to reduce noisy disconnect failures (thanks to @jwcrystal, @Jovines, @JiwaniZakir, @shekohex).
+- Usage: added ZhipuAI quota tracking and fixed MiniMax coding-plan plus GitHub Copilot overusage calculations for more accurate quota reporting (thanks to @kalac2232, @baruchvitorino, @ebrainte).
+
 ## [1.9.2] - 2026-03-31
 
 - Chat/Performance: overhauled live sync and streaming updates to reduce re-render churn and keep long-running chats smoother in the extension.
