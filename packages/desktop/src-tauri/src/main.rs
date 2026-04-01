@@ -2573,7 +2573,7 @@ fn apply_platform_window_config<M: Manager<tauri::Wry>>(
 ) -> WebviewWindowBuilder<'_, tauri::Wry, M> {
     #[cfg(target_os = "macos")]
     let builder = builder
-        .transparent(true)
+        .transparent(read_desktop_vibrancy_enabled())
         .hidden_title(true)
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {

@@ -538,7 +538,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             Window vibrancy
                                         </span>
                                         <span className="typography-meta text-muted-foreground">
-                                            Translucent window background. Disabling may reduce energy usage.
+                                            Translucent window background. Disabling may reduce energy usage. Existing windows update immediately, but full transparency changes apply to new windows or after restart.
                                         </span>
                                     </div>
                                 </div>
