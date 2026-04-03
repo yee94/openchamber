@@ -29,6 +29,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -65,6 +66,7 @@ import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 import { resolveSessionDiffStats } from '@/components/session/sidebar/utils';
+import type { Session } from '@opencode-ai/sdk/v2/client';
 
 
 const isSameContextUsage = (
@@ -250,6 +252,7 @@ export const Header: React.FC<HeaderProps> = ({
   const currentSessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '');
   const currentSessionMessages = currentSessionId ? (currentSessionMessageRecords.length > 0 ? currentSessionMessageRecords : undefined) : undefined;
   const sessions = useSessions();
+  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const activeProject = useProjectsStore((state) => {
     if (!state.activeProjectId) {
       return null;
@@ -561,16 +564,82 @@ export const Header: React.FC<HeaderProps> = ({
     });
   }, [fetchAllQuotas, isUsageRefreshSpinning]);
 
-  const currentSession = React.useMemo(() => {
+  const currentSessionLive = React.useMemo(() => {
     if (!currentSessionId) return null;
-    // Try current directory's store first, then fall back to all child stores.
-    // The sidebar loads sessions globally via SDK, but the header uses
-    // useSessions() which only has the current directory. This fallback
-    // ensures the title/directory show when the session lives elsewhere.
-    return sessions.find((s) => s.id === currentSessionId)
+    // Resolve from the global sessions snapshot first (same source as sidebar).
+    // Child-store lists are intentionally partial/truncated during bootstrap.
+    return globalActiveSessions.find((s) => s.id === currentSessionId)
+      ?? sessions.find((s) => s.id === currentSessionId)
       ?? getAllSyncSessions().find((s) => s.id === currentSessionId)
       ?? null;
-  }, [currentSessionId, sessions]);
+  }, [currentSessionId, globalActiveSessions, sessions]);
+
+  const lastResolvedSessionRef = React.useRef<{
+    sessionId: string;
+    session: Session;
+    expiresAt: number;
+  } | null>(null);
+  const [sessionFallbackVersion, setSessionFallbackVersion] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!currentSessionId) {
+      if (lastResolvedSessionRef.current) {
+        lastResolvedSessionRef.current = null;
+        setSessionFallbackVersion((value) => value + 1);
+      }
+      return;
+    }
+
+    if (currentSessionLive) {
+      lastResolvedSessionRef.current = {
+        sessionId: currentSessionId,
+        session: currentSessionLive,
+        expiresAt: Date.now() + 2000,
+      };
+      return;
+    }
+
+    const cached = lastResolvedSessionRef.current;
+    if (!cached || cached.sessionId !== currentSessionId) {
+      return;
+    }
+
+    const remainingMs = cached.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      lastResolvedSessionRef.current = null;
+      setSessionFallbackVersion((value) => value + 1);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (lastResolvedSessionRef.current?.sessionId === currentSessionId) {
+        lastResolvedSessionRef.current = null;
+      }
+      setSessionFallbackVersion((value) => value + 1);
+    }, remainingMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentSessionId, currentSessionLive]);
+
+  void sessionFallbackVersion;
+  const currentSession = (() => {
+    if (currentSessionLive) {
+      return currentSessionLive;
+    }
+
+    if (!currentSessionId) {
+      return null;
+    }
+
+    const cached = lastResolvedSessionRef.current;
+    if (cached && cached.sessionId === currentSessionId && cached.expiresAt > Date.now()) {
+      return cached.session;
+    }
+
+    return null;
+  })();
 
   const worktreePath = useSessionUIStore((state) => {
     if (!currentSessionId) return '';

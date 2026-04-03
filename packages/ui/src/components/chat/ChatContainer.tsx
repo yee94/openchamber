@@ -1,6 +1,6 @@
 import React from 'react';
 import { RiArrowLeftLine } from '@remixicon/react';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message, Part, Session } from '@opencode-ai/sdk/v2';
 
 import { ChatInput } from './ChatInput';
 import { useUIStore } from '@/stores/useUIStore';
@@ -191,7 +191,8 @@ export const ChatContainer: React.FC = () => {
 
     const handleReturnToParentSession = React.useCallback(() => {
         if (!parentSession) return;
-        setCurrentSession(parentSession.id);
+        const parentDirectory = (parentSession as Session & { directory?: string | null }).directory ?? null;
+        setCurrentSession(parentSession.id, parentDirectory);
     }, [parentSession, setCurrentSession]);
 
     const returnToParentButton = parentSession ? (
