@@ -41,6 +41,25 @@ export type EventPipelineInput = {
   onReconnect?: () => void
 }
 
+function resolveEventDirectory(event: unknown, payload: Event): string {
+  const directDirectory =
+    typeof event === "object" && event !== null && typeof (event as { directory?: unknown }).directory === "string"
+      ? (event as { directory: string }).directory
+      : null
+
+  if (directDirectory && directDirectory.length > 0) {
+    return directDirectory
+  }
+
+  const properties =
+    typeof payload.properties === "object" && payload.properties !== null
+      ? (payload.properties as Record<string, unknown>)
+      : null
+  const propertyDirectory = typeof properties?.directory === "string" ? properties.directory : null
+
+  return propertyDirectory && propertyDirectory.length > 0 ? propertyDirectory : "global"
+}
+
 export function createEventPipeline(input: EventPipelineInput) {
   const { sdk, onEvent, onReconnect } = input
   const abort = new AbortController()
@@ -167,11 +186,11 @@ export function createEventPipeline(input: EventPipelineInput) {
         for await (const event of events.stream) {
           resetHeartbeat()
           streamErrorLogged = false
-          const directory = (event as { directory?: string }).directory ?? "global"
           const payload = (event as { payload?: Event }).payload ?? (event as unknown as Event)
           if (!payload || typeof payload !== "object" || typeof (payload as { type?: unknown }).type !== "string") {
             continue
           }
+          const directory = resolveEventDirectory(event, payload)
           const k = key(directory, payload)
           if (k) {
             const i = coalesced.get(k)
