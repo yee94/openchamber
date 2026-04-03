@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useRef, useCallback, useMemo } from "react"
 import type { Event, Message, Part } from "@opencode-ai/sdk/v2/client"
+import type { Session } from "@opencode-ai/sdk/v2"
 import type { StoreApi } from "zustand"
 import { useStore } from "zustand"
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
@@ -677,6 +678,145 @@ export function useSessionQuestions(sessionID: string, directory?: string) {
 export function useSessions(directory?: string) {
   return useDirectorySync(
     useCallback((state: State) => state.session, []),
+    directory,
+  )
+}
+
+const getSidebarSessionSignature = (session: Session, stableUpdatedAt: number): string => {
+  const directory = (session as Session & { directory?: string | null }).directory ?? ''
+  const parentID = (session as Session & { parentID?: string | null }).parentID ?? ''
+  const projectWorktree = (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? ''
+  const shared = session.share?.url ?? ''
+  return [
+    session.id,
+    session.title ?? '',
+    session.time?.created ?? 0,
+    session.time?.archived ? 1 : 0,
+    directory,
+    parentID,
+    projectWorktree,
+    shared,
+    stableUpdatedAt,
+  ].join('|')
+}
+
+/** Get sessions stabilized for sidebar tree rendering */
+export function useSidebarSessions(directory?: string): Session[] {
+  const store = useDirectoryStore(directory)
+  const cacheRef = React.useRef<{
+    source: Session[]
+    streamingSignature: string
+    array: Session[]
+    signatures: Map<string, string>
+    sessionsById: Map<string, Session>
+    stableUpdatedAtById: Map<string, number>
+    streamingById: Map<string, boolean>
+  } | null>(null)
+
+  const getSnapshot = React.useCallback(() => {
+    const state = store.getState()
+    const source = state.session
+    const cached = cacheRef.current
+    const streamingSignature = source
+      .map((session) => {
+        const statusType = state.session_status?.[session.id]?.type
+        const isStreaming = statusType === 'busy' || statusType === 'retry'
+        return `${session.id}:${isStreaming ? 1 : 0}`
+      })
+      .join('|')
+
+    if (cached && cached.source === source && cached.streamingSignature === streamingSignature) {
+      return cached.array
+    }
+
+    const signatures = new Map<string, string>()
+    const sessionsById = new Map<string, Session>()
+    const stableUpdatedAtById = new Map<string, number>()
+    const streamingById = new Map<string, boolean>()
+    let changed = !cached || cached.array.length !== source.length
+
+    const array = source.map((session) => {
+      const rawUpdatedAt = Number(session.time?.updated ?? session.time?.created ?? 0)
+      const statusType = state.session_status?.[session.id]?.type
+      const isStreaming = statusType === 'busy' || statusType === 'retry'
+      const cachedUpdatedAt = cached?.stableUpdatedAtById.get(session.id) ?? rawUpdatedAt
+      const wasStreaming = cached?.streamingById.get(session.id) ?? false
+      const stableUpdatedAt = isStreaming
+        ? (wasStreaming ? cachedUpdatedAt : Math.max(rawUpdatedAt, cachedUpdatedAt, Date.now()))
+        : cachedUpdatedAt
+      const signature = getSidebarSessionSignature(session, stableUpdatedAt)
+      signatures.set(session.id, signature)
+      stableUpdatedAtById.set(session.id, stableUpdatedAt)
+      streamingById.set(session.id, isStreaming)
+
+      const cachedSession = cached?.sessionsById.get(session.id)
+      if (
+        cachedSession
+        && cached?.signatures.get(session.id) === signature
+      ) {
+        sessionsById.set(session.id, cachedSession)
+        return cachedSession
+      }
+
+      changed = true
+      const nextSession = stableUpdatedAt === rawUpdatedAt
+        ? session
+        : {
+            ...session,
+            time: {
+              ...session.time,
+              updated: stableUpdatedAt,
+            },
+          }
+      sessionsById.set(session.id, nextSession)
+      return nextSession
+    })
+
+    if (!changed && cached) {
+      cacheRef.current = {
+        source,
+        streamingSignature,
+        array: cached.array,
+        signatures,
+        sessionsById: cached.sessionsById,
+        stableUpdatedAtById,
+        streamingById,
+      }
+      return cached.array
+    }
+
+    cacheRef.current = { source, streamingSignature, array, signatures, sessionsById, stableUpdatedAtById, streamingById }
+    return array
+  }, [store])
+
+  return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
+}
+
+/** Get one session by id for a directory */
+export function useSession(sessionID?: string | null, directory?: string) {
+  return useDirectorySync(
+    useCallback(
+      (state: State) => {
+        if (!sessionID) return undefined
+        return state.session.find((session) => session.id === sessionID)
+      },
+      [sessionID],
+    ),
+    directory,
+  )
+}
+
+/** Get one session directory by id for a directory */
+export function useSessionDirectory(sessionID?: string | null, directory?: string): string | undefined {
+  return useDirectorySync(
+    useCallback(
+      (state: State) => {
+        if (!sessionID) return undefined
+        const session = state.session.find((candidate) => candidate.id === sessionID)
+        return (session as (typeof session & { directory?: string | null }) | undefined)?.directory ?? undefined
+      },
+      [sessionID],
+    ),
     directory,
   )
 }

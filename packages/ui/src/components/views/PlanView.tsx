@@ -5,7 +5,6 @@ import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
-import { useUIStore } from '@/stores/useUIStore';
 import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -87,7 +86,6 @@ export const PlanView: React.FC = () => {
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const runtimeApis = useRuntimeAPIs();
-  useUIStore();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);

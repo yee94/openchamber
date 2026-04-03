@@ -8,8 +8,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useViewportStore } from '@/sync/viewport-store';
-import { useSessions, useDirectorySync, useAllSessionStatuses } from '@/sync/sync-context';
+import { useSidebarSessions, useAllSessionStatuses } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSync } from '@/sync/use-sync';
 import { useSessionPrefetch } from './sidebar/hooks/useSessionPrefetch';
@@ -57,6 +56,7 @@ import {
 } from './sidebar/ConfirmDialogs';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
 import {
+  type ActiveNowEntry,
   addActiveNowSession,
   deriveActiveNowSessions,
   persistActiveNowEntries,
@@ -68,7 +68,7 @@ import {
   formatProjectLabel,
   normalizePath,
 } from './sidebar/utils';
-import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { refreshGlobalSessions, resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 
@@ -113,6 +113,50 @@ interface SessionSidebarProps {
   showOnlyMainWorkspace?: boolean;
 }
 
+type SessionStatusActivityBridgeProps = {
+  safeStorage: Storage;
+  setActiveNowEntries: React.Dispatch<React.SetStateAction<ActiveNowEntry[]>>;
+};
+
+const SessionStatusActivityBridge: React.FC<SessionStatusActivityBridgeProps> = ({
+  safeStorage,
+  setActiveNowEntries,
+}) => {
+  const globalSessionStatuses = useAllSessionStatuses();
+  const sessionStatus = React.useMemo(
+    () => new Map(Object.entries(globalSessionStatuses)),
+    [globalSessionStatuses],
+  );
+
+  const previousStreamingIdsRef = React.useRef<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    const nextStreamingIds = new Set<string>();
+    sessionStatus.forEach((status, sessionId) => {
+      if (status?.type === 'busy' || status?.type === 'retry') {
+        nextStreamingIds.add(sessionId);
+      }
+    });
+
+    const previousStreamingIds = previousStreamingIdsRef.current;
+    const startedStreamingIds = Array.from(nextStreamingIds).filter((sessionId) => !previousStreamingIds.has(sessionId));
+    if (startedStreamingIds.length > 0) {
+      setActiveNowEntries((prev) => {
+        const next = startedStreamingIds.reduce((entries, sessionId) => addActiveNowSession(entries, sessionId), prev);
+        if (next === prev) {
+          return prev;
+        }
+        persistActiveNowEntries(safeStorage, next);
+        return next;
+      });
+    }
+
+    previousStreamingIdsRef.current = nextStreamingIds;
+  }, [sessionStatus, safeStorage, setActiveNowEntries]);
+
+  return null;
+};
+
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   mobileVariant = false,
   onSessionSelected,
@@ -137,7 +181,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
-  const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
@@ -267,10 +310,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const gitBranches = useGitAllBranches();
 
   const sync = useSync();
-  const syncSessions = useSessions();
+  const syncSessions = useSidebarSessions();
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
-  const sessionsByDirectory = useGlobalSessionsStore((state) => state.sessionsByDirectory);
   const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const newSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
@@ -278,36 +320,53 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
   const shareSession = useSessionUIStore((state) => state.shareSession);
   const unshareSession = useSessionUIStore((state) => state.unshareSession);
-  const sessionMemoryState = useViewportStore((state) => state.sessionMemoryState);
-  const globalSessionStatuses = useAllSessionStatuses();
   // sessionAttentionStates removed — now using notification-store directly in SessionNodeItem
-  const permissionsRecord = useDirectorySync((state) => state.permission);
-
-  const sessionStatus = React.useMemo(
-    () => new Map(Object.entries(globalSessionStatuses)),
-    [globalSessionStatuses],
-  );
-  const permissions = React.useMemo(
-    () => new Map(Object.entries(permissionsRecord)),
-    [permissionsRecord],
-  );
   const worktreeMetadata = useSessionUIStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const getSessionsByDirectory = useSessionUIStore((state) => state.getSessionsByDirectory);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const updateStore = useUpdateStore();
 
-  const sessions = React.useMemo(
-    () => (hasLoadedGlobalSessions ? globalActiveSessions : syncSessions),
-    [globalActiveSessions, hasLoadedGlobalSessions, syncSessions],
-  );
+  const sessions = React.useMemo(() => {
+    if (!hasLoadedGlobalSessions) {
+      return syncSessions;
+    }
 
-  const syncSessionSignature = React.useMemo(
+    if (syncSessions.length === 0) {
+      return globalActiveSessions;
+    }
+
+    const syncedById = new Map(syncSessions.map((session) => [session.id, session]));
+    const merged = globalActiveSessions.map((session) => syncedById.get(session.id) ?? session);
+    const seenIds = new Set(merged.map((session) => session.id));
+
+    syncSessions.forEach((session) => {
+      if (seenIds.has(session.id)) {
+        return;
+      }
+
+      const sessionDirectory = resolveGlobalSessionDirectory(session);
+      if (sessionDirectory && sessionDirectory === currentDirectory) {
+        merged.push(session);
+      }
+    });
+
+    return merged;
+  }, [currentDirectory, globalActiveSessions, hasLoadedGlobalSessions, syncSessions]);
+
+  const syncSessionStructureSignature = React.useMemo(
     () => syncSessions
-      .map((session) => `${session.id}:${session.time?.updated ?? session.time?.created ?? 0}:${session.time?.archived ? 1 : 0}`)
+      .map((session) => {
+        const directory = normalizePath((session as Session & { directory?: string | null }).directory ?? null) ?? '';
+        return `${session.id}:${session.title ?? ''}:${session.time?.archived ? 1 : 0}:${directory}`;
+      })
       .join('|'),
     [syncSessions],
   );
+
+  const syncSessionsSnapshotRef = React.useRef<Session[]>(syncSessions);
+  React.useEffect(() => {
+    syncSessionsSnapshotRef.current = syncSessions;
+  }, [syncSessionStructureSignature, syncSessions]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -346,13 +405,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       });
     };
 
-    void refreshGlobalSessions(syncSessions);
+    void refreshGlobalSessions(syncSessionsSnapshotRef.current);
     void discoverWorktrees();
 
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, syncSessionSignature, syncSessions]);
+  }, [currentDirectory, syncSessionStructureSignature]);
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -489,6 +548,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
   }, [sessions, pinnedSessionIds]);
 
+  const sessionOrderIndex = React.useMemo(
+    () => new Map(sortedSessions.map((session, index) => [session.id, index])),
+    [sortedSessions],
+  );
+
   const allKnownSessionsById = React.useMemo(() => {
     const next = new Map<string, Session>();
     [...sessions, ...archivedSessions].forEach((session) => {
@@ -505,77 +569,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setActiveNowEntries(pruned);
     persistActiveNowEntries(safeStorage, pruned);
   }, [activeNowEntries, allKnownSessionsById, safeStorage]);
-
-  const previousStreamingIdsRef = React.useRef<Set<string>>(new Set());
-  React.useEffect(() => {
-    const nextStreamingIds = new Set<string>();
-    sessionStatus?.forEach((status, sessionId) => {
-      if (status?.type === 'busy' || status?.type === 'retry') {
-        nextStreamingIds.add(sessionId);
-      }
-    });
-
-    const previousStreamingIds = previousStreamingIdsRef.current;
-    const startedStreamingIds = Array.from(nextStreamingIds).filter((sessionId) => !previousStreamingIds.has(sessionId));
-    if (startedStreamingIds.length > 0) {
-      setActiveNowEntries((prev) => {
-        const next = startedStreamingIds.reduce((entries, sessionId) => addActiveNowSession(entries, sessionId), prev);
-        if (next === prev) {
-          return prev;
-        }
-        persistActiveNowEntries(safeStorage, next);
-        return next;
-      });
-    }
-
-    previousStreamingIdsRef.current = nextStreamingIds;
-  }, [sessionStatus, safeStorage]);
-
-  React.useEffect(() => {
-    const busyIds: string[] = [];
-    sessionStatus?.forEach((status, sessionId) => {
-      if (status?.type === 'busy' || status?.type === 'retry') {
-        busyIds.push(sessionId);
-      }
-    });
-
-    if (busyIds.length === 0) {
-      return;
-    }
-
-    setActiveNowEntries((prev) => {
-      const known = new Set(prev.map((entry) => entry.sessionId));
-      let next = prev;
-      let changed = false;
-
-      busyIds.forEach((sessionId) => {
-        if (known.has(sessionId)) {
-          return;
-        }
-
-        const session = allKnownSessionsById.get(sessionId);
-        if (!session || session.time?.archived) {
-          return;
-        }
-
-        const isSubtask = Boolean((session as Session & { parentID?: string | null }).parentID);
-        if (isSubtask) {
-          return;
-        }
-
-        next = addActiveNowSession(next, sessionId);
-        known.add(sessionId);
-        changed = true;
-      });
-
-      if (!changed) {
-        return prev;
-      }
-
-      persistActiveNowEntries(safeStorage, next);
-      return next;
-    });
-  }, [sessionStatus, allKnownSessionsById, safeStorage]);
 
   const childrenMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
@@ -887,8 +880,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     isVSCode,
     sessions,
     archivedSessions,
-    sessionsByDirectory,
-    getSessionsByDirectory,
     availableWorktreesByProject,
   });
 
@@ -1248,15 +1239,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         projectId={projectId}
         archivedBucket={archivedBucket}
         directoryStatus={directoryStatus}
-        sessionMemoryState={sessionMemoryState as Map<string, { isZombie?: boolean }>}
         currentSessionId={currentSessionId}
         pinnedSessionIds={pinnedSessionIds}
         expandedParents={expandedParents}
         hasSessionSearchQuery={hasSessionSearchQuery}
         normalizedSessionSearchQuery={normalizedSessionSearchQuery}
         notifyOnSubtasks={notifyOnSubtasks}
-        sessionStatus={sessionStatus as Map<string, { type?: string }> | undefined}
-        permissions={permissions as Map<string, unknown[]>}
         editingId={editingId}
         setEditingId={setEditingId}
         editTitle={editTitle}
@@ -1289,15 +1277,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ),
     [
       directoryStatus,
-      sessionMemoryState,
       currentSessionId,
       pinnedSessionIds,
       expandedParents,
       hasSessionSearchQuery,
       normalizedSessionSearchQuery,
       notifyOnSubtasks,
-      sessionStatus,
-      permissions,
       editingId,
       setEditingId,
       editTitle,
@@ -1395,6 +1380,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setRenameFolderDraft={setRenameFolderDraft}
         setRenamingFolderId={setRenamingFolderId}
         pinnedSessionIds={pinnedSessionIds}
+        sessionOrderIndex={sessionOrderIndex}
         prVisualStateByDirectoryBranch={prVisualStateByDirectoryBranch}
         onToggleCollapsedGroup={toggleCollapsedGroup}
         dragHandleProps={dragHandleProps}
@@ -1428,6 +1414,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       renamingFolderId,
       renameFolderDraft,
       pinnedSessionIds,
+      sessionOrderIndex,
       prVisualStateByDirectoryBranch,
       toggleCollapsedGroup,
     ],
@@ -1490,6 +1477,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         </div>
       ) : null}
 
+      <SessionStatusActivityBridge
+        safeStorage={safeStorage}
+        setActiveNowEntries={setActiveNowEntries}
+      />
+
       <SidebarHeader
         hideDirectoryControls={hideDirectoryControls}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}
@@ -1530,8 +1522,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         collapsedProjects={collapsedProjects}
         hideDirectoryControls={hideDirectoryControls}
         projectRepoStatus={projectRepoStatus}
-        hoveredProjectId={hoveredProjectId}
-        setHoveredProjectId={setHoveredProjectId}
         isDesktopShellRuntime={isDesktopShellRuntime}
         stuckProjectHeaders={stuckProjectHeaders}
         mobileVariant={mobileVariant}
