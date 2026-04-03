@@ -27,8 +27,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
-import { useGitStore } from '@/stores/useGitStore';
-import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
+import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
@@ -59,7 +58,7 @@ import {
 } from '@/components/ui/collapsible';
 import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import type { UsageWindow } from '@/types';
-import type { GitHubAuthStatus, GitHubPullRequestStatus } from '@/lib/api/types';
+import type { GitHubAuthStatus } from '@/lib/api/types';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
@@ -84,48 +83,6 @@ const isSameContextUsage = (
     && (a.normalizedOutput ?? 0) === (b.normalizedOutput ?? 0)
     && a.thresholdLimit === b.thresholdLimit
     && (a.lastMessageId ?? '') === (b.lastMessageId ?? '');
-};
-
-type PrVisualState = 'draft' | 'open' | 'blocked' | 'merged' | 'closed';
-
-const getPrVisualState = (status: GitHubPullRequestStatus | null): PrVisualState | null => {
-  const pr = status?.pr;
-  if (!pr) {
-    return null;
-  }
-  if (pr.state === 'merged') {
-    return 'merged';
-  }
-  if (pr.state === 'closed') {
-    return 'closed';
-  }
-  if (pr.draft) {
-    return 'draft';
-  }
-  const checksFailed = status?.checks?.state === 'failure';
-  const mergeableState = typeof pr.mergeableState === 'string' ? pr.mergeableState : '';
-  const notMergeable = pr.mergeable === false || mergeableState === 'blocked' || mergeableState === 'dirty';
-  if (checksFailed || notMergeable) {
-    return 'blocked';
-  }
-  return 'open';
-};
-
-const getPrVisualPriority = (state: PrVisualState): number => {
-  switch (state) {
-    case 'open':
-      return 5;
-    case 'blocked':
-      return 4;
-    case 'draft':
-      return 3;
-    case 'merged':
-      return 2;
-    case 'closed':
-      return 1;
-    default:
-      return 0;
-  }
 };
 
 const formatCompactHeaderLabel = (value: string): string => {
@@ -650,9 +607,6 @@ export const Header: React.FC<HeaderProps> = ({
     if (!currentSessionId) return null;
     return state.worktreeMetadata.get(currentSessionId)?.branch?.trim() ?? null;
   });
-  const gitDirectories = useGitStore((state) => state.directories);
-  const prStatusEntries = useGitHubPrStatusStore((state) => state.entries);
-
   const worktreeDirectory = React.useMemo(() => {
     return normalize(worktreePath || '');
   }, [worktreePath]);
@@ -673,6 +627,26 @@ export const Header: React.FC<HeaderProps> = ({
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
 
+  const catalogWorktreeBranch = useSessionUIStore((state) => {
+    const candidateDirectory = normalize(worktreeDirectory || sessionDirectory || '');
+    if (!candidateDirectory) {
+      return null;
+    }
+
+    for (const worktrees of state.availableWorktreesByProject.values()) {
+      const match = worktrees.find((worktree) => normalize(worktree.path) === candidateDirectory);
+      const branch = match?.branch?.trim();
+      if (branch) {
+        return branch;
+      }
+    }
+
+    return null;
+  });
+
+  const gitBranchForDirectory = useGitBranchLabel(openDirectory || null);
+  const currentBranchLabel = gitBranchForDirectory || currentSessionWorktreeBranch || catalogWorktreeBranch;
+
   const currentSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
       return activeProjectLabel ?? 'OpenChamber';
@@ -684,78 +658,6 @@ export const Header: React.FC<HeaderProps> = ({
   const currentSessionDiffStats = React.useMemo(() => {
     return resolveSessionDiffStats(currentSession?.summary as Parameters<typeof resolveSessionDiffStats>[0]);
   }, [currentSession?.summary]);
-
-  const currentBranchLabel = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
-    if (directory) {
-      const gitBranch = gitDirectories.get(directory)?.status?.current?.trim();
-      if (gitBranch) {
-        return gitBranch;
-      }
-    }
-    return currentSessionWorktreeBranch;
-  }, [currentSessionWorktreeBranch, gitDirectories, openDirectory]);
-
-  const currentSessionPr = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
-    const branch = currentBranchLabel?.trim();
-    if (!directory || !branch) {
-      return null;
-    }
-
-    let bestMatch: { visualState: PrVisualState; number: number; canMerge: boolean | null; checksState: string | null } | null = null;
-    const prEntries = Object.values(prStatusEntries);
-    for (const entry of prEntries) {
-      const entryDirectory = normalize(entry.params?.directory ?? entry.identity?.directory ?? '');
-      const entryBranch = entry.params?.branch?.trim() ?? entry.identity?.branch?.trim() ?? '';
-      if (!entryDirectory || !entryBranch || entryDirectory !== directory || entryBranch !== branch) {
-        continue;
-      }
-
-      const visualState = getPrVisualState(entry.status ?? null);
-      const number = entry.status?.pr?.number;
-      if (!visualState || !number) {
-        continue;
-      }
-
-      const next = {
-        visualState,
-        number,
-        canMerge: typeof entry.status?.canMerge === 'boolean' ? entry.status.canMerge : null,
-        checksState: entry.status?.checks?.state ?? null,
-      };
-
-      if (!bestMatch || getPrVisualPriority(next.visualState) > getPrVisualPriority(bestMatch.visualState)) {
-        bestMatch = next;
-      }
-    }
-
-    return bestMatch;
-  }, [currentBranchLabel, openDirectory, prStatusEntries]);
-
-  const currentSessionPrLabel = React.useMemo(() => {
-    if (!currentSessionPr) {
-      return null;
-    }
-
-    switch (currentSessionPr.visualState) {
-      case 'merged':
-        return `PR #${currentSessionPr.number} merged`;
-      case 'closed':
-        return `PR #${currentSessionPr.number} closed`;
-      case 'draft':
-        return `PR #${currentSessionPr.number} draft`;
-      case 'blocked':
-        return `PR #${currentSessionPr.number} blocked`;
-      case 'open':
-        if (currentSessionPr.canMerge === true || currentSessionPr.checksState === 'success') {
-          return `PR #${currentSessionPr.number} ready`;
-        }
-        return `PR #${currentSessionPr.number} open`;
-      default:
-        return null;
-    }
-  }, [currentSessionPr]);
 
   const currentSessionChanges = React.useMemo(() => {
     if (currentSessionDiffStats) {
@@ -1802,7 +1704,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="truncate pl-1 typography-ui-label text-[14px] font-normal leading-tight text-foreground">
               {currentSessionTitle}
             </div>
-            {(activeProjectLabel || currentBranchLabel || currentSessionPrLabel || hasNonZeroSessionChanges) ? (
+            {(activeProjectLabel || currentBranchLabel || hasNonZeroSessionChanges) ? (
               <div className="flex min-w-0 items-center gap-1.5 truncate pl-1 typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
                 {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
                 {currentBranchLabel ? (
@@ -1811,7 +1713,6 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="truncate">{currentBranchLabel}</span>
                   </span>
                 ) : null}
-                {currentSessionPrLabel ? <span className="truncate">{currentSessionPrLabel}</span> : null}
                 {hasNonZeroSessionChanges ? (
                   <span className="inline-flex flex-shrink-0 items-center gap-0 text-[0.92em]">
                     <span className="text-status-success/80">+{currentSessionChanges.additions}</span>

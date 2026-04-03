@@ -17,6 +17,7 @@ import { getSyncChildStores } from '@/sync/sync-refs';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { opencodeClient } from '@/lib/opencode/client';
+import { sessionEvents } from '@/lib/sessionEvents';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { Text } from '@/components/ui/text';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -159,6 +160,14 @@ const TASK_TOOL_ACTIVE_FETCH_LIMIT = 160;
 const TASK_TOOL_IDLE_FETCH_LIMIT = 80;
 const TASK_TOOL_NO_CHANGE_BACKOFF_AFTER_POLLS = 3;
 const TASK_TOOL_SETTLE_GRACE_MS = 2500;
+const GIT_REFRESH_MUTATING_TOOLS = new Set([
+    'bash',
+    'edit',
+    'write',
+    'apply_patch',
+    'patch',
+    'task',
+]);
 
 const formatDuration = (start: number, end?: number, now: number = Date.now()) => {
     const duration = Math.min(Math.max(0, (end ?? now) - start), MAX_DURATION_MS);
@@ -1573,12 +1582,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const [activeLatched, setActiveLatched] = React.useState<boolean>(!isFinalized);
     const previousPartIdRef = React.useRef<string | undefined>(part.id);
+    const lastGitRefreshSignatureRef = React.useRef<string>('');
 
     React.useEffect(() => {
         if (previousPartIdRef.current === part.id) {
             return;
         }
         previousPartIdRef.current = part.id;
+        lastGitRefreshSignatureRef.current = '';
         // Reset latch only when tool identity changes.
         setActiveLatched(!isFinalized);
     }, [isFinalized, part.id]);
@@ -1588,6 +1599,22 @@ const ToolPart: React.FC<ToolPartProps> = ({
             setActiveLatched(true);
         }
     }, [isFinalized]);
+
+    React.useEffect(() => {
+        if (!isFinalized || isError || !currentDirectory) {
+            return;
+        }
+        if (!GIT_REFRESH_MUTATING_TOOLS.has(normalizedPartTool)) {
+            return;
+        }
+
+        const signature = `${part.id}:${status ?? 'unknown'}`;
+        if (lastGitRefreshSignatureRef.current === signature) {
+            return;
+        }
+        lastGitRefreshSignatureRef.current = signature;
+        sessionEvents.requestGitRefresh({ directory: currentDirectory });
+    }, [currentDirectory, isError, isFinalized, normalizedPartTool, part.id, status]);
 
 
 
