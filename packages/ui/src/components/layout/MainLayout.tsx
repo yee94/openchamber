@@ -948,7 +948,7 @@ export const MainLayout: React.FC = () => {
                                     </div>
                                 </div>
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
-                                    <ErrorBoundary><TerminalView /></ErrorBoundary>
+                                    {isBottomTerminalOpen ? <ErrorBoundary><TerminalView /></ErrorBoundary> : null}
                                 </BottomTerminalDock>
                             </div>
                             <RightSidebar

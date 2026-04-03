@@ -19,8 +19,6 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
-import { useGitHubPrBackgroundTracking } from '@/hooks/useGitHubPrBackgroundTracking';
-import { GitPollingProvider } from '@/hooks/useGitPolling';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
 import { isDesktopLocalOriginActive, isDesktopShell } from '@/lib/desktop';
@@ -142,12 +140,9 @@ const SyncOptimisticBridge: React.FC = () => {
   return null;
 };
 
-function SyncAppEffects({ apis, embeddedBackgroundWorkEnabled }: {
-  apis: RuntimeAPIs;
+function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
   embeddedBackgroundWorkEnabled: boolean;
 }) {
-  const githubApi = embeddedBackgroundWorkEnabled ? apis.github : undefined;
-  useGitHubPrBackgroundTracking(githubApi, apis.git);
   usePwaManifestSync();
   useSessionAutoCleanup(embeddedBackgroundWorkEnabled);
   useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled);
@@ -532,7 +527,7 @@ function App({ apis }: AppProps) {
             <TooltipProvider delayDuration={700} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
                 <EmbeddedSessionSelectionGate embeddedSessionChat={embeddedSessionChat} isVSCodeRuntime={isVSCodeRuntime} />
-                <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                 <ChatView />
                 <Toaster />
               </div>
@@ -557,7 +552,7 @@ function App({ apis }: AppProps) {
           <RuntimeAPIProvider apis={apis}>
             <TooltipProvider delayDuration={700} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
-                <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                 <AgentManagerView />
                 <Toaster />
               </div>
@@ -575,7 +570,7 @@ function App({ apis }: AppProps) {
             <FireworksProvider>
               <TooltipProvider delayDuration={700} skipDelayDuration={150}>
                 <div className="h-full text-foreground bg-background">
-                  <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                  <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <VSCodeLayout />
                   <Toaster />
                 </div>
@@ -591,24 +586,22 @@ function App({ apis }: AppProps) {
     <ErrorBoundary>
       <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
-          <GitPollingProvider>
-            <FireworksProvider>
-              <VoiceProvider>
-                <TooltipProvider delayDuration={700} skipDelayDuration={150}>
-                  <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                    <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
-                    <MainLayout />
-                    <Toaster />
-                    <ConfigUpdateOverlay />
-                    <AboutDialogWrapper />
-                    {showMemoryDebug && (
-                      <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-                    )}
-                  </div>
-                </TooltipProvider>
-              </VoiceProvider>
-            </FireworksProvider>
-          </GitPollingProvider>
+          <FireworksProvider>
+            <VoiceProvider>
+              <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+                <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
+                  <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                  <MainLayout />
+                  <Toaster />
+                  <ConfigUpdateOverlay />
+                  <AboutDialogWrapper />
+                  {showMemoryDebug && (
+                    <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                  )}
+                </div>
+              </TooltipProvider>
+            </VoiceProvider>
+          </FireworksProvider>
         </RuntimeAPIProvider>
       </SyncProvider>
     </ErrorBoundary>
