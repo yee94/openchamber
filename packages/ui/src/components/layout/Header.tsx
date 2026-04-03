@@ -30,6 +30,7 @@ import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -807,7 +808,8 @@ export const Header: React.FC<HeaderProps> = ({
 
 
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
-  const showPlanTab = planTabAvailable;
+  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
+  const showPlanTab = planModeEnabled && planTabAvailable;
   const lastPlanSessionKeyRef = React.useRef<string>('');
 
   const handleGitHubAccountSwitch = React.useCallback(async (accountId: string) => {
@@ -843,6 +845,14 @@ export const Header: React.FC<HeaderProps> = ({
   }, [isSwitchingGitHubAccount, runtimeApis.github, setGitHubAuthStatus]);
 
   React.useEffect(() => {
+    if (!planModeEnabled) {
+      setPlanTabAvailable(false);
+      if (useUIStore.getState().activeMainTab === 'plan') {
+        useUIStore.getState().setActiveMainTab('chat');
+      }
+      return;
+    }
+
     let cancelled = false;
 
     const checkExists = async (directory: string, fileName: string): Promise<boolean> => {
@@ -903,6 +913,7 @@ export const Header: React.FC<HeaderProps> = ({
       window.clearInterval(interval);
     };
   }, [
+    planModeEnabled,
     sessionDirectory,
     currentSession?.slug,
     currentSession?.time?.created,

@@ -18,6 +18,7 @@ import { RiCheckLine, RiClipboardLine, RiFileCopy2Line } from '@remixicon/react'
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -84,6 +85,7 @@ export const PlanView: React.FC = () => {
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const sessions = useSessions();
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
+  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const runtimeApis = useRuntimeAPIs();
   useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -256,6 +258,13 @@ export const PlanView: React.FC = () => {
   }, [currentTheme, resolvedPath]);
 
   React.useEffect(() => {
+    if (!planModeEnabled) {
+      setResolvedPath(null);
+      setContent('');
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     const readText = async (path: string): Promise<string> => {
@@ -339,7 +348,7 @@ export const PlanView: React.FC = () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [sessionDirectory, session?.slug, session?.time?.created, homeDirectory, runtimeApis.files]);
+  }, [planModeEnabled, sessionDirectory, session?.slug, session?.time?.created, homeDirectory, runtimeApis.files]);
 
   React.useEffect(() => {
     return () => {

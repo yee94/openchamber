@@ -40,12 +40,12 @@ import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { VoiceProvider } from '@/components/voice';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const CLI_MISSING_ERROR_REGEX =
   /ENOENT|spawn\s+opencode|Unable\s+to\s+locate\s+the\s+opencode\s+CLI|OpenCode\s+CLI\s+not\s+found|opencode(\.exe)?\s+not\s+found|opencode(\.exe)?:\s*command\s+not\s+found|not\s+recognized\s+as\s+an\s+internal\s+or\s+external\s+command|env:\s*['"]?(node|bun)['"]?:\s*No\s+such\s+file\s+or\s+directory|(node|bun):\s*No\s+such\s+file\s+or\s+directory/i;
-const CLI_ONBOARDING_HEALTH_POLL_MS = 1500;
 
 const AboutDialogWrapper: React.FC = () => {
   const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen);
@@ -176,6 +176,7 @@ function App({ apis }: AppProps) {
   const [showCliOnboarding, setShowCliOnboarding] = React.useState(false);
   const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true);
   const isDesktopRuntime = React.useMemo(() => isDesktopShell(), []);
+  const setPlanModeEnabled = useFeatureFlagsStore((state) => state.setPlanModeEnabled);
   const appReadyDispatchedRef = React.useRef(false);
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), []);
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible;
@@ -255,6 +256,28 @@ function App({ apis }: AppProps) {
 
     return () => clearTimeout(fallbackTimer);
   }, [isInitialized]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      const res = await fetch('/health', { method: 'GET' }).catch(() => null);
+      if (!res || !res.ok || cancelled) return;
+      const data = (await res.json().catch(() => null)) as null | {
+        planModeExperimentalEnabled?: unknown;
+      };
+      if (!data || cancelled) return;
+      const raw = data.planModeExperimentalEnabled;
+      const enabled = raw === true || raw === 1 || raw === '1' || raw === 'true';
+      setPlanModeEnabled(enabled);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setPlanModeEnabled]);
 
   React.useEffect(() => {
     const init = async () => {
@@ -480,13 +503,9 @@ function App({ apis }: AppProps) {
     };
 
     void run();
-    const interval = window.setInterval(() => {
-      void run();
-    }, CLI_ONBOARDING_HEALTH_POLL_MS);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
   }, [embeddedSessionChat]);
 
