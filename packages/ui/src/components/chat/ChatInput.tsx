@@ -2990,7 +2990,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             className={cn(
                 "relative pt-0 pb-4",
                 isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
-                isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
+                isMobile && (isKeyboardOpen ? 'ios-keyboard-safe-area' : 'bottom-safe-area')
             )}
             data-keyboard-avoid="true"
             style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
