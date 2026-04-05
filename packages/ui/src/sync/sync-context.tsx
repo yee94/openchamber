@@ -642,6 +642,17 @@ export function useVisibleSessionMessages(sessionID: string, directory?: string)
   }, [messages, revertMessageID])
 }
 
+/** Check whether the message list for a session has been loaded into sync state. */
+export function useSessionMessagesResolved(sessionID: string, directory?: string): boolean {
+  return useDirectorySync(
+    useCallback((state: State) => {
+      if (!sessionID) return false
+      return Object.prototype.hasOwnProperty.call(state.message, sessionID)
+    }, [sessionID]),
+    directory,
+  )
+}
+
 /** Get parts for a specific message */
 export function useSessionParts(messageID: string, directory?: string) {
   return useDirectorySync(
@@ -836,24 +847,42 @@ export function useChildStoreManager() {
   return useSyncSystem().childStores
 }
 
-/**
- * Get messages for a session in the old {info, parts}[] format.
- * Uses visible messages (filtered by revert state).
- *
- * Uses a ref-stable parts lookup that only triggers re-renders when
- * a part array for one of our displayed messages actually changes.
- */
-export function useSessionMessageRecords(sessionID: string, directory?: string) {
-  const messages = useVisibleSessionMessages(sessionID, directory)
-  const store = useDirectoryStore(directory)
+const MESSAGE_PART_SNAPSHOT_THROTTLE_MS = 100
 
-  // Track parts with a ref to avoid subscribing to entire state.part map.
-  // Re-derive only when messages list changes or on store subscription.
+export type SessionTextMessage = {
+  id: string
+  role: string | null
+  text: string
+}
+
+const getPartText = (part: Part): string => {
+  if (part?.type !== "text") return ""
+  const text = (part as { text?: unknown }).text
+  return typeof text === "string" ? text : ""
+}
+
+const getConcatenatedTextFromParts = (parts: Part[]): string => {
+  let text = ""
+  for (const part of parts) {
+    text += getPartText(part)
+  }
+  return text
+}
+
+const getFirstTextFromParts = (parts: Part[]): string => {
+  for (const part of parts) {
+    const text = getPartText(part)
+    if (text.length > 0) return text
+  }
+  return ""
+}
+
+function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string) {
+  const store = useDirectoryStore(directory)
   const prevPartsRef = useRef<Record<string, Part[]>>({})
   const [partsSnapshot, setPartsSnapshot] = React.useState<Record<string, Part[]>>({})
 
   React.useEffect(() => {
-    const messageIds = messages.map((m) => m.id)
     let timer: ReturnType<typeof setTimeout> | null = null
     let pending = false
 
@@ -866,7 +895,6 @@ export function useSessionMessageRecords(sessionID: string, directory?: string) 
       const next: Record<string, Part[]> = {}
       for (const id of messageIds) {
         const parts = state.part[id] ?? EMPTY_PARTS
-        // Preserve existing reference if parts haven't changed in the store
         next[id] = prev[id] === parts ? prev[id] : parts
         if (next[id] !== prev[id]) changed = true
       }
@@ -876,10 +904,8 @@ export function useSessionMessageRecords(sessionID: string, directory?: string) 
       }
     }
 
-    // Initial sync
     flush()
 
-    // Throttled subscription — batch rapid delta events into ~100ms updates
     const unsub = store.subscribe(() => {
       if (timer) {
         pending = true
@@ -889,24 +915,103 @@ export function useSessionMessageRecords(sessionID: string, directory?: string) 
         flush()
         if (pending) {
           pending = false
-          timer = setTimeout(flush, 100)
+          timer = setTimeout(flush, MESSAGE_PART_SNAPSHOT_THROTTLE_MS)
         }
-      }, 100)
+      }, MESSAGE_PART_SNAPSHOT_THROTTLE_MS)
     })
 
     return () => {
       unsub()
       if (timer) clearTimeout(timer)
     }
-  }, [messages, store])
+  }, [messageIds, store])
+
+  return partsSnapshot
+}
+
+export function useSessionTextMessages(sessionID: string, directory?: string): SessionTextMessage[] {
+  const messages = useVisibleSessionMessages(sessionID, directory)
+  const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
+  const partsSnapshot = usePartsSnapshotForMessageIds(messageIds, directory)
 
   return useMemo(
-    () => messages.map((msg) => ({
-      info: msg,
-      parts: partsSnapshot[msg.id] ?? EMPTY_PARTS,
+    () => messages.map((message) => ({
+      id: message.id,
+      role: typeof message.role === "string" ? message.role : null,
+      text: getConcatenatedTextFromParts(partsSnapshot[message.id] ?? EMPTY_PARTS),
     })),
     [messages, partsSnapshot],
   )
+}
+
+export function useUserMessageHistory(sessionID: string, directory?: string): string[] {
+  const messages = useVisibleSessionMessages(sessionID, directory)
+  const userMessages = useMemo(
+    () => messages.filter((message) => message.role === "user"),
+    [messages],
+  )
+  const userMessageIds = useMemo(() => userMessages.map((message) => message.id), [userMessages])
+  const partsSnapshot = usePartsSnapshotForMessageIds(userMessageIds, directory)
+
+  return useMemo(() => {
+    const history: string[] = []
+    for (let index = userMessages.length - 1; index >= 0; index -= 1) {
+      const message = userMessages[index]
+      const text = getFirstTextFromParts(partsSnapshot[message.id] ?? EMPTY_PARTS)
+      if (text.length > 0) {
+        history.push(text)
+      }
+    }
+    return history
+  }, [partsSnapshot, userMessages])
+}
+
+/**
+ * Get messages for a session in the old {info, parts}[] format.
+ * Uses visible messages (filtered by revert state).
+ *
+ * Uses a ref-stable parts lookup that only triggers re-renders when
+ * a part array for one of our displayed messages actually changes.
+ */
+export function useSessionMessageRecords(sessionID: string, directory?: string) {
+  const messages = useVisibleSessionMessages(sessionID, directory)
+  const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
+  const partsSnapshot = usePartsSnapshotForMessageIds(messageIds, directory)
+  const previousRecordsRef = useRef<{
+    list: Array<{ info: (typeof messages)[number]; parts: Part[] }>
+    byId: Map<string, { info: (typeof messages)[number]; parts: Part[] }>
+  }>({
+    list: [],
+    byId: new Map(),
+  })
+
+  return useMemo(() => {
+    const previous = previousRecordsRef.current
+    const nextById = new Map<string, { info: (typeof messages)[number]; parts: Part[] }>()
+    const nextList = messages.map((message) => {
+      const parts = partsSnapshot[message.id] ?? EMPTY_PARTS
+      const previousRecord = previous.byId.get(message.id)
+      const record = previousRecord && previousRecord.info === message && previousRecord.parts === parts
+        ? previousRecord
+        : { info: message, parts }
+      nextById.set(message.id, record)
+      return record
+    })
+
+    const unchanged = previous.list.length === nextList.length
+      && previous.list.every((record, index) => record === nextList[index])
+
+    if (unchanged) {
+      return previous.list
+    }
+
+    previousRecordsRef.current = {
+      list: nextList,
+      byId: nextById,
+    }
+
+    return nextList
+  }, [messages, partsSnapshot])
 }
 
 /**

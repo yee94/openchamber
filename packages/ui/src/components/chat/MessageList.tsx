@@ -1,29 +1,34 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk/v2';
+import { measureElement as measureVirtualElement, type VirtualItem, useVirtualizer } from '@tanstack/react-virtual';
 
 import ChatMessage from './ChatMessage';
 import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessagesEqual } from './message/renderCompare';
-import { PermissionCard } from './PermissionCard';
-import { QuestionCard } from './QuestionCard';
 import TurnItem from './components/TurnItem';
-import TurnList from './components/TurnList';
-import type { PermissionRequest } from '@/types/permission';
-import type { QuestionRequest } from '@/types/question';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
-import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
 import type { ChatMessageEntry, TurnRecord, TurnGroupingContext } from './lib/turns/types';
 import { useTurnRecords } from './hooks/useTurnRecords';
 import { applyRetryOverlay } from './lib/turns/applyRetryOverlay';
 import { useUIStore } from '@/stores/useUIStore';
-import { useStreamingStore } from '@/sync/streaming';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionStatus } from '@/sync/sync-context';
-import { useDeviceInfo } from '@/lib/device';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
-import { StatusRowContainer } from './StatusRowContainer';
 import { streamPerfCount, streamPerfMeasure } from '@/stores/utils/streamDebug';
+
+const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 40;
+const MESSAGE_LIST_OVERSCAN = 6;
+
+const estimateHistoryEntryHeight = (entry: RenderEntry | undefined): number => {
+    if (!entry) {
+        return 160;
+    }
+
+    if (entry.kind === 'turn') {
+        return 180 + Math.min(entry.turn.assistantMessages.length, 4) * 100;
+    }
+
+    return 140;
+};
 
 const useStableEvent = <TArgs extends unknown[], TResult>(handler: (...args: TArgs) => TResult) => {
     const handlerRef = React.useRef(handler);
@@ -297,8 +302,14 @@ interface MessageListProps {
     turnStart: number;
     disableStaging?: boolean;
     messages: ChatMessageEntry[];
-    permissions: PermissionRequest[];
-    questions: QuestionRequest[];
+    sessionIsWorking?: boolean;
+    activeStreamingMessageId?: string | null;
+    retryOverlay?: {
+        sessionId: string;
+        message: string;
+        confirmedAt?: number;
+        fallbackTimestamp?: number;
+    } | null;
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     hasMoreAbove: boolean;
@@ -884,21 +895,24 @@ function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextPro
 }
 
 // Inner component that renders staged turn entries.
-const MessageListContent: React.FC<{
+const StaticHistoryList: React.FC<{
     entries: RenderEntry[];
+    shouldVirtualize: boolean;
+    virtualRows: VirtualItem[];
+    totalSize: number;
+    measureElement: (element: HTMLDivElement | null) => void;
+    contentRef: React.RefObject<HTMLDivElement | null>;
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     stickyUserHeader: boolean;
-    sessionIsWorking: boolean;
     defaultActivityExpanded: boolean;
     turnUiStates: Map<string, TurnUiState>;
     onToggleTurnGroup: (turnId: string) => void;
     chatRenderMode: 'sorted' | 'live';
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
-    activeStreamingMessageId?: string | null;
-}> = ({ entries, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, sessionIsWorking, defaultActivityExpanded, turnUiStates, onToggleTurnGroup, chatRenderMode, shouldAnimateUserMessage, onUserAnimationConsumed, activeStreamingMessageId }) => {
+}> = React.memo(({ entries, shouldVirtualize, virtualRows, totalSize, measureElement, contentRef, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, defaultActivityExpanded, turnUiStates, onToggleTurnGroup, chatRenderMode, shouldAnimateUserMessage, onUserAnimationConsumed }) => {
     const renderEntry = React.useCallback((entry: RenderEntry) => {
         return (
             <MessageListEntry
@@ -908,22 +922,83 @@ const MessageListContent: React.FC<{
                 getAnimationHandlers={getAnimationHandlers}
                 scrollToBottom={scrollToBottom}
                 stickyUserHeader={stickyUserHeader}
-                sessionIsWorking={sessionIsWorking}
+                sessionIsWorking={false}
                 defaultActivityExpanded={defaultActivityExpanded}
                 turnUiStates={turnUiStates}
                 onToggleTurnGroup={onToggleTurnGroup}
                 chatRenderMode={chatRenderMode}
                 shouldAnimateUserMessage={shouldAnimateUserMessage}
                 onUserAnimationConsumed={onUserAnimationConsumed}
-                activeStreamingMessageId={activeStreamingMessageId}
+                activeStreamingMessageId={null}
             />
         );
-    }, [activeStreamingMessageId, chatRenderMode, defaultActivityExpanded, getAnimationHandlers, onMessageContentChange, onToggleTurnGroup, onUserAnimationConsumed, scrollToBottom, sessionIsWorking, shouldAnimateUserMessage, stickyUserHeader, turnUiStates]);
+    }, [chatRenderMode, defaultActivityExpanded, getAnimationHandlers, onMessageContentChange, onToggleTurnGroup, onUserAnimationConsumed, scrollToBottom, shouldAnimateUserMessage, stickyUserHeader, turnUiStates]);
+
+    const paddingTop = shouldVirtualize && virtualRows.length > 0
+        ? virtualRows[0]?.start ?? 0
+        : 0;
+    const paddingBottom = shouldVirtualize && virtualRows.length > 0
+        ? Math.max(0, totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0))
+        : 0;
+
+    if (!shouldVirtualize) {
+        return (
+            <div ref={contentRef} className="relative w-full">
+                {entries.map((entry) => (
+                    <div
+                        key={entry.key}
+                        data-turn-entry={entry.key}
+                    >
+                        {renderEntry(entry)}
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     return (
-        <TurnList entries={entries} renderEntry={renderEntry} />
+        <div ref={contentRef} className="relative w-full">
+            {paddingTop > 0 ? <div aria-hidden="true" style={{ height: `${paddingTop}px` }} /> : null}
+            {virtualRows.map((virtualRow) => {
+                const entry = entries[virtualRow.index];
+                if (!entry) {
+                    return null;
+                }
+
+                return (
+                    <div
+                        key={virtualRow.key}
+                        ref={measureElement}
+                        data-index={virtualRow.index}
+                        data-turn-entry={entry.key}
+                    >
+                        {renderEntry(entry)}
+                    </div>
+                );
+            })}
+            {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: `${paddingBottom}px` }} /> : null}
+        </div>
     );
-};
+}, (prevProps, nextProps) => {
+    return prevProps.entries === nextProps.entries
+        && prevProps.shouldVirtualize === nextProps.shouldVirtualize
+        && prevProps.virtualRows === nextProps.virtualRows
+        && prevProps.totalSize === nextProps.totalSize
+        && prevProps.measureElement === nextProps.measureElement
+        && prevProps.contentRef === nextProps.contentRef
+        && prevProps.onMessageContentChange === nextProps.onMessageContentChange
+        && prevProps.getAnimationHandlers === nextProps.getAnimationHandlers
+        && prevProps.scrollToBottom === nextProps.scrollToBottom
+        && prevProps.stickyUserHeader === nextProps.stickyUserHeader
+        && prevProps.defaultActivityExpanded === nextProps.defaultActivityExpanded
+        && prevProps.turnUiStates === nextProps.turnUiStates
+        && prevProps.onToggleTurnGroup === nextProps.onToggleTurnGroup
+        && prevProps.chatRenderMode === nextProps.chatRenderMode
+        && prevProps.shouldAnimateUserMessage === nextProps.shouldAnimateUserMessage
+        && prevProps.onUserAnimationConsumed === nextProps.onUserAnimationConsumed;
+});
+
+StaticHistoryList.displayName = 'StaticHistoryList';
 
 const StreamingTailContent: React.FC<{
     entry: RenderEntry;
@@ -994,8 +1069,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     turnStart,
     disableStaging: _disableStaging,
     messages,
-    permissions,
-    questions,
+    sessionIsWorking = false,
+    activeStreamingMessageId = null,
+    retryOverlay = null,
     onMessageContentChange,
     getAnimationHandlers,
     hasMoreAbove,
@@ -1006,9 +1082,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 }, ref) => {
     streamPerfCount('ui.message_list.render');
     void _disableStaging;
-    const { isMobile } = useDeviceInfo();
-    const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
-    const activeStreamingMessageId = useStreamingStore((state) => state.streamingMessageIds.get(sessionKey) ?? null);
     const stickyUserHeader = useUIStore(state => state.stickyUserHeader);
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const activityRenderMode = useUIStore((state) => state.activityRenderMode);
@@ -1032,19 +1105,11 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         ungroupedMessageIds: Set<string>;
     } | null>(null);
 
-    const stableOnMessageContentChange = useStableEvent(onMessageContentChange);
     const stableGetAnimationHandlers = useStableEvent(getAnimationHandlers);
     const stableOnLoadOlder = useStableEvent(onLoadOlder);
     const stableScrollToBottom = useStableEvent((options?: { instant?: boolean; force?: boolean }) => {
         scrollToBottom?.(options);
     });
-
-    React.useEffect(() => {
-        if (permissions.length === 0 && questions.length === 0) {
-            return;
-        }
-        stableOnMessageContentChange('permission');
-    }, [permissions, questions, stableOnMessageContentChange]);
 
     React.useEffect(() => {
         setTurnUiStates(new Map());
@@ -1160,27 +1225,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return output;
     }), [messages]);
 
-    const currentSessionIdForRetry = useSessionUIStore((s) => s.currentSessionId);
-    const retryStatusRaw = useSessionStatus(currentSessionIdForRetry ?? '');
-    const activeRetryStatus = React.useMemo(() => {
-        if (!currentSessionIdForRetry) return null;
-        const status = retryStatusRaw;
-        if (!status || status.type !== 'retry') return null;
-        const rawMessage = typeof (status as { message?: string }).message === 'string' ? ((status as { message?: string }).message ?? '').trim() : '';
-        return {
-            sessionId: currentSessionIdForRetry,
-            message: rawMessage || 'Quota limit reached. Retrying automatically.',
-            confirmedAt: (status as { confirmedAt?: number }).confirmedAt,
-        };
-    }, [currentSessionIdForRetry, retryStatusRaw]);
-
-    const activeRetrySessionId = activeRetryStatus?.sessionId ?? null;
-    const activeRetryMessage = activeRetryStatus?.message
-        ?? 'Quota limit reached. Retrying automatically.';
-    const activeRetryConfirmedAt = activeRetryStatus?.confirmedAt;
-
-    const [fallbackRetryTimestamp, setFallbackRetryTimestamp] = React.useState<number>(0);
-    const fallbackRetrySessionRef = React.useRef<string | null>(null);
+    const historyContentRef = React.useRef<HTMLDivElement | null>(null);
+    const pendingVirtualMeasureFrameRef = React.useRef<number | null>(null);
     const resolveScrollContainer = React.useCallback((): HTMLDivElement | null => {
         if (scrollRef?.current) {
             return scrollRef.current;
@@ -1191,27 +1237,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return document.querySelector<HTMLDivElement>('[data-scrollbar="chat"]');
     }, [scrollRef]);
 
-    React.useEffect(() => {
-        if (!activeRetryStatus || typeof activeRetryStatus.confirmedAt === 'number') {
-            fallbackRetrySessionRef.current = null;
-            setFallbackRetryTimestamp(0);
-            return;
-        }
-
-        if (fallbackRetrySessionRef.current !== activeRetryStatus.sessionId) {
-            fallbackRetrySessionRef.current = activeRetryStatus.sessionId;
-            setFallbackRetryTimestamp(Date.now());
-        }
-    }, [activeRetryStatus, activeRetryStatus?.sessionId, activeRetryStatus?.confirmedAt]);
-
     const displayMessages = React.useMemo(() => streamPerfMeasure('ui.message_list.retry_overlay_ms', () => {
         return applyRetryOverlay(baseDisplayMessages, {
-            sessionId: activeRetrySessionId,
-            message: activeRetryMessage,
-            confirmedAt: activeRetryConfirmedAt,
-            fallbackTimestamp: fallbackRetryTimestamp,
+            sessionId: retryOverlay?.sessionId ?? null,
+            message: retryOverlay?.message ?? 'Quota limit reached. Retrying automatically.',
+            confirmedAt: retryOverlay?.confirmedAt,
+            fallbackTimestamp: retryOverlay?.fallbackTimestamp ?? 0,
         });
-    }), [activeRetryMessage, activeRetryConfirmedAt, activeRetrySessionId, baseDisplayMessages, fallbackRetryTimestamp]);
+    }), [baseDisplayMessages, retryOverlay]);
 
     const { projection, staticTurns, streamingTurn } = useTurnRecords(displayMessages, {
         sessionKey,
@@ -1341,9 +1374,101 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     }
 
     const historyEntries = staticRenderEntries;
+    const shouldVirtualizeHistory = historyEntries.length >= MESSAGE_LIST_VIRTUALIZE_THRESHOLD;
+    const [historyWidthPx, setHistoryWidthPx] = React.useState<number | null>(null);
+    const historyMeasurementScopeKey = historyWidthPx === null ? 'width:unknown' : `width:${Math.round(historyWidthPx)}`;
+
+    React.useLayoutEffect(() => {
+        const historyContent = historyContentRef.current;
+        if (!historyContent || !shouldVirtualizeHistory) {
+            setHistoryWidthPx((previous) => (previous === null ? previous : null));
+            return;
+        }
+
+        const updateWidth = (nextWidth: number) => {
+            setHistoryWidthPx((previous) => {
+                if (previous !== null && Math.abs(previous - nextWidth) < 0.5) {
+                    return previous;
+                }
+                return nextWidth;
+            });
+        };
+
+        updateWidth(historyContent.getBoundingClientRect().width);
+
+        if (typeof ResizeObserver === 'undefined') {
+            return;
+        }
+
+        const observer = new ResizeObserver(() => {
+            updateWidth(historyContent.getBoundingClientRect().width);
+        });
+        observer.observe(historyContent);
+        return () => {
+            observer.disconnect();
+        };
+    }, [historyEntries.length, shouldVirtualizeHistory]);
+
+    const historyVirtualizer = useVirtualizer({
+        count: historyEntries.length,
+        getScrollElement: resolveScrollContainer,
+        estimateSize: (index) => estimateHistoryEntryHeight(historyEntries[index]),
+        getItemKey: (index) => `${historyMeasurementScopeKey}:${historyEntries[index]?.key ?? index}`,
+        measureElement: measureVirtualElement,
+        useAnimationFrameWithResizeObserver: true,
+        overscan: MESSAGE_LIST_OVERSCAN,
+        enabled: shouldVirtualizeHistory,
+    });
+
+    React.useEffect(() => {
+        if (!shouldVirtualizeHistory || historyWidthPx === null) {
+            return;
+        }
+        historyVirtualizer.measure();
+    }, [historyVirtualizer, historyWidthPx, shouldVirtualizeHistory]);
+
+    const scheduleVirtualMeasure = React.useCallback(() => {
+        if (!shouldVirtualizeHistory) {
+            return;
+        }
+        if (typeof window === 'undefined') {
+            historyVirtualizer.measure();
+            return;
+        }
+        if (pendingVirtualMeasureFrameRef.current !== null) {
+            return;
+        }
+        pendingVirtualMeasureFrameRef.current = window.requestAnimationFrame(() => {
+            pendingVirtualMeasureFrameRef.current = null;
+            historyVirtualizer.measure();
+        });
+    }, [historyVirtualizer, shouldVirtualizeHistory]);
+
+    React.useEffect(() => {
+        return () => {
+            if (pendingVirtualMeasureFrameRef.current !== null && typeof window !== 'undefined') {
+                window.cancelAnimationFrame(pendingVirtualMeasureFrameRef.current);
+            }
+        };
+    }, []);
+
+    const historyVirtualRows = React.useMemo(
+        () => (shouldVirtualizeHistory ? historyVirtualizer.getVirtualItems() : []),
+        [historyVirtualizer, shouldVirtualizeHistory],
+    );
+
     const allEntries = React.useMemo(() => {
         return trailingStreamingEntry ? [...historyEntries, trailingStreamingEntry] : historyEntries;
     }, [historyEntries, trailingStreamingEntry]);
+
+    const stableHistoryContentChange = useStableEvent((reason?: ContentChangeReason) => {
+        scheduleVirtualMeasure();
+        onMessageContentChange(reason);
+    });
+
+    const stableTailContentChange = useStableEvent((reason?: ContentChangeReason) => {
+        onMessageContentChange(reason);
+    });
 
     const currentUserOrder = React.useMemo(() => {
         return messages
@@ -1427,6 +1552,23 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return container.querySelector(`[data-message-id="${messageId}"]`);
     }, [resolveScrollContainer]);
 
+    const scrollHistoryIndexIntoView = React.useCallback((index: number, behavior: ScrollBehavior = 'auto') => {
+        if (!shouldVirtualizeHistory || index < 0 || index >= historyEntries.length) {
+            return false;
+        }
+
+        const container = resolveScrollContainer();
+        if (!container) {
+            return false;
+        }
+
+        const virtualizerBehavior = behavior === 'smooth' ? 'smooth' : 'auto';
+        historyVirtualizer.scrollToIndex(index, { align: 'start', behavior: virtualizerBehavior });
+        const targetTop = Math.max(0, container.scrollTop - 50);
+        container.scrollTo({ top: targetTop, behavior });
+        return true;
+    }, [historyEntries.length, historyVirtualizer, resolveScrollContainer, shouldVirtualizeHistory]);
+
     const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
         const container = resolveScrollContainer();
         if (!container) {
@@ -1469,7 +1611,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 }
                 const turnElement = container.querySelector<HTMLElement>(`[data-turn-id="${turnId}"]`);
                 if (!turnElement) {
-                    return false;
+                    return scrollHistoryIndexIntoView(index, behavior);
                 }
                 turnElement.scrollIntoView({ behavior, block: 'start' });
                 return true;
@@ -1487,7 +1629,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
-                return scrollMessageElementIntoView(messageId, behavior);
+                return scrollMessageElementIntoView(messageId, behavior)
+                    || scrollHistoryIndexIntoView(index, behavior);
             },
 
             captureViewportAnchor: () => {
@@ -1551,6 +1694,13 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return true;
                 };
 
+                if (!applyAnchor()) {
+                    const index = messageIndexMap.get(anchor.messageId);
+                    if (typeof index === 'number' && index < historyEntries.length) {
+                        scrollHistoryIndexIntoView(index, 'auto');
+                    }
+                }
+
                 return applyAnchor();
             },
         };
@@ -1567,7 +1717,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return () => {
             objectRef.current = null;
         };
-    }, [findMessageElement, historyEntries.length, messageIndexMap, scrollMessageElementIntoView, resolveScrollContainer, trailingStreamingEntry, turnIndexMap, ref]);
+    }, [findMessageElement, historyEntries.length, messageIndexMap, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, trailingStreamingEntry, turnIndexMap, ref]);
 
     const disableFadeIn = false;
 
@@ -1593,25 +1743,28 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
                 <FadeInDisabledProvider disabled={disableFadeIn}>
                     <div className="relative w-full">
-                        <MessageListContent
+                        <StaticHistoryList
                             entries={historyEntries}
-                            onMessageContentChange={stableOnMessageContentChange}
+                            shouldVirtualize={shouldVirtualizeHistory}
+                            virtualRows={historyVirtualRows}
+                            totalSize={historyVirtualizer.getTotalSize()}
+                            measureElement={historyVirtualizer.measureElement}
+                            contentRef={historyContentRef}
+                            onMessageContentChange={stableHistoryContentChange}
                             getAnimationHandlers={stableGetAnimationHandlers}
                             scrollToBottom={stableScrollToBottom}
                             stickyUserHeader={stickyUserHeader}
-                            sessionIsWorking={sessionIsWorking}
                             defaultActivityExpanded={defaultActivityExpanded}
                             turnUiStates={turnUiStates}
                             onToggleTurnGroup={toggleTurnGroup}
                             chatRenderMode={chatRenderMode}
                             shouldAnimateUserMessage={shouldAnimateUserMessage}
                             onUserAnimationConsumed={onUserAnimationConsumed}
-                            activeStreamingMessageId={activeStreamingMessageId}
                         />
                         {trailingStreamingEntry ? (
                             <StreamingTailContent
                                 entry={trailingStreamingEntry}
-                                onMessageContentChange={stableOnMessageContentChange}
+                                onMessageContentChange={stableTailContentChange}
                                 getAnimationHandlers={stableGetAnimationHandlers}
                                 scrollToBottom={stableScrollToBottom}
                                 stickyUserHeader={stickyUserHeader}
@@ -1628,23 +1781,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     </div>
                 </FadeInDisabledProvider>
 
-                {(questions.length > 0 || permissions.length > 0) && (
-                    <div>
-                        {questions.map((question) => (
-                            <QuestionCard key={question.id} question={question} />
-                        ))}
-                        {permissions.map((permission) => (
-                            <PermissionCard key={permission.id} permission={permission} />
-                        ))}
-                    </div>
-                )}
-
-                <div className="mb-3">
-                    <StatusRowContainer />
-                </div>
-
-                {/* Bottom spacer */}
-                <div className="flex-shrink-0" style={{ height: isMobile ? '40px' : '10vh' }} aria-hidden="true" />
         </div>
     );
 });

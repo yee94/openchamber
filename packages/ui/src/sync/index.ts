@@ -59,6 +59,7 @@ export {
   useDirectoryStore,
   useDirectorySync,
   useSessionMessages,
+  useSessionMessagesResolved,
   useSessionParts,
   useSessionStatus,
   useSessionPermissions,
@@ -68,6 +69,8 @@ export {
   useSyncDirectory,
   useChildStoreManager,
   useSessionMessageRecords,
+  useSessionTextMessages,
+  useUserMessageHistory,
 } from "./sync-context"
 
 // Sync operations
