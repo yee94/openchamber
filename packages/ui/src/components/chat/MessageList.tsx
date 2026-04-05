@@ -49,6 +49,87 @@ const resolveMessageRole = (message: ChatMessageEntry): string | null => {
         ?? null;
 };
 
+const hasCompactionPart = (message: ChatMessageEntry): boolean => {
+    return message.parts.some((part) => {
+        const type = (part as { type?: unknown }).type;
+        return type === 'compaction';
+    });
+};
+
+const getPartText = (part: Part): string => {
+    const text = (part as { text?: unknown }).text;
+    if (typeof text === 'string') {
+        return text;
+    }
+    const content = (part as { content?: unknown }).content;
+    if (typeof content === 'string') {
+        return content;
+    }
+    return '';
+};
+
+const normalizeCompactionCommandMessage = (message: ChatMessageEntry): ChatMessageEntry => {
+    if (!hasCompactionPart(message)) {
+        return message;
+    }
+
+    let changedParts = false;
+    const nextParts = message.parts.map((part) => {
+        const type = (part as { type?: unknown }).type;
+        if (type !== 'compaction') {
+            return part;
+        }
+        changedParts = true;
+        return { type: 'text', text: '/compact' } as Part;
+    });
+
+    const info = message.info as unknown as { clientRole?: string | null | undefined };
+    const needsClientRole = info.clientRole !== 'user';
+
+    if (!changedParts && !needsClientRole) {
+        return message;
+    }
+
+    return {
+        ...message,
+        info: needsClientRole
+            ? ({
+                ...(message.info as unknown as Record<string, unknown>),
+                clientRole: 'user',
+            } as unknown as typeof message.info)
+            : message.info,
+        parts: changedParts ? nextParts : message.parts,
+    };
+};
+
+const normalizeCompactionSummaryMessage = (
+    message: ChatMessageEntry,
+    compactionCommandIds: Set<string>,
+): ChatMessageEntry => {
+    const role = resolveMessageRole(message);
+    if (role !== 'system') {
+        return message;
+    }
+
+    const parentID = getMessageParentId(message);
+    if (!parentID || !compactionCommandIds.has(parentID)) {
+        return message;
+    }
+
+    const info = message.info as unknown as { clientRole?: string | null | undefined };
+    if (info.clientRole === 'assistant') {
+        return message;
+    }
+
+    return {
+        ...message,
+        info: ({
+            ...(message.info as unknown as Record<string, unknown>),
+            clientRole: 'assistant',
+        } as unknown as typeof message.info),
+    };
+};
+
 const isAssistantMessageCompleted = (message: ChatMessageEntry): boolean => {
     const info = message.info as { time?: { completed?: unknown }; status?: unknown };
     const completed = info.time?.completed;
@@ -279,11 +360,12 @@ const getNormalizedMessageForDisplay = (message: ChatMessageEntry): ChatMessageE
         return cached;
     }
 
-    const filteredParts = filterSyntheticParts(message.parts);
-    const normalized = filteredParts === message.parts
-        ? message
+    const normalizedCompactionMessage = normalizeCompactionCommandMessage(message);
+    const filteredParts = filterSyntheticParts(normalizedCompactionMessage.parts);
+    const normalized = filteredParts === normalizedCompactionMessage.parts
+        ? normalizedCompactionMessage
         : {
-            ...message,
+            ...normalizedCompactionMessage,
             parts: filteredParts,
         };
 
@@ -1242,12 +1324,17 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         dedupedMessages.reverse();
 
         const output: ChatMessageEntry[] = [];
+        const compactionCommandIds = new Set<string>();
         for (let index = 0; index < dedupedMessages.length; index += 1) {
             const current = dedupedMessages[index];
+            const currentWithRole = normalizeCompactionSummaryMessage(current, compactionCommandIds);
+            if (hasCompactionPart(current) || current.parts.some((part) => part.type === 'text' && getPartText(part).trim() === '/compact')) {
+                compactionCommandIds.add(current.info.id);
+            }
             const previous = output.length > 0 ? output[output.length - 1] : undefined;
 
             if (isUserSubtaskMessage(previous)) {
-                const bridge = isSyntheticSubtaskBridgeAssistant(current);
+                const bridge = isSyntheticSubtaskBridgeAssistant(currentWithRole);
                 if (bridge.hide) {
                     output[output.length - 1] = withSubtaskSessionId(previous as ChatMessageEntry, bridge.taskSessionId);
                     continue;
@@ -1255,14 +1342,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             }
 
             if (isUserShellMarkerMessage(previous)) {
-                const bridge = getShellBridgeAssistantDetails(current, getMessageId(previous));
+                const bridge = getShellBridgeAssistantDetails(currentWithRole, getMessageId(previous));
                 if (bridge.hide) {
                     output[output.length - 1] = withShellBridgeDetails(previous as ChatMessageEntry, bridge.details);
                     continue;
                 }
             }
 
-            output.push(current);
+            output.push(currentWithRole);
         }
 
         const outputIndexById = new Map<string, number>();

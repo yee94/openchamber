@@ -178,7 +178,350 @@ function toSessionStatus(status: Awaited<ReturnType<typeof opencodeClient.getSes
   return undefined
 }
 
-async function resyncDirectoryAfterReconnect(directory: string, store: StoreApi<DirectoryStore>) {
+type EventRoutingIndex = {
+  sessionDirectoryById: Map<string, string>
+  messageSessionById: Map<string, string>
+  sessionMessageIdsById: Map<string, Set<string>>
+}
+
+const createEventRoutingIndex = (): EventRoutingIndex => ({
+  sessionDirectoryById: new Map(),
+  messageSessionById: new Map(),
+  sessionMessageIdsById: new Map(),
+})
+
+const normalizeEventDirectory = (rawDirectory: string): string => {
+  if (!rawDirectory || rawDirectory === "global") {
+    return rawDirectory
+  }
+  return rawDirectory.replace(/\\/g, "/").replace(/^([a-z]):/, (_, l: string) => l.toUpperCase() + ":")
+}
+
+const getSessionIdFromPayload = (event: Event): string | null => {
+  const properties = (event as { properties?: unknown }).properties
+  if (!properties || typeof properties !== "object") {
+    return null
+  }
+
+  const props = properties as Record<string, unknown>
+
+  if (event.type === "message.updated") {
+    const info = props.info
+    if (!info || typeof info !== "object") {
+      return null
+    }
+    const sessionID = (info as { sessionID?: unknown }).sessionID
+    return typeof sessionID === "string" && sessionID.length > 0 ? sessionID : null
+  }
+
+  if (
+    event.type === "message.removed"
+    || event.type === "session.status"
+    || event.type === "todo.updated"
+    || event.type === "permission.asked"
+    || event.type === "permission.replied"
+    || event.type === "question.asked"
+    || event.type === "question.replied"
+    || event.type === "question.rejected"
+    || event.type === "session.deleted"
+  ) {
+    const sessionID = props.sessionID
+    return typeof sessionID === "string" && sessionID.length > 0 ? sessionID : null
+  }
+
+  if (event.type === "message.part.updated") {
+    const part = props.part
+    if (!part || typeof part !== "object") {
+      return null
+    }
+    const sessionID = (part as { sessionID?: unknown }).sessionID
+    return typeof sessionID === "string" && sessionID.length > 0 ? sessionID : null
+  }
+
+  if (event.type === "session.created" || event.type === "session.updated") {
+    const info = props.info
+    if (!info || typeof info !== "object") {
+      return null
+    }
+    const id = (info as { id?: unknown }).id
+    return typeof id === "string" && id.length > 0 ? id : null
+  }
+
+  return null
+}
+
+const getMessageIdFromPayload = (event: Event): string | null => {
+  const properties = (event as { properties?: unknown }).properties
+  if (!properties || typeof properties !== "object") {
+    return null
+  }
+
+  const props = properties as Record<string, unknown>
+
+  if (event.type === "message.updated") {
+    const info = props.info
+    if (!info || typeof info !== "object") {
+      return null
+    }
+    const id = (info as { id?: unknown }).id
+    return typeof id === "string" && id.length > 0 ? id : null
+  }
+
+  if (event.type === "message.removed" || event.type === "message.part.delta" || event.type === "message.part.removed") {
+    const messageID = props.messageID
+    return typeof messageID === "string" && messageID.length > 0 ? messageID : null
+  }
+
+  if (event.type === "message.part.updated") {
+    const part = props.part
+    if (!part || typeof part !== "object") {
+      return null
+    }
+    const messageID = (part as { messageID?: unknown }).messageID
+    return typeof messageID === "string" && messageID.length > 0 ? messageID : null
+  }
+
+  return null
+}
+
+const setIndexedSessionDirectory = (routingIndex: EventRoutingIndex, sessionID: string, directory: string) => {
+  if (!sessionID || !directory || directory === "global") {
+    return
+  }
+  routingIndex.sessionDirectoryById.set(sessionID, directory)
+}
+
+const setIndexedSessionMessages = (
+  routingIndex: EventRoutingIndex,
+  sessionID: string,
+  directory: string,
+  messages: Message[],
+) => {
+  if (!sessionID) {
+    return
+  }
+
+  setIndexedSessionDirectory(routingIndex, sessionID, directory)
+
+  const previous = routingIndex.sessionMessageIdsById.get(sessionID)
+  const next = new Set<string>()
+
+  for (const message of messages) {
+    if (!message?.id) {
+      continue
+    }
+    next.add(message.id)
+    routingIndex.messageSessionById.set(message.id, sessionID)
+  }
+
+  if (previous) {
+    for (const previousMessageID of previous) {
+      if (!next.has(previousMessageID)) {
+        routingIndex.messageSessionById.delete(previousMessageID)
+      }
+    }
+  }
+
+  routingIndex.sessionMessageIdsById.set(sessionID, next)
+}
+
+const setIndexedMessage = (
+  routingIndex: EventRoutingIndex,
+  sessionID: string,
+  messageID: string,
+  directory: string,
+) => {
+  if (!sessionID || !messageID) {
+    return
+  }
+
+  setIndexedSessionDirectory(routingIndex, sessionID, directory)
+  routingIndex.messageSessionById.set(messageID, sessionID)
+
+  const existing = routingIndex.sessionMessageIdsById.get(sessionID)
+  if (existing) {
+    existing.add(messageID)
+  } else {
+    routingIndex.sessionMessageIdsById.set(sessionID, new Set([messageID]))
+  }
+}
+
+const removeIndexedMessage = (
+  routingIndex: EventRoutingIndex,
+  messageID: string,
+  sessionHint?: string | null,
+) => {
+  if (!messageID) {
+    return
+  }
+
+  const sessionID = sessionHint ?? routingIndex.messageSessionById.get(messageID)
+  routingIndex.messageSessionById.delete(messageID)
+
+  if (!sessionID) {
+    return
+  }
+
+  const messageIds = routingIndex.sessionMessageIdsById.get(sessionID)
+  if (!messageIds) {
+    return
+  }
+
+  messageIds.delete(messageID)
+  if (messageIds.size === 0) {
+    routingIndex.sessionMessageIdsById.delete(sessionID)
+  }
+}
+
+const removeIndexedSession = (routingIndex: EventRoutingIndex, sessionID: string) => {
+  if (!sessionID) {
+    return
+  }
+
+  routingIndex.sessionDirectoryById.delete(sessionID)
+  const messageIds = routingIndex.sessionMessageIdsById.get(sessionID)
+  if (messageIds) {
+    for (const messageID of messageIds) {
+      routingIndex.messageSessionById.delete(messageID)
+    }
+  }
+  routingIndex.sessionMessageIdsById.delete(sessionID)
+}
+
+const ingestDirectoryStateIntoRoutingIndex = (
+  routingIndex: EventRoutingIndex,
+  directory: string,
+  state: State,
+) => {
+  const nextSessionIds = new Set<string>()
+
+  for (const session of state.session) {
+    if (!session?.id) {
+      continue
+    }
+    nextSessionIds.add(session.id)
+    setIndexedSessionDirectory(routingIndex, session.id, directory)
+  }
+
+  for (const sessionID of Object.keys(state.message)) {
+    nextSessionIds.add(sessionID)
+    setIndexedSessionDirectory(routingIndex, sessionID, directory)
+    setIndexedSessionMessages(routingIndex, sessionID, directory, state.message[sessionID] ?? EMPTY_MESSAGES)
+  }
+
+  for (const [indexedSessionID, indexedDirectory] of routingIndex.sessionDirectoryById) {
+    if (indexedDirectory !== directory) {
+      continue
+    }
+    if (!nextSessionIds.has(indexedSessionID)) {
+      removeIndexedSession(routingIndex, indexedSessionID)
+    }
+  }
+}
+
+const resolveDirectoryFromRoutingIndex = (
+  routingIndex: EventRoutingIndex,
+  rawDirectory: string,
+  payload: Event,
+  childStores: ChildStoreManager,
+): string => {
+  const normalizedDirectory = normalizeEventDirectory(rawDirectory)
+
+  const sessionID = getSessionIdFromPayload(payload)
+  if (sessionID) {
+    const indexedDirectory = routingIndex.sessionDirectoryById.get(sessionID)
+    if (indexedDirectory) {
+      return indexedDirectory
+    }
+  }
+
+  const messageID = getMessageIdFromPayload(payload)
+  if (messageID) {
+    const sessionFromMessage = routingIndex.messageSessionById.get(messageID)
+    if (sessionFromMessage) {
+      const indexedDirectory = routingIndex.sessionDirectoryById.get(sessionFromMessage)
+      if (indexedDirectory) {
+        return indexedDirectory
+      }
+    }
+  }
+
+  if ((!normalizedDirectory || normalizedDirectory === "global") && childStores.children.size === 1) {
+    const onlyDirectory = childStores.children.keys().next().value
+    if (typeof onlyDirectory === "string" && onlyDirectory.length > 0) {
+      return onlyDirectory
+    }
+  }
+
+  return normalizedDirectory
+}
+
+const updateRoutingIndexFromEvent = (
+  routingIndex: EventRoutingIndex,
+  directory: string,
+  payload: Event,
+) => {
+  if (!directory || directory === "global") {
+    return
+  }
+
+  const sessionID = getSessionIdFromPayload(payload)
+  if (sessionID) {
+    setIndexedSessionDirectory(routingIndex, sessionID, directory)
+  }
+
+  switch (payload.type) {
+    case "session.created":
+    case "session.updated": {
+      const info = (payload.properties as { info?: Session }).info
+      if (info?.id) {
+        setIndexedSessionDirectory(routingIndex, info.id, directory)
+      }
+      return
+    }
+
+    case "session.deleted": {
+      const deletedSessionID = (payload.properties as { sessionID?: string }).sessionID
+      if (deletedSessionID) {
+        removeIndexedSession(routingIndex, deletedSessionID)
+      }
+      return
+    }
+
+    case "message.updated": {
+      const info = (payload.properties as { info?: Message }).info
+      if (info?.id && info.sessionID) {
+        setIndexedMessage(routingIndex, info.sessionID, info.id, directory)
+      }
+      return
+    }
+
+    case "message.removed": {
+      const props = payload.properties as { sessionID?: string; messageID?: string }
+      if (props.messageID) {
+        removeIndexedMessage(routingIndex, props.messageID, props.sessionID)
+      }
+      return
+    }
+
+    case "message.part.updated": {
+      const part = (payload.properties as { part?: Part }).part as (Part & { sessionID?: string; messageID?: string }) | undefined
+      if (part?.messageID && part.sessionID) {
+        setIndexedMessage(routingIndex, part.sessionID, part.messageID, directory)
+      }
+      return
+    }
+
+    default:
+      return
+  }
+}
+
+async function resyncDirectoryAfterReconnect(
+  directory: string,
+  store: StoreApi<DirectoryStore>,
+  routingIndex: EventRoutingIndex,
+) {
   const current = store.getState()
   const candidateSessionIds = getReconnectCandidateSessionIds(current)
   if (candidateSessionIds.length === 0) return
@@ -256,20 +599,22 @@ async function resyncDirectoryAfterReconnect(directory: string, store: StoreApi<
         part: nextPartState,
       }
     })
+
+    setIndexedSessionDirectory(routingIndex, nextSession.id, directory)
+    setIndexedSessionMessages(routingIndex, sessionId, directory, nextMessages)
   }))
+
+  ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())
 }
 
 function handleEvent(
   rawDirectory: string,
   payload: Event,
   childStores: ChildStoreManager,
+  routingIndex: EventRoutingIndex,
 ) {
-  // Normalize directory path: SSE events from OpenCode use native OS separators
-  // (backslashes on Windows) and may differ in drive-letter case.
-  // Child stores are keyed with forward slashes and uppercase drive letters.
-  const directory = rawDirectory && rawDirectory !== "global"
-    ? rawDirectory.replace(/\\/g, "/").replace(/^([a-z]):/, (_, l: string) => l.toUpperCase() + ":")
-    : rawDirectory
+  const directory = resolveDirectoryFromRoutingIndex(routingIndex, rawDirectory, payload, childStores)
+
   // Global events
   if (directory === "global" || !directory) {
     const recent = isRecentBoot()
@@ -305,6 +650,7 @@ function handleEvent(
 
   // Directory events
   const store = childStores.getChild(directory)
+
   if (!store) {
     // Try as global event for unknown directories
     const result = reduceGlobalEvent(payload)
@@ -402,6 +748,8 @@ function handleEvent(
     store.setState(draft)
   }
 
+  updateRoutingIndexFromEvent(routingIndex, directory, payload)
+
   // Update global session status for cross-directory sidebar visibility
   if (payload.type === "session.status") {
     const props = payload.properties as { sessionID: string; status: SessionStatus }
@@ -435,6 +783,9 @@ export function SyncProvider(props: {
   const childStoresRef = useRef<ChildStoreManager | null>(null)
   if (!childStoresRef.current) childStoresRef.current = new ChildStoreManager()
   const childStores = childStoresRef.current
+  const routingIndexRef = useRef<EventRoutingIndex | null>(null)
+  if (!routingIndexRef.current) routingIndexRef.current = createEventRoutingIndex()
+  const routingIndex = routingIndexRef.current
 
   const system = useMemo<SyncSystem>(
     () => ({
@@ -465,6 +816,9 @@ export function SyncProvider(props: {
             getState: () => store.getState(),
             set: (patch) => {
               store.setState(patch)
+              if (patch.session || patch.message) {
+                ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())
+              }
               if (patch.session_status) {
                 const current = useGlobalSessionStatusStore.getState().statuses
                 const merged = { ...current, ...patch.session_status }
@@ -491,6 +845,7 @@ export function SyncProvider(props: {
                 .filter((s) => !!s?.id)
                 .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
               store.setState({ session: sessions, sessionTotal: sessions.length, limit: Math.max(sessions.length, 50) })
+              ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())
             }),
           })
 
@@ -514,7 +869,7 @@ export function SyncProvider(props: {
       isBooting: (directory) => bootingDirs.has(directory),
       isLoadingSessions: () => false,
     })
-  }, [childStores, props.sdk])
+  }, [childStores, props.sdk, routingIndex])
 
   // Bootstrap global state — set bootingRoot/bootedAt to suppress
   // redundant refresh events during startup
@@ -538,7 +893,7 @@ export function SyncProvider(props: {
     const { cleanup } = createEventPipeline({
       sdk: props.sdk,
       onEvent: (directory, payload) => {
-        handleEvent(directory, payload, childStores)
+        handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {
         for (const [dir, store] of childStores.children) {
@@ -546,7 +901,7 @@ export function SyncProvider(props: {
           if (getReconnectCandidateSessionIds(store.getState()).length === 0) continue
 
           reconnectResyncing.add(dir)
-          void resyncDirectoryAfterReconnect(dir, store)
+          void resyncDirectoryAfterReconnect(dir, store, routingIndex)
             .catch(() => {
               // Transient failure during resync — next SSE event or reconnect will catch up.
             })
@@ -557,14 +912,15 @@ export function SyncProvider(props: {
       },
     })
     return cleanup
-  }, [props.sdk, childStores])
+  }, [props.sdk, childStores, routingIndex])
 
   // Ensure current directory's child store exists
   useEffect(() => {
     if (props.directory) {
-      childStores.ensureChild(props.directory)
+      const store = childStores.ensureChild(props.directory)
+      ingestDirectoryStateIntoRoutingIndex(routingIndex, props.directory, store.getState())
     }
-  }, [props.directory, childStores])
+  }, [props.directory, childStores, routingIndex])
 
   // Set refs so non-React code (session-actions, session-ui-store) can access sync state
   useEffect(() => {
