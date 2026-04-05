@@ -67,7 +67,6 @@ const VIEWPORT_ANCHOR_MIN_UPDATE_MS = 150;
 export const useChatScrollManager = ({
     currentSessionId,
     sessionMessageCount,
-    streamingMessageId,
     updateViewportAnchor,
     isSyncing,
     isMobile,
@@ -149,13 +148,12 @@ export const useChatScrollManager = ({
     }, [markProgrammaticScroll, scrollEngine]);
 
     const scrollPinnedToBottom = React.useCallback(() => {
-        if (streamingMessageId) {
-            scrollToBottomInternal({ followBottom: true });
-            return;
-        }
-
+        // Auto-follow should not animate across an entire new turn.
+        // Keep explicit user-triggered scrolls animated, but snap pinned
+        // updates so a new user/assistant message does not visibly travel
+        // from the previous sticky header down to the tail.
         scrollToBottomInternal({ instant: true });
-    }, [scrollToBottomInternal, streamingMessageId]);
+    }, [scrollToBottomInternal]);
 
     const updateScrollButtonVisibility = React.useCallback(() => {
         const container = scrollRef.current;
