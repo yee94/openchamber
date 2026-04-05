@@ -36,7 +36,14 @@ type SyncSystem = {
   directory: string
 }
 
-const SyncContext = createContext<SyncSystem | null>(null)
+const SYNC_CONTEXT_GLOBAL_KEY = "__openchamber_sync_context__"
+type SyncGlobal = typeof globalThis & {
+  [SYNC_CONTEXT_GLOBAL_KEY]?: React.Context<SyncSystem | null>
+}
+
+const syncGlobal = globalThis as SyncGlobal
+const SyncContext = syncGlobal[SYNC_CONTEXT_GLOBAL_KEY] ?? createContext<SyncSystem | null>(null)
+syncGlobal[SYNC_CONTEXT_GLOBAL_KEY] = SyncContext
 
 function useSyncSystem() {
   const ctx = useContext(SyncContext)
@@ -1072,9 +1079,3 @@ const EMPTY_MESSAGES: Message[] = []
 const EMPTY_PARTS: Part[] = []
 const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = []
 const EMPTY_QUESTION_REQUESTS: QuestionRequest[] = []
-
-if (import.meta.hot) {
-  import.meta.hot.accept(() => {
-    import.meta.hot?.invalidate()
-  })
-}

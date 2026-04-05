@@ -106,6 +106,7 @@ type ChatViewportProps = {
     isLoadingOlder: boolean;
     sessionIsWorking: boolean;
     streamingMessageId: string | null;
+    activeStreamingPhase: import('./message/types').StreamPhase | null;
     retryOverlay: {
         sessionId: string;
         message: string;
@@ -135,6 +136,7 @@ const ChatViewport = React.memo(({
     isLoadingOlder,
     sessionIsWorking,
     streamingMessageId,
+    activeStreamingPhase,
     retryOverlay,
     handleMessageContentChange,
     getAnimationHandlers,
@@ -173,6 +175,7 @@ const ChatViewport = React.memo(({
                             messages={renderedMessages}
                             sessionIsWorking={sessionIsWorking}
                             activeStreamingMessageId={streamingMessageId}
+                            activeStreamingPhase={activeStreamingPhase}
                             retryOverlay={retryOverlay}
                             onMessageContentChange={handleMessageContentChange}
                             getAnimationHandlers={getAnimationHandlers}
@@ -218,6 +221,7 @@ const ChatViewport = React.memo(({
         && prev.isLoadingOlder === next.isLoadingOlder
         && prev.sessionIsWorking === next.sessionIsWorking
         && prev.streamingMessageId === next.streamingMessageId
+        && prev.activeStreamingPhase === next.activeStreamingPhase
         && prev.retryOverlay === next.retryOverlay
         && prev.handleMessageContentChange === next.handleMessageContentChange
         && prev.getAnimationHandlers === next.getAnimationHandlers
@@ -294,6 +298,15 @@ export const ChatContainer: React.FC = () => {
         React.useCallback(
             (s) => (currentSessionId ? s.streamingMessageIds.get(currentSessionId) ?? null : null),
             [currentSessionId],
+        ),
+    );
+    const activeStreamingPhase = useStreamingStore(
+        React.useCallback(
+            (s) => {
+                if (!streamingMessageId) return null;
+                return s.messageStreamStates.get(streamingMessageId)?.phase ?? null;
+            },
+            [streamingMessageId],
         ),
     );
     const sessionMessageCount = useSessionMessageCount(currentSessionId ?? '');
@@ -803,6 +816,7 @@ export const ChatContainer: React.FC = () => {
                 isLoadingOlder={timelineController.isLoadingOlder}
                 sessionIsWorking={sessionIsWorking}
                 streamingMessageId={streamingMessageId}
+                activeStreamingPhase={activeStreamingPhase}
                 retryOverlay={retryOverlay}
                 handleMessageContentChange={handleMessageContentChange}
                 getAnimationHandlers={getAnimationHandlers}

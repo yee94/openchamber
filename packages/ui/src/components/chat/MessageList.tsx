@@ -14,6 +14,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { streamPerfCount, streamPerfMeasure } from '@/stores/utils/streamDebug';
+import type { StreamPhase } from './message/types';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 40;
 const MESSAGE_LIST_OVERSCAN = 6;
@@ -304,6 +305,7 @@ interface MessageListProps {
     messages: ChatMessageEntry[];
     sessionIsWorking?: boolean;
     activeStreamingMessageId?: string | null;
+    activeStreamingPhase?: StreamPhase | null;
     retryOverlay?: {
         sessionId: string;
         message: string;
@@ -347,6 +349,7 @@ interface MessageRowProps {
     turnGroupingContext?: TurnGroupingContext;
     assistantHeaderMessageId?: string;
     isInActiveTurn?: boolean;
+    activeStreamingPhase?: StreamPhase | null;
     animateUserOnMount?: boolean;
     onUserAnimationConsumed?: (messageId: string) => void;
     onContentChange: (reason?: ContentChangeReason) => void;
@@ -361,6 +364,7 @@ const MessageRow = React.memo<MessageRowProps>(({
     turnGroupingContext,
     assistantHeaderMessageId,
     isInActiveTurn,
+    activeStreamingPhase,
     animateUserOnMount,
     onUserAnimationConsumed,
     onContentChange,
@@ -380,6 +384,7 @@ const MessageRow = React.memo<MessageRowProps>(({
             turnGroupingContext={turnGroupingContext}
             assistantHeaderMessageId={assistantHeaderMessageId}
             isInActiveTurn={isInActiveTurn}
+            activeStreamingPhase={activeStreamingPhase}
         />
     );
 }, (prev, next) => {
@@ -404,6 +409,7 @@ const MessageRow = React.memo<MessageRowProps>(({
         && prevTurn?.activityParts === nextTurn?.activityParts
         && prev.assistantHeaderMessageId === next.assistantHeaderMessageId
         && prev.isInActiveTurn === next.isInActiveTurn
+        && prev.activeStreamingPhase === next.activeStreamingPhase
         && prev.animationHandlers?.onChunk === next.animationHandlers?.onChunk
         && prev.animationHandlers?.onComplete === next.animationHandlers?.onComplete
         && prev.animationHandlers?.onStreamingCandidate === next.animationHandlers?.onStreamingCandidate
@@ -430,6 +436,7 @@ interface TurnBlockProps {
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
+    activeStreamingPhase?: StreamPhase | null;
 }
 
 const TurnBlock: React.FC<TurnBlockProps> = ({
@@ -447,6 +454,7 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
     activeStreamingMessageId,
+    activeStreamingPhase,
 }) => {
     const turnUiState = turnUiStates.get(turn.turnId) ?? { isExpanded: defaultActivityExpanded };
     const handleToggleTurnGroup = React.useCallback(() => {
@@ -656,6 +664,7 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
                     turnGroupingContext={turnGroupingContext}
                     assistantHeaderMessageId={assistantHeaderMessageId}
                     isInActiveTurn={Boolean(streamingAssistantMessageId) && message.info.id === streamingAssistantMessageId}
+                    activeStreamingPhase={message.info.id === streamingAssistantMessageId ? activeStreamingPhase : null}
                     animateUserOnMount={shouldAnimateUserMessage(message)}
                     onUserAnimationConsumed={onUserAnimationConsumed}
                     onContentChange={onMessageContentChange}
@@ -681,6 +690,7 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
             turnUiState.isExpanded,
             turnGroupingContextBase,
             streamingAssistantMessageId,
+            activeStreamingPhase,
             visibleAssistantMessages,
             visibleAssistantIds,
             activityOwnerMessageId,
@@ -717,6 +727,7 @@ interface UngroupedMessageRowProps {
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
+    activeStreamingPhase?: StreamPhase | null;
 }
 
 const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
@@ -729,6 +740,7 @@ const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
     activeStreamingMessageId,
+    activeStreamingPhase,
 }) => {
     return (
         <MessageRow
@@ -741,6 +753,7 @@ const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
             animationHandlers={getAnimationHandlers(message.info.id)}
             scrollToBottom={scrollToBottom}
             isInActiveTurn={Boolean(activeStreamingMessageId) && message.info.id === activeStreamingMessageId}
+            activeStreamingPhase={message.info.id === activeStreamingMessageId ? activeStreamingPhase : null}
         />
     );
 }, (prev, next) => {
@@ -752,7 +765,8 @@ const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
         && prev.scrollToBottom === next.scrollToBottom
         && prev.shouldAnimateUserMessage === next.shouldAnimateUserMessage
         && prev.onUserAnimationConsumed === next.onUserAnimationConsumed
-        && prev.activeStreamingMessageId === next.activeStreamingMessageId;
+        && prev.activeStreamingMessageId === next.activeStreamingMessageId
+        && prev.activeStreamingPhase === next.activeStreamingPhase;
 });
 
 UngroupedMessageRow.displayName = 'UngroupedMessageRow';
@@ -771,6 +785,7 @@ interface MessageListEntryProps {
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
+    activeStreamingPhase?: StreamPhase | null;
 }
 
 const turnContainsMessageId = (turn: TurnRecord, messageId: string | null | undefined): boolean => {
@@ -799,6 +814,7 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
     activeStreamingMessageId,
+    activeStreamingPhase,
 }) => {
     if (entry.kind === 'ungrouped') {
         return (
@@ -812,6 +828,7 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
                 shouldAnimateUserMessage={shouldAnimateUserMessage}
                 onUserAnimationConsumed={onUserAnimationConsumed}
                 activeStreamingMessageId={activeStreamingMessageId}
+                activeStreamingPhase={activeStreamingPhase}
             />
         );
     }
@@ -828,6 +845,7 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
             shouldAnimateUserMessage={shouldAnimateUserMessage}
             onUserAnimationConsumed={onUserAnimationConsumed}
             activeStreamingMessageId={activeStreamingMessageId}
+            activeStreamingPhase={activeStreamingPhase}
             onMessageContentChange={onMessageContentChange}
             getAnimationHandlers={getAnimationHandlers}
             scrollToBottom={scrollToBottom}
@@ -871,6 +889,22 @@ function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextPro
             }
         }
 
+        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
+            const prevAffected = turnContainsMessageId(prevEntry.turn, prevProps.activeStreamingMessageId);
+            const nextAffected = turnContainsMessageId(nextEntry.turn, nextProps.activeStreamingMessageId);
+            if (prevAffected || nextAffected) {
+                return false;
+            }
+        }
+
+        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
+            const prevAffected = turnContainsMessageId(prevEntry.turn, prevProps.activeStreamingMessageId);
+            const nextAffected = turnContainsMessageId(nextEntry.turn, nextProps.activeStreamingMessageId);
+            if (prevAffected || nextAffected) {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -880,6 +914,20 @@ function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextPro
             const prevActive = prevProps.activeStreamingMessageId === messageId;
             const nextActive = nextProps.activeStreamingMessageId === messageId;
             if (prevActive !== nextActive) {
+                return false;
+            }
+        }
+
+        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
+            const messageId = prevEntry.message.info.id;
+            if (prevProps.activeStreamingMessageId === messageId || nextProps.activeStreamingMessageId === messageId) {
+                return false;
+            }
+        }
+
+        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
+            const messageId = prevEntry.message.info.id;
+            if (prevProps.activeStreamingMessageId === messageId || nextProps.activeStreamingMessageId === messageId) {
                 return false;
             }
         }
@@ -912,7 +960,8 @@ const StaticHistoryList: React.FC<{
     chatRenderMode: 'sorted' | 'live';
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
-}> = React.memo(({ entries, shouldVirtualize, virtualRows, totalSize, measureElement, contentRef, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, defaultActivityExpanded, turnUiStates, onToggleTurnGroup, chatRenderMode, shouldAnimateUserMessage, onUserAnimationConsumed }) => {
+    activeStreamingPhase?: StreamPhase | null;
+}> = React.memo(({ entries, shouldVirtualize, virtualRows, totalSize, measureElement, contentRef, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, defaultActivityExpanded, turnUiStates, onToggleTurnGroup, chatRenderMode, shouldAnimateUserMessage, onUserAnimationConsumed, activeStreamingPhase }) => {
     const renderEntry = React.useCallback((entry: RenderEntry) => {
         return (
             <MessageListEntry
@@ -930,9 +979,10 @@ const StaticHistoryList: React.FC<{
                 shouldAnimateUserMessage={shouldAnimateUserMessage}
                 onUserAnimationConsumed={onUserAnimationConsumed}
                 activeStreamingMessageId={null}
+                activeStreamingPhase={activeStreamingPhase}
             />
         );
-    }, [chatRenderMode, defaultActivityExpanded, getAnimationHandlers, onMessageContentChange, onToggleTurnGroup, onUserAnimationConsumed, scrollToBottom, shouldAnimateUserMessage, stickyUserHeader, turnUiStates]);
+    }, [activeStreamingPhase, chatRenderMode, defaultActivityExpanded, getAnimationHandlers, onMessageContentChange, onToggleTurnGroup, onUserAnimationConsumed, scrollToBottom, shouldAnimateUserMessage, stickyUserHeader, turnUiStates]);
 
     const paddingTop = shouldVirtualize && virtualRows.length > 0
         ? virtualRows[0]?.start ?? 0
@@ -995,7 +1045,8 @@ const StaticHistoryList: React.FC<{
         && prevProps.onToggleTurnGroup === nextProps.onToggleTurnGroup
         && prevProps.chatRenderMode === nextProps.chatRenderMode
         && prevProps.shouldAnimateUserMessage === nextProps.shouldAnimateUserMessage
-        && prevProps.onUserAnimationConsumed === nextProps.onUserAnimationConsumed;
+        && prevProps.onUserAnimationConsumed === nextProps.onUserAnimationConsumed
+        && prevProps.activeStreamingPhase === nextProps.activeStreamingPhase;
 });
 
 StaticHistoryList.displayName = 'StaticHistoryList';
@@ -1014,6 +1065,7 @@ const StreamingTailContent: React.FC<{
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
+    activeStreamingPhase?: StreamPhase | null;
 }> = React.memo(({
     entry,
     onMessageContentChange,
@@ -1028,6 +1080,7 @@ const StreamingTailContent: React.FC<{
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
     activeStreamingMessageId,
+    activeStreamingPhase,
 }) => {
     return (
         <MessageListEntry
@@ -1044,6 +1097,7 @@ const StreamingTailContent: React.FC<{
             shouldAnimateUserMessage={shouldAnimateUserMessage}
             onUserAnimationConsumed={onUserAnimationConsumed}
             activeStreamingMessageId={activeStreamingMessageId}
+            activeStreamingPhase={activeStreamingPhase}
         />
     );
 }, (prev, next) => {
@@ -1059,7 +1113,8 @@ const StreamingTailContent: React.FC<{
         && prev.chatRenderMode === next.chatRenderMode
         && prev.shouldAnimateUserMessage === next.shouldAnimateUserMessage
         && prev.onUserAnimationConsumed === next.onUserAnimationConsumed
-        && prev.activeStreamingMessageId === next.activeStreamingMessageId;
+        && prev.activeStreamingMessageId === next.activeStreamingMessageId
+        && prev.activeStreamingPhase === next.activeStreamingPhase;
 });
 
 StreamingTailContent.displayName = 'StreamingTailContent';
@@ -1071,6 +1126,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     messages,
     sessionIsWorking = false,
     activeStreamingMessageId = null,
+    activeStreamingPhase = null,
     retryOverlay = null,
     onMessageContentChange,
     getAnimationHandlers,
@@ -1760,6 +1816,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             chatRenderMode={chatRenderMode}
                             shouldAnimateUserMessage={shouldAnimateUserMessage}
                             onUserAnimationConsumed={onUserAnimationConsumed}
+                            activeStreamingPhase={activeStreamingPhase}
                         />
                         {trailingStreamingEntry ? (
                             <StreamingTailContent
@@ -1776,6 +1833,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                                 shouldAnimateUserMessage={shouldAnimateUserMessage}
                                 onUserAnimationConsumed={onUserAnimationConsumed}
                                 activeStreamingMessageId={activeStreamingMessageId}
+                                activeStreamingPhase={activeStreamingPhase}
                             />
                         ) : null}
                     </div>
