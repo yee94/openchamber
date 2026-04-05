@@ -446,7 +446,11 @@ const resolveDirectoryFromRoutingIndex = (
     }
   }
 
-  if ((!normalizedDirectory || normalizedDirectory === "global") && childStores.children.size === 1) {
+  if (
+    (sessionID || messageID)
+    && (!normalizedDirectory || normalizedDirectory === "global")
+    && childStores.children.size === 1
+  ) {
     const onlyDirectory = childStores.children.keys().next().value
     if (typeof onlyDirectory === "string" && onlyDirectory.length > 0) {
       return onlyDirectory

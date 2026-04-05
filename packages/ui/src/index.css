@@ -892,7 +892,46 @@ html:not(.dark) .chat-scroll {
 /* Reasoning markdown renders at meta size, dimmed. */
 .markdown-content.markdown-reasoning {
   font-size: var(--text-meta);
-  color: var(--muted-foreground);
+  color: var(--surface-muted-foreground);
+  --markdown-heading1: inherit;
+  --markdown-heading2: inherit;
+  --markdown-heading3: inherit;
+  --markdown-heading4: inherit;
+  --markdown-link: inherit;
+  --markdown-link-hover: var(--surface-foreground);
+  --markdown-blockquote: inherit;
+  --markdown-bold: inherit;
+  --markdown-italic: inherit;
+  --markdown-strikethrough: inherit;
+}
+
+.markdown-content.markdown-reasoning p,
+.markdown-content.markdown-reasoning li,
+.markdown-content.markdown-reasoning td,
+.markdown-content.markdown-reasoning th,
+.markdown-content.markdown-reasoning h1,
+.markdown-content.markdown-reasoning h2,
+.markdown-content.markdown-reasoning h3,
+.markdown-content.markdown-reasoning h4,
+.markdown-content.markdown-reasoning h5,
+.markdown-content.markdown-reasoning h6,
+.markdown-content.markdown-reasoning strong,
+.markdown-content.markdown-reasoning b,
+.markdown-content.markdown-reasoning em,
+.markdown-content.markdown-reasoning del,
+.markdown-content.markdown-reasoning [data-markdown="strong"],
+.markdown-content.markdown-reasoning [data-markdown="bold"] {
+  color: var(--surface-muted-foreground) !important;
+}
+
+.markdown-content.markdown-reasoning a,
+.markdown-content.markdown-reasoning [data-openchamber-file-link="true"] {
+  color: var(--surface-muted-foreground) !important;
+}
+
+.markdown-content.markdown-reasoning a:hover,
+.markdown-content.markdown-reasoning [data-openchamber-file-link="true"]:hover {
+  color: var(--surface-foreground) !important;
 }
 
 .markdown-content.markdown-reasoning strong,

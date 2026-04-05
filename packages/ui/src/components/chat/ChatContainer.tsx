@@ -494,7 +494,7 @@ export const ChatContainer: React.FC = () => {
     } = useChatScrollManager({
         currentSessionId,
         sessionMessageCount,
-        streamingMessageId,
+        sessionIsWorking,
         sessionMemoryState: sessionMemoryStateMap,
         updateViewportAnchor,
         isSyncing,
