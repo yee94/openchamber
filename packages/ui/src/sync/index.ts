@@ -59,6 +59,7 @@ export {
   useDirectoryStore,
   useDirectorySync,
   useSessionMessages,
+  useSessionMessageCount,
   useSessionMessagesResolved,
   useSessionParts,
   useSessionStatus,

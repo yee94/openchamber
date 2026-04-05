@@ -877,7 +877,7 @@ const getFirstTextFromParts = (parts: Part[]): string => {
   return ""
 }
 
-function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string) {
+function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string, suspendUpdates = false) {
   const store = useDirectoryStore(directory)
   const prevPartsRef = useRef<Record<string, Part[]>>({})
   const [partsSnapshot, setPartsSnapshot] = React.useState<Record<string, Part[]>>({})
@@ -906,6 +906,12 @@ function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string)
 
     flush()
 
+    if (suspendUpdates) {
+      return () => {
+        if (timer) clearTimeout(timer)
+      }
+    }
+
     const unsub = store.subscribe(() => {
       if (timer) {
         pending = true
@@ -924,9 +930,19 @@ function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string)
       unsub()
       if (timer) clearTimeout(timer)
     }
-  }, [messageIds, store])
+  }, [messageIds, store, suspendUpdates])
 
   return partsSnapshot
+}
+
+export function useSessionMessageCount(sessionID: string, directory?: string): number {
+  return useDirectorySync(
+    useCallback((state: State) => {
+      if (!sessionID) return 0
+      return state.message[sessionID]?.length ?? 0
+    }, [sessionID]),
+    directory,
+  )
 }
 
 export function useSessionTextMessages(sessionID: string, directory?: string): SessionTextMessage[] {
@@ -973,10 +989,14 @@ export function useUserMessageHistory(sessionID: string, directory?: string): st
  * Uses a ref-stable parts lookup that only triggers re-renders when
  * a part array for one of our displayed messages actually changes.
  */
-export function useSessionMessageRecords(sessionID: string, directory?: string) {
+export function useSessionMessageRecords(
+  sessionID: string,
+  directory?: string,
+  options?: { suspendPartUpdates?: boolean },
+) {
   const messages = useVisibleSessionMessages(sessionID, directory)
   const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
-  const partsSnapshot = usePartsSnapshotForMessageIds(messageIds, directory)
+  const partsSnapshot = usePartsSnapshotForMessageIds(messageIds, directory, Boolean(options?.suspendPartUpdates))
   const previousRecordsRef = useRef<{
     list: Array<{ info: (typeof messages)[number]; parts: Part[] }>
     byId: Map<string, { info: (typeof messages)[number]; parts: Part[] }>
@@ -1052,3 +1072,9 @@ const EMPTY_MESSAGES: Message[] = []
 const EMPTY_PARTS: Part[] = []
 const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = []
 const EMPTY_QUESTION_REQUESTS: QuestionRequest[] = []
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    import.meta.hot?.invalidate()
+  })
+}

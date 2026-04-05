@@ -1,6 +1,4 @@
 import React from 'react';
-import type { Part } from '@opencode-ai/sdk/v2';
-
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { createScrollSpy } from '@/components/chat/lib/scroll/scrollSpy';
 import {
@@ -12,11 +10,6 @@ import {
 import { useScrollEngine } from './useScrollEngine';
 
 export type ContentChangeReason = 'text' | 'structural' | 'permission';
-
-interface ChatMessageRecord {
-    info: Record<string, unknown>;
-    parts: Part[];
-}
 
 interface SessionMemoryState {
     viewportAnchor: number;
@@ -31,7 +24,7 @@ interface SessionMemoryState {
 
 interface UseChatScrollManagerOptions {
     currentSessionId: string | null;
-    sessionMessages: ChatMessageRecord[];
+    sessionMessageCount: number;
     sessionPermissions: unknown[];
     streamingMessageId: string | null;
     sessionMemoryState: Map<string, SessionMemoryState>;
@@ -73,7 +66,7 @@ const VIEWPORT_ANCHOR_MIN_UPDATE_MS = 150;
 
 export const useChatScrollManager = ({
     currentSessionId,
-    sessionMessages,
+    sessionMessageCount,
     streamingMessageId,
     updateViewportAnchor,
     isSyncing,
@@ -330,7 +323,7 @@ export const useChatScrollManager = ({
 
         const { scrollTop, scrollHeight, clientHeight } = container;
         const position = (scrollTop + clientHeight / 2) / Math.max(scrollHeight, 1);
-        const estimatedIndex = Math.floor(position * sessionMessages.length);
+        const estimatedIndex = Math.floor(position * sessionMessageCount);
         queueViewportAnchor(currentSessionId, estimatedIndex);
     }, [
         currentSessionId,
@@ -339,7 +332,7 @@ export const useChatScrollManager = ({
         queueViewportAnchor,
         schedulePinnedStateAndIndicators,
         scrollEngine,
-        sessionMessages.length,
+        sessionMessageCount,
         updatePinnedState,
     ]);
 
@@ -469,7 +462,7 @@ export const useChatScrollManager = ({
             return;
         }
         schedulePinnedStateAndIndicators();
-    }, [isSyncing, schedulePinnedStateAndIndicators, sessionMessages.length, shouldSkipLiveContentSync]);
+    }, [isSyncing, schedulePinnedStateAndIndicators, sessionMessageCount, shouldSkipLiveContentSync]);
 
     // Use ResizeObserver to detect content changes and maintain pin
     React.useEffect(() => {
@@ -551,7 +544,7 @@ export const useChatScrollManager = ({
         return () => {
             window.cancelAnimationFrame(rafId);
         };
-    }, [currentSessionId, schedulePinnedStateAndIndicators, sessionMessages.length, shouldSkipLiveContentSync]);
+    }, [currentSessionId, schedulePinnedStateAndIndicators, sessionMessageCount, shouldSkipLiveContentSync]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
 
@@ -714,7 +707,7 @@ export const useChatScrollManager = ({
             mutationObserver.disconnect();
             spy.destroy();
         };
-    }, [currentSessionId, onActiveTurnChange, scrollRef, sessionMessages.length]);
+    }, [currentSessionId, onActiveTurnChange, scrollRef, sessionMessageCount]);
 
     return {
         scrollRef,

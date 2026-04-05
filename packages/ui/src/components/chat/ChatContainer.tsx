@@ -32,6 +32,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useViewportStore } from '@/sync/viewport-store';
 import { useStreamingStore } from '@/sync/streaming';
 import {
+    useSessionMessageCount,
     useSessionMessageRecords,
     useSessions,
     useDirectorySync,
@@ -295,8 +296,12 @@ export const ChatContainer: React.FC = () => {
             [currentSessionId],
         ),
     );
+    const sessionMessageCount = useSessionMessageCount(currentSessionId ?? '');
+    const [suspendDetachedTailUpdates, setSuspendDetachedTailUpdates] = React.useState(false);
     // Messages from sync system
-    const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '');
+    const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '', undefined, {
+        suspendPartUpdates: suspendDetachedTailUpdates,
+    });
     const sessionMessages = currentSessionId ? sessionMessageRecords : EMPTY_MESSAGES;
 
     // Sessions from sync system
@@ -475,7 +480,7 @@ export const ChatContainer: React.FC = () => {
         isProgrammaticFollowActive,
     } = useChatScrollManager({
         currentSessionId,
-        sessionMessages,
+        sessionMessageCount,
         streamingMessageId,
         sessionMemoryState: sessionMemoryStateMap,
         updateViewportAnchor,
@@ -485,6 +490,11 @@ export const ChatContainer: React.FC = () => {
         sessionPermissions: sessionBlockingCards,
         onActiveTurnChange: handleActiveTurnChange,
     });
+
+    React.useEffect(() => {
+        const next = Boolean(currentSessionId && streamingMessageId && !isPinned);
+        setSuspendDetachedTailUpdates((previous) => (previous === next ? previous : next));
+    }, [currentSessionId, isPinned, streamingMessageId]);
 
     const viewportMessagesRef = React.useRef<SessionMessageRecord[]>(EMPTY_MESSAGES);
     const viewportSessionIdRef = React.useRef<string | null>(null);
