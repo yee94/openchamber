@@ -1692,17 +1692,10 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             return false;
         }
 
-        const container = resolveScrollContainer();
-        if (!container) {
-            return false;
-        }
-
         const virtualizerBehavior = behavior === 'smooth' ? 'smooth' : 'auto';
         historyVirtualizer.scrollToIndex(index, { align: 'start', behavior: virtualizerBehavior });
-        const targetTop = Math.max(0, container.scrollTop - 50);
-        container.scrollTo({ top: targetTop, behavior });
         return true;
-    }, [historyEntries.length, historyVirtualizer, resolveScrollContainer, shouldVirtualizeHistory]);
+    }, [historyEntries.length, historyVirtualizer, shouldVirtualizeHistory]);
 
     const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
         const container = resolveScrollContainer();

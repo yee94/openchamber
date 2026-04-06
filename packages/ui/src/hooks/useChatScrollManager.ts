@@ -114,6 +114,7 @@ export const useChatScrollManager = ({
     const pinnedSyncRafRef = React.useRef<number | null>(null);
     const preferInstantPinRef = React.useRef(false);
     const autoFollowDuringWorkRef = React.useRef(false);
+    const pendingSessionSwitchSnapRef = React.useRef(false);
     const viewportAnchorTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
     const lastViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
@@ -206,20 +207,34 @@ export const useChatScrollManager = ({
         pinnedSyncRafRef.current = null;
         updateScrollButtonVisibility();
         if (!isPinnedRef.current) {
+            pendingSessionSwitchSnapRef.current = false;
             return;
         }
 
         const distanceFromBottom = getDistanceFromBottom();
         if (sessionIsWorking) {
-            if (distanceFromBottom <= 0.5) {
+            if (pendingSessionSwitchSnapRef.current && distanceFromBottom > 0.5) {
+                autoFollowDuringWorkRef.current = false;
+                scrollToBottomInternal({ instant: true });
+                pendingSessionSwitchSnapRef.current = false;
                 preferInstantPinRef.current = false;
+                return;
+            }
+
+            if (distanceFromBottom <= 0.5) {
+                if (!pendingSessionSwitchSnapRef.current) {
+                    preferInstantPinRef.current = false;
+                }
                 return;
             }
 
             scrollPinnedToBottom(distanceFromBottom);
             preferInstantPinRef.current = false;
+            pendingSessionSwitchSnapRef.current = false;
             return;
         }
+
+        pendingSessionSwitchSnapRef.current = false;
 
         if (distanceFromBottom <= getAutoFollowThreshold()) {
             preferInstantPinRef.current = false;
@@ -480,6 +495,7 @@ export const useChatScrollManager = ({
         flushViewportAnchor();
         pendingViewportAnchorRef.current = null;
         autoFollowDuringWorkRef.current = false;
+        pendingSessionSwitchSnapRef.current = true;
 
         // Always start pinned at bottom on session switch
         preferInstantPinRef.current = true;
@@ -497,6 +513,7 @@ export const useChatScrollManager = ({
     React.useEffect(() => {
         if (!sessionIsWorking) {
             autoFollowDuringWorkRef.current = false;
+            pendingSessionSwitchSnapRef.current = false;
         }
     }, [sessionIsWorking]);
 

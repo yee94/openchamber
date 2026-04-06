@@ -631,6 +631,7 @@ export const ChatContainer: React.FC = () => {
     }, [currentSessionId, isDesktopExpandedInput, scrollRef]);
 
     const hasHistoryMetadata = Boolean(historyMeta);
+    const lastHydratedSessionRef = React.useRef<string | null>(null);
 
     const isSessionHydrating =
         Boolean(currentSessionId)
@@ -640,12 +641,15 @@ export const ChatContainer: React.FC = () => {
         if (!currentSessionId) return;
         if (hasSessionMessagesEntry && hasHistoryMetadata) return;
 
+        const isSessionSwitch = lastHydratedSessionRef.current !== currentSessionId;
+        lastHydratedSessionRef.current = currentSessionId;
+
         const load = async () => {
             await loadMessages(currentSessionId).finally(() => {
                 const statusType = sessionStatusForCurrent.type ?? 'idle';
                 const isActivePhase = statusType === 'busy' || statusType === 'retry';
                 const hasHashTarget = typeof window !== 'undefined' && window.location.hash.length > 0;
-                const shouldSkipScroll = (isActivePhase && isPinned) || hasHashTarget;
+                const shouldSkipScroll = hasHashTarget || (isActivePhase && isPinned && !isSessionSwitch);
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {

@@ -407,7 +407,19 @@ const {
 
 const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
                                     process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
-const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
+const ENV_DESKTOP_NOTIFY = (() => {
+  if (process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true') {
+    return true;
+  }
+
+  if (process.env.OPENCHAMBER_RUNTIME === 'desktop') {
+    return true;
+  }
+
+  const argv0 = typeof process.argv?.[0] === 'string' ? process.argv[0] : '';
+  const argv1 = typeof process.argv?.[1] === 'string' ? process.argv[1] : '';
+  return /openchamber-server/i.test(argv0) || /openchamber-server/i.test(argv1);
+})();
 const ENV_CONFIGURED_OPENCODE_WSL_DISTRO =
   typeof process.env.OPENCODE_WSL_DISTRO === 'string' && process.env.OPENCODE_WSL_DISTRO.trim().length > 0
     ? process.env.OPENCODE_WSL_DISTRO.trim()
@@ -758,6 +770,11 @@ const bootstrapOpenCodeAtStartup = async (...args) => {
   if (openCodeLifecycleState.openCodeProcess && !openCodeLifecycleState.isExternalOpenCode) {
     startHealthMonitoring();
   }
+  if (ENV_DESKTOP_NOTIFY) {
+    void ensureGlobalWatcherStarted().catch((error) => {
+      console.warn(`Global event watcher startup failed: ${error?.message || error}`);
+    });
+  }
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
 
@@ -874,6 +891,7 @@ async function main(options = {}) {
       opencodeWslDistro: resolvedWslDistro || null,
       nodeBinaryResolved: resolvedNodeBinary || null,
       bunBinaryResolved: resolvedBunBinary || null,
+      desktopNotifyEnabled: ENV_DESKTOP_NOTIFY,
       planModeExperimentalEnabled: PLAN_MODE_EXPERIMENT_ENABLED,
     }),
     uiPassword,
@@ -891,6 +909,8 @@ async function main(options = {}) {
     removePushSubscription,
     updateUiVisibility,
     isUiVisible,
+    getUiNotificationClients: () => uiNotificationClients,
+    writeSseEvent,
     sessionRuntime,
     setPushInitialized,
     fs,
