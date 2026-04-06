@@ -584,6 +584,7 @@ export const ChatContainer: React.FC = () => {
         const handleSessionReselected = (event: Event) => {
             const customEvent = event as CustomEvent<string>;
             if (customEvent.detail !== currentSessionId) return;
+            if (isPinned || !isOverflowing || isProgrammaticFollowActive) return;
             resumeToBottomInstant();
         };
 
@@ -591,7 +592,7 @@ export const ChatContainer: React.FC = () => {
         return () => {
             window.removeEventListener(SESSION_RESELECTED_EVENT, handleSessionReselected as EventListener);
         };
-    }, [currentSessionId, resumeToBottomInstant]);
+    }, [currentSessionId, isOverflowing, isPinned, isProgrammaticFollowActive, resumeToBottomInstant]);
 
     React.useLayoutEffect(() => {
         const container = scrollRef.current;
