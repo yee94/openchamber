@@ -737,10 +737,10 @@ const buildMarkdownComponents = ({
     return <td {...props} className={cn('border-r border-border/60 px-4 py-2.5 align-middle text-foreground/90 last:border-r-0', props.className)}>{children}</td>;
   },
   ul({ children, ...props }) {
-    return <ul {...props} className={cn('typography-markdown-body my-2 pl-6', props.className)}>{children}</ul>;
+    return <ul {...props} className={cn('typography-markdown-body my-2', props.className)}>{children}</ul>;
   },
   ol({ children, ...props }) {
-    return <ol {...props} className={cn('typography-markdown-body my-2 pl-6', props.className)}>{children}</ol>;
+    return <ol {...props} className={cn('typography-markdown-body my-2', props.className)}>{children}</ol>;
   },
   li({ children, ...props }) {
     return <li {...props} className={cn('typography-markdown-body my-0.5 text-foreground/90', props.className)}>{children}</li>;

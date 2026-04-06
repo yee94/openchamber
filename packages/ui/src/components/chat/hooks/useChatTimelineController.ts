@@ -32,7 +32,8 @@ interface UseChatTimelineControllerOptions {
     scrollRef: React.RefObject<HTMLDivElement | null>;
     messageListRef: React.RefObject<MessageListHandle | null>;
     loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
-    scrollToBottom: (options?: { instant?: boolean; force?: boolean }) => void;
+    prepareForBottomResume: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToBottom: (options?: { instant?: boolean; force?: boolean; followBottom?: boolean }) => void;
     isPinned: boolean;
     isOverflowing: boolean;
 }
@@ -65,6 +66,7 @@ export const useChatTimelineController = ({
     scrollRef,
     messageListRef,
     loadMoreMessages,
+    prepareForBottomResume,
     scrollToBottom,
     isPinned,
     isOverflowing,
@@ -484,21 +486,35 @@ export const useChatTimelineController = ({
         }
     }, [attemptPendingScrollRequest, sessionId]);
 
-    const resumeToBottom = React.useCallback(() => {
+    const resumeToBottom = React.useCallback(async () => {
         const nextStart = getInitialTurnStart(turnModelRef.current.turnCount);
-        setTurnStart(nextStart);
         setPendingRevealWork(false);
         setIsLoadingOlder(false);
-        scrollToBottom({ force: true });
-    }, [scrollToBottom]);
+        prepareForBottomResume({ force: true });
 
-    const resumeToBottomInstant = React.useCallback(() => {
+        const shouldWaitForRender = nextStart !== turnStartRef.current;
+        if (shouldWaitForRender) {
+            setTurnStart(nextStart);
+            await waitForNextRenderCommit();
+        }
+
+        scrollToBottom({ force: true });
+    }, [prepareForBottomResume, scrollToBottom, waitForNextRenderCommit]);
+
+    const resumeToBottomInstant = React.useCallback(async () => {
         const nextStart = getInitialTurnStart(turnModelRef.current.turnCount);
-        setTurnStart(nextStart);
         setPendingRevealWork(false);
         setIsLoadingOlder(false);
-        scrollToBottom({ instant: true, force: true });
-    }, [scrollToBottom]);
+        prepareForBottomResume({ instant: true, force: true });
+
+        const shouldWaitForRender = nextStart !== turnStartRef.current;
+        if (shouldWaitForRender) {
+            setTurnStart(nextStart);
+            await waitForNextRenderCommit();
+        }
+
+        scrollToBottom({ instant: true, force: true, followBottom: true });
+    }, [prepareForBottomResume, scrollToBottom, waitForNextRenderCommit]);
 
     const handleActiveTurnChange = React.useCallback((turnId: string | null) => {
         setActiveTurnId(turnId);
