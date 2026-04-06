@@ -386,6 +386,7 @@ function App({ apis }: AppProps) {
           title?: string;
           body?: string;
           tag?: string;
+          desktopStdoutActive?: boolean;
         };
       };
 
@@ -398,6 +399,10 @@ function App({ apis }: AppProps) {
       }
 
       if (payload?.type !== 'openchamber:notification') {
+        return;
+      }
+
+      if (payload.properties?.desktopStdoutActive === true) {
         return;
       }
 
