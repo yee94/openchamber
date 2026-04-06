@@ -38,6 +38,7 @@ import {
     useSessionStatus,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
@@ -319,6 +320,9 @@ export const ChatContainer: React.FC = () => {
 
     // Sessions from sync system
     const sessions = useSessions();
+
+    // Plan detection - watches messages for plan creation and signals store
+    usePlanDetection(currentSessionId ?? '');
 
     // Session status from sync system
     const sessionStatusForCurrent = useSessionStatus(currentSessionId ?? '') ?? IDLE_SESSION_STATUS;
