@@ -194,7 +194,9 @@ const normalizeEventDirectory = (rawDirectory: string): string => {
   if (!rawDirectory || rawDirectory === "global") {
     return rawDirectory
   }
-  return rawDirectory.replace(/\\/g, "/").replace(/^([a-z]):/, (_, l: string) => l.toUpperCase() + ":")
+  const normalized = rawDirectory.replace(/\\/g, "/").replace(/^([a-z]):/, (_, l: string) => l.toUpperCase() + ":")
+  // Strip trailing slashes to match child store keys (normalizeDirectoryPath in useDirectoryStore)
+  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
 }
 
 const getSessionIdFromPayload = (event: Event): string | null => {
@@ -419,6 +421,26 @@ const ingestDirectoryStateIntoRoutingIndex = (
   }
 }
 
+const findSessionInChildStores = (
+  sessionID: string,
+  childStores: ChildStoreManager,
+  routingIndex: EventRoutingIndex,
+): string | null => {
+  for (const [dir, store] of childStores.children) {
+    const state = store.getState()
+    if (
+      state.session.some((s) => s.id === sessionID)
+      || Object.prototype.hasOwnProperty.call(state.message, sessionID)
+      || Object.prototype.hasOwnProperty.call(state.session_status ?? {}, sessionID)
+    ) {
+      // Self-heal: populate the routing index so future events resolve instantly
+      setIndexedSessionDirectory(routingIndex, sessionID, dir)
+      return dir
+    }
+  }
+  return null
+}
+
 const resolveDirectoryFromRoutingIndex = (
   routingIndex: EventRoutingIndex,
   rawDirectory: string,
@@ -433,6 +455,13 @@ const resolveDirectoryFromRoutingIndex = (
     if (indexedDirectory) {
       return indexedDirectory
     }
+
+    // Routing index miss — scan child stores for this session.
+    // Covers optimistic sessions not yet indexed and events with wrong/empty directory.
+    const found = findSessionInChildStores(sessionID, childStores, routingIndex)
+    if (found) {
+      return found
+    }
   }
 
   const messageID = getMessageIdFromPayload(payload)
@@ -444,8 +473,16 @@ const resolveDirectoryFromRoutingIndex = (
         return indexedDirectory
       }
     }
+
+    // Scan child stores for a store that has parts for this message
+    for (const [dir, store] of childStores.children) {
+      if (Object.prototype.hasOwnProperty.call(store.getState().part, messageID)) {
+        return dir
+      }
+    }
   }
 
+  // Single-store fallback: if there's only one directory, use it
   if (
     (sessionID || messageID)
     && (!normalizedDirectory || normalizedDirectory === "global")
@@ -653,7 +690,22 @@ function handleEvent(
   }
 
   // Directory events
-  const store = childStores.getChild(directory)
+  let store = childStores.getChild(directory)
+  let resolvedDirectory = directory
+
+  if (!store) {
+    // Store not found for this directory — attempt recovery by scanning
+    // child stores for the session. This handles directory mismatches
+    // (trailing slashes, case differences, events with wrong directory).
+    const sessionID = getSessionIdFromPayload(payload)
+    if (sessionID) {
+      const fallbackDir = findSessionInChildStores(sessionID, childStores, routingIndex)
+      if (fallbackDir) {
+        store = childStores.getChild(fallbackDir)
+        resolvedDirectory = fallbackDir
+      }
+    }
+  }
 
   if (!store) {
     // Try as global event for unknown directories
@@ -669,7 +721,7 @@ function handleEvent(
     return
   }
 
-  childStores.mark(directory)
+  childStores.mark(resolvedDirectory)
 
   // Notification dispatch for session turn-complete and error events.
   // These are NOT handled by the event reducer — only the notification store.
@@ -683,10 +735,10 @@ function handleEvent(
       // subtask — skip notification
     } else if (sessionID) {
       appendNotification({
-        directory,
+        directory: resolvedDirectory,
         session: sessionID,
         time: Date.now(),
-        viewed: isViewedInCurrentSession(directory, sessionID),
+        viewed: isViewedInCurrentSession(resolvedDirectory, sessionID),
         ...(payload.type === "session.error"
           ? { type: "error" as const, error: props.error }
           : { type: "turn-complete" as const }),
@@ -752,7 +804,7 @@ function handleEvent(
     store.setState(draft)
   }
 
-  updateRoutingIndexFromEvent(routingIndex, directory, payload)
+  updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
 
   // Update global session status for cross-directory sidebar visibility
   if (payload.type === "session.status") {
@@ -761,15 +813,15 @@ function handleEvent(
   }
 
   if (payload.type === "permission.asked") {
-    const normalizedDirectory = normalizeDirectory(directory)
-    if (!normalizedDirectory) {
+    const nd = normalizeDirectory(resolvedDirectory)
+    if (!nd) {
       return
     }
 
     const permission = payload.properties as PermissionRequest
     const sessions = store.getState().session
     const autoAccept = usePermissionStore.getState().autoAccept
-    if (autoRespondsPermission({ autoAccept, sessions, sessionID: permission.sessionID, directory: normalizedDirectory })) {
+    if (autoRespondsPermission({ autoAccept, sessions, sessionID: permission.sessionID, directory: nd })) {
       void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
     }
   }
@@ -928,13 +980,15 @@ export function SyncProvider(props: {
 
   // Set refs so non-React code (session-actions, session-ui-store) can access sync state
   useEffect(() => {
-    setSyncRefs(props.sdk, childStores, props.directory)
+    setSyncRefs(props.sdk, childStores, props.directory, (sessionID, dir) => {
+      setIndexedSessionDirectory(routingIndex, sessionID, dir)
+    })
     setActionRefs(
       props.sdk,
       childStores,
       () => opencodeClient.getDirectory() || props.directory,
     )
-  }, [props.sdk, props.directory, childStores])
+  }, [props.sdk, props.directory, childStores, routingIndex])
 
   // Subscribe to child store for streaming state derivation
   useEffect(() => {
