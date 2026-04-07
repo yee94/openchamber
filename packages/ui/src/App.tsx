@@ -575,7 +575,7 @@ function App({ apis }: AppProps) {
   if (showCliOnboarding) {
     return (
       <ErrorBoundary>
-        <div className="h-full text-foreground bg-transparent">
+        <div className="h-full text-foreground bg-background">
           <OnboardingScreen onCliAvailable={handleCliAvailable} />
         </div>
       </ErrorBoundary>
@@ -652,7 +652,7 @@ function App({ apis }: AppProps) {
           <FireworksProvider>
             <VoiceProvider>
               <TooltipProvider delayDuration={700} skipDelayDuration={150}>
-                <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
+                <div className="h-full text-foreground bg-background">
                   <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <MainLayout />
                   <Toaster />

@@ -15,7 +15,6 @@
         "label": "main",
         "create": false,
         "title": "OpenChamber",
-        "transparent": true,
         "width": 1280,
         "height": 800,
         "resizable": true,

@@ -3387,7 +3387,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     onDrop={handleDrop}
                 >
                     {isDragging && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 rounded-xl">
                             <div className="text-center">
                                 <div className="inline-flex justify-center">
                                     <button

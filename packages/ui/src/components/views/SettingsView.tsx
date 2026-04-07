@@ -648,7 +648,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         <div
           className={cn(
             'flex items-center gap-2 px-3 py-2 border-b',
-            'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+            'bg-background'
           )}
           style={{ borderColor: 'var(--interactive-border)' }}
         >
@@ -730,7 +730,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               className={cn(
                 'relative flex h-full min-h-0 flex-col overflow-hidden border-r',
                 isDesktopApp
-                  ? 'bg-[color:var(--sidebar-overlay-strong)] supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                  ? 'bg-sidebar'
                   : runtimeCtx.isVSCode
                     ? 'bg-background'
                     : 'bg-sidebar',
