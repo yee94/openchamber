@@ -596,6 +596,7 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   longRequestTimeoutMs: LONG_REQUEST_TIMEOUT_MS,
   getRuntime: () => ({
     openCodePort,
+    openCodeBaseUrl,
     openCodeNotReadySince,
     isOpenCodeReady,
     isRestartingOpenCode,
