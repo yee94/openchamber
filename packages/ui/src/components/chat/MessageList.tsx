@@ -797,7 +797,7 @@ interface UngroupedMessageRowProps {
     activeStreamingPhase?: StreamPhase | null;
 }
 
-const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
+const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = ({
     message,
     previousMessage,
     nextMessage,
@@ -823,18 +823,7 @@ const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
             activeStreamingPhase={message.info.id === activeStreamingMessageId ? activeStreamingPhase : null}
         />
     );
-}, (prev, next) => {
-    return areRenderRelevantMessagesEqual(prev.message, next.message)
-        && areOptionalRenderRelevantMessagesEqual(prev.previousMessage, next.previousMessage)
-        && areOptionalRenderRelevantMessagesEqual(prev.nextMessage, next.nextMessage)
-        && prev.onMessageContentChange === next.onMessageContentChange
-        && prev.getAnimationHandlers === next.getAnimationHandlers
-        && prev.scrollToBottom === next.scrollToBottom
-        && prev.shouldAnimateUserMessage === next.shouldAnimateUserMessage
-        && prev.onUserAnimationConsumed === next.onUserAnimationConsumed
-        && prev.activeStreamingMessageId === next.activeStreamingMessageId
-        && prev.activeStreamingPhase === next.activeStreamingPhase;
-});
+};
 
 UngroupedMessageRow.displayName = 'UngroupedMessageRow';
 
@@ -867,7 +856,7 @@ const turnContainsMessageId = (turn: TurnRecord, messageId: string | null | unde
     return turn.assistantMessages.some((assistant) => assistant.info.id === messageId);
 };
 
-const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
+const MessageListEntry: React.FC<MessageListEntryProps> = ({
     entry,
     onMessageContentChange,
     getAnimationHandlers,
@@ -919,95 +908,9 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
             stickyUserHeader={stickyUserHeader}
         />
     );
-}, areMessageListEntryPropsEqual);
+};
 
 MessageListEntry.displayName = 'MessageListEntry';
-
-function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextProps: MessageListEntryProps): boolean {
-    if (prevProps.stickyUserHeader !== nextProps.stickyUserHeader) return false;
-    if (prevProps.chatRenderMode !== nextProps.chatRenderMode) return false;
-    if (prevProps.shouldAnimateUserMessage !== nextProps.shouldAnimateUserMessage) return false;
-
-    const prevEntry = prevProps.entry;
-    const nextEntry = nextProps.entry;
-    if (prevEntry.kind !== nextEntry.kind) return false;
-    if (prevEntry.key !== nextEntry.key) return false;
-
-    if (prevEntry.kind === 'turn' && nextEntry.kind === 'turn') {
-        if (prevEntry.turn !== nextEntry.turn || prevEntry.isLastTurn !== nextEntry.isLastTurn) {
-            return false;
-        }
-
-        const prevExpanded = (prevProps.turnUiStates.get(prevEntry.turn.turnId) ?? { isExpanded: prevProps.defaultActivityExpanded }).isExpanded;
-        const nextExpanded = (nextProps.turnUiStates.get(nextEntry.turn.turnId) ?? { isExpanded: nextProps.defaultActivityExpanded }).isExpanded;
-        if (prevExpanded !== nextExpanded) {
-            return false;
-        }
-
-        if (prevEntry.isLastTurn && prevProps.sessionIsWorking !== nextProps.sessionIsWorking) {
-            return false;
-        }
-
-        if (prevProps.activeStreamingMessageId !== nextProps.activeStreamingMessageId) {
-            const prevAffected = turnContainsMessageId(prevEntry.turn, prevProps.activeStreamingMessageId);
-            const nextAffected = turnContainsMessageId(nextEntry.turn, nextProps.activeStreamingMessageId);
-            if (prevAffected || nextAffected) {
-                return false;
-            }
-        }
-
-        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
-            const prevAffected = turnContainsMessageId(prevEntry.turn, prevProps.activeStreamingMessageId);
-            const nextAffected = turnContainsMessageId(nextEntry.turn, nextProps.activeStreamingMessageId);
-            if (prevAffected || nextAffected) {
-                return false;
-            }
-        }
-
-        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
-            const prevAffected = turnContainsMessageId(prevEntry.turn, prevProps.activeStreamingMessageId);
-            const nextAffected = turnContainsMessageId(nextEntry.turn, nextProps.activeStreamingMessageId);
-            if (prevAffected || nextAffected) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    if (prevEntry.kind === 'ungrouped' && nextEntry.kind === 'ungrouped') {
-        if (prevProps.activeStreamingMessageId !== nextProps.activeStreamingMessageId) {
-            const messageId = prevEntry.message.info.id;
-            const prevActive = prevProps.activeStreamingMessageId === messageId;
-            const nextActive = nextProps.activeStreamingMessageId === messageId;
-            if (prevActive !== nextActive) {
-                return false;
-            }
-        }
-
-        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
-            const messageId = prevEntry.message.info.id;
-            if (prevProps.activeStreamingMessageId === messageId || nextProps.activeStreamingMessageId === messageId) {
-                return false;
-            }
-        }
-
-        if (prevProps.activeStreamingPhase !== nextProps.activeStreamingPhase) {
-            const messageId = prevEntry.message.info.id;
-            if (prevProps.activeStreamingMessageId === messageId || nextProps.activeStreamingMessageId === messageId) {
-                return false;
-            }
-        }
-
-        return (
-            areRenderRelevantMessagesEqual(prevEntry.message, nextEntry.message)
-            && areOptionalRenderRelevantMessagesEqual(prevEntry.previousMessage, nextEntry.previousMessage)
-            && areOptionalRenderRelevantMessagesEqual(prevEntry.nextMessage, nextEntry.nextMessage)
-        );
-    }
-
-    return false;
-}
 
 // Inner component that renders staged turn entries.
 const StaticHistoryList: React.FC<{
@@ -1028,7 +931,7 @@ const StaticHistoryList: React.FC<{
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingPhase?: StreamPhase | null;
-}> = React.memo(({ entries, shouldVirtualize, virtualRows, totalSize, measureElement, contentRef, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, defaultActivityExpanded, turnUiStates, onToggleTurnGroup, chatRenderMode, shouldAnimateUserMessage, onUserAnimationConsumed, activeStreamingPhase }) => {
+}> = ({ entries, shouldVirtualize, virtualRows, totalSize, measureElement, contentRef, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, defaultActivityExpanded, turnUiStates, onToggleTurnGroup, chatRenderMode, shouldAnimateUserMessage, onUserAnimationConsumed, activeStreamingPhase }) => {
     const renderEntry = React.useCallback((entry: RenderEntry) => {
         return (
             <MessageListEntry
@@ -1096,25 +999,7 @@ const StaticHistoryList: React.FC<{
             {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: `${paddingBottom}px` }} /> : null}
         </div>
     );
-}, (prevProps, nextProps) => {
-    return prevProps.entries === nextProps.entries
-        && prevProps.shouldVirtualize === nextProps.shouldVirtualize
-        && prevProps.virtualRows === nextProps.virtualRows
-        && prevProps.totalSize === nextProps.totalSize
-        && prevProps.measureElement === nextProps.measureElement
-        && prevProps.contentRef === nextProps.contentRef
-        && prevProps.onMessageContentChange === nextProps.onMessageContentChange
-        && prevProps.getAnimationHandlers === nextProps.getAnimationHandlers
-        && prevProps.scrollToBottom === nextProps.scrollToBottom
-        && prevProps.stickyUserHeader === nextProps.stickyUserHeader
-        && prevProps.defaultActivityExpanded === nextProps.defaultActivityExpanded
-        && prevProps.turnUiStates === nextProps.turnUiStates
-        && prevProps.onToggleTurnGroup === nextProps.onToggleTurnGroup
-        && prevProps.chatRenderMode === nextProps.chatRenderMode
-        && prevProps.shouldAnimateUserMessage === nextProps.shouldAnimateUserMessage
-        && prevProps.onUserAnimationConsumed === nextProps.onUserAnimationConsumed
-        && prevProps.activeStreamingPhase === nextProps.activeStreamingPhase;
-});
+};
 
 StaticHistoryList.displayName = 'StaticHistoryList';
 
@@ -1133,7 +1018,7 @@ const StreamingTailContent: React.FC<{
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
     activeStreamingPhase?: StreamPhase | null;
-}> = React.memo(({
+}> = ({
     entry,
     onMessageContentChange,
     getAnimationHandlers,
@@ -1167,22 +1052,7 @@ const StreamingTailContent: React.FC<{
             activeStreamingPhase={activeStreamingPhase}
         />
     );
-}, (prev, next) => {
-    return prev.entry === next.entry
-        && prev.onMessageContentChange === next.onMessageContentChange
-        && prev.getAnimationHandlers === next.getAnimationHandlers
-        && prev.scrollToBottom === next.scrollToBottom
-        && prev.stickyUserHeader === next.stickyUserHeader
-        && prev.sessionIsWorking === next.sessionIsWorking
-        && prev.defaultActivityExpanded === next.defaultActivityExpanded
-        && prev.turnUiStates === next.turnUiStates
-        && prev.onToggleTurnGroup === next.onToggleTurnGroup
-        && prev.chatRenderMode === next.chatRenderMode
-        && prev.shouldAnimateUserMessage === next.shouldAnimateUserMessage
-        && prev.onUserAnimationConsumed === next.onUserAnimationConsumed
-        && prev.activeStreamingMessageId === next.activeStreamingMessageId
-        && prev.activeStreamingPhase === next.activeStreamingPhase;
-});
+};
 
 StreamingTailContent.displayName = 'StreamingTailContent';
 
