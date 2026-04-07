@@ -2024,8 +2024,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         const childSessionIsActive =
             childSessionActivity.phase === 'busy'
             || childSessionActivity.phase === 'retry'
-            || childSessionHasInFlightTools
-            || (!isFinalized && activeLatched);
+            || childSessionHasInFlightTools;
 
         if (childSessionIsActive) {
             if (!taskChildSeenActive) {
@@ -2106,7 +2105,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         const childSessionActive = childSessionActivity.phase === 'busy' || childSessionActivity.phase === 'retry';
         const shouldPoll =
             !taskChildPollingStopped
-            && (isActive || childSessionHasInFlightTools || childSessionActive || childSessionTaskSummaryEntries.length === 0);
+            && (childSessionHasInFlightTools || childSessionActive || childSessionTaskSummaryEntries.length === 0);
         const shouldFetchSnapshot = childSessionTaskSummaryEntries.length === 0 || shouldPoll;
         if (!shouldFetchSnapshot) {
             return;

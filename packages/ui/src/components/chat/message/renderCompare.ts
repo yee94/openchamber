@@ -17,6 +17,14 @@ const readToolStatus = (part: Part | undefined): string | null => {
   return typeof status === 'string' ? status : null;
 };
 
+const readToolStateRef = (part: Part | undefined): unknown => {
+  return (part as { state?: unknown } | undefined)?.state;
+};
+
+const readPartMetadataRef = (part: Part | undefined): unknown => {
+  return (part as { metadata?: unknown } | undefined)?.metadata;
+};
+
 const readPartTime = (part: Part | undefined) => {
   const time = (part as { time?: { start?: unknown; end?: unknown } } | undefined)?.time;
   return {
@@ -53,6 +61,12 @@ export const areRenderRelevantPartsEqual = (left: Part[], right: Part[]): boolea
     }
 
     if (leftPart.type === 'tool') {
+      if (readToolStateRef(leftPart) !== readToolStateRef(rightPart)) {
+        return false;
+      }
+      if (readPartMetadataRef(leftPart) !== readPartMetadataRef(rightPart)) {
+        return false;
+      }
       if (readToolStatus(leftPart) !== readToolStatus(rightPart)) {
         return false;
       }

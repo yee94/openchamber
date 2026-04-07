@@ -765,6 +765,8 @@ function handleEvent(
       draft.session_diff = { ...current.session_diff }
       break
     case "session.status":
+    case "session.idle":
+    case "session.error":
       draft.session_status = { ...(current.session_status ?? {}) }
       break
     case "todo.updated":
@@ -810,6 +812,11 @@ function handleEvent(
   if (payload.type === "session.status") {
     const props = payload.properties as { sessionID: string; status: SessionStatus }
     setGlobalSessionStatus(props.sessionID, props.status)
+  }
+
+  if (payload.type === "session.idle" || payload.type === "session.error") {
+    const props = payload.properties as { sessionID: string }
+    setGlobalSessionStatus(props.sessionID, { type: "idle" })
   }
 
   if (payload.type === "permission.asked") {
@@ -1268,8 +1275,6 @@ export function useChildStoreManager() {
   return useSyncSystem().childStores
 }
 
-const MESSAGE_PART_SNAPSHOT_THROTTLE_MS = 100
-
 export type SessionTextMessage = {
   id: string
   role: string | null
@@ -1304,12 +1309,7 @@ function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string,
   const [partsSnapshot, setPartsSnapshot] = React.useState<Record<string, Part[]>>({})
 
   React.useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let pending = false
-
     const flush = () => {
-      timer = null
-      pending = false
       const state = store.getState()
       const prev = prevPartsRef.current
       let changed = false
@@ -1328,28 +1328,13 @@ function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string,
     flush()
 
     if (suspendUpdates) {
-      return () => {
-        if (timer) clearTimeout(timer)
-      }
+      return
     }
 
-    const unsub = store.subscribe(() => {
-      if (timer) {
-        pending = true
-        return
-      }
-      timer = setTimeout(() => {
-        flush()
-        if (pending) {
-          pending = false
-          timer = setTimeout(flush, MESSAGE_PART_SNAPSHOT_THROTTLE_MS)
-        }
-      }, MESSAGE_PART_SNAPSHOT_THROTTLE_MS)
-    })
+    const unsub = store.subscribe(flush)
 
     return () => {
       unsub()
-      if (timer) clearTimeout(timer)
     }
   }, [messageIds, store, suspendUpdates])
 

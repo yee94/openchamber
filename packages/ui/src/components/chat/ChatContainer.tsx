@@ -50,42 +50,6 @@ const DEFAULT_RETRY_MESSAGE = 'Quota limit reached. Retrying automatically.';
 const CHAT_SCROLL_STYLE = { overflowAnchor: 'none' } as const;
 type SessionMessageRecord = { info: Message; parts: Part[] };
 
-const getSessionMessageId = (message: SessionMessageRecord | undefined): string | null => {
-    const id = message?.info?.id;
-    return typeof id === 'string' && id.trim().length > 0 ? id : null;
-};
-
-const canFreezeDetachedViewport = (
-    previous: SessionMessageRecord[],
-    next: SessionMessageRecord[],
-    streamingMessageId: string | null,
-): boolean => {
-    if (!streamingMessageId || previous.length === 0 || next.length === 0) {
-        return false;
-    }
-
-    if (next.length < previous.length) {
-        return false;
-    }
-
-    if (next.length === previous.length) {
-        for (let index = 0; index < next.length - 1; index += 1) {
-            if (previous[index] !== next[index]) {
-                return false;
-            }
-        }
-        return getSessionMessageId(previous[previous.length - 1]) === getSessionMessageId(next[next.length - 1]);
-    }
-
-    for (let index = 0; index < previous.length; index += 1) {
-        if (previous[index] !== next[index]) {
-            return false;
-        }
-    }
-
-    return true;
-};
-
 type HydratingToolSkeletonRow = {
     id: string;
     titleWidth: string;
@@ -310,12 +274,8 @@ export const ChatContainer: React.FC = () => {
         ),
     );
     const sessionMessageCount = useSessionMessageCount(currentSessionId ?? '');
-    const [suspendDetachedTailUpdates, setSuspendDetachedTailUpdates] = React.useState(false);
-    const [forceLiveViewport, setForceLiveViewport] = React.useState(false);
     // Messages from sync system
-    const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '', undefined, {
-        suspendPartUpdates: suspendDetachedTailUpdates,
-    });
+    const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '');
     const sessionMessages = currentSessionId ? sessionMessageRecords : EMPTY_MESSAGES;
 
     // Sessions from sync system
@@ -513,36 +473,7 @@ export const ChatContainer: React.FC = () => {
         onActiveTurnChange: handleActiveTurnChange,
     });
 
-    React.useEffect(() => {
-        const next = Boolean(currentSessionId && streamingMessageId && !isPinned && !forceLiveViewport);
-        setSuspendDetachedTailUpdates((previous) => (previous === next ? previous : next));
-    }, [currentSessionId, forceLiveViewport, isPinned, streamingMessageId]);
-
-    const viewportMessagesRef = React.useRef<SessionMessageRecord[]>(EMPTY_MESSAGES);
-    const viewportSessionIdRef = React.useRef<string | null>(null);
-    const viewportMessages = React.useMemo(() => {
-        if (viewportSessionIdRef.current !== currentSessionId) {
-            viewportSessionIdRef.current = currentSessionId;
-            viewportMessagesRef.current = sessionMessages;
-            return sessionMessages;
-        }
-
-        const shouldFreezeViewport = Boolean(
-            currentSessionId
-            && streamingMessageId
-            && !isPinned
-            && !forceLiveViewport
-            && historyMeta?.loading !== true
-            && canFreezeDetachedViewport(viewportMessagesRef.current, sessionMessages, streamingMessageId),
-        );
-
-        if (shouldFreezeViewport) {
-            return viewportMessagesRef.current;
-        }
-
-        viewportMessagesRef.current = sessionMessages;
-        return sessionMessages;
-    }, [currentSessionId, forceLiveViewport, historyMeta?.loading, isPinned, sessionMessages, streamingMessageId]);
+    const viewportMessages = sessionMessages;
 
     const timelineController = useChatTimelineController({
         sessionId: currentSessionId,
@@ -559,22 +490,11 @@ export const ChatContainer: React.FC = () => {
     const { loadEarlier, resumeToBottomInstant } = timelineController;
 
     const runLatestInstantResume = React.useCallback(async () => {
-        setForceLiveViewport(true);
-        try {
-            if (!currentSessionId) {
-                scrollToBottom({ instant: true, force: true });
-                return;
-            }
-            await resumeToBottomInstant();
-        } finally {
-            if (typeof window === 'undefined') {
-                setForceLiveViewport(false);
-            } else {
-                window.requestAnimationFrame(() => {
-                    setForceLiveViewport(false);
-                });
-            }
+        if (!currentSessionId) {
+            scrollToBottom({ instant: true, force: true });
+            return;
         }
+        await resumeToBottomInstant();
     }, [currentSessionId, resumeToBottomInstant, scrollToBottom]);
 
     const resumeToLatestInstant = React.useCallback(() => {
@@ -658,7 +578,6 @@ export const ChatContainer: React.FC = () => {
     }, [currentSessionId, isDesktopExpandedInput, scrollRef]);
 
     const hasHistoryMetadata = Boolean(historyMeta);
-    const lastHydratedSessionRef = React.useRef<string | null>(null);
     const lastScrolledSessionRef = React.useRef<string | null>(null);
 
     const isSessionHydrating =
@@ -696,15 +615,12 @@ export const ChatContainer: React.FC = () => {
         if (!currentSessionId) return;
         if (hasSessionMessagesEntry && hasHistoryMetadata) return;
 
-        const isSessionSwitch = lastHydratedSessionRef.current !== currentSessionId;
-        lastHydratedSessionRef.current = currentSessionId;
-
         const load = async () => {
             await loadMessages(currentSessionId).finally(() => {
                 const statusType = sessionStatusForCurrent.type ?? 'idle';
                 const isActivePhase = statusType === 'busy' || statusType === 'retry';
                 const hasHashTarget = typeof window !== 'undefined' && window.location.hash.length > 0;
-                const shouldSkipScroll = hasHashTarget || (isActivePhase && isPinned && !isSessionSwitch);
+                const shouldSkipScroll = hasHashTarget || (isActivePhase && isPinned);
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {
