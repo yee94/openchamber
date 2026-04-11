@@ -6,6 +6,7 @@
  */
 
 import OpenAI, { toFile } from 'openai';
+import { normalizeCustomOpenAIBaseURL } from './base-url.js';
 
 /**
  * Transcribe an audio buffer via an OpenAI-compatible /v1/audio/transcriptions endpoint.
@@ -19,12 +20,20 @@ import OpenAI, { toFile } from 'openai';
  * @returns {Promise<string>} Transcribed text
  */
 export async function transcribeAudio({ audioBuffer, mimeType, model, baseURL, language }) {
+  const normalizedBaseURLResult = normalizeCustomOpenAIBaseURL(baseURL);
+  if (normalizedBaseURLResult.error) {
+    throw new Error(normalizedBaseURLResult.error);
+  }
+
+  const normalizedBaseURL = normalizedBaseURLResult.value;
+  if (!normalizedBaseURL) {
+    throw new Error('Custom server URL is required');
+  }
+
   const clientOpts = {
     apiKey: process.env.OPENAI_API_KEY || 'not-required',
   };
-  if (baseURL) {
-    clientOpts.baseURL = baseURL;
-  }
+  clientOpts.baseURL = normalizedBaseURL;
 
   const client = new OpenAI(clientOpts);
 

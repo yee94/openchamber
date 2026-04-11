@@ -234,9 +234,13 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
         const { transcribeAudio } = await import('./stt.js');
 
         const mimeType = (req.headers['content-type'] || 'audio/webm').split(',')[0].trim();
-        const baseURL = req.headers['x-base-url'];
-        const model = req.headers['x-model'] || 'deepdml/faster-whisper-large-v3-turbo-ct2';
-        const language = req.headers['x-language'] || undefined;
+        const baseURL = typeof req.headers['x-base-url'] === 'string' ? req.headers['x-base-url'].trim() : '';
+        const model = typeof req.headers['x-model'] === 'string' && req.headers['x-model'].trim().length > 0
+          ? req.headers['x-model'].trim()
+          : 'deepdml/faster-whisper-large-v3-turbo-ct2';
+        const language = typeof req.headers['x-language'] === 'string' && req.headers['x-language'].trim().length > 0
+          ? req.headers['x-language'].trim()
+          : undefined;
 
         if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
           return res.status(400).json({ error: 'Audio data is required' });
