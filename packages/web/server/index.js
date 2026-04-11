@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import express from 'express';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';

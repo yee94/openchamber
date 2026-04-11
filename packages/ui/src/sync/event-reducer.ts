@@ -1,6 +1,5 @@
 import type {
   Event,
-  FileDiff,
   Message,
   Part,
   PermissionRequest,
@@ -11,7 +10,7 @@ import type {
   Todo,
 } from "@opencode-ai/sdk/v2/client"
 import { Binary } from "./binary"
-import type { GlobalState, State } from "./types"
+import type { FileDiff, GlobalState, State } from "./types"
 import { dropSessionCaches } from "./session-cache"
 import { stripSessionDiffSnapshots } from "./sanitize"
 import { syncDebug } from "./debug"
