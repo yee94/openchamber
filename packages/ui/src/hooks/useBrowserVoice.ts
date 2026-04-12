@@ -166,6 +166,7 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
   // Server TTS for mobile (bypasses Safari audio restrictions)
   const { speak: speakServerTTS, stop: stopServerTTS, isAvailable: isServerTTSAvailable, unlockAudio: unlockServerTTSAudio } = useServerTTS({
     enabled: shouldCheckOpenAIAvailability,
+    availabilityMode: voiceProvider === 'openai-compatible' ? 'openai-compatible' : 'openai',
   });
 
   // macOS Say TTS

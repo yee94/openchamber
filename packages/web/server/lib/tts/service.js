@@ -7,6 +7,7 @@
 
 import OpenAI from 'openai';
 import { readAuthFile } from '../opencode/auth.js';
+import { normalizeCustomOpenAIBaseURL } from './base-url.js';
 
 // Voice options from OpenAI
 export const TTS_VOICES = [
@@ -82,13 +83,19 @@ class TTSService {
       baseURL,
     } = options;
 
+    const normalizedBaseURLResult = normalizeCustomOpenAIBaseURL(baseURL);
+    if (normalizedBaseURLResult.error) {
+      throw new Error(normalizedBaseURLResult.error);
+    }
+    const normalizedBaseURL = normalizedBaseURLResult.value;
+
     // Use provided API key / baseURL or fall back to configured key
     let client;
-    if (baseURL || apiKey) {
+    if (normalizedBaseURL || apiKey) {
       const clientOpts = {};
       if (apiKey) clientOpts.apiKey = apiKey;
       if (!apiKey) clientOpts.apiKey = 'not-required';
-      if (baseURL) clientOpts.baseURL = baseURL;
+      if (normalizedBaseURL) clientOpts.baseURL = normalizedBaseURL;
       client = new OpenAI(clientOpts);
     } else {
       client = this._getClient();
@@ -105,7 +112,7 @@ class TTSService {
     try {
       // OpenAI-compatible servers (custom baseURL) may not support `instructions`
       // or `response_format`, but do support `speed`. Send the safe subset.
-      const speechParams = baseURL
+      const speechParams = normalizedBaseURL
         ? { model, voice, input: text, speed }
         : {
             model,
@@ -116,7 +123,7 @@ class TTSService {
             response_format: 'mp3',
           };
 
-      console.log('[TTSService] Generating speech — model:', model, 'voice:', voice, 'baseURL:', baseURL ?? '(openai)');
+      console.log('[TTSService] Generating speech — model:', model, 'voice:', voice, 'baseURL:', normalizedBaseURL ?? '(openai)');
       const response = await client.audio.speech.create(speechParams);
 
       const arrayBuffer = await response.arrayBuffer();

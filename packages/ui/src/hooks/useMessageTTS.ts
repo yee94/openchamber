@@ -44,6 +44,7 @@ export function useMessageTTS(): UseMessageTTSReturn {
 
     const { speak: speakServerTTS, stop: stopServerTTS, isAvailable: isServerTTSAvailable } = useServerTTS({
         enabled: shouldCheckOpenAIAvailability,
+        availabilityMode: voiceProvider === 'openai-compatible' ? 'openai-compatible' : 'openai',
     });
     const { speak: speakSayTTS, stop: stopSayTTS, isAvailable: isSayTTSAvailable } = useSayTTS({
         enabled: shouldCheckSayAvailability,

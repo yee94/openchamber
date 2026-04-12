@@ -1,4 +1,5 @@
 import express from 'express';
+import { normalizeCustomOpenAIBaseURL } from './base-url.js';
 
 export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
   let ttsModulePromise = null;
@@ -44,6 +45,12 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
     try {
       const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, summarize = false, providerId, modelId, threshold = 200, maxLength = 500, apiKey, baseURL } = req.body || {};
 
+      const normalizedBaseURLResult = normalizeCustomOpenAIBaseURL(baseURL);
+      if (normalizedBaseURLResult.error) {
+        return res.status(400).json({ error: normalizedBaseURLResult.error });
+      }
+      const normalizedBaseURL = normalizedBaseURLResult.value;
+
       console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey, hasBaseURL: !!baseURL });
 
       if (!text || typeof text !== 'string' || !text.trim()) {
@@ -56,7 +63,7 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
       // Check availability - server-configured key, client-provided key, or custom server URL
       const hasServerKey = ttsService.isAvailable();
       const hasClientKey = apiKey && typeof apiKey === 'string' && apiKey.trim().length > 0;
-      const hasCustomBaseURL = baseURL && typeof baseURL === 'string' && baseURL.trim().length > 0;
+      const hasCustomBaseURL = typeof normalizedBaseURL === 'string' && normalizedBaseURL.length > 0;
       
       if (!hasServerKey && !hasClientKey && !hasCustomBaseURL) {
         return res.status(503).json({ 
@@ -89,7 +96,7 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
         speed,
         instructions,
         apiKey: hasClientKey ? apiKey.trim() : undefined,
-        baseURL: hasCustomBaseURL ? baseURL.trim() : undefined,
+        baseURL: hasCustomBaseURL ? normalizedBaseURL : undefined,
       });
 
       res.setHeader('Content-Type', result.contentType);

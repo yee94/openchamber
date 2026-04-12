@@ -26,6 +26,7 @@ interface ServerTTSStatusCache {
 
 interface UseServerTTSOptions {
   enabled?: boolean;
+  availabilityMode?: 'auto' | 'openai' | 'openai-compatible';
 }
 
 const SERVER_TTS_STATUS_TTL_MS = 30000;
@@ -125,6 +126,7 @@ function getAudioContext(): AudioContext {
 
 export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSReturn {
   const enabled = options.enabled ?? true;
+  const availabilityMode = options.availabilityMode ?? 'auto';
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAvailable, setIsAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +152,17 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
 
     const hasClientKey = Boolean(openaiApiKey && openaiApiKey.trim().length > 0);
     const hasCustomUrl = Boolean(openaiCompatibleUrl && openaiCompatibleUrl.trim().length > 0);
-    if (hasClientKey || hasCustomUrl) {
+    if (availabilityMode === 'openai-compatible') {
+      setIsAvailable(hasCustomUrl);
+      return hasCustomUrl;
+    }
+
+    if (hasClientKey) {
+      setIsAvailable(true);
+      return true;
+    }
+
+    if (availabilityMode === 'auto' && hasCustomUrl) {
       setIsAvailable(true);
       return true;
     }
@@ -163,7 +175,7 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       setIsAvailable(false);
       return false;
     }
-  }, [enabled, openaiApiKey, openaiCompatibleUrl]);
+  }, [availabilityMode, enabled, openaiApiKey, openaiCompatibleUrl]);
 
   // Check availability on mount and when API key changes
   useEffect(() => {
