@@ -128,8 +128,6 @@ const SessionStatusActivityBridge: React.FC<SessionStatusActivityBridgeProps> = 
     [globalSessionStatuses],
   );
 
-  const previousStreamingIdsRef = React.useRef<Set<string>>(new Set());
-
   React.useEffect(() => {
     const nextStreamingIds = new Set<string>();
     sessionStatus.forEach((status, sessionId) => {
@@ -138,11 +136,9 @@ const SessionStatusActivityBridge: React.FC<SessionStatusActivityBridgeProps> = 
       }
     });
 
-    const previousStreamingIds = previousStreamingIdsRef.current;
-    const startedStreamingIds = Array.from(nextStreamingIds).filter((sessionId) => !previousStreamingIds.has(sessionId));
-    if (startedStreamingIds.length > 0) {
+    if (nextStreamingIds.size > 0) {
       setActiveNowEntries((prev) => {
-        const next = startedStreamingIds.reduce((entries, sessionId) => addActiveNowSession(entries, sessionId), prev);
+        const next = Array.from(nextStreamingIds).reduce((entries, sessionId) => addActiveNowSession(entries, sessionId), prev);
         if (next === prev) {
           return prev;
         }
@@ -150,8 +146,6 @@ const SessionStatusActivityBridge: React.FC<SessionStatusActivityBridgeProps> = 
         return next;
       });
     }
-
-    previousStreamingIdsRef.current = nextStreamingIds;
   }, [sessionStatus, safeStorage, setActiveNowEntries]);
 
   return null;
