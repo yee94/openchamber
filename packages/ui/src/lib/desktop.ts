@@ -242,6 +242,21 @@ export const isDesktopShell = (): boolean => {
   return isTauriShell();
 };
 
+export const startDesktopWindowDrag = async (): Promise<boolean> => {
+  if (!isDesktopShell() || !isTauriShell()) {
+    return false;
+  }
+
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    const appWindow = getCurrentWindow();
+    await appWindow.startDragging();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const isVSCodeRuntime = (): boolean => {
   if (typeof window === "undefined") return false;
   const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isVSCode?: boolean } } }).__OPENCHAMBER_RUNTIME_APIS__;

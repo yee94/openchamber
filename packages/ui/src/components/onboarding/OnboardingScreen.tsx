@@ -1,6 +1,6 @@
 import React from 'react';
 import { RiFileCopyLine, RiCheckLine, RiExternalLinkLine } from '@remixicon/react';
-import { isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopShell, isTauriShell, startDesktopWindowDrag } from '@/lib/desktop';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -105,14 +105,8 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
       return;
     }
     if (e.button !== 0) return;
-    if (isDesktopApp && isTauriShell()) {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const window = getCurrentWindow();
-        await window.startDragging();
-      } catch (error) {
-        console.error('Failed to start window dragging:', error);
-      }
+    if (isDesktopApp) {
+      await startDesktopWindowDrag();
     }
   }, [isDesktopApp]);
 

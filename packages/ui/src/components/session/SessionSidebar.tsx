@@ -3,7 +3,7 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, startDesktopWindowDrag } from '@/lib/desktop';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, cn } from '@/lib/utils';
@@ -490,13 +490,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return;
     }
 
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const appWindow = getCurrentWindow();
-      await appWindow.startDragging();
-    } catch (error) {
-      console.error('Failed to start window dragging:', error);
-    }
+    await startDesktopWindowDrag();
   }, [isDesktopShellRuntime]);
 
   const {
