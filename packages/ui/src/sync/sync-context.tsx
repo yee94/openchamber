@@ -9,6 +9,14 @@ import { createEventPipeline } from "./event-pipeline"
 import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent } from "./event-reducer"
 import { useGlobalSyncStore, type GlobalSyncStore } from "./global-sync-store"
 import { ChildStoreManager, type DirectoryStore } from "./child-store"
+import {
+  aggregateLiveSessions,
+  aggregateLiveSessionStatuses,
+  areSessionListsEquivalent,
+  areStatusMapsEquivalent,
+  findLiveSession,
+  findLiveSessionStatus,
+} from "./live-aggregate"
 import { bootstrapGlobal, bootstrapDirectory } from "./bootstrap"
 import { retry } from "./retry"
 import { updateStreamingState } from "./streaming"
@@ -24,7 +32,6 @@ import type { State } from "./types"
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
 import type { PermissionRequest } from "@/types/permission"
 import type { QuestionRequest } from "@/types/question"
-import { create } from "zustand"
 import * as sessionActions from "./session-actions"
 
 // ---------------------------------------------------------------------------
@@ -52,44 +59,59 @@ function useSyncSystem() {
   return ctx
 }
 
+function getLiveStates(childStores: ChildStoreManager): State[] {
+  return Array.from(childStores.children.values(), (store) => store.getState())
+}
+
+function useLiveSyncSelector<T>(selector: (states: State[]) => T, isEqual: (left: T, right: T) => boolean = Object.is): T {
+  const { childStores } = useSyncSystem()
+  const cacheRef = useRef<T | undefined>(undefined)
+  const initializedRef = useRef(false)
+
+  const getSnapshot = useCallback(() => {
+    const next = selector(getLiveStates(childStores))
+    if (initializedRef.current && isEqual(cacheRef.current as T, next)) {
+      return cacheRef.current as T
+    }
+
+    cacheRef.current = next
+    initializedRef.current = true
+    return next
+  }, [childStores, isEqual, selector])
+
+  return React.useSyncExternalStore(
+    useCallback((notify) => childStores.subscribeAll(notify), [childStores]),
+    getSnapshot,
+    getSnapshot,
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Event handler — applies one SSE event at a time to the live store.
 // Each event reads live state, creates a shallow draft, applies, writes back.
 // React 18 batches synchronous setState calls automatically.
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Global session status store — cross-directory status tracking.
-//
-// OpenCode isolates sessions behind project navrails, so per-directory
-// session_status is sufficient. OpenChamber shows all sessions in one sidebar,
-// so we need a global view. Updated from handleEvent on every session.status.
-// ---------------------------------------------------------------------------
-
-interface GlobalSessionStatusStore {
-  statuses: Record<string, SessionStatus>
-}
-
-const useGlobalSessionStatusStore = create<GlobalSessionStatusStore>(() => ({
-  statuses: {},
-}))
-
-function setGlobalSessionStatus(sessionId: string, status: SessionStatus) {
-  const current = useGlobalSessionStatusStore.getState().statuses
-  if (current[sessionId] === status) return
-  useGlobalSessionStatusStore.setState({
-    statuses: { ...current, [sessionId]: status },
-  })
-}
-
 /** Read status for a session across all directories */
 export function useGlobalSessionStatus(sessionId: string): SessionStatus | undefined {
-  return useGlobalSessionStatusStore((s) => s.statuses[sessionId])
+  return useLiveSyncSelector(
+    useCallback((states) => findLiveSessionStatus(states, sessionId), [sessionId]),
+  )
 }
 
 /** Read all session statuses (for sidebar) */
 export function useAllSessionStatuses(): Record<string, SessionStatus> {
-  return useGlobalSessionStatusStore((s) => s.statuses)
+  return useLiveSyncSelector(
+    useCallback((states) => aggregateLiveSessionStatuses(states), []),
+    areStatusMapsEquivalent,
+  )
+}
+
+export function useAllLiveSessions(): Session[] {
+  return useLiveSyncSelector(
+    useCallback((states) => aggregateLiveSessions(states), []),
+    areSessionListsEquivalent,
+  )
 }
 
 // Boot debounce — suppresses redundant refresh/re-bootstrap events during startup.
@@ -107,6 +129,34 @@ const requestSignature = (items: Array<{ id: string }> | undefined): string => {
 }
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+const partRepairSignature = (part: Part): string => JSON.stringify(part)
+
+function haveEquivalentPartSnapshots(left: Part[] | undefined, right: Part[]): boolean {
+  if (!left) {
+    return right.length === 0
+  }
+
+  if (left.length !== right.length) {
+    return false
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftPart = left[index]
+    const rightPart = right[index]
+    if (!leftPart || !rightPart) {
+      return false
+    }
+    if (leftPart.id !== rightPart.id) {
+      return false
+    }
+    if (partRepairSignature(leftPart) !== partRepairSignature(rightPart)) {
+      return false
+    }
+  }
+
+  return true
+}
 
 // ---------------------------------------------------------------------------
 // Parts-gap recovery — when SSE events arrive but parts are missing,
@@ -172,8 +222,8 @@ async function repairSessionParts(
         .sort((a: Part, b: Part) => cmp(a.id, b.id))
 
       const existing = nextPartState[messageId]
-      // Only patch if parts were missing or fewer than server has
-      if (!existing || existing.length < newParts.length) {
+      // Repair when parts are missing, truncated, or stale-but-same-length.
+      if (!haveEquivalentPartSnapshots(existing, newParts)) {
         nextPartState[messageId] = newParts
       }
     }
@@ -199,22 +249,6 @@ function isViewedInCurrentSession(directory: string, sessionId?: string): boolea
 
 function isRecentBoot() {
   return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
-}
-
-function setGlobalSessionStatuses(nextStatuses: Record<string, SessionStatus>) {
-  const current = useGlobalSessionStatusStore.getState().statuses
-  let changed = false
-  const merged = { ...current }
-
-  for (const [sessionId, status] of Object.entries(nextStatuses)) {
-    if (!status || merged[sessionId] === status) continue
-    merged[sessionId] = status
-    changed = true
-  }
-
-  if (changed) {
-    useGlobalSessionStatusStore.setState({ statuses: merged })
-  }
 }
 
 function getReconnectCandidateSessionIds(state: State) {
@@ -662,7 +696,6 @@ async function resyncDirectoryAfterReconnect(
     store.setState((state: DirectoryStore) => ({
       session_status: { ...state.session_status, ...relevantStatuses },
     }))
-    setGlobalSessionStatuses(relevantStatuses)
   }
 
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
@@ -733,6 +766,13 @@ async function resyncDirectoryAfterReconnect(
   // If SSE changed a session while the request was in-flight, keep that data.
   try {
     const before = store.getState()
+    const knownSessionIds = new Set<string>([
+      ...before.session.map((session) => session.id),
+      ...Object.keys(before.message ?? {}),
+      ...Object.keys(before.session_status ?? {}),
+      ...Object.keys(before.question ?? {}),
+      ...Object.keys(before.permission ?? {}),
+    ])
     const beforeSignatures = new Map(
       candidateSessionIds.map((sessionId) => [sessionId, requestSignature(before.question[sessionId])]),
     )
@@ -740,6 +780,7 @@ async function resyncDirectoryAfterReconnect(
     const grouped: Record<string, QuestionRequest[]> = {}
     for (const q of pendingQuestions) {
       if (!q?.id || !q.sessionID) continue
+      if (!knownSessionIds.has(q.sessionID)) continue
       const list = grouped[q.sessionID]
       if (list) list.push(q)
       else grouped[q.sessionID] = [q]
@@ -956,17 +997,6 @@ function handleEvent(
 
   updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
 
-  // Update global session status for cross-directory sidebar visibility
-  if (payload.type === "session.status") {
-    const props = payload.properties as { sessionID: string; status: SessionStatus }
-    setGlobalSessionStatus(props.sessionID, props.status)
-  }
-
-  if (payload.type === "session.idle" || payload.type === "session.error") {
-    const props = payload.properties as { sessionID: string }
-    setGlobalSessionStatus(props.sessionID, { type: "idle" })
-  }
-
   if (payload.type === "permission.asked") {
     const nd = normalizeDirectory(resolvedDirectory)
     if (!nd) {
@@ -1029,11 +1059,6 @@ export function SyncProvider(props: {
               store.setState(patch)
               if (patch.session || patch.message) {
                 ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())
-              }
-              if (patch.session_status) {
-                const current = useGlobalSessionStatusStore.getState().statuses
-                const merged = { ...current, ...patch.session_status }
-                useGlobalSessionStatusStore.setState({ statuses: merged })
               }
             },
             global: {
@@ -1103,6 +1128,9 @@ export function SyncProvider(props: {
 
     const { cleanup } = createEventPipeline({
       sdk: props.sdk,
+      routeDirectory: (directory, payload) => {
+        return resolveDirectoryFromRoutingIndex(routingIndex, directory, payload, childStores)
+      },
       onEvent: (directory, payload) => {
         handleEvent(directory, payload, childStores, routingIndex)
       },
@@ -1381,31 +1409,28 @@ export function useSidebarSessions(directory?: string): Session[] {
 
 /** Get one session by id for a directory */
 export function useSession(sessionID?: string | null, directory?: string) {
-  return useDirectorySync(
-    useCallback(
-      (state: State) => {
-        if (!sessionID) return undefined
-        return state.session.find((session) => session.id === sessionID)
-      },
-      [sessionID],
-    ),
-    directory,
-  )
+  const { childStores } = useSyncSystem()
+  const getSnapshot = useCallback(() => {
+    if (directory) {
+      return childStores.getChild(directory)?.getState().session.find((session) => session.id === sessionID)
+    }
+    return findLiveSession(getLiveStates(childStores), sessionID)
+  }, [childStores, directory, sessionID])
+
+  const subscribe = useCallback((notify: () => void) => {
+    if (directory) {
+      return childStores.ensureChild(directory).subscribe(notify)
+    }
+    return childStores.subscribeAll(notify)
+  }, [childStores, directory])
+
+  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 /** Get one session directory by id for a directory */
 export function useSessionDirectory(sessionID?: string | null, directory?: string): string | undefined {
-  return useDirectorySync(
-    useCallback(
-      (state: State) => {
-        if (!sessionID) return undefined
-        const session = state.session.find((candidate) => candidate.id === sessionID)
-        return (session as (typeof session & { directory?: string | null }) | undefined)?.directory ?? undefined
-      },
-      [sessionID],
-    ),
-    directory,
-  )
+  const session = useSession(sessionID, directory)
+  return (session as (typeof session & { directory?: string | null }) | undefined)?.directory ?? undefined
 }
 
 /** Get the SDK client */
@@ -1451,42 +1476,84 @@ const getFirstTextFromParts = (parts: Part[]): string => {
   return ""
 }
 
-function usePartsSnapshotForMessageIds(messageIds: string[], directory?: string, suspendUpdates = false) {
-  const store = useDirectoryStore(directory)
-  const prevPartsRef = useRef<Record<string, Part[]>>({})
-  const [partsSnapshot, setPartsSnapshot] = React.useState<Record<string, Part[]>>({})
+type SessionMessageRecord = { info: Message; parts: Part[] }
 
-  React.useEffect(() => {
-    const flush = () => {
-      const state = store.getState()
-      const prev = prevPartsRef.current
-      let changed = false
-      const next: Record<string, Part[]> = {}
-      for (const id of messageIds) {
-        const parts = state.part[id] ?? EMPTY_PARTS
-        next[id] = prev[id] === parts ? prev[id] : parts
-        if (next[id] !== prev[id]) changed = true
-      }
-      if (changed || Object.keys(prev).length !== messageIds.length) {
-        prevPartsRef.current = next
-        setPartsSnapshot(next)
-      }
+type SessionMessageRecordsSnapshot = {
+  sessionID: string
+  sourceMessages: Message[]
+  visibleMessages: Message[]
+  revertMessageID?: string
+  list: SessionMessageRecord[]
+  byId: Map<string, SessionMessageRecord>
+}
+
+function getVisibleMessagesForSession(state: State, sessionID: string, previous?: SessionMessageRecordsSnapshot): {
+  sourceMessages: Message[]
+  visibleMessages: Message[]
+  revertMessageID?: string
+} {
+  const sourceMessages = state.message[sessionID] ?? EMPTY_MESSAGES
+  const session = state.session.find((candidate) => candidate.id === sessionID)
+  const revertMessageID = (session as { revert?: { messageID?: string } } | undefined)?.revert?.messageID
+
+  if (
+    previous
+    && previous.sourceMessages === sourceMessages
+    && previous.revertMessageID === revertMessageID
+  ) {
+    return {
+      sourceMessages,
+      visibleMessages: previous.visibleMessages,
+      revertMessageID,
     }
+  }
 
-    flush()
+  return {
+    sourceMessages,
+    visibleMessages: revertMessageID ? sourceMessages.filter((message) => message.id < revertMessageID) : sourceMessages,
+    revertMessageID,
+  }
+}
 
-    if (suspendUpdates) {
-      return
-    }
+function buildSessionMessageRecordsSnapshot(
+  state: State,
+  sessionID: string,
+  previous?: SessionMessageRecordsSnapshot,
+  suspendPartUpdates = false,
+): SessionMessageRecordsSnapshot {
+  const { sourceMessages, visibleMessages, revertMessageID } = getVisibleMessagesForSession(state, sessionID, previous)
+  const nextById = new Map<string, SessionMessageRecord>()
+  const nextList = visibleMessages.map((message) => {
+    const previousRecord = previous?.byId.get(message.id)
+    const parts = suspendPartUpdates && previousRecord
+      ? previousRecord.parts
+      : (state.part[message.id] ?? EMPTY_PARTS)
 
-    const unsub = store.subscribe(flush)
+    const nextRecord = previousRecord && previousRecord.info === message && previousRecord.parts === parts
+      ? previousRecord
+      : { info: message, parts }
 
-    return () => {
-      unsub()
-    }
-  }, [messageIds, store, suspendUpdates])
+    nextById.set(message.id, nextRecord)
+    return nextRecord
+  })
 
-  return partsSnapshot
+  const unchanged = Boolean(previous)
+    && previous?.visibleMessages === visibleMessages
+    && previous.list.length === nextList.length
+    && previous.list.every((record, index) => record === nextList[index])
+
+  if (unchanged && previous) {
+    return previous
+  }
+
+  return {
+    sessionID,
+    sourceMessages,
+    visibleMessages,
+    revertMessageID,
+    list: nextList,
+    byId: nextById,
+  }
 }
 
 export function useSessionMessageCount(sessionID: string, directory?: string): number {
@@ -1500,40 +1567,33 @@ export function useSessionMessageCount(sessionID: string, directory?: string): n
 }
 
 export function useSessionTextMessages(sessionID: string, directory?: string): SessionTextMessage[] {
-  const messages = useVisibleSessionMessages(sessionID, directory)
-  const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
-  const partsSnapshot = usePartsSnapshotForMessageIds(messageIds, directory)
+  const records = useSessionMessageRecords(sessionID, directory)
 
   return useMemo(
-    () => messages.map((message) => ({
-      id: message.id,
-      role: typeof message.role === "string" ? message.role : null,
-      text: getConcatenatedTextFromParts(partsSnapshot[message.id] ?? EMPTY_PARTS),
+    () => records.map((record) => ({
+      id: record.info.id,
+      role: typeof record.info.role === "string" ? record.info.role : null,
+      text: getConcatenatedTextFromParts(record.parts),
     })),
-    [messages, partsSnapshot],
+    [records],
   )
 }
 
 export function useUserMessageHistory(sessionID: string, directory?: string): string[] {
-  const messages = useVisibleSessionMessages(sessionID, directory)
-  const userMessages = useMemo(
-    () => messages.filter((message) => message.role === "user"),
-    [messages],
-  )
-  const userMessageIds = useMemo(() => userMessages.map((message) => message.id), [userMessages])
-  const partsSnapshot = usePartsSnapshotForMessageIds(userMessageIds, directory)
+  const records = useSessionMessageRecords(sessionID, directory)
+  const userMessages = useMemo(() => records.filter((record) => record.info.role === 'user'), [records])
 
   return useMemo(() => {
     const history: string[] = []
     for (let index = userMessages.length - 1; index >= 0; index -= 1) {
       const message = userMessages[index]
-      const text = getFirstTextFromParts(partsSnapshot[message.id] ?? EMPTY_PARTS)
+      const text = getFirstTextFromParts(message.parts)
       if (text.length > 0) {
         history.push(text)
       }
     }
     return history
-  }, [partsSnapshot, userMessages])
+  }, [userMessages])
 }
 
 /**
@@ -1548,44 +1608,28 @@ export function useSessionMessageRecords(
   directory?: string,
   options?: { suspendPartUpdates?: boolean },
 ) {
-  const messages = useVisibleSessionMessages(sessionID, directory)
-  const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
-  const partsSnapshot = usePartsSnapshotForMessageIds(messageIds, directory, Boolean(options?.suspendPartUpdates))
-  const previousRecordsRef = useRef<{
-    list: Array<{ info: (typeof messages)[number]; parts: Part[] }>
-    byId: Map<string, { info: (typeof messages)[number]; parts: Part[] }>
-  }>({
+  const store = useDirectoryStore(directory)
+  const snapshotRef = useRef<SessionMessageRecordsSnapshot>({
+    sessionID,
+    sourceMessages: EMPTY_MESSAGES,
+    visibleMessages: EMPTY_MESSAGES,
+    revertMessageID: undefined,
     list: [],
     byId: new Map(),
   })
 
-  return useMemo(() => {
-    const previous = previousRecordsRef.current
-    const nextById = new Map<string, { info: (typeof messages)[number]; parts: Part[] }>()
-    const nextList = messages.map((message) => {
-      const parts = partsSnapshot[message.id] ?? EMPTY_PARTS
-      const previousRecord = previous.byId.get(message.id)
-      const record = previousRecord && previousRecord.info === message && previousRecord.parts === parts
-        ? previousRecord
-        : { info: message, parts }
-      nextById.set(message.id, record)
-      return record
-    })
+  const getSnapshot = useCallback(() => {
+    const nextSnapshot = buildSessionMessageRecordsSnapshot(
+      store.getState(),
+      sessionID,
+      snapshotRef.current.sessionID === sessionID ? snapshotRef.current : undefined,
+      Boolean(options?.suspendPartUpdates),
+    )
+    snapshotRef.current = nextSnapshot
+    return nextSnapshot.list
+  }, [options?.suspendPartUpdates, sessionID, store])
 
-    const unchanged = previous.list.length === nextList.length
-      && previous.list.every((record, index) => record === nextList[index])
-
-    if (unchanged) {
-      return previous.list
-    }
-
-    previousRecordsRef.current = {
-      list: nextList,
-      byId: nextById,
-    }
-
-    return nextList
-  }, [messages, partsSnapshot])
+  return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
 }
 
 /**
