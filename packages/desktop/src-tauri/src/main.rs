@@ -115,6 +115,8 @@ const MENU_ITEM_SETTINGS_ID: &str = "menu_settings";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_COMMAND_PALETTE_ID: &str = "menu_command_palette";
 #[cfg(target_os = "macos")]
+const MENU_ITEM_QUICK_OPEN_ID: &str = "menu_quick_open";
+#[cfg(target_os = "macos")]
 const MENU_ITEM_NEW_SESSION_ID: &str = "menu_new_session";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_WORKTREE_CREATOR_ID: &str = "menu_worktree_creator";
@@ -395,6 +397,14 @@ fn build_macos_menu<R: tauri::Runtime>(
         Some("Cmd+K"),
     )?;
 
+    let quick_open = MenuItem::with_id(
+        app,
+        MENU_ITEM_QUICK_OPEN_ID,
+        "Quick Open…",
+        true,
+        Some("Cmd+P"),
+    )?;
+
     let new_window = MenuItem::with_id(
         app,
         MENU_ITEM_NEW_WINDOW_ID,
@@ -582,6 +592,7 @@ fn build_macos_menu<R: tauri::Runtime>(
                     &PredefinedMenuItem::separator(app)?,
                     &settings,
                     &command_palette,
+                    &quick_open,
                     &PredefinedMenuItem::separator(app)?,
                     &PredefinedMenuItem::services(app, None)?,
                     &PredefinedMenuItem::separator(app)?,
@@ -3823,6 +3834,10 @@ fn main() {
                 }
                 if id == MENU_ITEM_COMMAND_PALETTE_ID {
                     dispatch_menu_action(app, "command-palette");
+                    return;
+                }
+                if id == MENU_ITEM_QUICK_OPEN_ID {
+                    dispatch_menu_action(app, "quick-open");
                     return;
                 }
 
