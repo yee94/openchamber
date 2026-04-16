@@ -19,6 +19,7 @@ import { useGitStore, useGitAllBranches, useGitRepoStatusMap } from '@/stores/us
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { NewWorktreeDialog } from './NewWorktreeDialog';
+import { ScheduledTasksDialog } from './ScheduledTasksDialog';
 import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -71,6 +72,7 @@ import {
 import { refreshGlobalSessions, resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
@@ -267,6 +269,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setAboutDialogOpen = useUIStore((state) => state.setAboutDialogOpen);
   const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
+  const setScheduledTasksDialogOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
@@ -406,6 +409,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       cancelled = true;
     };
   }, [currentDirectory, syncSessionStructureSignature]);
+
+  React.useEffect(() => {
+    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type !== 'scheduled-task-ran') {
+        return;
+      }
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+      refreshTimeout = setTimeout(() => {
+        void refreshGlobalSessions(syncSessionsSnapshotRef.current);
+      }, 500);
+    });
+    return () => {
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+      unsubscribe();
+    };
+  }, []);
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -1511,6 +1535,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         searchMatchCount={searchMatchCount}
         collapseAllProjects={collapseAllProjects}
         expandAllProjects={expandAllProjects}
+        openScheduledTasksDialog={() => setScheduledTasksDialogOpen(true)}
       />
 
       <SidebarProjectsList
@@ -1602,6 +1627,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           openNewSessionDraft({ directoryOverride: worktreePath });
         }}
       />
+
+      <ScheduledTasksDialog />
 
       {useMobileNotesPanel ? (
         <MobileOverlayPanel
