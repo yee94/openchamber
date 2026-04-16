@@ -286,11 +286,6 @@ export function createEventPipeline(input: EventPipelineInput) {
             }
             d.coalesced.set(k, d.queue.length)
           }
-          if (normalizedPayload.type === "message.part.updated") {
-            const part = (normalizedPayload.properties as { part: { messageID: string; id: string } }).part
-            d.staleDeltas.add(deltaKey(part.messageID, part.id, "text"))
-            d.staleDeltas.add(deltaKey(part.messageID, part.id, "output"))
-          }
           d.queue.push(normalizedPayload)
           scheduleDir(routedDirectory)
 

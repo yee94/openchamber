@@ -336,6 +336,37 @@ describe('createEventPipeline', () => {
     expect(received[1].payload.type).toBe('message.part.updated');
   });
 
+  it('keeps text delta after an initial part.updated when no newer part.updated replaced it', async () => {
+    const received = await runPipelineWithEvents([
+      {
+        directory: 'dir-a',
+        payload: {
+          type: 'message.part.updated',
+          properties: {
+            part: { id: 'part-1', type: 'text', messageID: 'msg-1' },
+          },
+        },
+      },
+      {
+        directory: 'dir-a',
+        payload: {
+          type: 'message.part.delta',
+          properties: {
+            messageID: 'msg-1',
+            partID: 'part-1',
+            field: 'text',
+            delta: 'hello',
+          },
+        },
+      },
+    ]);
+
+    expect(received).toHaveLength(2);
+    expect(received[0].payload.type).toBe('message.part.updated');
+    expect(received[1].payload.type).toBe('message.part.delta');
+    expect(received[1].payload.properties.delta).toBe('hello');
+  });
+
   it('coalesces message.part.updated events for the same part', async () => {
     installDomStubs();
 
