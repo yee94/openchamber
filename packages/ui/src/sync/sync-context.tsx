@@ -26,7 +26,7 @@ import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize
 import { syncDebug } from "./debug"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
-import { autoRespondsPermission, normalizeDirectory } from "@/stores/utils/permissionAutoAccept"
+import { toast } from "@/components/ui"
 import { appendNotification } from "./notification-store"
 import type { State } from "./types"
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
@@ -235,6 +235,26 @@ async function repairSessionParts(
 // Used to determine if user is currently viewing the session when a notification arrives.
 let _activeDirectory = ""
 let _activeSession = ""
+const pendingQuestionToastIds = new Set<string>()
+const pendingPermissionToastIds = new Set<string>()
+
+const getQuestionToastKey = (sessionID?: string, requestID?: string) => {
+  if (!sessionID || !requestID) return null
+  return `${sessionID}:${requestID}`
+}
+
+const getPermissionToastKey = (sessionID?: string, requestID?: string) => {
+  if (!sessionID || !requestID) return null
+  return `${sessionID}:${requestID}`
+}
+
+const openSessionFromToast = (sessionID: string, directory: string) => {
+  void import("./session-ui-store")
+    .then(({ useSessionUIStore }) => {
+      useSessionUIStore.getState().setCurrentSession(sessionID, directory)
+    })
+    .catch(() => undefined)
+}
 
 export function setActiveSession(directory: string, sessionId: string) {
   _activeDirectory = directory
@@ -789,6 +809,30 @@ async function resyncDirectoryAfterReconnect(
     for (const sessionId of Object.keys(grouped)) {
       grouped[sessionId].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     }
+
+    for (const [sessionId, questions] of Object.entries(grouped)) {
+      const knownIds = new Set((before.question[sessionId] ?? []).map((item) => item.id))
+      const isViewed = isViewedInCurrentSession(directory, sessionId)
+      if (isViewed) continue
+      for (const question of questions) {
+        if (knownIds.has(question.id)) continue
+        const toastKey = getQuestionToastKey(sessionId, question.id)
+        if (!toastKey || pendingQuestionToastIds.has(toastKey)) continue
+        pendingQuestionToastIds.add(toastKey)
+        const firstQuestion = question.questions?.[0]
+        const title = firstQuestion?.header?.trim() || "Input needed"
+        const description = firstQuestion?.question?.trim() || "Agent is waiting for your response"
+        toast.info(title, {
+          id: `question-${toastKey}`,
+          description,
+          action: {
+            label: "Open session",
+            onClick: () => openSessionFromToast(sessionId, directory),
+          },
+        })
+      }
+    }
+
     store.setState((state: DirectoryStore) => {
       const merged = { ...state.question }
       for (const [sessionId, questions] of Object.entries(grouped)) {
@@ -805,6 +849,73 @@ async function resyncDirectoryAfterReconnect(
     })
   } catch {
     // Non-fatal: question resync best-effort
+  }
+
+  // Re-fetch pending permissions on reconnect — same rationale as questions.
+  try {
+    const before = store.getState()
+    const knownSessionIds = new Set<string>([
+      ...before.session.map((session) => session.id),
+      ...Object.keys(before.message ?? {}),
+      ...Object.keys(before.session_status ?? {}),
+      ...Object.keys(before.question ?? {}),
+      ...Object.keys(before.permission ?? {}),
+    ])
+    const beforeSignatures = new Map(
+      candidateSessionIds.map((sessionId) => [sessionId, requestSignature(before.permission[sessionId])]),
+    )
+    const pendingPermissions = await opencodeClient.listPendingPermissions({ directories: [directory] })
+    const grouped: Record<string, PermissionRequest[]> = {}
+    for (const permission of pendingPermissions) {
+      if (!permission?.id || !permission.sessionID) continue
+      if (!knownSessionIds.has(permission.sessionID)) continue
+      const list = grouped[permission.sessionID]
+      if (list) list.push(permission)
+      else grouped[permission.sessionID] = [permission]
+    }
+    for (const sessionId of Object.keys(grouped)) {
+      grouped[sessionId].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    }
+
+    for (const [sessionId, permissions] of Object.entries(grouped)) {
+      const knownIds = new Set((before.permission[sessionId] ?? []).map((item) => item.id))
+      const isViewed = isViewedInCurrentSession(directory, sessionId)
+      if (isViewed) continue
+      for (const permission of permissions) {
+        if (knownIds.has(permission.id)) continue
+        const toastKey = getPermissionToastKey(sessionId, permission.id)
+        if (!toastKey || pendingPermissionToastIds.has(toastKey)) continue
+        pendingPermissionToastIds.add(toastKey)
+        const description = typeof permission.permission === "string" && permission.permission.trim().length > 0
+          ? permission.permission
+          : "Agent needs your approval"
+        toast.info("Permission needed", {
+          id: `permission-${toastKey}`,
+          description,
+          action: {
+            label: "Open session",
+            onClick: () => openSessionFromToast(sessionId, directory),
+          },
+        })
+      }
+    }
+
+    store.setState((state: DirectoryStore) => {
+      const merged = { ...state.permission }
+      for (const [sessionId, permissions] of Object.entries(grouped)) {
+        merged[sessionId] = permissions
+      }
+      for (const sessionId of candidateSessionIds) {
+        if (grouped[sessionId]) continue
+        const beforeSignature = beforeSignatures.get(sessionId) ?? ""
+        const currentSignature = requestSignature(state.permission[sessionId])
+        if (currentSignature !== beforeSignature) continue
+        delete merged[sessionId]
+      }
+      return { permission: merged }
+    })
+  } catch {
+    // Non-fatal: permission resync best-effort
   }
 
   ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())
@@ -884,6 +995,72 @@ function handleEvent(
   }
 
   childStores.mark(resolvedDirectory)
+
+  if (payload.type === "permission.asked") {
+    const permission = payload.properties as PermissionRequest
+    const permissionStore = usePermissionStore.getState()
+    if (permissionStore.isSessionAutoAccepting(permission.sessionID)) {
+      updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
+      void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
+      return
+    }
+
+    const toastKey = getPermissionToastKey(permission.sessionID, permission.id)
+    const isViewed = isViewedInCurrentSession(resolvedDirectory, permission.sessionID)
+    if (!isViewed && toastKey && !pendingPermissionToastIds.has(toastKey)) {
+      pendingPermissionToastIds.add(toastKey)
+      const description = typeof permission.permission === "string" && permission.permission.trim().length > 0
+        ? permission.permission
+        : "Agent needs your approval"
+      toast.info("Permission needed", {
+        id: `permission-${toastKey}`,
+        description,
+        action: {
+          label: "Open session",
+          onClick: () => openSessionFromToast(permission.sessionID, resolvedDirectory),
+        },
+      })
+    }
+  }
+
+  if (payload.type === "permission.replied") {
+    const props = payload.properties as { sessionID?: string; requestID?: string }
+    const toastKey = getPermissionToastKey(props.sessionID, props.requestID)
+    if (toastKey) {
+      pendingPermissionToastIds.delete(toastKey)
+      toast.dismiss(`permission-${toastKey}`)
+    }
+  }
+
+  if (payload.type === "question.asked") {
+    const question = payload.properties as QuestionRequest
+    const sessionID = question.sessionID
+    const toastKey = getQuestionToastKey(sessionID, question.id)
+    const isViewed = isViewedInCurrentSession(resolvedDirectory, sessionID)
+    if (!isViewed && toastKey && !pendingQuestionToastIds.has(toastKey)) {
+      pendingQuestionToastIds.add(toastKey)
+      const firstQuestion = question.questions?.[0]
+      const title = firstQuestion?.header?.trim() || "Input needed"
+      const description = firstQuestion?.question?.trim() || "Agent is waiting for your response"
+      toast.info(title, {
+        id: `question-${toastKey}`,
+        description,
+        action: {
+          label: "Open session",
+          onClick: () => openSessionFromToast(sessionID, resolvedDirectory),
+        },
+      })
+    }
+  }
+
+  if (payload.type === "question.replied" || payload.type === "question.rejected") {
+    const props = payload.properties as { sessionID?: string; requestID?: string }
+    const toastKey = getQuestionToastKey(props.sessionID, props.requestID)
+    if (toastKey) {
+      pendingQuestionToastIds.delete(toastKey)
+      toast.dismiss(`question-${toastKey}`)
+    }
+  }
 
   // Notification dispatch for session turn-complete and error events.
   // These are NOT handled by the event reducer — only the notification store.
@@ -996,20 +1173,6 @@ function handleEvent(
   }
 
   updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
-
-  if (payload.type === "permission.asked") {
-    const nd = normalizeDirectory(resolvedDirectory)
-    if (!nd) {
-      return
-    }
-
-    const permission = payload.properties as PermissionRequest
-    const sessions = store.getState().session
-    const autoAccept = usePermissionStore.getState().autoAccept
-    if (autoRespondsPermission({ autoAccept, sessions, sessionID: permission.sessionID, directory: nd })) {
-      void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1151,7 +1314,7 @@ export function SyncProvider(props: {
       },
     })
     return cleanup
-  }, [props.sdk, childStores, routingIndex])
+  }, [props.sdk, props.directory, childStores, routingIndex])
 
   // Ensure current directory's child store exists
   useEffect(() => {
