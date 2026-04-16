@@ -47,6 +47,36 @@ const getStatusMessage = (status: SessionStatus | undefined): string | null => {
   return typeof message === 'string' ? message : null
 }
 
+type StatusCandidate = {
+  status: SessionStatus
+  sessionUpdatedAt: number
+}
+
+const getStatusCandidate = (state: LiveStateSlice, sessionId: string): StatusCandidate | null => {
+  const status = state.session_status?.[sessionId]
+  if (!status) {
+    return null
+  }
+
+  const session = state.session.find((candidate) => candidate.id === sessionId)
+  return {
+    status,
+    sessionUpdatedAt: session ? getSessionUpdatedAt(session) : -1,
+  }
+}
+
+const shouldReplaceStatusCandidate = (current: StatusCandidate | undefined, next: StatusCandidate): boolean => {
+  if (!current) {
+    return true
+  }
+
+  if (next.sessionUpdatedAt !== current.sessionUpdatedAt) {
+    return next.sessionUpdatedAt > current.sessionUpdatedAt
+  }
+
+  return getStatusPriority(next.status) >= getStatusPriority(current.status)
+}
+
 export const areSessionListsEquivalent = (left: Session[], right: Session[]): boolean => {
   if (left === right) {
     return true
@@ -116,15 +146,25 @@ export function aggregateLiveSessions(states: Iterable<LiveStateSlice>): Session
 }
 
 export function aggregateLiveSessionStatuses(states: Iterable<LiveStateSlice>): Record<string, SessionStatus> {
-  const statuses: Record<string, SessionStatus> = {}
+  const candidates = new Map<string, StatusCandidate>()
 
   for (const state of states) {
-    for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
-      const current = statuses[sessionId]
-      if (!current || getStatusPriority(status) >= getStatusPriority(current)) {
-        statuses[sessionId] = status
+    for (const sessionId of Object.keys(state.session_status ?? {})) {
+      const next = getStatusCandidate(state, sessionId)
+      if (!next) {
+        continue
+      }
+
+      const current = candidates.get(sessionId)
+      if (shouldReplaceStatusCandidate(current, next)) {
+        candidates.set(sessionId, next)
       }
     }
+  }
+
+  const statuses: Record<string, SessionStatus> = {}
+  for (const [sessionId, candidate] of candidates) {
+    statuses[sessionId] = candidate.status
   }
 
   return statuses
@@ -157,16 +197,16 @@ export function findLiveSessionStatus(
     return undefined
   }
 
-  let match: SessionStatus | undefined
+  let match: StatusCandidate | undefined
   for (const state of states) {
-    const status = state.session_status?.[sessionID]
-    if (!status) {
+    const next = getStatusCandidate(state, sessionID)
+    if (!next) {
       continue
     }
-    if (!match || getStatusPriority(status) >= getStatusPriority(match)) {
-      match = status
+    if (shouldReplaceStatusCandidate(match, next)) {
+      match = next
     }
   }
 
-  return match
+  return match?.status
 }

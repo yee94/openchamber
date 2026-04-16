@@ -57,7 +57,13 @@ import {
 } from './sidebar/ConfirmDialogs';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
 import {
+  type ActiveNowEntry,
+  addActiveNowSession,
+  deriveActiveNowSessions,
   deriveLiveActiveNowSessions,
+  persistActiveNowEntries,
+  pruneActiveNowEntries,
+  readActiveNowEntries,
 } from './sidebar/activitySections';
 import {
   compareSessionsByPinnedAndTime,
@@ -129,6 +135,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     () => new Map(),
   );
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
+  const [activeNowEntries, setActiveNowEntries] = React.useState<ActiveNowEntry[]>(() => readActiveNowEntries(safeStorage));
   const [collapsedProjects, setCollapsedProjects] = React.useState<Set<string>>(new Set());
 
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
@@ -1011,9 +1018,44 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [projectSections, homeDirectory]);
 
   const activeNowSessions = React.useMemo(
+    () => deriveActiveNowSessions(activeNowEntries, new Map(sessions.map((session) => [session.id, session]))),
+    [activeNowEntries, sessions],
+  );
+
+  const liveActiveSessions = React.useMemo(
     () => deriveLiveActiveNowSessions(sessions, liveSessionStatuses),
     [liveSessionStatuses, sessions],
   );
+
+  React.useEffect(() => {
+    if (liveActiveSessions.length === 0) {
+      return;
+    }
+
+    setActiveNowEntries((prev) => {
+      const next = liveActiveSessions.reduce((entries, session) => addActiveNowSession(entries, session.id), prev);
+      if (next === prev) {
+        return prev;
+      }
+      persistActiveNowEntries(safeStorage, next);
+      return next;
+    });
+  }, [liveActiveSessions, safeStorage]);
+
+  React.useEffect(() => {
+    const allKnownSessionsById = new Map<string, Session>();
+    [...sessions, ...archivedSessions].forEach((session) => {
+      allKnownSessionsById.set(session.id, session);
+    });
+
+    const pruned = pruneActiveNowEntries(activeNowEntries, allKnownSessionsById);
+    if (pruned.length === activeNowEntries.length && pruned.every((entry, index) => entry.sessionId === activeNowEntries[index]?.sessionId)) {
+      return;
+    }
+
+    setActiveNowEntries(pruned);
+    persistActiveNowEntries(safeStorage, pruned);
+  }, [activeNowEntries, archivedSessions, safeStorage, sessions]);
 
   // Prefetch is wired below, after recentSessionIds is computed.
 

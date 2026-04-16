@@ -58,6 +58,27 @@ describe('live aggregate', () => {
     expect(findLiveSessionStatus(states, 'ses-2')?.type).toBe('retry')
   })
 
+  it('lets a fresher idle snapshot override a stale busy status', () => {
+    const states = [
+      {
+        session: [session('ses-1', '/a', 10)],
+        session_status: {
+          'ses-1': { type: 'busy' },
+        },
+      },
+      {
+        session: [session('ses-1', '/a', 30)],
+        session_status: {
+          'ses-1': { type: 'idle' },
+        },
+      },
+    ]
+
+    const statuses = aggregateLiveSessionStatuses(states)
+    expect(statuses['ses-1']?.type).toBe('idle')
+    expect(findLiveSessionStatus(states, 'ses-1')?.type).toBe('idle')
+  })
+
   it('derives active-now sessions from live statuses instead of persisted history', () => {
     const sessions = [
       session('ses-1', '/a', 20),
