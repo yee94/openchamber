@@ -4,12 +4,14 @@ import { EditorSelection } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type GoToLineDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   view: EditorView | null;
+  variant?: 'overlay' | 'inline';
 };
 
 type CursorSnapshot = {
@@ -51,7 +53,7 @@ const moveSelectionToLine = (view: EditorView, lineNumber: number, preferredChar
   });
 };
 
-export function GoToLineDialog({ open, onOpenChange, view }: GoToLineDialogProps) {
+export function GoToLineDialog({ open, onOpenChange, view, variant = 'overlay' }: GoToLineDialogProps) {
   const [inputValue, setInputValue] = React.useState('');
   const initialCursorRef = React.useRef<CursorSnapshot | null>(null);
   const committedRef = React.useRef(false);
@@ -159,7 +161,7 @@ export function GoToLineDialog({ open, onOpenChange, view }: GoToLineDialogProps
       document.removeEventListener('pointerdown', handlePointerDown, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [handleOpenChange, open]);
+  }, [handleOpenChange, open, variant]);
 
   const helperText = React.useMemo(() => {
     if (!view) {
@@ -173,6 +175,46 @@ export function GoToLineDialog({ open, onOpenChange, view }: GoToLineDialogProps
 
     return `Go to line ${lineNumber}`;
   }, [lineNumber, view]);
+
+  if (variant === 'inline') {
+    if (!open) {
+      return null;
+    }
+
+    return (
+      <div
+        ref={panelRef}
+        className="ml-1 flex h-6 items-center gap-1"
+      >
+        <Input
+          ref={inputRef}
+          type="number"
+          min={1}
+          step={1}
+          inputMode="numeric"
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleSubmit();
+            }
+          }}
+          placeholder="Line"
+          className="h-6 w-20 rounded-md border-border/70 bg-transparent px-2 typography-meta"
+        />
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={handleSubmit}
+          disabled={!view || lineNumber === null}
+          className="h-6 px-2"
+        >
+          Go
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div
