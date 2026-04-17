@@ -589,6 +589,18 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
+  if (pathname.startsWith('/api/vscode/save-markdown') && method === 'POST') {
+    const body = init?.body ? JSON.parse(init.body as string) : {};
+    const fileName = typeof (body as { fileName?: unknown }).fileName === 'string'
+      ? (body as { fileName: string }).fileName
+      : undefined;
+    const content = typeof (body as { content?: unknown }).content === 'string'
+      ? (body as { content: string }).content
+      : undefined;
+    const data = await sendBridgeMessage('api:files/save-markdown', { fileName, content });
+    return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
   if (pathname.startsWith('/api/config/agents/')) {
     const encodedName = pathname.slice('/api/config/agents/'.length);
     const name = decodeURIComponent(encodedName);

@@ -113,6 +113,12 @@ export const createVSCodeFilesAPI = (): FilesAPI => ({
     };
   },
 
+  async revealPath(path: string): Promise<{ success: boolean }> {
+    const target = normalizePath(path);
+    const data = await sendBridgeMessage<{ success?: boolean }>('api:fs:reveal', { path: target });
+    return { success: Boolean(data?.success) };
+  },
+
   async execCommands(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }> {
     const targetCwd = normalizePath(cwd);
     const data = await sendBridgeMessageWithOptions<{ success: boolean; results?: CommandExecResult[] }>('api:fs:exec', {
