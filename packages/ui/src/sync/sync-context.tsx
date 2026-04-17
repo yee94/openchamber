@@ -1698,7 +1698,7 @@ function getVisibleMessagesForSession(state: State, sessionID: string, previous?
   }
 }
 
-function buildSessionMessageRecordsSnapshot(
+export function buildSessionMessageRecordsSnapshot(
   state: State,
   sessionID: string,
   previous?: SessionMessageRecordsSnapshot,

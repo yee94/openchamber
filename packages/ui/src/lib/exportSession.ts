@@ -1,6 +1,54 @@
 import type { Message, Part } from '@opencode-ai/sdk/v2';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { openDesktopPath, saveDesktopMarkdownFile } from '@/lib/desktop';
+import { getRevealLabel } from '@/lib/utils';
 
 type SessionMessageRecord = { info: Message; parts: Part[] };
+
+function formatTimestamp(timestamp: number | undefined): string {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return '';
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const monthPart = date.toLocaleString(undefined, { month: 'short' });
+  const dayPart = date.getDate();
+  const yearPart = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${monthPart} ${dayPart}, ${yearPart}, ${hours}:${minutes}`;
+}
+
+function formatAssistantModel(record: SessionMessageRecord): string {
+  if (record.info.role === 'user') {
+    return '';
+  }
+
+  const providerID = typeof record.info.providerID === 'string' ? record.info.providerID.trim() : '';
+  const modelID = typeof record.info.modelID === 'string' ? record.info.modelID.trim() : '';
+
+  if (providerID && modelID) {
+    return `${providerID}/${modelID}`;
+  }
+
+  return modelID || providerID;
+}
+
+function formatMessageHeader(record: SessionMessageRecord): string {
+  const label = record.info.role === 'user' ? 'User' : 'Assistant';
+  const timestamp = formatTimestamp(record.info.time?.created);
+  const assistantModel = formatAssistantModel(record);
+  const details = timestamp && assistantModel
+    ? `${timestamp} (${assistantModel})`
+    : (timestamp || assistantModel);
+
+  return details ? `**${label}**\n\n*${details}*` : `**${label}**`;
+}
 
 function extractTextFromParts(parts: Part[]): string {
   return parts
@@ -10,7 +58,7 @@ function extractTextFromParts(parts: Part[]): string {
 }
 
 function formatMessageAsMarkdown(record: SessionMessageRecord): string {
-  const role = record.info.role === 'user' ? '### User' : '### Assistant';
+  const role = formatMessageHeader(record);
   const text = extractTextFromParts(record.parts).trim();
 
   if (!text) return '';
@@ -46,13 +94,37 @@ export function downloadAsMarkdown(content: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+export async function saveAsMarkdownDesktop(content: string, filename: string): Promise<string | null> {
+  return saveDesktopMarkdownFile(filename, content);
+}
+
+export async function revealExportedMarkdown(path: string): Promise<boolean> {
+  const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
+  if (runtimeFiles?.revealPath) {
+    try {
+      const result = await runtimeFiles.revealPath(path);
+      return Boolean(result?.success);
+    } catch {
+      return false;
+    }
+  }
+
+  return openDesktopPath(path);
+}
+
+export function getExportRevealLabel(): string {
+  return getRevealLabel();
+}
+
 export function buildExportFilename(sessionTitle?: string | null): string {
   const base = sessionTitle?.trim() || 'session';
   const safe = base
+    .normalize('NFKC')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
+  const normalizedBase = safe || 'session';
   const date = new Date().toISOString().split('T')[0];
-  return `${safe}-${date}.md`;
+  return `${normalizedBase}-${date}.md`;
 }
