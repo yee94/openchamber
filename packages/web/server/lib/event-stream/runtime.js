@@ -10,6 +10,18 @@ import {
   sendMessageStreamWsFrame,
 } from './protocol.js';
 
+function shouldTriggerUpstreamHealthCheck(upstream) {
+  if (!upstream) {
+    return true;
+  }
+
+  if (!upstream.body) {
+    return upstream.ok || upstream.status >= 500;
+  }
+
+  return upstream.status >= 500;
+}
+
 export function createGlobalUiEventBroadcaster({
   sseClients,
   wsClients,
@@ -151,7 +163,9 @@ export function createMessageStreamWsRuntime({
           message: `OpenCode event stream unavailable (${upstream.status})`,
         });
         socket.close(1011, 'OpenCode event stream unavailable');
-        triggerHealthCheck?.();
+        if (shouldTriggerUpstreamHealthCheck(upstream)) {
+          triggerHealthCheck?.();
+        }
         return;
       }
 

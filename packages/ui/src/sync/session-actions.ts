@@ -429,6 +429,9 @@ export async function dismissPermission(
   sessionId: string,
   requestId: string,
 ): Promise<void> {
+  if (!useConfigStore.getState().isConnected) {
+    throw new Error("Connection lost. Please wait for reconnection.")
+  }
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
     reply: "reject",
@@ -463,6 +466,9 @@ export async function rejectQuestion(
   sessionId: string,
   requestId: string,
 ): Promise<void> {
+  if (!useConfigStore.getState().isConnected) {
+    throw new Error("Connection lost. Please wait for reconnection.")
+  }
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reject({
     requestID: requestId,
   })
