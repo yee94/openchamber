@@ -85,6 +85,9 @@ export const createSettingsHelpers = (dependencies) => {
       const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
       result.opencodeBinary = normalized;
     }
+    if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
+      result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
+    }
     if (Array.isArray(candidate.projects)) {
       const projects = sanitizeProjects(candidate.projects);
       if (projects) {

@@ -50,6 +50,7 @@ export type DesktopSettings = {
   homeDirectory?: string;
   // Optional absolute path to `opencode` binary.
   opencodeBinary?: string;
+  desktopLanAccessEnabled?: boolean;
   projects?: ProjectEntry[];
   activeProjectId?: string;
   approvedDirectories?: string[];
@@ -476,6 +477,21 @@ export const restartDesktopApp = async (): Promise<boolean> => {
   } catch (error) {
     console.warn('Failed to restart desktop app (tauri)', error);
     return false;
+  }
+};
+
+export const getDesktopLanAddress = async (): Promise<string | null> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return null;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_get_lan_address');
+    return typeof result === 'string' && result.trim().length > 0 ? result.trim() : null;
+  } catch (error) {
+    console.warn('Failed to get desktop LAN address (tauri)', error);
+    return null;
   }
 };
 
