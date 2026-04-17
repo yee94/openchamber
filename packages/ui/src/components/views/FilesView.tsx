@@ -2077,6 +2077,19 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         return;
       }
 
+      const isTypingTarget = Boolean(
+        target?.closest('input, textarea, [contenteditable="true"], [role="textbox"]')
+      );
+      if (isTypingTarget) {
+        return;
+      }
+
+      const activeElement = document.activeElement as Element | null;
+      const editorHasFocus = Boolean(activeElement?.closest('.cm-editor'));
+      if (!editorHasFocus) {
+        return;
+      }
+
       if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.code === 'KeyG') {
         event.preventDefault();
         setIsGoToLineOpen(true);
