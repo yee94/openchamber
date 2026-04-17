@@ -83,6 +83,7 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import { openDesktopPath, openDesktopProjectInApp } from '@/lib/desktop';
 import { OPEN_DIRECTORY_APP_IDS } from '@/lib/openInApps';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
+import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 
 type FileNode = {
   name: string;
@@ -684,6 +685,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const setPendingFileNavigation = useUIStore((state) => state.setPendingFileNavigation);
   const pendingFileFocusPath = useUIStore((state) => state.pendingFileFocusPath);
   const setPendingFileFocusPath = useUIStore((state) => state.setPendingFileFocusPath);
+  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
 
   // Global mouseup to end drag selection
   React.useEffect(() => {
@@ -2071,16 +2073,19 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
+    const goToLineCombo = getEffectiveShortcutCombo('open_go_to_line', shortcutOverrides);
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as Element | null;
       if (target?.closest('[role="dialog"]')) {
         return;
       }
 
+      const isEditorTarget = Boolean(target?.closest('.cm-editor'));
       const isTypingTarget = Boolean(
         target?.closest('input, textarea, [contenteditable="true"], [role="textbox"]')
       );
-      if (isTypingTarget) {
+      if (isTypingTarget && !isEditorTarget) {
         return;
       }
 
@@ -2090,7 +2095,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         return;
       }
 
-      if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.code === 'KeyG') {
+      if (eventMatchesShortcut(event, goToLineCombo)) {
         event.preventDefault();
         setIsGoToLineOpen(true);
       }
@@ -2098,7 +2103,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canEdit, isMobile, textViewMode]);
+  }, [canEdit, isMobile, shortcutOverrides, textViewMode]);
 
   const editorExtensions = React.useMemo(() => {
     if (!selectedFile?.path) {
