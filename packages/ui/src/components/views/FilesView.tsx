@@ -17,7 +17,6 @@ import {
   RiSearchLine,
   RiSave3Line,
   RiTextWrap,
-  RiCommandLine,
   RiMore2Fill,
   RiFileAddLine,
   RiFolderAddLine,
