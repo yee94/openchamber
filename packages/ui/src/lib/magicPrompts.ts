@@ -16,13 +16,19 @@ export type MagicPromptId =
   | 'github.pr.comments.review.visible'
   | 'github.pr.comments.review.instructions'
   | 'github.pr.comment.single.visible'
-  | 'github.pr.comment.single.instructions';
+  | 'github.pr.comment.single.instructions'
+  | 'plan.todo.visible'
+  | 'plan.todo.instructions'
+  | 'plan.improve.visible'
+  | 'plan.improve.instructions'
+  | 'plan.implement.visible'
+  | 'plan.implement.instructions';
 
 export interface MagicPromptDefinition {
   id: MagicPromptId;
   title: string;
   description: string;
-  group: 'Git' | 'GitHub';
+  group: 'Git' | 'GitHub' | 'Planning';
   template: string;
   placeholders?: Array<{ key: string; description: string }>;
 }
@@ -347,6 +353,92 @@ Important:
 - Make sure the final code is syntactically correct
 - Do not leave any files with unresolved conflict markers
 - After completing all steps, confirm the cherry-pick was successful`,
+  },
+  {
+    id: 'plan.todo.visible',
+    title: 'Todo Planning Visible Prompt',
+    group: 'Planning',
+    description: 'Visible user message when sending a todo into a new planning session.',
+    placeholders: [
+      { key: 'todo_text', description: 'Todo text selected by the user.' },
+    ],
+    template: '{{todo_text}}',
+  },
+  {
+    id: 'plan.todo.instructions',
+    title: 'Todo Planning Instructions',
+    group: 'Planning',
+    description: 'Hidden instructions for sending a project todo into a new planning session.',
+    placeholders: [
+      { key: 'todo_text', description: 'Todo text selected by the user.' },
+    ],
+    template: `You are starting from a project todo item.
+Todo: {{todo_text}}
+Your job right now is to produce an implementation plan for this todo, not to implement it yet.
+Before writing the plan, inspect the repository and gather the necessary context from relevant files, module docs, existing patterns, and nearby code.
+Identify the affected areas, constraints, dependencies, likely risks, and validation steps based on the actual repo state.
+Then provide a concrete implementation plan grounded in that repo context. Make assumptions and missing context explicit.`,
+  },
+  {
+    id: 'plan.improve.visible',
+    title: 'Improve Plan Visible Prompt',
+    group: 'Planning',
+    description: 'Visible user message when sending a saved plan into an improve flow.',
+    placeholders: [
+      { key: 'plan_title', description: 'Current plan title.' },
+    ],
+    template: 'Improve this plan: {{plan_title}}',
+  },
+  {
+    id: 'plan.improve.instructions',
+    title: 'Improve Plan Instructions',
+    group: 'Planning',
+    description: 'Hidden instructions for improving a saved plan from project context.',
+    placeholders: [
+      { key: 'plan_title', description: 'Current plan title.' },
+      { key: 'plan_path', description: 'Absolute path to the saved plan file.' },
+    ],
+    template: `You are starting from an existing implementation plan.
+Plan title: {{plan_title}}
+This plan is stored in the file: {{plan_path}}
+Read that file first and treat its current contents as the source of truth for the plan.
+First inspect the repository and gather the necessary context from relevant files, module docs, existing patterns, and nearby code.
+Your main goal in this task is to improve the plan so it is better grounded in the actual repo state.
+Do not implement yet. Produce an improved implementation plan, call out assumptions, missing context, risks, and validation steps.
+Discuss important plan decisions, tradeoffs, gaps, or risks with the user in a concise and understandable way.
+Keep the response short and to the point. Do not dump a long wall of text.
+Prefer a short summary of proposed changes, open questions, and recommendations over rewriting the whole plan inline.
+Do not return the full plan as a markdown code block or fenced block.
+If useful, quote only small targeted snippets or describe the exact sections that should change.
+After you finish researching, propose the improved plan and explicitly offer to edit this same file with those plan changes.`,
+  },
+  {
+    id: 'plan.implement.visible',
+    title: 'Implement Plan Visible Prompt',
+    group: 'Planning',
+    description: 'Visible user message when sending a saved plan into an implement flow.',
+    placeholders: [
+      { key: 'plan_title', description: 'Current plan title.' },
+    ],
+    template: 'Implement this plan: {{plan_title}}',
+  },
+  {
+    id: 'plan.implement.instructions',
+    title: 'Implement Plan Instructions',
+    group: 'Planning',
+    description: 'Hidden instructions for implementing a saved plan from project context.',
+    placeholders: [
+      { key: 'plan_title', description: 'Current plan title.' },
+      { key: 'plan_path', description: 'Absolute path to the saved plan file.' },
+    ],
+    template: `You are starting from an existing implementation plan.
+Plan title: {{plan_title}}
+This plan is stored in the file: {{plan_path}}
+Read that file first and treat its current contents as the source of truth for the plan.
+Use this plan as task context and begin implementing it.
+Before and during implementation, inspect the repository and gather the necessary context from relevant files, module docs, existing patterns, and nearby code.
+Do the implementation work. If you discover mismatches between the plan and the repo reality, make those adjustments explicit and continue with implementation using the corrected understanding.
+If implementation reveals plan adjustments, explicitly tell the user those plan changes should be saved back into this same file.`,
   },
 ] as const;
 
