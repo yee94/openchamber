@@ -749,6 +749,64 @@ export async function readProjectPlanFile(path: string): Promise<OpenChamberProj
   };
 }
 
+const deleteFile = async (path: string): Promise<boolean> => {
+  const runtimeFiles = getRuntimeFilesAPI();
+  if (runtimeFiles?.delete) {
+    try {
+      const result = await runtimeFiles.delete(path);
+      if (result?.success !== false) {
+        return true;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const res = await postJson<{ success?: boolean }>(`${getBaseUrl()}/fs/delete`, { path });
+  return Boolean(res.ok);
+};
+
+export async function deleteProjectPlanFile(
+  project: ProjectRef,
+  planId: string
+): Promise<boolean> {
+  const trimmedId = typeof planId === 'string' ? planId.trim() : '';
+  if (!trimmedId) {
+    return false;
+  }
+
+  const existing = await getProjectPlanFiles(project);
+  const target = existing.find((entry) => entry.id === trimmedId);
+  if (!target) {
+    return false;
+  }
+
+  const next = existing.filter((entry) => entry.id !== trimmedId);
+  const saved = await saveProjectPlanFiles(project, next);
+  if (!saved) {
+    return false;
+  }
+
+  // Best-effort: remove underlying markdown file, ignore failure.
+  await deleteFile(target.path).catch(() => false);
+  return true;
+}
+
+export async function importProjectPlanFileFromContent(
+  project: ProjectRef,
+  content: string,
+  fallbackTitle?: string
+): Promise<OpenChamberProjectPlanFileLink | null> {
+  const raw = typeof content === 'string' ? content : '';
+  if (!raw.trim()) {
+    return null;
+  }
+
+  const parsed = parseProjectPlanMarkdown(raw);
+  const title = parsed.title || sanitizePlanTitle(fallbackTitle ?? '') || 'Plan';
+  return createProjectPlanFile(project, { title, body: parsed.body });
+}
+
 export async function createProjectPlanFile(
   project: ProjectRef,
   value: { title: string; body: string }

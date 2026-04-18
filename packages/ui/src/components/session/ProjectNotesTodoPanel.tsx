@@ -11,7 +11,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  deleteProjectPlanFile,
   getProjectContextData,
+  importProjectPlanFileFromContent,
   OPENCHAMBER_PROJECT_NOTES_MAX_LENGTH,
   readProjectPlanFile,
   OPENCHAMBER_PROJECT_TODO_TEXT_MAX_LENGTH,
@@ -405,6 +407,72 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [canCreateWorktree, createSession, initializeNewOpenChamberSession, onActionComplete, pendingSendTarget, projectRef, routeToChat, sendMessage, setCurrentSession]
   );
 
+  const planFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isImportingPlan, setIsImportingPlan] = React.useState(false);
+  const [deletingPlanId, setDeletingPlanId] = React.useState<string | null>(null);
+
+  const handleDeletePlan = React.useCallback(
+    async (planId: string) => {
+      if (!projectRef || deletingPlanId) {
+        return;
+      }
+      setDeletingPlanId(planId);
+      try {
+        const ok = await deleteProjectPlanFile(projectRef, planId);
+        if (!ok) {
+          toast.error('Failed to delete plan');
+          return;
+        }
+        setPlans((previous) => previous.filter((entry) => entry.id !== planId));
+        window.dispatchEvent(new CustomEvent('openchamber:project-plan-saved', {
+          detail: { projectId: projectRef.id },
+        }));
+      } finally {
+        setDeletingPlanId(null);
+      }
+    },
+    [deletingPlanId, projectRef]
+  );
+
+  const handleTriggerUploadPlan = React.useCallback(() => {
+    if (!projectRef || isImportingPlan) {
+      return;
+    }
+    planFileInputRef.current?.click();
+  }, [isImportingPlan, projectRef]);
+
+  const handleUploadPlanFile = React.useCallback(
+    async (file: File | null) => {
+      if (!projectRef || !file) {
+        return;
+      }
+      setIsImportingPlan(true);
+      try {
+        const text = await file.text();
+        if (!text.trim()) {
+          toast.error('Plan file is empty');
+          return;
+        }
+        const fallbackTitle = file.name.replace(/\.(md|markdown|txt)$/i, '').trim();
+        const created = await importProjectPlanFileFromContent(projectRef, text, fallbackTitle);
+        if (!created) {
+          toast.error('Failed to import plan');
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('openchamber:project-plan-saved', {
+          detail: { projectId: projectRef.id },
+        }));
+        toast.success('Plan imported');
+      } catch (error) {
+        const description = error instanceof Error ? error.message : undefined;
+        toast.error('Failed to read plan file', description ? { description } : undefined);
+      } finally {
+        setIsImportingPlan(false);
+      }
+    },
+    [projectRef]
+  );
+
   const handleOpenPlan = React.useCallback(
     (plan: ProjectPlanListItem) => {
       const projectPath = projectRef?.path?.trim();
@@ -572,6 +640,27 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
             <h3 className="typography-ui-label font-semibold text-foreground">Plans</h3>
             <span className="typography-meta text-muted-foreground">{plans.length} file{plans.length === 1 ? '' : 's'}</span>
           </div>
+          <input
+            ref={planFileInputRef}
+            type="file"
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              void handleUploadPlanFile(file);
+              event.currentTarget.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleTriggerUploadPlan}
+            disabled={!projectRef || isImportingPlan}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/70 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Import plan from file"
+            title="Import plan from file"
+          >
+            <RiAddLine className="h-3.5 w-3.5" />
+          </button>
         </div>
 
         <div className="max-h-56 overflow-y-auto rounded-lg border border-border/60 bg-background/40">
@@ -580,16 +669,26 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           ) : (
             <ul className="divide-y divide-border/50">
               {plans.map((plan) => (
-                <li key={plan.id} className="px-2.5 py-1.5">
+                <li key={plan.id} className="flex items-center gap-1.5 px-2.5 py-1.5">
                   <button
                     type="button"
                     onClick={() => handleOpenPlan(plan)}
-                    className="flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-1.5 py-1 text-left hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-1.5 py-1 text-left hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   >
                     <span className="min-w-0 truncate typography-ui-label text-foreground">{plan.title}</span>
                     <span className="flex-shrink-0 typography-micro text-muted-foreground">
                       {new Date(plan.createdAt).toLocaleDateString()}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeletePlan(plan.id)}
+                    disabled={deletingPlanId === plan.id}
+                    className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`Delete plan "${plan.title}"`}
+                    title="Delete plan"
+                  >
+                    <RiDeleteBinLine className="h-3.5 w-3.5" />
                   </button>
                 </li>
               ))}
