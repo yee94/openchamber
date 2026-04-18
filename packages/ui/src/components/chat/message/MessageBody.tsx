@@ -38,6 +38,8 @@ import { StaticToolRow } from './parts/ProgressiveGroup';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 import { createProjectPlanFile } from '@/lib/openchamberConfig';
+import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessions } from '@/sync/sync-context';
 
 type SubtaskPartLike = Part & {
@@ -79,38 +81,6 @@ const normalizeSubtaskModel = (model: SubtaskPartLike['model']): string | null =
     return `${providerID}/${modelID}`;
 };
 
-const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/g, '') || value;
-
-const resolveProjectRefForDirectory = (
-    directory: string,
-    projects: Array<{ id: string; path: string }>,
-    activeProjectId: string | null,
-): { id: string; path: string } | null => {
-    const normalized = normalizePath(directory.trim());
-    if (!normalized) {
-        return null;
-    }
-
-    const activeProject = activeProjectId
-        ? projects.find((project) => project.id === activeProjectId) ?? null
-        : null;
-
-    if (activeProject?.path) {
-        const activePath = normalizePath(activeProject.path);
-        if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
-            return { id: activeProject.id, path: activeProject.path };
-        }
-    }
-
-    const match = projects
-        .filter((project) => {
-            const projectPath = normalizePath(project.path);
-            return normalized === projectPath || normalized.startsWith(`${projectPath}/`);
-        })
-        .sort((left, right) => normalizePath(right.path).length - normalizePath(left.path).length)[0];
-
-    return match ? { id: match.id, path: match.path } : null;
-};
 
 const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     const [expanded, setExpanded] = React.useState(false);
@@ -741,7 +711,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const projects = useProjectsStore((state) => state.projects);
-    const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+    const effectiveDirectory = useEffectiveDirectory();
     const sessions = useSessions();
     const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState(false);
     const [isSavingPlan, setIsSavingPlan] = React.useState(false);
@@ -771,10 +741,13 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         return sessions.find((session) => session.id === currentSessionId) ?? null;
     }, [currentSessionId, sessions]);
 
+    const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
     const currentProjectRef = React.useMemo(() => {
-        const directory = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
-        return resolveProjectRefForDirectory(directory, projects, activeProjectId);
-    }, [activeProjectId, currentSession?.directory, projects]);
+        const directory = effectiveDirectory
+            ?? (typeof currentSession?.directory === 'string' ? currentSession.directory : '');
+        const resolved = resolveProjectForSessionDirectory(projects, availableWorktreesByProject, directory);
+        return resolved ? { id: resolved.id, path: resolved.path } : null;
+    }, [availableWorktreesByProject, currentSession?.directory, effectiveDirectory, projects]);
 
 
     const hasTools = toolParts.length > 0;

@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { toast } from '@/components/ui';
 import { getProjectNotesAndTodos, saveProjectNotesAndTodos } from '@/lib/openchamberConfig';
+import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { summarizeText } from '@/lib/voice/summarize';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
@@ -29,41 +31,6 @@ interface SelectionPayload {
   rect: DOMRect;
 }
 
-const normalizeProjectPath = (value: string): string => {
-  const replaced = value.replace(/\\/g, '/').replace(/\/+$/g, '');
-  return replaced || value;
-};
-
-const resolveProjectRefForDirectory = (
-  directory: string,
-  projects: Array<{ id: string; path: string }>,
-  activeProjectId: string | null,
-): { id: string; path: string } | null => {
-  const normalized = normalizeProjectPath(directory.trim());
-  if (!normalized) {
-    return null;
-  }
-
-  const activeProject = activeProjectId
-    ? projects.find((project) => project.id === activeProjectId) ?? null
-    : null;
-
-  if (activeProject?.path) {
-    const activePath = normalizeProjectPath(activeProject.path);
-    if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
-      return { id: activeProject.id, path: activeProject.path };
-    }
-  }
-
-  const match = projects
-    .filter((project) => {
-      const projectPath = normalizeProjectPath(project.path);
-      return normalized === projectPath || normalized.startsWith(`${projectPath}/`);
-    })
-    .sort((left, right) => normalizeProjectPath(right.path).length - normalizeProjectPath(left.path).length)[0];
-
-  return match ? { id: match.id, path: match.path } : null;
-};
 
 const appendDistilledInsightToNotes = (existingNotes: string, insight: string): string => {
   const trimmedInsight = insight.trim().replace(/^[-*+]\s+/, '');
@@ -255,7 +222,8 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   const setPendingInputText = useInputStore((state) => state.setPendingInputText);
   const isMobile = useUIStore((state) => state.isMobile);
   const projects = useProjectsStore((state) => state.projects);
-  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const effectiveDirectory = useEffectiveDirectory();
   const sessions = useSessions();
 
   React.useEffect(() => {
@@ -521,9 +489,11 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   }, [currentSessionId, sessions]);
 
   const currentProjectRef = React.useMemo(() => {
-    const directory = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
-    return resolveProjectRefForDirectory(directory, projects, activeProjectId);
-  }, [activeProjectId, currentSession?.directory, projects]);
+    const directory = effectiveDirectory
+      ?? (typeof currentSession?.directory === 'string' ? currentSession.directory : '');
+    const resolved = resolveProjectForSessionDirectory(projects, availableWorktreesByProject, directory);
+    return resolved ? { id: resolved.id, path: resolved.path } : null;
+  }, [availableWorktreesByProject, currentSession?.directory, effectiveDirectory, projects]);
 
   const handleAddToNotes = React.useCallback(async () => {
     if (!selectedText || !currentProjectRef) {
