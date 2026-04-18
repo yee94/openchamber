@@ -1,11 +1,16 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSessions } from '@/sync/sync-context';
 import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
-import { RiChatNewLine, RiAddLine, RiFileCopyLine } from '@remixicon/react';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { RiBookletLine, RiChatNewLine, RiAddLine, RiFileCopyLine, RiLoader4Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { toast } from '@/components/ui';
+import { getProjectNotesAndTodos, saveProjectNotesAndTodos } from '@/lib/openchamberConfig';
+import { summarizeText } from '@/lib/voice/summarize';
 
 interface TextSelectionMenuProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -22,6 +27,52 @@ interface SelectionPayload {
   markdownText: string;
   rect: DOMRect;
 }
+
+const normalizeProjectPath = (value: string): string => {
+  const replaced = value.replace(/\\/g, '/').replace(/\/+$/g, '');
+  return replaced || value;
+};
+
+const resolveProjectRefForDirectory = (
+  directory: string,
+  projects: Array<{ id: string; path: string }>,
+  activeProjectId: string | null,
+): { id: string; path: string } | null => {
+  const normalized = normalizeProjectPath(directory.trim());
+  if (!normalized) {
+    return null;
+  }
+
+  const activeProject = activeProjectId
+    ? projects.find((project) => project.id === activeProjectId) ?? null
+    : null;
+
+  if (activeProject?.path) {
+    const activePath = normalizeProjectPath(activeProject.path);
+    if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
+      return { id: activeProject.id, path: activeProject.path };
+    }
+  }
+
+  const match = projects
+    .filter((project) => {
+      const projectPath = normalizeProjectPath(project.path);
+      return normalized === projectPath || normalized.startsWith(`${projectPath}/`);
+    })
+    .sort((left, right) => normalizeProjectPath(right.path).length - normalizeProjectPath(left.path).length)[0];
+
+  return match ? { id: match.id, path: match.path } : null;
+};
+
+const appendDistilledInsightToNotes = (existingNotes: string, insight: string): string => {
+  const trimmedInsight = insight.trim().replace(/^[-*+]\s+/, '');
+  if (!trimmedInsight) {
+    return existingNotes;
+  }
+
+  const trimmedNotes = existingNotes.trimEnd();
+  return trimmedNotes ? `${trimmedNotes}\n${trimmedInsight}` : trimmedInsight;
+};
 
 const DESKTOP_MENU_SIDE_MARGIN_PX = 8;
 const DESKTOP_MENU_FALLBACK_WIDTH_PX = 280;
@@ -192,14 +243,19 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   const [selectedTextMarkdown, setSelectedTextMarkdown] = React.useState('');
   const [isDragging, setIsDragging] = React.useState(false);
   const [isOpening, setIsOpening] = React.useState(false);
+  const [isAddingToNotes, setIsAddingToNotes] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const menuWidthRef = React.useRef(DESKTOP_MENU_FALLBACK_WIDTH_PX);
   const pendingSelectionRef = React.useRef<SelectionPayload | null>(null);
   const openRafRef = React.useRef<number | null>(null);
   const isMenuVisibleRef = React.useRef(false);
   const createSession = useSessionUIStore((state) => state.createSession);
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setPendingInputText = useInputStore((state) => state.setPendingInputText);
   const isMobile = useUIStore((state) => state.isMobile);
+  const projects = useProjectsStore((state) => state.projects);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const sessions = useSessions();
 
   React.useEffect(() => {
     isMenuVisibleRef.current = position.show;
@@ -456,6 +512,57 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     window.getSelection()?.removeAllRanges();
   }, [selectedText, hideMenu]);
 
+  const currentSession = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    return sessions.find((session) => session.id === currentSessionId) ?? null;
+  }, [currentSessionId, sessions]);
+
+  const currentProjectRef = React.useMemo(() => {
+    const directory = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
+    return resolveProjectRefForDirectory(directory, projects, activeProjectId);
+  }, [activeProjectId, currentSession?.directory, projects]);
+
+  const handleAddToNotes = React.useCallback(async () => {
+    if (!selectedText || !currentProjectRef) {
+      if (!currentProjectRef) {
+        toast.error('No project found for this session');
+      }
+      return;
+    }
+
+    try {
+      setIsAddingToNotes(true);
+      const distilledInsight = await summarizeText(selectedText, {
+        threshold: 0,
+        maxLength: 100,
+        mode: 'note',
+      });
+      const projectData = await getProjectNotesAndTodos(currentProjectRef);
+      const nextNotes = appendDistilledInsightToNotes(projectData.notes, distilledInsight);
+      const saved = await saveProjectNotesAndTodos(currentProjectRef, {
+        notes: nextNotes,
+        todos: projectData.todos,
+      });
+      if (!saved) {
+        toast.error('Failed to add to notes');
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('openchamber:project-notes-updated', {
+        detail: { projectId: currentProjectRef.id },
+      }));
+      toast.success('Added distilled insight to notes');
+      hideMenu();
+      window.getSelection()?.removeAllRanges();
+    } catch (error) {
+      const description = error instanceof Error ? error.message : undefined;
+      toast.error('Failed to add to notes', description ? { description } : undefined);
+    } finally {
+      setIsAddingToNotes(false);
+    }
+  }, [currentProjectRef, hideMenu, selectedText]);
+
   if (!position.show) return null;
 
   // Mobile: Show as a bar at the bottom of the screen, above the keyboard
@@ -520,6 +627,22 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           <RiFileCopyLine className="h-5 w-5" />
           <span>Copy</span>
         </button>
+
+        <button
+          onClick={handleAddToNotes}
+          disabled={isAddingToNotes}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-lg',
+            'text-sm font-medium',
+            'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
+            'active:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed',
+            'transition-opacity duration-150'
+          )}
+          type="button"
+        >
+          {isAddingToNotes ? <RiLoader4Line className="h-5 w-5 animate-spin" /> : <RiBookletLine className="h-5 w-5" />}
+          <span>Add to notes</span>
+        </button>
       </div>,
       document.body
     );
@@ -578,6 +701,25 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         >
           <RiChatNewLine className="h-4 w-4" />
           <span className="whitespace-nowrap">New session</span>
+        </button>
+
+        <div className="w-px h-4 bg-[var(--interactive-border)]" />
+
+        <button
+          onClick={handleAddToNotes}
+          disabled={isAddingToNotes}
+          className={cn(
+            'flex items-center gap-1.5 px-2 py-1 rounded-md',
+            'text-sm font-medium',
+            'text-[var(--surface-foreground)]',
+            'hover:bg-[var(--interactive-hover)] disabled:opacity-60 disabled:cursor-not-allowed',
+            'transition-colors duration-150'
+          )}
+          title="Save distilled insight to notes"
+          type="button"
+        >
+          {isAddingToNotes ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : <RiBookletLine className="h-4 w-4" />}
+          <span className="whitespace-nowrap">Add to notes</span>
         </button>
       </div>
     </div>,
