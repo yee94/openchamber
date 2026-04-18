@@ -120,45 +120,46 @@ Files changed across these commits:
     title: 'PR Review Instructions',
     group: 'GitHub',
     description: 'Hidden instructions attached when generating a PR review response.',
-    template: `Before reporting issues:
-- First identify the PR intent (what it's trying to achieve) from title/body/diff, then evaluate whether the implementation matches that intent; call out missing pieces, incorrect behavior vs intent, and scope creep.
-- Gather any needed repository context (code, config, docs) to validate assumptions.
-- No speculation: if something is unclear or cannot be verified, say what's missing and ask for it instead of guessing.
+    template: `You are drafting a pull request review comment that will be posted back to the PR author. You are not the implementer; do not propose to write code or run commands.
+
+Before drafting:
+- Read the PR title and body first to anchor on the author's intent. Evaluate whether the implementation matches that intent — missing pieces, incorrect behavior vs intent, scope creep.
+- The PR diff is the source of truth for what changed; the repo on disk may not yet reflect those changes. Read the diff carefully. Use the repo only as ancillary context (imports, call sites, existing patterns, nearby code) when you need to verify a specific claim — not to discover the changes themselves.
+- No speculation: every reported issue must be grounded in the diff plus ancillary repo evidence you actually read. If a claim cannot be verified, drop it — do not hedge or guess.
+- Clarifying question: if the PR's intent itself is unreadable (title/body give no "why", diff is ambiguous on purpose), ask me one focused question about intent and stop. Do not open a discovery loop — this is a review, not a planning session.
+
+High-signal bar — only report issues that meet all of:
+- Objective and verifiable from the diff plus ancillary repo evidence.
+- Introduced by this PR (not pre-existing).
+- Material: bugs that will cause incorrect runtime behavior, security/privacy risks, correctness edge cases, backwards-compat breakage, missing implementations across modules/targets, boundary violations, OR a clear CLAUDE.md / AGENTS.md violation where you can quote the exact rule.
+
+Do NOT report:
+- Pre-existing issues unrelated to the diff.
+- Pedantic nitpicks a senior engineer would not flag.
+- Issues a linter would catch.
+- Subjective style preferences not explicitly required by CLAUDE.md / AGENTS.md.
+- "Might" / "could" / "potential" concerns without concrete evidence.
+- Rules mentioned in CLAUDE.md / AGENTS.md but explicitly silenced in the code (e.g., via an ignore comment or documented exception).
+- Missing tests / coverage gaps unless CLAUDE.md / AGENTS.md explicitly requires them for the changed area.
+
+Validation pass: before writing the final comment, re-check each candidate issue against the diff + ancillary repo evidence. Drop anything you are not certain about. False positives waste the author's time.
 
 Output rules:
-- Start with a 1-2 sentence summary.
-- Provide a single concise PR review comment.
-- No emojis. No code snippets. No fenced blocks.
-- Short inline code identifiers allowed, but no snippets or fenced blocks.
-- Reference evidence with file paths and line ranges (e.g., path/to/file.ts:120-138). If exact lines aren't available, cite the file and say "approx" + why.
-- Keep the entire comment under ~300 words.
-
-Report:
-- Must-fix issues (blocking)-brief why and a one-line action each.
-- Nice-to-have improvements (optional)-brief why and a one-line action each.
-
-Quality & safety (general):
-- Call out correctness risks, edge cases, performance regressions, security/privacy concerns, and backwards-compatibility risks.
-- Call out missing tests/verification steps and suggest the minimal validation needed.
-- Note readability/maintainability issues when they materially affect future changes.
-
-Applicability (only if relevant):
-- If changes affect multiple components/targets/environments (e.g., client/server, OSs, deployments), state what is affected vs not, and why.
-
-Architecture:
-- Call out breakages, missing implementations across modules/targets, boundary violations, and cross-cutting concerns (errors, logging/observability, accessibility).
-
-Precedence:
-- If local precedent conflicts with best practices, state it and suggest a follow-up task.
-
-Do not implement changes until I confirm; end with a short "Next actions" sentence describing the recommended plan.
+- Produce a single review comment addressed to the PR author, using the exact format below.
+- No emojis. No code snippets. No fenced blocks. Short inline code identifiers are fine.
+- Reference evidence with file paths and line ranges (e.g., path/to/file.ts:120-138) derived from the diff. Use "approx" only as a last resort when the diff does not expose exact lines.
+- One bullet per unique issue; do not duplicate an issue across sections.
+- Keep the whole comment under ~300 words.
 
 Format exactly:
+<1-2 sentence summary of intent and top-level verdict>
+
 Must-fix:
 - <issue> - <brief why> - <file:line-range> - Action: <one-line action>
 Nice-to-have:
 - <issue> - <brief why> - <file:line-range> - Action: <one-line action>
-If no issues, write:
+
+If nothing clears the high-signal bar, write:
 Must-fix:
 - None
 Nice-to-have:
@@ -184,14 +185,18 @@ Nice-to-have:
 Process:
 - First classify the issue type (bug / feature request / question/support / refactor / ops) and state it as: Type: <one label>.
 - Gather any needed repository context (code, config, docs) to validate assumptions.
-- After gathering, if anything is still unclear or cannot be verified, do not speculate-state what's missing and ask targeted questions.
+- After gathering, if anything is still unclear or cannot be verified, do not speculate — state what's missing and ask targeted questions.
+
+Mode selection by type:
+- Bug / Question/Support / Ops: deliver the response directly using the matching template below. Do not bombard me with questions for straightforward diagnosis; use "Missing info" / "Repro/diagnostics needed" fields instead.
+- Feature request / Refactor with substantive unknowns: this is effectively a planning session. Do not emit the Feature template on the first turn. Instead, ask me focused clarifying questions in batches of at most 3, one topic at a time (scope, constraints, tradeoffs, UX, etc.), wait for answers, drop questions that became irrelevant, and repeat until you have no more substantive questions. Only then emit the Feature template.
 
 Output rules:
 - Compact output; pick ONE template below and omit the others.
 - No emojis. No code snippets. No fenced blocks.
 - Short inline code identifiers allowed.
 - Reference evidence with file paths and line ranges when applicable; if exact lines are not available, cite the file and say "approx" + why.
-- Keep the entire response under ~300 words.
+- Keep the entire response under ~300 words (applies to the final template output, not to clarifying-question turns).
 
 Templates (choose one):
 Bug:
@@ -249,8 +254,8 @@ Do not implement changes until I confirm; end with: "Next actions: <1 sentence>"
     template: `Use the attached comments payload.
 - Identify required vs optional changes.
 - Call out intent/implementation mismatch if present.
-- Propose a minimal plan and verification steps.
-- No speculation: ask for missing info if needed.`,
+- Before proposing a plan: if a comment's intent is ambiguous, or the required change depends on a tradeoff only I can decide, ask me focused clarifying questions in batches of at most 3 and wait for answers. Do not speculate.
+- Once intent is clear, propose a minimal plan and verification steps.`,
   },
   {
     id: 'github.pr.comment.single.visible',
@@ -267,8 +272,8 @@ Do not implement changes until I confirm; end with: "Next actions: <1 sentence>"
     template: `Use the attached single-comment payload.
 - Explain what the reviewer is asking for.
 - Identify exact code areas likely impacted.
-- Propose a minimal implementation plan and verification steps.
-- Call out ambiguity and ask focused follow-up questions if needed.`,
+- Before proposing a plan: if the reviewer's intent is ambiguous or the required change depends on a tradeoff only I can decide, ask me focused clarifying questions in batches of at most 3 and wait for answers. Do not speculate.
+- Once intent is clear, propose a minimal implementation plan and verification steps.`,
   },
   {
     id: 'git.conflict.resolve.visible',
@@ -374,10 +379,22 @@ Important:
     ],
     template: `You are starting from a project todo item.
 Todo: {{todo_text}}
-Your job right now is to produce an implementation plan for this todo, not to implement it yet.
-Before writing the plan, inspect the repository and gather the necessary context from relevant files, module docs, existing patterns, and nearby code.
-Identify the affected areas, constraints, dependencies, likely risks, and validation steps based on the actual repo state.
-Then provide a concrete implementation plan grounded in that repo context. Make assumptions and missing context explicit.`,
+Your job right now is to produce a thorough implementation plan for this todo, not to implement it yet. Optimize for a well-considered plan, not a fast one.
+
+Work back and forth with me. Do not dump a wall of questions. Do not jump to the full plan.
+
+Discovery — questions in batches of 3:
+1. First, inspect the repo — relevant files, module docs, existing patterns, nearby code, constraints, dependencies — enough to form informed questions, not enough to guess the plan.
+2. Ask me at most 3 questions per turn. Each batch should be focused on one topic at a time (e.g., scope, architecture, data model, UX, edge cases). Pick the topic that most blocks the plan right now.
+3. Wait for my answers. Use them to refine your understanding, re-read code if needed, and prepare the next batch.
+4. Questions that became irrelevant after my earlier answers — drop them, don't ask.
+5. Repeat until you have no more substantive questions.
+
+Alignment:
+6. Share a short outline: affected areas, proposed approach, main risks. Wait for my confirmation or corrections. Iterate on the outline until I confirm.
+
+Final plan:
+7. Once aligned, deliver the concrete implementation plan grounded in the repo context. Make remaining assumptions and missing context explicit.`,
   },
   {
     id: 'plan.improve.visible',
@@ -402,15 +419,22 @@ Then provide a concrete implementation plan grounded in that repo context. Make 
 Plan title: {{plan_title}}
 This plan is stored in the file: {{plan_path}}
 Read that file first and treat its current contents as the source of truth for the plan.
-First inspect the repository and gather the necessary context from relevant files, module docs, existing patterns, and nearby code.
-Your main goal in this task is to improve the plan so it is better grounded in the actual repo state.
-Do not implement yet. Produce an improved implementation plan, call out assumptions, missing context, risks, and validation steps.
-Discuss important plan decisions, tradeoffs, gaps, or risks with the user in a concise and understandable way.
-Keep the response short and to the point. Do not dump a long wall of text.
-Prefer a short summary of proposed changes, open questions, and recommendations over rewriting the whole plan inline.
-Do not return the full plan as a markdown code block or fenced block.
-If useful, quote only small targeted snippets or describe the exact sections that should change.
-After you finish researching, propose the improved plan and explicitly offer to edit this same file with those plan changes.`,
+Your job right now is to improve this plan so it is better grounded in the actual repo state. Do not implement yet. Optimize for a well-considered improved plan, not a fast one.
+
+Work back and forth with me. Do not dump a wall of questions. Do not jump to the full improved plan.
+
+Discovery — questions in batches of 3:
+1. First, inspect the repo and map it against the plan — relevant files, module docs, existing patterns, nearby code, constraints, dependencies. Identify gaps, plan assumptions that don't match the repo, missing context, and risks.
+2. Ask me at most 3 questions per turn. Each batch should be focused on one topic at a time (e.g., scope deltas, architecture assumptions, data model, UX, edge cases, tradeoffs between approaches). Pick the topic that most blocks a confident improvement right now.
+3. Wait for my answers. Use them to refine your understanding, re-read code if needed, and prepare the next batch.
+4. Questions that became irrelevant after my earlier answers — drop them, don't ask.
+5. Repeat until you have no more substantive questions.
+
+Alignment:
+6. Share a short summary of proposed changes — what sections of the plan change and why, open questions, recommendations. Do not rewrite the whole plan inline and do not return the full plan as a code block. Quote only small targeted snippets or describe the exact sections to change. Wait for my confirmation or corrections. Iterate until I confirm.
+
+Final step:
+7. Once aligned, explicitly offer to edit this same file ({{plan_path}}) with the agreed changes. Make remaining assumptions and missing context explicit.`,
   },
   {
     id: 'plan.implement.visible',
@@ -434,11 +458,13 @@ After you finish researching, propose the improved plan and explicitly offer to 
     template: `You are starting from an existing implementation plan.
 Plan title: {{plan_title}}
 This plan is stored in the file: {{plan_path}}
-Read that file first and treat its current contents as the source of truth for the plan.
-Use this plan as task context and begin implementing it.
-Before and during implementation, inspect the repository and gather the necessary context from relevant files, module docs, existing patterns, and nearby code.
-Do the implementation work. If you discover mismatches between the plan and the repo reality, make those adjustments explicit and continue with implementation using the corrected understanding.
-If implementation reveals plan adjustments, explicitly tell the user those plan changes should be saved back into this same file.`,
+Read that file first and treat its current contents as the source of truth for the plan. The plan is already agreed; implement it end-to-end without deviating from it.
+
+Before and during implementation, build a deep understanding of the project — relevant files, module docs, existing patterns, nearby code, conventions — so your choices fit the repo's style.
+
+Do the implementation work continuously. When a plan step is ambiguous, do not stop to ask — make the best judgment call consistent with the plan's intent and the repo's conventions, and briefly note the decision inline so it is visible on review. Prefer forward progress over interrupting me.
+
+Do not expand scope beyond the plan. If during implementation you find the plan itself is wrong or genuinely blocks completion (not merely ambiguous), stop, state exactly what is broken and why, and propose a plan adjustment to save back into this same file ({{plan_path}}) before continuing.`,
   },
 ] as const;
 
