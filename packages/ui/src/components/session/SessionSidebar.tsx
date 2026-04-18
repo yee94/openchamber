@@ -4,7 +4,6 @@ import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, startDesktopWindowDrag } from '@/lib/desktop';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -16,11 +15,9 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { useGitStore, useGitAllBranches, useGitRepoStatusMap } from '@/stores/useGitStore';
-import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { NewWorktreeDialog } from './NewWorktreeDialog';
 import { ScheduledTasksDialog } from './ScheduledTasksDialog';
-import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useArchivedAutoFolders } from './sidebar/hooks/useArchivedAutoFolders';
@@ -142,7 +139,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
-  const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [openSidebarMenuKey, setOpenSidebarMenuKey] = React.useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = React.useState('');
@@ -230,7 +226,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
   const setAboutDialogOpen = useUIStore((state) => state.setAboutDialogOpen);
-  const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const setScheduledTasksDialogOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
@@ -893,44 +888,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     </div>
   );
 
-  const activeProjectForHeader = React.useMemo(
-    () => normalizedProjects.find((project) => project.id === activeProjectId) ?? normalizedProjects[0] ?? null,
-    [normalizedProjects, activeProjectId],
-  );
-  const activeProjectRefForHeader = React.useMemo(
-    () => (activeProjectForHeader
-      ? {
-        id: activeProjectForHeader.id,
-        path: activeProjectForHeader.normalizedPath,
-      }
-      : null),
-    [activeProjectForHeader],
-  );
-  const activeProjectLabelForHeader = React.useMemo(
-    () => (activeProjectForHeader
-      ? activeProjectForHeader.label?.trim()
-        || formatDirectoryName(activeProjectForHeader.normalizedPath, homeDirectory)
-        || activeProjectForHeader.normalizedPath
-      : null),
-    [activeProjectForHeader, homeDirectory],
-  );
-
-  const activeProjectIsRepo = React.useMemo(
-    () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
-    [activeProjectForHeader, projectRepoStatus],
-  );
-  // Only flip to false once the new project's status is actually resolved (present in map)
-  const stableActiveProjectIsRepo = activeProjectForHeader && projectRepoStatus.has(activeProjectForHeader.id)
-    ? activeProjectIsRepo
-    : lastRepoStatusRef.current;
   const reserveHeaderActionsSpace = true;
-  const useMobileNotesPanel = mobileVariant || deviceInfo.isMobile;
-
-  React.useEffect(() => {
-    if (!activeProjectForHeader) {
-      setProjectNotesPanelOpen(false);
-    }
-  }, [activeProjectForHeader]);
 
   const { currentSessionDirectory } = useProjectSessionSelection({
     projectSections,
@@ -1479,14 +1437,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         hideDirectoryControls={hideDirectoryControls}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}
         handleNewSession={handleSidebarNewSession}
-        useMobileNotesPanel={useMobileNotesPanel}
-        projectNotesPanelOpen={projectNotesPanelOpen}
-        setProjectNotesPanelOpen={setProjectNotesPanelOpen}
-        activeProjectRefForHeader={activeProjectRefForHeader}
-        activeProjectLabelForHeader={activeProjectLabelForHeader}
         canOpenMultiRun={projects.length > 0}
         openMultiRunLauncher={handleOpenMultiRunFromHeader}
-        stableActiveProjectIsRepo={stableActiveProjectIsRepo}
         headerActionIconClass={headerActionIconClass}
         reserveHeaderActionsSpace={reserveHeaderActionsSpace}
         headerActionButtonClass={headerActionButtonClass}
@@ -1593,22 +1545,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       />
 
       <ScheduledTasksDialog />
-
-      {useMobileNotesPanel ? (
-        <MobileOverlayPanel
-          open={projectNotesPanelOpen}
-          onClose={() => setProjectNotesPanelOpen(false)}
-          title={activeProjectLabelForHeader ? `Project notes - ${activeProjectLabelForHeader}` : 'Project notes'}
-        >
-          <ProjectNotesTodoPanel
-            projectRef={activeProjectRefForHeader}
-            projectLabel={activeProjectLabelForHeader}
-            canCreateWorktree={stableActiveProjectIsRepo}
-            onActionComplete={() => setProjectNotesPanelOpen(false)}
-            className="p-0"
-          />
-        </MobileOverlayPanel>
-      ) : null}
 
       <SessionDeleteConfirmDialog
         value={deleteSessionConfirm}
