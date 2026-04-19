@@ -15,7 +15,7 @@ OpenChamber provides UI runtimes (web/desktop/VS Code) for interacting with an O
 - Runtime/tooling: Bun (`package.json` `packageManager`), Node >=20 (`package.json` `engines`)
 - UI: React, TypeScript, Vite, Tailwind v4
 - State: Zustand (`packages/ui/src/stores/`)
-- UI primitives: Radix UI (`package.json` deps), HeroUI (`package.json` deps), Remixicon (`package.json` deps)
+- UI primitives: Base UI (`@base-ui/react`, primary source for dropdown/select/dialog/menu/tooltip/etc. — wrappers live in `packages/ui/src/components/ui/`), Radix UI (`package.json` deps, legacy usages being migrated), HeroUI (`package.json` deps), Remixicon (`package.json` deps)
 - Server: Express (`packages/web/server/index.js`)
 - Desktop: Tauri v2 (`packages/desktop/src-tauri/`)
 - VS Code: extension + webview (`packages/vscode/`)
