@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { GridLoader } from '@/components/ui/grid-loader';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -45,12 +44,6 @@ import type { SessionNode, SessionSummaryMeta } from './types';
 import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
-
-const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
-
-const getAttentionDiamondDelay = (index: number): string => {
-  return index === 4 ? '0ms' : '130ms';
-};
 
 type Folder = { id: string; name: string; sessionIds: string[] };
 
@@ -387,17 +380,19 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const showUnreadStatus = !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
   const statusMarkerContent = isStreaming
-    ? <GridLoader size="xs" className="text-primary" />
+    ? (
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-primary animate-busy-pulse"
+          aria-label="Session active"
+          title="Session active"
+        />
+      )
     : (
-        <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label="Unread updates" title="Unread updates">
-          {Array.from({ length: 9 }, (_, i) => (
-            ATTENTION_DIAMOND_INDICES.has(i) ? (
-              <span key={i} className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse" style={{ animationDelay: getAttentionDiamondDelay(i) }} />
-            ) : (
-              <span key={i} className="h-[3px] w-[3px]" />
-            )
-          ))}
-        </span>
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
+          aria-label="Unread updates"
+          title="Unread updates"
+        />
       );
   const inlineStatusMarker = !isMinimalMode && showStatusMarker ? (
     <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
