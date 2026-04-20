@@ -44,6 +44,7 @@ import type { SessionNode, SessionSummaryMeta } from './types';
 import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
+import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 
 type Folder = { id: string; name: string; sessionIds: string[] };
 
@@ -250,14 +251,37 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const hideOnHoverClass = isVSCode
     ? 'group-hover:opacity-0'
     : 'group-hover:opacity-0 group-focus-within:opacity-0';
-  const revealPaddingClass = isVSCode
-    ? 'group-hover:pr-5'
-    : 'group-hover:pr-5 group-focus-within:pr-5';
+  const revealPaddingClass = isMinimalMode
+    ? (isVSCode
+        ? 'group-hover:pr-1'
+        : 'group-hover:pr-1 group-focus-within:pr-1')
+    : (isVSCode
+        ? 'group-hover:pr-5'
+        : 'group-hover:pr-5 group-focus-within:pr-5');
   const suppressNextSelectRef = React.useRef(false);
 
   const session = node.session;
   const liveSession = useSession(session.id);
   const resolvedSession = liveSession ?? session;
+
+  const selectionModeEnabled = useSessionMultiSelectStore((state) => state.enabled);
+  const isRowSelected = useSessionMultiSelectStore(
+    React.useCallback((state) => state.selectedIds.has(session.id), [session.id]),
+  );
+  const toggleRowSelected = useSessionMultiSelectStore((state) => state.toggleSelected);
+  const setRowRange = useSessionMultiSelectStore((state) => state.setRange);
+
+  const collectNodeDescendantIds = React.useCallback((root: SessionNode): string[] => {
+    const out: string[] = [];
+    const walk = (n: SessionNode) => {
+      n.children.forEach((child) => {
+        out.push(child.session.id);
+        walk(child);
+      });
+    };
+    walk(root);
+    return out;
+  }, []);
   const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
   const sessionDirectory =
     normalizePath((session as Session & { directory?: string | null }).directory ?? null)
@@ -460,16 +484,35 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     event.stopPropagation();
   };
 
-  const handleRowSelect = () => {
+  const handleRowSelect = (event?: React.MouseEvent<HTMLButtonElement>) => {
     if (suppressNextSelectRef.current) {
       suppressNextSelectRef.current = false;
+      return;
+    }
+    if (selectionModeEnabled) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      if (event?.shiftKey) {
+        const rows = typeof document !== 'undefined'
+          ? Array.from(document.querySelectorAll<HTMLElement>('[data-session-row]'))
+          : [];
+        const orderedIds = rows
+          .map((el) => el.getAttribute('data-session-row'))
+          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        const currentAnchor = useSessionMultiSelectStore.getState().anchorId;
+        const descendantsById = new Map<string, string[]>();
+        descendantsById.set(session.id, collectNodeDescendantIds(node));
+        setRowRange(currentAnchor, session.id, orderedIds, sessionDirectory ?? null, descendantsById);
+        return;
+      }
+      toggleRowSelected(session.id, sessionDirectory ?? null, collectNodeDescendantIds(node));
       return;
     }
     handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId);
   };
 
   const handleRowMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+    if (event.button === 2 || (event.button === 0 && event.ctrlKey && !selectionModeEnabled)) {
       suppressNextSelectRef.current = true;
     }
   };
@@ -578,7 +621,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     <React.Fragment key={session.id}>
       <DraggableSessionRow sessionId={session.id} sessionDirectory={sessionDirectory ?? null} sessionTitle={sessionTitle}>
         <div
-          className={cn('group relative flex items-center rounded-sm px-1.5 py-1', isMissingDirectory ? 'opacity-75' : '', depth > 0 && 'pl-[20px]')}
+          data-session-row={session.id}
+          data-session-scope={sessionDirectory ?? ''}
+          data-session-archived={archivedBucket ? '1' : '0'}
+          className={cn(
+            'group relative my-0.5 flex items-center rounded-sm px-1.5 py-1',
+            isMissingDirectory ? 'opacity-75' : '',
+            depth > 0 && 'pl-[20px]',
+            isRowSelected && 'bg-primary/15',
+          )}
         >
           {minimalLeadingStatusMarker}
           {subsessionChevron}
@@ -590,7 +641,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     type="button"
                     disabled={isMissingDirectory}
                     onMouseDown={handleRowMouseDown}
-                    onClick={handleRowSelect}
+                    onClick={(event) => handleRowSelect(event)}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       handleSessionDoubleClick();
@@ -651,7 +702,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 type="button"
                 disabled={isMissingDirectory}
                 onMouseDown={handleRowMouseDown}
-                onClick={handleRowSelect}
+                onClick={(event) => handleRowSelect(event)}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   handleSessionDoubleClick();
