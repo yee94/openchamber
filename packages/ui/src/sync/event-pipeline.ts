@@ -19,7 +19,7 @@ export type QueuedEvent = {
 
 export type FlushHandler = (events: QueuedEvent[]) => void
 
-const FLUSH_FRAME_MS = 16
+const FLUSH_FRAME_MS = 33
 const STREAM_YIELD_MS = 8
 const RECONNECT_DELAY_MS = 250
 const HEARTBEAT_TIMEOUT_MS = 15_000
