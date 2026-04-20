@@ -69,11 +69,10 @@ const AppIcon = ({
 
 type OpenInAppButtonProps = {
   directory: string;
-  activeFilePath?: string | null;
   className?: string;
 };
 
-export const OpenInAppButton = ({ directory, activeFilePath, className }: OpenInAppButtonProps) => {
+export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) => {
   const selectedAppId = useOpenInAppsStore((state) => state.selectedAppId);
   const availableApps = useOpenInAppsStore((state) => state.availableApps);
   const isCacheStale = useOpenInAppsStore((state) => state.isCacheStale);
@@ -108,7 +107,7 @@ export const OpenInAppButton = ({ directory, activeFilePath, className }: OpenIn
   }
 
   const handleOpen = async (app: OpenInAppOption) => {
-    const opened = await openDesktopProjectInApp(directory, app.id, app.appName, activeFilePath);
+    const opened = await openDesktopProjectInApp(directory, app.id, app.appName);
     if (!opened) {
       await openDesktopPath(directory, app.appName);
     }

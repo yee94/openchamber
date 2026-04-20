@@ -3,7 +3,8 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, startDesktopWindowDrag } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopWindowFullscreen as getDesktopWindowFullscreen, onDesktopWindowResized, startDesktopWindowDrag } from '@/lib/desktopNative';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -403,9 +404,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
     const syncFullscreenState = async () => {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const currentWindow = getCurrentWindow();
-        const fullscreen = await currentWindow.isFullscreen();
+        const fullscreen = await getDesktopWindowFullscreen();
         if (!disposed) {
           setIsDesktopWindowFullscreen(fullscreen);
         }
@@ -418,9 +417,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
     const attach = async () => {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const currentWindow = getCurrentWindow();
-        unlistenResize = await currentWindow.onResized(() => {
+        unlistenResize = onDesktopWindowResized(() => {
           void syncFullscreenState();
         });
       } catch {

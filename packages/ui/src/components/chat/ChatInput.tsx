@@ -756,7 +756,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const composerHighlightRef = React.useRef<HTMLDivElement | null>(null);
 
     const isDesktopExpanded = isExpandedInput && !isMobile;
-    const chatInputRadius = 'var(--radius-lg)';
+    const chatInputRadius = 'var(--radius-xl)';
 
     const sendableAttachedFiles = attachedFiles;
 

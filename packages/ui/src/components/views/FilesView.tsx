@@ -80,8 +80,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
-import { openDesktopPath, openDesktopProjectInApp } from '@/lib/desktop';
-import { OPEN_DIRECTORY_APP_IDS } from '@/lib/openInApps';
+import { openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 
@@ -510,17 +509,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isFloatingToolbarOpen, setIsFloatingToolbarOpen] = React.useState(false);
   const floatingToolbarRef = React.useRef<HTMLDivElement | null>(null);
+  const toolbarDropdownOpenCountRef = React.useRef(0);
+
+  const handleToolbarDropdownOpenChange = React.useCallback((open: boolean) => {
+    toolbarDropdownOpenCountRef.current = Math.max(
+      0,
+      toolbarDropdownOpenCountRef.current + (open ? 1 : -1),
+    );
+  }, []);
+
+  const isClickInsidePortalledMenu = React.useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    return target.closest('[data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-item"]') !== null;
+  }, []);
 
   React.useEffect(() => {
     if (!isFloatingToolbarOpen) return;
     const handler = (event: MouseEvent) => {
+      if (toolbarDropdownOpenCountRef.current > 0) return;
+      if (isClickInsidePortalledMenu(event.target)) return;
       if (floatingToolbarRef.current && !floatingToolbarRef.current.contains(event.target as Node)) {
         setIsFloatingToolbarOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [isFloatingToolbarOpen]);
+  }, [isClickInsidePortalledMenu, isFloatingToolbarOpen]);
   const [textViewMode, setTextViewMode] = React.useState<'view' | 'edit'>('edit');
   const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
   const [jsonViewMode, setJsonViewMode] = React.useState<'tree' | 'text'>('tree');
@@ -664,21 +678,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   }, [files]);
 
   const handleOpenInApp = React.useCallback(async (app: { id: string; appName: string }) => {
-    if (!selectedFile?.path || !root) {
+    if (!selectedFile?.path) {
       return;
     }
 
-    const fileDirectory = getParentDirectoryPath(selectedFile.path) || root;
-
-    if (OPEN_DIRECTORY_APP_IDS.has(app.id)) {
-      const openedDirectory = await openDesktopPath(fileDirectory, app.appName);
-      if (!openedDirectory) {
-        toast.error(`Failed to open in ${app.appName}`);
-      }
-      return;
-    }
-
-    const openedInApp = await openDesktopProjectInApp(root, app.id, app.appName, selectedFile.path);
+    const openedInApp = await openDesktopFileInApp(selectedFile.path, app.id, app.appName);
     if (openedInApp) {
       return;
     }
@@ -688,10 +692,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    const openedDirectory = await openDesktopPath(fileDirectory, app.appName);
-    if (!openedDirectory) {
-      toast.error(`Failed to open in ${app.appName}`);
+    const fileDirectory = getParentDirectoryPath(selectedFile.path) || root;
+    if (fileDirectory) {
+      const openedDirectory = await openDesktopPath(fileDirectory, app.appName);
+      if (openedDirectory) {
+        return;
+      }
     }
+    toast.error(`Failed to open in ${app.appName}`);
   }, [root, selectedFile?.path]);
 
   const handleOpenDialog = React.useCallback((type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => {
@@ -2354,7 +2362,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           ) : null
         )}
 
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={handleToolbarDropdownOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -2758,7 +2766,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             ref={floatingToolbarRef}
             className="absolute right-3 top-3 z-30"
             onMouseEnter={() => setIsFloatingToolbarOpen(true)}
-            onMouseLeave={() => setIsFloatingToolbarOpen(false)}
+            onMouseLeave={() => {
+              if (toolbarDropdownOpenCountRef.current > 0) return;
+              setIsFloatingToolbarOpen(false);
+            }}
           >
             {isFloatingToolbarOpen ? (
               renderFloatingFileControls()

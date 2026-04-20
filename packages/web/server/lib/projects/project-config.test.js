@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import os from 'os';
 import path from 'path';
 import { mkdtemp, rm, readFile, writeFile } from 'fs/promises';
