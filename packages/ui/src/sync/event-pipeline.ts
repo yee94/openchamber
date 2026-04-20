@@ -245,12 +245,19 @@ export function createEventPipeline(input: EventPipelineInput) {
   let heartbeat: ReturnType<typeof setTimeout> | undefined
 
   const markConnected = () => {
+    const wasDisconnected = disconnected
     disconnected = false
     if (hasConnected) {
       onReconnect?.()
       return
     }
     hasConnected = true
+    // First successful connect, but an earlier attempt already fired onDisconnect
+    // (e.g. sidecar was not ready at launch). Consumer state is stuck at
+    // isConnected=false — fire onReconnect to unstick it.
+    if (wasDisconnected) {
+      onReconnect?.()
+    }
   }
 
   const enqueueEvent = (directory: string, payload: Event) => {
