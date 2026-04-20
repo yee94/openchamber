@@ -159,7 +159,7 @@ export const useScrollEngine = ({
         resize.observe(container);
 
         const mutation = new MutationObserver(onChange);
-        mutation.observe(container, { childList: true, subtree: true, characterData: true });
+        mutation.observe(container, { childList: true, subtree: true });
 
         followObserversRef.current = { resize, mutation };
     }, [containerRef, runFollowBurst]);
