@@ -1,5 +1,5 @@
 import React from 'react';
-import { BusyDots } from './BusyDots';
+import { cn } from '@/lib/utils';
 
 const MAX_BUSY_DURATION_MS = 5 * 60 * 1000; // 5 minutes cap
 
@@ -80,9 +80,12 @@ export const MinDurationShineText: React.FC<MinDurationShineTextProps> = ({
     }, [active, minDurationMs, isBusy]);
 
     return (
-        <span className={className} style={style} title={title}>
+        <span
+            className={cn('transition-opacity duration-200', isBusy && 'opacity-70', className)}
+            style={style}
+            title={title}
+        >
             {children}
-            {isBusy ? <BusyDots /> : null}
         </span>
     );
 };
