@@ -581,11 +581,22 @@ const focusForegroundWindow = () => {
   const target = state.mainWindow && !state.mainWindow.isDestroyed()
     ? state.mainWindow
     : windows.find((window) => window.isVisible()) || windows[0];
-  if (target.isMinimized()) target.restore();
-  if (!target.isVisible()) target.show();
-  target.focus();
+  // macOS: bring the app to foreground FIRST. When the window is minimized
+  // to the Dock or hidden via Cmd+H, the app is in the background, and
+  // subsequent window.show/restore/focus calls won't pull it forward
+  // unless app.focus runs first.
   if (process.platform === 'darwin') app.focus({ steal: true });
+  if (target.isMinimized()) target.restore();
+  target.show();
+  target.focus();
+  if (typeof target.moveTop === 'function') target.moveTop();
 };
+
+// Keep references to live notifications so they aren't garbage-collected
+// before the OS fires click/close. On macOS, losing the JS reference causes
+// click events to silently stop firing after ~1 min.
+// See https://blog.bloomca.me/2025/02/22/electron-mac-notifications
+const activeNotifications = new Set();
 
 const maybeShowNativeNotification = (rawInput) => {
   const payload = normalizeNotificationInput(rawInput);
@@ -614,12 +625,18 @@ const maybeShowNativeNotification = (rawInput) => {
     ...(process.platform === 'darwin' ? { sound: 'Glass' } : {}),
   });
 
+  activeNotifications.add(notification);
+  const release = () => { activeNotifications.delete(notification); };
+
   notification.on('click', () => {
     focusForegroundWindow();
     if (sessionId) {
       emitToAllWindows('openchamber:open-session', { sessionId });
     }
+    release();
   });
+  notification.on('close', release);
+  notification.on('failed', release);
 
   notification.show();
 };
@@ -2179,9 +2196,8 @@ app.on('activate', async () => {
   if (windows.length > 0) {
     const visibleWindow = windows.find((window) => window.isVisible());
     const targetWindow = visibleWindow || state.mainWindow || windows[0];
-    if (!targetWindow.isVisible()) {
-      targetWindow.show();
-    }
+    if (targetWindow.isMinimized()) targetWindow.restore();
+    targetWindow.show();
     targetWindow.focus();
     return;
   }
