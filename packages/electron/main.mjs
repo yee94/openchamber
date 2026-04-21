@@ -1355,6 +1355,17 @@ const setupAutoUpdater = () => {
       },
     }));
   });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info(`[electron] update-downloaded version=${info?.version || 'unknown'}`);
+    if (state.pendingUpdate) {
+      state.pendingUpdate.downloaded = true;
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    log.error('[electron] autoUpdater error', err);
+  });
 };
 
 const parseRelevantChangelogNotes = async (fromVersion, toVersion) => {
@@ -1892,14 +1903,26 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       }));
       return null;
 
-    case 'desktop_restart':
-      if (state.pendingUpdate?.downloaded && app.isPackaged) {
-        autoUpdater.quitAndInstall(false, true);
-        return null;
-      }
-      app.relaunch();
-      app.exit(0);
+    case 'desktop_restart': {
+      const applyUpdate = Boolean(state.pendingUpdate?.downloaded && app.isPackaged);
+      log.info(`[electron] desktop_restart applyUpdate=${applyUpdate} packaged=${app.isPackaged}`);
+      // Defer so the IPC reply flushes before the app starts shutting down.
+      // Without this, quitAndInstall() can race with the renderer's pending
+      // invoke and the restart appears to do nothing from the UI side.
+      setImmediate(() => {
+        try {
+          if (applyUpdate) {
+            autoUpdater.quitAndInstall(false, true);
+          } else {
+            app.relaunch();
+            app.exit(0);
+          }
+        } catch (err) {
+          log.error('[electron] desktop_restart failed', err);
+        }
+      });
       return null;
+    }
 
     case 'desktop_get_lan_address':
       return await detectLanIPv4Address();
