@@ -126,6 +126,7 @@ const state = {
   quitRequested: false,
   quitConfirmed: false,
   quitConfirmationPending: false,
+  installingUpdate: false,
   quitRiskPollerStarted: false,
   pendingUpdate: null,
   unreachableHosts: new Set(),
@@ -167,10 +168,11 @@ const quitConfirmationMessage = () => {
   return `OpenChamber detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
 };
 
-const performConfirmedQuit = () => {
-  if (state.quitConfirmed) return;
-  state.quitConfirmed = true;
+const prepareForQuit = ({ installingUpdate = false } = {}) => {
   state.quitRequested = true;
+  state.quitConfirmed = true;
+  state.installingUpdate = installingUpdate;
+  state.quitConfirmationPending = false;
 
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     try {
@@ -179,11 +181,18 @@ const performConfirmedQuit = () => {
     }
   }
 
-  try {
-    killSidecar();
-  } catch {
+  if (!installingUpdate) {
+    try {
+      killSidecar();
+    } catch {
+    }
+    void sshManager.shutdownAll().catch(() => {});
   }
-  void sshManager.shutdownAll().catch(() => {});
+};
+
+const performConfirmedQuit = () => {
+  if (state.quitConfirmed) return;
+  prepareForQuit();
 
   // Safety net: force-exit if normal quit sequence stalls (e.g. background
   // handles in electron-updater / fetch refs) after a short grace period.
@@ -1180,7 +1189,9 @@ const createBrowserWindow = ({ label, restoreGeometry, url }) => {
       state.mainWindow = null;
     }
     if (BrowserWindow.getAllWindows().length === 0) {
-      killSidecar();
+      if (!state.installingUpdate) {
+        killSidecar();
+      }
       if (process.platform !== 'darwin') {
         app.quit();
       }
@@ -1947,8 +1958,26 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (!state.pendingUpdate.electronUpdate) {
         throw new Error('Electron updater metadata is not available for this build');
       }
-      await autoUpdater.downloadUpdate();
-      state.pendingUpdate.downloaded = true;
+      if (!state.pendingUpdate.downloaded) {
+        await new Promise((resolve, reject) => {
+          let settled = false;
+          const cleanup = () => {
+            autoUpdater.off('update-downloaded', onDownloaded);
+            autoUpdater.off('error', onError);
+          };
+          const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback(value);
+          };
+          const onDownloaded = () => finish(resolve, null);
+          const onError = (error) => finish(reject, error);
+          autoUpdater.on('update-downloaded', onDownloaded);
+          autoUpdater.on('error', onError);
+          Promise.resolve(autoUpdater.downloadUpdate()).catch((error) => finish(reject, error));
+        });
+      }
       emitToAllWindows('openchamber:update-progress', mapUpdaterProgressEvent({
         event: 'Finished',
         data: {},
@@ -1958,13 +1987,37 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     case 'desktop_restart': {
       const applyUpdate = Boolean(state.pendingUpdate?.downloaded && app.isPackaged);
       log.info(`[electron] desktop_restart applyUpdate=${applyUpdate} packaged=${app.isPackaged}`);
+      if (applyUpdate && process.platform === 'darwin' && typeof app.isInApplicationsFolder === 'function') {
+        try {
+          if (!app.isInApplicationsFolder()) {
+            throw new Error('Desktop update requires OpenChamber.app to be installed in /Applications');
+          }
+        } catch (error) {
+          log.warn('[electron] desktop_restart blocked', error);
+          throw error;
+        }
+      }
+      if (applyUpdate) {
+        // Match the working updater pattern closely: only bypass the macOS
+        // hide-on-close / quit-confirmation guards, leave the rest of the
+        // updater-driven quit/install sequence alone.
+        state.quitRequested = true;
+        state.installingUpdate = true;
+        state.quitConfirmationPending = false;
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          try {
+            debounceWindowStatePersist(state.mainWindow, true);
+          } catch {
+          }
+        }
+      }
       // Defer so the IPC reply flushes before the app starts shutting down.
       // Without this, quitAndInstall() can race with the renderer's pending
       // invoke and the restart appears to do nothing from the UI side.
       setImmediate(() => {
         try {
           if (applyUpdate) {
-            autoUpdater.quitAndInstall(false, true);
+            autoUpdater.quitAndInstall();
           } else {
             app.relaunch();
             app.exit(0);
@@ -2237,15 +2290,17 @@ app.on('window-all-closed', () => {
     return;
   }
 
-  killSidecar();
-  void sshManager.shutdownAll();
+  if (!state.installingUpdate) {
+    killSidecar();
+    void sshManager.shutdownAll();
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', (event) => {
-  if (state.quitConfirmed || process.platform !== 'darwin') {
+  if (state.quitConfirmed || state.installingUpdate || process.platform !== 'darwin') {
     state.quitRequested = true;
     return;
   }
