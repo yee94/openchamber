@@ -1082,7 +1082,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url }) => {
     // Electron's hiddenInset adds its own extra inset, which leaves the controls
     // visibly lower than the app header. Use a plain hidden title bar instead.
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 18 } : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 17 } : undefined,
     webPreferences: {
       additionalArguments: [
         `--openchamber-local-origin=${desktopLocalOrigin}`,
@@ -1119,6 +1119,30 @@ const createBrowserWindow = ({ label, restoreGeometry, url }) => {
   browserWindow.on('blur', () => {
     state.focusedWindowIds.delete(browserWindow.id);
   });
+
+  // Traffic lights disappear during dock-restore animation when using
+  // titleBarStyle:'hidden' + custom trafficLightPosition. macOS caches a
+  // snapshot of the window at miniaturize time and plays it during the
+  // genie-restore animation. We re-assert button position on 'minimize'
+  // (before the snapshot) and 'restore'/'show'/'focus' to cover other
+  // transient reset states AppKit puts the buttons in.
+  if (process.platform === 'darwin') {
+    const refreshTrafficLights = () => {
+      if (browserWindow.isDestroyed()) return;
+      try {
+        browserWindow.setWindowButtonVisibility(true);
+        browserWindow.setTrafficLightPosition({ x: 16, y: 17 });
+      } catch {}
+    };
+    browserWindow.on('minimize', refreshTrafficLights);
+    browserWindow.on('restore', () => {
+      refreshTrafficLights();
+      setTimeout(refreshTrafficLights, 250);
+    });
+    browserWindow.on('show', refreshTrafficLights);
+    browserWindow.on('focus', refreshTrafficLights);
+  }
+
   browserWindow.on('resize', () => {
     emitToWindow(browserWindow, 'openchamber:window-resized');
     debounceWindowStatePersist(browserWindow, false);
