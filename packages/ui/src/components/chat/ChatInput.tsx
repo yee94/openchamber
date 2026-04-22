@@ -28,6 +28,7 @@ import * as sessionActions from '@/sync/session-actions';
 import { useUserMessageHistory } from '@/sync/sync-context';
 import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { appendInlineComments } from '@/lib/messages/inlineComments';
+import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { AttachedFilesList } from './FileAttachment';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
@@ -1530,6 +1531,35 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     });
                 } catch (error) {
                     toast.error(error instanceof Error ? error.message : 'Failed to compact session');
+                }
+                return;
+            }
+            else if (commandName === 'summary' && currentSessionId) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    // Everything after `/summary ` is an optional topic hint
+                    // the user wants the summary focused on.
+                    const topic = normalizedCommand.replace(/^\/summary\b/i, '').trim();
+                    const topicLine = topic ? ` focused on: ${topic}` : '';
+                    const topicBlock = topic
+                        ? `The user asked you to focus this summary on: ${topic}. Prioritize that topic; mention unrelated threads only in passing.`
+                        : '';
+                    const visibleText = await renderMagicPrompt('session.summary.visible', { topic_line: topicLine });
+                    const instructionsText = await renderMagicPrompt('session.summary.instructions', { topic_block: topicBlock });
+                    await sendMessage(
+                        visibleText,
+                        currentProviderId,
+                        currentModelId,
+                        currentAgentName,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        currentVariant,
+                        inputMode,
+                    );
+                    scrollToBottom?.({ instant: true, force: true });
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Failed to generate summary');
                 }
                 return;
             }

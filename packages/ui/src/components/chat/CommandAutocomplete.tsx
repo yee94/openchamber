@@ -13,6 +13,7 @@ interface CommandInfo {
   agent?: string;
   model?: string;
   isBuiltIn?: boolean;
+  isOpenChamber?: boolean;
   isSkill?: boolean;
   scope?: string;
 }
@@ -111,6 +112,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             : []
           ),
           { name: 'compact', description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
+          ...(hasSession
+            ? [{ name: 'summary', description: 'Non-destructive session summary. Optional topic hint after the command.', isOpenChamber: true }]
+            : []
+          ),
         ];
 
         const commandMap = new Map<string, CommandInfo>();
@@ -154,6 +159,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             : []
           ),
           { name: 'compact', description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
+          ...(hasSession
+            ? [{ name: 'summary', description: 'Non-destructive session summary. Optional topic hint after the command.', isOpenChamber: true }]
+            : []
+          ),
         ];
 
         const filtered = (searchQuery
@@ -293,6 +302,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           <div>
             {commands.map((command, index) => {
               const isSystem = command.isBuiltIn;
+              const isOpenChamberBadge = command.isOpenChamber;
               const isProject = command.scope === 'project';
               
               return (
@@ -359,7 +369,18 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                           skill
                         </span>
                       ) : null}
-                      {isSystem ? (
+                      {isOpenChamberBadge ? (
+                        <span
+                          className="text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0"
+                          style={{
+                            backgroundColor: 'color-mix(in srgb, var(--primary-base) 14%, transparent)',
+                            color: 'var(--primary-base)',
+                            borderColor: 'color-mix(in srgb, var(--primary-base) 28%, transparent)',
+                          }}
+                        >
+                          openchamber
+                        </span>
+                      ) : isSystem ? (
                         <span className="text-[10px] leading-none uppercase font-bold tracking-tight bg-[var(--status-warning-background)] text-[var(--status-warning)] border-[var(--status-warning-border)] px-1.5 py-1 rounded border flex-shrink-0">
                           system
                         </span>

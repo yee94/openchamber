@@ -123,6 +123,14 @@ const PROMPT_PAGE_MAP: Record<string, PromptPageConfig> = {
       { id: 'plan.implement.instructions', title: 'Instructions' },
     ],
   },
+  'session.summary': {
+    title: 'Session Summary',
+    description: 'Prompts used by the /summary slash command: visible user message + hidden instructions. Non-destructive — does not compact session history.',
+    blocks: [
+      { id: 'session.summary.visible', title: 'Visible Prompt' },
+      { id: 'session.summary.instructions', title: 'Instructions' },
+    ],
+  },
 };
 
 const hasOwn = (input: Record<string, string>, key: string) => Object.prototype.hasOwnProperty.call(input, key);
