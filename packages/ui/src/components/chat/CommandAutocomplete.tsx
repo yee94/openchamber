@@ -7,8 +7,12 @@ import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
-interface CommandInfo {
+type CommandSource = 'openchamber' | 'opencode';
+
+export interface CommandInfo {
+  id: string;
   name: string;
+  source: CommandSource;
   description?: string;
   agent?: string;
   model?: string;
@@ -89,8 +93,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       setLoading(true);
       try {
         const skillNames = new Set(skills.map((skill) => skill.name));
-        const customCommands: CommandInfo[] = commandsWithMetadata.map(cmd => ({
+        const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
+          id: `opencode:${cmd.scope ?? 'global'}:${cmd.name}:${cmd.agent ?? ''}:${cmd.model ?? ''}:${index}`,
           name: cmd.name,
+          source: 'opencode',
           description: cmd.description,
           agent: cmd.agent ?? undefined,
           model: cmd.model ?? undefined,
@@ -101,30 +107,23 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
         const builtInCommands: CommandInfo[] = [
           ...(hasSession && !hasMessagesInCurrentSession
-            ? [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]
+            ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: 'Create/update AGENTS.md file', isBuiltIn: true }]
             : []
           ),
           ...(hasSession  // Show when session exists, not when hasMessages
             ? [
-                { name: 'undo', description: 'Undo the last message', isBuiltIn: true },
-                { name: 'redo', description: 'Redo previously undone messages', isBuiltIn: true },
+                { id: 'openchamber:undo', name: 'undo', source: 'openchamber' as const, description: 'Undo the last message', isBuiltIn: true },
+                { id: 'openchamber:redo', name: 'redo', source: 'openchamber' as const, description: 'Redo previously undone messages', isBuiltIn: true },
               ]
             : []
           ),
-          { name: 'compact', description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
+          { id: 'openchamber:compact', name: 'compact', source: 'openchamber' as const, description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
           ...(hasSession
-            ? [{ name: 'summary', description: 'Non-destructive session summary. Optional topic hint after the command.', isOpenChamber: true }]
+            ? [{ id: 'openchamber:summary', name: 'summary', source: 'openchamber' as const, description: 'Non-destructive session summary. Optional topic hint after the command.', isOpenChamber: true }]
             : []
           ),
         ];
-
-        const commandMap = new Map<string, CommandInfo>();
-
-        builtInCommands.forEach(cmd => commandMap.set(cmd.name, cmd));
-
-        customCommands.forEach(cmd => commandMap.set(cmd.name, cmd));
-
-        const allCommands = Array.from(commandMap.values());
+        const allCommands = [...builtInCommands, ...customCommands];
 
         const allowInitCommand = !hasMessagesInCurrentSession;
         const filtered = (searchQuery
@@ -148,19 +147,19 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         const allowInitCommand = !hasMessagesInCurrentSession;
         const builtInCommands: CommandInfo[] = [
           ...(hasSession && !hasMessagesInCurrentSession
-            ? [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]
+            ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: 'Create/update AGENTS.md file', isBuiltIn: true }]
             : []
           ),
           ...(hasSession  // Show when session exists, not when hasMessages
             ? [
-                { name: 'undo', description: 'Undo the last message', isBuiltIn: true },
-                { name: 'redo', description: 'Redo previously undone messages', isBuiltIn: true },
+                { id: 'openchamber:undo', name: 'undo', source: 'openchamber' as const, description: 'Undo the last message', isBuiltIn: true },
+                { id: 'openchamber:redo', name: 'redo', source: 'openchamber' as const, description: 'Redo previously undone messages', isBuiltIn: true },
               ]
             : []
           ),
-          { name: 'compact', description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
+          { id: 'openchamber:compact', name: 'compact', source: 'openchamber' as const, description: 'Compress session history using AI to reduce context size', isBuiltIn: true },
           ...(hasSession
-            ? [{ name: 'summary', description: 'Non-destructive session summary. Optional topic hint after the command.', isOpenChamber: true }]
+            ? [{ id: 'openchamber:summary', name: 'summary', source: 'openchamber' as const, description: 'Non-destructive session summary. Optional topic hint after the command.', isOpenChamber: true }]
             : []
           ),
         ];
@@ -307,7 +306,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
               
               return (
                 <div
-                  key={command.name}
+                  key={command.id}
                   ref={(el) => { itemRefs.current[index] = el; }}
                   className={cn(
                     "flex items-start gap-2 px-3 py-2 cursor-pointer rounded-lg",
@@ -425,5 +424,3 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 });
 
 CommandAutocomplete.displayName = 'CommandAutocomplete';
-
-export type { CommandInfo };
