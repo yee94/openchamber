@@ -1053,9 +1053,14 @@ const nextWindowLabel = () => {
 
 const readThemeSource = () => {
   const settings = readSettingsRoot();
-  if (settings.useSystemTheme === true) return 'system';
-  if (settings.themeMode === 'light' || settings.themeVariant === 'light') return 'light';
-  if (settings.themeMode === 'dark' || settings.themeVariant === 'dark') return 'dark';
+  // themeMode is the user's intent; themeVariant is only the resolved
+  // concrete appearance at persist time. When mode === 'system', we must
+  // follow the OS even if variant was saved as a specific value.
+  if (settings.themeMode === 'system' || settings.useSystemTheme === true) return 'system';
+  if (settings.themeMode === 'light') return 'light';
+  if (settings.themeMode === 'dark') return 'dark';
+  if (settings.themeVariant === 'light') return 'light';
+  if (settings.themeVariant === 'dark') return 'dark';
   return 'system';
 };
 
@@ -1828,9 +1833,24 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     case 'desktop_set_window_theme': {
       const mode = typeof args.themeMode === 'string' ? args.themeMode : '';
       const variant = typeof args.themeVariant === 'string' ? args.themeVariant : '';
-      nativeTheme.themeSource = mode === 'dark' || variant === 'dark'
-        ? 'dark'
-        : (mode === 'light' || variant === 'light' ? 'light' : 'system');
+      // Priority order: themeMode expresses the user's intent (including
+      // "follow OS"). Variant is just the resolved variant at send time;
+      // when mode === 'system' with variant === 'dark' (because OS is
+      // currently dark), we must still pin themeSource to 'system' so
+      // Chromium keeps reacting to OS theme changes.
+      if (mode === 'system') {
+        nativeTheme.themeSource = 'system';
+      } else if (mode === 'light') {
+        nativeTheme.themeSource = 'light';
+      } else if (mode === 'dark') {
+        nativeTheme.themeSource = 'dark';
+      } else if (variant === 'light') {
+        nativeTheme.themeSource = 'light';
+      } else if (variant === 'dark') {
+        nativeTheme.themeSource = 'dark';
+      } else {
+        nativeTheme.themeSource = 'system';
+      }
       return null;
     }
 
