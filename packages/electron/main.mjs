@@ -42,6 +42,14 @@ log.transports.file.maxSize = 5 * 1024 * 1024;
 log.transports.file.level = 'info';
 log.transports.console.level = isDev ? 'debug' : 'warn';
 
+// The in-process web server runs in this same Node process and uses plain
+// `console.log/warn/error`. Without piping console through electron-log,
+// that output never lands in ~/Library/Logs/OpenChamber/main.log and we
+// can't diagnose issues (e.g. OpenCode lifecycle, SSE disconnects) after
+// the fact. Route all console calls through electron-log so server-side
+// diagnostics are persisted.
+Object.assign(console, log.functions);
+
 const LOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 try {
   const logPath = log.transports.file.getFile().path;

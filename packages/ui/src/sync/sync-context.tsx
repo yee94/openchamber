@@ -1376,7 +1376,11 @@ export function SyncProvider(props: {
         handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {
-        useConfigStore.setState({ isConnected: true, lastDisconnectReason: null })
+        useConfigStore.setState({
+          isConnected: true,
+          hasEverConnected: true,
+          connectionPhase: "connected",
+        })
         for (const [dir, store] of childStores.children) {
           if (reconnectResyncing.has(dir)) continue
           if (getReconnectCandidateSessionIds(store.getState()).length === 0) continue
@@ -1392,13 +1396,22 @@ export function SyncProvider(props: {
         }
       },
       onDisconnect: (reason) => {
-        useConfigStore.setState({ isConnected: false, lastDisconnectReason: reason })
+        const { hasEverConnected } = useConfigStore.getState()
+        useConfigStore.setState({
+          isConnected: false,
+          connectionPhase: hasEverConnected ? "reconnecting" : "connecting",
+          lastDisconnectReason: reason,
+        })
       },
       onTransportSwitch: () => {
         // Transport switched (e.g. WS timeout → SSE fallback) without
         // actual disconnection. No events lost — just update connection
         // state without triggering a full directory resync.
-        useConfigStore.setState({ isConnected: true })
+        useConfigStore.setState({
+          isConnected: true,
+          hasEverConnected: true,
+          connectionPhase: "connected",
+        })
       },
     })
     return cleanup
