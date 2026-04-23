@@ -339,6 +339,7 @@ export function createEventPipeline(input: EventPipelineInput) {
   const runSseAttempt = async (signal: AbortSignal) => {
     const events = await sdk.global.event({
       signal,
+      ...(lastEventId && lastEventId.length > 0 ? { headers: { "Last-Event-ID": lastEventId } } : {}),
       onSseError: (error: unknown) => {
         if (isAbortError(error)) return
         if (streamErrorLogged) return

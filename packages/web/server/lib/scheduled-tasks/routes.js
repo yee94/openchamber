@@ -209,7 +209,22 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
     } catch {
     }
 
+    const heartbeat = setInterval(() => {
+      try {
+        writeSseEvent(res, {
+          type: 'openchamber:heartbeat',
+          properties: {
+            timestamp: Date.now(),
+          },
+        });
+      } catch {
+        clearInterval(heartbeat);
+        clients.delete(res);
+      }
+    }, 25_000);
+
     req.on('close', () => {
+      clearInterval(heartbeat);
       clients.delete(res);
     });
   });
