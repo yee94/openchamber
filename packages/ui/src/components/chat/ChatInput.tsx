@@ -1563,6 +1563,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 }
                 return;
             }
+            else if (commandName === 'review' && currentSessionId) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    const visibleText = await renderMagicPrompt('session.review.visible');
+                    const instructionsText = await renderMagicPrompt('session.review.instructions');
+                    await sendMessage(
+                        visibleText,
+                        currentProviderId,
+                        currentModelId,
+                        currentAgentName,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        currentVariant,
+                        inputMode,
+                    );
+                    scrollToBottom?.({ instant: true, force: true });
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Failed to review changes');
+                }
+                return;
+            }
         }
 
         // Collect all attachments for error recovery
