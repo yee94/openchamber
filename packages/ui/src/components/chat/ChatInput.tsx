@@ -787,7 +787,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
     const isMobile = useUIStore((state) => state.isMobile);
     const inputBarOffset = useUIStore((state) => state.inputBarOffset);
-    const isKeyboardOpen = useUIStore((state) => state.isKeyboardOpen);
     const persistChatDraft = useUIStore((state) => state.persistChatDraft);
     const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
@@ -1170,50 +1169,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // Session activity for queue availability and controls
     const { phase: sessionPhase } = useCurrentSessionActivity();
 
-    const handleTextareaPointerDownCapture = React.useCallback((event: React.PointerEvent<HTMLTextAreaElement>) => {
-        if (!isMobile) {
-            return;
-        }
-
-        if (event.pointerType !== 'touch') {
-            return;
-        }
-
-        const textarea = textareaRef.current;
-        if (!textarea) {
-            return;
-        }
-
-        if (document.activeElement === textarea) {
-            return;
-        }
-
-        // Prevent iOS from scrolling the page to reveal the input.
-        event.preventDefault();
-        event.stopPropagation();
-
-        const scroller = document.scrollingElement;
-        if (scroller && scroller.scrollTop !== 0) {
-            scroller.scrollTop = 0;
-        }
-        if (window.scrollY !== 0) {
-            window.scrollTo(0, 0);
-        }
-
-        try {
-            textarea.focus({ preventScroll: true });
-        } catch {
-            textarea.focus();
-        }
-
-        const len = textarea.value.length;
-        try {
-            textarea.setSelectionRange(len, len);
-        } catch {
-            // ignored
-        }
-    }, [isMobile]);
-
     const handleOpenMobileControls = React.useCallback(() => {
         if (!isMobile) {
             return;
@@ -1226,16 +1181,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         setMobileControlsPanel(null);
 
-        if (isKeyboardOpen) {
-            textareaRef.current?.blur();
-            requestAnimationFrame(() => {
-                setMobileControlsOpen(true);
-            });
-            return;
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
         }
 
         setMobileControlsOpen(true);
-    }, [isMobile, isKeyboardOpen, mobileControlsOpen]);
+    }, [isMobile, mobileControlsOpen]);
 
     const handleCloseMobileControls = React.useCallback(() => {
         setMobileControlsOpen(false);
@@ -2136,7 +2087,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const isWordBoundary = !charBefore || /\s/.test(charBefore);
             if (isWordBoundary && !textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
                 setMentionQuery(textAfterAt);
-                setAutocompleteTab('agents');
+                setAutocompleteTab((current) => current === 'files' ? 'files' : 'agents');
                 setShowFileMention(true);
             } else {
                 setShowFileMention(false);
@@ -2179,22 +2130,31 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 // ignored
             }
         }
+        const cursorPosition = textarea?.selectionStart ?? message.length;
+        const textBeforeCursor = message.substring(0, cursorPosition);
+        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+        const nextMentionQuery = lastAtSymbol !== -1
+            ? textBeforeCursor.substring(lastAtSymbol + 1).replace(/[\s\n].*$/, '')
+            : '';
+
         setAutocompleteTab(tab);
         setCommandQuery('');
-        setMentionQuery('');
         if (tab === 'commands') {
+            setMentionQuery('');
             applyAutocompletePrefix('/');
         }
         if (tab === 'agents') {
+            setMentionQuery(nextMentionQuery);
             applyAutocompletePrefix('@');
         }
         if (tab === 'files') {
+            setMentionQuery(nextMentionQuery);
             applyAutocompletePrefix('@');
         }
         setShowSkillAutocomplete(false);
         setShowCommandAutocomplete(tab === 'commands');
         setShowFileMention(tab === 'agents' || tab === 'files');
-    }, [applyAutocompletePrefix, isMobile, setAutocompleteTab, setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete]);
+    }, [applyAutocompletePrefix, isMobile, message, setAutocompleteTab, setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete]);
 
     const handleOpenCommandMenu = React.useCallback(() => {
         if (!isMobile) {
@@ -3331,10 +3291,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             className={cn(
                 "relative pt-0 pb-4",
                 isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
-                isMobile && (isKeyboardOpen ? 'ios-keyboard-safe-area' : 'bottom-safe-area')
+                isMobile && 'bottom-safe-area'
             )}
-            data-keyboard-avoid="true"
-            style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
+
+            style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             <div className={cn('chat-column relative overflow-visible', isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 <AttachedFilesList />
@@ -3689,7 +3649,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             onDropCapture={handleDropCapture}
                             onDrop={handleDrop}
                             onDragEnd={handleDragEnd}
-                            onPointerDownCapture={handleTextareaPointerDownCapture}
                             onKeyUp={updateAutocompleteOverlayPosition}
                             onClick={updateAutocompleteOverlayPosition}
                             onScroll={(event) => {

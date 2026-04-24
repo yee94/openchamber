@@ -2150,10 +2150,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    const rootStyles = getComputedStyle(document.documentElement);
-    const keyboardInset = Number.parseFloat(rootStyles.getPropertyValue('--oc-keyboard-inset')) || 0;
-    const keyboardHomeIndicator = Number.parseFloat(rootStyles.getPropertyValue('--oc-keyboard-home-indicator')) || 0;
-    const occludedBottom = keyboardInset + keyboardHomeIndicator;
+    const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
+    const occludedBottom = Math.max(0, layoutHeight - (viewport.offsetTop + viewport.height));
     if (occludedBottom <= 0) {
       return;
     }
@@ -2965,8 +2963,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             <div
               className={cn('relative h-full', shouldMaskEditorForPendingNavigation && 'overflow-hidden')}
               ref={editorWrapperRef}
-              data-keyboard-avoid="none"
-              style={isMobile ? { height: 'calc(100% - var(--oc-keyboard-inset, 0px))' } : undefined}
             >
               <div className={cn('h-full', shouldMaskEditorForPendingNavigation && 'invisible')}>
                 <CodeMirrorEditor

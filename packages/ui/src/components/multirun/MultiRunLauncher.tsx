@@ -585,7 +585,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const configuredSetupCount = setupCommands.filter(cmd => cmd.trim()).length;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full bg-background" data-keyboard-avoid="true">
+    <form onSubmit={handleSubmit} className="flex flex-col h-full bg-background">
       {!isWindowed ? (
         <header
           onMouseDown={handleDragStart}
