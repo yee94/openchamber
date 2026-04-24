@@ -33,6 +33,7 @@ import { detectSayTtsCapability } from './lib/tts/capability-runtime.js';
 import { createTerminalRuntime } from './lib/terminal/runtime.js';
 import {
   createGlobalUiEventBroadcaster,
+  createGlobalMessageStreamHub,
   createMessageStreamWsRuntime,
 } from './lib/event-stream/index.js';
 import { createFsSearchRuntime as createFsSearchRuntimeFactory } from './lib/fs/search.js';
@@ -648,11 +649,17 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
 const maybeSendPushForTrigger = (...args) => notificationTriggerRuntime.maybeSendPushForTrigger(...args);
 const setAutoAcceptSession = (...args) => notificationTriggerRuntime.setAutoAcceptSession(...args);
 
+const globalMessageStreamHub = createGlobalMessageStreamHub({
+  buildOpenCodeUrl,
+  getOpenCodeAuthHeaders,
+});
+
 const openCodeWatcherRuntime = createOpenCodeWatcherRuntime({
   waitForOpenCodePort: (...args) => waitForOpenCodePort(...args),
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
   parseSseDataPayload: (...args) => parseSseDataPayload(...args),
+  globalEventHub: globalMessageStreamHub,
   onPayload: (payload) => {
     maybeCacheSessionInfoFromEvent(payload);
     void maybeSendPushForTrigger(payload);
@@ -1155,6 +1162,7 @@ async function main(options = {}) {
     rejectWebSocketUpgrade,
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
+    globalEventHub: globalMessageStreamHub,
     processForwardedEventPayload,
     messageStreamWsClients: uiNotificationWsClients,
     terminalHeartbeatIntervalMs: TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS,
