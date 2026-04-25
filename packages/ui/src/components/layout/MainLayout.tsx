@@ -22,18 +22,19 @@ import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { isDesktopShell } from '@/lib/desktop';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
 import { ChatView } from '@/components/views';
 
 // Heavy views loaded on-demand to reduce initial bundle parse time.
-const PlanView = React.lazy(() => import('@/components/views/PlanView').then(m => ({ default: m.PlanView })));
-const GitView = React.lazy(() => import('@/components/views/GitView').then(m => ({ default: m.GitView })));
-const DiffView = React.lazy(() => import('@/components/views/DiffView').then(m => ({ default: m.DiffView })));
-const TerminalView = React.lazy(() => import('@/components/views/TerminalView').then(m => ({ default: m.TerminalView })));
-const FilesView = React.lazy(() => import('@/components/views/FilesView').then(m => ({ default: m.FilesView })));
-const SettingsView = React.lazy(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
-const SettingsWindow = React.lazy(() => import('@/components/views/SettingsWindow').then(m => ({ default: m.SettingsWindow })));
-const MultiRunWindow = React.lazy(() => import('@/components/views/MultiRunWindow').then(m => ({ default: m.MultiRunWindow })));
+const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then(m => ({ default: m.PlanView })));
+const GitView = lazyWithChunkRecovery(() => import('@/components/views/GitView').then(m => ({ default: m.GitView })));
+const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then(m => ({ default: m.DiffView })));
+const TerminalView = lazyWithChunkRecovery(() => import('@/components/views/TerminalView').then(m => ({ default: m.TerminalView })));
+const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then(m => ({ default: m.FilesView })));
+const SettingsView = lazyWithChunkRecovery(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
+const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/SettingsWindow').then(m => ({ default: m.SettingsWindow })));
+const MultiRunWindow = lazyWithChunkRecovery(() => import('@/components/views/MultiRunWindow').then(m => ({ default: m.MultiRunWindow })));
 
 // Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
