@@ -782,7 +782,7 @@ const MermaidPreviewDialog: React.FC<{
                 setStatus('error');
                 setErrorMessage(error instanceof Error ? error.message : t('chat.toolOutputDialog.mermaid.loadFailed'));
             });
-    }, [decodeDataUrl, normalizeFilePath, popup.mermaid]);
+    }, [decodeDataUrl, normalizeFilePath, popup.mermaid, t]);
 
     React.useEffect(() => {
         if (!popup.open || !popup.mermaid) {

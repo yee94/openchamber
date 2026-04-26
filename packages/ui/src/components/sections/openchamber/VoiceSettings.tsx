@@ -181,7 +181,7 @@ export const VoiceSettings: React.FC = () => {
 
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
-    }, [browserVoice, browserVoices, speechRate, speechPitch, speechVolume, isBrowserPreviewPlaying]);
+    }, [browserVoice, browserVoices, speechRate, speechPitch, speechVolume, isBrowserPreviewPlaying, t]);
 
     useEffect(() => {
         return () => {

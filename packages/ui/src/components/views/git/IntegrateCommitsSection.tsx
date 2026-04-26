@@ -252,7 +252,7 @@ export const IntegrateCommitsSection: React.FC<{
       { text: context.payloadText, synthetic: true },
     ]);
     setActiveMainTab('chat');
-  }, [currentSessionId, setActiveMainTab, buildConflictContext, openNewSessionDraft, setPendingInputText, setPendingSyntheticParts]);
+  }, [currentSessionId, setActiveMainTab, buildConflictContext, openNewSessionDraft, setPendingInputText, setPendingSyntheticParts, t]);
 
   const handleMove = React.useCallback(async () => {
     if (ui.kind !== 'ready') return;
@@ -288,7 +288,7 @@ export const IntegrateCommitsSection: React.FC<{
       if (next) setUi({ kind: 'ready', plan: next });
       else setUi({ kind: 'idle' });
     }
-  }, [ui, onRefresh, repoRoot, sourceBranch, targetBranch, conflictStorageKey]);
+  }, [ui, onRefresh, repoRoot, sourceBranch, targetBranch, conflictStorageKey, t]);
 
   const handleAbort = React.useCallback(async () => {
     if (ui.kind !== 'conflict') return;
@@ -303,7 +303,7 @@ export const IntegrateCommitsSection: React.FC<{
       if (next) setUi({ kind: 'ready', plan: next });
       else setUi({ kind: 'idle' });
     }
-  }, [ui, repoRoot, sourceBranch, targetBranch, conflictStorageKey]);
+  }, [ui, repoRoot, sourceBranch, targetBranch, conflictStorageKey, t]);
 
   const handleContinue = React.useCallback(async () => {
     if (ui.kind !== 'conflict') return;
@@ -330,7 +330,7 @@ export const IntegrateCommitsSection: React.FC<{
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('gitView.integrate.cherryPickContinueFailedToast'), { description: message });
     }
-  }, [ui, repoRoot, sourceBranch, targetBranch, onRefresh, conflictStorageKey]);
+  }, [ui, repoRoot, sourceBranch, targetBranch, onRefresh, conflictStorageKey, t]);
 
   if (!repoRoot || !sourceBranch) {
     return null;

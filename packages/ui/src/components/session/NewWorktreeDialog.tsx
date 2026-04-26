@@ -618,6 +618,7 @@ export function NewWorktreeDialog({
     resolveDefaultAgentName,
     resolveDefaultModelSelection,
     resolveDefaultVariant,
+    t,
   ]);
 
   // Get current state based on mode
@@ -788,6 +789,7 @@ export function NewWorktreeDialog({
     validation.touched,
     validationAbortController,
     isCreating,
+    t,
   ]);
 
   // Extract branch name for dependency array

@@ -1307,7 +1307,7 @@ export function DesktopHostSwitcherButton({ headerIconButtonClass }: DesktopHost
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [connectDefaultSshInstance]);
+  }, [connectDefaultSshInstance, t]);
 
   if (!isDesktopShell()) {
     return null;

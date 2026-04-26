@@ -150,6 +150,7 @@ export const ProjectsPage: React.FC = () => {
     uploadProjectIcon,
     removeProjectIcon,
     selectedProject,
+    t,
     updateProjectMeta,
   ]);
 

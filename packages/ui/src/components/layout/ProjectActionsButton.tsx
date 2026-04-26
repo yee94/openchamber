@@ -370,7 +370,7 @@ export const ProjectActionsButton = ({
       }
     }
 
-  }, [actions, openExternal, runningByKey, terminalSessions]);
+  }, [actions, openExternal, runningByKey, t, terminalSessions]);
 
   const normalizedDirectory = React.useMemo(() => {
     return normalizeProjectActionDirectory(directory || stableProjectRef?.path || '');
@@ -424,6 +424,7 @@ export const ProjectActionsButton = ({
     setActiveTab,
     setBottomTerminalOpen,
     setTabLabel,
+    t,
   ]);
 
   const runAction = React.useCallback(async (action: OpenChamberProjectAction) => {
@@ -529,6 +530,7 @@ export const ProjectActionsButton = ({
     runtime.isVSCode,
     setConnecting,
     setTabSessionId,
+    t,
     terminal,
   ]);
 

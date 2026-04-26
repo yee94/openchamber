@@ -2341,7 +2341,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.clipboardAttachFailed'));
             }
         }
-    }, [addAttachedFile, currentSessionId, newSessionDraftOpen, insertTextAtSelection]);
+    }, [addAttachedFile, currentSessionId, newSessionDraftOpen, insertTextAtSelection, t]);
 
     const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
 
@@ -2650,7 +2650,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         setPendingInputText(mentions.join(' '), 'append-inline');
         toast.success(t('chat.chatInput.toast.addedFileMentions', { count: mentions.length }));
-    }, [normalizeDroppedPath, setPendingInputText, toProjectRelativeMentionPath]);
+    }, [normalizeDroppedPath, setPendingInputText, t, toProjectRelativeMentionPath]);
 
     const handleDragEnter = (e: React.DragEvent) => {
         if (!hasDraggedFiles(e.dataTransfer)) {
@@ -2897,7 +2897,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             cancelled = true;
             if (unlisten) unlisten();
         };
-    }, [addAttachedFile, normalizeDroppedPath]);
+    }, [addAttachedFile, normalizeDroppedPath, t]);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -2912,7 +2912,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.attachFileFailed'));
             }
         }
-    }, [addAttachedFile]);
+    }, [addAttachedFile, t]);
 
     const handleVSCodePickFiles = React.useCallback(async () => {
         try {
@@ -2956,7 +2956,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             console.error('VS Code file pick failed', error);
             toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.vscodePickFailed'));
         }
-    }, [attachFiles]);
+    }, [attachFiles, t]);
 
     const handlePickLocalFiles = React.useCallback(() => {
         if (isVSCodeRuntime()) {
@@ -3268,7 +3268,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         setSessionAutoAccept(permissionScopeSessionId, nextEnabled).catch(() => {
             toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed'));
         });
-    }, [permissionAutoAcceptEnabled, permissionScopeSessionId, setSessionAutoAccept]);
+    }, [permissionAutoAcceptEnabled, permissionScopeSessionId, setSessionAutoAccept, t]);
 
     React.useEffect(() => {
         const pendingAbortBanner = Boolean(abortPromptSessionId) && abortPromptSessionId === currentSessionId;

@@ -429,6 +429,7 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
     revertingPaths,
     rowPaddingClassName,
     selectedPaths,
+    t,
     toggleDirectoryExpanded,
     toggleDirectorySelection,
   ]);

@@ -443,7 +443,7 @@ export const RemoteInstancesPage: React.FC = () => {
         return false;
       }
     },
-    [createFromCommand, setSelectedId],
+    [createFromCommand, setSelectedId, t],
   );
 
   const closePatternDialog = React.useCallback(() => {

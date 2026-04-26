@@ -538,7 +538,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsLoadingCheckDetails(false);
     }
-  }, [directory, github, pr]);
+  }, [directory, github, pr, t]);
 
   const openCommentsDialog = React.useCallback(async () => {
     if (!github?.prContext) {
@@ -561,7 +561,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsLoadingCommentsDetails(false);
     }
-  }, [directory, github, pr]);
+  }, [directory, github, pr, t]);
 
   const formatTimestamp = React.useCallback((value?: string) => {
     if (!value) return '';
@@ -650,7 +650,7 @@ export const PullRequestSection: React.FC<{
       currentAgentName: currentAgentName ?? null,
       currentVariant: currentVariant ?? null,
     };
-  }, [currentSessionId]);
+  }, [currentSessionId, t]);
 
   const dispatchSyntheticPrompt = React.useCallback((
     target: ChatDispatchTarget,
@@ -674,7 +674,7 @@ export const PullRequestSection: React.FC<{
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('gitView.pr.toast.sendMessageFailed'), { description: message });
     });
-  }, []);
+  }, [t]);
 
   const renderCheckRunSummary = React.useCallback((run: GitHubCheckRun) => {
     const status = run.status || 'unknown';
@@ -804,7 +804,7 @@ export const PullRequestSection: React.FC<{
         ) : null}
       </div>
     );
-  }, [expandedCheckStepKeys, formatTimestamp]);
+  }, [expandedCheckStepKeys, formatTimestamp, t]);
 
   const sendFailedChecksToChat = React.useCallback(async () => {
     setActiveMainTab('chat');
@@ -860,7 +860,7 @@ export const PullRequestSection: React.FC<{
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('gitView.pr.toast.loadChecksFailed'), { description: message });
     }
-  }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab]);
+  }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab, t]);
 
   const sendCommentsToChat = React.useCallback(async () => {
     setActiveMainTab('chat');
@@ -899,7 +899,7 @@ export const PullRequestSection: React.FC<{
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('gitView.pr.toast.loadPrCommentsFailed'), { description: message });
     }
-  }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab]);
+  }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab, t]);
 
   const sendSingleCommentToChat = React.useCallback(async (comment: TimelineCommentItem) => {
     setCommentsDialogOpen(false);
@@ -1142,7 +1142,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsGenerating(false);
     }
-  }, [additionalContext, branch, directory, isGenerating, onGeneratedDescription, targetBaseBranch]);
+  }, [additionalContext, branch, directory, isGenerating, onGeneratedDescription, targetBaseBranch, t]);
 
   const createPr = React.useCallback(async () => {
     if (!github?.prCreate) {
@@ -1188,7 +1188,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [body, branch, directory, draft, github, prStatusKey, refresh, scheduleActionRefresh, selectedRemote, targetBaseBranch, title, updatePrStatus]);
+  }, [body, branch, directory, draft, github, prStatusKey, refresh, scheduleActionRefresh, selectedRemote, targetBaseBranch, title, updatePrStatus, t]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1214,7 +1214,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsMerging(false);
     }
-  }, [directory, github, mergeMethod, refresh, scheduleActionRefresh]);
+  }, [directory, github, mergeMethod, refresh, scheduleActionRefresh, t]);
 
   const markReady = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prReady) {
@@ -1236,7 +1236,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsMarkingReady(false);
     }
-  }, [directory, github, refresh, scheduleActionRefresh]);
+  }, [directory, github, refresh, scheduleActionRefresh, t]);
 
   const updatePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prUpdate) {
@@ -1277,7 +1277,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsUpdating(false);
     }
-  }, [directory, editBody, editTitle, github, prStatusKey, refresh, scheduleActionRefresh, updatePrStatus]);
+  }, [directory, editBody, editTitle, github, prStatusKey, refresh, scheduleActionRefresh, updatePrStatus, t]);
 
   if (!canShow) {
     return null;

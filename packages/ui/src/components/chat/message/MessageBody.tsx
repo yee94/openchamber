@@ -1010,7 +1010,7 @@ const AssistantMessageBody = React.memo(({
                 setIsSavingPlan(false);
             }
         },
-        [assistantPlanText, currentProjectRef]
+        [assistantPlanText, currentProjectRef, t]
     );
 
     const [isSharing, setIsSharing] = React.useState(false);
@@ -1123,7 +1123,7 @@ const AssistantMessageBody = React.memo(({
                 setIsSharing(false);
             }
         },
-        [messageId, isSharing]
+        [messageId, isSharing, t]
     );
 
     React.useEffect(() => {

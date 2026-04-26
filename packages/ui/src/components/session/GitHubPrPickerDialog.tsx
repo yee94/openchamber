@@ -126,7 +126,7 @@ export function GitHubPrPickerDialog({
     } finally {
       setIsLoading(false);
     }
-  }, [github, githubAuthChecked, githubAuthStatus, projectDirectory]);
+  }, [github, githubAuthChecked, githubAuthStatus, projectDirectory, t]);
 
   const loadMore = React.useCallback(async () => {
     if (!projectDirectory) return;

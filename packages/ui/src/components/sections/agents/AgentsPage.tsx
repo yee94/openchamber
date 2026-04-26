@@ -422,7 +422,7 @@ export const AgentsPage: React.FC = () => {
     }
     setPendingRuleName('');
     setPendingRulePattern('*');
-  }, [globalPermission, pendingRuleName, pendingRulePattern, removeRule, setGlobalPermissionAndPrune, upsertRule]);
+  }, [globalPermission, pendingRuleName, pendingRulePattern, removeRule, setGlobalPermissionAndPrune, t, upsertRule]);
 
   const formatPermissionLabel = React.useCallback((permissionName: string): string => {
     if (permissionName === '*') return t('settings.agents.page.permissions.defaultLabel');

@@ -1243,6 +1243,56 @@ type DiffPatchEntry = {
     patch: string;
 };
 
+const hasUnifiedDiffHunk = (patch: string): boolean => /^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/m.test(patch);
+
+const getUnifiedDiffPath = (patch: string, fallbackTitle: string): string => {
+    const plusHeader = patch.match(/^\+\+\+\s+(?:[ab]\/(.+)|(.+))$/m);
+    const rawPath = plusHeader?.[1] ?? plusHeader?.[2];
+    if (!rawPath || rawPath === '/dev/null') {
+        return fallbackTitle;
+    }
+    return rawPath;
+};
+
+const splitUnifiedDiffPatch = (patch: string): DiffPatchEntry[] => {
+    const normalized = patch.replace(/\r\n/g, '\n').trim();
+    if (!normalized) {
+        return [];
+    }
+
+    const lines = normalized.split('\n');
+    const starts: number[] = [];
+
+    for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index] ?? '';
+        const nextLine = lines[index + 1] ?? '';
+        const isUnifiedFileHeader = /^---\s+(?:[ab]\/|\/dev\/null|\/)/.test(line)
+            && /^\+\+\+\s+(?:[ab]\/|\/dev\/null|\/)/.test(nextLine);
+        if (line.startsWith('diff --git ') || line.startsWith('Index: ') || isUnifiedFileHeader) {
+            starts.push(index);
+        }
+    }
+
+    const chunks = starts.length > 0
+        ? starts.map((start, index) => lines.slice(start, starts[index + 1] ?? lines.length).join('\n').trim())
+        : [normalized];
+
+    return chunks
+        .map((chunk, index) => {
+            if (!hasUnifiedDiffHunk(chunk)) {
+                return null;
+            }
+
+            const title = getUnifiedDiffPath(chunk, `Diff ${index + 1}`);
+            return {
+                id: `${title}-${index}`,
+                title,
+                patch: chunk,
+            } satisfies DiffPatchEntry;
+        })
+        .filter((entry): entry is DiffPatchEntry => entry !== null);
+};
+
 const renderPathLikeGitChanges = (path: string, grow = true) => {
     const lastSlash = path.lastIndexOf('/');
     if (lastSlash === -1) {
@@ -1338,7 +1388,7 @@ const getDiffPatchEntries = (
 
             const record = file as { relativePath?: unknown; filePath?: unknown; patch?: unknown; diff?: unknown };
             const patch = getPatchText(record.patch) ?? getPatchText(record.diff) ?? '';
-            if (!patch) {
+            if (!patch || !hasUnifiedDiffHunk(patch)) {
                 return null;
             }
 
@@ -1364,13 +1414,16 @@ const getDiffPatchEntries = (
         return entries;
     }
 
-    return [
-        {
-            id: 'diff-0',
-            title: 'Diff',
-            patch: fallbackDiff,
-        },
-    ];
+    const splitEntries = splitUnifiedDiffPatch(fallbackDiff).map((entry) => ({
+        ...entry,
+        title: getRelativePath(entry.title, currentDirectory),
+    }));
+
+    if (splitEntries.length > 0) {
+        return splitEntries;
+    }
+
+    return [];
 };
 
 const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, pierreTheme, pierreThemeType, diffViewMode }) => {

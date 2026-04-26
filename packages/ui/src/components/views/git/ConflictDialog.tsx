@@ -66,7 +66,7 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
       .finally(() => {
         setIsLoading(false);
       });
-  }, [open, directory]);
+  }, [open, directory, t]);
 
   const buildConflictContext = React.useCallback(async (): Promise<{
     visibleText: string;

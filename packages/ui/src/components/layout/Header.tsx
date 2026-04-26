@@ -930,7 +930,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     return groups;
-  }, [dropdownProviderIds, quotaResults, selectedModels]);
+  }, [dropdownProviderIds, quotaResults, selectedModels, t]);
   const hasRateLimits = rateLimitGroups.length > 0;
   React.useEffect(() => {
     void loadQuotaSettings();
