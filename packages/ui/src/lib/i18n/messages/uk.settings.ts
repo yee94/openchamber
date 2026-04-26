@@ -1322,6 +1322,7 @@ export const settingsDict = {
   "settings.voice.page.preview.voiceLine": "Привіт! Я {voiceName}. Ось як я звучу.",
   "settings.voice.page.preview.customServerLine": "Привіт! Це попередній перегляд спеціального сервера TTS.",
   "settings.openchamber.visual.section.colorMode": "Режим теми",
+  "settings.openchamber.visual.section.localization": "Локалізація",
   "settings.openchamber.visual.section.spacingAndLayout": "Відступи й компонування",
   "settings.openchamber.visual.section.navigation": "Навігація",
   "settings.openchamber.visual.section.chatRenderMode": "Режим візуалізації чату",

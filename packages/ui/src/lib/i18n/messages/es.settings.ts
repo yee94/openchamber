@@ -1322,6 +1322,7 @@ export const settingsDict = {
   "settings.voice.page.preview.voiceLine": "¡Hola! Soy {voiceName}. Así suena mi voz.",
   "settings.voice.page.preview.customServerLine": "¡Hola! Esta es una previsualización del servidor TTS personalizado.",
   "settings.openchamber.visual.section.colorMode": "Modo de color",
+  "settings.openchamber.visual.section.localization": "Localización",
   "settings.openchamber.visual.section.spacingAndLayout": "Espaciado y diseño",
   "settings.openchamber.visual.section.navigation": "Navegación",
   "settings.openchamber.visual.section.chatRenderMode": "Modo de renderizado de chat",

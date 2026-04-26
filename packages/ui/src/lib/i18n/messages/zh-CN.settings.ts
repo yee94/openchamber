@@ -1322,6 +1322,7 @@ export const settingsDict = {
   'settings.voice.page.preview.voiceLine': '你好！我是 {voiceName}。这是我的声音效果。',
   'settings.voice.page.preview.customServerLine': '你好！这是自定义 TTS 服务器的预览。',
   'settings.openchamber.visual.section.colorMode': '颜色模式',
+  'settings.openchamber.visual.section.localization': '本地化',
   'settings.openchamber.visual.section.spacingAndLayout': '间距与布局',
   'settings.openchamber.visual.section.navigation': '导航',
   'settings.openchamber.visual.section.chatRenderMode': '聊天渲染模式',
