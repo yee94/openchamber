@@ -233,6 +233,10 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   }, [isExpanded]);
 
   const toggleExpanded = () => setIsExpanded((prev) => !prev);
+  const todoSummaryLabel = t('chat.statusRow.summary.activeLeft', {
+    active: statusSummary.active,
+    left: statusSummary.left,
+  });
 
   // Abort button for mobile/vscode
   const abortButton = showAbort && onAbort ? (
@@ -252,6 +256,8 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       type="button"
       onClick={toggleExpanded}
       className="flex items-center gap-1 flex-shrink-0 text-muted-foreground"
+      aria-label={todoSummaryLabel}
+      title={todoSummaryLabel}
     >
       {/* Desktop: show task text; Mobile/VSCode: just "Tasks" */}
       {!isCompact && activeTodo ? (
@@ -261,8 +267,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       ) : (
         <span className="typography-ui-label">{t('chat.statusRow.tasksTitle')}</span>
       )}
-      <span className="typography-meta">
-        {t('chat.statusRow.summary.activeLeft', { active: statusSummary.active, left: statusSummary.left })}
+      <span className="typography-meta flex items-center gap-1 tabular-nums" aria-hidden="true">
+        <span className="flex items-center gap-0.5">
+          <RiRecordCircleLine className="h-3.5 w-3.5 text-[var(--status-info)]" />
+          {statusSummary.active}
+        </span>
+        <span>·</span>
+        <span className="flex items-center gap-0.5">
+          <RiTimeLine className="h-3.5 w-3.5" />
+          {statusSummary.left}
+        </span>
       </span>
       {isExpanded ? (
         <RiArrowUpSLine className="h-3.5 w-3.5" />

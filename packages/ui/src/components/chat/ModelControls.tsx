@@ -2409,9 +2409,24 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
                             {/* Keyboard hints footer */}
                             <div className="px-3 pt-1 pb-1.5 border-t border-border/40 typography-micro text-muted-foreground">
-                                {t('chat.modelControls.keyboardHint', {
-                                    thinking: highlightedSupportsThinking ? ` • ${t('chat.modelControls.keyboardHintThinking')}` : '',
-                                })}
+                                {(() => {
+                                    const thinkingMarker = '__MODEL_THINKING_HINT__';
+                                    const thinkingHint = ` • ${t('chat.modelControls.keyboardHintThinking')}`;
+                                    const hintParts = t('chat.modelControls.keyboardHint', { thinking: thinkingMarker }).split(thinkingMarker);
+
+                                    return (
+                                        <>
+                                            {hintParts[0]}
+                                            <span
+                                                aria-disabled={!highlightedSupportsThinking}
+                                                className={cn(!highlightedSupportsThinking && 'opacity-40')}
+                                            >
+                                                {thinkingHint}
+                                            </span>
+                                            {hintParts[1]}
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
