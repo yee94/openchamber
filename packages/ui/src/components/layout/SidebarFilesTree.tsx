@@ -374,6 +374,11 @@ export const SidebarFilesTree: React.FC = () => {
   const canDelete = Boolean(files.delete);
   const canReveal = Boolean(files.revealPath);
 
+  const fileRowPermissions = React.useMemo(
+    () => ({ canRename, canCreateFile, canCreateFolder, canDelete, canReveal }),
+    [canRename, canCreateFile, canCreateFolder, canDelete, canReveal]
+  );
+
   const handleRevealPath = React.useCallback((targetPath: string) => {
     if (!files.revealPath) return;
     void files.revealPath(targetPath).catch(() => {
@@ -787,7 +792,7 @@ export const SidebarFilesTree: React.FC = () => {
             isActive={isActive}
             status={!isDir ? getFileStatus(node.path) : undefined}
             badge={isDir ? getFolderBadge(node.path) : undefined}
-            permissions={{ canRename, canCreateFile, canCreateFolder, canDelete, canReveal }}
+            permissions={fileRowPermissions}
             downloadFile={files.downloadFile}
             contextMenuPath={contextMenuPath}
             setContextMenuPath={setContextMenuPath}

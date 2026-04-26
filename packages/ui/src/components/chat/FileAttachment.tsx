@@ -522,7 +522,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
         if (isImage && file.url) {
           return (
             <div
-              key={index}
+              key={file.url || `${fileName}-${index}`}
               className="relative aspect-video rounded-lg border border-border/40 bg-muted/10 overflow-hidden group"
             >
               <img
@@ -542,7 +542,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
 
         if (githubLinkKind && file.url) {
           return (
-            <Tooltip key={index}>
+            <Tooltip key={file.url || `${fileName}-${index}`}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -575,7 +575,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
         }
 
         return (
-          <Tooltip key={index}>
+          <Tooltip key={file.url || `${fileName}-${index}`}>
             <TooltipTrigger asChild>
               <button
                 type="button"
@@ -646,7 +646,7 @@ export const ImageGallery = memo(({ urls, caption, onShowPopup }: ImageGalleryPr
       <div className={cn("grid gap-2", getGridCols())}>
         {urls.map((url, index) => (
           <button
-            key={index}
+            key={url}
             type="button"
             onClick={() => onShowPopup?.({
               open: true,

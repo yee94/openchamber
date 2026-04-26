@@ -707,6 +707,8 @@ const loadShellEnv = () => {
 };
 
 // Merge the user's login-shell env (PATH, etc.) into this process before we
+import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/server/lib/opencode/path-utils.js';
+
 // import/start the server in-process. The server and its children (opencode
 // CLI, git, etc.) inherit process.env directly now — there is no sidecar
 // subprocess to hand a custom env to.
@@ -716,13 +718,7 @@ const inheritUserShellEnv = () => {
 
   const homeDir = os.homedir();
   const currentPath = process.env.PATH || '';
-  const currentPathLooksUserConfigured = currentPath.split(':').some((segment) => (
-    segment.startsWith(`${homeDir}${path.sep}`)
-    || segment === homeDir
-    || segment.startsWith('/opt/homebrew/')
-    || segment.startsWith('/opt/pkg/')
-    || segment.startsWith('/opt/pmk/')
-  ));
+  const currentPathLooksUserConfigured = pathLooksUserConfigured(currentPath, homeDir, ':');
 
   for (const [key, value] of Object.entries(shellEnv)) {
     if (key === 'PATH') continue;
@@ -730,8 +726,10 @@ const inheritUserShellEnv = () => {
       process.env[key] = value;
     }
   }
-  if (!currentPathLooksUserConfigured && typeof shellEnv.PATH === 'string' && shellEnv.PATH.length > 0) {
-    process.env.PATH = shellEnv.PATH;
+
+  const shellPath = typeof shellEnv.PATH === 'string' ? shellEnv.PATH : '';
+  if (!currentPathLooksUserConfigured && shellPath) {
+    process.env.PATH = mergePathValues(shellPath, currentPath, ':');
   }
 };
 

@@ -39,7 +39,8 @@ interface InstallSkillDialogProps {
 
 export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, onOpenChange, item }) => {
   const { t } = useI18n();
-  const { installSkills, isInstalling } = useSkillsCatalogStore();
+  const installSkills = useSkillsCatalogStore((s) => s.installSkills);
+  const isInstalling = useSkillsCatalogStore((s) => s.isInstalling);
   const [scope, setScope] = React.useState<'user' | 'project'>('user');
   const [targetSource, setTargetSource] = React.useState<'opencode' | 'agents'>('opencode');
   const projects = useProjectsStore((s) => s.projects);

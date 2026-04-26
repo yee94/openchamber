@@ -211,7 +211,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   const [position, setPosition] = React.useState<MenuPosition>({ x: 0, y: 0, show: false });
   const [selectedText, setSelectedText] = React.useState('');
   const [selectedTextMarkdown, setSelectedTextMarkdown] = React.useState('');
-  const [isDragging, setIsDragging] = React.useState(false);
+  const isDraggingRef = React.useRef(false);
   const [isOpening, setIsOpening] = React.useState(false);
   const [isAddingToNotes, setIsAddingToNotes] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -351,7 +351,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     const container = containerRef.current;
 
     if (!selection || !container) {
-      if (!isDragging) {
+      if (!isDraggingRef.current) {
         hideMenu();
       }
       return;
@@ -361,7 +361,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
     // Only show if we have text and the selection is within our container
     if (!text) {
-      if (!isDragging) {
+      if (!isDraggingRef.current) {
         hideMenu();
       }
       return;
@@ -371,7 +371,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     const range = selection.getRangeAt(0);
     
     if (!container.contains(range.commonAncestorContainer)) {
-      if (!isDragging) {
+      if (!isDraggingRef.current) {
         hideMenu();
       }
       return;
@@ -388,10 +388,10 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     };
 
     // Only show menu if we're not currently dragging
-    if (!isDragging) {
+    if (!isDraggingRef.current) {
       showMenu();
     }
-  }, [containerRef, hideMenu, showMenu, isDragging]);
+  }, [containerRef, hideMenu, showMenu]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -399,13 +399,13 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
     // Track when dragging starts
     const handleMouseDown = () => {
-      setIsDragging(true);
+      isDraggingRef.current = true;
       hideMenu();
     };
 
     // Track when dragging stops
     const handleMouseUp = () => {
-      setIsDragging(false);
+      isDraggingRef.current = false;
       // Check if we have a pending selection to show
       if (pendingSelectionRef.current) {
         // Small delay to ensure selection is finalized

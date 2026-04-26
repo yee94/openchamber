@@ -58,12 +58,10 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
   importData,
 }) => {
   const { t } = useI18n();
-  const {
-    getProfileById,
-    createProfile,
-    updateProfile,
-    deleteProfile,
-  } = useGitIdentitiesStore();
+  const getProfileById = useGitIdentitiesStore((s) => s.getProfileById);
+  const createProfile = useGitIdentitiesStore((s) => s.createProfile);
+  const updateProfile = useGitIdentitiesStore((s) => s.updateProfile);
+  const deleteProfile = useGitIdentitiesStore((s) => s.deleteProfile);
 
   const selectedProfile = React.useMemo(() =>
     profileId && profileId !== 'new' && !importData ? getProfileById(profileId) : null,

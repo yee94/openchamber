@@ -75,7 +75,7 @@ class ChatErrorBoundaryView extends React.Component<ChatErrorBoundaryViewProps, 
               {this.state.error && (
                 <details className="text-xs font-mono bg-muted p-3 rounded">
                   <summary className="cursor-pointer hover:bg-interactive-hover/80">{this.props.texts.detailsSummary}</summary>
-                  <pre className="mt-2 overflow-x-auto">
+                  <pre className="mt-2 max-h-48 overflow-auto">
                     {this.state.error.toString()}
                   </pre>
                 </details>

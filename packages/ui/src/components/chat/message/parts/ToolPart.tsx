@@ -758,17 +758,8 @@ const ToolScrollableTextOutput: React.FC<{
                 style={syntaxTheme}
                 language={outputLanguage}
                 PreTag="div"
-                customStyle={{
-                    ...toolDisplayStyles.getCollapsedStyles(),
-                    padding: 0,
-                    overflow: 'visible',
-                }}
-                codeTagProps={{
-                    style: {
-                        background: 'transparent',
-                        backgroundColor: 'transparent',
-                    },
-                }}
+                customStyle={TOOL_COLLAPSED_CUSTOM_STYLE}
+                codeTagProps={CODE_TAG_PROPS}
                 wrapLongLines
             >
                 {renderedOutput}
@@ -1233,6 +1224,19 @@ const TOOL_DIFF_METRICS = {
     fileGap: 0,
 };
 
+const TOOL_COLLAPSED_CUSTOM_STYLE: React.CSSProperties = {
+    ...toolDisplayStyles.getCollapsedStyles(),
+    padding: 0,
+    overflow: 'visible',
+};
+
+const CODE_TAG_PROPS = { style: { background: 'transparent', backgroundColor: 'transparent' } };
+
+const TOOL_ERROR_ICON_STYLE: React.CSSProperties = { color: 'var(--status-error)' };
+const TOOL_NORMAL_ICON_STYLE: React.CSSProperties = { color: 'var(--tools-icon)' };
+const TOOL_ERROR_TITLE_STYLE: React.CSSProperties = { color: 'var(--status-error)' };
+const TOOL_NORMAL_TITLE_STYLE: React.CSSProperties = { color: 'var(--tools-title)' };
+
 type DiffPatchEntry = {
     id: string;
     title: string;
@@ -1370,24 +1374,29 @@ const getDiffPatchEntries = (
 };
 
 const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, pierreTheme, pierreThemeType, diffViewMode }) => {
+    const options = React.useMemo(
+        () => ({
+            diffStyle: diffViewMode === 'side-by-side' ? 'split' as const : 'unified' as const,
+            diffIndicators: 'none' as const,
+            hunkSeparators: 'line-info-basic' as const,
+            lineDiffType: 'none' as const,
+            disableFileHeader: true,
+            maxLineDiffLength: 1000,
+            expansionLineCount: 20,
+            overflow: 'wrap' as const,
+            theme: pierreTheme,
+            themeType: pierreThemeType,
+            unsafeCSS: TOOL_DIFF_UNSAFE_CSS,
+        }),
+        [diffViewMode, pierreTheme, pierreThemeType]
+    );
+
     return (
         <div className="typography-code px-1 pb-1 pt-0">
             <PatchDiff
                 patch={diff}
                 metrics={TOOL_DIFF_METRICS}
-                options={{
-                    diffStyle: diffViewMode === 'side-by-side' ? 'split' : 'unified',
-                    diffIndicators: 'none',
-                    hunkSeparators: 'line-info-basic',
-                    lineDiffType: 'none',
-                    disableFileHeader: true,
-                    maxLineDiffLength: 1000,
-                    expansionLineCount: 20,
-                    overflow: 'wrap',
-                    theme: pierreTheme,
-                    themeType: pierreThemeType,
-                    unsafeCSS: TOOL_DIFF_UNSAFE_CSS,
-                }}
+                options={options}
                 className="block w-full"
             />
         </div>
@@ -1797,14 +1806,17 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const shouldNotifyStructuralChange = isFinalized || isTaskTool;
 
+    const onContentChangeRef = React.useRef(onContentChange);
+    onContentChangeRef.current = onContentChange;
+
     React.useEffect(() => {
         if (!shouldNotifyStructuralChange) {
             return;
         }
         if (typeof isExpanded === 'boolean') {
-            onContentChange?.('structural');
+            onContentChangeRef.current?.('structural');
         }
-    }, [isExpanded, onContentChange, shouldNotifyStructuralChange]);
+    }, [isExpanded, shouldNotifyStructuralChange]);
 
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
@@ -2425,6 +2437,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
         handleMainClick(event);
     };
 
+    const iconStyle = !isTaskTool && isError ? TOOL_ERROR_ICON_STYLE : TOOL_NORMAL_ICON_STYLE;
+    const titleStyle = !isTaskTool && isError ? TOOL_ERROR_TITLE_STYLE : TOOL_NORMAL_TITLE_STYLE;
+
     if (!shouldTreatAsFinalized && !isActive && !isTaskTool) {
         return null;
     }
@@ -2455,7 +2470,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 isExpanded && 'opacity-0',
                                 !isExpanded && 'group-hover/tool:opacity-0'
                             )}
-                            style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-icon)' }}
+                            style={iconStyle}
                         >
                             {getToolIcon(normalizedPartTool || part.tool)}
                         </div>
@@ -2476,7 +2491,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 active={Boolean(isActive && !isError)}
                                 minDurationMs={300}
                                 className="typography-meta font-medium flex-shrink-0"
-                                style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
+                                style={titleStyle}
                                 title={displayName}
                             >
                                 {displayName}
@@ -2490,7 +2505,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                     active={Boolean(isActive && !isError)}
                                     minDurationMs={300}
                                     className="typography-meta font-medium flex-shrink-0"
-                                    style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
+                                    style={titleStyle}
                                     title={displayName}
                                 >
                                     {displayName}

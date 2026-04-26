@@ -95,6 +95,10 @@ const MERMAID_DIALOG_HEADER_HEIGHT = 40;
 const MERMAID_ASPECT_RETRY_DELAY_MS = 120;
 const MERMAID_ASPECT_MAX_RETRIES = 3;
 
+const DIALOG_CODE_TAG_PROPS = { style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' } };
+
+const MERMAID_CONTROLS = { download: false, copy: false, fullscreen: false, panZoom: true };
+
 type PierreThemeConfig = {
     theme: { light: string; dark: string };
     themeType: 'light' | 'dark';
@@ -966,12 +970,7 @@ const MermaidPreviewDialog: React.FC<{
                                         variant="tool"
                                         allowMermaidWheelZoom
                                         className="markdown-mermaid-fullscreen h-full [&_[data-markdown='mermaid-block']_button]:hidden"
-                                        mermaidControls={{
-                                            download: false,
-                                            copy: false,
-                                            fullscreen: false,
-                                            panZoom: true,
-                                        }}
+                                        mermaidControls={MERMAID_CONTROLS}
                                     />
                                 </div>
                             )}
@@ -1059,7 +1058,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 language="bash"
                                                 PreTag="div"
                                                 customStyle={toolDisplayStyles.getPopupStyles()}
-                                                codeTagProps={{ style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' } }}
+                                                codeTagProps={DIALOG_CODE_TAG_PROPS}
                                                 wrapLongLines
                                             >
                                                 {getInputValue('command')!}
@@ -1129,7 +1128,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 PreTag="div"
                                                 wrapLongLines
                                                 customStyle={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeTagProps={{ style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' } }}
+                                                codeTagProps={DIALOG_CODE_TAG_PROPS}
                                             >
                                                 {popup.content}
                                             </SyntaxHighlighter>
@@ -1184,7 +1183,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 PreTag="div"
                                                 wrapLongLines
                                                 customStyle={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeTagProps={{ style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' } }}
+                                                codeTagProps={DIALOG_CODE_TAG_PROPS}
                                             >
                                                 {popup.content}
                                             </SyntaxHighlighter>
@@ -1215,7 +1214,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                         PreTag="div"
                                         wrapLongLines
                                         customStyle={toolDisplayStyles.getPopupContainerStyles()}
-                                        codeTagProps={{ style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' } }}
+                                        codeTagProps={DIALOG_CODE_TAG_PROPS}
                                     >
                                         {popup.content}
                                     </SyntaxHighlighter>

@@ -35,7 +35,10 @@ import {
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { toast } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getExportRevealLabelKey, revealExportedMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
+import type { ChildSessionExport } from '@/lib/exportSession';
 import { buildSessionMessageRecordsSnapshot, useDirectoryStore, useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { useViewportStore } from '@/sync/viewport-store';
@@ -174,8 +177,20 @@ const areEqual = (prev: Props, next: Props): boolean => {
   if (prev.hasSessionSearchQuery !== next.hasSessionSearchQuery) return false;
   if (prev.normalizedSessionSearchQuery !== next.normalizedSessionSearchQuery) return false;
   if (prev.notifyOnSubtasks !== next.notifyOnSubtasks) return false;
-  if ((prev.editingId === prevSessionId) !== (next.editingId === nextSessionId)) return false;
-  if (prev.editTitle !== next.editTitle && ((prev.editingId === prevSessionId) || (next.editingId === nextSessionId))) return false;
+  if (prev.editingId !== next.editingId) {
+    const prevEditingInTree = treeContainsSessionId(prev.node, prev.editingId);
+    const nextEditingInTree = treeContainsSessionId(next.node, next.editingId);
+    if (prevEditingInTree || nextEditingInTree) {
+      return false;
+    }
+  }
+  if (prev.editTitle !== next.editTitle) {
+    const prevEditingInTree = treeContainsSessionId(prev.node, prev.editingId);
+    const nextEditingInTree = treeContainsSessionId(next.node, next.editingId);
+    if (prevEditingInTree || nextEditingInTree) {
+      return false;
+    }
+  }
   if ((prev.copiedSessionId === prevSessionId) !== (next.copiedSessionId === nextSessionId)) return false;
 
   const prevMenuInTree = treeContainsMenuKey(prev.node, prev.openSidebarMenuKey, prev.renderContext ?? 'project', prev.archivedBucket ?? false);
@@ -267,6 +282,12 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const liveSession = useSession(session.id);
   const resolvedSession = liveSession ?? session;
 
+  const sessionDirectory =
+    normalizePath((session as Session & { directory?: string | null }).directory ?? null)
+    ?? normalizePath(groupDirectory ?? null);
+  const directoryStore = useDirectoryStore(sessionDirectory ?? undefined);
+  const sync = useSync();
+
   const selectionModeEnabled = useSessionMultiSelectStore((state) => state.enabled);
   const isRowSelected = useSessionMultiSelectStore(
     React.useCallback((state) => state.selectedIds.has(session.id), [session.id]),
@@ -285,15 +306,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     walk(root);
     return out;
   }, []);
+
+  const [exportDialogOpen, setExportDialogOpen] = React.useState(false);
+  const [exportIncludeSubtasks, setExportIncludeSubtasks] = React.useState(true);
+
   const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
-  const sessionDirectory =
-    normalizePath((session as Session & { directory?: string | null }).directory ?? null)
-    ?? normalizePath(groupDirectory ?? null);
   const isZombie = useViewportStore(
     React.useCallback((state) => Boolean(state.sessionMemoryState.get(session.id)?.isZombie), [session.id]),
   );
-  const directoryStore = useDirectoryStore(sessionDirectory ?? undefined);
-  const sync = useSync();
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
   const directoryState = sessionDirectory ? directoryStatus.get(sessionDirectory) : null;
@@ -312,7 +332,41 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
-  const handleExportSession = React.useCallback(async () => {
+
+  const descendantCount = React.useMemo(() => collectNodeDescendantIds(node).length, [collectNodeDescendantIds, node]);
+
+  const collectChildExports = React.useCallback(async (children: SessionNode[]): Promise<{ children: ChildSessionExport[]; skipped: number }> => {
+    const results: ChildSessionExport[] = [];
+    let skipped = 0;
+    for (const child of children) {
+      try {
+        await sync.syncSession(child.session.id);
+        const childRecords = buildSessionMessageRecordsSnapshot(directoryStore.getState(), child.session.id).list;
+        const childTitle = child.session.title || t('sessions.sidebar.session.export.untitledSubagent');
+        const childAgent = (child.session as Session & { agent?: string }).agent;
+        const grandChildren = await collectChildExports(child.children);
+        skipped += grandChildren.skipped;
+        results.push({
+          title: childTitle,
+          agent: childAgent,
+          records: childRecords,
+          children: grandChildren.children,
+        });
+      } catch {
+        skipped += collectNodeDescendantIds(child).length + 1;
+      }
+    }
+    return { children: results, skipped };
+  }, [collectNodeDescendantIds, directoryStore, sync, t]);
+
+  const showSkippedSubtasksWarning = React.useCallback((count: number) => {
+    if (count <= 0) return;
+    toast.warning(count === 1
+      ? t('sessions.sidebar.session.export.skippedSubtaskSingle', { count })
+      : t('sessions.sidebar.session.export.skippedSubtaskMany', { count }));
+  }, [t]);
+
+  const doExportSession = React.useCallback(async (includeSubtasks: boolean) => {
     if (!sessionDirectory) {
       toast.error(t('sessions.sidebar.session.export.nothingToExport'));
       return;
@@ -326,7 +380,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       return;
     }
 
-    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null);
+    let childExports: ChildSessionExport[] | undefined;
+    let skippedSubtaskCount = 0;
+    if (includeSubtasks && node.children.length > 0) {
+      const collected = await collectChildExports(node.children);
+      childExports = collected.children;
+      skippedSubtaskCount = collected.skipped;
+    }
+
+    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null, childExports);
     const filename = buildExportFilename(resolvedSession.title ?? null);
     const savedPath = await saveAsMarkdownDesktop(markdown, filename);
 
@@ -343,12 +405,22 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           },
         },
       });
+      showSkippedSubtasksWarning(skippedSubtaskCount);
       return;
     }
 
     downloadAsMarkdown(markdown, filename);
     toast.success(t('sessions.sidebar.session.export.success'));
-  }, [directoryStore, resolvedSession.title, session.id, sessionDirectory, sync, t]);
+    showSkippedSubtasksWarning(skippedSubtaskCount);
+  }, [collectChildExports, directoryStore, node.children, resolvedSession.title, session.id, sessionDirectory, showSkippedSubtasksWarning, sync, t]);
+  const handleExportSession = React.useCallback(async () => {
+    if (node.children.length > 0) {
+      setExportIncludeSubtasks(true);
+      setExportDialogOpen(true);
+      return;
+    }
+    await doExportSession(false);
+  }, [doExportSession, node.children.length]);
 
   if (editingId === session.id) {
     return (
@@ -808,6 +880,47 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       {hasChildren && isExpanded
         ? node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory, projectId, archivedBucket, undefined, renderContext))
         : null}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>{t('sessions.sidebar.session.export.dialog.title')}</DialogTitle>
+            <DialogDescription>
+              {descendantCount === 1
+                ? t('sessions.sidebar.session.export.dialog.descriptionSingle', { count: descendantCount })
+                : t('sessions.sidebar.session.export.dialog.descriptionMany', { count: descendantCount })}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex items-center gap-2 typography-ui-label cursor-pointer">
+            <input
+              type="checkbox"
+              checked={exportIncludeSubtasks}
+              onChange={(e) => setExportIncludeSubtasks(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            {t('sessions.sidebar.session.export.dialog.includeSubtasks')}
+          </label>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => setExportDialogOpen(false)}
+              variant="outline"
+              size="sm"
+            >
+              {t('sessions.sidebar.dialogs.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setExportDialogOpen(false);
+                void doExportSession(exportIncludeSubtasks);
+              }}
+              size="sm"
+            >
+              {t('sessions.sidebar.session.export.dialog.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </React.Fragment>
   );
 }

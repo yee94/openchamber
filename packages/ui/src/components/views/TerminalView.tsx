@@ -100,17 +100,16 @@ export const TerminalView: React.FC = () => {
     const hasActiveContext = currentSessionId !== null || newSessionDraft?.open === true;
 
     const effectiveDirectory = useEffectiveDirectory() ?? null;
-    const terminalStore = useTerminalStore();
-    const terminalSessions = terminalStore.sessions;
-    const terminalHydrated = terminalStore.hasHydrated;
-    const ensureDirectory = terminalStore.ensureDirectory;
-    const createTab = terminalStore.createTab;
-    const setActiveTab = terminalStore.setActiveTab;
-    const closeTab = terminalStore.closeTab;
-    const setTabSessionId = terminalStore.setTabSessionId;
-    const setTabLifecycle = terminalStore.setTabLifecycle;
-    const setConnecting = terminalStore.setConnecting;
-    const appendToBuffer = terminalStore.appendToBuffer;
+    const terminalSessions = useTerminalStore((s) => s.sessions);
+    const terminalHydrated = useTerminalStore((s) => s.hasHydrated);
+    const ensureDirectory = useTerminalStore((s) => s.ensureDirectory);
+    const createTab = useTerminalStore((s) => s.createTab);
+    const setActiveTab = useTerminalStore((s) => s.setActiveTab);
+    const closeTab = useTerminalStore((s) => s.closeTab);
+    const setTabSessionId = useTerminalStore((s) => s.setTabSessionId);
+    const setTabLifecycle = useTerminalStore((s) => s.setTabLifecycle);
+    const setConnecting = useTerminalStore((s) => s.setConnecting);
+    const appendToBuffer = useTerminalStore((s) => s.appendToBuffer);
 
     const directoryTerminalState = React.useMemo(() => {
         if (!effectiveDirectory) return undefined;
