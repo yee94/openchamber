@@ -449,9 +449,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     };
 
     const isVSCode = isVSCodeRuntime();
-    const hasAppearanceSettings = (shouldShow('theme') || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart')) && !isVSCode;
     const hasThemeSettings = shouldShow('theme') && !isVSCode;
-    const hasLocalizationSettings = (shouldShow('theme') || shouldShow('timeFormat') || shouldShow('weekStart')) && !isVSCode;
+    const hasLocalizationSettings = shouldShow('theme') || shouldShow('timeFormat') || shouldShow('weekStart');
+    const hasAppearanceSettings = isVSCode
+        ? hasLocalizationSettings
+        : (shouldShow('theme') || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart'));
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('inputBarOffset');
     const hasNavigationSettings = shouldShow('terminalQuickKeys') && !isMobile;
     const hasBehaviorSettings = shouldShow('mermaidRendering')
@@ -712,7 +714,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     </Select>
                                 </div>
 
-                                {(shouldShow('timeFormat') || shouldShow('weekStart')) && (
+                                {!isVSCode && (shouldShow('timeFormat') || shouldShow('weekStart')) && (
                                     <div className="grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
                                         {shouldShow('timeFormat') && (
                                             <div className="flex min-w-0 items-center gap-2">
