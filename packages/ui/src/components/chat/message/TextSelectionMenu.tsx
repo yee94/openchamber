@@ -544,80 +544,85 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
       <div
         ref={menuRef}
         className={cn(
-          'fixed left-0 right-0 bottom-0 z-50',
-          'flex items-center justify-center gap-4',
-          'bg-[var(--surface-elevated)] border-t border-[var(--interactive-border)]',
-          'px-3 py-2',
+          'fixed left-3 right-3 bottom-0 z-50 mx-auto max-w-[420px]',
+          'rounded-2xl border border-[var(--interactive-border)]',
+          'bg-[var(--surface-elevated)] p-2 shadow-lg',
           'safe-area-bottom',
           'transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform]',
           isOpening ? 'opacity-0 translate-y-[4px]' : 'opacity-100 translate-y-0'
         )}
         style={{
-          paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
+          bottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <button
-          onClick={handleAddToChat}
-          className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-lg',
-            'text-sm font-medium',
-            'bg-[var(--primary-base)] text-[var(--primary-foreground)]',
-            'active:opacity-80',
-            'transition-opacity duration-150'
-          )}
-          type="button"
-        >
-          <RiAddLine className="h-5 w-5" />
-          <span>{t('chat.textSelection.actions.addToChat')}</span>
-        </button>
-        
-        <button
-          onClick={handleCreateNewSession}
-          className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-lg',
-            'text-sm font-medium',
-            'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]',
-            'active:opacity-80',
-            'transition-opacity duration-150'
-          )}
-          type="button"
-        >
-          <RiChatNewLine className="h-5 w-5" />
-          <span>{t('chat.textSelection.actions.newSession')}</span>
-        </button>
-        
-        <button
-          onClick={handleCopy}
-          className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-lg',
-            'text-sm font-medium',
-            'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
-            'active:opacity-80',
-            'transition-opacity duration-150'
-          )}
-          type="button"
-        >
-          <RiFileCopyLine className="h-5 w-5" />
-          <span>{t('chat.textSelection.actions.copy')}</span>
-        </button>
-
-        {!isVSCodeRuntime() ? (
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={handleAddToNotes}
-            disabled={isAddingToNotes}
+            onClick={handleAddToChat}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg',
-              'text-sm font-medium',
-              'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
-              'active:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed',
+              'flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left',
+              'text-sm font-medium leading-tight',
+              'bg-[var(--primary-base)] text-[var(--primary-foreground)]',
+              'active:opacity-80',
               'transition-opacity duration-150'
             )}
+            title={t('chat.textSelection.title.addToCurrentChat')}
             type="button"
           >
-            {isAddingToNotes ? <RiLoader4Line className="h-5 w-5 animate-spin" /> : <RiBookletLine className="h-5 w-5" />}
-            <span>{t('chat.textSelection.actions.addToNotes')}</span>
+            <RiAddLine className="h-5 w-5 flex-shrink-0" />
+            <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.addToChat')}</span>
           </button>
-        ) : null}
+
+          <button
+            onClick={handleCreateNewSession}
+            className={cn(
+              'flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left',
+              'text-sm font-medium leading-tight',
+              'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]',
+              'active:opacity-80',
+              'transition-opacity duration-150'
+            )}
+            title={t('chat.textSelection.title.newSessionWithSelection')}
+            type="button"
+          >
+            <RiChatNewLine className="h-5 w-5 flex-shrink-0" />
+            <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.newSession')}</span>
+          </button>
+
+          <button
+            onClick={handleCopy}
+            className={cn(
+              'flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left',
+              'text-sm font-medium leading-tight',
+              'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
+              'active:opacity-80',
+              'transition-opacity duration-150'
+            )}
+            title={t('chat.textSelection.actions.copy')}
+            type="button"
+          >
+            <RiFileCopyLine className="h-5 w-5 flex-shrink-0" />
+            <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.copy')}</span>
+          </button>
+
+          {!isVSCodeRuntime() ? (
+            <button
+              onClick={handleAddToNotes}
+              disabled={isAddingToNotes}
+              className={cn(
+                'flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left',
+                'text-sm font-medium leading-tight',
+                'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
+                'active:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed',
+                'transition-opacity duration-150'
+              )}
+              title={t('chat.textSelection.title.saveInsightToNotes')}
+              type="button"
+            >
+              {isAddingToNotes ? <RiLoader4Line className="h-5 w-5 flex-shrink-0 animate-spin" /> : <RiBookletLine className="h-5 w-5 flex-shrink-0" />}
+              <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.addToNotes')}</span>
+            </button>
+          ) : null}
+        </div>
       </div>,
       document.body
     );
