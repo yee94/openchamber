@@ -23,6 +23,7 @@ import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { usePwaDetection } from '@/hooks/usePwaDetection';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { CODE_FONT_OPTIONS, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTIONS, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import {
@@ -249,6 +250,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setFontSize = useUIStore(state => state.setFontSize);
     const terminalFontSize = useUIStore(state => state.terminalFontSize);
     const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
+    const uiFont = useUIStore(state => state.uiFont);
+    const setUiFont = useUIStore(state => state.setUiFont);
+    const monoFont = useUIStore(state => state.monoFont);
+    const setMonoFont = useUIStore(state => state.setMonoFont);
     const padding = useUIStore(state => state.padding);
     const setPadding = useUIStore(state => state.setPadding);
     const inputBarOffset = useUIStore(state => state.inputBarOffset);
@@ -846,6 +851,72 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         <section className="p-2 space-y-0.5">
                             <h4 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.visual.section.spacingAndLayout')}</h4>
                             <div className="pl-2">
+
+                            {shouldShow('fontSize') && !isMobile && (
+                                <div className="flex items-center gap-8 py-1">
+                                    <div className="flex min-w-0 flex-col w-56 shrink-0">
+                                        <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.interfaceFont')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-fit">
+                                        <Select value={uiFont} onValueChange={(value) => setUiFont(value as UiFontOption)}>
+                                            <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectInterfaceFontAria')} className="w-[13rem]">
+                                                <SelectValue>{UI_FONT_OPTIONS.find((option) => option.id === uiFont)?.label}</SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {UI_FONT_OPTIONS.map((option) => (
+                                                    <SelectItem key={option.id} value={option.id}>
+                                                        <span style={{ fontFamily: option.stack }}>{option.label}</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="sm"
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => setUiFont(DEFAULT_UI_FONT)}
+                                            disabled={uiFont === DEFAULT_UI_FONT}
+                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
+                                            aria-label={t('settings.openchamber.visual.actions.resetInterfaceFontAria')}
+                                            title={t('settings.common.actions.reset')}
+                                        >
+                                            <RiRestartLine className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {shouldShow('terminalFontSize') && (
+                                <div className={cn("py-1", isMobile ? "flex flex-col gap-3" : "flex items-center gap-8")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-56 shrink-0")}>
+                                        <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.codeFont')}</span>
+                                    </div>
+                                    <div className={cn("flex items-center gap-2", isMobile ? "w-full" : "w-fit")}>
+                                        <Select value={monoFont} onValueChange={(value) => setMonoFont(value as MonoFontOption)}>
+                                            <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectCodeFontAria')} className="w-[13rem]">
+                                                <SelectValue>{CODE_FONT_OPTIONS.find((option) => option.id === monoFont)?.label}</SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {CODE_FONT_OPTIONS.map((option) => (
+                                                    <SelectItem key={option.id} value={option.id}>
+                                                        <span style={{ fontFamily: option.stack }}>{option.label}</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="sm"
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => setMonoFont(DEFAULT_MONO_FONT)}
+                                            disabled={monoFont === DEFAULT_MONO_FONT}
+                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
+                                            aria-label={t('settings.openchamber.visual.actions.resetCodeFontAria')}
+                                            title={t('settings.common.actions.reset')}
+                                        >
+                                            <RiRestartLine className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
 
                             {shouldShow('fontSize') && !isMobile && (
                                 <div className="flex items-center gap-8 py-1">
