@@ -567,6 +567,7 @@ interface UIStore {
   mermaidRenderingMode: MermaidRenderingMode;
   userMessageRenderingMode: UserMessageRenderingMode;
   stickyUserHeader: boolean;
+  showSplitAssistantMessageActions: boolean;
   showMobileSessionStatusBar: boolean;
   isMobileSessionStatusBarCollapsed: boolean;
   isExpandedInput: boolean;
@@ -684,6 +685,7 @@ interface UIStore {
   setMermaidRenderingMode: (value: MermaidRenderingMode) => void;
   setUserMessageRenderingMode: (value: UserMessageRenderingMode) => void;
   setStickyUserHeader: (value: boolean) => void;
+  setShowSplitAssistantMessageActions: (value: boolean) => void;
   setShowMobileSessionStatusBar: (value: boolean) => void;
   setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
   viewPagerPage: 'left' | 'center' | 'right';
@@ -805,6 +807,7 @@ export const useUIStore = create<UIStore>()(
         mermaidRenderingMode: 'svg',
         userMessageRenderingMode: 'markdown',
         stickyUserHeader: true,
+        showSplitAssistantMessageActions: false,
         showMobileSessionStatusBar: true,
         isMobileSessionStatusBarCollapsed: false,
         isExpandedInput: false,
@@ -1743,6 +1746,9 @@ export const useUIStore = create<UIStore>()(
         setStickyUserHeader: (value) => {
           set({ stickyUserHeader: value });
         },
+        setShowSplitAssistantMessageActions: (value) => {
+          set({ showSplitAssistantMessageActions: value });
+        },
         setShowMobileSessionStatusBar: (value) => {
           set({ showMobileSessionStatusBar: value });
         },
@@ -1943,6 +1949,7 @@ export const useUIStore = create<UIStore>()(
           mermaidRenderingMode: state.mermaidRenderingMode,
           userMessageRenderingMode: state.userMessageRenderingMode,
           stickyUserHeader: state.stickyUserHeader,
+          showSplitAssistantMessageActions: state.showSplitAssistantMessageActions,
           showMobileSessionStatusBar: state.showMobileSessionStatusBar,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
           shortcutOverrides: state.shortcutOverrides,
