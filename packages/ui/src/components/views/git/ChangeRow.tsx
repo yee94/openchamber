@@ -101,7 +101,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
       onKeyDown={handleKeyDown}
       style={indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined}
     >
-        <div onClick={(e) => { e.stopPropagation(); }}>
+        <div className="flex size-5 shrink-0 items-center justify-center" onClick={(e) => { e.stopPropagation(); }}>
           <Checkbox
             size="sm"
             checked={checked}
