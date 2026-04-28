@@ -124,7 +124,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
             return (
               <span
                 className="flex-1 min-w-0 truncate typography-ui-label text-foreground"
-                style={{ direction: 'rtl', textAlign: 'left' }}
+                style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
                 title={file.path}
               >
                 {file.path}
@@ -137,7 +137,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
             <span className="flex-1 min-w-0 flex items-baseline overflow-hidden" title={file.path}>
               <span
                 className="min-w-0 truncate typography-ui-label text-muted-foreground"
-                style={{ direction: 'rtl', textAlign: 'left' }}
+                  style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
               >
                 {dir}
               </span>
