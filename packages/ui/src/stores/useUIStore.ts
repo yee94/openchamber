@@ -8,7 +8,7 @@ import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOpt
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
 export type RightSidebarTab = 'git' | 'files' | 'context';
-export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat';
+export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -161,6 +161,10 @@ const buildDefaultContextPanelTabDedupeKey = (mode: ContextPanelMode, targetPath
     return targetPath || mode;
   }
 
+  if (mode === 'preview') {
+    return targetPath || mode;
+  }
+
   return mode;
 };
 
@@ -237,7 +241,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       touchedAt?: unknown;
     };
 
-    if (candidate.mode !== 'diff' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat') {
+    if (candidate.mode !== 'diff' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'preview') {
       continue;
     }
 
@@ -588,6 +592,7 @@ interface UIStore {
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
   openContextOverview: (directory: string) => void;
   openContextPlan: (directory: string) => void;
+  openContextPreview: (directory: string, url: string) => void;
   setActiveContextPanelTab: (directory: string, tabID: string) => void;
   reorderContextPanelTabs: (directory: string, activeTabID: string, overTabID: string) => void;
   closeContextPanelTab: (directory: string, tabID: string) => void;
@@ -989,6 +994,31 @@ export const useUIStore = create<UIStore>()(
           }
 
           get().openContextPanelTab(normalizedDirectory, { mode: 'plan' });
+        },
+
+        openContextPreview: (directory, url) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          const normalizedUrl = (url || '').trim();
+          if (!normalizedDirectory || !normalizedUrl) {
+            return;
+          }
+
+          let label: string | null = null;
+          try {
+            const parsed = new URL(normalizedUrl);
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+              label = parsed.host || parsed.hostname || 'Preview';
+            }
+          } catch {
+            // ignore invalid URL
+          }
+
+          get().openContextPanelTab(normalizedDirectory, {
+            mode: 'preview',
+            targetPath: normalizedUrl,
+            dedupeKey: normalizedUrl,
+            label,
+          });
         },
 
         setActiveContextPanelTab: (directory, tabID) => {

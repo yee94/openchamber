@@ -16,7 +16,7 @@ import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiImageDownloadLine, RiLoader4Line, RiErrorWarningLine, RiBookletLine } from '@remixicon/react';
+import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiImageDownloadLine, RiLoader4Line, RiErrorWarningLine, RiBookletLine, RiGlobalLine } from '@remixicon/react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -43,6 +43,7 @@ import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessions } from '@/sync/sync-context';
 import { useI18n } from '@/lib/i18n';
+import { extractLoopbackUrls } from '@/lib/url';
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
@@ -960,6 +961,36 @@ const AssistantMessageBody = React.memo(({
     const assistantPlanText = React.useMemo(() => flattenAssistantTextParts(assistantTextParts), [assistantTextParts]);
     const suggestedPlanTitle = React.useMemo(() => suggestPlanTitleFromText(assistantPlanText), [assistantPlanText]);
 
+    const openContextPreview = useUIStore((state) => state.openContextPreview);
+
+    const messagePreviewUrl = React.useMemo(() => {
+        for (const part of assistantTextParts) {
+            const text = (part as { text?: unknown }).text;
+            if (typeof text !== 'string' || text.length === 0) {
+                continue;
+            }
+            const url = extractLoopbackUrls(text)[0];
+            if (!url) {
+                continue;
+            }
+            return url.includes('0.0.0.0') ? url.replace('0.0.0.0', '127.0.0.1') : url;
+        }
+        for (const part of toolParts) {
+            const state = (part as unknown as { state?: unknown }).state as Record<string, unknown> | undefined;
+            const output = state && typeof state.output === 'string' ? state.output : null;
+            if (!output) {
+                continue;
+            }
+            // eslint-disable-next-line no-control-regex
+            const url = extractLoopbackUrls(output.replace(/\x1b\[[0-9;]*m/g, ''))[0];
+            if (!url) {
+                continue;
+            }
+            return url.includes('0.0.0.0') ? url.replace('0.0.0.0', '127.0.0.1') : url;
+        }
+        return null;
+    }, [assistantTextParts, toolParts]);
+
     const createSessionFromAssistantMessage = useSessionUIStore((state) => state.createSessionFromAssistantMessage);
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
@@ -1658,9 +1689,35 @@ const AssistantMessageBody = React.memo(({
     }, [messageCompletedAt, messageCreatedAt]);
 
     const footerTimestampClassName = 'text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1';
+    const canOpenMessagePreview = !isMobile && !isVSCodeRuntime();
 
     const finalTurnActionButtons = (
         <>
+            {canOpenMessagePreview && messagePreviewUrl ? (
+                <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                            aria-label={t('chat.messageBody.actions.openPreviewAria')}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => {
+                                const directory = effectiveDirectory
+                                    ?? (typeof currentSession?.directory === 'string' ? currentSession.directory : null);
+                                if (!directory) {
+                                    return;
+                                }
+                                openContextPreview(directory, messagePreviewUrl);
+                            }}
+                        >
+                            <RiGlobalLine className="h-4 w-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.openPreview')}</TooltipContent>
+                </Tooltip>
+            ) : null}
             {!isVSCodeRuntime() ? (
                 <Tooltip delayDuration={1000}>
                     <TooltipTrigger asChild>
