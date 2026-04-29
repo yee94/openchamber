@@ -651,6 +651,15 @@ export const createPreviewProxyRuntime = ({
         })
         .replace(/@import\s+(["'])\/(?!\/)([^"']*)\1/gi, (_match, quote, path) => {
           return `@import ${quote}${rewriteRootPath(`/${path}`)}${quote}`;
+        })
+        .replace(/\bfrom\s+(["'])\/(?!\/)([^"']*)\1/gi, (_match, quote, path) => {
+          return `from ${quote}${rewriteRootPath(`/${path}`)}${quote}`;
+        })
+        .replace(/\bimport\s+(["'])\/(?!\/)([^"']*)\1/gi, (_match, quote, path) => {
+          return `import ${quote}${rewriteRootPath(`/${path}`)}${quote}`;
+        })
+        .replace(/\bimport\(\s*(["'])\/(?!\/)([^"']*)\1\s*\)/gi, (_match, quote, path) => {
+          return `import(${quote}${rewriteRootPath(`/${path}`)}${quote})`;
         });
     };
 
@@ -810,7 +819,7 @@ export const createPreviewProxyRuntime = ({
           const parsed = new URL(req.originalUrl || req.url || '', 'http://localhost');
           const upstreamPath = stripProxyPrefix(parsed.pathname, resolved.id);
           if (isJavaScript && upstreamPath === '/@vite/client') {
-            return rewriteViteClientHmr(responseBuffer.toString('utf8'), proxyBasePath);
+            return rewritePreviewBody(rewriteViteClientHmr(responseBuffer.toString('utf8'), proxyBasePath), proxyBasePath);
           }
 
           const rewrittenBody = rewritePreviewBody(responseBuffer.toString('utf8'), proxyBasePath);
