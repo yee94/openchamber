@@ -190,6 +190,67 @@ const PREVIEW_BRIDGE_SCRIPT = String.raw`(() => {
     window.WebSocket = OpenChamberPreviewWebSocket;
   };
 
+  const installAppRequestProxyPatch = () => {
+    if (window.__openchamberAppRequestProxyPatched) return;
+    window.__openchamberAppRequestProxyPatched = true;
+    const proxyMatch = window.location.pathname.match(/^(\/api\/preview\/proxy\/[a-f0-9]{16,64})(?:\/|$)/i);
+    if (!proxyMatch) return;
+    const proxyBase = proxyMatch[1];
+
+    const shouldProxyPath = (pathname) => {
+      if (typeof pathname !== 'string' || !pathname.startsWith('/') || pathname.startsWith('//')) return false;
+      if (pathname.indexOf(proxyBase) === 0) return false;
+      return true;
+    };
+
+    const proxiedUrl = (value) => {
+      if (typeof value !== 'string' || !value.startsWith('/')) return value;
+      if (!shouldProxyPath(value)) return value;
+      return proxyBase + value;
+    };
+
+    if (typeof window.fetch === 'function') {
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = function(input, init) {
+        if (typeof input === 'string') {
+          return nativeFetch(proxiedUrl(input), init);
+        }
+        if (input instanceof Request) {
+          try {
+            const parsed = new URL(input.url);
+            if (parsed.origin === window.location.origin && shouldProxyPath(parsed.pathname)) {
+              const nextUrl = proxyBase + parsed.pathname + parsed.search + parsed.hash;
+              return nativeFetch(new Request(nextUrl, input), init);
+            }
+          } catch {}
+        }
+        return nativeFetch(input, init);
+      };
+    }
+
+    if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
+      const nativeOpen = window.XMLHttpRequest.prototype.open;
+      window.XMLHttpRequest.prototype.open = function(method, url) {
+        const args = Array.prototype.slice.call(arguments);
+        if (typeof url === 'string') {
+          args[1] = proxiedUrl(url);
+        }
+        return nativeOpen.apply(this, args);
+      };
+    }
+
+    if (typeof window.EventSource === 'function') {
+      const NativeEventSource = window.EventSource;
+      function OpenChamberPreviewEventSource(url, eventSourceInitDict) {
+        return new NativeEventSource(proxiedUrl(String(url)), eventSourceInitDict);
+      }
+      OpenChamberPreviewEventSource.prototype = NativeEventSource.prototype;
+      Object.setPrototypeOf(OpenChamberPreviewEventSource, NativeEventSource);
+      Object.defineProperty(OpenChamberPreviewEventSource, 'name', { value: 'EventSource' });
+      window.EventSource = OpenChamberPreviewEventSource;
+    }
+  };
+
   const selectorPart = (element) => {
     const tag = element.tagName.toLowerCase();
     if (element.id && /^[A-Za-z][\w:.-]*$/.test(element.id)) return tag + '#' + CSS.escape(element.id);
@@ -308,6 +369,7 @@ const PREVIEW_BRIDGE_SCRIPT = String.raw`(() => {
   }
 
   installViteHmrProxyPatch();
+  installAppRequestProxyPatch();
 
   window.addEventListener('error', (event) => {
     const target = event.target;
