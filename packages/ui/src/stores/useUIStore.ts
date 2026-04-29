@@ -563,6 +563,7 @@ interface UIStore {
   showTerminalQuickKeysOnDesktop: boolean;
   persistChatDraft: boolean;
   inputSpellcheckEnabled: boolean;
+  wideChatLayoutEnabled: boolean;
   showToolFileIcons: boolean;
   showExpandedBashTools: boolean;
   showExpandedEditTools: boolean;
@@ -689,6 +690,7 @@ interface UIStore {
   setMaxLastMessageLength: (value: number) => void;
   setPersistChatDraft: (value: boolean) => void;
   setInputSpellcheckEnabled: (value: boolean) => void;
+  setWideChatLayoutEnabled: (value: boolean) => void;
   setShowToolFileIcons: (value: boolean) => void;
   setShowExpandedBashTools: (value: boolean) => void;
   setShowExpandedEditTools: (value: boolean) => void;
@@ -811,6 +813,7 @@ export const useUIStore = create<UIStore>()(
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
         inputSpellcheckEnabled: false,
+        wideChatLayoutEnabled: false,
         showToolFileIcons: true,
         showExpandedBashTools: false,
         showExpandedEditTools: false,
@@ -1804,6 +1807,9 @@ export const useUIStore = create<UIStore>()(
         setInputSpellcheckEnabled: (value) => {
           set({ inputSpellcheckEnabled: value });
         },
+        setWideChatLayoutEnabled: (value) => {
+          set({ wideChatLayoutEnabled: value });
+        },
         setShowToolFileIcons: (value) => {
           set({ showToolFileIcons: value });
         },
@@ -2025,6 +2031,7 @@ export const useUIStore = create<UIStore>()(
           maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
           inputSpellcheckEnabled: state.inputSpellcheckEnabled,
+          wideChatLayoutEnabled: state.wideChatLayoutEnabled,
           showToolFileIcons: state.showToolFileIcons,
           showExpandedBashTools: state.showExpandedBashTools,
           showExpandedEditTools: state.showExpandedEditTools,
