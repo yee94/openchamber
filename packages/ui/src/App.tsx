@@ -828,7 +828,7 @@ function App({ apis }: AppProps) {
       <ErrorBoundary>
         <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
           <RuntimeAPIProvider apis={apis}>
-            <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
                 <EmbeddedSessionSelectionGate embeddedSessionChat={embeddedSessionChat} isVSCodeRuntime={isVSCodeRuntime} />
                 <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
@@ -873,7 +873,7 @@ function App({ apis }: AppProps) {
       <ErrorBoundary>
         <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
           <RuntimeAPIProvider apis={apis}>
-            <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
                 <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                 <AgentManagerView />
@@ -891,7 +891,7 @@ function App({ apis }: AppProps) {
         <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
           <RuntimeAPIProvider apis={apis}>
             <FireworksProvider>
-              <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
                 <div className="h-full text-foreground bg-background">
                   <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <VSCodeLayout />
@@ -916,7 +916,7 @@ function App({ apis }: AppProps) {
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
             <VoiceProvider>
-              <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
                 <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
                   <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <MainLayout />

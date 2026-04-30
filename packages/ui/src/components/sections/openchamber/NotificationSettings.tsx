@@ -804,7 +804,7 @@ export const NotificationSettings: React.FC = () => {
                   <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
                     <div className="flex items-center gap-2">
                       <span className="typography-ui-label text-foreground">{t('settings.notifications.page.summary.modelLabel')}</span>
-                      <Tooltip delayDuration={1000}>
+                      <Tooltip>
                         <TooltipTrigger asChild>
                           <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                         </TooltipTrigger>

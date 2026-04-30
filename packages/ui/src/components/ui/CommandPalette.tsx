@@ -108,8 +108,10 @@ export const CommandPalette: React.FC = () => {
   const trimmedQuery = debouncedQuery.trim();
   const liveTrimmed = query.trim();
 
+  // Clear query on open (not close) so content stays visible through the
+  // close animation instead of emptying mid-flight.
   React.useEffect(() => {
-    if (!isCommandPaletteOpen) setQuery('');
+    if (isCommandPaletteOpen) setQuery('');
   }, [isCommandPaletteOpen]);
 
   // Lazy-load git status for every session directory we plan to display so that
@@ -418,10 +420,7 @@ export const CommandPalette: React.FC = () => {
         <DialogTitle>{t('commandPalette.title')}</DialogTitle>
         <DialogDescription>{t('commandPalette.description')}</DialogDescription>
       </DialogHeader>
-      <DialogContent
-        className="overflow-hidden p-0 transform-gpu will-change-transform"
-        showCloseButton
-      >
+      <DialogContent className="overflow-hidden p-0" showCloseButton>
         <Command
           shouldFilter={false}
           className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-8 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4 [&_[cmdk-item]]:typography-meta"

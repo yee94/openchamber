@@ -431,7 +431,7 @@ const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButto
     }
 
     return (
-        <Tooltip delayDuration={600}>
+        <Tooltip>
             <TooltipTrigger asChild>
                 {button}
             </TooltipTrigger>
@@ -454,7 +454,7 @@ const FocusModeButton = React.memo(function FocusModeButton(props: FocusModeButt
     const { t } = useI18n();
 
     return (
-        <Tooltip delayDuration={600}>
+        <Tooltip>
             <TooltipTrigger asChild>
                 <button
                     type="button"

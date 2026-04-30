@@ -29,7 +29,6 @@ interface SyncActionsProps {
   disabled: boolean;
   removingRemoteName?: string | null;
   iconOnly?: boolean;
-  tooltipDelayMs?: number;
   aheadCount?: number;
   behindCount?: number;
 }
@@ -44,7 +43,6 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   disabled,
   removingRemoteName = null,
   iconOnly = false,
-  tooltipDelayMs = 1000,
   aheadCount = 0,
   behindCount = 0,
 }) => {
@@ -108,7 +106,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
     );
 
     return (
-      <Tooltip delayDuration={tooltipDelayMs}>
+      <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
         <TooltipContent sideOffset={8}>{tooltipText}</TooltipContent>
       </Tooltip>
@@ -126,7 +124,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   ) => {
     return (
       <DropdownMenu>
-        <Tooltip delayDuration={tooltipDelayMs}>
+        <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <Button

@@ -444,7 +444,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, hasTouchInput,
                 )}
             >
                 {onRevert && (
-                <Tooltip delayDuration={1000}>
+                <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                                 type="button"
@@ -465,7 +465,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, hasTouchInput,
                     </Tooltip>
                 )}
                 {onFork && (
-                    <Tooltip delayDuration={1000}>
+                    <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
                                 type="button"
@@ -486,7 +486,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, hasTouchInput,
                     </Tooltip>
                 )}
                 {canCopyMessage && hasCopyableText && (
-                    <Tooltip delayDuration={1000}>
+                    <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
                                 type="button"
@@ -734,7 +734,7 @@ const AssistantMessageActionButtons = React.memo(({
     return (
         <>
             {onCopyMessage && (
-                <Tooltip delayDuration={1000}>
+                <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
@@ -773,7 +773,7 @@ const AssistantMessageActionButtons = React.memo(({
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.copyAnswer')}</TooltipContent>
                 </Tooltip>
             )}
-            <Tooltip delayDuration={1000}>
+            <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
                         type="button"
@@ -799,7 +799,7 @@ const AssistantMessageActionButtons = React.memo(({
                 <TooltipContent sideOffset={6}>{isSharing ? t('chat.messageBody.actions.savingImage') : t('chat.messageBody.actions.saveAsImage')}</TooltipContent>
             </Tooltip>
             {showMessageTTSButtons && hasCopyableText && (
-                <Tooltip delayDuration={1000}>
+                <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
@@ -1698,7 +1698,7 @@ const AssistantMessageBody = React.memo(({
     const finalTurnActionButtons = (
         <>
             {canOpenMessagePreview && messagePreviewUrl ? (
-                <Tooltip delayDuration={1000}>
+                <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
@@ -1723,7 +1723,7 @@ const AssistantMessageBody = React.memo(({
                 </Tooltip>
             ) : null}
             {!isVSCode ? (
-                <Tooltip delayDuration={1000}>
+                <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
@@ -1743,7 +1743,7 @@ const AssistantMessageBody = React.memo(({
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.saveAsPlan')}</TooltipContent>
                 </Tooltip>
             ) : null}
-            <Tooltip delayDuration={1000}>
+            <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
                         type="button"
@@ -1759,7 +1759,7 @@ const AssistantMessageBody = React.memo(({
                 <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.startNewSession')}</TooltipContent>
             </Tooltip>
             {!isVSCode ? (
-                <Tooltip delayDuration={1000}>
+                <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
@@ -1846,7 +1846,7 @@ const AssistantMessageBody = React.memo(({
                         </div>
                         <div className="flex items-center gap-1.5">
                             {turnDurationText ? (
-                                <Tooltip delayDuration={300}>
+                                <Tooltip>
                                     <TooltipTrigger asChild>
                                         <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
                                             <RiHourglassLine className="h-3.5 w-3.5" />
@@ -1857,7 +1857,7 @@ const AssistantMessageBody = React.memo(({
                                 </Tooltip>
                             ) : null}
                             {footerTimestamp ? (
-                                <Tooltip delayDuration={300}>
+                                <Tooltip>
                                     <TooltipTrigger asChild>
                                         <span
                                             className={footerTimestampClassName}

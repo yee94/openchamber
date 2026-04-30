@@ -554,7 +554,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               if (!Icon) return null;
 
               return (
-                <Tooltip key={page.slug} delayDuration={600}>
+                <Tooltip key={page.slug}>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
@@ -587,7 +587,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         <div className="overflow-hidden transition-opacity duration-150 opacity-100">
           <div className="border-t border-border bg-sidebar px-2 py-1 space-y-0.5">
             {!runtimeCtx.isVSCode && (
-              <Tooltip delayDuration={300}>
+              <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
