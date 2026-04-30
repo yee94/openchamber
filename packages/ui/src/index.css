@@ -1446,3 +1446,8 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
 
 
 }
+
+/* Settings dialog: hide the overlay scrollbar; wheel/keyboard scroll still works. */
+[data-settings-view="true"] .overlay-scrollbar {
+  display: none;
+}
