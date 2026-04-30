@@ -26,6 +26,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Buttons should never look selectable. */
+button,
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 :root.oc-theme-switching *,
 :root.oc-theme-switching *::before,
 :root.oc-theme-switching *::after {
