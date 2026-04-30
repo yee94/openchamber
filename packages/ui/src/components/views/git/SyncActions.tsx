@@ -150,7 +150,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
           </TooltipTrigger>
           <TooltipContent sideOffset={8}>{tooltipText}</TooltipContent>
         </Tooltip>
-        <DropdownMenuContent align="start" className="min-w-[200px]">
+        <DropdownMenuContent align="start" alignOffset={-40} className="w-[min(360px,calc(100vw-2rem))] max-h-[320px] overflow-y-auto">
           {remotes.map((remote) => (
             <DropdownMenuItem
               key={remote.name}
