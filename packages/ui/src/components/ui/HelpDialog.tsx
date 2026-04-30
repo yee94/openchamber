@@ -71,12 +71,6 @@ export const HelpDialog: React.FC = () => {
           keys: '',
         },
         {
-          id: 'open_quick_open',
-          descriptionKey: 'helpDialog.item.quickOpenFile',
-          icon: RiFileLine,
-          keys: '',
-        },
-        {
           id: 'open_help',
           descriptionKey: "helpDialog.item.showKeyboardShortcuts",
           icon: RiQuestionLine,
@@ -298,7 +292,7 @@ export const HelpDialog: React.FC = () => {
                 <ul className="space-y-0.5 typography-meta">
                   <li>
                     • {t('helpDialog.proTips.commandPalette', {
-                      shortcut: renderShortcut('open_command_palette', `${mod} K`, shortcutOverrides),
+                      shortcut: renderShortcut('open_command_palette', `${mod} P`, shortcutOverrides),
                     })}
                   </li>
                   <li>

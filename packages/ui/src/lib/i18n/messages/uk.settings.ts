@@ -718,7 +718,6 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.field.pressKeys": "Натисніть клавіші...",
   "settings.openchamber.keyboardShortcuts.error.captureFirst": "Спочатку запишіть комбінацію клавіш.",
   "settings.openchamber.keyboardShortcuts.warning.riskyBrowserShortcut": "Ця комбінація клавіш може конфліктувати зі стандартними скороченнями браузера. Її все одно збережено.",
-  "settings.openchamber.keyboardShortcuts.action.open_quick_open.label": "Швидке відкриття",
   "settings.openchamber.keyboardShortcuts.action.open_go_to_line.label": "Перейти до рядка (редактор файлів)",
   "settings.openchamber.keyboardShortcuts.action.open_command_palette.label": "Відкрити палітру команд",
   "settings.openchamber.keyboardShortcuts.action.focus_input.label": "Фокус на полі вводу",

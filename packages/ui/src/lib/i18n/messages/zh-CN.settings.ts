@@ -718,7 +718,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.field.pressKeys': '按下按键...',
   'settings.openchamber.keyboardShortcuts.error.captureFirst': '请先录入一个快捷键。',
   'settings.openchamber.keyboardShortcuts.warning.riskyBrowserShortcut': '该快捷键可能与浏览器默认快捷键冲突，但仍已保存。',
-  'settings.openchamber.keyboardShortcuts.action.open_quick_open.label': '打开快速打开',
   'settings.openchamber.keyboardShortcuts.action.open_go_to_line.label': '跳转到行（文件编辑器）',
   'settings.openchamber.keyboardShortcuts.action.open_command_palette.label': '打开命令面板',
   'settings.openchamber.keyboardShortcuts.action.focus_input.label': '聚焦输入框',
