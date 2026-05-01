@@ -47,6 +47,7 @@ const EMPTY_PERMISSIONS: PermissionRequest[] = [];
 const EMPTY_QUESTIONS: QuestionRequest[] = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
 const SESSION_RESELECTED_EVENT = 'openchamber:session-reselected';
+const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DEFAULT_RETRY_MESSAGE = 'Quota limit reached. Retrying automatically.';
 const CHAT_SCROLL_STYLE = {
     overflowAnchor: 'none',
@@ -581,9 +582,15 @@ export const ChatContainer: React.FC = () => {
     });
     const { loadEarlier, resumeToBottomInstant, restoreSavedScrollPosition } = timelineController;
 
-    const runLatestInstantResume = React.useCallback(async () => {
+    const runLatestInstantResume = React.useCallback(async (options?: { force?: boolean }) => {
         if (!currentSessionId) {
             scrollToBottom({ instant: true, force: true });
+            return;
+        }
+
+        if (options?.force) {
+            await resumeToBottomInstant();
+            clearRestoreInProgress(currentSessionId);
             return;
         }
 
@@ -606,8 +613,8 @@ export const ChatContainer: React.FC = () => {
         clearRestoreInProgress(currentSessionId);
     }, [clearRestoreInProgress, currentSessionId, restoreSavedScrollPosition, resumeToBottomInstant, scrollToBottom, sessionIsWorking, sessionMemoryStateMap]);
 
-    const resumeToLatestInstant = React.useCallback(() => {
-        void runLatestInstantResume();
+    const resumeToLatestInstant = React.useCallback((options?: { force?: boolean }) => {
+        void runLatestInstantResume(options);
     }, [runLatestInstantResume]);
 
     React.useEffect(() => {
@@ -680,6 +687,12 @@ export const ChatContainer: React.FC = () => {
     React.useEffect(() => {
         if (typeof window === 'undefined' || !currentSessionId) return;
 
+        const handleForceScrollBottom = (event: Event) => {
+            const customEvent = event as CustomEvent<{ sessionId?: string }>;
+            if (customEvent.detail?.sessionId && customEvent.detail.sessionId !== currentSessionId) return;
+            resumeToLatestInstant({ force: true });
+        };
+
         const handleSessionReselected = (event: Event) => {
             const customEvent = event as CustomEvent<string>;
             if (customEvent.detail !== currentSessionId) return;
@@ -687,11 +700,13 @@ export const ChatContainer: React.FC = () => {
             void resumeToBottomInstant();
         };
 
+        window.addEventListener(CHAT_FORCE_SCROLL_BOTTOM_EVENT, handleForceScrollBottom as EventListener);
         window.addEventListener(SESSION_RESELECTED_EVENT, handleSessionReselected as EventListener);
         return () => {
+            window.removeEventListener(CHAT_FORCE_SCROLL_BOTTOM_EVENT, handleForceScrollBottom as EventListener);
             window.removeEventListener(SESSION_RESELECTED_EVENT, handleSessionReselected as EventListener);
         };
-    }, [currentSessionId, isOverflowing, isPinned, isProgrammaticFollowActive, resumeToBottomInstant]);
+    }, [currentSessionId, isOverflowing, isPinned, isProgrammaticFollowActive, resumeToBottomInstant, resumeToLatestInstant]);
 
     React.useLayoutEffect(() => {
         const container = scrollRef.current;
