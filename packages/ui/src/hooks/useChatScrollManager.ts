@@ -85,6 +85,7 @@ export const useChatScrollManager = ({
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
+    const cancelScrollFollow = scrollEngine.cancelFollow;
 
     const getPinThreshold = React.useCallback(() => {
         const container = scrollRef.current;
@@ -196,9 +197,9 @@ export const useChatScrollManager = ({
         markAutoScroll(Math.max(0, bottom));
         scrollEngine.scrollToPosition(Math.max(0, bottom), {
             ...options,
-            persistFollow: Boolean(options?.followBottom && sessionIsWorking),
+            persistFollow: Boolean(options?.followBottom),
         });
-    }, [markAutoScroll, scrollEngine, sessionIsWorking]);
+    }, [markAutoScroll, scrollEngine]);
 
     const scrollPinnedToBottom = React.useCallback((distanceFromBottom: number) => {
         if (sessionIsWorking) {
@@ -571,10 +572,10 @@ export const useChatScrollManager = ({
     // Maintain pin-to-bottom when content changes
     React.useEffect(() => {
         if (!sessionIsWorking) {
-            scrollEngine.cancelFollow();
+            cancelScrollFollow();
             setFollowMode('none');
         }
-    }, [scrollEngine, sessionIsWorking, setFollowMode]);
+    }, [cancelScrollFollow, sessionIsWorking, setFollowMode]);
 
     React.useEffect(() => {
         if (isSyncing) {
