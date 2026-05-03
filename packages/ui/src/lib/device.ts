@@ -141,6 +141,69 @@ export function isMobileDeviceViaCSS(): boolean {
   return isMobileValue === '1' || isMobileValue === 'true';
 }
 
+export const isStandalonePwaRuntime = (): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
+  return Boolean(
+    standaloneNavigator.standalone === true
+    || window.matchMedia?.('(display-mode: standalone)')?.matches
+    || window.matchMedia?.('(display-mode: fullscreen)')?.matches
+  );
+};
+
+export const isTabletStandalonePwaRuntime = (): boolean => {
+  if (typeof window === 'undefined' || isDesktopShell()) return false;
+
+  const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
+  return isStandalonePwaRuntime() && maxTouchPoints > 0 && window.innerWidth > BREAKPOINTS.md;
+};
+
+export function useTabletStandalonePwaRuntime(): boolean {
+  const [value, setValue] = React.useState<boolean>(() => isTabletStandalonePwaRuntime());
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const update = () => setValue(isTabletStandalonePwaRuntime());
+    const standaloneQuery = window.matchMedia?.('(display-mode: standalone)');
+    const fullscreenQuery = window.matchMedia?.('(display-mode: fullscreen)');
+
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('focus', update);
+
+    const addQueryListener = (query: MediaQueryList | undefined) => {
+      if (!query) return;
+      if (typeof query.addEventListener === 'function') {
+        query.addEventListener('change', update);
+      } else if (typeof query.addListener === 'function') {
+        query.addListener(update);
+      }
+    };
+    const removeQueryListener = (query: MediaQueryList | undefined) => {
+      if (!query) return;
+      if (typeof query.removeEventListener === 'function') {
+        query.removeEventListener('change', update);
+      } else if (typeof query.removeListener === 'function') {
+        query.removeListener(update);
+      }
+    };
+
+    addQueryListener(standaloneQuery);
+    addQueryListener(fullscreenQuery);
+
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('focus', update);
+      removeQueryListener(standaloneQuery);
+      removeQueryListener(fullscreenQuery);
+    };
+  }, []);
+
+  return value;
+}
+
 export function useDeviceInfo(): DeviceInfo {
   const [deviceInfo, setDeviceInfo] = React.useState<DeviceInfo>(() => {
     if (typeof window === 'undefined') {

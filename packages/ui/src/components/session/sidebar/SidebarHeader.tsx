@@ -48,6 +48,7 @@ type Props = {
   onToggleSelectionMode: () => void;
   showSidebarToggle?: boolean;
   onToggleSidebar?: () => void;
+  avoidWindowControlsOverlay?: boolean;
 };
 
 export function SidebarHeader(props: Props): React.ReactNode {
@@ -75,6 +76,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
     onToggleSelectionMode,
     showSidebarToggle = false,
     onToggleSidebar,
+    avoidWindowControlsOverlay = false,
   } = props;
 
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
@@ -90,7 +92,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
     <div
       className={cn(
         'select-none flex-shrink-0',
-        showSidebarToggle ? 'pl-3 pr-3' : 'px-2.5 py-1',
+        showSidebarToggle ? (avoidWindowControlsOverlay ? 'pl-[5.5rem] pr-3' : 'pl-3 pr-3') : 'px-2.5 py-1',
       )}
     >
       {reserveHeaderActionsSpace ? (

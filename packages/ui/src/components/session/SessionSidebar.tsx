@@ -4,7 +4,7 @@ import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
-import { useDeviceInfo } from '@/lib/device';
+import { useDeviceInfo, useTabletStandalonePwaRuntime } from '@/lib/device';
 import { isDesktopShell } from '@/lib/desktop';
 import { isDesktopWindowFullscreen as getDesktopWindowFullscreen, onDesktopWindowResized, startDesktopWindowDrag } from '@/lib/desktopNative';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -435,6 +435,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
 
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
+  const isTabletStandalonePwa = useTabletStandalonePwaRuntime();
   const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
@@ -448,7 +449,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
   const isWebRuntime = !mobileVariant && !isVSCode && !isDesktopShellRuntime;
   const showDesktopSidebarChrome = !mobileVariant && !isVSCode && !isWebRuntime;
-  const desktopSidebarTopPaddingClass = isDesktopShellRuntime && isMacPlatform && !isDesktopWindowFullscreen ? 'pl-[5.5rem]' : 'pl-3';
+  const desktopSidebarTopPaddingClass = (isDesktopShellRuntime && isMacPlatform && !isDesktopWindowFullscreen) || isTabletStandalonePwa ? 'pl-[5.5rem]' : 'pl-3';
   const desktopSidebarToggleButtonClass = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center rounded-md typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50';
 
   React.useEffect(() => {
@@ -1680,6 +1681,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         onToggleSelectionMode={handleToggleSelectionMode}
         showSidebarToggle={isWebRuntime}
         onToggleSidebar={toggleSidebar}
+        avoidWindowControlsOverlay={isTabletStandalonePwa}
       />
 
       <SidebarProjectsList
