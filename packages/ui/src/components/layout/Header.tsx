@@ -1401,14 +1401,14 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     return {
-      paddingLeft: isTabletStandalonePwa
+      paddingLeft: isTabletStandalonePwa && !isSidebarOpen
         ? 'max(calc(0.75rem + var(--oc-wco-left-inset, 0px)), 5.5rem)'
         : 'calc(0.75rem + var(--oc-wco-left-inset, 0px))',
       paddingRight: 'calc(0.75rem + var(--oc-wco-right-inset, 0px))',
       minHeight: 'max(3rem, var(--oc-wco-titlebar-height, 0px))',
       height: 'max(3rem, var(--oc-wco-titlebar-height, 0px))',
     };
-  }, [isDesktopApp, isTabletStandalonePwa, isVSCode]);
+  }, [isDesktopApp, isSidebarOpen, isTabletStandalonePwa, isVSCode]);
 
   const updateHeaderHeight = React.useCallback(() => {
     if (typeof document === 'undefined') {
