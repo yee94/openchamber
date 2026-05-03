@@ -4,6 +4,7 @@ import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
+import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell } from '@/lib/desktop';
 import { isDesktopWindowFullscreen as getDesktopWindowFullscreen, onDesktopWindowResized, startDesktopWindowDrag } from '@/lib/desktopNative';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -437,6 +438,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const { isTablet } = useDeviceInfo();
+  const alwaysShowSidebarActions = mobileVariant || isTablet;
   const isMacPlatform = React.useMemo(() => {
     if (typeof navigator === 'undefined') {
       return false;
@@ -1281,6 +1284,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         openContextPanelTab={openContextPanelTab}
         handleDeleteSession={handleDeleteSession}
         mobileVariant={mobileVariant}
+        alwaysShowActions={alwaysShowSidebarActions}
         renderSessionNode={renderSessionNode}
         secondaryMeta={secondaryMeta}
         renderContext={renderContext}
@@ -1319,6 +1323,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       openContextPanelTab,
       handleDeleteSession,
       mobileVariant,
+      alwaysShowSidebarActions,
     ],
   );
 
@@ -1378,6 +1383,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         lastRepoStatus={lastRepoStatusRef.current}
         toggleGroupSessionLimit={toggleGroupSessionLimit}
         mobileVariant={mobileVariant}
+        alwaysShowActions={alwaysShowSidebarActions}
         activeProjectId={activeProjectId}
         setActiveProjectIdOnly={setActiveProjectIdOnly}
         setActiveMainTab={setActiveMainTab}
@@ -1413,6 +1419,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       projectRepoStatus,
       toggleGroupSessionLimit,
       mobileVariant,
+      alwaysShowSidebarActions,
       activeProjectId,
       setActiveProjectIdOnly,
       setActiveMainTab,
@@ -1692,6 +1699,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         isDesktopShellRuntime={isDesktopShellRuntime}
         stuckProjectHeaders={stuckProjectHeaders}
         mobileVariant={mobileVariant}
+        alwaysShowActions={alwaysShowSidebarActions}
         toggleProject={toggleProject}
         setActiveProjectIdOnly={setActiveProjectIdOnly}
         setActiveMainTab={setActiveMainTab}
