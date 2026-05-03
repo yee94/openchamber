@@ -181,6 +181,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.header.displayMode.label": "Modo de visualización",
   "sessions.sidebar.header.displayMode.default": "Predeterminado",
   "sessions.sidebar.header.displayMode.minimal": "Mínimo",
+  "sessions.sidebar.header.displayMode.showRecent": "Mostrar recientes",
   "sessions.sidebar.header.displayMode.collapseAll": "Colapsar todo",
   "sessions.sidebar.header.displayMode.expandAll": "Expandir todo",
   "sessions.sidebar.header.search.matchCountSingle": "{count} coincidencia",

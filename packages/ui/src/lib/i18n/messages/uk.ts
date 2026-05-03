@@ -181,6 +181,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.header.displayMode.label": "Режим відображення",
   "sessions.sidebar.header.displayMode.default": "За замовчуванням",
   "sessions.sidebar.header.displayMode.minimal": "Мінімальний",
+  "sessions.sidebar.header.displayMode.showRecent": "Показувати нещодавні",
   "sessions.sidebar.header.displayMode.collapseAll": "Згорнути все",
   "sessions.sidebar.header.displayMode.expandAll": "Розгорнути все",
   "sessions.sidebar.header.search.matchCountSingle": "{count} збіг",

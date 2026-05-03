@@ -78,7 +78,9 @@ export function SidebarHeader(props: Props): React.ReactNode {
   } = props;
 
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
+  const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
   const setDisplayMode = useSessionDisplayStore((state) => state.setDisplayMode);
+  const toggleRecentSection = useSessionDisplayStore((state) => state.toggleRecentSection);
 
   if (hideDirectoryControls) {
     return null;
@@ -238,6 +240,14 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   >
                     <span>{t('sessions.sidebar.header.displayMode.minimal')}</span>
                     {displayMode === 'minimal' ? <RiCheckLine className="h-4 w-4 text-primary" /> : null}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={toggleRecentSection}
+                    className="flex items-center justify-between"
+                  >
+                    <span>{t('sessions.sidebar.header.displayMode.showRecent')}</span>
+                    {showRecentSection ? <RiCheckLine className="h-4 w-4 text-primary" /> : null}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={collapseAllProjects} className="flex items-center gap-2">

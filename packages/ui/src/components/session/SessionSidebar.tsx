@@ -58,6 +58,7 @@ import {
 } from './sidebar/ConfirmDialogs';
 import { BulkActionBar } from './sidebar/BulkActionBar';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
 import {
   type ActiveNowEntry,
@@ -996,19 +997,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return meta;
   }, [projectSections, homeDirectory]);
 
-  const activeNowSessions = React.useMemo(
-    () => deriveActiveNowSessions(activeNowEntries, new Map(sessions.map((session) => [session.id, session])))
-      .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)),
-    [activeNowEntries, pinnedSessionIds, sessions],
-  );
+  const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
 
-  const liveActiveSessions = React.useMemo(
-    () => deriveLiveActiveNowSessions(sessions, liveSessionStatuses),
-    [liveSessionStatuses, sessions],
-  );
+  const activeNowSessions = React.useMemo(() => {
+    if (!showRecentSection) {
+      return [];
+    }
+
+    return deriveActiveNowSessions(activeNowEntries, new Map(sessions.map((session) => [session.id, session])))
+      .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
+  }, [activeNowEntries, pinnedSessionIds, sessions, showRecentSection]);
+
+  const liveActiveSessions = React.useMemo(() => {
+    if (!showRecentSection) {
+      return [];
+    }
+
+    return deriveLiveActiveNowSessions(sessions, liveSessionStatuses);
+  }, [liveSessionStatuses, sessions, showRecentSection]);
 
   React.useEffect(() => {
-    if (liveActiveSessions.length === 0) {
+    if (!showRecentSection || liveActiveSessions.length === 0) {
       return;
     }
 
@@ -1020,9 +1029,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       persistActiveNowEntries(safeStorage, next);
       return next;
     });
-  }, [liveActiveSessions, safeStorage]);
+  }, [liveActiveSessions, safeStorage, showRecentSection]);
 
   React.useEffect(() => {
+    if (!showRecentSection) {
+      return;
+    }
+
     const allKnownSessionsById = new Map<string, Session>();
     [...sessions, ...archivedSessions].forEach((session) => {
       allKnownSessionsById.set(session.id, session);
@@ -1035,11 +1048,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
     setActiveNowEntries(pruned);
     persistActiveNowEntries(safeStorage, pruned);
-  }, [activeNowEntries, archivedSessions, safeStorage, sessions]);
+  }, [activeNowEntries, archivedSessions, safeStorage, sessions, showRecentSection]);
 
   // Prefetch is wired below, after recentSessionIds is computed.
 
   const activitySections = React.useMemo(() => {
+    if (!showRecentSection) {
+      return [];
+    }
+
     const toItem = (session: Session) => {
       const existing = sessionSidebarMetaById.get(session.id);
       const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
@@ -1054,11 +1071,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return [
       { key: 'active-now' as const, title: t('sessions.sidebar.activity.recentTitle'), items: activeNowSessions.map(toItem) },
     ];
-  }, [activeNowSessions, sessionSidebarMetaById, t]);
+  }, [activeNowSessions, sessionSidebarMetaById, showRecentSection, t]);
 
   const recentSessionIds = React.useMemo(() => {
-    return new Set(activitySections.flatMap((section) => section.items.map((item) => item.node.session.id)));
-  }, [activitySections]);
+    return new Set(activeNowSessions.map((session) => session.id));
+  }, [activeNowSessions]);
 
   const recentSessionIdsList = React.useMemo(() => [...recentSessionIds], [recentSessionIds]);
 
@@ -1412,7 +1429,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ],
   );
 
-  const topContent = !hasSessionSearchQuery ? (
+  const topContent = showRecentSection && !hasSessionSearchQuery ? (
     <SidebarActivitySections
       sections={activitySections}
       renderSessionNode={renderSessionNode}

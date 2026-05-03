@@ -181,6 +181,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.header.displayMode.label': '显示模式',
   'sessions.sidebar.header.displayMode.default': '默认',
   'sessions.sidebar.header.displayMode.minimal': '精简',
+  'sessions.sidebar.header.displayMode.showRecent': '显示最近部分',
   'sessions.sidebar.header.displayMode.collapseAll': '全部折叠',
   'sessions.sidebar.header.displayMode.expandAll': '全部展开',
   'sessions.sidebar.header.search.matchCountSingle': '{count} 个匹配',

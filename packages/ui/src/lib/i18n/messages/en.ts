@@ -180,6 +180,7 @@ export const dict = {
   'sessions.sidebar.header.displayMode.label': 'Display mode',
   'sessions.sidebar.header.displayMode.default': 'Default',
   'sessions.sidebar.header.displayMode.minimal': 'Minimal',
+  'sessions.sidebar.header.displayMode.showRecent': 'Show recent section',
   'sessions.sidebar.header.displayMode.collapseAll': 'Collapse all',
   'sessions.sidebar.header.displayMode.expandAll': 'Expand all',
   'sessions.sidebar.header.search.matchCountSingle': '{count} match',
