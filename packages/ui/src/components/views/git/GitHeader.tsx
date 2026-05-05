@@ -270,7 +270,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
       onSelect={onSelectIdentity}
       isApplying={isApplyingIdentity}
 
-      iconOnly={false}
+      iconOnly={true}
     />
   );
 

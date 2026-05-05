@@ -55,9 +55,11 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   const isPrimaryDisabled = disabled || syncAction !== null || isRemovingRemote || !trackingRemote || blocksRebaseSync;
   const isDropdownDisabled = disabled || syncAction !== null || isRemovingRemote || remotes.length === 0;
   const hasKnownSyncWork = aheadCount > 0 || behindCount > 0;
-  const primaryLabel = hasKnownSyncWork
-    ? t('gitView.sync.syncCounts', { ahead: aheadCount, behind: behindCount })
-    : t('gitView.sync.sync');
+  const primaryLabel = [
+    t('gitView.sync.sync'),
+    behindCount > 0 ? `↓${behindCount}` : null,
+    aheadCount > 0 ? `↑${aheadCount}` : null,
+  ].filter(Boolean).join(' ');
   const tooltipLabel = blocksRebaseSync
     ? t('gitView.sync.commitOrStashTooltip')
     : trackingRemote
