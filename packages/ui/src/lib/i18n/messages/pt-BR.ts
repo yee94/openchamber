@@ -616,6 +616,7 @@ export const dict: Record<I18nKey, string> = {
   "gitView.pr.checkDetails.empty": "Não há detalhes do check disponíveis",
   "gitView.pr.checkDetails.title": "Detalhes do check falhou",
   "gitView.pr.checkingStatus": "Verificando status da PR...",
+  "gitView.pr.checks.label": "checks",
   "gitView.pr.checks.completedLabel": "Concluído",
   "gitView.pr.checks.conclusionLabel": "Conclusión",
   "gitView.pr.checks.startedLabel": "Iniciado",

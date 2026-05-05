@@ -615,6 +615,7 @@ export const dict = {
   'gitView.pr.checkDetails.empty': 'No check details available',
   'gitView.pr.checkDetails.title': 'Failed check details',
   'gitView.pr.checkingStatus': 'Checking pull request status...',
+  'gitView.pr.checks.label': 'checks',
   'gitView.pr.checks.completedLabel': 'Completed',
   'gitView.pr.checks.conclusionLabel': 'Conclusion',
   'gitView.pr.checks.startedLabel': 'Started',
