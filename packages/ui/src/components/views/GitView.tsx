@@ -2315,7 +2315,7 @@ export const GitView: React.FC = () => {
       </div>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-5xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>{t('gitView.history.title')}</DialogTitle>
             <DialogDescription>
@@ -2334,6 +2334,7 @@ export const GitView: React.FC = () => {
               loadingCommitHashes={loadingCommitHashes}
               onCopyHash={handleCopyCommitHash}
               showHeader={false}
+              contentMaxHeightClassName="h-full max-h-none"
               branchDivider={historyBranchDivider}
             />
           </div>
