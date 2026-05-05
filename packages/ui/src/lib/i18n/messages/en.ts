@@ -1331,6 +1331,7 @@ export const dict = {
   'chat.commandAutocomplete.command.initDescription': 'Create/update AGENTS.md file',
   'chat.commandAutocomplete.command.undoDescription': 'Undo the last message',
   'chat.commandAutocomplete.command.redoDescription': 'Redo previously undone messages',
+  'chat.commandAutocomplete.command.timelineDescription': 'Open the conversation timeline',
   'chat.commandAutocomplete.command.compactDescription': 'Compress session history using AI to reduce context size',
   'chat.commandAutocomplete.command.summaryDescription': 'Non-destructive session summary. Optional topic hint after the command.',
   'chat.commandAutocomplete.command.workspaceReviewDescription': 'Review current workspace changes for high-signal issues only.',

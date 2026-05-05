@@ -1297,6 +1297,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.initDescription': '创建/更新 AGENTS.md 文件',
   'chat.commandAutocomplete.command.undoDescription': '撤销上一条消息',
   'chat.commandAutocomplete.command.redoDescription': '重做之前撤销的消息',
+  'chat.commandAutocomplete.command.timelineDescription': '打开对话时间线',
   'chat.commandAutocomplete.command.compactDescription': '使用 AI 压缩会话历史以减少上下文大小',
   'chat.commandAutocomplete.command.summaryDescription': '非破坏性会话总结。命令后可选填主题提示。',
   'chat.commandAutocomplete.command.workspaceReviewDescription': '仅审查当前工作区中高价值的问题。',

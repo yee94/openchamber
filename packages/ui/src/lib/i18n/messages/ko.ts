@@ -1333,6 +1333,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.initDescription': 'AGENTS.md 파일 생성/업데이트',
   'chat.commandAutocomplete.command.undoDescription': '마지막 메시지 실행 취소',
   'chat.commandAutocomplete.command.redoDescription': '이전에 실행 취소한 메시지 다시 실행',
+  'chat.commandAutocomplete.command.timelineDescription': '대화 타임라인 열기',
   'chat.commandAutocomplete.command.compactDescription': 'AI로 세션 기록을 압축해 컨텍스트 크기를 줄입니다',
   'chat.commandAutocomplete.command.summaryDescription': '세션 기록을 안전하게 요약합니다. 명령 뒤에 선택적으로 주제 힌트를 넣을 수 있습니다.',
   'chat.commandAutocomplete.command.workspaceReviewDescription': '현재 워크스페이스 변경 사항에서 중요한 이슈만 리뷰합니다.',

@@ -1297,6 +1297,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.commandAutocomplete.command.initDescription": "Crear/actualizar el archivo AGENTS.md",
   "chat.commandAutocomplete.command.undoDescription": "Deshacer el último mensaje",
   "chat.commandAutocomplete.command.redoDescription": "Rehacer mensajes previamente deshechos",
+  "chat.commandAutocomplete.command.timelineDescription": "Abrir la línea de tiempo de la conversación",
   "chat.commandAutocomplete.command.compactDescription": "Comprimir el historial de la sesión usando IA para reducir el tamaño del contexto",
   "chat.commandAutocomplete.command.summaryDescription": "Resumen no destructivo de la sesión. Pista opcional del tema después del comando.",
   "chat.commandAutocomplete.command.workspaceReviewDescription": "Revisar los cambios actuales del espacio de trabajo solo para problemas de alto impacto.",
