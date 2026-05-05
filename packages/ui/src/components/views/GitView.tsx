@@ -1396,6 +1396,12 @@ export const GitView: React.FC = () => {
     return 'main';
   }, [effectiveRemotes, localBranches, rootBranchHint, worktreeMetadata?.createdFromBranch]);
 
+  const updateTargetBranch = React.useMemo(() => {
+    const remoteNames = effectiveRemotes.map((remote) => remote.name);
+    const remoteCandidates = remoteNames.map((remote) => `${remote}/${baseBranch}`);
+    return remoteCandidates.find((candidate) => remoteBranches.includes(candidate)) ?? baseBranch;
+  }, [baseBranch, effectiveRemotes, remoteBranches]);
+
   const availableIdentities = React.useMemo(() => {
     const unique = new Map<string, GitIdentityProfile>();
     if (globalIdentity) {
@@ -1762,6 +1768,29 @@ export const GitView: React.FC = () => {
     setBranchOperation(null);
   }, []);
 
+  const resolveIntegrationTarget = React.useCallback((branch: string) => {
+    const trimmed = branch.trim();
+    const knownRemoteNames = new Set(effectiveRemotes.map((remote) => remote.name));
+    const slashIndex = trimmed.indexOf('/');
+
+    if (slashIndex > 0) {
+      const remote = trimmed.slice(0, slashIndex);
+      const remoteBranch = trimmed.slice(slashIndex + 1);
+      if (knownRemoteNames.has(remote) && remoteBranch) {
+        return { branch: trimmed, remote, remoteBranch };
+      }
+    }
+
+    for (const remote of effectiveRemotes) {
+      const remoteCandidate = `${remote.name}/${trimmed}`;
+      if (remoteBranches.includes(remoteCandidate)) {
+        return { branch: remoteCandidate, remote: remote.name, remoteBranch: trimmed };
+      }
+    }
+
+    return { branch: trimmed, remote: null, remoteBranch: null };
+  }, [effectiveRemotes, remoteBranches]);
+
   const handleMerge = React.useCallback(
     async (branch: string) => {
       if (!currentDirectory) return;
@@ -1770,21 +1799,17 @@ export const GitView: React.FC = () => {
 
       const currentBranch = status?.current;
 
-      const knownRemoteNames = new Set(effectiveRemotes.map((r) => r.name));
+      const target = resolveIntegrationTarget(branch);
 
       try {
-        // If it's a remote-tracking branch (prefix matches a known remote), fetch latest first
-        const slashIndex = branch.indexOf('/');
-        if (slashIndex > 0 && knownRemoteNames.has(branch.substring(0, slashIndex))) {
-          const remote = branch.substring(0, slashIndex);
-          const remoteBranch = branch.substring(slashIndex + 1);
-          addOperationLog(`Fetching ${remote}/${remoteBranch}...`, 'running');
-          await git.gitFetch(currentDirectory, { remote, branch: remoteBranch });
-          updateLastLog('done', `Fetched ${remote}/${remoteBranch}`);
+        if (target.remote && target.remoteBranch) {
+          addOperationLog(`Fetching ${target.remote}/${target.remoteBranch}...`, 'running');
+          await git.gitFetch(currentDirectory, { remote: target.remote, branch: target.remoteBranch });
+          updateLastLog('done', `Fetched ${target.remote}/${target.remoteBranch}`);
         }
 
-        addOperationLog(`Merging ${branch} into ${currentBranch}...`, 'running');
-        const result = await git.merge(currentDirectory, { branch });
+        addOperationLog(`Merging ${target.branch} into ${currentBranch}...`, 'running');
+        const result = await git.merge(currentDirectory, { branch: target.branch });
 
         if (result.conflict) {
           updateLastLog('error', `Merge conflicts detected`);
@@ -1793,7 +1818,7 @@ export const GitView: React.FC = () => {
           setConflictDialogOpen(true);
           persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
         } else {
-          updateLastLog('done', `Merged ${branch} into ${currentBranch}`);
+          updateLastLog('done', `Merged ${target.branch} into ${currentBranch}`);
           clearConflictState();
           addOperationLog('Refreshing repository status...', 'running');
           await refreshStatusAndBranches();
@@ -1804,16 +1829,16 @@ export const GitView: React.FC = () => {
         if (isUncommittedChangesError(err)) {
           updateLastLog('error', 'Uncommitted changes detected');
           setStashDialogOperation('merge');
-          setStashDialogBranch(branch);
+          setStashDialogBranch(target.branch);
           setStashDialogOpen(true);
         } else {
-          const message = err instanceof Error ? err.message : `Failed to merge ${branch}`;
+          const message = err instanceof Error ? err.message : `Failed to merge ${target.branch}`;
           updateLastLog('error', message);
         }
       }
       // Note: branchOperation is cleared when dialog closes via handleOperationComplete
     },
-    [currentDirectory, git, status, effectiveRemotes, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
+    [currentDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
   );
 
   const handleRebase = React.useCallback(
@@ -1824,21 +1849,17 @@ export const GitView: React.FC = () => {
 
       const currentBranch = status?.current;
 
-      const knownRemoteNames = new Set(effectiveRemotes.map((r) => r.name));
+      const target = resolveIntegrationTarget(branch);
 
       try {
-        // If it's a remote-tracking branch (prefix matches a known remote), fetch latest first
-        const slashIndex = branch.indexOf('/');
-        if (slashIndex > 0 && knownRemoteNames.has(branch.substring(0, slashIndex))) {
-          const remote = branch.substring(0, slashIndex);
-          const remoteBranch = branch.substring(slashIndex + 1);
-          addOperationLog(`Fetching ${remote}/${remoteBranch}...`, 'running');
-          await git.gitFetch(currentDirectory, { remote, branch: remoteBranch });
-          updateLastLog('done', `Fetched ${remote}/${remoteBranch}`);
+        if (target.remote && target.remoteBranch) {
+          addOperationLog(`Fetching ${target.remote}/${target.remoteBranch}...`, 'running');
+          await git.gitFetch(currentDirectory, { remote: target.remote, branch: target.remoteBranch });
+          updateLastLog('done', `Fetched ${target.remote}/${target.remoteBranch}`);
         }
 
-        addOperationLog(`Rebasing ${currentBranch} onto ${branch}...`, 'running');
-        const result = await git.rebase(currentDirectory, { onto: branch });
+        addOperationLog(`Rebasing ${currentBranch} onto ${target.branch}...`, 'running');
+        const result = await git.rebase(currentDirectory, { onto: target.branch });
 
         if (result.conflict) {
           updateLastLog('error', `Rebase conflicts detected`);
@@ -1847,7 +1868,7 @@ export const GitView: React.FC = () => {
           setConflictDialogOpen(true);
           persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
         } else {
-          updateLastLog('done', `Rebased ${currentBranch} onto ${branch}`);
+          updateLastLog('done', `Rebased ${currentBranch} onto ${target.branch}`);
           clearConflictState();
           addOperationLog('Refreshing repository status...', 'running');
           await refreshStatusAndBranches();
@@ -1858,16 +1879,16 @@ export const GitView: React.FC = () => {
         if (isUncommittedChangesError(err)) {
           updateLastLog('error', 'Uncommitted changes detected');
           setStashDialogOperation('rebase');
-          setStashDialogBranch(branch);
+          setStashDialogBranch(target.branch);
           setStashDialogOpen(true);
         } else {
-          const message = err instanceof Error ? err.message : `Failed to rebase onto ${branch}`;
+          const message = err instanceof Error ? err.message : `Failed to rebase onto ${target.branch}`;
           updateLastLog('error', message);
         }
       }
       // Note: branchOperation is cleared when dialog closes via handleOperationComplete
     },
-    [currentDirectory, git, status, effectiveRemotes, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
+    [currentDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
   );
 
   const handleAbortConflict = React.useCallback(async () => {
@@ -2249,6 +2270,7 @@ export const GitView: React.FC = () => {
                       currentBranch={status?.current}
                       localBranches={localBranches}
                       remoteBranches={remoteBranches}
+                      defaultTargetBranch={updateTargetBranch}
                       onMerge={handleMerge}
                       onRebase={handleRebase}
                       disabled={isBusy}

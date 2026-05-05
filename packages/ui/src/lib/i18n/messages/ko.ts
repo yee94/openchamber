@@ -398,7 +398,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.branch.summaryMergePrefix': '현재 브랜치에',
   'gitView.branch.summaryRebaseInfix': '위로 리베이스',
   'gitView.branch.summaryRebasePrefix': '현재 브랜치를',
-  'gitView.branch.updateDescriptionPrefix': '브랜치 설명 접두사 업데이트',
+  'gitView.branch.updateDescriptionPrefix': '최신 변경 사항을 가져올 대상:',
   'gitView.branch.updateTitle': '브랜치 업데이트',
   'gitView.changes.changedFilesAria': '변경된 파일',
   'gitView.changes.clearSelectionAria': '파일 선택 해제',
