@@ -306,6 +306,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
               layoutMode="fit"
               variant="active-pill"
               iconOnlyActiveTab={true}
+              activePillButtonClassName="h-7"
               className="h-full"
             />
           </div>
