@@ -976,6 +976,8 @@ html:not(.dark) .chat-scroll {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .markdown-content [data-openchamber-file-link="true"]:hover {
