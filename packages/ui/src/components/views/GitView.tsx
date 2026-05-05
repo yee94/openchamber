@@ -54,6 +54,7 @@ import { getSessionWorktreeRepairActions, getMutationBlockingReasons } from '@/s
 import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
+import { StashesDialog } from './git/StashesDialog';
 import { ChangesSection } from './git/ChangesSection';
 import { CommitSection } from './git/CommitSection';
 import { GitEmptyState } from './git/GitEmptyState';
@@ -429,6 +430,7 @@ export const GitView: React.FC = () => {
   const [isGitmojiPickerOpen, setIsGitmojiPickerOpen] = React.useState(false);
   const actionPanelScrollRef = React.useRef<HTMLElement | null>(null);
   const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
+  const [isStashesDialogOpen, setIsStashesDialogOpen] = React.useState(false);
   const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
   const [logMaxCountLocal, setLogMaxCountLocal] = React.useState<number>(25);
   const [isSettingIdentity, setIsSettingIdentity] = React.useState(false);
@@ -2069,6 +2071,7 @@ export const GitView: React.FC = () => {
         isApplyingIdentity={isSettingIdentity}
         isWorktreeMode={!!worktreeMetadata}
         onOpenHistory={() => setIsHistoryDialogOpen(true)}
+        onOpenStashes={() => setIsStashesDialogOpen(true)}
       />
 
       {/* In-progress operation banner */}
@@ -2273,6 +2276,18 @@ export const GitView: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <StashesDialog
+        open={isStashesDialogOpen}
+        onOpenChange={setIsStashesDialogOpen}
+        directory={currentDirectory}
+        hasUncommittedChanges={(status?.files?.length ?? 0) > 0}
+        uncommittedFileCount={status?.files?.length ?? 0}
+        onChanged={async () => {
+          await refreshStatusAndBranches(false);
+          await refreshLog();
+        }}
+      />
 
       <Dialog open={isGitmojiPickerOpen} onOpenChange={setIsGitmojiPickerOpen}>
         <DialogContent className="max-w-md p-0 overflow-hidden">

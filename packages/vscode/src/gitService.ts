@@ -2399,6 +2399,63 @@ export async function gitPull(
   };
 }
 
+export async function listGitStashes(directory: string): Promise<Array<{ ref: string; message: string; relativeTime: string; hash: string }>> {
+  const result = await execGit(['stash', 'list', '--format=%gd%x1f%gs%x1f%cr%x1f%H'], directory);
+  if (result.exitCode !== 0) throw new Error(result.stderr.trim() || 'Failed to list stashes');
+  return result.stdout.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [ref = '', message = '', relativeTime = '', hash = ''] = line.split('\x1f');
+    return { ref, message, relativeTime, hash };
+  }).filter((entry) => entry.ref);
+}
+
+export async function countGitStashFiles(directory: string, refs: string[]): Promise<Record<string, number>> {
+  const uniqueRefs = Array.from(new Set(refs.map((ref) => String(ref || '').trim()).filter(Boolean)));
+  const counts: Record<string, number> = {};
+  const concurrency = 4;
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < uniqueRefs.length) {
+      const ref = uniqueRefs[cursor++];
+      if (!ref) continue;
+      const names = await execGit(['stash', 'show', '--name-only', ref], directory);
+      counts[ref] = names.exitCode === 0 ? names.stdout.split('\n').map((line) => line.trim()).filter(Boolean).length : 0;
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, uniqueRefs.length) }, () => worker()));
+  return counts;
+}
+
+export async function stashGitChanges(directory: string, options: { message?: string } = {}): Promise<{ success: boolean; created: boolean; message: string; output: string }> {
+  const message = options.message?.trim() || `OpenChamber stash ${new Date().toISOString()}`;
+  const result = await execGit(['stash', 'push', '--include-untracked', '-m', message], directory);
+  if (result.exitCode !== 0) throw new Error(result.stderr.trim() || 'Failed to stash changes');
+  const output = result.stdout.trim() || result.stderr.trim();
+  return { success: true, created: !/no local changes/i.test(output), message, output };
+}
+
+export async function applyGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }> {
+  const ref = options.ref || 'stash@{0}';
+  const result = await execGit(['stash', 'apply', ref], directory);
+  if (result.exitCode !== 0) throw new Error(result.stderr.trim() || result.stdout.trim() || 'Failed to apply stash');
+  return { success: true, ref };
+}
+
+export async function dropGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }> {
+  const ref = options.ref || 'stash@{0}';
+  const result = await execGit(['stash', 'drop', ref], directory);
+  if (result.exitCode !== 0) throw new Error(result.stderr.trim() || result.stdout.trim() || 'Failed to drop stash');
+  return { success: true, ref };
+}
+
+export async function popGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }> {
+  const ref = options.ref || 'stash@{0}';
+  await applyGitStash(directory, { ref });
+  await dropGitStash(directory, { ref });
+  return { success: true, ref };
+}
+
 /**
  * Fetch from remote
  */

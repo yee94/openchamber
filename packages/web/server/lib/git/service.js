@@ -1828,6 +1828,78 @@ export async function pull(directory, options = {}) {
   }
 }
 
+export async function listStashes(directory) {
+  const git = await createGit(directory);
+  const output = await git.raw(['stash', 'list', '--format=%gd%x1f%gs%x1f%cr%x1f%H']);
+  return String(output || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [ref = '', message = '', relativeTime = '', hash = ''] = line.split('\x1f');
+      return { ref, message, relativeTime, hash };
+    })
+    .filter((entry) => entry.ref);
+}
+
+export async function countStashFiles(directory, refs = []) {
+  const git = await createGit(directory);
+  const uniqueRefs = Array.from(new Set((Array.isArray(refs) ? refs : []).map((ref) => String(ref || '').trim()).filter(Boolean)));
+  const counts = {};
+  const concurrency = 4;
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < uniqueRefs.length) {
+      const ref = uniqueRefs[cursor++];
+      if (!ref) continue;
+      try {
+        const names = await git.raw(['stash', 'show', '--name-only', ref]);
+        counts[ref] = String(names || '').split('\n').map((line) => line.trim()).filter(Boolean).length;
+      } catch {
+        counts[ref] = 0;
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, uniqueRefs.length) }, () => worker()));
+  return counts;
+}
+export async function stashPush(directory, options = {}) {
+  const git = await createGit(directory);
+  const message = typeof options.message === 'string' && options.message.trim()
+    ? options.message.trim()
+    : `OpenChamber stash ${new Date().toISOString()}`;
+  const output = await git.raw(['stash', 'push', '--include-untracked', '-m', message]);
+  return {
+    success: true,
+    created: !/no local changes/i.test(String(output || '')),
+    message,
+    output: String(output || '').trim(),
+  };
+}
+
+export async function stashApply(directory, options = {}) {
+  const git = await createGit(directory);
+  const ref = typeof options.ref === 'string' && options.ref.trim() ? options.ref.trim() : 'stash@{0}';
+  await git.raw(['stash', 'apply', ref]);
+  return { success: true, ref };
+}
+
+export async function stashDrop(directory, options = {}) {
+  const git = await createGit(directory);
+  const ref = typeof options.ref === 'string' && options.ref.trim() ? options.ref.trim() : 'stash@{0}';
+  await git.raw(['stash', 'drop', ref]);
+  return { success: true, ref };
+}
+
+export async function stashPop(directory, options = {}) {
+  const ref = typeof options.ref === 'string' && options.ref.trim() ? options.ref.trim() : 'stash@{0}';
+  await stashApply(directory, { ref });
+  await stashDrop(directory, { ref });
+  return { success: true, ref };
+}
+
 export async function push(directory, options = {}) {
   const git = await createGit(directory);
 
@@ -3264,43 +3336,6 @@ export async function getConflictDetails(directory) {
     };
   } catch (error) {
     console.error('Failed to get conflict details:', error);
-    throw error;
-  }
-}
-
-// ============== Stash Operations ==============
-
-export async function stash(directory, options = {}) {
-  const git = await createGit(directory);
-
-  try {
-    const args = ['stash', 'push'];
-    
-    // Include untracked files by default
-    if (options.includeUntracked !== false) {
-      args.push('--include-untracked');
-    }
-    
-    if (options.message) {
-      args.push('-m', options.message);
-    }
-
-    await git.raw(args);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to stash:', error);
-    throw error;
-  }
-}
-
-export async function stashPop(directory) {
-  const git = await createGit(directory);
-
-  try {
-    await git.raw(['stash', 'pop']);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to pop stash:', error);
     throw error;
   }
 }

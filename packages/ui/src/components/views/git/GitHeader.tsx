@@ -10,6 +10,7 @@ import {
   RiCodeLine,
   RiHeartLine,
   RiHistoryLine,
+  RiArchiveStackLine,
   RiUser3Line,
 } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ interface GitHeaderProps {
   isApplyingIdentity: boolean;
   isWorktreeMode: boolean;
   onOpenHistory?: () => void;
+  onOpenStashes?: () => void;
 }
 
 const IDENTITY_ICON_MAP: Record<
@@ -206,6 +208,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   isApplyingIdentity,
   isWorktreeMode,
   onOpenHistory,
+  onOpenStashes,
 }) => {
   const { t } = useI18n();
   if (!status) {
@@ -227,6 +230,16 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
             </Button>
           </TooltipTrigger>
           <TooltipContent sideOffset={8}>{t('gitView.history.title')}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {onOpenStashes ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 px-0" onClick={onOpenStashes}>
+              <RiArchiveStackLine className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={8}>{t('gitView.stashes.title')}</TooltipContent>
         </Tooltip>
       ) : null}
     </div>
