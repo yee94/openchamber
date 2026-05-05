@@ -70,7 +70,7 @@ import { generateCommitMessage as generateSessionCommitMessage, getGitWorktreeBo
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
 
-type SyncAction = 'fetch' | 'pull' | 'push' | null;
+type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 type BranchOperation = 'merge' | 'rebase' | null;
 type ActionTab = 'commit' | 'branch' | 'pr' | 'worktree';
@@ -911,6 +911,18 @@ export const GitView: React.FC = () => {
     setSyncAction(action);
 
     try {
+      const getPullOptions = (pullRemote: GitRemote) => {
+        const trackingPrefix = `${pullRemote.name}/`;
+        const trackedBranch = status?.tracking?.startsWith(trackingPrefix)
+          ? status.tracking.slice(trackingPrefix.length)
+          : undefined;
+        return {
+          remote: pullRemote.name,
+          branch: trackedBranch,
+          rebase: true,
+        };
+      };
+
       if (action === 'fetch') {
         if (!remote) {
           throw new Error('No remote available for fetch');
@@ -921,7 +933,7 @@ export const GitView: React.FC = () => {
         if (!remote) {
           throw new Error('No remote available for pull');
         }
-        const result = await git.gitPull(currentDirectory, { remote: remote.name });
+        const result = await git.gitPull(currentDirectory, getPullOptions(remote));
         toast.success(
           result.files.length === 1
             ? t('gitView.toast.pulledFilesSingle', { count: result.files.length, name: remote.name })
@@ -930,6 +942,26 @@ export const GitView: React.FC = () => {
       } else if (action === 'push') {
         await git.gitPush(currentDirectory);
         toast.success(t('gitView.toast.pushedToUpstream'));
+      } else if (action === 'sync') {
+        if (!remote) {
+          throw new Error('No remote available for sync');
+        }
+        await git.gitFetch(currentDirectory, { remote: remote.name });
+        const afterFetch = await git.getGitStatus(currentDirectory);
+
+        if ((afterFetch.behind ?? 0) > 0) {
+          if ((afterFetch.files?.length ?? 0) > 0) {
+            toast.error(t('gitView.toast.commitOrStashBeforeSync'));
+            return;
+          }
+          await git.gitPull(currentDirectory, getPullOptions(remote));
+        }
+
+        const afterPull = await git.getGitStatus(currentDirectory);
+        if ((afterPull.ahead ?? 0) > 0) {
+          await git.gitPush(currentDirectory);
+        }
+        toast.success(t('gitView.toast.syncedChanges'));
       }
 
       await refreshStatusAndBranches(false);
@@ -938,7 +970,7 @@ export const GitView: React.FC = () => {
       const message =
         err instanceof Error
           ? err.message
-          : t('gitView.toast.syncActionFailed', { action: action === 'pull' ? t('gitView.sync.pull') : action });
+          : t('gitView.toast.syncActionFailed', { action: action === 'sync' ? t('gitView.sync.syncChanges') : action === 'pull' ? t('gitView.sync.pull') : action });
       toast.error(message);
     } finally {
       setSyncAction(null);
@@ -2025,8 +2057,7 @@ export const GitView: React.FC = () => {
         syncAction={syncAction}
         remotes={effectiveRemotes}
         onFetch={(remote) => handleSyncAction('fetch', remote)}
-        onPull={(remote) => handleSyncAction('pull', remote)}
-        onPush={() => handleSyncAction('push')}
+        onSync={(remote) => handleSyncAction('sync', remote)}
         onRemoveRemote={handleRemoveRemote}
         removingRemoteName={removingRemoteName}
         onCheckoutBranch={handleCheckoutBranch}
@@ -2124,17 +2155,18 @@ export const GitView: React.FC = () => {
                       />
                     </>
                   ) : (
-                    <GitEmptyState
-                      behind={effectiveRemotes.length > 0 ? (status?.behind ?? 0) : 0}
-                      isPulling={syncAction === 'pull'}
-                      onPull={() => {
-                        const remote = effectiveRemotes[0];
-                        if (!remote) {
-                          return;
-                        }
-                        void handleSyncAction('pull', remote);
-                      }}
-                    />
+                      <GitEmptyState
+                        ahead={effectiveRemotes.length > 0 ? (status?.ahead ?? 0) : 0}
+                        behind={effectiveRemotes.length > 0 ? (status?.behind ?? 0) : 0}
+                        isSyncing={syncAction === 'sync'}
+                        onSync={() => {
+                          const remote = effectiveRemotes[0];
+                          if (!remote) {
+                            return;
+                          }
+                          void handleSyncAction('sync', remote);
+                        }}
+                      />
                   )}
                 </div>
               ) : null}

@@ -530,7 +530,7 @@ export async function gitPush(
 
 export async function gitPull(
   directory: string,
-  options: { remote?: string; branch?: string } = {}
+  options: import('./api/types').GitPullOptions = {}
 ): Promise<import('./api/types').GitPullResult> {
   const runtime = getRuntimeGit();
   if (runtime) return runtime.gitPull(directory, options);

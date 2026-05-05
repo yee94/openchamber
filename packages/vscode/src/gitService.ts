@@ -2360,11 +2360,11 @@ export async function gitPush(
  */
 export async function gitPull(
   directory: string,
-  options?: { remote?: string; branch?: string }
+  options?: { remote?: string; branch?: string; rebase?: boolean }
 ): Promise<{ success: boolean; summary: { changes: number; insertions: number; deletions: number }; files: string[]; insertions: number; deletions: number }> {
   const repo = await getRepository(directory);
   
-  if (repo) {
+  if (repo && options?.rebase !== true) {
     try {
       await repo.pull();
       return {
@@ -2381,10 +2381,14 @@ export async function gitPull(
 
   // Fallback to raw git
   const args = ['pull'];
+  if (options?.rebase === true) args.push('--rebase');
   if (options?.remote) args.push(options.remote);
   if (options?.branch) args.push(options.branch);
 
   const result = await execGit(args, directory);
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || result.stdout.trim() || 'Failed to pull from remote');
+  }
   
   return {
     success: result.exitCode === 0,

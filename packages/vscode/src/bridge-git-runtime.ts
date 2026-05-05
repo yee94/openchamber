@@ -253,14 +253,15 @@ export async function handleStandardGitBridgeMessage(message: BridgeMessageInput
     }
 
     case 'api:git/pull': {
-      const { directory, remote, branch } = (payload || {}) as {
+      const { directory, remote, branch, rebase } = (payload || {}) as {
         directory?: string;
         remote?: string;
         branch?: string;
+        rebase?: boolean;
       };
       const dirError = requireDirectory(id, type, directory);
       if (dirError) return dirError;
-      const result = await gitService.gitPull(directory!, { remote, branch });
+      const result = await gitService.gitPull(directory!, { remote, branch, rebase });
       return { id, type, success: true, data: result };
     }
 

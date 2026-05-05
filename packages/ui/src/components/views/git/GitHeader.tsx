@@ -26,7 +26,7 @@ import { SyncActions } from './SyncActions';
 import type { GitStatus, GitIdentityProfile, GitRemote } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
 
-type SyncAction = 'fetch' | 'pull' | 'push' | null;
+type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 
 interface GitHeaderProps {
   status: GitStatus | null;
@@ -36,8 +36,7 @@ interface GitHeaderProps {
   syncAction: SyncAction;
   remotes: GitRemote[];
   onFetch: (remote: GitRemote) => void;
-  onPull: (remote: GitRemote) => void;
-  onPush: () => void;
+  onSync: (remote: GitRemote) => void;
   onRemoveRemote: (remote: GitRemote) => void;
   removingRemoteName: string | null;
   onCheckoutBranch: (branch: string) => void;
@@ -195,8 +194,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   syncAction,
   remotes,
   onFetch,
-  onPull,
-  onPush,
+  onSync,
   onRemoveRemote,
   removingRemoteName,
   onCheckoutBranch,
@@ -239,8 +237,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
       syncAction={syncAction}
       remotes={remotes}
       onFetch={onFetch}
-      onPull={onPull}
-      onPush={onPush}
+      onSync={onSync}
       onRemoveRemote={onRemoveRemote}
       removingRemoteName={removingRemoteName}
       disabled={!status}
@@ -248,6 +245,8 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
 
       aheadCount={status.ahead}
       behindCount={status.behind}
+      trackingRemoteName={status.tracking?.split('/')[0]}
+      hasUncommittedChanges={(status.files?.length ?? 0) > 0}
     />
   );
 

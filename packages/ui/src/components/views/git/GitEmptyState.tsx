@@ -1,20 +1,23 @@
 import React from 'react';
-import { RiGitCommitLine, RiArrowDownLine, RiLoader4Line } from '@remixicon/react';
+import { RiGitCommitLine, RiRefreshLine, RiLoader4Line } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 
 interface GitEmptyStateProps {
+  ahead: number;
   behind: number;
-  onPull: () => void;
-  isPulling: boolean;
+  onSync: () => void;
+  isSyncing: boolean;
 }
 
 export const GitEmptyState: React.FC<GitEmptyStateProps> = ({
+  ahead,
   behind,
-  onPull,
-  isPulling,
+  onSync,
+  isSyncing,
 }) => {
   const { t } = useI18n();
+  const hasSyncChanges = ahead > 0 || behind > 0;
   return (
     <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
       <RiGitCommitLine className="size-10 text-muted-foreground/70 mb-4" />
@@ -25,20 +28,18 @@ export const GitEmptyState: React.FC<GitEmptyStateProps> = ({
         {t('gitView.empty.cleanDescription')}
       </p>
 
-      {behind > 0 && (
+      {hasSyncChanges && (
         <Button
-          variant="outline"
-          onClick={onPull}
-          disabled={isPulling}
+          variant="default"
+          onClick={onSync}
+          disabled={isSyncing}
         >
-          {isPulling ? (
+          {isSyncing ? (
             <RiLoader4Line className="size-4 animate-spin" />
           ) : (
-            <RiArrowDownLine className="size-4" />
+            <RiRefreshLine className="size-4" />
           )}
-          {behind === 1
-            ? t('gitView.empty.pullBehindSingle', { count: behind })
-            : t('gitView.empty.pullBehindPlural', { count: behind })}
+          {t('gitView.sync.syncCounts', { ahead, behind })}
         </Button>
       )}
     </div>

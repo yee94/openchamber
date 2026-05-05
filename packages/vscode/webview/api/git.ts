@@ -193,11 +193,12 @@ export const createVSCodeGitAPI = (): GitAPI => ({
     });
   },
 
-  gitPull: async (directory: string, options?: { remote?: string; branch?: string }): Promise<GitPullResult> => {
+  gitPull: async (directory: string, options?: { remote?: string; branch?: string; rebase?: boolean }): Promise<GitPullResult> => {
     return sendBridgeMessage<GitPullResult>('api:git/pull', {
       directory,
       remote: options?.remote,
       branch: options?.branch,
+      rebase: options?.rebase,
     });
   },
 

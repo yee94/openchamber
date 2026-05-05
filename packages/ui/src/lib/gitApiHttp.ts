@@ -20,6 +20,7 @@ import type {
   GitCommitResult,
   GitPushResult,
   GitPullResult,
+  GitPullOptions,
   GitLogOptions,
   GitLogResponse,
   GitCommitFilesResponse,
@@ -518,7 +519,7 @@ export async function gitPush(
 
 export async function gitPull(
   directory: string,
-  options: { remote?: string; branch?: string } = {}
+  options: GitPullOptions = {}
 ): Promise<GitPullResult> {
   const response = await fetch(buildUrl(`${API_BASE}/pull`, directory), {
     method: 'POST',

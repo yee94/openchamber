@@ -1804,12 +1804,15 @@ export async function collectDiffs(directory, files = []) {
 
 export async function pull(directory, options = {}) {
   const git = await createGit(directory);
+  const pullOptions = options.rebase === true
+    ? { ...(options.options && typeof options.options === 'object' && !Array.isArray(options.options) ? options.options : {}), '--rebase': null }
+    : options.options || {};
 
   try {
     const result = await git.pull(
       options.remote || 'origin',
       options.branch,
-      options.options || {}
+      pullOptions
     );
 
     return {
