@@ -2241,18 +2241,7 @@ export const GitView: React.FC = () => {
                       />
                     </>
                   ) : (
-                      <GitEmptyState
-                        ahead={effectiveRemotes.length > 0 ? (status?.ahead ?? 0) : 0}
-                        behind={effectiveRemotes.length > 0 ? (status?.behind ?? 0) : 0}
-                        isSyncing={syncAction === 'sync'}
-                        onSync={() => {
-                          const remote = effectiveRemotes[0];
-                          if (!remote) {
-                            return;
-                          }
-                          void handleSyncAction('sync', remote);
-                        }}
-                      />
+                      <GitEmptyState />
                   )}
                 </div>
               ) : null}
