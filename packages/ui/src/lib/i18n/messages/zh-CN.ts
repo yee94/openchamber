@@ -506,7 +506,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.operation.rebase': '变基',
   'gitView.operation.rebaseInProgress': '变基进行中',
   'gitView.operation.rebasingOnto': '正在将 {headName} 变基到 {onto}',
-  'gitView.operation.resolveConflictsHint': '继续前必须先解决冲突。可使用“使用 AI 解决”或手动解决，然后暂存更改并点击继续。',
+  'gitView.operation.resolveConflictsHint': '解决冲突，然后继续操作。',
   'gitView.operation.resolveWithAi': '使用 AI 解决',
   'gitView.stash.confirmButton': '储藏并{operation}',
   'gitView.stash.description': '你有未提交更改会被此次 {operation} 覆盖。是否先临时储藏这些更改？',
