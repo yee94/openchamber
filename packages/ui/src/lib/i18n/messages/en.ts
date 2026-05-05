@@ -674,6 +674,7 @@ export const dict = {
   'gitView.pr.toast.titleRequired': 'Title is required',
   'gitView.pr.toast.updatePrFailed': 'Failed to update pull request',
   'gitView.pullRequest.createHint': 'Create and manage pull requests from this branch.',
+  'gitView.pullRequest.availableOnFeatureBranches': 'Available when the current branch can open a pull request.',
   'gitView.pullRequest.title': 'Pull request',
   'gitView.tabs.commit': 'Commit',
   'gitView.tabs.pr': 'PR',

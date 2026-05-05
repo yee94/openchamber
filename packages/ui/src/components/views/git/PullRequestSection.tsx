@@ -1365,7 +1365,16 @@ export const PullRequestSection: React.FC<{
   }, [directory, editBody, editTitle, github, prStatusKey, refresh, scheduleActionRefresh, updatePrStatus, t]);
 
   if (!canShow) {
-    return null;
+    return (
+      <section className="border-0 bg-transparent rounded-none">
+        <div className="space-y-1 pt-3">
+          <div className="typography-ui-header font-semibold text-foreground">{t('gitView.pullRequest.title')}</div>
+          <div className="typography-micro text-muted-foreground">
+            {t('gitView.pullRequest.availableOnFeatureBranches')}
+          </div>
+        </div>
+      </section>
+    );
   }
 
   const originRepoUrl = status?.repo?.url || null;

@@ -675,6 +675,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.pr.toast.titleRequired': '제목 필수',
   'gitView.pr.toast.updatePrFailed': 'PR 업데이트 실패',
   'gitView.pullRequest.createHint': '이 브랜치에서 PR을 만들고 관리하세요.',
+  'gitView.pullRequest.availableOnFeatureBranches': '현재 브랜치에서 PR을 열 수 있을 때 사용할 수 있습니다.',
   'gitView.pullRequest.title': 'PR',
   'gitView.tabs.commit': '커밋',
   'gitView.tabs.pr': 'PR',
