@@ -1260,45 +1260,55 @@ export async function getStatus(directory, options = {}) {
 
     const diffStats = Object.fromEntries(diffStatsMap.entries());
 
-    const newFileStats = lightMode ? [] : await Promise.all(
-      status.files.map(async (file) => {
+    const MAX_NEW_FILE_STATS = 200;
+    const MAX_NEW_FILE_STAT_SIZE = 1024 * 1024;
+    const newFileStats = [];
+
+    if (!lightMode) {
+      for (const file of status.files) {
+        if (newFileStats.length >= MAX_NEW_FILE_STATS) {
+          break;
+        }
+
         const working = (file.working_dir || '').trim();
         const indexStatus = (file.index || '').trim();
         const statusCode = working || indexStatus;
 
         if (statusCode !== '?' && statusCode !== 'A') {
-          return null;
+          continue;
         }
 
         const existing = diffStats[file.path];
         if (existing && existing.insertions > 0) {
-          return null;
+          continue;
         }
 
         const absolutePath = path.join(directoryPath, file.path);
 
         try {
           const stat = await fsp.stat(absolutePath);
-          if (!stat.isFile()) {
-            return null;
+          if (!stat.isFile() || stat.size > MAX_NEW_FILE_STAT_SIZE) {
+            continue;
           }
 
           const buffer = await fsp.readFile(absolutePath);
           if (buffer.indexOf(0) !== -1) {
-            return {
+            newFileStats.push({
               path: file.path,
               insertions: existing?.insertions ?? 0,
               deletions: existing?.deletions ?? 0,
-            };
+            });
+            continue;
           }
 
           const normalized = buffer.toString('utf8').replace(/\r\n/g, '\n');
           if (!normalized.length) {
-            return {
+            newFileStats.push({
               path: file.path,
               insertions: 0,
               deletions: 0,
-            };
+            });
+            continue;
           }
 
           const segments = normalized.split('\n');
@@ -1307,20 +1317,20 @@ export async function getStatus(directory, options = {}) {
           }
 
           const lineCount = segments.length;
-          return {
+          newFileStats.push({
             path: file.path,
             insertions: lineCount,
             deletions: 0,
-          };
+          });
         } catch (error) {
-          console.warn('Failed to estimate diff stats for new file', file.path, error);
-          return null;
+          if (error?.code !== 'ENOENT') {
+            console.warn('Failed to estimate diff stats for new file', file.path, error);
+          }
         }
-      })
-    );
+      }
+    }
 
     for (const entry of newFileStats) {
-      if (!entry) continue;
       diffStats[entry.path] = {
         insertions: entry.insertions,
         deletions: entry.deletions,
