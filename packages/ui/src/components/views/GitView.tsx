@@ -2119,7 +2119,6 @@ export const GitView: React.FC = () => {
                         onCommit={() => handleCommit({ pushAfter: false })}
                         onCommitAndPush={() => handleCommit({ pushAfter: true })}
                         commitAction={commitAction}
-                        isBusy={isBusy}
                         gitmojiEnabled={settingsGitmojiEnabled}
                         onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
                       />
