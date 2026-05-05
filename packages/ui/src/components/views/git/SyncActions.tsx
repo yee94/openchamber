@@ -54,11 +54,16 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   const blocksRebaseSync = behindCount > 0 && hasUncommittedChanges;
   const isPrimaryDisabled = disabled || syncAction !== null || isRemovingRemote || !trackingRemote || blocksRebaseSync;
   const isDropdownDisabled = disabled || syncAction !== null || isRemovingRemote || remotes.length === 0;
-  const countsLabel = t('gitView.sync.syncCounts', { ahead: aheadCount, behind: behindCount });
+  const hasKnownSyncWork = aheadCount > 0 || behindCount > 0;
+  const primaryLabel = hasKnownSyncWork
+    ? t('gitView.sync.syncCounts', { ahead: aheadCount, behind: behindCount })
+    : t('gitView.sync.sync');
   const tooltipLabel = blocksRebaseSync
     ? t('gitView.sync.commitOrStashTooltip')
     : trackingRemote
-    ? t('gitView.sync.syncChangesTooltip', { ahead: aheadCount, behind: behindCount })
+    ? hasKnownSyncWork
+      ? t('gitView.sync.syncChangesTooltip', { ahead: aheadCount, behind: behindCount })
+      : t('gitView.sync.syncChanges')
     : t('gitView.sync.noRemoteTooltip');
 
   const handleSync = () => {
@@ -87,7 +92,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
             ) : (
               <RiRefreshLine className="size-4" />
             )}
-            <span className="whitespace-nowrap tabular-nums">{countsLabel}</span>
+            <span className="whitespace-nowrap tabular-nums">{primaryLabel}</span>
           </button>
         </TooltipTrigger>
         <TooltipContent sideOffset={8}>{tooltipLabel}</TooltipContent>

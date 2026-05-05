@@ -948,6 +948,8 @@ export const GitView: React.FC = () => {
         if (!remote) {
           throw new Error('No remote available for sync');
         }
+        let pulledFileCount = 0;
+        let pushedChanges = false;
         await git.gitFetch(currentDirectory, { remote: remote.name });
         const afterFetch = await git.getGitStatus(currentDirectory);
 
@@ -956,14 +958,32 @@ export const GitView: React.FC = () => {
             toast.error(t('gitView.toast.commitOrStashBeforeSync'));
             return;
           }
-          await git.gitPull(currentDirectory, getPullOptions(remote));
+          const pullResult = await git.gitPull(currentDirectory, getPullOptions(remote));
+          pulledFileCount = pullResult.files.length;
         }
 
         const afterPull = await git.getGitStatus(currentDirectory);
         if ((afterPull.ahead ?? 0) > 0) {
           await git.gitPush(currentDirectory);
+          pushedChanges = true;
         }
-        toast.success(t('gitView.toast.syncedChanges'));
+        if (pulledFileCount > 0 && pushedChanges) {
+          toast.success(
+            pulledFileCount === 1
+              ? t('gitView.toast.syncedPulledSingleAndPushed', { count: pulledFileCount, name: remote.name })
+              : t('gitView.toast.syncedPulledPluralAndPushed', { count: pulledFileCount, name: remote.name })
+          );
+        } else if (pulledFileCount > 0) {
+          toast.success(
+            pulledFileCount === 1
+              ? t('gitView.toast.pulledFilesSingle', { count: pulledFileCount, name: remote.name })
+              : t('gitView.toast.pulledFilesPlural', { count: pulledFileCount, name: remote.name })
+          );
+        } else if (pushedChanges) {
+          toast.success(t('gitView.toast.pushedToUpstream'));
+        } else {
+          toast.success(t('gitView.toast.syncedChanges'));
+        }
       }
 
       await refreshStatusAndBranches(false);

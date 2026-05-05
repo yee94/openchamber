@@ -2380,6 +2380,7 @@ export async function gitPull(
   }
 
   // Fallback to raw git
+  const beforeHead = await execGit(['rev-parse', 'HEAD'], directory);
   const args = ['pull'];
   if (options?.rebase === true) args.push('--rebase');
   if (options?.remote) args.push(options.remote);
@@ -2389,11 +2390,20 @@ export async function gitPull(
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || result.stdout.trim() || 'Failed to pull from remote');
   }
-  
+  const afterHead = await execGit(['rev-parse', 'HEAD'], directory);
+  const before = beforeHead.exitCode === 0 ? beforeHead.stdout.trim() : '';
+  const after = afterHead.exitCode === 0 ? afterHead.stdout.trim() : '';
+  const changedFiles = before && after && before !== after
+    ? await execGit(['diff', '--name-only', before, after], directory)
+    : { stdout: '', stderr: '', exitCode: 0 };
+  const files = changedFiles.exitCode === 0
+    ? changedFiles.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+    : [];
+   
   return {
     success: result.exitCode === 0,
-    summary: { changes: 0, insertions: 0, deletions: 0 },
-    files: [],
+    summary: { changes: files.length, insertions: 0, deletions: 0 },
+    files,
     insertions: 0,
     deletions: 0,
   };
