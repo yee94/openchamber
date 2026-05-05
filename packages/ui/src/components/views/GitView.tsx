@@ -25,10 +25,8 @@ import {
   RiGitCommitLine,
   RiGitPullRequestLine,
   RiLoader4Line,
-  RiSplitCellsHorizontal,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
-import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import {
   Dialog,
   DialogContent,
@@ -74,7 +72,7 @@ import { useI18n } from '@/lib/i18n';
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 type BranchOperation = 'merge' | 'rebase' | null;
-type ActionTab = 'commit' | 'branch' | 'pr' | 'worktree';
+type ActionTab = 'commit' | 'branch' | 'pr';
 type HistoryBranchDivider = {
   insertBeforeIndex: number;
   branchName: string;
@@ -84,7 +82,7 @@ type HistoryBranchDivider = {
 const GIT_ACTION_TAB_STORAGE_KEY = 'oc.git.actionTab';
 
 const isActionTab = (value: unknown): value is ActionTab =>
-  value === 'commit' || value === 'branch' || value === 'pr' || value === 'worktree';
+  value === 'commit' || value === 'branch' || value === 'pr';
 
 
 type GitViewSnapshot = {
@@ -526,13 +524,15 @@ export const GitView: React.FC = () => {
     { id: 'commit', label: t('gitView.tabs.commit'), icon: <RiGitCommitLine className="h-3.5 w-3.5" /> },
     { id: 'branch', label: t('gitView.tabs.update'), icon: <RiGitMergeLine className="h-3.5 w-3.5" /> },
     { id: 'pr', label: t('gitView.tabs.pr'), icon: <RiGitPullRequestLine className="h-3.5 w-3.5" /> },
-    { id: 'worktree', label: t('gitView.tabs.worktree'), icon: <RiSplitCellsHorizontal className="h-3.5 w-3.5" /> },
   ], [t]);
   const [actionTab, setActionTab] = React.useState<ActionTab>(() => {
     if (typeof window === 'undefined') {
       return 'commit';
     }
     const stored = window.localStorage.getItem(GIT_ACTION_TAB_STORAGE_KEY);
+    if (stored === 'worktree') {
+      return 'branch';
+    }
     return isActionTab(stored) ? stored : 'commit';
   });
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
@@ -2143,7 +2143,7 @@ export const GitView: React.FC = () => {
 
   return (
     <div className={cn('flex h-full flex-col overflow-hidden', 'bg-sidebar')}>
-      <GitHeader
+          <GitHeader
         status={status}
         localBranches={localBranches}
         remoteBranches={remoteBranches}
@@ -2161,10 +2161,12 @@ export const GitView: React.FC = () => {
         availableIdentities={availableIdentities}
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
-        isWorktreeMode={!!worktreeMetadata}
-        onOpenHistory={() => setIsHistoryDialogOpen(true)}
-        onOpenStashes={() => setIsStashesDialogOpen(true)}
-      />
+            isWorktreeMode={!!worktreeMetadata}
+            onOpenHistory={() => setIsHistoryDialogOpen(true)}
+            actionTabItems={actionTabItems}
+            activeActionTab={actionTab}
+            onSelectActionTab={(tabID) => setActionTab(tabID as ActionTab)}
+          />
 
       {/* In-progress operation banner */}
       {currentDirectory && (
@@ -2185,18 +2187,6 @@ export const GitView: React.FC = () => {
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
           <div className={cn('min-w-0 min-h-0 h-full flex flex-col', 'bg-sidebar')}>
-            <div className={cn(isMobile ? 'h-10 px-1.5' : 'h-8 px-2')}>
-              <SortableTabsStrip
-                items={actionTabItems}
-                activeId={actionTab}
-                onSelect={(tabID) => setActionTab(tabID as ActionTab)}
-                layoutMode="fit"
-                variant="active-pill"
-                inactiveTabsIconOnly={isMobile}
-                className="h-full"
-              />
-            </div>
-
             <ScrollableOverlay
               as={ScrollShadow}
               ref={actionPanelScrollRef}
@@ -2232,6 +2222,7 @@ export const GitView: React.FC = () => {
                         }}
                         onRevertFile={handleRevertFile}
                         isRevertingAll={isRevertingAll}
+                        onOpenStashes={() => setIsStashesDialogOpen(true)}
                       />
 
                       <CommitSection
@@ -2269,50 +2260,40 @@ export const GitView: React.FC = () => {
               {actionTab === 'branch' ? (
                 <div className="space-y-4">
                   {canShowBranchWorkflows ? (
-                    <BranchIntegrationSection
-                      mode="inline"
-                      currentBranch={status?.current}
-                      localBranches={localBranches}
-                      remoteBranches={remoteBranches}
-                      defaultTargetBranch={updateTargetBranch}
-                      onMerge={handleMerge}
-                      onRebase={handleRebase}
-                      disabled={isBusy}
-                      isOperating={branchOperation !== null}
-                      operationLogs={operationLogs}
-                      onOperationComplete={handleOperationComplete}
-                    />
+                    <>
+                      <BranchIntegrationSection
+                        mode="inline"
+                        currentBranch={status?.current}
+                        localBranches={localBranches}
+                        remoteBranches={remoteBranches}
+                        defaultTargetBranch={updateTargetBranch}
+                        onMerge={handleMerge}
+                        onRebase={handleRebase}
+                        disabled={isBusy}
+                        isOperating={branchOperation !== null}
+                        operationLogs={operationLogs}
+                        onOperationComplete={handleOperationComplete}
+                      />
+                      {integrateCommitsProps ? (
+                        <IntegrateCommitsSection
+                          key={integrateCommitsProps.worktreeMetadata.path}
+                          repoRoot={integrateCommitsProps.repoRoot}
+                          sourceBranch={integrateCommitsProps.sourceBranch}
+                          worktreeMetadata={integrateCommitsProps.worktreeMetadata}
+                          localBranches={localBranches}
+                          defaultTargetBranch={defaultTargetBranch}
+                          refreshKey={integrateRefreshKey}
+                          onRefresh={() => {
+                            if (!currentDirectory) return;
+                            fetchStatus(currentDirectory, git);
+                            fetchBranches(currentDirectory, git);
+                            fetchLog(currentDirectory, git, logMaxCountLocal);
+                          }}
+                        />
+                      ) : null}
+                    </>
                   ) : (
                     <p className="typography-meta text-muted-foreground">{t('gitView.branch.actionsUnavailable')}</p>
-                  )}
-                </div>
-              ) : null}
-
-              {actionTab === 'worktree' ? (
-                <div className="space-y-4">
-                  {integrateCommitsProps ? (
-                    <IntegrateCommitsSection
-                      key={integrateCommitsProps.worktreeMetadata.path}
-                      repoRoot={integrateCommitsProps.repoRoot}
-                      sourceBranch={integrateCommitsProps.sourceBranch}
-                      worktreeMetadata={integrateCommitsProps.worktreeMetadata}
-                      localBranches={localBranches}
-                      defaultTargetBranch={defaultTargetBranch}
-                      refreshKey={integrateRefreshKey}
-                      onRefresh={() => {
-                        if (!currentDirectory) return;
-                        fetchStatus(currentDirectory, git);
-                        fetchBranches(currentDirectory, git);
-                        fetchLog(currentDirectory, git, logMaxCountLocal);
-                      }}
-                    />
-                  ) : (
-                    <div className="space-y-1 pt-3">
-                      <div className="typography-ui-header font-semibold text-foreground">{t('gitView.integrate.title')}</div>
-                      <div className="typography-micro text-muted-foreground">
-                        {t('gitView.worktree.availableInWorktreeMode')}
-                      </div>
-                    </div>
                   )}
                 </div>
               ) : null}

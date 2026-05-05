@@ -10,10 +10,10 @@ import {
   RiCodeLine,
   RiHeartLine,
   RiHistoryLine,
-  RiArchiveStackLine,
   RiUser3Line,
 } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
+import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,7 +49,9 @@ interface GitHeaderProps {
   isApplyingIdentity: boolean;
   isWorktreeMode: boolean;
   onOpenHistory?: () => void;
-  onOpenStashes?: () => void;
+  actionTabItems?: SortableTabsStripItem[];
+  activeActionTab?: string;
+  onSelectActionTab?: (tabID: string) => void;
 }
 
 const IDENTITY_ICON_MAP: Record<
@@ -208,7 +210,9 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   isApplyingIdentity,
   isWorktreeMode,
   onOpenHistory,
-  onOpenStashes,
+  actionTabItems,
+  activeActionTab,
+  onSelectActionTab,
 }) => {
   const { t } = useI18n();
   if (!status) {
@@ -230,16 +234,6 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
             </Button>
           </TooltipTrigger>
           <TooltipContent sideOffset={8}>{t('gitView.history.title')}</TooltipContent>
-        </Tooltip>
-      ) : null}
-      {onOpenStashes ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 px-0" onClick={onOpenStashes}>
-              <RiArchiveStackLine className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent sideOffset={8}>{t('gitView.stashes.title')}</TooltipContent>
         </Tooltip>
       ) : null}
     </div>
@@ -296,15 +290,28 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
             />
           )}
         </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {managementButtons}
+          {identityControl}
+        </div>
       </div>
 
-      <div className="mt-1.5 flex items-center justify-between gap-2 min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-1">
-          {syncButtons}
-          {managementButtons}
+      {actionTabItems && activeActionTab && onSelectActionTab ? (
+        <div className="mt-3 flex h-8 min-w-0 items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <SortableTabsStrip
+              items={actionTabItems}
+              activeId={activeActionTab}
+              onSelect={onSelectActionTab}
+              layoutMode="fit"
+              variant="active-pill"
+              iconOnlyActiveTab={true}
+              className="h-full"
+            />
+          </div>
+          <div className="shrink-0">{syncButtons}</div>
         </div>
-        <div className="min-w-0 max-w-[45%]">{identityControl}</div>
-      </div>
+      ) : null}
     </header>
   );
 };
