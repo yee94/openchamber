@@ -1057,6 +1057,7 @@ export const GitView: React.FC = () => {
       await refreshStatusAndBranches();
 
       if (options.pushAfter) {
+        setSyncAction('sync');
         const trackingRemoteName = status?.tracking?.split('/')[0];
         const syncRemote = effectiveRemotes.find((remote) => remote.name === trackingRemoteName) ?? effectiveRemotes[0];
         if (!syncRemote) {
@@ -1119,6 +1120,9 @@ export const GitView: React.FC = () => {
       toast.error(message);
     } finally {
       setCommitAction(null);
+      if (options.pushAfter) {
+        setSyncAction(null);
+      }
     }
   };
 
