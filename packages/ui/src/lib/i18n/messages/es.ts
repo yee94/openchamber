@@ -709,6 +709,7 @@ export const dict: Record<I18nKey, string> = {
   "gitView.toast.pulledFilesSingle": "Se trajo {count} archivo de {name}",
   "gitView.toast.pushedToUpstream": "Enviado al upstream",
   "gitView.toast.commitOrStashBeforeSync": "Haz commit o stash de tus cambios antes de sincronizar",
+  "gitView.toast.alreadyUpToDate": "Ya está actualizado",
   "gitView.toast.syncedPulledPluralAndPushed": "Se trajeron {count} archivos de {name} y se envió al upstream",
   "gitView.toast.syncedPulledSingleAndPushed": "Se trajo {count} archivo de {name} y se envió al upstream",
   "gitView.toast.syncedChanges": "Cambios sincronizados",

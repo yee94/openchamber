@@ -709,6 +709,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.toast.pulledFilesSingle': '{name}에서 파일 {count}개를 풀했습니다',
   'gitView.toast.pushedToUpstream': '업스트림에 푸시했습니다',
   'gitView.toast.commitOrStashBeforeSync': '동기화하기 전에 변경 사항을 커밋하거나 stash하세요',
+  'gitView.toast.alreadyUpToDate': '이미 최신 상태입니다',
   'gitView.toast.syncedPulledPluralAndPushed': '{name}에서 파일 {count}개를 풀하고 업스트림에 푸시했습니다',
   'gitView.toast.syncedPulledSingleAndPushed': '{name}에서 파일 {count}개를 풀하고 업스트림에 푸시했습니다',
   'gitView.toast.syncedChanges': '변경 사항을 동기화했습니다',

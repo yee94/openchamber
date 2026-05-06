@@ -709,6 +709,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.toast.pulledFilesSingle': '已从 {name} 拉取 {count} 个文件',
   'gitView.toast.pushedToUpstream': '已推送到上游',
   'gitView.toast.commitOrStashBeforeSync': '同步前请先提交或储藏你的更改',
+  'gitView.toast.alreadyUpToDate': '已是最新状态',
   'gitView.toast.syncedPulledPluralAndPushed': '已从 {name} 拉取 {count} 个文件并推送到上游',
   'gitView.toast.syncedPulledSingleAndPushed': '已从 {name} 拉取 {count} 个文件并推送到上游',
   'gitView.toast.syncedChanges': '已同步更改',

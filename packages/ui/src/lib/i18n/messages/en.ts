@@ -708,6 +708,7 @@ export const dict = {
   'gitView.toast.pulledFilesSingle': 'Pulled {count} file from {name}',
   'gitView.toast.pushedToUpstream': 'Pushed to upstream',
   'gitView.toast.commitOrStashBeforeSync': 'Commit or stash your changes before syncing',
+  'gitView.toast.alreadyUpToDate': 'Already up to date',
   'gitView.toast.syncedPulledPluralAndPushed': 'Pulled {count} files from {name} and pushed to upstream',
   'gitView.toast.syncedPulledSingleAndPushed': 'Pulled {count} file from {name} and pushed to upstream',
   'gitView.toast.syncedChanges': 'Synced changes',

@@ -1,8 +1,13 @@
 import React from 'react';
-import { RiGitCommitLine } from '@remixicon/react';
+import { RiArchiveStackLine, RiGitCommitLine } from '@remixicon/react';
+import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 
-export const GitEmptyState: React.FC = () => {
+interface GitEmptyStateProps {
+  onOpenStashes?: () => void;
+}
+
+export const GitEmptyState: React.FC<GitEmptyStateProps> = ({ onOpenStashes }) => {
   const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
@@ -13,6 +18,19 @@ export const GitEmptyState: React.FC = () => {
       <p className="typography-meta text-muted-foreground mb-4">
         {t('gitView.empty.cleanDescription')}
       </p>
+
+      {onOpenStashes ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onOpenStashes}
+          className="gap-1.5"
+        >
+          <RiArchiveStackLine className="size-4" />
+          {t('gitView.stashes.title')}
+        </Button>
+      ) : null}
     </div>
   );
 };

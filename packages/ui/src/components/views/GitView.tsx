@@ -982,7 +982,7 @@ export const GitView: React.FC = () => {
         } else if (pushedChanges) {
           toast.success(t('gitView.toast.pushedToUpstream'));
         } else {
-          toast.success(t('gitView.toast.syncedChanges'));
+          toast.success(t('gitView.toast.alreadyUpToDate'));
         }
       }
 
@@ -1104,7 +1104,7 @@ export const GitView: React.FC = () => {
         } else if (pushedChanges) {
           toast.success(t('gitView.toast.pushedToUpstream'));
         } else {
-          toast.success(t('gitView.toast.syncedChanges'));
+          toast.success(t('gitView.toast.alreadyUpToDate'));
         }
 
         triggerFireworks();
@@ -2241,7 +2241,7 @@ export const GitView: React.FC = () => {
                       />
                     </>
                   ) : (
-                      <GitEmptyState />
+                      <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
                   )}
                 </div>
               ) : null}
