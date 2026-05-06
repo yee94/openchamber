@@ -122,7 +122,8 @@ export function useAllLiveSessions(): Session[] {
 let bootingRoot = false
 let bootedAt = 0
 const BOOT_DEBOUNCE_MS = 1500
-const RECONNECT_MESSAGE_LIMIT = 200
+const RECONNECT_MESSAGE_LIMIT = 30
+const REPAIR_MESSAGE_LIMIT = 30
 const RECONNECT_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const requestSignature = (items: Array<{ id: string }> | undefined): string => {
   if (!items || items.length === 0) return ""
@@ -216,7 +217,7 @@ async function repairSessionParts(
 ) {
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
   const result = await retry(() =>
-    scopedClient.session.messages({ sessionID, limit: RECONNECT_MESSAGE_LIMIT }),
+    scopedClient.session.messages({ sessionID, limit: REPAIR_MESSAGE_LIMIT }),
   )
   const records = (result.data ?? []).filter((record: { info?: { id?: string } }) => !!record?.info?.id)
   if (records.length === 0) return
