@@ -109,7 +109,7 @@ interface IdentityDropdownProps {
   iconOnly?: boolean;
 }
 
-const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
+export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   activeProfile,
   identities,
   onSelect,

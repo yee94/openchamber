@@ -31,6 +31,7 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import {
   RiAddLine,
   RiChatAi3Line,
+  RiFolderAddLine,
   RiGitBranchLine,
   RiLayoutLeftLine,
   RiLayoutRightLine,
@@ -47,6 +48,7 @@ import { getSettingsNavIcon } from '@/components/views/SettingsView';
 import { scoreByFuzzyQuery } from '@/lib/search/fuzzySearch';
 import { truncatePathMiddle } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { sessionEvents } from '@/lib/sessionEvents';
 
 type CommandEntry = {
   id: string;
@@ -166,6 +168,15 @@ export const CommandPalette: React.FC = () => {
         searchText: t('commandPalette.item.newWorktreeDraft'),
         onSelect: run(() => {
           void createWorktreeSession();
+        }),
+      },
+      {
+        id: 'add-project',
+        title: t('commandPalette.item.addProject'),
+        icon: <RiFolderAddLine className="mr-2 h-4 w-4" />,
+        searchText: t('commandPalette.item.addProject'),
+        onSelect: run(() => {
+          sessionEvents.requestDirectoryDialog();
         }),
       },
       {
