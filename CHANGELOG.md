@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-05-06
+
+- Git: added one-click Sync and stash management, including stash access from a clean worktree, making it faster to pull, push, review, apply, or drop saved changes without leaving OpenChamber.
+- Git: improved sync safety and feedback with latest remote refs, clearer progress banners, less flicker during refresh, cleaner header controls, and better unavailable pull-request states.
+- UI/Localization: added Polish interface translations, expanding language support for Polish-speaking users (thanks to @levy52).
+- Sessions: added a quick archive action directly on session rows, making cleanup faster from the session list (thanks to @zoubenr).
+- Files: added a manual save mode to the file editor, giving you more control over when edits are written while reviewing or drafting changes.
+- Chat/Timeline: added full-text timeline search across user, assistant, and tool messages in a session, making it easier to jump back to earlier context (thanks to @jwcrystal).
+- Chat/Reliability: pending questions now survive session switches and directory eviction, reducing lost approval or clarification prompts during longer multi-session work (thanks to @ablepharus).
+- Mobile/Terminal: added an opt-in keyboard resize mode and steadier touch terminal input, improving typing and terminal control on mobile devices (thanks to @vhqtvn).
+- Terminal: restored focus back to terminal input after Ghostty element blur events, keeping keyboard input more reliable during terminal use (thanks to @Dav1dch).
+- VSCode/Reliability: aligned session status parsing and reconnect reconciliation so activity state recovers more accurately after extension reconnects (thanks to @vhqtvn).
+- Startup/Reliability: configured OpenCode CLI paths are now validated before managed startup, with clearer errors for missing, non-executable, or app-bundle paths.
+- Performance/Reliability: reduced duplicate app initialization, deferred heavier views until needed, lowered local server status overhead, optimized markdown file-link detection, reduced sync recovery payloads, and suppressed expected missing-directory noise for smoother day-to-day use.
+
 ## [1.10.0] - 2026-05-05
 
 - Preview: added an embedded dev-server Preview pane for loopback apps, with authenticated proxying, Vite/HMR support, same-origin API request handling, and safer local dev-server shutdown so apps can run inside OpenChamber more like they do in the browser (thanks to @wpbiggs).

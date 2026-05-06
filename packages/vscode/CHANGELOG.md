@@ -1,3 +1,13 @@
+## [1.10.1] - 2026-05-06
+
+- UI/Localization: added Polish interface translations, expanding language support for Polish-speaking users (thanks to @levy52).
+- Sessions: added a quick archive action directly on session rows, making cleanup faster from the session list (thanks to @zoubenr).
+- Chat/Timeline: added full-text timeline search across user, assistant, and tool messages in a session, making it easier to jump back to earlier context (thanks to @jwcrystal).
+- Chat/Reliability: pending questions now survive session switches and directory eviction, reducing lost approval or clarification prompts during longer multi-session work (thanks to @ablepharus).
+- Reliability/Sync: aligned session status parsing and reconnect reconciliation so activity state recovers more accurately after extension reconnects (thanks to @vhqtvn).
+- Startup/Reliability: configured OpenCode CLI paths are now validated before managed startup, with clearer errors for missing, non-executable, or app-bundle paths.
+- Performance/Reliability: reduced duplicate extension initialization, deferred heavier views until needed, lowered managed runtime status overhead, optimized markdown file-link detection, reduced sync recovery payloads, and suppressed expected missing-directory noise for smoother day-to-day use.
+
 ## [1.10.0] - 2026-05-05
 
 - Chat/UI: added the currently open editor file to chat context, making it faster to ask about the file you are already editing (thanks to @daveotero).
