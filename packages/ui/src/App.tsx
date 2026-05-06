@@ -8,16 +8,11 @@ import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
 import { setStreamPerfEnabled } from '@/stores/utils/streamDebug';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 // useEventStream removed — replaced by SyncProvider + SyncBridge
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMenuActions } from '@/hooks/useMenuActions';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
-import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
-import { useQueuedMessageAutoSend } from '@/hooks/useQueuedMessageAutoSend';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
-import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
-import { useWindowControlsOverlayLayout } from '@/hooks/useWindowControlsOverlayLayout';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
@@ -37,11 +32,6 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { SyncProvider, useSessions } from '@/sync/sync-context';
-import { useSync } from '@/sync/use-sync';
-import { setOptimisticRefs } from '@/sync/session-actions';
-import { useFontPreferences } from '@/hooks/useFontPreferences';
-import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
-import { loadMonoFont, loadUiFont } from '@/lib/fontLoader';
 import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { AboutDialog } from '@/components/ui/AboutDialog';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
@@ -57,18 +47,12 @@ import { MCP_OAUTH_CALLBACK_PATH } from '@/components/sections/mcp/mcpOAuth';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { useI18n } from '@/lib/i18n';
 import { applyMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
+import { SyncAppEffects } from '@/apps/AppEffects';
+import { useAppFontEffects } from '@/apps/useAppFontEffects';
 
 // Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
 const OnboardingScreen = lazyWithChunkRecovery(() =>
   import('@/components/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
-);
-
-const VSCodeLayoutLazy = lazyWithChunkRecovery(() =>
-  import('@/components/layout/VSCodeLayout').then((m) => ({ default: m.VSCodeLayout })),
-);
-
-const AgentManagerViewLazy = lazyWithChunkRecovery(() =>
-  import('@/components/views/agent-manager').then((m) => ({ default: m.AgentManagerView })),
 );
 
 const AboutDialogWrapper: React.FC = () => {
@@ -178,35 +162,6 @@ const EmbeddedSessionSelectionGate: React.FC<{
   return null;
 };
 
-const SyncOptimisticBridge: React.FC = () => {
-  const sync = useSync();
-  const addRef = React.useRef(sync.optimistic.add);
-  const removeRef = React.useRef(sync.optimistic.remove);
-  addRef.current = sync.optimistic.add;
-  removeRef.current = sync.optimistic.remove;
-
-  React.useEffect(() => {
-    setOptimisticRefs(
-      (input) => addRef.current(input),
-      (input) => removeRef.current(input),
-    );
-  }, []);
-
-  return null;
-};
-
-function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
-  embeddedBackgroundWorkEnabled: boolean;
-}) {
-  usePwaManifestSync();
-  useWindowControlsOverlayLayout();
-  useSessionAutoCleanup(embeddedBackgroundWorkEnabled);
-  useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled);
-  useKeyboardShortcuts();
-
-  return <SyncOptimisticBridge />;
-}
-
 function App({ apis }: AppProps) {
   const initializeApp = useConfigStore((s) => s.initializeApp);
   const isInitialized = useConfigStore((s) => s.isInitialized);
@@ -221,7 +176,6 @@ function App({ apis }: AppProps) {
   const setDirectory = useDirectoryStore((state) => state.setDirectory);
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
-  const { uiFont, monoFont } = useFontPreferences();
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true);
@@ -281,27 +235,7 @@ function App({ apis }: AppProps) {
     void refreshGitHubAuthStatus(apis.github, { force: true });
   }, [apis.github, embeddedSessionChat, refreshGitHubAuthStatus]);
 
-  React.useEffect(() => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-    const root = document.documentElement;
-    const uiStack = UI_FONT_OPTION_MAP[uiFont]?.stack ?? UI_FONT_OPTION_MAP[DEFAULT_UI_FONT].stack;
-    const monoStack = CODE_FONT_OPTION_MAP[monoFont]?.stack ?? CODE_FONT_OPTION_MAP[DEFAULT_MONO_FONT].stack;
-    void loadUiFont(uiFont);
-    void loadMonoFont(monoFont);
-
-    root.style.setProperty('--font-sans', uiStack);
-    root.style.setProperty('--font-heading', uiStack);
-    root.style.setProperty('--font-family-sans', uiStack);
-    root.style.setProperty('--font-mono', monoStack);
-    root.style.setProperty('--font-family-mono', monoStack);
-    root.style.setProperty('--ui-regular-font-weight', '400');
-
-    if (document.body) {
-      document.body.style.fontFamily = uiStack;
-    }
-  }, [uiFont, monoFont]);
+  useAppFontEffects();
 
   const bootOutcomeKnown = bootInjectionStatus === 'valid';
   const bootViewIsMain = bootView?.screen === 'main';
@@ -844,54 +778,6 @@ function App({ apis }: AppProps) {
           onRetry={() => { void handleManualInitRetry(); }}
           isRetrying={manualInitRetrying}
         />
-      </ErrorBoundary>
-    );
-  }
-
-  // VS Code runtime - simplified layout without git/terminal views
-  if (isVSCodeRuntime) {
-    // Check if this is the Agent Manager panel
-    const panelType = typeof window !== 'undefined'
-      ? (window as { __OPENCHAMBER_PANEL_TYPE__?: 'chat' | 'agentManager' }).__OPENCHAMBER_PANEL_TYPE__
-      : 'chat';
-
-    if (panelType === 'agentManager') {
-    return (
-      <ErrorBoundary>
-        <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
-          <RuntimeAPIProvider apis={apis}>
-            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-              <div className="h-full text-foreground bg-background">
-                <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
-                <React.Suspense fallback={<div className="h-full" />}>
-                  <AgentManagerViewLazy />
-                </React.Suspense>
-                <Toaster />
-              </div>
-            </TooltipProvider>
-          </RuntimeAPIProvider>
-        </SyncProvider>
-      </ErrorBoundary>
-    );
-    }
-
-    return (
-      <ErrorBoundary>
-        <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
-          <RuntimeAPIProvider apis={apis}>
-            <FireworksProvider>
-              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-                <div className="h-full text-foreground bg-background">
-                  <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
-                  <React.Suspense fallback={<div className="h-full" />}>
-                    <VSCodeLayoutLazy />
-                  </React.Suspense>
-                  <Toaster />
-                </div>
-              </TooltipProvider>
-            </FireworksProvider>
-          </RuntimeAPIProvider>
-        </SyncProvider>
       </ErrorBoundary>
     );
   }
