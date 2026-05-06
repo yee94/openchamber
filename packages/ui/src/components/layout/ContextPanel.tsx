@@ -54,6 +54,7 @@ type PreviewBridgeMessage = {
   title?: unknown;
   ts?: unknown;
   target?: unknown;
+  navigation?: unknown;
 };
 
 type PreviewElementMetadata = {
@@ -386,6 +387,7 @@ const getCachedProxyTarget = (url: string): CachedProxyTarget | null => {
 
 const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
   const { t } = useI18n();
+  const { currentTheme } = useThemeSystem();
   const [reloadNonce, bumpReload] = React.useReducer((x: number) => x + 1, 0);
   const [proxyRegistrationNonce, bumpProxyRegistration] = React.useReducer((x: number) => x + 1, 0);
   const [proxyState, setProxyState] = React.useState<PreviewProxyState>({ status: 'idle' });
@@ -424,6 +426,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
     : null;
 
   const targetKey = normalizedUrl ? normalizedUrl.toString() : '';
+  const previewColorScheme = currentTheme.metadata.variant;
 
   React.useEffect(() => {
     if (!targetKey || !isLoopback) {
@@ -582,6 +585,19 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
   }, [bridgeReady, inspectMode]);
 
   React.useEffect(() => {
+    const frameWindow = iframeRef.current?.contentWindow;
+    if (!bridgeReady || !frameWindow) {
+      return;
+    }
+    frameWindow.postMessage({
+      source: 'openchamber-preview-parent',
+      version: 1,
+      type: 'set-color-scheme',
+      scheme: previewColorScheme,
+    }, window.location.origin);
+  }, [bridgeReady, previewColorScheme]);
+
+  React.useEffect(() => {
     if (!inspectMode || typeof window === 'undefined') return;
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -690,6 +706,11 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
 
       if (data.type === 'navigate-preview') {
         const nextUrl = typeof data.url === 'string' ? data.url : '';
+        const navigation = data.navigation === 'external' ? 'external' : 'proxy';
+        if (nextUrl && navigation === 'external') {
+          void openExternalUrl(nextUrl);
+          return;
+        }
         if (nextUrl) {
           onNavigate(nextUrl);
         }
@@ -974,6 +995,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
               src={effectiveSrc}
               title={t('contextPanel.preview.iframeTitle')}
               className="h-full w-full border-0"
+              style={{ colorScheme: previewColorScheme }}
               onLoad={handlePreviewFrameLoad}
               sandbox={isLoopback
                 ? 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads'
