@@ -273,14 +273,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const hideOnHoverClass = isVSCode
     ? 'group-hover:opacity-0'
     : 'group-hover:opacity-0 group-focus-within:opacity-0';
+  const showQuickArchiveAction = !archivedBucket && !mobileVariant;
   const revealPaddingClass = isMinimalMode
     ? (isVSCode
         ? 'group-hover:pr-2'
         : 'group-hover:pr-2 group-focus-within:pr-2')
     : (isVSCode
-        ? (archivedBucket ? 'group-hover:pr-5' : 'group-hover:pr-12')
-        : (archivedBucket ? 'group-hover:pr-5 group-focus-within:pr-5' : 'group-hover:pr-12 group-focus-within:pr-12'));
-  const alwaysActionPaddingClass = archivedBucket ? 'pr-7' : 'pr-13';
+        ? (showQuickArchiveAction ? 'group-hover:pr-12' : 'group-hover:pr-5')
+        : (showQuickArchiveAction ? 'group-hover:pr-12 group-focus-within:pr-12' : 'group-hover:pr-5 group-focus-within:pr-5'));
+  const alwaysActionPaddingClass = showQuickArchiveAction ? 'pr-13' : 'pr-7';
   const suppressNextSelectRef = React.useRef(false);
   const [isTouchPressed, setIsTouchPressed] = React.useState(false);
 
@@ -870,7 +871,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 ? 'opacity-100'
                 : cn('opacity-0', revealOnHoverClass),
           )}>
-            {!archivedBucket ? (
+            {showQuickArchiveAction ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
