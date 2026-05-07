@@ -375,7 +375,10 @@ export const useChatScrollManager = ({
             return;
         }
 
-        const isProgrammatic = isMarkedAutoScroll(container.scrollTop);
+        const currentScrollTop = container.scrollTop;
+        const scrollingUp = currentScrollTop < lastScrollTopRef.current;
+        const isTrustedScrollUp = Boolean(event?.isTrusted && scrollingUp);
+        const isProgrammatic = !isTrustedScrollUp && isMarkedAutoScroll(currentScrollTop);
         if (isProgrammatic) {
             autoScrollMarkerRef.current = null;
         }
@@ -393,9 +396,6 @@ export const useChatScrollManager = ({
         schedulePinnedStateAndIndicators();
 
         // Handle pin/unpin logic
-        const currentScrollTop = container.scrollTop;
-        const scrollingUp = currentScrollTop < lastScrollTopRef.current;
-
         if (event?.isTrusted && !isProgrammatic) {
             if (scrollingUp && isPinnedRef.current) {
                 setFollowMode('none');
