@@ -54,6 +54,44 @@ export const useKeyboardShortcuts = () => {
 
   React.useEffect(() => {
     const combo = (actionId: string) => getEffectiveShortcutCombo(actionId, shortcutOverrides);
+    const isTerminalEventTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) {
+        return false;
+      }
+
+      return Boolean(
+        target.closest('.terminal-viewport-container') ||
+        target.getAttribute('data-terminal-hidden-input') === 'true'
+      );
+    };
+
+    const handleTerminalShortcutCapture = (e: KeyboardEvent) => {
+      if (!isTerminalEventTarget(e.target)) {
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_terminal'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        toggleBottomTerminal();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_terminal_expanded'))) {
+        const { isMobile, isBottomTerminalExpanded } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        setBottomTerminalExpanded(!isBottomTerminalExpanded);
+        return;
+      }
+    };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (eventMatchesShortcut(e, combo('open_command_palette'))) {
@@ -416,9 +454,11 @@ export const useKeyboardShortcuts = () => {
       }
     };
 
+    window.addEventListener('keydown', handleTerminalShortcutCapture, true);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      window.removeEventListener('keydown', handleTerminalShortcutCapture, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
