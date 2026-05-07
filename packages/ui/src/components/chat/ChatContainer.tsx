@@ -39,6 +39,7 @@ import {
     useSessionStatus,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { getSessionMaterializationStatus } from '@/sync/materialization';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useI18n } from '@/lib/i18n';
@@ -329,8 +330,8 @@ export const ChatContainer: React.FC = () => {
 
     // Sync actions
     const sync = useSync();
-    const loadMessages = React.useCallback(
-        (sessionId: string) => sync.syncSession(sessionId),
+    const ensureSessionRenderable = React.useCallback(
+        (sessionId: string) => sync.ensureSessionRenderable(sessionId),
         [sync],
     );
     const loadMoreMessages = React.useCallback(
@@ -363,9 +364,9 @@ export const ChatContainer: React.FC = () => {
         ),
     );
     const sessionMessageCount = useSessionMessageCount(currentSessionId ?? '');
-    const hasLoadedSessionMessages = useDirectorySync(
+    const hasRenderableSessionSnapshot = useDirectorySync(
         React.useCallback(
-            (state) => (currentSessionId ? state.message[currentSessionId] !== undefined : false),
+            (state) => (currentSessionId ? getSessionMaterializationStatus(state, currentSessionId).renderable : false),
             [currentSessionId],
         ),
     );
@@ -425,10 +426,6 @@ export const ChatContainer: React.FC = () => {
             return false;
         }
 
-        if (streamingMessageId || activeStreamingPhase) {
-            return true;
-        }
-
         const statusType = sessionStatusForCurrent.type ?? 'idle';
         if (statusType === 'busy' || statusType === 'retry') {
             return true;
@@ -440,7 +437,7 @@ export const ChatContainer: React.FC = () => {
             && lastMessage.role === 'assistant'
             && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== 'number',
         );
-    }, [activeStreamingPhase, currentSessionId, sessionMessages, sessionPermissions.length, sessionQuestions.length, sessionStatusForCurrent.type, streamingMessageId]);
+    }, [currentSessionId, sessionMessages, sessionPermissions.length, sessionQuestions.length, sessionStatusForCurrent.type]);
     const activeRetryStatus = React.useMemo(() => {
         if (!currentSessionId || sessionStatusForCurrent.type !== 'retry') {
             return null;
@@ -751,7 +748,7 @@ export const ChatContainer: React.FC = () => {
 
     const isSessionHydrating =
         Boolean(currentSessionId)
-        && !hasLoadedSessionMessages;
+        && !hasRenderableSessionSnapshot;
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -783,10 +780,10 @@ export const ChatContainer: React.FC = () => {
 
     React.useEffect(() => {
         if (!currentSessionId) return;
-        if (hasLoadedSessionMessages) return;
+        if (hasRenderableSessionSnapshot) return;
 
         const load = async () => {
-            await loadMessages(currentSessionId).finally(() => {
+            await ensureSessionRenderable(currentSessionId).finally(() => {
                 const statusType = sessionStatusForCurrent.type ?? 'idle';
                 const isActivePhase = statusType === 'busy' || statusType === 'retry';
                 const hasHashTarget = typeof window !== 'undefined' && window.location.hash.length > 0;
@@ -805,7 +802,7 @@ export const ChatContainer: React.FC = () => {
         };
 
         void load();
-    }, [currentSessionId, hasLoadedSessionMessages, isPinned, loadMessages, resumeToLatestInstant, sessionStatusForCurrent.type]);
+    }, [currentSessionId, ensureSessionRenderable, hasRenderableSessionSnapshot, isPinned, resumeToLatestInstant, sessionStatusForCurrent.type]);
 
 	if (!currentSessionId && !draftOpen) {
 		return (
@@ -841,7 +838,7 @@ export const ChatContainer: React.FC = () => {
         return null;
     }
 
-	if (isSessionHydrating && sessionMessages.length === 0 && !streamingMessageId) {
+	if (isSessionHydrating && sessionMessages.length === 0 && !sessionIsWorking) {
 		return (
 			<div className="relative flex flex-col h-full bg-background">
 				{returnToParentButton}
@@ -897,7 +894,7 @@ export const ChatContainer: React.FC = () => {
         );
     }
 
-	if (sessionMessages.length === 0 && !streamingMessageId) {
+	if (sessionMessages.length === 0 && !sessionIsWorking) {
 		return (
 			<div className="relative flex flex-col h-full bg-background transform-gpu">
 				{returnToParentButton}

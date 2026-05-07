@@ -6,7 +6,6 @@ import { SESSION_CACHE_LIMIT } from "./types"
 import { pickSessionCacheEvictions } from "./session-cache"
 import {
   mergeOptimisticPage,
-  mergeMessages,
   type OptimisticItem,
 } from "./optimistic"
 import { useDirectoryStore, useSyncSDK, useSyncDirectory, useChildStoreManager } from "./sync-context"
@@ -18,6 +17,7 @@ import {
   setSessionPrefetch,
   clearSessionPrefetch,
 } from "./session-prefetch-cache"
+import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const MESSAGE_PAGE_SIZE = 200
@@ -224,33 +224,19 @@ export function useSync() {
         }
 
         const current = store.getState()
-        const cached = current.message[sessionID] ?? []
-        const messages = options?.mode === "prepend"
-          ? mergeMessages(cached, merged.session)
-          : (cached.length > 0 ? mergeMessages(cached, merged.session) : merged.session)
+        const materialized = materializeSessionSnapshots(
+          current,
+          sessionID,
+          merged.session.map((info) => ({
+            info,
+            parts: merged.part.find((item) => item.id === info.id)?.part ?? [],
+          })),
+          { skipPartTypes: SKIP_PARTS, mode: options?.mode === "prepend" ? "prepend" : "merge" },
+        )
 
-        // Build part updates — preserve existing references on prepend to avoid flicker
-        const isPrepend = options?.mode === "prepend"
-        let partsChanged = false
-        const partUpdate: Record<string, Part[]> = { ...current.part }
-        for (const p of merged.part) {
-          if (isPrepend && partUpdate[p.id]) continue // already loaded
-          const filtered = p.part.filter((x: Part) => !SKIP_PARTS.has(x.type))
-          if (filtered.length) {
-            partUpdate[p.id] = filtered
-            partsChanged = true
-          }
-        }
-
-        const patch: Record<string, unknown> = {
-          message: messages !== cached ? { ...current.message, [sessionID]: messages } : current.message,
-        }
-        if (!isPrepend || partsChanged) {
-          patch.part = partUpdate
-        }
-        store.setState(patch)
+        store.setState({ message: materialized.message, part: materialized.part })
         setMetaFor(sessionID, {
-          limit: messages.length,
+          limit: materialized.messages.length,
           cursor: merged.cursor,
           complete: merged.complete,
           loading: false,
@@ -258,7 +244,7 @@ export function useSync() {
         setSessionPrefetch({
           directory,
           sessionID,
-          limit: messages.length,
+          limit: materialized.messages.length,
           cursor: merged.cursor,
           complete: merged.complete,
         })
@@ -281,7 +267,8 @@ export function useSync() {
 
       const current = store.getState()
       const m = getMetaFor(sessionID)
-      const cached = current.message[sessionID] !== undefined && m.limit > 0
+      const materialization = getSessionMaterializationStatus(current, sessionID)
+      const cached = materialization.hasMessages && materialization.renderable && m.limit > 0
       const hasSession = Binary.search(current.session, sessionID, (s) => s.id).found
       if (cached && hasSession && !force) return
 
@@ -401,6 +388,7 @@ export function useSync() {
 
   return useMemo(
     () => ({
+      ensureSessionRenderable: syncSession,
       syncSession,
       loadMore,
       hasMore,

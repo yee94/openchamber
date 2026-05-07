@@ -101,6 +101,23 @@ export type GlobalEventResult = {
   project: Project
 } | null
 
+export type DirectoryEventResult = boolean | {
+  changed: boolean
+  materialization: {
+    type: "incomplete-session-snapshot"
+    sessionID?: string
+    messageID: string
+    partID?: string
+  }
+}
+
+function hasMessage(draft: State, sessionID: string | undefined, messageID: string): boolean {
+  if (!sessionID) return false
+  const messages = draft.message[sessionID]
+  if (!messages) return false
+  return Binary.search(messages, messageID, (message) => message.id).found
+}
+
 export function reduceGlobalEvent(event: Event): GlobalEventResult {
   if (event.type === "global.disposed" || event.type === "server.connected") {
     return { type: "refresh" }
@@ -135,7 +152,7 @@ export function applyDirectoryEvent(
     onLoadLsp?: () => void
     onSetSessionTodo?: (sessionID: string, todos: Todo[] | undefined) => void
   },
-): boolean {
+): DirectoryEventResult {
   switch (event.type) {
     case "server.instance.disposed": {
       callbacks?.onRefresh?.("")
@@ -269,11 +286,18 @@ export function applyDirectoryEvent(
         return false
       }
       const messageID = (part as { messageID: string }).messageID
+      const sessionID = (part as { sessionID?: string }).sessionID
+      const missingOwningMessage = !hasMessage(draft, sessionID, messageID)
       const parts = draft.part[messageID]
       if (!parts) {
         syncDebug.reducer.partUpdatedNoExistingParts(messageID, part.id, part.type)
         draft.part[messageID] = [part]
-        return true
+        return missingOwningMessage
+          ? {
+            changed: true,
+            materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
+          }
+          : true
       }
       const next = [...parts]
       const result = Binary.search(next, part.id, (p) => p.id)
@@ -302,7 +326,12 @@ export function applyDirectoryEvent(
         next.splice(insertResult.index, 0, part)
       }
       draft.part[messageID] = next
-      return true
+      return missingOwningMessage
+        ? {
+          changed: true,
+          materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
+        }
+        : true
     }
 
     case "message.part.removed": {
@@ -333,12 +362,18 @@ export function applyDirectoryEvent(
       const parts = draft.part[props.messageID]
       if (!parts) {
         syncDebug.reducer.partDeltaNoParts(props.messageID, props.partID)
-        return false
+        return {
+          changed: false,
+          materialization: { type: "incomplete-session-snapshot", messageID: props.messageID, partID: props.partID },
+        }
       }
       const result = Binary.search(parts, props.partID, (p) => p.id)
       if (!result.found) {
         syncDebug.reducer.partDeltaNotFound(props.messageID, props.partID)
-        return false
+        return {
+          changed: false,
+          materialization: { type: "incomplete-session-snapshot", messageID: props.messageID, partID: props.partID },
+        }
       }
       const existing = parts[result.index] as Record<string, unknown>
       const existingValue = existing[props.field] as string | undefined
