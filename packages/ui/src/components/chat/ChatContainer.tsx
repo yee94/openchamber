@@ -787,7 +787,9 @@ export const ChatContainer: React.FC = () => {
                 const statusType = sessionStatusForCurrent.type ?? 'idle';
                 const isActivePhase = statusType === 'busy' || statusType === 'retry';
                 const hasHashTarget = typeof window !== 'undefined' && window.location.hash.length > 0;
-                const shouldSkipScroll = hasHashTarget || (isActivePhase && isPinned);
+                // Active sessions are already followed by the scroll manager when pinned.
+                // If the user scrolled away, a materialization retry must not force-resume.
+                const shouldSkipScroll = hasHashTarget || isActivePhase;
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {
@@ -802,7 +804,7 @@ export const ChatContainer: React.FC = () => {
         };
 
         void load();
-    }, [currentSessionId, ensureSessionRenderable, hasRenderableSessionSnapshot, isPinned, resumeToLatestInstant, sessionStatusForCurrent.type]);
+    }, [currentSessionId, ensureSessionRenderable, hasRenderableSessionSnapshot, resumeToLatestInstant, sessionStatusForCurrent.type]);
 
 	if (!currentSessionId && !draftOpen) {
 		return (
