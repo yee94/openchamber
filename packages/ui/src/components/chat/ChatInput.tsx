@@ -73,6 +73,7 @@ import { usePermissionStore } from '@/stores/permissionStore';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
+import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
@@ -1576,7 +1577,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const responseStyleInstruction = await fetchResponseStyleInstruction().catch(() => null);
             if (responseStyleInstruction) {
                 additionalParts.push({
-                    text: responseStyleInstruction,
+                    text: wrapSystemReminder(responseStyleInstruction),
                     synthetic: true,
                 });
             }
