@@ -169,20 +169,24 @@ export const usePermissionStore = create<PermissionStore>()(
                         return { autoAccept };
                     });
 
-                    // Mirror state to the server so it can suppress permission
-                    // notifications at the source (otherwise the 500ms debounce
-                    // races with the client's auto-response and can leak).
-                    void fetch('/api/notifications/auto-accept', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId, enabled }),
-                    }).catch(() => { /* best-effort */ });
+                    const sessionScope = resolveSessionScope(sessionId, sessions);
+
+                    // Mirror inherited state to the server so it can suppress
+                    // permission notifications before the client auto-response
+                    // round-trip. Send known descendants too; server-side
+                    // ancestry lookup can lag OpenCode session indexing.
+                    for (const scopedSessionId of sessionScope) {
+                        void fetch('/api/notifications/auto-accept', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId: scopedSessionId, enabled }),
+                        }).catch(() => { /* best-effort */ });
+                    }
 
                     if (!enabled) {
                         return;
                     }
 
-                    const sessionScope = resolveSessionScope(sessionId, sessions);
                     const sessionDirectory = useSessionUIStore.getState().getDirectoryForSession(sessionId);
                     const directories = new Set<string>();
                     const currentDirectory = normalizeDirectoryCandidate(opencodeClient.getDirectory());
