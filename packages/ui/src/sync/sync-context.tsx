@@ -223,6 +223,11 @@ async function repairSessionParts(
   if (records.length === 0) return
 
   store.setState((state: DirectoryStore) => {
+    const nextMessages = records
+      .map((record: { info: Message }) => stripMessageDiffSnapshots(record.info))
+      .sort((a, b) => cmp(a.id, b.id))
+    const currentMessages = state.message[sessionID] ?? []
+    const mergedMessages = mergeMessages(currentMessages, nextMessages)
     const nextPartState = { ...state.part }
     for (const record of records) {
       const messageId = record?.info?.id
@@ -237,7 +242,10 @@ async function repairSessionParts(
         nextPartState[messageId] = newParts
       }
     }
-    return { part: nextPartState }
+    return {
+      message: mergedMessages !== currentMessages ? { ...state.message, [sessionID]: mergedMessages } : state.message,
+      part: nextPartState,
+    }
   })
 }
 

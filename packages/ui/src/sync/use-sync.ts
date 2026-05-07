@@ -10,7 +10,7 @@ import {
   type OptimisticItem,
 } from "./optimistic"
 import { useDirectoryStore, useSyncSDK, useSyncDirectory, useChildStoreManager } from "./sync-context"
-import { dropSessionCaches } from "./session-cache"
+import { dropSessionCaches, getProtectedSessionCacheIds } from "./session-cache"
 import { stripMessageDiffSnapshots } from "./sanitize"
 import {
   shouldSkipSessionPrefetch,
@@ -135,14 +135,16 @@ export function useSync() {
   const touch = useCallback(
     (sessionID: string) => {
       const s = seenFor()
+      const protectedIds = getProtectedSessionCacheIds(store.getState())
       const stale = pickSessionCacheEvictions({
         seen: s,
         keep: sessionID,
         limit: SESSION_CACHE_LIMIT,
+        preserve: protectedIds,
       })
       evict(directory, stale)
     },
-    [directory, seenFor, evict],
+    [directory, seenFor, evict, store],
   )
 
   // Optimistic operations
