@@ -1,3 +1,11 @@
+## [1.10.2] - 2026-05-07
+
+- Chat/Reliability: stabilized live turn rendering and session sync caches, reducing flicker, stale state, and missing updates during reconnects or long-running chats.
+- Terminal: improved Android tablet keyboard handling, including control-key shortcuts, and kept app shortcuts from stealing focus while typing in the terminal (thanks to @Dav1dch).
+- Terminal: set a UTF-8 locale for terminal sessions so Unicode output renders more reliably across shells and commands (thanks to @liyiopener).
+- Usage: OpenRouter credit balances now avoid misleading percentage displays and use clearer labels across usage views (thanks to @zerone0x).
+- Reliability: split the extension into a dedicated app root, improving startup boundaries and reducing cross-runtime UI assumptions.
+
 ## [1.10.1] - 2026-05-06
 
 - UI/Localization: added Polish interface translations, expanding language support for Polish-speaking users (thanks to @levy52).

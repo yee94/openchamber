@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-05-07
+
+- Projects: added repository cloning to the Add Project flow, so you can clone a repo into a chosen folder and open it in OpenChamber without leaving setup.
+- Chat/Reliability: stabilized live turn rendering and session sync caches, reducing flicker, stale state, and missing updates during reconnects or long-running chats.
+- Terminal: improved Android tablet keyboard handling, including control-key shortcuts, and kept app shortcuts from stealing focus while typing in the terminal (thanks to @Dav1dch).
+- Terminal: set a UTF-8 locale for terminal sessions so Unicode output renders more reliably across shells and commands (thanks to @liyiopener).
+- Usage: OpenRouter credit balances now avoid misleading percentage displays and use clearer labels across usage views (thanks to @zerone0x).
+- Preview: improved embedded preview proxying with cleaner URL rewriting, fewer false-positive dev-server errors, steadier navigation, and theme-aware preview frames.
+- Notifications: suppressed inherited subagent completion notifications, reducing duplicate or irrelevant alerts during delegated work.
+- VSCode: split the extension into a dedicated app root, improving extension startup boundaries and reducing cross-runtime UI assumptions.
+
 ## [1.10.1] - 2026-05-06
 
 - Git: added one-click Sync and stash management, including stash access from a clean worktree, making it faster to pull, push, review, apply, or drop saved changes without leaving OpenChamber.
