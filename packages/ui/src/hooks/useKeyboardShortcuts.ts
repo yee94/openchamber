@@ -64,7 +64,6 @@ export const useKeyboardShortcuts = () => {
         target.getAttribute('data-terminal-hidden-input') === 'true'
       );
     };
-
     const handleTerminalShortcutCapture = (e: KeyboardEvent) => {
       if (!isTerminalEventTarget(e.target)) {
         return;
@@ -94,6 +93,10 @@ export const useKeyboardShortcuts = () => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTerminalEventTarget(e.target)) {
+        return;
+      }
+
       if (eventMatchesShortcut(e, combo('open_command_palette'))) {
         e.preventDefault();
         toggleCommandPalette();
