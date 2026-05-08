@@ -317,7 +317,11 @@ const HYDRATING_SKELETON_ITEMS: Array<{
     },
 ];
 
-export const ChatContainer: React.FC = () => {
+type ChatContainerProps = {
+    autoOpenDraft?: boolean;
+};
+
+export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = true }) => {
     const { t } = useI18n();
     // Session UI state
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
@@ -529,10 +533,10 @@ export const ChatContainer: React.FC = () => {
     ) : null;
 
     React.useEffect(() => {
-        if (!currentSessionId && !draftOpen) {
+        if (autoOpenDraft && !currentSessionId && !draftOpen) {
             openNewSessionDraft();
         }
-    }, [currentSessionId, draftOpen, openNewSessionDraft]);
+    }, [autoOpenDraft, currentSessionId, draftOpen, openNewSessionDraft]);
 
     const sessionBlockingCards = React.useMemo(() => {
         return [...sessionPermissions, ...sessionQuestions];

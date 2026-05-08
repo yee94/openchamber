@@ -39,6 +39,7 @@ import { ModelControls } from './ModelControls';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { PendingChangesBar } from './PendingChangesBar';
+import { useChatSurfaceMode } from './useChatSurfaceMode';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
 import { MobileSessionStatusBar } from './MobileSessionStatusBar';
@@ -3142,12 +3143,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return draftBranchItems.find((item) => item.value === selectedValue)?.label ?? formatDirectoryName(selectedValue);
     }, [draftBranchItems, selectedDraftDirectory]);
 
+    const chatSurfaceMode = useChatSurfaceMode();
+    const isMiniChatSurface = chatSurfaceMode === 'mini-chat';
+
     const hasPendingChanges = React.useMemo(() => {
+        if (isMiniChatSurface) {
+            return false;
+        }
         if (isGitRepo !== true || !currentGitStatus || currentGitStatus.isClean) {
             return false;
         }
         return extractGitChangedFiles(currentGitStatus.files, currentGitStatus.diffStats, currentDirectory).length > 0;
-    }, [currentDirectory, currentGitStatus, isGitRepo]);
+    }, [currentDirectory, currentGitStatus, isGitRepo, isMiniChatSurface]);
 
     const selectedDraftBranchIsKnown = React.useMemo(() => {
         if (!selectedDraftDirectory) {
