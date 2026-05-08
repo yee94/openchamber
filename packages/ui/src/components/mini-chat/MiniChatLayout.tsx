@@ -3,17 +3,20 @@ import { RiExternalLinkLine, RiGitBranchLine, RiPushpin2Fill, RiPushpin2Line } f
 import { Button } from '@/components/ui/button';
 import { ChatContainer } from '@/components/chat/ChatContainer';
 import { ChatSurfaceProvider } from '@/components/chat/ChatSurfaceContext';
+import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { invokeDesktop, isElectronShell } from '@/lib/desktop';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
-import { useSessions } from '@/sync/sync-context';
+import { useSessionMessages, useSessions } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitBranchLabel, useGitStore } from '@/stores/useGitStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { resolveSessionDiffStats } from '@/components/session/sidebar/utils';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 
 type MiniChatMode = 'session' | 'draft';
 
@@ -49,7 +52,10 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const projects = useProjectsStore((state) => state.projects);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
+  const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
+  const providers = useConfigStore((state) => state.providers);
   const sessions = useSessions();
+  const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
   const runtimeApis = useRuntimeAPIs();
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
   const worktreePath = useSessionUIStore((state) => currentSessionId ? state.worktreeMetadata.get(currentSessionId)?.path ?? '' : '');
@@ -129,8 +135,100 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   }, [session?.summary]);
   const changes = diffStats ?? { additions: 0, deletions: 0 };
   const hasChanges = changes.additions > 0 || changes.deletions > 0;
+  const currentModel = getCurrentModel();
+  const latestAssistantModel = React.useMemo(() => {
+    for (let i = currentSessionMessages.length - 1; i >= 0; i -= 1) {
+      const message = currentSessionMessages[i] as { role?: unknown; providerID?: unknown; modelID?: unknown };
+      if (message.role !== 'assistant') continue;
+      if (typeof message.providerID !== 'string' || typeof message.modelID !== 'string') continue;
+      const provider = providers.find((entry) => entry.id === message.providerID);
+      const model = provider?.models.find((entry) => entry.id === message.modelID);
+      if (model) return model;
+    }
+    return undefined;
+  }, [currentSessionMessages, providers]);
+  const modelForLimits = currentModel?.limit ? currentModel : latestAssistantModel;
+  const limit = modelForLimits && typeof modelForLimits.limit === 'object' && modelForLimits.limit !== null
+    ? (modelForLimits.limit as Record<string, unknown>)
+    : null;
+  const contextLimit = limit && typeof limit.context === 'number' ? limit.context : 0;
+  const outputLimit = limit && typeof limit.output === 'number' ? limit.output : 0;
+  const contextUsage = React.useMemo<SessionContextUsage | null>(() => {
+    if (!currentSessionId || currentSessionMessages.length === 0) {
+      return null;
+    }
+
+    type AssistantTokens = { input: number; output: number; reasoning: number; cache: { read: number; write: number } };
+    let lastTokens: AssistantTokens | undefined;
+    let lastMessageId: string | undefined;
+
+    for (let i = currentSessionMessages.length - 1; i >= 0; i -= 1) {
+      const message = currentSessionMessages[i];
+      if (message.role !== 'assistant') continue;
+      const tokens = (message as { tokens?: AssistantTokens }).tokens;
+      if (!tokens) continue;
+      const total = tokens.input + tokens.output + tokens.reasoning + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0);
+      if (total > 0) {
+        lastTokens = tokens;
+        lastMessageId = message.id;
+        break;
+      }
+    }
+
+    if (!lastTokens) {
+      return null;
+    }
+
+    const totalTokens = lastTokens.input + lastTokens.output + lastTokens.reasoning + (lastTokens.cache?.read ?? 0) + (lastTokens.cache?.write ?? 0);
+    const thresholdLimit = contextLimit > 0 ? contextLimit : 200000;
+    const percentage = contextLimit > 0 ? Math.round((totalTokens / contextLimit) * 100) : 0;
+    const normalizedOutput = outputLimit > 0 ? Math.round((lastTokens.output / outputLimit) * 100) : undefined;
+
+    return {
+      totalTokens,
+      percentage,
+      contextLimit: contextLimit || 0,
+      outputLimit: outputLimit || undefined,
+      normalizedOutput,
+      thresholdLimit,
+      lastMessageId,
+    };
+  }, [contextLimit, currentSessionId, currentSessionMessages, outputLimit]);
+  const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null);
   const dragRegionStyle = { WebkitAppRegion: 'drag' } as React.CSSProperties;
   const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
+
+  React.useEffect(() => {
+    if (!currentSessionId) {
+      setStableContextUsage((prev) => (prev === null ? prev : null));
+      return;
+    }
+
+    if (contextUsage && contextUsage.totalTokens > 0) {
+      setStableContextUsage((prev) => {
+        if (
+          prev
+          && prev.totalTokens === contextUsage.totalTokens
+          && prev.percentage === contextUsage.percentage
+          && prev.contextLimit === contextUsage.contextLimit
+          && (prev.outputLimit ?? 0) === (contextUsage.outputLimit ?? 0)
+          && (prev.normalizedOutput ?? 0) === (contextUsage.normalizedOutput ?? 0)
+          && prev.thresholdLimit === contextUsage.thresholdLimit
+          && prev.lastMessageId === contextUsage.lastMessageId
+        ) {
+          return prev;
+        }
+        return contextUsage;
+      });
+      return;
+    }
+
+    setStableContextUsage((prev) => (prev === null ? prev : null));
+  }, [contextUsage, currentSessionId]);
+
+  const displayContextPercentage = stableContextUsage && stableContextUsage.contextLimit > 0
+    ? Math.min(999, (stableContextUsage.totalTokens / stableContextUsage.contextLimit) * 100)
+    : 0;
 
   const handleTogglePinned = React.useCallback(() => {
     const nextPinned = !pinned;
@@ -181,6 +279,20 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
           ) : null}
         </div>
       </div>
+      {stableContextUsage && stableContextUsage.totalTokens > 0 ? (
+        <ContextUsageDisplay
+          totalTokens={stableContextUsage.totalTokens}
+          percentage={displayContextPercentage}
+          colorPercentage={stableContextUsage.percentage}
+          contextLimit={stableContextUsage.contextLimit}
+          outputLimit={stableContextUsage.outputLimit ?? 0}
+          className="h-9 shrink-0 pl-1 pr-1 typography-ui-label"
+          valueClassName="font-semibold leading-none"
+          hideIcon
+          showPercentIcon
+          percentIconClassName="h-5 w-5"
+        />
+      ) : null}
       <Button
         type="button"
         variant="ghost"
