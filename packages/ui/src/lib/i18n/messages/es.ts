@@ -1289,6 +1289,7 @@ export const dict: Record<I18nKey, string> = {
   "session.githubIntegration.error.notConnected": "GitHub no está conectado",
   "session.githubIntegration.error.loadDataFailed": "No se pudieron cargar los datos",
   "session.githubIntegration.validation.branchAlreadyCheckedOut": "La rama ya está en uso en un worktree",
+  "session.githubIntegration.validation.branchAlreadyExists": "La rama ya existe localmente",
   "session.githubIntegration.validation.failed": "No se pudo validar",
   "chat.fileAttachment.toast.attachFailed": "No se pudo adjuntar el archivo",
   "chat.fileAttachment.toast.someFilesSkipped": "Algunos archivos se omitieron:\n{summary}",

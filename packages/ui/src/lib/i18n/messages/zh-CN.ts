@@ -1289,6 +1289,7 @@ export const dict: Record<I18nKey, string> = {
   'session.githubIntegration.error.notConnected': 'GitHub 未连接',
   'session.githubIntegration.error.loadDataFailed': '加载数据失败',
   'session.githubIntegration.validation.branchAlreadyCheckedOut': '该分支已在某个 worktree 中检出',
+  'session.githubIntegration.validation.branchAlreadyExists': '该分支已在本地存在',
   'session.githubIntegration.validation.failed': '校验失败',
   'chat.fileAttachment.toast.attachFailed': '附加文件失败',
   'chat.fileAttachment.toast.someFilesSkipped': '以下文件被跳过：\n{summary}',

@@ -390,6 +390,7 @@ export const dict: Record<I18nKey, string> = {
   'session.githubIntegration.error.notConnected': 'GitHub nie jest połączony',
   'session.githubIntegration.error.loadDataFailed': 'Nie udało się załadować danych',
   'session.githubIntegration.validation.branchAlreadyCheckedOut': 'Gałąź jest już wyewidencjonowana w drzewie pracy',
+  'session.githubIntegration.validation.branchAlreadyExists': 'Gałąź już istnieje lokalnie',
   'session.githubIntegration.validation.failed': 'Walidacja nie powiodła się',
   'chat.fileAttachment.toast.attachFailed': 'Nie udało się dołączyć pliku',
   'chat.fileAttachment.toast.someFilesSkipped': 'Niektóre pliki zostały pominięte:\n{summary}',

@@ -1323,6 +1323,7 @@ export const dict = {
   'session.githubIntegration.error.notConnected': 'GitHub not connected',
   'session.githubIntegration.error.loadDataFailed': 'Failed to load data',
   'session.githubIntegration.validation.branchAlreadyCheckedOut': 'Branch is already checked out in a worktree',
+  'session.githubIntegration.validation.branchAlreadyExists': 'Branch already exists locally',
   'session.githubIntegration.validation.failed': 'Validation failed',
   'chat.fileAttachment.toast.attachFailed': 'Failed to attach file',
   'chat.fileAttachment.toast.someFilesSkipped': 'Some files were skipped:\n{summary}',

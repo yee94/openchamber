@@ -195,13 +195,15 @@ export function GitHubIntegrationDialog({
         worktreeName: branchName,
       });
       
-      const isBlocked = result.errors.some(
-        (entry) => entry.code === 'branch_in_use' || entry.code === 'branch_exists'
-      );
+      const blockingError = result.errors.find((entry) => entry.code === 'branch_in_use');
       
       setValidations(prev => new Map(prev).set(branchName, {
-        isValid: !isBlocked,
-        error: isBlocked ? t('session.githubIntegration.validation.branchAlreadyCheckedOut') : null,
+        isValid: !blockingError,
+        error: blockingError
+          ? t(blockingError.code === 'branch_exists'
+            ? 'session.githubIntegration.validation.branchAlreadyExists'
+            : 'session.githubIntegration.validation.branchAlreadyCheckedOut')
+          : null,
       }));
     } catch {
       setValidations(prev => new Map(prev).set(branchName, {

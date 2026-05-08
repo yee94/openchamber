@@ -1289,6 +1289,7 @@ export const dict: Record<I18nKey, string> = {
   "session.githubIntegration.error.notConnected": "GitHub не підключено",
   "session.githubIntegration.error.loadDataFailed": "Не вдалося завантажити дані",
   "session.githubIntegration.validation.branchAlreadyCheckedOut": "Гілку вже відкрито в worktree",
+  "session.githubIntegration.validation.branchAlreadyExists": "Гілка вже існує локально",
   "session.githubIntegration.validation.failed": "Помилка перевірки",
   "chat.fileAttachment.toast.attachFailed": "Не вдалося прикріпити файл",
   "chat.fileAttachment.toast.someFilesSkipped": "Деякі файли були пропущені:\n{summary}",
