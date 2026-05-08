@@ -18,7 +18,7 @@ import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialo
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiImageDownloadLine, RiLoader4Line, RiErrorWarningLine, RiBookletLine, RiGlobalLine, RiInformationLine } from '@remixicon/react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
-import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
+import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
 
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { useSessionUIStore } from '@/sync/session-ui-store';

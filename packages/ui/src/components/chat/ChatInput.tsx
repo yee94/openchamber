@@ -634,7 +634,7 @@ const appendInlineText = (base: string, next: string): string => {
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToBottom?: () => void;
 }
 
 type AutocompleteOverlayPosition = {
@@ -1489,12 +1489,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
             if (commandName === 'undo' && currentSessionId) {
                 await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
-                scrollToBottom?.({ instant: true, force: true });
+                scrollToBottom?.();
                 return;
             }
             else if (commandName === 'redo' && currentSessionId) {
                 await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
-                scrollToBottom?.({ instant: true, force: true });
+                scrollToBottom?.();
                 return;
             }
             else if (commandName === 'timeline' && currentSessionId) {
@@ -1540,7 +1540,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         currentVariant,
                         inputMode,
                     );
-                    scrollToBottom?.({ instant: true, force: true });
+                    scrollToBottom?.();
                 } catch (error) {
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.summaryFailed'));
                 }
@@ -1562,7 +1562,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         currentVariant,
                         inputMode,
                     );
-                    scrollToBottom?.({ instant: true, force: true });
+                    scrollToBottom?.();
                 } catch (error) {
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.reviewFailed'));
                 }
@@ -1603,10 +1603,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         );
 
         if (typeof window === 'undefined') {
-            scrollToBottom?.({ instant: true, force: true });
+            scrollToBottom?.();
         } else {
             window.requestAnimationFrame(() => {
-                scrollToBottom?.({ instant: true, force: true });
+                scrollToBottom?.();
             });
         }
 
