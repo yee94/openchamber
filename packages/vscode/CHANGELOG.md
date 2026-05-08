@@ -1,3 +1,10 @@
+## [1.10.4] - 2026-05-09
+
+- Chat/Input: collapsed model, variant, and agent labels more gracefully on narrow widths, keeping prompt controls usable in compact editor panels.
+- Git/Worktrees: pull-request worktrees can now reuse an existing local branch when it matches the PR head, reducing blocked setup flows.
+- Git: deduplicated lightweight and full status refreshes separately, preventing stale or mismatched Git updates during background polling (thanks to @isanchez404).
+- Reliability/Sync: preserved message part update ordering so live chat output stays consistent during rapid streaming updates (thanks to @isanchez404).
+
 ## [1.10.3] - 2026-05-08
 
 - Chat/Scrolling: rebuilt auto-follow behavior so active responses stay pinned when you want them to, while wheel, touch, keyboard, scrollbar, and find-in-page interactions more reliably release control when you scroll away.
