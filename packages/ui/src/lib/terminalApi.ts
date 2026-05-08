@@ -75,8 +75,6 @@ const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CONNECTING = 0;
 const DEFAULT_TERMINAL_WS_PATH = '/api/terminal/ws';
 const WS_SEND_WAIT_MS = 1200;
-const WS_RECONNECT_INITIAL_DELAY_MS = 1000;
-const WS_RECONNECT_MAX_DELAY_MS = 30000;
 const WS_RECONNECT_JITTER_MS = 250;
 const WS_KEEPALIVE_INTERVAL_MS = 20000;
 const WS_CONNECT_TIMEOUT_MS = 5000;
@@ -214,6 +212,10 @@ class TerminalTransportManager {
       }
       if (this.requestedSessionId === sessionId) {
         this.requestedSessionId = null;
+      }
+      if (this.subscriptions.size === 0) {
+        this.clearReconnectTimeout();
+        this.resetConnection();
       }
     };
   }
@@ -448,27 +450,29 @@ class TerminalTransportManager {
     }
 
     const activeSubscription = this.getActiveSubscription();
-    const attempt = (activeSubscription?.retryCount ?? 0) + 1;
-    const initialDelay = activeSubscription?.initialRetryDelay ?? WS_RECONNECT_INITIAL_DELAY_MS;
-    const maxDelay = activeSubscription?.maxRetryDelay ?? WS_RECONNECT_MAX_DELAY_MS;
-    const maxRetries = activeSubscription?.maxRetries ?? Number.POSITIVE_INFINITY;
-
-    if (activeSubscription) {
-      if (attempt > maxRetries) {
-        this.clearConnectionTimeout(activeSubscription);
-        activeSubscription.onError?.(error, true);
-        return;
-      }
-
-      activeSubscription.retryCount = attempt;
-      activeSubscription.connected = false;
-      activeSubscription.onEvent({
-        type: 'reconnecting',
-        attempt,
-        maxAttempts: maxRetries,
-      });
-      this.startConnectionTimeout(activeSubscription);
+    if (!activeSubscription) {
+      return;
     }
+
+    const attempt = activeSubscription.retryCount + 1;
+    const initialDelay = activeSubscription.initialRetryDelay;
+    const maxDelay = activeSubscription.maxRetryDelay;
+    const maxRetries = activeSubscription.maxRetries;
+
+    if (attempt > maxRetries) {
+      this.clearConnectionTimeout(activeSubscription);
+      activeSubscription.onError?.(error, true);
+      return;
+    }
+
+    activeSubscription.retryCount = attempt;
+    activeSubscription.connected = false;
+    activeSubscription.onEvent({
+      type: 'reconnecting',
+      attempt,
+      maxAttempts: maxRetries,
+    });
+    this.startConnectionTimeout(activeSubscription);
 
     const baseDelay = Math.min(initialDelay * Math.pow(2, Math.max(attempt - 1, 0)), maxDelay);
     const jitter = Math.floor(Math.random() * WS_RECONNECT_JITTER_MS);
