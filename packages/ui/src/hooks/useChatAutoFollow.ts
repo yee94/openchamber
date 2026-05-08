@@ -56,10 +56,11 @@ const REPIN_GRACE_AFTER_RELEASE_MS = 1200;
 // — its height is exactly how far above scrollHeight the user can be while still
 // looking at "empty" space. We use that same value as the threshold for both
 // re-pinning auto-follow and showing the scroll-to-bottom button.
-const computeBottomZoneThreshold = (isMobile: boolean): number => {
+const computeBottomZoneThreshold = (isMobile: boolean, container?: HTMLElement | null): number => {
     if (isMobile) return BOTTOM_SPACER_MOBILE_PX;
-    if (typeof window === 'undefined') return 96;
-    return Math.max(48, window.innerHeight * BOTTOM_SPACER_DESKTOP_VH);
+    const height = container?.clientHeight ?? 0;
+    if (height <= 0) return 96;
+    return Math.max(48, height * BOTTOM_SPACER_DESKTOP_VH);
 };
 
 const distanceFromBottom = (el: HTMLElement): number => {
@@ -67,7 +68,7 @@ const distanceFromBottom = (el: HTMLElement): number => {
 };
 
 const isNearBottom = (el: HTMLElement, isMobile: boolean): boolean => {
-    return distanceFromBottom(el) <= computeBottomZoneThreshold(isMobile);
+    return distanceFromBottom(el) <= computeBottomZoneThreshold(isMobile, el);
 };
 
 const isReleaseKey = (event: KeyboardEvent): boolean => {
@@ -84,16 +85,23 @@ const isReleaseKey = (event: KeyboardEvent): boolean => {
     }
 };
 
-const targetIsNestedScrollable = (root: HTMLElement, target: EventTarget | null): boolean => {
-    if (!(target instanceof Element)) return false;
+const nestedScrollableTarget = (root: HTMLElement, target: EventTarget | null): HTMLElement | null => {
+    if (!(target instanceof Element)) return null;
     const nested = target.closest('[data-scrollable]');
-    return Boolean(nested) && nested !== root;
+    if (!nested || nested === root || !(nested instanceof HTMLElement)) return null;
+    return nested;
+};
+
+const nestedScrollableCanConsumeUp = (root: HTMLElement, target: EventTarget | null): boolean => {
+    const nested = nestedScrollableTarget(root, target);
+    if (!nested) return false;
+    return nested.scrollTop > 0;
 };
 
 const isAtBottomSnapshot = (snapshot: NonNullable<SessionMemoryState['scrollPosition']>, isMobile: boolean): boolean => {
     const max = Math.max(0, snapshot.scrollHeight - snapshot.clientHeight);
     if (max <= 0) return true;
-    const threshold = computeBottomZoneThreshold(isMobile);
+    const threshold = computeBottomZoneThreshold(isMobile, null);
     return max - snapshot.scrollTop <= threshold;
 };
 
@@ -486,7 +494,7 @@ export const useChatAutoFollow = ({
 
         const handleWheel = (event: WheelEvent) => {
             if (event.deltaY >= 0) return;
-            if (targetIsNestedScrollable(container, event.target)) return;
+            if (nestedScrollableCanConsumeUp(container, event.target)) return;
             releaseFromUserIntent();
         };
 
@@ -506,7 +514,7 @@ export const useChatAutoFollow = ({
             if (previousY === null) return;
             const fingerDelta = touch.clientY - previousY;
             if (fingerDelta <= TOUCH_FINGER_DOWN_THRESHOLD) return;
-            if (targetIsNestedScrollable(container, event.target)) return;
+            if (nestedScrollableCanConsumeUp(container, event.target)) return;
             releaseFromUserIntent();
         };
         const handleTouchEnd = () => {
