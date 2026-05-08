@@ -1,3 +1,13 @@
+## [1.10.3] - 2026-05-08
+
+- Chat/Scrolling: rebuilt auto-follow behavior so active responses stay pinned when you want them to, while wheel, touch, keyboard, scrollbar, and find-in-page interactions more reliably release control when you scroll away.
+- Chat/Scrolling: restored saved scroll positions more consistently after session switches, hydration, and draft-to-session transitions, reducing jumps to the wrong part of a conversation.
+- Chat/UI: tightened scroll-to-bottom behavior so the button appears only after you move past the visible bottom spacer, and code-block scrolling no longer prevents the main chat from releasing auto-follow when the nested block cannot scroll further.
+- Chat/Input: fixed attachment-only queued sends, stale attachment restores, stale file-search results, autocomplete tab handling, and focusable removal controls so drafting stays reliable across queued, linked, and restored messages (thanks to @isanchez404).
+- Reliability/Sync: reduced stale and duplicate live-state updates across request arrays, retry metadata, streaming indicators, and session status events, cutting unnecessary rerenders and stuck activity states during long-running chats (thanks to @isanchez404).
+- Skills/Reliability: ignored outdated skills catalog and repo scans, keeping skills setup from showing results from an older request (thanks to @isanchez404).
+- Chat/Reliability: added smaller polish fixes for text-selection cleanup (thanks to @isanchez404).
+
 ## [1.10.2] - 2026-05-07
 
 - Chat/Reliability: stabilized live turn rendering and session sync caches, reducing flicker, stale state, and missing updates during reconnects or long-running chats.
