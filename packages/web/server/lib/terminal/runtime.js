@@ -503,7 +503,10 @@ export function createTerminalRuntime({
       }
 
       try {
-        await fs.promises.access(cwd);
+        const stats = await fs.promises.stat(cwd);
+        if (!stats.isDirectory()) {
+          return res.status(400).json({ error: 'Invalid working directory' });
+        }
       } catch {
         return res.status(400).json({ error: 'Invalid working directory' });
       }
