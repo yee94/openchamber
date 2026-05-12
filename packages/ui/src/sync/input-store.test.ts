@@ -14,6 +14,22 @@ class MockFileReader {
 }
 
 const pendingReaders: MockFileReader[] = []
+const originalFileReader = globalThis.FileReader
+
+const restoreFileReader = () => {
+  pendingReaders.length = 0
+  globalThis.FileReader = originalFileReader
+}
+
+const testWithMockFileReader = (name: string, fn: () => Promise<void>) => {
+  test(name, async () => {
+    try {
+      await fn()
+    } finally {
+      restoreFileReader()
+    }
+  })
+}
 
 const resolveReader = (reader: MockFileReader, result: string) => {
   reader.result = result
@@ -38,7 +54,7 @@ describe("input-store attachments", () => {
     useInputStore.getState().setAttachedFiles([])
   })
 
-  test("does not attach a local file that finishes reading after attachments are cleared", async () => {
+  testWithMockFileReader("does not attach a local file that finishes reading after attachments are cleared", async () => {
     const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
 
@@ -49,7 +65,7 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
-  test("does not attach a local file after attached files are replaced", async () => {
+  testWithMockFileReader("does not attach a local file after attached files are replaced", async () => {
     const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
 
@@ -60,7 +76,7 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
-  test("does not attach a local file after attached files are restored", async () => {
+  testWithMockFileReader("does not attach a local file after attached files are restored", async () => {
     const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
 
@@ -80,7 +96,7 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["restored.txt"])
   })
 
-  test("does not attach a VS Code selection that finishes reading after attachments are cleared", async () => {
+  testWithMockFileReader("does not attach a VS Code selection that finishes reading after attachments are cleared", async () => {
     const addPromise = useInputStore.getState().addVSCodeSelectionAttachment(
       "/workspace/hello.txt",
       new File(["hello"], "hello.txt", { type: "text/plain" })
