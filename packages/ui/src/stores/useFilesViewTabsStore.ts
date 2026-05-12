@@ -205,12 +205,15 @@ export const useFilesViewTabsStore = create<FilesViewTabsStore>()(
               return state;
             }
 
-            if (!current.openPaths.includes(normalizedPath) && current.selectedPath !== normalizedPath) {
+            const comparablePath = toComparablePath(normalizedPath);
+            const isMatchingPath = (candidate: string) => toComparablePath(candidate) === comparablePath;
+            const selectedPathMatches = current.selectedPath ? isMatchingPath(current.selectedPath) : false;
+            if (!current.openPaths.some(isMatchingPath) && !selectedPathMatches) {
               return state;
             }
 
-            const openPaths = current.openPaths.filter((p) => p !== normalizedPath);
-            const selectedPath = current.selectedPath === normalizedPath ? (openPaths[0] ?? null) : current.selectedPath;
+            const openPaths = current.openPaths.filter((p) => !isMatchingPath(p));
+            const selectedPath = selectedPathMatches ? (openPaths[0] ?? null) : current.selectedPath;
 
             const byRoot = {
               ...state.byRoot,
@@ -238,13 +241,18 @@ export const useFilesViewTabsStore = create<FilesViewTabsStore>()(
               return state;
             }
 
-            const prefixWithSlash = normalizedPrefix.endsWith('/') ? normalizedPrefix : `${normalizedPrefix}/`;
-            const openPaths = current.openPaths.filter((p) => p !== normalizedPrefix && !p.startsWith(prefixWithSlash));
+            const comparablePrefix = toComparablePath(normalizedPrefix);
+            const comparablePrefixWithSlash = comparablePrefix.endsWith('/') ? comparablePrefix : `${comparablePrefix}/`;
+            const isWithinPrefix = (candidate: string) => {
+              const comparablePath = toComparablePath(candidate);
+              return comparablePath === comparablePrefix || comparablePath.startsWith(comparablePrefixWithSlash);
+            };
+            const openPaths = current.openPaths.filter((p) => !isWithinPrefix(p));
             if (openPaths.length === current.openPaths.length) {
               return state;
             }
 
-            const selectedPath = current.selectedPath && (current.selectedPath === normalizedPrefix || current.selectedPath.startsWith(prefixWithSlash))
+            const selectedPath = current.selectedPath && isWithinPrefix(current.selectedPath)
               ? (openPaths[0] ?? null)
               : current.selectedPath;
 
