@@ -284,6 +284,7 @@ export const stopGlobalEventWatcher = (): void => {
     clearTimeout(timer);
   }
   sessionActivityCooldowns.clear();
+  sessionActivityPhases.clear();
 };
 
 export const setChatViewProvider = (provider: { postMessage: (message: unknown) => void } | null): void => {
