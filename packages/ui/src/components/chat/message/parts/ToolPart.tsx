@@ -187,6 +187,32 @@ const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> =
     return <>{formatDuration(start, end, now)}</>;
 };
 
+const useDeferredExpandedContent = (isExpanded: boolean) => {
+    const [shouldRender, setShouldRender] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!isExpanded) {
+            setShouldRender(false);
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            setShouldRender(true);
+            return;
+        }
+
+        const frame = window.requestAnimationFrame(() => {
+            setShouldRender(true);
+        });
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+        };
+    }, [isExpanded]);
+
+    return shouldRender;
+};
+
 const parseDiffStats = (metadata?: Record<string, unknown>): { added: number; removed: number } | null => {
     const diffText = getPatchText((metadata as { patch?: unknown } | undefined)?.patch)
         ?? getPatchText(metadata?.diff);
@@ -2495,6 +2521,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const iconStyle = !isTaskTool && isError ? TOOL_ERROR_ICON_STYLE : TOOL_NORMAL_ICON_STYLE;
     const titleStyle = !isTaskTool && isError ? TOOL_ERROR_TITLE_STYLE : TOOL_NORMAL_TITLE_STYLE;
+    const shouldRenderExpandedContent = useDeferredExpandedContent(isExpanded);
 
     if (!shouldTreatAsFinalized && !isActive && !isTaskTool) {
         return null;
@@ -2638,7 +2665,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 />
             ) : null}
 
-            {!isTaskTool && isExpanded ? (
+            {!isTaskTool && shouldRenderExpandedContent ? (
                 <div className="relative ml-2 pl-3">
                     <span
                         aria-hidden="true"
