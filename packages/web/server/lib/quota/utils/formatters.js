@@ -40,9 +40,10 @@ export const calculateResetAfterSeconds = (resetAt) => {
 export const toUsageWindow = ({ usedPercent, windowSeconds, resetAt, valueLabel }) => {
   const resetAfterSeconds = calculateResetAfterSeconds(resetAt);
   const resetFormatted = hasResetTimestamp(resetAt) ? formatResetTime(resetAt) : null;
+  const hasFiniteUsedPercent = typeof usedPercent === 'number' && Number.isFinite(usedPercent);
   return {
     usedPercent,
-    remainingPercent: usedPercent !== null ? Math.max(0, 100 - usedPercent) : null,
+    remainingPercent: hasFiniteUsedPercent ? Math.max(0, 100 - usedPercent) : null,
     windowSeconds: windowSeconds ?? null,
     resetAfterSeconds,
     resetAt,

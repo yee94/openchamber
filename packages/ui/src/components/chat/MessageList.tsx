@@ -1355,8 +1355,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         // measure() defers via useAnimationFrameWithResizeObserver.
         // Wait two frames then, if we were near the estimated bottom, scroll
         // to the real bottom after measurements settle.
+        let frame2: number | null = null;
         const frame1 = requestAnimationFrame(() => {
-            const frame2 = requestAnimationFrame(() => {
+            frame2 = requestAnimationFrame(() => {
                 if (!nearBottom) return
                 const el = resolveScrollContainer()
                 if (!el) return
@@ -1368,8 +1369,11 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         })
         return () => {
             cancelAnimationFrame(frame1)
+            if (frame2 !== null) {
+                cancelAnimationFrame(frame2)
+            }
         }
-    }, [historyVirtualizer, shouldVirtualizeHistory]);
+    }, [historyVirtualizer, resolveScrollContainer, shouldVirtualizeHistory]);
 
     const scheduleVirtualMeasure = React.useCallback(() => {
         if (!shouldVirtualizeHistory) {
