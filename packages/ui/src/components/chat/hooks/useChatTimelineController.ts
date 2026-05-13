@@ -59,6 +59,9 @@ export interface UseChatTimelineControllerResult {
     handleActiveTurnChange: (turnId: string | null) => void;
 }
 
+const TURN_MODEL_CACHE_MAX = 30
+const turnModelCache = new Map<string, { messages: ChatMessageEntry[]; model: TurnWindowModel }>()
+
 export const useChatTimelineController = ({
     sessionId,
     messages,
@@ -74,6 +77,14 @@ export const useChatTimelineController = ({
     const previousTurnWindowModelRef = React.useRef<TurnWindowModel | null>(null);
     const previousMessagesRef = React.useRef<ChatMessageEntry[] | null>(null);
     const turnWindowModel = React.useMemo(() => {
+        const key = sessionId ?? ""
+        const cached = key ? turnModelCache.get(key) : undefined
+        if (cached && cached.messages === messages) {
+            previousTurnWindowModelRef.current = cached.model
+            previousMessagesRef.current = messages
+            return cached.model
+        }
+
         const incrementalModel = updateTurnWindowModelIncremental(
             previousTurnWindowModelRef.current,
             previousMessagesRef.current,
@@ -82,8 +93,18 @@ export const useChatTimelineController = ({
         const nextModel = incrementalModel ?? buildTurnWindowModel(messages);
         previousTurnWindowModelRef.current = nextModel;
         previousMessagesRef.current = messages;
+
+        if (key && messages.length > 0) {
+            // LRU-like eviction: delete oldest when at capacity
+            if (turnModelCache.size >= TURN_MODEL_CACHE_MAX) {
+                const oldest = turnModelCache.keys().next().value
+                if (oldest !== undefined) turnModelCache.delete(oldest)
+            }
+            turnModelCache.set(key, { messages, model: nextModel })
+        }
+
         return nextModel;
-    }, [messages]);
+    }, [messages, sessionId]);
 
     const [turnStart, setTurnStart] = React.useState(() => getInitialTurnStart(turnWindowModel.turnCount));
     const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);

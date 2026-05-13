@@ -414,6 +414,7 @@ export interface MessageListHandle {
     scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => boolean;
     captureViewportAnchor: () => { messageId: string; offsetTop: number } | null;
     restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => boolean;
+    scrollToBottom: () => void;
 }
 
 type RenderEntry =
@@ -1343,7 +1344,31 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         if (!shouldVirtualizeHistory) {
             return;
         }
+        const scrollEl = resolveScrollContainer();
+        const prevTotal = historyVirtualizer.getTotalSize();
+        const nearBottom = scrollEl && prevTotal > 0
+            ? scrollEl.scrollTop + scrollEl.clientHeight >= prevTotal - 10
+            : false
+
         historyVirtualizer.measure();
+
+        // measure() defers via useAnimationFrameWithResizeObserver.
+        // Wait two frames then, if we were near the estimated bottom, scroll
+        // to the real bottom after measurements settle.
+        const frame1 = requestAnimationFrame(() => {
+            const frame2 = requestAnimationFrame(() => {
+                if (!nearBottom) return
+                const el = resolveScrollContainer()
+                if (!el) return
+                const target = Math.max(0, el.scrollHeight - el.clientHeight)
+                if (target > 0 && Math.abs(el.scrollTop - target) > 5) {
+                    el.scrollTop = target
+                }
+            })
+        })
+        return () => {
+            cancelAnimationFrame(frame1)
+        }
     }, [historyVirtualizer, shouldVirtualizeHistory]);
 
     const scheduleVirtualMeasure = React.useCallback(() => {
@@ -1615,6 +1640,16 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
                 return applyAnchor();
             },
+
+            scrollToBottom: () => {
+                if (shouldVirtualizeHistory && historyEntries.length > 0) {
+                    historyVirtualizer.scrollToIndex(historyEntries.length - 1, { align: 'end' });
+                    return;
+                }
+                const container = resolveScrollContainer();
+                if (!container) return;
+                container.scrollTop = container.scrollHeight;
+            },
         };
 
         if (typeof ref === 'function') {
@@ -1629,7 +1664,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return () => {
             objectRef.current = null;
         };
-    }, [findMessageElement, historyEntries.length, messageIndexMap, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, trailingStreamingEntry, turnIndexMap, ref]);
+    }, [findMessageElement, historyEntries.length, historyVirtualizer, messageIndexMap, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, shouldVirtualizeHistory, trailingStreamingEntry, turnIndexMap, ref]);
 
     const disableFadeIn = false;
 
