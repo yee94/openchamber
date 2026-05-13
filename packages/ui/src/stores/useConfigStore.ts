@@ -17,11 +17,29 @@ import { parseModelIdentifier } from "@/lib/modelIdentifier";
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/openchamber/models-metadata";
+const STT_SILENCE_THRESHOLD_DB_MIN = -100;
+const STT_SILENCE_THRESHOLD_DB_MAX = 0;
+const STT_SILENCE_HOLD_MS_MIN = 250;
+const STT_SILENCE_HOLD_MS_MAX = 10000;
 
 const FALLBACK_PROVIDER_ID = "opencode";
 const FALLBACK_MODEL_ID = "big-pickle";
 const GIT_UTILITY_PROVIDER_ID = "zen";
 const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle";
+
+const normalizeSttSilenceThresholdDb = (value: unknown): number | undefined => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return undefined;
+    }
+    return Math.max(STT_SILENCE_THRESHOLD_DB_MIN, Math.min(STT_SILENCE_THRESHOLD_DB_MAX, value));
+};
+
+const normalizeSttSilenceHoldMs = (value: unknown): number | undefined => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return undefined;
+    }
+    return Math.max(STT_SILENCE_HOLD_MS_MIN, Math.min(STT_SILENCE_HOLD_MS_MAX, Math.round(value)));
+};
 
 interface OpenChamberDefaults {
     defaultModel?: string;
@@ -32,6 +50,12 @@ interface OpenChamberDefaults {
     defaultFileViewerPreview?: boolean;
     zenModel?: string;
     messageStreamTransport?: 'auto' | 'ws' | 'sse';
+    sttProvider?: 'browser' | 'server';
+    sttServerUrl?: string;
+    sttModel?: string;
+    sttLanguage?: string;
+    sttSilenceThresholdDb?: number;
+    sttSilenceHoldMs?: number;
 }
 
 const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
@@ -53,6 +77,12 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                         data?.messageStreamTransport === 'ws' || data?.messageStreamTransport === 'sse' || data?.messageStreamTransport === 'auto'
                             ? data.messageStreamTransport
                             : undefined;
+                    const sttProvider = data?.sttProvider === 'browser' || data?.sttProvider === 'server' ? data.sttProvider : undefined;
+                    const sttServerUrl = typeof data?.sttServerUrl === 'string' ? data.sttServerUrl.trim() : undefined;
+                    const sttModel = typeof data?.sttModel === 'string' ? data.sttModel.trim() : undefined;
+                    const sttLanguage = typeof data?.sttLanguage === 'string' ? data.sttLanguage.trim() : undefined;
+                    const sttSilenceThresholdDb = normalizeSttSilenceThresholdDb(data?.sttSilenceThresholdDb);
+                    const sttSilenceHoldMs = normalizeSttSilenceHoldMs(data?.sttSilenceHoldMs);
 
                     return {
                         defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
@@ -63,6 +93,12 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                         defaultFileViewerPreview,
                         zenModel: zenModel.length > 0 ? zenModel : undefined,
                         messageStreamTransport,
+                        sttProvider,
+                        sttServerUrl,
+                        sttModel,
+                        sttLanguage,
+                        sttSilenceThresholdDb,
+                        sttSilenceHoldMs,
                     };
                 }
             } catch {
@@ -89,6 +125,12 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             data?.messageStreamTransport === 'ws' || data?.messageStreamTransport === 'sse' || data?.messageStreamTransport === 'auto'
                 ? data.messageStreamTransport
                 : undefined;
+        const sttProvider = data?.sttProvider === 'browser' || data?.sttProvider === 'server' ? data.sttProvider : undefined;
+        const sttServerUrl = typeof data?.sttServerUrl === 'string' ? data.sttServerUrl.trim() : undefined;
+        const sttModel = typeof data?.sttModel === 'string' ? data.sttModel.trim() : undefined;
+        const sttLanguage = typeof data?.sttLanguage === 'string' ? data.sttLanguage.trim() : undefined;
+        const sttSilenceThresholdDb = normalizeSttSilenceThresholdDb(data?.sttSilenceThresholdDb);
+        const sttSilenceHoldMs = normalizeSttSilenceHoldMs(data?.sttSilenceHoldMs);
 
         return {
             defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
@@ -99,6 +141,12 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             defaultFileViewerPreview,
             zenModel: zenModel.length > 0 ? zenModel : undefined,
             messageStreamTransport,
+            sttProvider,
+            sttServerUrl,
+            sttModel,
+            sttLanguage,
+            sttSilenceThresholdDb,
+            sttSilenceHoldMs,
         };
     } catch {
         return {};
@@ -1300,6 +1348,12 @@ export const useConfigStore = create<ConfigStore>()(
                                     settingsDefaultFileViewerPreview: openChamberDefaults.defaultFileViewerPreview ?? false,
                                     settingsZenModel: resolvedZenModel,
                                     settingsMessageStreamTransport: openChamberDefaults.messageStreamTransport ?? state.settingsMessageStreamTransport ?? 'auto',
+                                    sttProvider: openChamberDefaults.sttProvider ?? state.sttProvider,
+                                    sttServerUrl: openChamberDefaults.sttServerUrl ?? state.sttServerUrl,
+                                    sttModel: openChamberDefaults.sttModel ?? state.sttModel,
+                                    sttLanguage: openChamberDefaults.sttLanguage ?? state.sttLanguage,
+                                    sttSilenceThresholdDb: openChamberDefaults.sttSilenceThresholdDb ?? state.sttSilenceThresholdDb,
+                                    sttSilenceHoldMs: openChamberDefaults.sttSilenceHoldMs ?? state.sttSilenceHoldMs,
                                     directoryScoped: {
                                         ...state.directoryScoped,
                                         [directoryKey]: nextSnapshot,
@@ -1837,6 +1891,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttProvider', provider);
                     }
+                    updateDesktopSettings({ sttProvider: provider }).catch(() => {});
                 },
 
                 setSttServerUrl: (url: string) => {
@@ -1844,6 +1899,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttServerUrl', url);
                     }
+                    updateDesktopSettings({ sttServerUrl: url }).catch(() => {});
                 },
 
                 setSttModel: (model: string) => {
@@ -1851,6 +1907,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttModel', model);
                     }
+                    updateDesktopSettings({ sttModel: model }).catch(() => {});
                 },
 
                 setSttLanguage: (lang: string) => {
@@ -1858,6 +1915,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttLanguage', lang);
                     }
+                    updateDesktopSettings({ sttLanguage: lang }).catch(() => {});
                 },
 
                 setSttSilenceThresholdDb: (db: number) => {
@@ -1865,6 +1923,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttSilenceThresholdDb', String(db));
                     }
+                    updateDesktopSettings({ sttSilenceThresholdDb: db }).catch(() => {});
                 },
 
                 setSttSilenceHoldMs: (ms: number) => {
@@ -1872,6 +1931,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttSilenceHoldMs', String(ms));
                     }
+                    updateDesktopSettings({ sttSilenceHoldMs: ms }).catch(() => {});
                 },
 
                 setSttTranscribeOnStop: (enabled: boolean) => {
@@ -1879,6 +1939,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttTranscribeOnStop', String(enabled));
                     }
+                    updateDesktopSettings({ sttTranscribeOnStop: enabled }).catch(() => {});
                 },
 
                 setShowMessageTTSButtons: (show: boolean) => {
