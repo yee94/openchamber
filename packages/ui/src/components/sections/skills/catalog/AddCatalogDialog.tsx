@@ -17,8 +17,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select';
-
-import { RiGitRepositoryLine } from '@remixicon/react';
+import { Icon } from "@/components/icon/Icon";
 
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -354,7 +353,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
             onClick={() => void handleScan()}
             disabled={isScanning || !source.trim()}
           >
-            <RiGitRepositoryLine className="h-4 w-4" />
+            <Icon name="git-repository" className="h-4 w-4" />
             {isScanning ? t('settings.skills.catalog.shared.actions.scanning') : t('settings.skills.catalog.shared.actions.scan')}
           </Button>
           <Button

@@ -4,10 +4,10 @@ import {
   DialogContent,
 } from '@/components/ui/dialog';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
-import { RiDiscordFill, RiGithubFill, RiTwitterXFill } from '@remixicon/react';
 import { debugUtils } from '@/lib/debug';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
+import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { getDesktopAppVersion } from '@/lib/desktopNative';
 
@@ -153,7 +153,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
             >
-              <RiGithubFill className="h-4 w-4" />
+              <Icon name="github-fill" className="h-4 w-4" />
               <span>GitHub</span>
             </a>
             <a
@@ -162,7 +162,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
             >
-              <RiDiscordFill className="h-4 w-4" />
+              <Icon name="discord-fill" className="h-4 w-4" />
               <span>Discord</span>
             </a>
             <a
@@ -171,7 +171,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
             >
-              <RiTwitterXFill className="h-4 w-4" />
+              <Icon name="twitter-xfill" className="h-4 w-4" />
               <span>@btriapitsyn</span>
             </a>
           </div>

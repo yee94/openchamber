@@ -22,14 +22,9 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-    RiMicOffLine,
-    RiStopCircleLine,
-    RiVoiceRecognitionLine,
-    RiVolumeUpLine,
-} from '@remixicon/react';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 import { toast } from '@/components/ui/toast';
+import { Icon } from "@/components/icon/Icon";
 
 // Status text for accessibility and labels
 const statusLabels: Record<string, string> = {
@@ -260,8 +255,6 @@ export function BrowserVoiceButton() {
         toggleConversationMode();
     }, [toggleConversationMode]);
 
-
-
     // If voice mode is disabled, don't render anything
     if (!voiceModeEnabled) {
         return null;
@@ -289,7 +282,7 @@ export function BrowserVoiceButton() {
                             aria-label={tooltipMessage}
                             className={`${buttonSizeClass} p-0 ${clearHoverBackgroundClass}`}
                         >
-                            <RiMicOffLine className={`${iconSizeClass} opacity-50`} />
+                            <Icon name="mic-off" className={`${iconSizeClass} opacity-50`} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" align="center">
@@ -341,10 +334,10 @@ export function BrowserVoiceButton() {
                             {isActive ? (
                                 isSpeaking ? (
                                     // Green speaker icon when AI is speaking
-                                    <RiVolumeUpLine className={`${iconSizeClass} text-green-400 animate-pulse`} />
+                                    <Icon name="volume-up" className={`${iconSizeClass} text-green-400 animate-pulse`} />
                                 ) : (
                                     // Red stop icon for listening/processing (both mobile and desktop)
-                                    <RiStopCircleLine className={`${iconSizeClass} text-[var(--status-error)]`} />
+                                    <Icon name="stop-circle" className={`${iconSizeClass} text-[var(--status-error)]`} />
                                 )
                             ) : (
                                 <VoiceStatusIndicator
@@ -373,7 +366,7 @@ export function BrowserVoiceButton() {
                         `${buttonSizeClass} p-0 ${clearHoverBackgroundClass} ${conversationMode ? 'text-[var(--status-info)] hover:text-[var(--status-info)]' : 'text-muted-foreground hover:text-foreground'}`
                     }
                 >
-                    <RiVoiceRecognitionLine className={continuousIconSizeClass} />
+                    <Icon name="voice-recognition" className={continuousIconSizeClass} />
                 </Button>
             )}
         </div>

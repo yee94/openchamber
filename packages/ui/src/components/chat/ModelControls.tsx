@@ -1,5 +1,4 @@
 import React from 'react';
-import type { ComponentType } from 'react';
 import {
     DndContext,
     PointerSensor,
@@ -10,31 +9,6 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS as DndCSS } from '@dnd-kit/utilities';
-import {
-    RiAddLine,
-    RiAiAgentLine,
-    RiArrowDownSLine,
-    RiArrowGoBackLine,
-    RiArrowRightSLine,
-    RiBrainAi3Line,
-    RiCheckLine,
-    RiCheckboxCircleLine,
-    RiCloseCircleLine,
-    RiDraggable,
-    RiFileImageLine,
-    RiFileMusicLine,
-    RiFilePdfLine,
-    RiFileVideoLine,
-    RiLoader4Line,
-    RiPencilAiLine,
-    RiQuestionLine,
-    RiSearchLine,
-    RiStarFill,
-    RiStarLine,
-    RiText,
-    RiTimeLine,
-    RiToolsLine,
-} from '@remixicon/react';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import type { ModelMetadata } from '@/types';
 import {
@@ -51,6 +25,8 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { TextLoop } from '@/components/ui/TextLoop';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Icon } from "@/components/icon/Icon";
+import type { IconName } from "@/components/icon/icons";
 import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import { isDesktopShell } from '@/lib/desktop';
 import { getAgentColor } from '@/lib/agentColors';
@@ -71,8 +47,8 @@ import { formatEffortLabel, getCycledPrimaryAgentName, type MobileControlsPanel 
 import { useI18n } from '@/lib/i18n';
 import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type IconComponent = ComponentType<any>;
+ 
+type IconComponent = IconName;
 
 type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
 
@@ -172,13 +148,13 @@ interface CapabilityDefinition {
 const CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
     {
         key: 'tool_call',
-        icon: RiToolsLine,
+        icon: "tools",
         label: 'Tool calling',
         isActive: (metadata) => metadata?.tool_call === true,
     },
     {
         key: 'reasoning',
-        icon: RiBrainAi3Line,
+        icon: "brain-ai-3",
         label: 'Reasoning',
         isActive: (metadata) => metadata?.reasoning === true,
     },
@@ -198,11 +174,11 @@ type ModalityIcon = {
 type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
-    text: { icon: RiText, label: 'Text' },
-    image: { icon: RiFileImageLine, label: 'Image' },
-    video: { icon: RiFileVideoLine, label: 'Video' },
-    audio: { icon: RiFileMusicLine, label: 'Audio' },
-    pdf: { icon: RiFilePdfLine, label: 'PDF' },
+    text: { icon: "text", label: 'Text' },
+    image: { icon: "file-image", label: 'Image' },
+    video: { icon: "file-video", label: 'Video' },
+    audio: { icon: "file-music", label: 'Audio' },
+    pdf: { icon: "file-pdf", label: 'PDF' },
 };
 
 const normalizeModality = (value: string) => value.trim().toLowerCase();
@@ -587,15 +563,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const iconStyle = { color: iconColor };
 
         if (mode === 'full') {
-            return <RiPencilAiLine className={combinedClassName} style={iconStyle} />;
+            return <Icon name="pencil-ai" className={combinedClassName} style={iconStyle} />;
         }
         if (mode === 'allow') {
-            return <RiCheckboxCircleLine className={combinedClassName} style={iconStyle} />;
+            return <Icon name="checkbox-circle" className={combinedClassName} style={iconStyle} />;
         }
         if (mode === 'deny') {
-            return <RiCloseCircleLine className={combinedClassName} style={iconStyle} />;
+            return <Icon name="close-circle" className={combinedClassName} style={iconStyle} />;
         }
-        return <RiQuestionLine className={combinedClassName} style={iconStyle} />;
+        return <Icon name="question" className={combinedClassName} style={iconStyle} />;
     }, [editToggleIconClass]);
 
     const currentProvider = getCurrentProvider();
@@ -1359,7 +1335,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return name.charAt(0).toUpperCase() + name.slice(1);
     };
 
-    const renderIconBadge = (IconComp: IconComponent, label: string, key: string) => (
+    const renderIconBadge = (iconName: IconComponent, label: string, key: string) => (
         <span
             key={key}
             className="flex h-5 w-5 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground"
@@ -1367,7 +1343,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             aria-label={label}
             role="img"
         >
-            <IconComp className="h-3.5 w-3.5" />
+            <Icon name={iconName} className="h-3.5 w-3.5" />
         </span>
     );
 
@@ -1577,7 +1553,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         </div>
                     )}
 
-
                     {}
                     <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
                         <div className="typography-micro text-muted-foreground mb-1">{t('chat.modelControls.permissions')}</div>
@@ -1617,7 +1592,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
                             <div className="flex items-center justify-between">
                                 <span className="typography-meta text-muted-foreground/80">{t('chat.modelControls.customPrompt')}</span>
-                                <RiCheckboxCircleLine className="h-4 w-4 text-foreground" />
+                                <Icon name="checkbox-circle" className="h-4 w-4 text-foreground" />
                             </div>
                         </div>
                     )}
@@ -1756,7 +1731,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     <span className="typography-meta font-medium text-foreground truncate">
                                         {getModelDisplayName(model)}
                                     </span>
-                                    {isSelected ? <RiCheckLine className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" /> : null}
+                                    {isSelected ? <Icon name="check" className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" /> : null}
                                 </div>
                                 {contextText || indicatorIcons.length > 0 ? (
                                     <div className="flex min-w-0 items-center gap-1.5 overflow-hidden typography-micro text-muted-foreground">
@@ -1770,14 +1745,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         ) : null}
                                         {indicatorIcons.length > 0 ? (
                                             <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap pl-0.5">
-                                                {indicatorIcons.map(({ key, icon: IconComponent, label }) => (
+                                                {indicatorIcons.map(({ key, icon: iconName, label }) => (
                                                 <span
                                                     key={`meta-${providerId}-${modelId}-${key}`}
                                                     className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-muted-foreground"
                                                     title={label}
                                                     aria-label={label}
                                                 >
-                                                    <IconComponent className="h-3 w-3" />
+                                                    <Icon name={iconName} className="h-3 w-3" />
                                                 </span>
                                             ))}
                                             </div>
@@ -1795,7 +1770,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 aria-label={isExpanded ? t('chat.modelControls.hideThinkingModes') : t('chat.modelControls.showThinkingModes')}
                             >
                                 <span className="whitespace-nowrap">{variantLabel}</span>
-                                {isExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
+                                {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
                             </button>
                         ) : null}
                         <div className="flex flex-shrink-0 items-start gap-1.5">
@@ -1818,9 +1793,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     : t('chat.modelControls.addToFavorites')}
                             >
                                 {isFavoriteModel(providerId, modelId) ? (
-                                    <RiStarFill className="h-4 w-4" />
+                                    <Icon name="star-fill" className="h-4 w-4" />
                                 ) : (
-                                    <RiStarLine className="h-4 w-4" />
+                                    <Icon name="star" className="h-4 w-4" />
                                 )}
                             </button>
                         </div>
@@ -1875,7 +1850,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 <div className="flex flex-col gap-2">
                     <div>
                         <div className="relative">
-                            <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Icon name="search" className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input
                                 value={mobileModelQuery}
                                 onChange={(event) => setMobileModelQuery(event.target.value)}
@@ -1889,7 +1864,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                     aria-label={t('chat.modelControls.clearSearch')}
                                 >
-                                    <RiCloseCircleLine className="h-4 w-4" />
+                                    <Icon name="close-circle" className="h-4 w-4" />
                                 </button>
                             )}
                         </div>
@@ -1905,7 +1880,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {filteredFavorites.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <RiStarFill className="h-3 w-3 inline-block mr-1.5 text-primary" />
+                                <Icon name="star-fill" className="h-3 w-3 inline-block mr-1.5 text-primary" />
                                 {t('chat.modelControls.favorites')}
                             </div>
                             <div className="flex flex-col border-t border-border/30">
@@ -1923,7 +1898,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {filteredRecents.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <RiTimeLine className="h-3 w-3 inline-block mr-1.5" />
+                                <Icon name="time" className="h-3 w-3 inline-block mr-1.5" />
                                 {t('chat.modelControls.recent')}
                             </div>
                             <div className="flex flex-col border-t border-border/30">
@@ -1971,9 +1946,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         )}
                                     </div>
                                     {isExpanded ? (
-                                        <RiArrowDownSLine className="h-3 w-3 text-muted-foreground" />
+                                        <Icon name="arrow-down-s" className="h-3 w-3 text-muted-foreground" />
                                     ) : (
-                                        <RiArrowRightSLine className="h-3 w-3 text-muted-foreground" />
+                                        <Icon name="arrow-right-s" className="h-3 w-3 text-muted-foreground" />
                                     )}
                                 </button>
 
@@ -2037,7 +2012,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             onClick={handleBack}
                             className="flex items-center gap-1 rounded-lg px-1.5 py-1 typography-meta text-muted-foreground hover:bg-interactive-hover"
                         >
-                            <RiArrowGoBackLine className="h-4 w-4" />
+                            <Icon name="arrow-go-back" className="h-4 w-4" />
                             <span>{t('onboarding.common.actions.back')}</span>
                         </button>
                         <h2 className="typography-ui-label font-semibold text-foreground">{t('chat.modelControls.thinking')}</h2>
@@ -2056,7 +2031,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         onClick={() => handleSelect(undefined)}
                     >
                         <span className="typography-meta font-medium text-foreground">{t('chat.modelControls.default')}</span>
-                        {isDefault && <RiCheckLine className="h-4 w-4 text-primary flex-shrink-0" />}
+                        {isDefault && <Icon name="check" className="h-4 w-4 text-primary flex-shrink-0" />}
                     </button>
 
                     {targetVariants.map((variant) => {
@@ -2075,7 +2050,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 onClick={() => handleSelect(variant)}
                             >
                                 <span className="typography-meta font-medium text-foreground">{label}</span>
-                                {selected && <RiCheckLine className="h-4 w-4 text-primary flex-shrink-0" />}
+                                {selected && <Icon name="check" className="h-4 w-4 text-primary flex-shrink-0" />}
                             </button>
                         );
                     })}
@@ -2122,7 +2097,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         {capitalizeAgentName(agent.name)}
                                     </span>
                                     {isSelected && (
-                                        <RiCheckLine className="h-4 w-4 text-primary ml-auto flex-shrink-0" />
+                                        <Icon name="check" className="h-4 w-4 text-primary ml-auto flex-shrink-0" />
                                     )}
                                 </div>
                                 {agent.description && (
@@ -2288,7 +2263,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (hasCapabilities) {
             slides.push(
                 <div key="capabilities" className="flex items-center gap-0.5">
-                    {indicatorIcons.map(({ id, icon: Icon, label }) => (
+                    {indicatorIcons.map(({ id, icon: iconName, label }) => (
                         <span
                             key={id}
                             className="flex h-3.5 w-3.5 items-center justify-center text-muted-foreground"
@@ -2296,7 +2271,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             role="img"
                             title={label}
                         >
-                            <Icon className="h-2.5 w-2.5" />
+                            <Icon name={iconName} className="h-2.5 w-2.5" />
                         </span>
                     ))}
                 </div>
@@ -2355,7 +2330,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         aria-label={t('chat.modelControls.reorderFavoriteAria')}
                         title={t('chat.modelControls.reorderFavoriteTitle')}
                     >
-                        <RiDraggable className="h-3.5 w-3.5" />
+                        <Icon name="draggable" className="h-3.5 w-3.5" />
                     </button>
                 ) : null}
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -2395,7 +2370,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         </div>
                     ) : null}
                     {isSelected && (
-                        <RiCheckLine className="h-4 w-4 text-primary" />
+                        <Icon name="check" className="h-4 w-4 text-primary" />
                     )}
                     <button
                         onClick={(e) => {
@@ -2415,9 +2390,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             : t('chat.modelControls.addToFavorites')}
                     >
                         {isFavorite ? (
-                            <RiStarFill className="h-3.5 w-3.5" />
+                            <Icon name="star-fill" className="h-3.5 w-3.5" />
                         ) : (
-                            <RiStarLine className="h-3.5 w-3.5" />
+                            <Icon name="star" className="h-3.5 w-3.5" />
                         )}
                     </button>
                 </div>
@@ -2669,7 +2644,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 >
                                     {!isReady ? (
                                         <>
-                                            <RiLoader4Line className={cn(controlIconSize, 'animate-spin text-muted-foreground flex-shrink-0')} />
+                                            <Icon name="loader-4" className={cn(controlIconSize, 'animate-spin text-muted-foreground flex-shrink-0')} />
                                             <span className={cn(
                                                 'model-controls__model-label',
                                                 controlTextSize,
@@ -2684,10 +2659,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 providerId={currentProviderId}
                                                 className={cn(controlIconSize, 'flex-shrink-0')}
                                             />
-                                            <RiPencilAiLine className={cn(controlIconSize, 'text-primary/60 hidden')} />
+                                            <Icon name="pencil-ai" className={cn(controlIconSize, 'text-primary/60 hidden')} />
                                         </>
                                     ) : (
-                                        <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
+                                        <Icon name="pencil-ai" className={cn(controlIconSize, 'text-muted-foreground')} />
                                     )}
                                     {isReady && (
                                         <span
@@ -2712,7 +2687,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             {/* Search Input */}
                             <div className="p-2 border-b border-border/40">
                                 <div className="relative">
-                                    <RiSearchLine className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                                     <Input
                                         type="text"
                                         placeholder={t('chat.modelControls.searchModels')}
@@ -2744,7 +2719,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         className="typography-meta group flex items-center gap-1 rounded-md px-2 py-1.5 cursor-pointer hover:bg-interactive-hover/50"
                                     >
                                         <span className="flex h-4 w-4 items-center justify-center text-muted-foreground">
-                                            <RiAddLine className="h-4 w-4 -mr-0.5" />
+                                            <Icon name="add" className="h-4 w-4 -mr-0.5" />
                                         </span>
                                         <span className="font-medium text-foreground">{t('chat.modelControls.addNewProvider')}</span>
                                     </div>
@@ -2763,7 +2738,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             <DropdownMenuLabel
                                                 className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 border-b border-border/30"
                                             >
-                                                <RiStarFill className="h-4 w-4 text-primary" />
+                                                <Icon name="star-fill" className="h-4 w-4 text-primary" />
                                                 {t('chat.modelControls.favorites')}
                                             </DropdownMenuLabel>
                                             {favoriteSortingEnabled ? (
@@ -2813,7 +2788,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             <DropdownMenuLabel
                                                 className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 border-b border-border/30"
                                             >
-                                                <RiTimeLine className="h-4 w-4" />
+                                                <Icon name="time" className="h-4 w-4" />
                                                 {t('chat.modelControls.recent')}
                                             </DropdownMenuLabel>
                                             {filteredRecents.map(({ model, providerID, modelID }) => {
@@ -2879,9 +2854,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                     <span className="min-w-0 truncate">{provider.name}</span>
                                                     <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-muted-foreground">
                                                         {isExpanded ? (
-                                                            <RiArrowDownSLine className="h-4 w-4" />
+                                                            <Icon name="arrow-down-s" className="h-4 w-4" />
                                                         ) : (
-                                                            <RiArrowRightSLine className="h-4 w-4" />
+                                                            <Icon name="arrow-right-s" className="h-4 w-4" />
                                                         )}
                                                     </span>
                                                 </div>
@@ -2923,7 +2898,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     >
                         {!isReady ? (
                             <>
-                                <RiLoader4Line className={cn(controlIconSize, 'animate-spin text-muted-foreground flex-shrink-0')} />
+                                <Icon name="loader-4" className={cn(controlIconSize, 'animate-spin text-muted-foreground flex-shrink-0')} />
                                 <span className="typography-micro font-medium text-muted-foreground min-w-0">
                                     {readinessLabel}
                                 </span>
@@ -2936,7 +2911,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         className={cn(controlIconSize, 'flex-shrink-0')}
                                     />
                                 ) : (
-                                    <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
+                                    <Icon name="pencil-ai" className={cn(controlIconSize, 'text-muted-foreground')} />
                                 )}
                                 <span
                                     ref={modelLabelRef}
@@ -3043,7 +3018,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         </div>
                     )}
 
-
                     <div className="flex flex-col gap-1">
                         <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">{t('chat.modelControls.permissions')}</span>
                         <div className="flex items-center gap-3">
@@ -3078,7 +3052,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {hasCustomPrompt && (
                         <div className="flex items-center justify-between gap-3">
                             <span className="typography-meta text-muted-foreground/80">{t('chat.modelControls.customPrompt')}</span>
-                            <RiCheckboxCircleLine className="h-4 w-4 text-foreground" />
+                            <Icon name="checkbox-circle" className="h-4 w-4 text-foreground" />
                         </div>
                     )}
                 </div>
@@ -3106,7 +3080,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         'cursor-pointer hover:bg-transparent hover:opacity-70',
                     )}
                 >
-                    <RiBrainAi3Line className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
+                    <Icon name="brain-ai-3" className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
                     <span className={cn(
                         'model-controls__variant-label',
                         controlTextSize,
@@ -3131,7 +3105,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     buttonHeight,
                                 )}
                             >
-                                <RiBrainAi3Line className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
+                                <Icon name="brain-ai-3" className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
                                 <span
                                     className={cn(
                                         'model-controls__variant-label',
@@ -3151,7 +3125,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         <DropdownMenuItem className="typography-meta" onSelect={() => handleVariantSelect(undefined)}>
                             <div className="flex items-center justify-between gap-2 w-full min-w-0">
                                 <span className="typography-meta font-medium text-foreground truncate min-w-0">{t('chat.modelControls.default')}</span>
-                                {isDefault && <RiCheckLine className="h-4 w-4 text-primary flex-shrink-0" />}
+                                {isDefault && <Icon name="check" className="h-4 w-4 text-primary flex-shrink-0" />}
                             </div>
                         </DropdownMenuItem>
                         {availableVariants.length > 0 && <DropdownMenuSeparator />}
@@ -3166,7 +3140,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 >
                                     <div className="flex items-center justify-between gap-2 w-full min-w-0">
                                         <span className="typography-meta font-medium text-foreground truncate min-w-0">{label}</span>
-                                        {selected && <RiCheckLine className="h-4 w-4 text-primary flex-shrink-0" />}
+                                        {selected && <Icon name="check" className="h-4 w-4 text-primary flex-shrink-0" />}
                                     </div>
                                 </DropdownMenuItem>
                             );
@@ -3194,7 +3168,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     )}>
                                         {!isReady ? (
                                             <>
-                                                <RiLoader4Line
+                                                <Icon name="loader-4"
                                                     className={cn(
                                                         controlIconSize,
                                                         'flex-shrink-0 animate-spin text-muted-foreground'
@@ -3212,7 +3186,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             </>
                                         ) : (
                                             <>
-                                                <RiAiAgentLine
+                                                <Icon name="ai-agent"
                                                     className={cn(
                                                         controlIconSize,
                                                         'flex-shrink-0',
@@ -3239,7 +3213,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             <DropdownMenuContent align="end" alignOffset={-40} className="w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col">
                                 <div className="p-2 border-b border-border/40">
                                     <div className="relative">
-                                        <RiSearchLine className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                        <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                                         <Input
                                             type="text"
                                             placeholder={t('chat.modelControls.searchAgents')}
@@ -3262,7 +3236,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                     onSelect={() => handleAgentChange(defaultAgentName)}
                                                 >
                                                     <div className="flex items-center gap-1.5">
-                                                        <RiArrowGoBackLine className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <Icon name="arrow-go-back" className="h-3.5 w-3.5 text-muted-foreground" />
                                                         <span className="font-medium">{t('chat.modelControls.resetToDefault')}</span>
                                                     </div>
                                                 </DropdownMenuItem>
@@ -3323,7 +3297,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             >
                 {!isReady ? (
                     <>
-                        <RiLoader4Line
+                        <Icon name="loader-4"
                             className={cn(
                                 controlIconSize,
                                 'flex-shrink-0 animate-spin text-muted-foreground'
@@ -3341,7 +3315,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     </>
                 ) : (
                     <>
-                        <RiAiAgentLine
+                        <Icon name="ai-agent"
                             className={cn(
                                 controlIconSize,
                                 'flex-shrink-0',

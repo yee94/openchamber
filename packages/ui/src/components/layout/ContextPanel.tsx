@@ -1,5 +1,4 @@
 import React from 'react';
-import { RiArrowLeftRightLine, RiChat4Line, RiCloseLine, RiDonutChartFill, RiFileTextLine, RiFullscreenExitLine, RiFullscreenLine, RiGlobalLine, RiRefreshLine, RiExternalLinkLine, RiTerminalBoxLine, RiCursorLine } from '@remixicon/react';
 
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Button } from '@/components/ui/button';
@@ -20,6 +19,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useInputStore } from '@/sync/input-store';
 import { ContextPanelContent } from './ContextSidebarTab';
 import { toast } from '@/components/ui';
+import { Icon } from "@/components/icon/Icon";
 
 const CONTEXT_PANEL_MIN_WIDTH = 360;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
@@ -296,23 +296,23 @@ const getTabIcon = (tab: { mode: 'diff' | 'file' | 'context' | 'plan' | 'chat' |
   }
 
   if (tab.mode === 'diff') {
-    return <RiArrowLeftRightLine className="h-3.5 w-3.5" />;
+    return <Icon name="arrow-left-right" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'plan') {
-    return <RiFileTextLine className="h-3.5 w-3.5" />;
+    return <Icon name="file-text" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'context') {
-    return <RiDonutChartFill className="h-3.5 w-3.5" />;
+    return <Icon name="donut-chart-fill" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'chat') {
-    return <RiChat4Line className="h-3.5 w-3.5" />;
+    return <Icon name="chat-4" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'preview') {
-    return <RiGlobalLine className="h-3.5 w-3.5 text-[var(--status-info)]" />;
+    return <Icon name="global" className="h-3.5 w-3.5 text-[var(--status-info)]" />;
   }
 
   return undefined;
@@ -919,7 +919,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
           aria-label={t('contextPanel.preview.actions.reload')}
           disabled={!effectiveSrc}
         >
-          <RiRefreshLine className="h-3.5 w-3.5" />
+          <Icon name="refresh" className="h-3.5 w-3.5" />
         </Button>
         <Button
           type="button"
@@ -934,7 +934,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
           aria-label={t('contextPanel.preview.actions.openExternal')}
           disabled={!directSrc}
         >
-          <RiExternalLinkLine className="h-3.5 w-3.5" />
+          <Icon name="external-link" className="h-3.5 w-3.5" />
         </Button>
         {isLoopback ? (
           <Button
@@ -947,7 +947,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
             aria-label={t('contextPanel.preview.inspect.toggle')}
             disabled={!bridgeReady}
           >
-            <RiCursorLine className="h-3.5 w-3.5" />
+            <Icon name="cursor" className="h-3.5 w-3.5" />
           </Button>
         ) : null}
         {isLoopback ? (
@@ -961,7 +961,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
             aria-label={bridgeReady ? t('contextPanel.preview.console.open') : t('contextPanel.preview.console.waiting')}
             disabled={!bridgeReady && consoleEvents.length === 0}
           >
-            <RiTerminalBoxLine className="h-3.5 w-3.5" />
+            <Icon name="terminal-box" className="h-3.5 w-3.5" />
             {consoleErrorCount > 0 ? (
               <span className="typography-micro text-status-error">{consoleErrorCount}</span>
             ) : null}
@@ -1380,7 +1380,7 @@ export const ContextPanel: React.FC = () => {
                 ? <PreviewPane rawUrl={activeTab.targetPath ?? ''} onNavigate={(url) => openContextPreview(effectiveDirectory, url)} />
                 : (
                   <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-                    <RiGlobalLine className="h-12 w-12 text-muted-foreground/50" />
+                    <Icon name="global" className="h-12 w-12 text-muted-foreground/50" />
                     <div className="typography-ui-header text-foreground">{t('contextPanel.preview.title')}</div>
                     <div className="max-w-sm typography-micro text-muted-foreground">{t('contextPanel.preview.description')}</div>
                   </div>
@@ -1433,7 +1433,7 @@ export const ContextPanel: React.FC = () => {
           title={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
           aria-label={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
         >
-          {isExpanded ? <RiFullscreenExitLine className="h-3.5 w-3.5" /> : <RiFullscreenLine className="h-3.5 w-3.5" />}
+          {isExpanded ? <Icon name="fullscreen-exit" className="h-3.5 w-3.5" /> : <Icon name="fullscreen" className="h-3.5 w-3.5" />}
         </Button>
         <Button
           type="button"
@@ -1444,7 +1444,7 @@ export const ContextPanel: React.FC = () => {
           title={t('contextPanel.actions.closePanel')}
           aria-label={t('contextPanel.actions.closePanel')}
         >
-          <RiCloseLine className="h-3.5 w-3.5" />
+          <Icon name="close" className="h-3.5 w-3.5" />
         </Button>
       </div>
     </header>
