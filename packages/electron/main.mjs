@@ -1118,6 +1118,20 @@ const dispatchCheckForUpdates = () => {
   }
 };
 
+const reloadMenuTargetWindow = () => {
+  const target = getMenuTargetWindow();
+  if (!target || target.isDestroyed()) return;
+  target.webContents.reload();
+};
+
+const relaunchFromMenu = () => {
+  prepareForQuit();
+  setImmediate(() => {
+    app.relaunch();
+    app.exit(0);
+  });
+};
+
 const nextWindowLabel = () => {
   const value = state.windowCounter++;
   return value === 1 ? 'main' : `main-${value}`;
@@ -2388,6 +2402,8 @@ const buildMacMenu = () => {
         },
         { type: 'separator' },
         { label: 'Settings', accelerator: 'Cmd+,', click: () => dispatchAction('settings') },
+        { label: 'Reload Webview', click: () => reloadMenuTargetWindow() },
+        { label: 'Restart', click: () => relaunchFromMenu() },
         { label: 'Command Palette', accelerator: 'Cmd+P', click: () => dispatchAction('command-palette') },
         { type: 'separator' },
         { role: 'services' },
