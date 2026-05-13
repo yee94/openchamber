@@ -113,7 +113,9 @@ export function BrowserVoiceButton() {
     const isIdle = status === 'idle';
 
     const isSpeaking = status === 'speaking';
-    const canTranscribeOnStop = sttProvider === 'server' && sttTranscribeOnStop;
+    // WASM STT always needs finishVoiceInput to flush the recorder and transcribe.
+    // Server STT uses it when sttTranscribeOnStop is enabled.
+    const canTranscribeOnStop = sttProvider === 'wasm' || (sttProvider === 'server' && sttTranscribeOnStop);
     const isListeningWithTranscribeOnStop = status === 'listening' && canTranscribeOnStop;
 
     // Show toast notification when voice error occurs

@@ -17,6 +17,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Icon } from "@/components/icon/Icon";
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
 import { audioStreamService } from '@/lib/voice/audioStreamService';
+import { wasmSttService, WASM_MODELS } from '@/lib/voice/wasmSttService';
+import type { WasmModelStatus } from '@/lib/voice/wasmSttService';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 const LANGUAGE_OPTIONS = [
@@ -31,6 +33,82 @@ const LANGUAGE_OPTIONS = [
     { value: 'ko-KR', label: '한국어' },
     { value: 'uk-UA', label: 'Українська' },
 ];
+
+const WasmModelStatusIndicator = ({ modelId }: { modelId: string }) => {
+    const { t } = useI18n();
+    const [status, setStatus] = useState<WasmModelStatus>(wasmSttService.getModelStatus());
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const handler = (s: WasmModelStatus) => setStatus(s);
+        wasmSttService.onModelStatusChange = handler;
+        return () => { wasmSttService.onModelStatusChange = null; };
+    }, []);
+
+    const currentModelId = wasmSttService.getCurrentModelId();
+    const isLoadingOrDownloading = status.state === 'downloading' || status.state === 'loading';
+
+    // Reset local loading state when model finishes loading or errors
+    useEffect(() => {
+        if (status.state !== 'downloading' && status.state !== 'loading') {
+            setLoading(false);
+        }
+    }, [status.state]);
+
+    const handleDownload = async () => {
+        setLoading(true);
+        try {
+            await wasmSttService.loadModel(modelId);
+        } catch {
+            // Error is shown via status indicator
+        }
+    };
+
+    if (status.state === 'ready' && currentModelId === modelId) {
+        return (
+            <div className="flex items-center gap-2">
+                <span className="typography-ui-compact text-green-600 dark:text-green-400">
+                    {t('settings.voice.page.stt.wasmLoaded')}
+                </span>
+            </div>
+        );
+    }
+
+    if (isLoadingOrDownloading) {
+        const progress = status.state === 'downloading' ? Math.round(status.progress) : undefined;
+        return (
+            <div className="flex items-center gap-2">
+                <span className="typography-ui-compact text-muted-foreground">
+                    {status.state === 'downloading' ? t('settings.voice.page.stt.wasmDownloading') : t('settings.voice.page.stt.wasmLoading')}
+                    {progress !== undefined ? ` (${progress}%)` : ''}
+                </span>
+            </div>
+        );
+    }
+
+    if (status.state === 'error') {
+        // Partial download (cached progress): show retry button.
+        return (
+            <div className="flex items-center gap-2">
+                <span className="typography-ui-compact text-destructive">{status.error}</span>
+                <Button variant="chip" size="xs" disabled={loading} onClick={handleDownload}>
+                    {t('settings.voice.page.stt.wasmRetry')}
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="typography-ui-compact text-muted-foreground">
+                {t('settings.voice.page.stt.wasmNotLoaded')}
+            </span>
+            <Button variant="chip" size="xs" disabled={loading} onClick={handleDownload}>
+                {t('settings.voice.page.stt.wasmDownload')}
+            </Button>
+        </div>
+    );
+};
 
 const OPENAI_VOICE_OPTIONS = [
     { value: 'alloy', label: 'Alloy' },
@@ -86,6 +164,8 @@ export const VoiceSettings: React.FC = () => {
     const setSttServerUrl = useConfigStore((state) => state.setSttServerUrl);
     const sttModel = useConfigStore((state) => state.sttModel);
     const setSttModel = useConfigStore((state) => state.setSttModel);
+    const wasmSttModel = useConfigStore((state) => state.wasmSttModel);
+    const setWasmSttModel = useConfigStore((state) => state.setWasmSttModel);
     const sttLanguage = useConfigStore((state) => state.sttLanguage);
     const setSttLanguage = useConfigStore((state) => state.setSttLanguage);
     const sttSilenceThresholdDb = useConfigStore((state) => state.sttSilenceThresholdDb);
@@ -647,12 +727,12 @@ export const VoiceSettings: React.FC = () => {
 
                                     {voiceProvider === 'browser' && filteredBrowserVoices.length > 0 && (
                                         <>
-                                            <Select value={browserVoice || '__auto__'} onValueChange={(value) => setBrowserVoice(value === '__auto__' ? '' : value)}>
+                                            <Select value={browserVoice || '$auto'} onValueChange={(value) => setBrowserVoice(value === '$auto' ? '' : value)}>
                                                 <SelectTrigger className="w-fit max-w-[200px]">
                                                     <SelectValue placeholder={t('settings.voice.page.field.auto')} />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="__auto__">{t('settings.voice.page.field.auto')}</SelectItem>
+                                                    <SelectItem value="$auto">{t('settings.voice.page.field.auto')}</SelectItem>
                                                     {filteredBrowserVoices.map((v) => (
                                                         <SelectItem key={v.name} value={v.name}>{v.name} ({v.lang})</SelectItem>
                                                     ))}
@@ -765,6 +845,15 @@ export const VoiceSettings: React.FC = () => {
                                     >
                                         {t('settings.voice.page.provider.server')}
                                     </Button>
+                                    <Button
+                                        variant="chip"
+                                        size="xs"
+                                        aria-pressed={sttProvider === 'wasm'}
+                                        onClick={() => setSttProvider('wasm')}
+                                        className="!font-normal"
+                                    >
+                                        {t('settings.voice.page.provider.wasm')}
+                                    </Button>
                                 </div>
                             </div>
                         </div>
@@ -858,6 +947,38 @@ export const VoiceSettings: React.FC = () => {
                                         <span className="typography-meta text-muted-foreground">{t('settings.voice.page.field.millisecondsUnit')}</span>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {sttProvider === 'wasm' && (
+                            <div className="py-1.5 space-y-2">
+                                <div>
+                                    <span className="typography-ui-label text-muted-foreground">
+                                        {t('settings.voice.page.stt.wasmModel')}
+                                    </span>
+                                    <Select value={wasmSttModel} onValueChange={setWasmSttModel}>
+                                        <SelectTrigger className="mt-0.5">
+                                            <SelectValue placeholder={t('settings.voice.page.stt.wasmModel')} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {WASM_MODELS.map((m) => (
+                                                <SelectItem key={m.id} value={m.id}>
+                                                    <div className="flex flex-col">
+                                                        <span>{m.name}</span>
+                                                        <span className="typography-ui-compact text-muted-foreground">
+                                                            {m.size} · {m.languages}
+                                                        </span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="typography-ui-compact text-muted-foreground mt-0.5">
+                                        {WASM_MODELS.find((m) => m.id === wasmSttModel)?.description}
+                                    </p>
+                                </div>
+                                {/* Model status indicator */}
+                                <WasmModelStatusIndicator modelId={wasmSttModel} />
                             </div>
                         )}
                     </section>
