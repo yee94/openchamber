@@ -785,6 +785,7 @@ const spawnLocalServer = async () => {
     attachSignals: false,
     exitOnShutdown: false,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
+    getIsWindowFocused: isAnyWindowFocused,
   });
 
   const port = handle.getPort();
