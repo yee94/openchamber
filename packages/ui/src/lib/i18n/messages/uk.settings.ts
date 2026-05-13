@@ -1330,6 +1330,8 @@ export const settingsDict = {
   "settings.voice.page.field.sttLanguageHint": "BCP-47 код (наприклад en, fr). Залиште поле порожнім для автоматичного визначення.",
   "settings.voice.page.field.silenceThreshold": "Поріг тиші",
   "settings.voice.page.field.silenceHold": "Утримання тиші",
+  "settings.voice.page.field.transcribeOnStopAria": "Розпізнавати після зупинки запису",
+  "settings.voice.page.field.transcribeOnStop": "Розпізнавати при зупинці",
   "settings.voice.page.field.millisecondsUnit": "мс",
   "settings.voice.page.field.messageReadAloudButtonAria": "Кнопка «Прочитати повідомлення вголос»",
   "settings.voice.page.field.messageReadAloudButton": "Кнопка «Прочитати вголос» для повідомлень",

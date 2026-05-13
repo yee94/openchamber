@@ -582,6 +582,7 @@ export const dict: Record<I18nKey, string> = {
   'voice.status.speaking': 'Mówię...',
   'voice.status.error': 'Błąd głosu',
   'voice.status.conversationModeActiveAria': 'Tryb rozmowy aktywny',
+  'voice.action.finishAndTranscribe': 'Zakończ i transkrybuj wejście głosowe',
   'onboarding.common.actions.back': 'Wstecz',
   'onboarding.common.copyToClipboard': 'Kopiuj do schowka',
   'onboarding.common.status.copiedToClipboard': 'Skopiowano do schowka',

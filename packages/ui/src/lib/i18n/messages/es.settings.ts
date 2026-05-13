@@ -1330,6 +1330,8 @@ export const settingsDict = {
   "settings.voice.page.field.sttLanguageHint": "Código BCP-47 (por ejemplo en, fr). Dejar en blanco para detección automática.",
   "settings.voice.page.field.silenceThreshold": "Umbral de silencio",
   "settings.voice.page.field.silenceHold": "Retención de silencio",
+  "settings.voice.page.field.transcribeOnStopAria": "Transcribir al detener la grabación",
+  "settings.voice.page.field.transcribeOnStop": "Transcribir al detener",
   "settings.voice.page.field.millisecondsUnit": "ms",
   "settings.voice.page.field.messageReadAloudButtonAria": "Botón de lectura en voz alta del mensaje",
   "settings.voice.page.field.messageReadAloudButton": "Botón de lectura en voz alta del mensaje",

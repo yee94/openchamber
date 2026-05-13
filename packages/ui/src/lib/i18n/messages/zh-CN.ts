@@ -1987,6 +1987,7 @@ export const dict: Record<I18nKey, string> = {
   'voice.status.speaking': '播放中...',
   'voice.status.error': '语音错误',
   'voice.status.conversationModeActiveAria': '会话模式已启用',
+  'voice.action.finishAndTranscribe': '结束并转写语音输入',
   'onboarding.common.actions.back': '返回',
   'onboarding.common.copyToClipboard': '复制到剪贴板',
   'onboarding.common.status.copiedToClipboard': '已复制到剪贴板',

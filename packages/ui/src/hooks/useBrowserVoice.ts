@@ -53,6 +53,8 @@ export interface UseBrowserVoiceReturn {
   startVoice: () => void;
   /** Stop voice mode */
   stopVoice: () => void;
+  /** Finish current voice input and process it */
+  finishVoiceInput: () => void;
   /** Whether conversation mode is active */
   conversationMode: boolean;
   /** Toggle conversation mode */
@@ -834,6 +836,55 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
     setStatus('idle');
     setError(null);
   }, [stopServerTTS, stopSayTTS]);
+
+  const finishVoiceInput = useCallback(() => {
+    if (!isActiveRef.current) {
+      return;
+    }
+
+    pendingResumeOnVisibleRef.current = false;
+    if (deviceChangeRestartTimerRef.current) {
+      clearTimeout(deviceChangeRestartTimerRef.current);
+      deviceChangeRestartTimerRef.current = null;
+    }
+    setStatus('processing');
+
+    if (sttProvider === 'server') {
+      void audioStreamService.finishListening().then(() => {
+        window.setTimeout(() => {
+          if (!isActiveRef.current) {
+            return;
+          }
+          if (pendingFinalTranscriptRef.current || finalTranscriptTimerRef.current) {
+            return;
+          }
+          if (processingMessageRef.current) {
+            return;
+          }
+          isActiveRef.current = false;
+          processingMessageRef.current = false;
+          setStatus('idle');
+        }, FINAL_TRANSCRIPT_SETTLE_MS + 200);
+      });
+      return;
+    }
+
+    browserVoiceService.stopListening();
+    window.setTimeout(() => {
+      if (!isActiveRef.current) {
+        return;
+      }
+      if (pendingFinalTranscriptRef.current || finalTranscriptTimerRef.current) {
+        return;
+      }
+      if (processingMessageRef.current) {
+        return;
+      }
+      isActiveRef.current = false;
+      processingMessageRef.current = false;
+      setStatus('idle');
+    }, FINAL_TRANSCRIPT_SETTLE_MS + 300);
+  }, [sttProvider]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -863,6 +914,7 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
     setLanguage,
     startVoice,
     stopVoice,
+    finishVoiceInput,
     conversationMode,
     toggleConversationMode,
     prepareVoice,

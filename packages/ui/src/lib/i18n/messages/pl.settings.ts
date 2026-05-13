@@ -1502,6 +1502,8 @@ export const settingsDict = {
   'settings.voice.page.field.serverUrlHint': 'Bazowy URL serwera TTS zgodnego z OpenAI',
   'settings.voice.page.field.silenceHold': 'Podtrzymanie ciszy',
   'settings.voice.page.field.silenceThreshold': 'Próg ciszy',
+  'settings.voice.page.field.transcribeOnStopAria': 'Transkrybuj po zatrzymaniu nagrania',
+  'settings.voice.page.field.transcribeOnStop': 'Transkrybuj po zatrzymaniu',
   'settings.voice.page.field.speechPitch': 'Wysokość głosu',
   'settings.voice.page.field.speechRate': 'Tempo mowy',
   'settings.voice.page.field.speechVolume': 'Głośność mowy',

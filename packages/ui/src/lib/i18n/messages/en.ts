@@ -2021,6 +2021,7 @@ export const dict = {
   'voice.status.speaking': 'Speaking...',
   'voice.status.error': 'Voice Error',
   'voice.status.conversationModeActiveAria': 'Conversation mode active',
+  'voice.action.finishAndTranscribe': 'Finish and transcribe voice input',
   'onboarding.common.actions.back': 'Back',
   'onboarding.common.copyToClipboard': 'Copy to clipboard',
   'onboarding.common.status.copiedToClipboard': 'Copied to clipboard',

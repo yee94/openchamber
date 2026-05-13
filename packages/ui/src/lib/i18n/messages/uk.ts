@@ -1987,6 +1987,7 @@ export const dict: Record<I18nKey, string> = {
   "voice.status.speaking": "Говорить...",
   "voice.status.error": "Голосова помилка",
   "voice.status.conversationModeActiveAria": "Активний режим розмови",
+  "voice.action.finishAndTranscribe": "Завершити й розпізнати голосове введення",
   "onboarding.common.actions.back": "Назад",
   "onboarding.common.copyToClipboard": "Копіювати в буфер обміну",
   "onboarding.common.status.copiedToClipboard": "Скопійовано в буфер обміну",

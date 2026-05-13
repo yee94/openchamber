@@ -510,6 +510,7 @@ interface ConfigStore {
     sttLanguage: string;
     sttSilenceThresholdDb: number;
     sttSilenceHoldMs: number;
+    sttTranscribeOnStop: boolean;
     showMessageTTSButtons: boolean;
     voiceModeEnabled: boolean;
     // Summarization settings
@@ -533,6 +534,7 @@ interface ConfigStore {
     setSttLanguage: (lang: string) => void;
     setSttSilenceThresholdDb: (db: number) => void;
     setSttSilenceHoldMs: (ms: number) => void;
+    setSttTranscribeOnStop: (enabled: boolean) => void;
     setShowMessageTTSButtons: (show: boolean) => void;
     setVoiceModeEnabled: (enabled: boolean) => void;
     setSummarizeMessageTTS: (enabled: boolean) => void;
@@ -759,6 +761,13 @@ export const useConfigStore = create<ConfigStore>()(
                         }
                     }
                     return 1500;
+                })(),
+                sttTranscribeOnStop: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttTranscribeOnStop');
+                        if (saved === 'true') return true;
+                    }
+                    return false;
                 })(),
                 // Show TTS buttons on messages - disabled by default until user enables it
                 showMessageTTSButtons: (() => {
@@ -1862,6 +1871,13 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ sttSilenceHoldMs: ms });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttSilenceHoldMs', String(ms));
+                    }
+                },
+
+                setSttTranscribeOnStop: (enabled: boolean) => {
+                    set({ sttTranscribeOnStop: enabled });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttTranscribeOnStop', String(enabled));
                     }
                 },
 

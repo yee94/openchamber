@@ -1330,6 +1330,8 @@ export const settingsDict = {
   'settings.voice.page.field.sttLanguageHint': 'BCP-47 代码（例如 en、fr）。留空为自动检测。',
   'settings.voice.page.field.silenceThreshold': '静音阈值',
   'settings.voice.page.field.silenceHold': '静音保持时长',
+  'settings.voice.page.field.transcribeOnStopAria': '停止录音时转写',
+  'settings.voice.page.field.transcribeOnStop': '停止时转写',
   'settings.voice.page.field.millisecondsUnit': '毫秒',
   'settings.voice.page.field.messageReadAloudButtonAria': '消息朗读按钮',
   'settings.voice.page.field.messageReadAloudButton': '消息朗读按钮',

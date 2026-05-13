@@ -2021,6 +2021,7 @@ export const dict: Record<I18nKey, string> = {
   'voice.status.speaking': '말하는 중…',
   'voice.status.error': '음성 오류',
   'voice.status.conversationModeActiveAria': '대화 모드 활성 상태',
+  'voice.action.finishAndTranscribe': '음성 입력을 완료하고 받아쓰기',
   'onboarding.common.actions.back': '뒤로',
   'onboarding.common.copyToClipboard': '클립보드에 복사',
   'onboarding.common.status.copiedToClipboard': '클립보드에 복사했습니다',

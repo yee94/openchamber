@@ -1330,6 +1330,8 @@ export const settingsDict = {
   'settings.voice.page.field.sttLanguageHint': 'BCP-47 코드(예: en, fr). 자동 감지하려면 비워 두세요.',
   'settings.voice.page.field.silenceThreshold': '무음 기준',
   'settings.voice.page.field.silenceHold': '무음 유지',
+  'settings.voice.page.field.transcribeOnStopAria': '녹음을 중지할 때 받아쓰기',
+  'settings.voice.page.field.transcribeOnStop': '중지 시 받아쓰기',
   'settings.voice.page.field.millisecondsUnit': 'ms',
   'settings.voice.page.field.messageReadAloudButtonAria': '메시지 읽어주기 버튼',
   'settings.voice.page.field.messageReadAloudButton': '메시지 읽어주기 버튼',

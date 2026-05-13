@@ -25,6 +25,7 @@ import {
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 import { toast } from '@/components/ui/toast';
 import { Icon } from "@/components/icon/Icon";
+import { useI18n } from '@/lib/i18n';
 
 // Status text for accessibility and labels
 const statusLabels: Record<string, string> = {
@@ -65,7 +66,10 @@ const normalizeVoiceErrorMessage = (error: string): string => {
  * Browser Voice Button with language selection
  */
 export function BrowserVoiceButton() {
+    const { t } = useI18n();
     const voiceModeEnabled = useConfigStore((s) => s.voiceModeEnabled);
+    const sttProvider = useConfigStore((s) => s.sttProvider);
+    const sttTranscribeOnStop = useConfigStore((s) => s.sttTranscribeOnStop);
     
     const {
         status,
@@ -74,6 +78,7 @@ export function BrowserVoiceButton() {
 
         startVoice,
         stopVoice,
+        finishVoiceInput,
         conversationMode,
         toggleConversationMode,
         isMobile,
@@ -108,6 +113,8 @@ export function BrowserVoiceButton() {
     const isIdle = status === 'idle';
 
     const isSpeaking = status === 'speaking';
+    const canTranscribeOnStop = sttProvider === 'server' && sttTranscribeOnStop;
+    const isListeningWithTranscribeOnStop = status === 'listening' && canTranscribeOnStop;
 
     // Show toast notification when voice error occurs
     useEffect(() => {
@@ -131,6 +138,8 @@ export function BrowserVoiceButton() {
     // Status text for accessibility
     const statusText = isError
         ? error || 'Voice Error'
+        : isListeningWithTranscribeOnStop
+          ? t('voice.action.finishAndTranscribe')
         : conversationMode && status === 'idle'
           ? 'Start Voice (Continuous mode on)'
           : statusLabels[status] || 'Start Voice';
@@ -139,6 +148,9 @@ export function BrowserVoiceButton() {
     const getTooltipContent = () => {
         if (isError && error) {
             return normalizeVoiceErrorMessage(error);
+        }
+        if (isListeningWithTranscribeOnStop) {
+            return t('voice.action.finishAndTranscribe');
         }
         if (isActive) {
             return 'Stop voice conversation';
@@ -152,6 +164,10 @@ export function BrowserVoiceButton() {
     // Handle voice activation (used by both click and touch)
     const activateVoice = useCallback(async () => {
         if (isActive) {
+            if (status === 'listening' && canTranscribeOnStop) {
+                finishVoiceInput();
+                return;
+            }
             stopVoice();
         } else if (status !== 'error') {
             // On mobile, we must NOT do any async operations before calling startVoice()
@@ -181,7 +197,7 @@ export function BrowserVoiceButton() {
                 }
             }
         }
-    }, [isActive, status, startVoice, stopVoice, isMobile]);
+    }, [isActive, status, canTranscribeOnStop, finishVoiceInput, startVoice, stopVoice, isMobile]);
 
     // Handle Shift+Click to toggle conversation mode
     const handleClick = useCallback(async (e: React.MouseEvent) => {
