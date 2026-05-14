@@ -49,6 +49,7 @@ import { useI18n } from '@/lib/i18n';
 import { applyMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { SyncAppEffects } from '@/apps/AppEffects';
 import { useAppFontEffects } from '@/apps/useAppFontEffects';
+import { OpenCodeUpdateToast } from '@/components/update/OpenCodeUpdateToast';
 
 // Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
 const OnboardingScreen = lazyWithChunkRecovery(() =>
@@ -781,6 +782,7 @@ function App({ apis }: AppProps) {
               <div className="h-full text-foreground bg-background">
                 <EmbeddedSessionSelectionGate embeddedSessionChat={embeddedSessionChat} isVSCodeRuntime={isVSCodeRuntime} />
                 <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                <OpenCodeUpdateToast />
                 <ChatView />
                 <Toaster />
               </div>
@@ -824,6 +826,7 @@ function App({ apis }: AppProps) {
               <TooltipProvider delayDuration={300} skipDelayDuration={150}>
                 <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
                   <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                  <OpenCodeUpdateToast />
                   <MainLayout />
                   <Toaster />
                   {!isBootShell && (

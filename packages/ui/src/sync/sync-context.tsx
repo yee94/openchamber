@@ -1270,6 +1270,11 @@ function handleEvent(
 // Provider
 // ---------------------------------------------------------------------------
 
+const dispatchOpenCodeUpdateAvailable = (payload: { version: string }) => {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent("openchamber:opencode-update-available", { detail: payload }))
+}
+
 export function SyncProvider(props: {
   sdk: OpencodeClient
   directory: string
@@ -1427,6 +1432,14 @@ export function SyncProvider(props: {
         return resolveDirectoryFromRoutingIndex(routingIndex, directory, payload, childStores)
       },
       onEvent: (directory, payload) => {
+        if (payload.type === "installation.update-available") {
+          const version = typeof (payload.properties as { version?: unknown })?.version === "string"
+            ? (payload.properties as { version: string }).version
+            : ""
+          if (version) {
+            dispatchOpenCodeUpdateAvailable({ version })
+          }
+        }
         handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {

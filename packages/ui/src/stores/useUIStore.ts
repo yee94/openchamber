@@ -9,7 +9,7 @@ import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobi
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
 export type RightSidebarTab = 'git' | 'files' | 'context';
-export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview';
+export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview' | 'browser';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -242,7 +242,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       touchedAt?: unknown;
     };
 
-    if (candidate.mode !== 'diff' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'preview') {
+    if (candidate.mode !== 'diff' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'preview' && candidate.mode !== 'browser') {
       continue;
     }
 
@@ -385,6 +385,17 @@ const reorderContextPanelTabs = (
     touchedAt: Date.now(),
   };
 };
+
+const setContextPanelTabTargetPath = (
+  current: ContextPanelDirectoryState,
+  tabID: string,
+  targetPath: string,
+): ContextPanelDirectoryState => ({
+  ...current,
+  tabs: current.tabs.map((tab) =>
+    tab.id === tabID ? { ...tab, targetPath } : tab,
+  ),
+});
 
 const sanitizeContextPanelByDirectory = (
   value: unknown,
@@ -595,6 +606,8 @@ interface UIStore {
   openContextOverview: (directory: string) => void;
   openContextPlan: (directory: string) => void;
   openContextPreview: (directory: string, url: string) => void;
+  openContextBrowser: (directory: string, url?: string) => void;
+  setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void;
   setActiveContextPanelTab: (directory: string, tabID: string) => void;
   reorderContextPanelTabs: (directory: string, activeTabID: string, overTabID: string) => void;
   closeContextPanelTab: (directory: string, tabID: string) => void;
@@ -1021,6 +1034,33 @@ export const useUIStore = create<UIStore>()(
             targetPath: normalizedUrl,
             dedupeKey: normalizedUrl,
             label,
+          });
+        },
+        openContextBrowser: (directory, url = '') => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) return;
+          const targetUrl = typeof url === 'string' && url.trim().length > 0 ? url.trim() : '';
+          get().openContextPanelTab(normalizedDirectory, {
+            mode: 'browser',
+            targetPath: targetUrl,
+            dedupeKey: 'desktop-browser',
+            label: 'Browser',
+          });
+        },
+
+        setContextPanelTabTargetPath: (directory, tabID, targetPath) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          const normalizedTabID = (tabID || '').trim();
+          if (!normalizedDirectory || !normalizedTabID) return;
+          set((state) => {
+            const current = state.contextPanelByDirectory[normalizedDirectory];
+            if (!current) return state;
+            return {
+              contextPanelByDirectory: {
+                ...state.contextPanelByDirectory,
+                [normalizedDirectory]: setContextPanelTabTargetPath(current, normalizedTabID, targetPath),
+              },
+            };
           });
         },
 
