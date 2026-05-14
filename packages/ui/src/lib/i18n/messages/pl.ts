@@ -221,6 +221,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.project.label': 'Projekt',
   'multirun.launcher.project.placeholder': 'Wybierz projekt',
   'multirun.launcher.project.empty': 'Najpierw dodaj projekt.',
+  'multirun.launcher.project.gitRequired': 'Bez izolacji worktree: uruchomienia używają tego samego katalogu.',
   'multirun.launcher.groupName.label': 'Nazwa grupy',
   'multirun.launcher.groupName.info': 'Używane dla katalogu drzewa pracy i nazw gałęzi',
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',

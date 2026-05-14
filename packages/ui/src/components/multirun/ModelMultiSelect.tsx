@@ -560,7 +560,11 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                             variantValue === DEFAULT_VARIANT_VALUE ? 'text-muted-foreground' : 'text-[color:var(--status-info)]'
                           )}
                         />
-                        <SelectValue placeholder={t('multirun.modelMultiSelect.variant.placeholder')} />
+                        <SelectValue placeholder={t('multirun.modelMultiSelect.variant.placeholder')}>
+                          {(value) => value === DEFAULT_VARIANT_VALUE
+                            ? t('multirun.modelMultiSelect.variant.default')
+                            : value}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent fitContent>
                         <SelectItem value={DEFAULT_VARIANT_VALUE} className="pr-2 [&>span:first-child]:hidden">

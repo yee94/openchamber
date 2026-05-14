@@ -146,6 +146,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.project.label': '프로젝트',
   'multirun.launcher.project.placeholder': '프로젝트 선택',
   'multirun.launcher.project.empty': '먼저 프로젝트를 추가하세요.',
+  'multirun.launcher.project.gitRequired': 'worktree 격리 없음: 실행은 같은 디렉터리를 사용합니다.',
   'multirun.launcher.groupName.label': '그룹 이름',
   'multirun.launcher.groupName.info': '워크트리 디렉터리와 브랜치 이름에 사용됩니다',
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',

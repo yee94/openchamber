@@ -146,6 +146,7 @@ export const dict: Record<I18nKey, string> = {
   "multirun.launcher.project.label": "Proyecto",
   "multirun.launcher.project.placeholder": "Seleccionar proyecto",
   "multirun.launcher.project.empty": "Añade un proyecto primero.",
+  "multirun.launcher.project.gitRequired": "Sin aislamiento worktree: las ejecuciones usan el mismo directorio.",
   "multirun.launcher.groupName.label": "Nombre del grupo",
   "multirun.launcher.groupName.info": "Usado para el directorio de worktree y nombres de rama",
   "multirun.launcher.groupName.placeholder": "feature-auth, bugfix-login",

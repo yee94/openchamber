@@ -146,6 +146,7 @@ export const dict: Record<I18nKey, string> = {
   "multirun.launcher.project.label": "Проєкт",
   "multirun.launcher.project.placeholder": "Вибрати проєкт",
   "multirun.launcher.project.empty": "Спочатку додайте проєкт.",
+  "multirun.launcher.project.gitRequired": "Без ізоляції worktree: запуски використовують ту саму директорію.",
   "multirun.launcher.groupName.label": "Назва групи",
   "multirun.launcher.groupName.info": "Використовується для імен каталогу та гілок worktree",
   "multirun.launcher.groupName.placeholder": "feature-auth, bugfix-login",

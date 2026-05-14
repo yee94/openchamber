@@ -145,6 +145,7 @@ export const dict = {
   'multirun.launcher.project.label': 'Project',
   'multirun.launcher.project.placeholder': 'Select project',
   'multirun.launcher.project.empty': 'Add a project first.',
+  'multirun.launcher.project.gitRequired': 'No worktree isolation: runs use the same directory.',
   'multirun.launcher.groupName.label': 'Group name',
   'multirun.launcher.groupName.info': 'Used for worktree directory and branch names',
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',

@@ -587,7 +587,12 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   };
 
   const isValid = Boolean(
-    name.trim() && prompt.trim() && selectedModels.length >= 2 && worktreeBaseBranch && isGitRepository && !isLoadingWorktreeBaseBranches
+    name.trim() &&
+    prompt.trim() &&
+    selectedModels.length >= 2 &&
+    selectedProjectDirectory &&
+    !isLoadingWorktreeBaseBranches &&
+    (isGitRepository === false || (isGitRepository === true && worktreeBaseBranch))
   );
 
   const configuredSetupCount = setupCommands.filter(cmd => cmd.trim()).length;
@@ -929,6 +934,12 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
       {/* ── Fixed footer ── */}
       <div className="shrink-0 px-4 sm:px-6 py-3">
         <div className="mx-auto w-full max-w-2xl flex items-center justify-end gap-2">
+          {isGitRepository === false ? (
+            <div className="mr-auto flex min-w-0 items-center gap-1.5 typography-micro text-muted-foreground">
+              <Icon name="information" className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{t('multirun.launcher.project.gitRequired')}</span>
+            </div>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

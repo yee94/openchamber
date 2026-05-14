@@ -146,6 +146,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.project.label': '项目',
   'multirun.launcher.project.placeholder': '选择项目',
   'multirun.launcher.project.empty': '请先添加项目。',
+  'multirun.launcher.project.gitRequired': '无 worktree 隔离：运行将使用同一目录。',
   'multirun.launcher.groupName.label': '组名',
   'multirun.launcher.groupName.info': '用于工作树目录和分支名称',
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',
