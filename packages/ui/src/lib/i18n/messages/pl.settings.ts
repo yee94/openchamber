@@ -598,6 +598,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.cycle_right_sidebar_tab.label': 'Przełącz zakładkę prawego paska bocznego',
   'settings.openchamber.keyboardShortcuts.action.cycle_services_tab.label': 'Przełącz zakładkę usług',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Przełącz motyw',
+  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Przełącz agenta',
   'settings.openchamber.keyboardShortcuts.action.expand_input.label': 'Rozwiń pole wprowadzania',
   'settings.openchamber.keyboardShortcuts.action.focus_input.label': 'Skup pole wprowadzania',
   'settings.openchamber.keyboardShortcuts.action.new_chat.label': 'Nowa sesja',

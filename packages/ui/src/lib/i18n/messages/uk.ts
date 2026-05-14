@@ -1607,7 +1607,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.expandProvider": "Розгорнути провайдера",
   "chat.modelControls.keyboardHint": "↑↓ навігація{thinking} • Enter вибрати • Esc закрити",
   "chat.modelControls.keyboardHintNavigate": "↑↓ навігація",
-  "chat.modelControls.keyboardHintSwitchAgent": "Tab змінити агента",
+  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} змінити агента",
   "chat.modelControls.keyboardHintThinking": "←→ мислення",
   "chat.modelControls.showThinkingModes": "Показати режими мислення",
   "chat.modelControls.hideThinkingModes": "Приховати режими мислення",

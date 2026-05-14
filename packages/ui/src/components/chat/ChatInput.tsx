@@ -62,6 +62,7 @@ import { useI18n } from '@/lib/i18n';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
+import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -791,6 +792,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
     const setExpandedInput = useUIStore((state) => state.setExpandedInput);
     const setTimelineDialogOpen = useUIStore((state) => state.setTimelineDialogOpen);
+    const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
+    const cycleAgentShortcut = React.useMemo(() => (
+        getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
+    ), [cycleAgentShortcutOverride]);
     const { git: runtimeGit } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
     const chatSearchDirectory = useChatSearchDirectory();
@@ -1762,9 +1767,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return;
         }
 
-        if (e.key === 'Tab' && !showCommandAutocomplete && !showSkillAutocomplete && !showFileMention) {
+        const cycleAgentBackwardShortcut = cycleAgentShortcut && !cycleAgentShortcut.includes('shift')
+            ? normalizeCombo(`shift+${cycleAgentShortcut}`)
+            : '';
+        const cycleAgentDirection = cycleAgentBackwardShortcut && eventMatchesShortcut(e, cycleAgentBackwardShortcut)
+            ? -1
+            : eventMatchesShortcut(e, cycleAgentShortcut)
+                ? 1
+                : 0;
+
+        if (cycleAgentDirection !== 0 && !showCommandAutocomplete && !showSkillAutocomplete && !showFileMention) {
             e.preventDefault();
-            handleCycleAgent();
+            e.stopPropagation();
+            handleCycleAgent(cycleAgentDirection);
             return;
         }
 
@@ -1988,8 +2003,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         void abortCurrentOperation(currentSessionId || undefined);
     }, [abortCurrentOperation, clearAbortPrompt, currentSessionId, startAbortIndicator]);
 
-    const handleCycleAgent = React.useCallback(() => {
-        const nextAgentName = getCycledPrimaryAgentName(agents, currentAgentName);
+    const handleCycleAgent = React.useCallback((direction: 1 | -1 = 1) => {
+        const nextAgentName = getCycledPrimaryAgentName(agents, currentAgentName, direction);
         if (!nextAgentName) return;
 
         setAgent(nextAgentName);

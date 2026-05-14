@@ -1607,7 +1607,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.expandProvider": "Expandir provedor",
   "chat.modelControls.keyboardHint": "↑↓ navegar{thinking} • Enter selecionar • Esc fechar",
   "chat.modelControls.keyboardHintNavigate": "↑↓ navegar",
-  "chat.modelControls.keyboardHintSwitchAgent": "Tab alternar agente",
+  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} alternar agente",
   "chat.modelControls.keyboardHintThinking": "←→ mudar raciocínio",
   "chat.modelControls.showThinkingModes": "Mostrar modos de raciocínio",
   "chat.modelControls.hideThinkingModes": "Ocultar modos de raciocínio",

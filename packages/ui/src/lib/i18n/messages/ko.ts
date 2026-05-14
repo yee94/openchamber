@@ -1641,7 +1641,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.expandProvider': '펼치기 프로바이더',
   'chat.modelControls.keyboardHint': '↑↓ 이동 {thinking} • Enter 선택 • Esc 닫기',
   'chat.modelControls.keyboardHintNavigate': '↑↓ 이동',
-  'chat.modelControls.keyboardHintSwitchAgent': 'Tab 에이전트 전환',
+  'chat.modelControls.keyboardHintSwitchAgent': '{shortcut} 에이전트 전환',
   'chat.modelControls.keyboardHintThinking': '←→ 추론',
   'chat.modelControls.showThinkingModes': '추론 모드 표시',
   'chat.modelControls.hideThinkingModes': '추론 모드 숨기기',

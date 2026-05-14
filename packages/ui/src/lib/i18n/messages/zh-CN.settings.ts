@@ -759,6 +759,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': '切换服务菜单',
   'settings.openchamber.keyboardShortcuts.action.cycle_services_tab.label': '轮换服务菜单标签',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '轮换主题',
+  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '轮换智能体',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': '向前轮换收藏模型',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': '向后轮换收藏模型',
   'settings.openchamber.keyboardShortcuts.action.expand_input.label': '展开输入框',

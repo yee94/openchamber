@@ -1607,7 +1607,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.expandProvider': '展开提供商',
   'chat.modelControls.keyboardHint': '↑↓ 导航{thinking} • Enter 选择 • Esc 关闭',
   'chat.modelControls.keyboardHintNavigate': '↑↓ 导航',
-  'chat.modelControls.keyboardHintSwitchAgent': 'Tab 切换智能体',
+  'chat.modelControls.keyboardHintSwitchAgent': '{shortcut} 切换智能体',
   'chat.modelControls.keyboardHintThinking': '←→ 思考',
   'chat.modelControls.showThinkingModes': '显示思考模式',
   'chat.modelControls.hideThinkingModes': '隐藏思考模式',

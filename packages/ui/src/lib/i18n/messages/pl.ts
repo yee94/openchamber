@@ -896,7 +896,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.input': 'Wejście',
   'chat.modelControls.keyboardHint': '↑↓ nawigacja{thinking} • Enter wybór • Esc zamknij',
   'chat.modelControls.keyboardHintNavigate': '↑↓ nawigacja',
-  'chat.modelControls.keyboardHintSwitchAgent': 'Tab przełącz agenta',
+  'chat.modelControls.keyboardHintSwitchAgent': '{shortcut} przełącz agenta',
   'chat.modelControls.keyboardHintThinking': '←→ myślenie',
   'chat.modelControls.knowledge': 'Wiedza',
   'chat.modelControls.limits': 'Limity',
