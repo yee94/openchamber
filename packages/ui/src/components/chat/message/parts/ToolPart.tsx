@@ -1359,20 +1359,20 @@ const renderPathLikeGitChanges = (path: string, grow = true) => {
     );
 };
 
-const renderAnimatedPathWithIcon = (path: string, _animate = true, grow = true, showFileIcons = true) => {
-    void _animate;
+const renderAnimatedPathWithIcon = (path: string, animate = true, grow = true, showFileIcons = true) => {
     const lastSlash = path.lastIndexOf('/');
 
     if (lastSlash === -1) {
         return (
             <span className={cn('min-w-0 inline-flex items-center gap-1 overflow-hidden', grow && 'flex-1')} title={path}>
                 {showFileIcons ? <FileTypeIcon filePath={path} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
-                <span
+                <Text
+                    variant={animate ? 'generate-effect' : 'static'}
                     className={cn('min-w-0 truncate whitespace-nowrap typography-meta', grow && 'flex-1')}
                     style={{ color: 'var(--tools-title)' }}
                 >
                     {path}
-                </span>
+                </Text>
             </span>
         );
     }
@@ -1399,9 +1399,13 @@ const renderAnimatedPathWithIcon = (path: string, _animate = true, grow = true, 
                     {displayDir}
                 </span>
                 <span className="flex-shrink-0" style={{ color: 'var(--tools-description)' }}>/</span>
-                <span className="flex-shrink-0" style={{ color: 'var(--tools-title)' }}>
+                <Text
+                    variant={animate ? 'generate-effect' : 'static'}
+                    className="flex-shrink-0"
+                    style={{ color: 'var(--tools-title)' }}
+                >
                     {name}
-                </span>
+                </Text>
             </span>
         </span>
     );
