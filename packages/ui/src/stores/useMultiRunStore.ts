@@ -118,10 +118,11 @@ export const useMultiRunStore = create<MultiRunStore>()(
           const directory = project.path;
 
           const isGit = await checkIsGitRepository(directory);
+          const shouldIsolateRuns = isGit && params.isolateRuns !== false;
 
           const groupSlug = toGitSafeSlug(groupName);
-          const rootBranch = isGit ? await getRootBranch(directory) : undefined;
-          const rootTrackingRemote = isGit ? await resolveRootTrackingRemote(directory) : null;
+          const rootBranch = shouldIsolateRuns ? await getRootBranch(directory) : undefined;
+          const rootTrackingRemote = shouldIsolateRuns ? await resolveRootTrackingRemote(directory) : null;
 
           const createdRuns: Array<{
             sessionId: string;
@@ -161,7 +162,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 ? `${groupSlug}/${model.providerID}/${model.modelID}/${index}`
                 : `${groupSlug}/${model.providerID}/${model.modelID}`;
 
-              if (!isGit) {
+              if (!shouldIsolateRuns) {
                 const session = await opencodeClient.withDirectory(
                   directory,
                   () => opencodeClient.createSession({ title: sessionTitle })

@@ -151,6 +151,7 @@ export const dict = {
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',
   'multirun.launcher.baseBranch.label': 'Base branch',
   'multirun.launcher.baseBranch.info': 'New branch created from this base per model',
+  'multirun.launcher.isolateRuns.label': 'Isolate runs',
   'multirun.launcher.agent.label': 'Agent',
   'multirun.launcher.agent.info': 'Agent used for all runs. Defaults to your configured agent.',
   'multirun.launcher.setupCommands.label': 'Setup commands',

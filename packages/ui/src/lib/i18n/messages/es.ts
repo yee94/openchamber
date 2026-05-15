@@ -152,6 +152,7 @@ export const dict: Record<I18nKey, string> = {
   "multirun.launcher.groupName.placeholder": "feature-auth, bugfix-login",
   "multirun.launcher.baseBranch.label": "Rama base",
   "multirun.launcher.baseBranch.info": "Nueva rama creada desde esta base por modelo",
+  "multirun.launcher.isolateRuns.label": "Aislar ejecuciones",
   "multirun.launcher.agent.label": "Agente",
   "multirun.launcher.agent.info": "Agente usado para todas las ejecuciones. Por defecto es el agente configurado.",
   "multirun.launcher.setupCommands.label": "Comandos de configuración",

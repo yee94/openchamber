@@ -152,6 +152,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',
   'multirun.launcher.baseBranch.label': '基础分支',
   'multirun.launcher.baseBranch.info': '每个模型都会基于此分支创建新分支',
+  'multirun.launcher.isolateRuns.label': '隔离运行',
   'multirun.launcher.agent.label': '智能体',
   'multirun.launcher.agent.info': '所有运行使用同一智能体。默认使用你当前配置的智能体。',
   'multirun.launcher.setupCommands.label': '设置命令',

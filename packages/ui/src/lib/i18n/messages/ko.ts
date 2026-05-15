@@ -152,6 +152,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.groupName.placeholder': 'feature-auth, bugfix-login',
   'multirun.launcher.baseBranch.label': '기본 브랜치',
   'multirun.launcher.baseBranch.info': '각 모델은 이 기본 브랜치에서 새 브랜치를 만듭니다',
+  'multirun.launcher.isolateRuns.label': '실행 격리',
   'multirun.launcher.agent.label': '에이전트',
   'multirun.launcher.agent.info': '모든 실행에 사용할 에이전트입니다. 설정된 기본 에이전트를 사용합니다.',
   'multirun.launcher.setupCommands.label': '셋업 명령',
