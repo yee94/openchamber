@@ -3030,11 +3030,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     );
 
     const selectedDraftProjectBranches = useGitBranches(selectedDraftProjectPath);
+    const selectedDraftProjectIsGitRepo = useIsGitRepo(selectedDraftProjectPath);
+    const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const fetchBranches = useGitStore((state) => state.fetchBranches);
     const [isDiscoveringDraftBranches, setIsDiscoveringDraftBranches] = React.useState(false);
 
     React.useEffect(() => {
-        if (!showDraftTargetSelectors || !selectedDraftProjectPath || !selectedDraftProject || !runtimeGit) {
+        if (!showDraftTargetSelectors || !selectedDraftProjectPath || !runtimeGit || selectedDraftProjectIsGitRepo !== null) {
+            return;
+        }
+
+        void fetchGitStatus(selectedDraftProjectPath, runtimeGit, { silent: true });
+    }, [fetchGitStatus, runtimeGit, selectedDraftProjectIsGitRepo, selectedDraftProjectPath, showDraftTargetSelectors]);
+
+    React.useEffect(() => {
+        if (!showDraftTargetSelectors || !selectedDraftProjectPath || !selectedDraftProject || !runtimeGit || selectedDraftProjectIsGitRepo !== true) {
             setIsDiscoveringDraftBranches(false);
             return;
         }
@@ -3057,7 +3067,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return () => {
             cancelled = true;
         };
-    }, [fetchBranches, runtimeGit, selectedDraftProject, selectedDraftProjectBranches?.all, selectedDraftProjectPath, showDraftTargetSelectors]);
+    }, [fetchBranches, runtimeGit, selectedDraftProject, selectedDraftProjectBranches?.all, selectedDraftProjectIsGitRepo, selectedDraftProjectPath, showDraftTargetSelectors]);
 
     const selectedDraftProjectCurrentBranch = selectedDraftProjectBranches?.current?.trim() ?? '';
 
@@ -3181,6 +3191,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [newSessionDraft?.open, newSessionDraft?.preserveDirectoryOverride, selectedDraftBranchIsKnown, selectedDraftDirectory]);
 
     const shouldShowDraftBranchSelector = React.useMemo(() => {
+        if (selectedDraftProjectIsGitRepo !== true) {
+            return false;
+        }
         if (isDiscoveringDraftBranches) {
             return false;
         }
@@ -3188,7 +3201,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return true;
         }
         return worktreeBranchOptions.length > 0;
-    }, [isDiscoveringDraftBranches, projectRootBranchOption, worktreeBranchOptions.length]);
+    }, [isDiscoveringDraftBranches, projectRootBranchOption, selectedDraftProjectIsGitRepo, worktreeBranchOptions.length]);
 
     const handleDraftProjectChange = React.useCallback((projectId: string) => {
         const draft = useSessionUIStore.getState().newSessionDraft;
