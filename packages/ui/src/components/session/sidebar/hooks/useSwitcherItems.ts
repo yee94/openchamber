@@ -21,6 +21,10 @@ export type SwitcherItem = {
 
 const MAX_PARENT_SESSIONS = 7;
 
+type SwitcherItemsOptions = {
+  scopeProjectId?: string | null;
+};
+
 const normalize = (value: string | null | undefined): string | null => {
   if (!value) return null;
   const replaced = value.replace(/\\/g, '/');
@@ -36,7 +40,8 @@ const formatProjectLabel = (project: { label?: string | null; path: string } | n
   return segments[segments.length - 1] ?? null;
 };
 
-export const useSwitcherItems = (enabled: boolean): SwitcherItem[] => {
+export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions = {}): SwitcherItem[] => {
+  const { scopeProjectId = null } = options;
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const projects = useProjectsStore((state) => state.projects);
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
@@ -84,6 +89,11 @@ export const useSwitcherItems = (enabled: boolean): SwitcherItem[] => {
     const parents = activeSessions
       .filter((session) => !session.time?.archived)
       .filter((session) => !(session as Session & { parentID?: string | null }).parentID)
+      .filter((session) => {
+        if (!scopeProjectId) return true;
+        const directory = resolveGlobalSessionDirectory(session);
+        return findProjectForDirectory(directory)?.id === scopeProjectId;
+      })
       .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds))
       .slice(0, MAX_PARENT_SESSIONS);
 
@@ -111,7 +121,7 @@ export const useSwitcherItems = (enabled: boolean): SwitcherItem[] => {
         },
       };
     });
-  }, [activeSessions, branchesByDirectory, enabled, findProjectForDirectory, pinnedSessionIds]);
+  }, [activeSessions, branchesByDirectory, enabled, findProjectForDirectory, pinnedSessionIds, scopeProjectId]);
 
   React.useEffect(() => {
     if (!enabled || !gitApi) return;
