@@ -63,6 +63,7 @@ import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { forceKillTerminal } from '@/lib/terminalApi';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
+import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag } from '@/lib/desktop';
 import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 import { resolveSessionDiffStats } from '@/components/session/sidebar/utils';
@@ -1892,13 +1893,17 @@ export const Header: React.FC<HeaderProps> = ({
             className="mr-2"
           />
         )}
-        {!isNewSessionDraftOpen ? (
-          <div className="mr-3 min-w-0">
-            <div className="truncate pl-1 typography-ui-label text-[14px] font-normal leading-tight text-foreground">
-              {currentSessionTitle}
-            </div>
-            {(activeProjectLabel || currentBranchLabel || hasNonZeroSessionChanges) ? (
-              <div className="flex min-w-0 items-center gap-1.5 truncate pl-1 typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
+        <SessionSwitcherDropdown>
+          <button
+            type="button"
+            aria-label={t('sessions.switcher.openAria')}
+            className="app-region-no-drag mr-3 flex min-w-0 flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
+          >
+            <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
+              {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
+            </span>
+            {(activeProjectLabel || currentBranchLabel || (!isNewSessionDraftOpen && (hasNonZeroSessionChanges || worktreeBadgeKind))) ? (
+              <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
                 {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
                 {currentBranchLabel ? (
                   <span className="inline-flex min-w-0 items-center gap-0.5">
@@ -1906,14 +1911,14 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="truncate">{currentBranchLabel}</span>
                   </span>
                 ) : null}
-                {hasNonZeroSessionChanges ? (
+                {!isNewSessionDraftOpen && hasNonZeroSessionChanges ? (
                   <span className="inline-flex flex-shrink-0 items-center gap-0 text-[0.92em]">
                     <span className="text-status-success/80">+{currentSessionChanges.additions}</span>
                     <span className="text-muted-foreground/60">/</span>
                     <span className="text-status-error/65">-{currentSessionChanges.deletions}</span>
                   </span>
                 ) : null}
-                {worktreeBadgeKind ? (
+                {!isNewSessionDraftOpen && worktreeBadgeKind ? (
                   <span className={cn(
                     "inline-flex min-w-0 items-center gap-0.5",
                     worktreeBadgeKind === 'attention' || worktreeBadgeKind === 'invalid' || worktreeBadgeKind === 'missing' ? 'text-status-warning' : 'text-muted-foreground/60'
@@ -1922,10 +1927,10 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="truncate">{worktreeBadge}</span>
                   </span>
                 ) : null}
-              </div>
+              </span>
             ) : null}
-          </div>
-        ) : null}
+          </button>
+        </SessionSwitcherDropdown>
 
         {tabs.length > 0 && (
           <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-muted)]/50 p-1">
