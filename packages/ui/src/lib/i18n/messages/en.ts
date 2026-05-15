@@ -1433,6 +1433,7 @@ export const dict = {
   'chat.container.returnToParent.titleNamed': 'Return to: {title}',
   'chat.container.returnToParent.title': 'Return to parent session',
   'chat.container.returnToParent.label': 'Parent',
+  'chat.container.readOnlySubagentPromptBanner': 'Subagent sessions cannot be prompted.',
   'chat.unifiedControls.title': 'Controls',
   'chat.unifiedControls.model.title': 'Model',
   'chat.unifiedControls.model.noRecent': 'No recent models',

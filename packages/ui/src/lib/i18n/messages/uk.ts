@@ -1399,6 +1399,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.container.returnToParent.titleNamed": "Повернутися до: {title}",
   "chat.container.returnToParent.title": "Повернутися до батьківської сесії",
   "chat.container.returnToParent.label": "Батьківська",
+  "chat.container.readOnlySubagentPromptBanner": "Сесії субагентів не можна запитувати.",
   "chat.unifiedControls.title": "Елементи керування",
   "chat.unifiedControls.model.title": "Модель",
   "chat.unifiedControls.model.noRecent": "Немає останніх моделей",

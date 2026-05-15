@@ -1435,6 +1435,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.container.returnToParent.titleNamed': '돌아가기: {title}',
   'chat.container.returnToParent.title': '상위 세션으로 돌아가기',
   'chat.container.returnToParent.label': '상위',
+  'chat.container.readOnlySubagentPromptBanner': '하위 에이전트 세션에는 프롬프트를 보낼 수 없습니다.',
   'chat.unifiedControls.title': '컨트롤',
   'chat.unifiedControls.model.title': '모델',
   'chat.unifiedControls.model.noRecent': '최근 모델 없음',

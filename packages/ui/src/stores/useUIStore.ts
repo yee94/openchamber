@@ -24,6 +24,7 @@ type ContextPanelTab = {
   targetPath: string | null;
   dedupeKey: string;
   label: string | null;
+  readOnly: boolean;
   touchedAt: number;
 };
 
@@ -32,6 +33,7 @@ type ContextPanelTabDescriptor = {
   targetPath?: string | null;
   dedupeKey?: string | null;
   label?: string | null;
+  readOnly?: boolean;
 };
 
 type ContextPanelDirectoryState = {
@@ -201,6 +203,7 @@ const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPa
     targetPath: normalizedTargetPath,
     dedupeKey,
     label: normalizeContextTabLabel(descriptor.label),
+    readOnly: descriptor.readOnly === true,
     touchedAt: Date.now(),
   };
 };
@@ -239,6 +242,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       targetPath?: unknown;
       dedupeKey?: unknown;
       label?: unknown;
+      readOnly?: unknown;
       touchedAt?: unknown;
     };
 
@@ -264,6 +268,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       targetPath,
       dedupeKey,
       label: normalizeContextTabLabel(typeof candidate.label === 'string' ? candidate.label : null),
+      readOnly: candidate.readOnly === true,
       touchedAt: typeof candidate.touchedAt === 'number' && Number.isFinite(candidate.touchedAt)
         ? candidate.touchedAt
         : Date.now(),

@@ -91,7 +91,8 @@ const normalizeSubtaskModel = (model: SubtaskPartLike['model']): string | null =
 
 const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     const [expanded, setExpanded] = React.useState(false);
-    const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+    const effectiveDirectory = useEffectiveDirectory();
+    const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const { t } = useI18n();
 
     const description = typeof part.description === 'string' ? part.description.trim() : '';
@@ -151,7 +152,13 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
                         type="button"
                         className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                         onClick={() => {
-                            void setCurrentSession(taskSessionID);
+                            if (!effectiveDirectory) return;
+                            openContextPanelTab(effectiveDirectory, {
+                                mode: 'chat',
+                                dedupeKey: `session:${taskSessionID}`,
+                                label: description || agent || t('contextPanel.mode.chat'),
+                                readOnly: true,
+                            });
                         }}
                     >
                         {t('chat.messageBody.subtask.openSession')}

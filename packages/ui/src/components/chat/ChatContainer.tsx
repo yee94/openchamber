@@ -315,11 +315,24 @@ const HYDRATING_SKELETON_ITEMS: Array<{
     },
 ];
 
-type ChatContainerProps = {
-    autoOpenDraft?: boolean;
+const ReadOnlyPromptBanner: React.FC = () => {
+    const { t } = useI18n();
+
+    return (
+        <div className="p-3">
+            <div className="rounded-2xl border border-border/70 bg-[var(--surface-background)] px-4 py-3 typography-ui-label text-muted-foreground">
+                {t('chat.container.readOnlySubagentPromptBanner')}
+            </div>
+        </div>
+    );
 };
 
-export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = true }) => {
+type ChatContainerProps = {
+    autoOpenDraft?: boolean;
+    readOnly?: boolean;
+};
+
+export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = true, readOnly = false }) => {
     const { t } = useI18n();
     // Session UI state
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
@@ -751,7 +764,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 							: 'bg-background'
 					)}
 				>
-						<ChatInput scrollToBottom={resumeToLatestInstant} />
+						{readOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={resumeToLatestInstant} />}
 				</div>
 			</div>
         );
@@ -811,7 +824,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 							: 'bg-background'
 					)}
 				>
-					<ChatInput scrollToBottom={resumeToLatestInstant} />
+					{readOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={resumeToLatestInstant} />}
 				</div>
             </div>
         );
@@ -844,7 +857,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 							: 'bg-background'
 					)}
 				>
-					<ChatInput scrollToBottom={resumeToLatestInstant} />
+					{readOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={resumeToLatestInstant} />}
 				</div>
             </div>
         );
@@ -892,7 +905,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
                         onClick={navigation.resumeToLatest}
                     />
                 )}
-                <ChatInput scrollToBottom={resumeToLatestInstant} />
+                {readOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={resumeToLatestInstant} />}
             </div>
 
             <TimelineDialog

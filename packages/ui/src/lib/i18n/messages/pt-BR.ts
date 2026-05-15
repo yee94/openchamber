@@ -1399,6 +1399,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.container.returnToParent.titleNamed": "Voltar para: {title}",
   "chat.container.returnToParent.title": "Voltar para a sessão principal",
   "chat.container.returnToParent.label": "Principal",
+  "chat.container.readOnlySubagentPromptBanner": "Sessões de subagente não podem receber prompts.",
   "chat.unifiedControls.title": "Controles",
   "chat.unifiedControls.model.title": "Modelo",
   "chat.unifiedControls.model.noRecent": "Não há modelos recentes",

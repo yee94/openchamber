@@ -1080,7 +1080,8 @@ const TaskToolSummary: React.FC<{
     isActive?: boolean;
 }> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false }) => {
     const { t } = useI18n();
-    const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     const displayEntries = entries;
 
@@ -1092,8 +1093,13 @@ const TaskToolSummary: React.FC<{
 
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
-        if (sessionId) {
-            setCurrentSession(sessionId);
+        if (sessionId && currentDirectory) {
+            openContextPanelTab(currentDirectory, {
+                mode: 'chat',
+                dedupeKey: `session:${sessionId}`,
+                label: agentType.charAt(0).toUpperCase() + agentType.slice(1),
+                readOnly: true,
+            });
         }
     };
 
