@@ -709,6 +709,8 @@ export const settingsDict = {
   'settings.openchamber.opencodeCli.tooltipSuffix': 'binary.',
   'settings.openchamber.opencodeCli.field.binaryPath': 'OpenCode Binary Path',
   'settings.openchamber.opencodeCli.field.binaryPathPlaceholder': '/Users/you/.bun/bin/opencode',
+  'settings.openchamber.opencodeCli.field.showUpdateNotifications': 'Show OpenCode update notifications',
+  'settings.openchamber.opencodeCli.field.showUpdateNotificationsAria': 'Show OpenCode update notifications',
   'settings.openchamber.opencodeCli.actions.browseAria': 'Browse for OpenCode binary path',
   'settings.openchamber.opencodeCli.actions.browse': 'Browse',
   'settings.openchamber.opencodeCli.actions.saveAndReload': 'Save + Reload',

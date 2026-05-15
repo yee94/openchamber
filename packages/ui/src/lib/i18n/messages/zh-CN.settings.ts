@@ -709,6 +709,8 @@ export const settingsDict = {
   'settings.openchamber.opencodeCli.tooltipSuffix': '二进制绝对路径。',
   'settings.openchamber.opencodeCli.field.binaryPath': 'OpenCode 可执行文件路径',
   'settings.openchamber.opencodeCli.field.binaryPathPlaceholder': '/Users/you/.bun/bin/opencode',
+  'settings.openchamber.opencodeCli.field.showUpdateNotifications': '显示 OpenCode 更新通知',
+  'settings.openchamber.opencodeCli.field.showUpdateNotificationsAria': '显示 OpenCode 更新通知',
   'settings.openchamber.opencodeCli.actions.browseAria': '浏览 OpenCode 可执行文件路径',
   'settings.openchamber.opencodeCli.actions.browse': '浏览',
   'settings.openchamber.opencodeCli.actions.saveAndReload': '保存并重载',

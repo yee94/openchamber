@@ -709,6 +709,8 @@ export const settingsDict = {
   'settings.openchamber.opencodeCli.tooltipSuffix': 'binary.',
   'settings.openchamber.opencodeCli.field.binaryPath': 'OpenCode binary 경로',
   'settings.openchamber.opencodeCli.field.binaryPathPlaceholder': '/Users/you/.bun/bin/opencode',
+  'settings.openchamber.opencodeCli.field.showUpdateNotifications': 'OpenCode 업데이트 알림 표시',
+  'settings.openchamber.opencodeCli.field.showUpdateNotificationsAria': 'OpenCode 업데이트 알림 표시',
   'settings.openchamber.opencodeCli.actions.browseAria': 'OpenCode binary 경로 찾아보기',
   'settings.openchamber.opencodeCli.actions.browse': '찾아보기',
   'settings.openchamber.opencodeCli.actions.saveAndReload': '저장 + 다시 로드',

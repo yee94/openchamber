@@ -709,6 +709,8 @@ export const settingsDict = {
   "settings.openchamber.opencodeCli.tooltipSuffix": "бінарного файлу.",
   "settings.openchamber.opencodeCli.field.binaryPath": "Шлях до бінарного файлу OpenCode",
   "settings.openchamber.opencodeCli.field.binaryPathPlaceholder": "/Users/you/.bun/bin/opencode",
+  "settings.openchamber.opencodeCli.field.showUpdateNotifications": "Показувати сповіщення про оновлення OpenCode",
+  "settings.openchamber.opencodeCli.field.showUpdateNotificationsAria": "Показувати сповіщення про оновлення OpenCode",
   "settings.openchamber.opencodeCli.actions.browseAria": "Вибрати шлях до виконуваного файла OpenCode",
   "settings.openchamber.opencodeCli.actions.browse": "Огляд",
   "settings.openchamber.opencodeCli.actions.saveAndReload": "Зберегти й перезавантажити",
