@@ -1434,6 +1434,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.diffViewModeAria': 'Diff view mode: {option}',
   'settings.openchamber.visual.field.showReasoningTracesAria': 'Show reasoning traces',
   'settings.openchamber.visual.field.showReasoningTraces': 'Show Reasoning Traces',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocksAria': 'Enable collapsible reasoning blocks',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocks': 'Enable Collapsible Reasoning Blocks',
   'settings.openchamber.visual.field.stickyUserHeaderAria': 'Sticky user header',
   'settings.openchamber.visual.field.stickyUserHeader': 'Sticky User Header',
   'settings.openchamber.visual.field.wideChatLayoutAria': 'Wide chat layout',

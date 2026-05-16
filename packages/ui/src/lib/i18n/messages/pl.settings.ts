@@ -840,6 +840,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showMobileStatusBarAria': 'Pokaż mobilny pasek statusu',
   'settings.openchamber.visual.field.showReasoningTraces': 'Pokaż ślady rozumowania',
   'settings.openchamber.visual.field.showReasoningTracesAria': 'Pokaż ślady rozumowania',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocks': 'Włącz zwijalne bloki rozumowania',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocksAria': 'Włącz zwijalne bloki rozumowania',
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Akcje asystenta w treści',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsAria': 'Akcje asystenta w treści',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Pokaż Kopiuj odpowiedź, Zapisz jako obraz i Odczytaj na głos w blokach tekstu asystenta, które pojawiają się przed późniejszymi wywołaniami narzędzi w tej samej odpowiedzi.',

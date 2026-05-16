@@ -1434,6 +1434,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.diffViewModeAria": "Modo de vista de comparación: {option}",
   "settings.openchamber.visual.field.showReasoningTracesAria": "Mostrar rastros de razonamiento",
   "settings.openchamber.visual.field.showReasoningTraces": "Mostrar trazas de razonamiento",
+  "settings.openchamber.visual.field.collapsibleThinkingBlocksAria": "Habilitar bloques de razonamiento colapsables",
+  "settings.openchamber.visual.field.collapsibleThinkingBlocks": "Habilitar Bloques de Razonamiento Colapsables",
   "settings.openchamber.visual.field.stickyUserHeaderAria": "Encabezado del usuario fijo",
   "settings.openchamber.visual.field.stickyUserHeader": "Encabezado de usuario fijo",
   "settings.openchamber.visual.field.wideChatLayoutAria": "Diseño de chat ancho",

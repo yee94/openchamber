@@ -1434,6 +1434,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.diffViewModeAria": "Режим перегляду diff: {option}",
   "settings.openchamber.visual.field.showReasoningTracesAria": "Показати сліди міркувань",
   "settings.openchamber.visual.field.showReasoningTraces": "Показати сліди міркувань",
+  "settings.openchamber.visual.field.collapsibleThinkingBlocksAria": "Увімкнути згортальні блоки міркувань",
+  "settings.openchamber.visual.field.collapsibleThinkingBlocks": "Увімкнути згортальні блоки міркувань",
   "settings.openchamber.visual.field.stickyUserHeaderAria": "Закріплений заголовок користувача",
   "settings.openchamber.visual.field.stickyUserHeader": "Закріплений заголовок користувача",
   "settings.openchamber.visual.field.wideChatLayoutAria": "Широкий макет чату",

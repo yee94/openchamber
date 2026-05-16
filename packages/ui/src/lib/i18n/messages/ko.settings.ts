@@ -1434,6 +1434,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.diffViewModeAria': 'Diff 보기 모드: {option}',
   'settings.openchamber.visual.field.showReasoningTracesAria': 'Reasoning trace 표시',
   'settings.openchamber.visual.field.showReasoningTraces': 'Reasoning Trace 표시',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocksAria': '접을 수 있는 추론 블록 활성화',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocks': '접을 수 있는 추론 블록 활성화',
   'settings.openchamber.visual.field.stickyUserHeaderAria': '고정 사용자 헤더',
   'settings.openchamber.visual.field.stickyUserHeader': '고정 사용자 헤더',
   'settings.openchamber.visual.field.wideChatLayoutAria': '넓은 채팅 레이아웃',

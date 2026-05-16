@@ -1434,6 +1434,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.diffViewModeAria': 'Diff 视图模式：{option}',
   'settings.openchamber.visual.field.showReasoningTracesAria': '显示推理轨迹',
   'settings.openchamber.visual.field.showReasoningTraces': '显示推理轨迹',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocksAria': '启用可折叠推理块',
+  'settings.openchamber.visual.field.collapsibleThinkingBlocks': '启用可折叠推理块',
   'settings.openchamber.visual.field.stickyUserHeaderAria': '固定用户消息头',
   'settings.openchamber.visual.field.stickyUserHeader': '固定用户消息头',
   'settings.openchamber.visual.field.wideChatLayoutAria': '宽聊天布局',
