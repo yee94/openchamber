@@ -2575,6 +2575,9 @@ ipcMain.handle('openchamber:dialog:open', async (event, options) => {
   const browserWindow = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(browserWindow || undefined, {
     title: typeof options?.title === 'string' ? options.title : undefined,
+    defaultPath: typeof options?.defaultPath === 'string' && options.defaultPath.trim().length > 0
+      ? options.defaultPath.trim()
+      : undefined,
     filters: Array.isArray(options?.filters)
       ? options.filters
           .filter((filter) => filter && typeof filter === 'object')

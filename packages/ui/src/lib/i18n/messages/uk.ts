@@ -1000,6 +1000,8 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.todo.actions.expand": "Розгорнути завдання \"{text}\"",
   "rightSidebar.contextNotesTodo.todo.actions.delete": "Видалити \"{text}\"",
   "rightSidebar.contextNotesTodo.todo.actions.send": "Надіслати \"{text}\"",
+  "rightSidebar.contextNotesTodo.todo.actions.reorder": "Змінити порядок \"{text}\"",
+  "rightSidebar.contextNotesTodo.todo.resizeAria": "Змінити розмір списку завдань",
   "rightSidebar.contextNotesTodo.todo.sendMenu.currentSession": "Надіслати до поточної сесії",
   "rightSidebar.contextNotesTodo.todo.sendMenu.newSession": "Надіслати до нової сесії",
   "rightSidebar.contextNotesTodo.todo.sendMenu.newWorktreeSession": "Надіслати до нової сесії в worktree",

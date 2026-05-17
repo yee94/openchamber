@@ -1000,6 +1000,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.todo.actions.expand': '展开待办“{text}”',
   'rightSidebar.contextNotesTodo.todo.actions.delete': '删除“{text}”',
   'rightSidebar.contextNotesTodo.todo.actions.send': '发送“{text}”',
+  'rightSidebar.contextNotesTodo.todo.actions.reorder': '重新排序"{text}"',
+  'rightSidebar.contextNotesTodo.todo.resizeAria': '调整待办列表大小',
   'rightSidebar.contextNotesTodo.todo.sendMenu.currentSession': '发送到当前会话',
   'rightSidebar.contextNotesTodo.todo.sendMenu.newSession': '发送到新会话',
   'rightSidebar.contextNotesTodo.todo.sendMenu.newWorktreeSession': '发送到新 worktree 会话',

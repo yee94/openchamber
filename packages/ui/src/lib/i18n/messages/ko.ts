@@ -1037,6 +1037,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.todo.actions.expand': '펼치기 todo "{text}"',
   'rightSidebar.contextNotesTodo.todo.actions.delete': '"{text}" 삭제',
   'rightSidebar.contextNotesTodo.todo.actions.send': '보내기 "{text}"',
+  'rightSidebar.contextNotesTodo.todo.actions.reorder': '재정렬 "{text}"',
+  'rightSidebar.contextNotesTodo.todo.resizeAria': '할 일 목록 크기 조정',
   'rightSidebar.contextNotesTodo.todo.sendMenu.currentSession': '현재 세션으로 보내기',
   'rightSidebar.contextNotesTodo.todo.sendMenu.newSession': '새 세션으로 보내기',
   'rightSidebar.contextNotesTodo.todo.sendMenu.newWorktreeSession': '새 워크트리 세션으로 보내기',

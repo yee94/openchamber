@@ -1034,6 +1034,8 @@ export const dict = {
   'rightSidebar.contextNotesTodo.todo.actions.expand': 'Expand todo "{text}"',
   'rightSidebar.contextNotesTodo.todo.actions.delete': 'Delete "{text}"',
   'rightSidebar.contextNotesTodo.todo.actions.send': 'Send "{text}"',
+  'rightSidebar.contextNotesTodo.todo.actions.reorder': 'Reorder "{text}"',
+  'rightSidebar.contextNotesTodo.todo.resizeAria': 'Resize todo list',
   'rightSidebar.contextNotesTodo.todo.sendMenu.currentSession': 'Send to current session',
   'rightSidebar.contextNotesTodo.todo.sendMenu.newSession': 'Send to new session',
   'rightSidebar.contextNotesTodo.todo.sendMenu.newWorktreeSession': 'Send to new worktree session',

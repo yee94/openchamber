@@ -1000,6 +1000,8 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.todo.actions.expand": "Expandir tarea pendiente \"{text}\"",
   "rightSidebar.contextNotesTodo.todo.actions.delete": "Eliminar \"{text}\"",
   "rightSidebar.contextNotesTodo.todo.actions.send": "Enviar \"{text}\"",
+  "rightSidebar.contextNotesTodo.todo.actions.reorder": "Reordenar \"{text}\"",
+  "rightSidebar.contextNotesTodo.todo.resizeAria": "Redimensionar lista de tareas",
   "rightSidebar.contextNotesTodo.todo.sendMenu.currentSession": "Enviar a la sesión actual",
   "rightSidebar.contextNotesTodo.todo.sendMenu.newSession": "Enviar a una nueva sesión",
   "rightSidebar.contextNotesTodo.todo.sendMenu.newWorktreeSession": "Enviar a una nueva sesión de worktree",
