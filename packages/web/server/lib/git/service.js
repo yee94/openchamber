@@ -3129,6 +3129,9 @@ export async function getRemotes(directory) {
       pushUrl: remote.refs.push
     }));
   } catch (error) {
+    if (isNotGitRepositoryError(error)) {
+      return [];
+    }
     console.error('Failed to get remotes:', error);
     throw error;
   }
