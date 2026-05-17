@@ -116,6 +116,18 @@ function getSessionReplyClient(sessionId?: string): OpencodeClient {
   return sdk()
 }
 
+function restoreFilePartsToInput(fileParts: Array<Record<string, unknown>>): void {
+  useInputStore.getState().clearAttachedFiles()
+  for (const filePart of fileParts) {
+    const url = typeof filePart.url === "string" ? filePart.url : ""
+    const mime = typeof filePart.mime === "string" ? filePart.mime : "application/octet-stream"
+    const filename = typeof filePart.filename === "string" ? filePart.filename : "attachment"
+    if (url) {
+      useInputStore.getState().addRestoredAttachment({ url, mimeType: mime, filename })
+    }
+  }
+}
+
 function resolveDirectoryForBlockingRequest(
   type: "permission" | "question",
   sessionId: string,
@@ -589,10 +601,10 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
       .map((p: Record<string, unknown>) => (p as { text?: string }).text || (p as { content?: string }).content || "")
       .join("\n")
       .trim()
-    // Snapshot file parts for later restoration to the input (line ~626).
-    // File parts (type="file") contain url/mime/filename — the file already
-    // exists on the server so we record it as a "server" source attachment.
-    submittedFileParts = parts.filter((p) => p.type === "file") as Array<Record<string, unknown>>
+    // Snapshot file parts for later restoration to the input.
+    // Exclude synthetic file parts (server-generated file content that should
+    // not be restored to the composer).
+    submittedFileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>
   }
 
   // Optimistically set only the revert marker. Keep messages and parts in the
@@ -632,16 +644,7 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
   // Restore file/image attachments from the target message.
   // Clear existing attachments first — previous revert's attachments
   // must not carry over, even when the current message has no files.
-  useInputStore.getState().clearAttachedFiles()
-  for (const fp of submittedFileParts) {
-      const f = fp as Record<string, unknown>
-      const url = typeof f.url === "string" ? f.url : ""
-      const mime = typeof f.mime === "string" ? f.mime : "application/octet-stream"
-      const filename = typeof f.filename === "string" ? f.filename : "attachment"
-      if (url) {
-        useInputStore.getState().addRestoredAttachment({ url, mimeType: mime, filename })
-      }
-    }
+  restoreFilePartsToInput(submittedFileParts)
 
   // Call SDK and merge authoritative result into store
   try {
@@ -745,8 +748,10 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   const store = dirStore()
   const state = store.getState()
 
-  // Extract message text for input restoration (only non-synthetic text parts —
-  // the server adds file content as synthetic text parts that should not be restored)
+  // Extract message text and file attachments for input restoration.
+  // Only non-synthetic text parts — the server adds file content as synthetic
+  // text parts that should not be restored. File parts (images, pasted
+  // screenshots) are user-originated and must be restored.
   const parts = state.part[messageId] ?? []
   let messageText = ""
   const textParts = parts.filter((p) => p.type === "text" && !isSyntheticPart(p))
@@ -754,6 +759,7 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
     .map((p: Part) => ((p as Record<string, unknown>).text as string) || ((p as Record<string, unknown>).content as string) || "")
     .join("\n")
     .trim()
+  const fileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>
 
   const result = await sdk().session.fork({ sessionID: sessionId, directory: dir(), messageID: messageId })
   if (!result.data) return
@@ -772,11 +778,13 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   // Switch to new session
   useSessionUIStore.getState().setCurrentSession(forkedSession.id)
 
-  // Restore forked message text to input
+  // Restore forked message text and file attachments to input
   if (messageText) {
     useInputStore.setState({
       pendingInputText: messageText,
       pendingInputMode: "replace" as const,
     })
   }
+  // Clear existing attachments and restore file parts from the forked message.
+  restoreFilePartsToInput(fileParts)
 }
