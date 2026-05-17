@@ -187,26 +187,28 @@ const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> =
     return <>{formatDuration(start, end, now)}</>;
 };
 
-const useDeferredExpandedContent = (isExpanded: boolean) => {
-    const [shouldRender, setShouldRender] = React.useState(false);
+const EXPANDED_CONTENT_TRANSITION_MS = 350;
+
+const useAnimatedExpandedContent = (isExpanded: boolean) => {
+    const [shouldRender, setShouldRender] = React.useState(isExpanded);
 
     React.useEffect(() => {
-        if (!isExpanded) {
-            setShouldRender(false);
-            return;
-        }
-
         if (typeof window === 'undefined') {
+            setShouldRender(isExpanded);
+            return;
+        }
+
+        if (isExpanded) {
             setShouldRender(true);
             return;
         }
 
-        const frame = window.requestAnimationFrame(() => {
-            setShouldRender(true);
-        });
+        const timer = window.setTimeout(() => {
+            setShouldRender(false);
+        }, EXPANDED_CONTENT_TRANSITION_MS);
 
         return () => {
-            window.cancelAnimationFrame(frame);
+            window.clearTimeout(timer);
         };
     }, [isExpanded]);
 
@@ -2528,7 +2530,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const iconStyle = !isTaskTool && isError ? TOOL_ERROR_ICON_STYLE : TOOL_NORMAL_ICON_STYLE;
     const titleStyle = !isTaskTool && isError ? TOOL_ERROR_TITLE_STYLE : TOOL_NORMAL_TITLE_STYLE;
-    const shouldRenderExpandedContent = useDeferredExpandedContent(isExpanded);
+    const shouldRenderExpandedContent = useAnimatedExpandedContent(isExpanded);
 
     if (!shouldTreatAsFinalized && !isActive && !isTaskTool) {
         return null;
@@ -2672,20 +2674,32 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 />
             ) : null}
 
-            {!isTaskTool && shouldRenderExpandedContent ? (
-                <div className="relative ml-2 pl-3">
-                    <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute left-0 top-px bottom-0 w-px"
-                        style={{ backgroundColor: 'var(--tools-border)' }}
-                    />
-                    <ToolExpandedContent
-                        part={part}
-                        state={state}
-                        syntaxTheme={syntaxTheme}
-                        currentDirectory={currentDirectory}
-                        onShowPopup={onShowPopup}
-                    />
+            {!isTaskTool ? (
+                <div
+                    aria-hidden={!isExpanded}
+                    className={cn(
+                        'grid transition-[grid-template-rows,opacity] duration-[350ms] ease-out motion-reduce:transition-none',
+                        isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                    )}
+                >
+                    <div className="min-h-0 overflow-hidden">
+                        {shouldRenderExpandedContent ? (
+                            <div className="relative ml-2 pl-3">
+                                <span
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute left-0 top-px bottom-0 w-px"
+                                    style={{ backgroundColor: 'var(--tools-border)' }}
+                                />
+                                <ToolExpandedContent
+                                    part={part}
+                                    state={state}
+                                    syntaxTheme={syntaxTheme}
+                                    currentDirectory={currentDirectory}
+                                    onShowPopup={onShowPopup}
+                                />
+                            </div>
+                        ) : null}
+                    </div>
                 </div>
             ) : null}
         </div>
