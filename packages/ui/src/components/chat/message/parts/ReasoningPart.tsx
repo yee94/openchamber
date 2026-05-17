@@ -1,4 +1,5 @@
 import React from 'react';
+import { animate, type AnimationPlaybackControls } from 'motion';
 import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
@@ -29,6 +30,7 @@ const cleanReasoningText = (text: string): string => {
 
 const SUMMARY_MAX_CHARS = 80;
 const INLINE_THRESHOLD = 120;
+const EXPANDED_CONTENT_SPRING = { type: 'spring' as const, visualDuration: 0.35, bounce: 0 };
 
 /** Strip common markdown syntax so the header preview reads as plain text. */
 const stripMarkdown = (text: string): string =>
@@ -95,6 +97,9 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const [isExpanded, setIsExpanded] = React.useState(defaultExpanded ?? isStreaming);
     const contentId = React.useId();
     const scrollRef = React.useRef<HTMLElement>(null);
+    const contentRef = React.useRef<HTMLDivElement>(null);
+    const contentAnimationRef = React.useRef<AnimationPlaybackControls | null>(null);
+    const contentMountedRef = React.useRef(false);
     // Track previous isStreaming so the effect only collapses on true→false
     // transitions and does NOT override defaultExpanded on initial mount.
     const prevIsStreamingRef = React.useRef(isStreaming);
@@ -138,6 +143,67 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [text, isStreaming, isExpanded]);
+
+    React.useLayoutEffect(() => {
+        const element = contentRef.current;
+        if (!element) {
+            return;
+        }
+
+        contentAnimationRef.current?.stop();
+
+        if (!contentMountedRef.current) {
+            contentMountedRef.current = true;
+            element.style.height = isExpanded ? 'auto' : '0px';
+            element.style.opacity = isExpanded ? '1' : '0';
+            element.style.overflow = isExpanded ? 'visible' : 'hidden';
+            return;
+        }
+
+        element.style.overflow = 'hidden';
+
+        if (isExpanded) {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+        } else {
+            element.style.height = `${element.scrollHeight}px`;
+            element.style.opacity = '1';
+        }
+
+        const animation = animate(
+            element,
+            { height: isExpanded ? 'auto' : '0px', opacity: isExpanded ? 1 : 0 },
+            EXPANDED_CONTENT_SPRING,
+        );
+        contentAnimationRef.current = animation;
+
+        void animation.finished.then(() => {
+            if (contentAnimationRef.current !== animation) {
+                return;
+            }
+            contentAnimationRef.current = null;
+            if (isExpanded) {
+                element.style.overflow = 'visible';
+                element.style.height = 'auto';
+            } else {
+                element.style.overflow = 'hidden';
+            }
+        }).catch(() => undefined);
+
+        return () => {
+            animation.stop();
+            if (contentAnimationRef.current === animation) {
+                contentAnimationRef.current = null;
+            }
+        };
+    }, [isExpanded]);
+
+    React.useEffect(() => {
+        return () => {
+            contentAnimationRef.current?.stop();
+            contentAnimationRef.current = null;
+        };
+    }, []);
 
     if (!text || text.trim().length === 0) {
         return null;
@@ -246,47 +312,48 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
             {/* Expanded content — keep mounted so auto-collapse can animate smoothly. */}
             <div
+                ref={contentRef}
                 id={contentId}
                 aria-hidden={!isExpanded}
-                className={cn(
-                    'grid transition-[grid-template-rows,opacity] duration-[350ms] ease-out motion-reduce:transition-none',
-                    isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                )}
+                style={{
+                    height: isExpanded ? 'auto' : '0px',
+                    opacity: isExpanded ? 1 : 0,
+                    overflow: isExpanded ? 'visible' : 'hidden',
+                    overflowAnchor: 'none',
+                }}
             >
-                <div className="min-h-0 overflow-hidden">
-                    <div className="relative ml-2 pl-3 pb-1 pt-0.5">
-                        <span
-                            aria-hidden="true"
-                            className="pointer-events-none absolute left-0 top-0 bottom-0 w-px"
-                            style={{ backgroundColor: 'var(--tools-border)' }}
-                        />
-                        <ScrollableOverlay
-                            ref={scrollRef}
-                            as="div"
-                            outerClassName="max-h-80"
-                            className="p-0"
-                            useScrollShadow
-                            scrollShadowSize={36}
-                            userIntentOnly
-                        >
-                            <div data-message-text-export-source="true">
-                                <MarkdownRenderer
-                                    content={text}
-                                    messageId={blockId}
-                                    isAnimated={false}
-                                    isStreaming={isStreaming}
-                                    variant="reasoning"
-                                />
-                            </div>
-                            {actions ? (
-                                <div className="mt-2 mb-1 flex items-center justify-start gap-1.5" data-message-actions="true">
-                                    <div className="flex items-center gap-1.5" data-message-action-group="true">
-                                        {actions}
-                                    </div>
+                <div className="relative ml-2 pl-3 pb-1 pt-0.5">
+                    <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-0 top-0 bottom-0 w-px"
+                        style={{ backgroundColor: 'var(--tools-border)' }}
+                    />
+                    <ScrollableOverlay
+                        ref={scrollRef}
+                        as="div"
+                        outerClassName="max-h-80"
+                        className="p-0"
+                        useScrollShadow
+                        scrollShadowSize={36}
+                        userIntentOnly
+                    >
+                        <div data-message-text-export-source="true">
+                            <MarkdownRenderer
+                                content={text}
+                                messageId={blockId}
+                                isAnimated={false}
+                                isStreaming={isStreaming}
+                                variant="reasoning"
+                            />
+                        </div>
+                        {actions ? (
+                            <div className="mt-2 mb-1 flex items-center justify-start gap-1.5" data-message-actions="true">
+                                <div className="flex items-center gap-1.5" data-message-action-group="true">
+                                    {actions}
                                 </div>
-                            ) : null}
-                        </ScrollableOverlay>
-                    </div>
+                            </div>
+                        ) : null}
+                    </ScrollableOverlay>
                 </div>
             </div>
         </div>

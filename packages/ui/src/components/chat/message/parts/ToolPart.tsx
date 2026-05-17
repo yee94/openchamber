@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { animate, type AnimationPlaybackControls } from 'motion';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { PatchDiff } from '@pierre/diffs/react';
 import { cn } from '@/lib/utils';
@@ -188,6 +189,7 @@ const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> =
 };
 
 const EXPANDED_CONTENT_TRANSITION_MS = 350;
+const EXPANDED_CONTENT_SPRING = { type: 'spring' as const, visualDuration: 0.35, bounce: 0 };
 
 const useAnimatedExpandedContent = (isExpanded: boolean) => {
     const [shouldRender, setShouldRender] = React.useState(isExpanded);
@@ -1900,15 +1902,77 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const onContentChangeRef = React.useRef(onContentChange);
     onContentChangeRef.current = onContentChange;
+    const expandedContentRef = React.useRef<HTMLDivElement>(null);
+    const expandedContentAnimationRef = React.useRef<AnimationPlaybackControls | null>(null);
+    const expandedContentMountedRef = React.useRef(false);
 
-    React.useEffect(() => {
-        if (!shouldNotifyStructuralChange) {
+    React.useLayoutEffect(() => {
+        if (isTaskTool) {
             return;
         }
-        if (typeof isExpanded === 'boolean') {
-            onContentChangeRef.current?.('structural');
+
+        const element = expandedContentRef.current;
+        if (!element) {
+            return;
         }
-    }, [isExpanded, shouldNotifyStructuralChange]);
+
+        expandedContentAnimationRef.current?.stop();
+
+        if (!expandedContentMountedRef.current) {
+            expandedContentMountedRef.current = true;
+            element.style.height = isExpanded ? 'auto' : '0px';
+            element.style.opacity = isExpanded ? '1' : '0';
+            element.style.overflow = isExpanded ? 'visible' : 'hidden';
+            return;
+        }
+
+        element.style.overflow = 'hidden';
+
+        if (isExpanded) {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+        } else {
+            element.style.height = `${element.scrollHeight}px`;
+            element.style.opacity = '1';
+        }
+
+        const animation = animate(
+            element,
+            { height: isExpanded ? 'auto' : '0px', opacity: isExpanded ? 1 : 0 },
+            EXPANDED_CONTENT_SPRING,
+        );
+        expandedContentAnimationRef.current = animation;
+
+        void animation.finished.then(() => {
+            if (expandedContentAnimationRef.current !== animation) {
+                return;
+            }
+            expandedContentAnimationRef.current = null;
+            if (isExpanded) {
+                element.style.overflow = 'visible';
+                element.style.height = 'auto';
+            } else {
+                element.style.overflow = 'hidden';
+            }
+            if (shouldNotifyStructuralChange) {
+                onContentChangeRef.current?.('structural');
+            }
+        }).catch(() => undefined);
+
+        return () => {
+            animation.stop();
+            if (expandedContentAnimationRef.current === animation) {
+                expandedContentAnimationRef.current = null;
+            }
+        };
+    }, [isExpanded, isTaskTool, shouldNotifyStructuralChange]);
+
+    React.useEffect(() => {
+        return () => {
+            expandedContentAnimationRef.current?.stop();
+            expandedContentAnimationRef.current = null;
+        };
+    }, []);
 
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
@@ -2676,30 +2740,31 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
             {!isTaskTool ? (
                 <div
+                    ref={expandedContentRef}
                     aria-hidden={!isExpanded}
-                    className={cn(
-                        'grid transition-[grid-template-rows,opacity] duration-[350ms] ease-out motion-reduce:transition-none',
-                        isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                    )}
+                    style={{
+                        height: isExpanded ? 'auto' : '0px',
+                        opacity: isExpanded ? 1 : 0,
+                        overflow: isExpanded ? 'visible' : 'hidden',
+                        overflowAnchor: 'none',
+                    }}
                 >
-                    <div className="min-h-0 overflow-hidden">
-                        {shouldRenderExpandedContent ? (
-                            <div className="relative ml-2 pl-3">
-                                <span
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute left-0 top-px bottom-0 w-px"
-                                    style={{ backgroundColor: 'var(--tools-border)' }}
-                                />
-                                <ToolExpandedContent
-                                    part={part}
-                                    state={state}
-                                    syntaxTheme={syntaxTheme}
-                                    currentDirectory={currentDirectory}
-                                    onShowPopup={onShowPopup}
-                                />
-                            </div>
-                        ) : null}
-                    </div>
+                    {shouldRenderExpandedContent ? (
+                        <div className="relative ml-2 pl-3">
+                            <span
+                                aria-hidden="true"
+                                className="pointer-events-none absolute left-0 top-px bottom-0 w-px"
+                                style={{ backgroundColor: 'var(--tools-border)' }}
+                            />
+                            <ToolExpandedContent
+                                part={part}
+                                state={state}
+                                syntaxTheme={syntaxTheme}
+                                currentDirectory={currentDirectory}
+                                onShowPopup={onShowPopup}
+                            />
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
         </div>
