@@ -2683,14 +2683,52 @@ export async function deleteBranch(directory, branch, options = {}) {
   }
 }
 
+/**
+ * Resolve a log base ref using local-first semantics.
+ *
+ * - If `from` is falsy / whitespace → return undefined.
+ * - If the local ref resolves → return it unchanged (caller's intent preserved).
+ * - If the local ref is absent but `origin/<from>` exists → return `origin/<from>`
+ *   (common when the user has never checked out the base branch locally).
+ * - If neither resolves → return `from` unchanged so git surfaces a meaningful error.
+ *
+ * @param {string | undefined} from   - The raw `from` option value.
+ * @param {(ref: string) => Promise<boolean>} checkRef - Returns true when the ref resolves.
+ * @returns {Promise<string | undefined>}
+ */
+export async function resolveBaseRefForLog(from, checkRef) {
+  const normalized = typeof from === 'string' ? from.trim() : undefined;
+  if (!normalized) return undefined;
+
+  if (await checkRef(normalized)) return normalized;
+
+  const originRef = `refs/remotes/origin/${normalized}`;
+  if (await checkRef(originRef)) return `origin/${normalized}`;
+
+  return normalized;
+}
+
 export async function getLog(directory, options = {}) {
   const git = await createGit(directory);
 
   try {
     const maxCount = options.maxCount || 50;
+
+    // Prefer the local ref; fall back to origin/<from> only when the local ref
+    // cannot be resolved (e.g. user has never checked out the base branch).
+    const checkRef = async (ref) => {
+      try {
+        const out = await git.raw(['rev-parse', '--verify', ref]);
+        return Boolean(out && out.trim());
+      } catch {
+        return false;
+      }
+    };
+    const resolvedFrom = await resolveBaseRefForLog(options.from, checkRef);
+
     const baseLog = await git.log({
       maxCount,
-      from: options.from,
+      from: resolvedFrom,
       to: options.to,
       file: options.file
     });
@@ -2703,10 +2741,10 @@ export async function getLog(directory, options = {}) {
       '--shortstat'
     ];
 
-    if (options.from && options.to) {
-      logArgs.push(`${options.from}..${options.to}`);
-    } else if (options.from) {
-      logArgs.push(`${options.from}..HEAD`);
+    if (resolvedFrom && options.to) {
+      logArgs.push(`${resolvedFrom}..${options.to}`);
+    } else if (resolvedFrom) {
+      logArgs.push(`${resolvedFrom}..HEAD`);
     } else if (options.to) {
       logArgs.push(options.to);
     }
