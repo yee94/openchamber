@@ -1611,6 +1611,27 @@ const parseIsBinaryFromNumstat = (raw) => {
   return added === '-' || deleted === '-';
 };
 
+const extractGitStatusPath = (status, pathPart) => {
+  if ((status === 'R' || status === 'C') && pathPart.includes('\t')) {
+    return pathPart.split('\t').pop() || pathPart;
+  }
+  return pathPart;
+};
+
+const extractGitNumstatDestinationPath = (filePath) => {
+  if (!filePath.includes(' => ')) {
+    return filePath;
+  }
+
+  const braceMatch = filePath.match(/^(.*)\{([^{}]*)\s=>\s([^{}]*)\}(.*)$/);
+  if (braceMatch) {
+    const [, prefix, , destination, suffix] = braceMatch;
+    return `${prefix}${destination}${suffix}`.replace(/\/+/g, '/');
+  }
+
+  return filePath.split(' => ').pop()?.trim() || filePath;
+};
+
 const looksBinaryBySniff = async (absolutePath) => {
   try {
     const handle = await fsp.open(absolutePath, 'r');
@@ -3028,15 +3049,13 @@ export async function getCommitFiles(directory, commitHash) {
     for (const line of statusLines) {
       const match = line.match(/^([AMDRC])\d*\t(.+)$/);
       if (match) {
-        const [, status, path] = match;
-        statusMap.set(path, status);
+        const [, status, pathPart] = match;
+        statusMap.set(extractGitStatusPath(status, pathPart), status);
       }
     }
 
     for (const file of files) {
-      const basePath = file.path.includes(' => ')
-        ? file.path.split(' => ').pop()?.replace(/[{}]/g, '') || file.path
-        : file.path;
+      const basePath = extractGitNumstatDestinationPath(file.path);
 
       const status = statusMap.get(basePath) || statusMap.get(file.path);
       if (status) {
@@ -3378,4 +3397,30 @@ export async function getConflictDetails(directory) {
     console.error('Failed to get conflict details:', error);
     throw error;
   }
+}
+
+export async function getCommitFileDiff(directory, hash, filePath, isBinary) {
+  if (!directory || !hash || !filePath) {
+    throw new Error('directory, hash, and path are required for getCommitFileDiff');
+  }
+
+  if (isBinary) {
+    return { original: '', modified: '', isBinary: true };
+  }
+
+  const directoryPath = normalizeDirectoryPath(directory);
+
+  const [originalResult, modifiedResult] = await Promise.all([
+    runGitCommand(directoryPath, ['show', `${hash}^:${filePath}`]),
+    runGitCommand(directoryPath, ['show', `${hash}:${filePath}`]),
+  ]);
+
+  const original = originalResult.success ? originalResult.stdout : '';
+  const modified = modifiedResult.success ? modifiedResult.stdout : '';
+
+  if (!originalResult.success && !modifiedResult.success) {
+    throw new Error(`Failed to read file content at commit ${hash}: ${originalResult.stderr || modifiedResult.stderr}`);
+  }
+
+  return { original, modified, isBinary: false };
 }
