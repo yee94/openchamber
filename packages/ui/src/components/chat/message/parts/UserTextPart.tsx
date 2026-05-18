@@ -23,6 +23,18 @@ const buildMentionUrl = (name: string): string => {
 };
 
 const SKILL_TOKEN_PATTERN = /(^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
+const SKILL_LINK_PREFIX = '#openchamber-skill:';
+
+const buildSkillHref = (name: string): string => `${SKILL_LINK_PREFIX}${encodeURIComponent(name)}`;
+
+const parseSkillHref = (href: string | null | undefined): string | null => {
+    if (!href?.startsWith(SKILL_LINK_PREFIX)) return null;
+    try {
+        return decodeURIComponent(href.slice(SKILL_LINK_PREFIX.length));
+    } catch {
+        return null;
+    }
+};
 
 const escapeHtml = (text: string): string => {
     return text
@@ -93,7 +105,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     const handleClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
         const target = event.target as HTMLElement | null;
         const skillLink = target?.closest<HTMLElement>('[data-skill-name]');
-        const skillName = skillLink?.dataset.skillName;
+        const skillName = skillLink?.dataset.skillName
+            ?? parseSkillHref(target?.closest<HTMLAnchorElement>('a[href]')?.getAttribute('href'));
         if (skillName) {
             event.preventDefault();
             event.stopPropagation();
@@ -135,7 +148,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         content = content.replace(SKILL_TOKEN_PATTERN, (match, prefix: string, skillName: string, offset: number) => {
             const slashIndex = offset + prefix.length;
             if (slashIndex === 0 || !skillByName.has(skillName)) return match;
-            return `${prefix}<a href="#" data-skill-name="${skillName}" class="text-primary hover:underline">/${skillName}</a>`;
+            return `${prefix}[/${skillName}](${buildSkillHref(skillName)})`;
         });
 
         return content;
