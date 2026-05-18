@@ -275,6 +275,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  public notifyWindowFocusChanged(focused: boolean): void {
+    if (!this._view) {
+      return;
+    }
+
+    this._view.webview.postMessage({
+      type: 'command',
+      command: 'windowFocusChanged',
+      payload: { focused },
+    });
+  }
+
   // Message delivery confirmation
   private _confirmMessage(messageId: string) {
     this._pendingMessages.delete(messageId);
@@ -354,6 +366,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       status: this._cachedStatus,
       error: this._cachedError,
     });
+    this.notifyWindowFocusChanged(vscode.window.state.focused);
   }
 
   private _scheduleBroadcast(): void {

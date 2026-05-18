@@ -149,11 +149,26 @@ export class SessionEditorPanelProvider {
     }
   }
 
+  public notifyWindowFocusChanged(focused: boolean): void {
+    for (const entry of this._panels.values()) {
+      entry.panel.webview.postMessage({
+        type: 'command',
+        command: 'windowFocusChanged',
+        payload: { focused },
+      });
+    }
+  }
+
   private _sendCachedStateToPanel(entry: SessionPanelState) {
     entry.panel.webview.postMessage({
       type: 'connectionStatus',
       status: this._cachedStatus,
       error: this._cachedError,
+    });
+    entry.panel.webview.postMessage({
+      type: 'command',
+      command: 'windowFocusChanged',
+      payload: { focused: vscode.window.state.focused },
     });
   }
 
