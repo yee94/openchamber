@@ -489,6 +489,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.summaryDescription': 'Niedestrukcyjne podsumowanie sesji. Opcjonalna wskazówka tematu po poleceniu.',
   'chat.commandAutocomplete.command.workspaceReviewDescription': 'Recenzja obecnych zmian w przestrzeni roboczej tylko dla problemów o wysokim sygnale.',
   'chat.commandAutocomplete.badge.skill': 'skill',
+  'chat.commandAutocomplete.badge.command': 'polecenie',
   'chat.commandAutocomplete.badge.system': 'system',
   'chat.commandAutocomplete.empty': 'Nie znaleziono poleceń',
   'chat.agentMentionAutocomplete.badge.system': 'system',

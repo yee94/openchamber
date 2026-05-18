@@ -1408,6 +1408,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.commandAutocomplete.command.summaryDescription": "Resumen no destructivo de la sesión. Pista opcional del tema después del comando.",
   "chat.commandAutocomplete.command.workspaceReviewDescription": "Revisar los cambios actuales del espacio de trabajo solo para problemas de alto impacto.",
   "chat.commandAutocomplete.badge.skill": "habilidad",
+  "chat.commandAutocomplete.badge.command": "comando",
   "chat.commandAutocomplete.badge.system": "sistema",
   "chat.commandAutocomplete.empty": "No se encontraron comandos",
   "chat.agentMentionAutocomplete.badge.system": "sistema",

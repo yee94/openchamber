@@ -1408,6 +1408,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.summaryDescription': '非破坏性会话总结。命令后可选填主题提示。',
   'chat.commandAutocomplete.command.workspaceReviewDescription': '仅审查当前工作区中高价值的问题。',
   'chat.commandAutocomplete.badge.skill': '技能',
+  'chat.commandAutocomplete.badge.command': '命令',
   'chat.commandAutocomplete.badge.system': '系统',
   'chat.commandAutocomplete.empty': '未找到命令',
   'chat.agentMentionAutocomplete.badge.system': '系统',

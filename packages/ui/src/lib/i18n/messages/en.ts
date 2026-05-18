@@ -1442,6 +1442,7 @@ export const dict = {
   'chat.commandAutocomplete.command.summaryDescription': 'Non-destructive session summary. Optional topic hint after the command.',
   'chat.commandAutocomplete.command.workspaceReviewDescription': 'Review current workspace changes for high-signal issues only.',
   'chat.commandAutocomplete.badge.skill': 'skill',
+  'chat.commandAutocomplete.badge.command': 'command',
   'chat.commandAutocomplete.badge.system': 'system',
   'chat.commandAutocomplete.empty': 'No commands found',
   'chat.agentMentionAutocomplete.badge.system': 'system',

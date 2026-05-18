@@ -1444,6 +1444,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.summaryDescription': '세션 기록을 안전하게 요약합니다. 명령 뒤에 선택적으로 주제 힌트를 넣을 수 있습니다.',
   'chat.commandAutocomplete.command.workspaceReviewDescription': '현재 워크스페이스 변경 사항에서 중요한 이슈만 리뷰합니다.',
   'chat.commandAutocomplete.badge.skill': '스킬',
+  'chat.commandAutocomplete.badge.command': '명령',
   'chat.commandAutocomplete.badge.system': 'system',
   'chat.commandAutocomplete.empty': '명령 없음',
   'chat.agentMentionAutocomplete.badge.system': 'system',
