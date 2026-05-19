@@ -1,6 +1,6 @@
 import React from 'react';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { isWebRuntime } from '@/lib/desktop';
+import { isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import type { NotificationPayload } from '@/lib/api/types';
 
@@ -29,7 +29,7 @@ export const useWebNotificationStream = (options?: { enabled?: boolean }) => {
   const enabled = options?.enabled ?? true;
 
   React.useEffect(() => {
-    if (!enabled || !isWebRuntime() || typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    if (!enabled || isDesktopShell() || !isWebRuntime() || typeof window === 'undefined' || typeof EventSource === 'undefined') {
       return;
     }
 
