@@ -22,6 +22,26 @@ type SystemRuntimeDeps = {
   clientReloadDelayMs: number;
 };
 
+const NOTIFICATION_CLAIM_TTL_MS = 10_000;
+const notificationClaims = new Map<string, number>();
+
+const claimNotification = (key: string): boolean => {
+  const now = Date.now();
+  for (const [claimKey, claimedAt] of notificationClaims) {
+    if (now - claimedAt > NOTIFICATION_CLAIM_TTL_MS) {
+      notificationClaims.delete(claimKey);
+    }
+  }
+
+  const existing = notificationClaims.get(key);
+  if (existing && now - existing <= NOTIFICATION_CLAIM_TTL_MS) {
+    return false;
+  }
+
+  notificationClaims.set(key, now);
+  return true;
+};
+
 
 const getOpenChamberConfigDir = (): string => {
   if (process.platform === 'win32') {
@@ -223,6 +243,13 @@ export async function handleSystemBridgeMessage(
 
     case 'api:session-activity:get': {
       return { id, type, success: true, data: getSessionActivitySnapshot() };
+    }
+
+    case 'api:notifications:claim': {
+      const key = typeof (payload as { key?: unknown } | undefined)?.key === 'string'
+        ? (payload as { key: string }).key.trim()
+        : '';
+      return { id, type, success: true, data: { claimed: key ? claimNotification(key) : false } };
     }
 
     case 'api:zen:models': {

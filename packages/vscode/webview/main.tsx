@@ -1279,12 +1279,32 @@ onCommand('showSettings', () => {
   window.dispatchEvent(new CustomEvent('openchamber:navigate', { detail: { view: 'settings' } }));
 });
 
-const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown; sessionId?: unknown; requireHidden?: unknown } | undefined) => {
+const getNotificationClaimKey = (payload: { title?: unknown; body?: unknown; sessionId?: unknown; tag?: unknown } | undefined): string => {
+  const tag = typeof payload?.tag === 'string' ? payload.tag.trim() : '';
+  if (tag) return tag;
+  return [payload?.sessionId, payload?.title, payload?.body]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim())
+    .join('|');
+};
+
+const claimOpenChamberNotification = async (payload: { title?: unknown; body?: unknown; sessionId?: unknown; tag?: unknown } | undefined): Promise<boolean> => {
+  const key = getNotificationClaimKey(payload);
+  if (!key) return true;
+  try {
+    const result = await sendBridgeMessage<{ claimed?: boolean }>('api:notifications:claim', { key });
+    return result?.claimed === true;
+  } catch {
+    return true;
+  }
+};
+
+const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown; sessionId?: unknown; tag?: unknown; requireHidden?: unknown } | undefined) => {
   if (typeof Notification === 'undefined') {
     return false;
   }
 
-  const show = () => {
+  const show = async () => {
     const isVSCodeWindowFocused = window.__OPENCHAMBER_VSCODE_WINDOW_FOCUSED__ ?? document.hasFocus();
     if (payload?.requireHidden === true && isVSCodeWindowFocused) {
       return false;
@@ -1300,6 +1320,9 @@ const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown;
     const sessionId = typeof payload?.sessionId === 'string' && payload.sessionId.trim().length > 0
       ? payload.sessionId.trim()
       : '';
+    if (!await claimOpenChamberNotification({ ...payload, title, body, sessionId })) {
+      return false;
+    }
 
     const notification = new Notification(title, { body });
     notification.onclick = () => {
@@ -1316,13 +1339,14 @@ const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown;
   if (Notification.permission === 'default') {
     void Notification.requestPermission().then((permission) => {
       if (permission === 'granted') {
-        show();
+        void show();
       }
     });
     return true;
   }
 
-  return show();
+  void show();
+  return true;
 };
 
 onCommand('showNotification', (payload) => {
