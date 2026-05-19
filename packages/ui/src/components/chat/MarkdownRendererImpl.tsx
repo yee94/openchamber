@@ -101,15 +101,17 @@ const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
   }
 
   return (
-    <img
-      src={faviconUrl}
-      alt=""
-      aria-hidden="true"
-      loading="lazy"
-      decoding="async"
-      className="mr-1 inline-block size-4 rounded-sm align-[-0.1875em]"
-      onError={() => setFailed(true)}
-    />
+    <span className="mr-1 inline-flex size-[18px] items-center justify-center rounded border border-[var(--border)] bg-[var(--interactive-hover)] align-[-0.25em]">
+      <img
+        src={faviconUrl}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        className="size-3.5 rounded-sm"
+        onError={() => setFailed(true)}
+      />
+    </span>
   );
 };
 

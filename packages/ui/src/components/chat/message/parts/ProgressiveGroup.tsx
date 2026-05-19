@@ -51,15 +51,17 @@ const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
     }
 
     return (
-        <img
-            src={faviconUrl}
-            alt=""
-            aria-hidden="true"
-            loading="lazy"
-            decoding="async"
-            className="size-4 flex-shrink-0 rounded-sm"
-            onError={() => setFailed(true)}
-        />
+        <span className="inline-flex size-[18px] flex-shrink-0 items-center justify-center rounded border border-[var(--border)] bg-[var(--interactive-hover)]">
+            <img
+                src={faviconUrl}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                className="size-3.5 rounded-sm"
+                onError={() => setFailed(true)}
+            />
+        </span>
     );
 };
 
