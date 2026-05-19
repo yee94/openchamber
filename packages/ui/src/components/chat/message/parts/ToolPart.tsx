@@ -1282,6 +1282,16 @@ type DiffPatchEntry = {
 
 const hasUnifiedDiffHunk = (patch: string): boolean => /^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/m.test(patch);
 
+const isUnifiedFileHeaderPair = (minusLine: string, plusLine: string): boolean => {
+    if (!minusLine.startsWith('--- ') || !plusLine.startsWith('+++ ')) {
+        return false;
+    }
+
+    const oldPath = minusLine.slice(4).trim();
+    const newPath = plusLine.slice(4).trim();
+    return oldPath.length > 0 && newPath.length > 0;
+};
+
 const getUnifiedDiffPath = (patch: string, fallbackTitle: string): string => {
     const plusHeader = patch.match(/^\+\+\+\s+(?:[ab]\/(.+)|(.+))$/m);
     const rawPath = plusHeader?.[1] ?? plusHeader?.[2];
@@ -1303,9 +1313,7 @@ const splitUnifiedDiffPatch = (patch: string): DiffPatchEntry[] => {
     for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index] ?? '';
         const nextLine = lines[index + 1] ?? '';
-        const isUnifiedFileHeader = /^---\s+(?:[ab]\/|\/dev\/null|\/)/.test(line)
-            && /^\+\+\+\s+(?:[ab]\/|\/dev\/null|\/)/.test(nextLine);
-        if (line.startsWith('diff --git ') || line.startsWith('Index: ') || isUnifiedFileHeader) {
+        if (line.startsWith('diff --git ') || line.startsWith('Index: ') || isUnifiedFileHeaderPair(line, nextLine)) {
             starts.push(index);
         }
     }
@@ -1430,7 +1438,8 @@ const getDiffPatchEntries = (
 
             const record = file as { relativePath?: unknown; filePath?: unknown; patch?: unknown; diff?: unknown };
             const patch = getPatchText(record.patch) ?? getPatchText(record.diff) ?? '';
-            if (!patch || !hasUnifiedDiffHunk(patch)) {
+            const splitPatchEntries = splitUnifiedDiffPatch(patch);
+            if (!patch || splitPatchEntries.length === 0) {
                 return null;
             }
 
@@ -1444,12 +1453,13 @@ const getDiffPatchEntries = (
                 ? getRelativePath(rawPath, currentDirectory)
                 : `File ${index + 1}`;
 
-            return {
-                id: `${title}-${index}`,
-                title,
-                patch,
-            } satisfies DiffPatchEntry;
+            return splitPatchEntries.map((entry, splitIndex) => ({
+                id: `${title}-${index}-${splitIndex}`,
+                title: splitPatchEntries.length === 1 ? title : getRelativePath(entry.title, currentDirectory),
+                patch: entry.patch,
+            } satisfies DiffPatchEntry));
         })
+        .flat()
         .filter((entry): entry is DiffPatchEntry => entry !== null);
 
     if (entries.length > 0) {
