@@ -258,6 +258,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.session.menu.exportMarkdown': 'Markdown 내보내기',
   'sessions.sidebar.session.menu.runFusion': 'fusion 실행',
   'sessions.sidebar.session.menu.openInSidePanel': '사이드 패널에서 열기',
+  'sessions.sidebar.session.actions.openInEditor': '편집기에서 열기',
   'sessions.sidebar.session.menu.betaBadge': 'beta',
   'sessions.sidebar.session.menu.label': '세션 메뉴',
   'sessions.sidebar.session.untitled': '제목 없는 세션',

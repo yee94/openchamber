@@ -89,6 +89,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.session.menu.exportMarkdown': 'Eksportuj Markdown',
   'sessions.sidebar.session.menu.runFusion': 'Uruchom fusion',
   'sessions.sidebar.session.menu.openInSidePanel': 'Otwórz w panelu bocznym',
+  'sessions.sidebar.session.actions.openInEditor': 'Otwórz w edytorze',
   'sessions.sidebar.session.menu.betaBadge': 'beta',
   'sessions.sidebar.session.menu.label': 'Menu sesji',
   'sessions.sidebar.session.untitled': 'Nienazwana Sesja',

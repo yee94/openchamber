@@ -258,6 +258,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.session.menu.exportMarkdown": "Exportar Markdown",
   "sessions.sidebar.session.menu.runFusion": "Executar fusion",
   "sessions.sidebar.session.menu.openInSidePanel": "Abrir no painel lateral",
+  "sessions.sidebar.session.actions.openInEditor": "Abrir no editor",
   "sessions.sidebar.session.menu.betaBadge": "beta",
   "sessions.sidebar.session.menu.label": "Menu da sessão",
   "sessions.sidebar.session.untitled": "Sessão sem título",

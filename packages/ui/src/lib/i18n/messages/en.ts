@@ -257,6 +257,7 @@ export const dict = {
   'sessions.sidebar.session.menu.exportMarkdown': 'Export Markdown',
   'sessions.sidebar.session.menu.runFusion': 'Run fusion',
   'sessions.sidebar.session.menu.openInSidePanel': 'Open in Side Panel',
+  'sessions.sidebar.session.actions.openInEditor': 'Open in Editor',
   'sessions.sidebar.session.menu.betaBadge': 'beta',
   'sessions.sidebar.session.menu.label': 'Session menu',
   'sessions.sidebar.session.untitled': 'Untitled Session',

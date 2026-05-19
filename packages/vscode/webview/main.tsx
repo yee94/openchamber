@@ -1159,12 +1159,21 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return originalFetch(input as RequestInfo, init);
 };
 
-// Listen for addToContext command from extension
-onCommand('addToContext', (payload) => {
-  const { text } = payload as { text: string };
+onCommand('addContextSelection', (payload) => {
+  const { filePath, filename, text } = payload as { filePath?: unknown; filename?: unknown; text?: unknown };
+  if (typeof filePath !== 'string' || typeof filename !== 'string' || typeof text !== 'string') {
+    return;
+  }
+
+  const trimmedPath = filePath.trim();
+  const trimmedFilename = filename.trim();
+  if (!trimmedPath || !trimmedFilename || !text.trim()) {
+    return;
+  }
 
   import('@/sync/input-store').then(({ useInputStore }) => {
-    useInputStore.getState().setPendingInputText(text, 'append');
+    const file = new File([new Blob([text], { type: 'text/plain' })], trimmedFilename, { type: 'text/plain' });
+    void useInputStore.getState().addVSCodeSelectionAttachment(trimmedPath, file);
   });
 });
 
@@ -1188,6 +1197,33 @@ onCommand('addFileMentions', (payload) => {
   });
 });
 
+onCommand('addFileAttachments', (payload) => {
+  const rawFiles = Array.isArray((payload as { files?: unknown[] })?.files)
+    ? (payload as { files: unknown[] }).files
+    : [];
+
+  const files = rawFiles
+    .map((entry) => {
+      const record = entry as { filePath?: unknown; fileName?: unknown; fileSize?: unknown };
+      const filePath = typeof record.filePath === 'string' ? record.filePath.trim() : '';
+      const fileName = typeof record.fileName === 'string' ? record.fileName.trim() : '';
+      const fileSize = typeof record.fileSize === 'number' && Number.isFinite(record.fileSize) ? record.fileSize : null;
+      return filePath && fileName ? { filePath, fileName, fileSize } : null;
+    })
+    .filter((entry): entry is { filePath: string; fileName: string; fileSize: number | null } => entry !== null);
+
+  if (files.length === 0) {
+    return;
+  }
+
+  import('@/sync/input-store').then(({ useInputStore }) => {
+    const inputStore = useInputStore.getState();
+    for (const file of files) {
+      inputStore.addVSCodeFileAttachment(file.filePath, file.fileName, file.fileSize);
+    }
+  });
+});
+
 // Listen for createSessionWithPrompt command from extension (Explain, Improve Code)
 onCommand('createSessionWithPrompt', (payload) => {
   const { prompt } = payload as { prompt: string };
@@ -1200,13 +1236,14 @@ onCommand('createSessionWithPrompt', (payload) => {
     const sessionStore = useSessionUIStore.getState();
     const configStore = useConfigStore.getState();
 
-    // Open a new session draft first
-    sessionStore.openNewSessionDraft();
-
     // Get current provider/model/agent configuration
     const { currentProviderId, currentModelId, currentAgentName } = configStore;
 
     if (currentProviderId && currentModelId) {
+      if (!sessionStore.currentSessionId) {
+        sessionStore.openNewSessionDraft();
+      }
+
       // Send the message - this will create the session from the draft and send
       sessionStore.sendMessage(
         prompt,

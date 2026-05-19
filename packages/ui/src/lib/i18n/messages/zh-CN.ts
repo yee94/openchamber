@@ -258,6 +258,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.session.menu.exportMarkdown': '导出 Markdown',
   'sessions.sidebar.session.menu.runFusion': '运行 fusion',
   'sessions.sidebar.session.menu.openInSidePanel': '在侧边面板中打开',
+  'sessions.sidebar.session.actions.openInEditor': '在编辑器中打开',
   'sessions.sidebar.session.menu.betaBadge': 'beta',
   'sessions.sidebar.session.menu.label': '会话菜单',
   'sessions.sidebar.session.untitled': '未命名会话',
