@@ -20,6 +20,7 @@ import * as zhipuaiCodingPlan from './zhipuai-coding-plan.js';
 import * as minimaxCodingPlan from './minimax-coding-plan.js';
 import * as minimaxCnCodingPlan from './minimax-cn-coding-plan.js';
 import * as ollamaCloud from './ollama-cloud.js';
+import * as wafer from './wafer.js';
 
 const registry = {
   claude: {
@@ -99,6 +100,12 @@ const registry = {
     providerName: ollamaCloud.providerName,
     isConfigured: ollamaCloud.isConfigured,
     fetchQuota: ollamaCloud.fetchQuota
+  },
+  wafer: {
+    providerId: wafer.providerId,
+    providerName: wafer.providerName,
+    isConfigured: wafer.isConfigured,
+    fetchQuota: wafer.fetchQuota
   }
 };
 
@@ -158,4 +165,5 @@ export const fetchNanoGptQuota = nanogpt.fetchQuota;
 export const fetchMinimaxCodingPlanQuota = minimaxCodingPlan.fetchQuota;
 export const fetchMinimaxCnCodingPlanQuota = minimaxCnCodingPlan.fetchQuota;
 export const fetchOllamaCloudQuota = ollamaCloud.fetchQuota;
+export const fetchWaferQuota = wafer.fetchQuota;
 export const fetchZhipuaiQuota = zhipuaiCodingPlan.fetchQuota;
