@@ -1085,8 +1085,10 @@ const TaskToolSummary: React.FC<{
 }> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false }) => {
     const { t } = useI18n();
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
+    const runtime = React.useContext(RuntimeAPIContext);
     const displayEntries = entries;
 
     const trimmedOutput = typeof output === 'string'
@@ -1098,6 +1100,11 @@ const TaskToolSummary: React.FC<{
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
         if (sessionId && currentDirectory) {
+            if (isMobile || runtime?.runtime.isVSCode) {
+                setCurrentSession(sessionId, currentDirectory);
+                return;
+            }
+
             openContextPanelTab(currentDirectory, {
                 mode: 'chat',
                 dedupeKey: `session:${sessionId}`,
