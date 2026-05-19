@@ -1,3 +1,15 @@
+## [1.11.3] - 2026-05-19
+
+- Editor Integration: Add to Context now attaches the selected code as context instead of pasting a formatted block into the input.
+- Editor Integration: Add File to Chat now attaches selected files instead of inserting file mentions.
+- Editor Integration: Add to Context, Add File to Chat, Explain, and Improve Code now target the active session editor when one is open.
+- Chat: session editor tabs now update their title to match the session title.
+- Sessions: session rows now include an action to open a chat as editor tab.
+- Notifications: completion, question, and permission notifications now use the extension notification settings and shows as multi-platforn native notifications.
+- Chat: question cards now include copy buttons for Markdown and JSON (thanks to @robertoberto).
+- Chat: slash command autocomplete now includes skills and clearer command/type badges.
+- Usage: added Wafer.ai quota tracking (thanks to @bowber).
+
 ## [1.11.2] - 2026-05-18
 
 - Chat: thinking blocks can now be collapsed, and expanding tool details feels smooth (thanks to @ermanhavuc).

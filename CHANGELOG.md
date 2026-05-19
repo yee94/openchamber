@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-05-19
+
+- Chat: question cards now include copy buttons for Markdown and JSON (thanks to @robertoberto).
+- Chat: slash command autocomplete now includes skills and clearer command/type badges.
+- Chat: slash, file, skill, and agent autocomplete selection now stays steadier when using the keyboard or mouse.
+- Chat: external links in messages now show favicons with better contrast, and skill links render correctly in user message rendered as markdown.
+- Chat: multi-file tool diffs now render safely, including files with mixed line endings.
+- Sessions: archived session lists handle large archives better, and sub-session expansion is kept separate between Recent and project sections (thanks to @vhqtvn).
+- Sessions: deleting or archiving a parent session now shows a descendant count that matches what will actually be removed (thanks to @vhqtvn).
+- Git: reverting a chat message now refreshes the Git changes view afterward.
+- Updates/PWA: OpenCode update and PWA install prompts can now be dismissed without reappearing repeatedly (thanks to @robertoberto).
+- Notifications: browser and VS Code notifications work without duplicate alerts.
+- Terminal/Mobile: the terminal viewport now stays above the mobile keyboard more consistently (thanks to @Dav1dch).
+- Usage: added Wafer.ai quota tracking and removed the duplicate Zhipu usage provider entry (thanks to @bowber).
+
 ## [1.11.2] - 2026-05-18
 
 - Chat: thinking blocks can now be collapsed, and expanding tool details feels smooth (thanks to @ermanhavuc).
