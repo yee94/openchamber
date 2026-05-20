@@ -39,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
         sidebar.style.width = `${nextWidth}px`;
         sidebar.style.minWidth = `${nextWidth}px`;
         sidebar.style.maxWidth = `${nextWidth}px`;
+        sidebar.style.setProperty('--oc-left-sidebar-width', `${nextWidth}px`);
     }, []);
 
     React.useEffect(() => {
@@ -132,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
                 width: `${currentWidth}px`,
                 minWidth: `${currentWidth}px`,
                 maxWidth: `${currentWidth}px`,
+                ['--oc-left-sidebar-width' as string]: `${isResizing ? currentWidth : openWidth}px`,
                 overflowX: 'clip',
                 transitionProperty: isResizing ? 'none' : 'width, min-width, max-width',
                 transitionDuration: '200ms',
@@ -160,7 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
                     isResizing && 'pointer-events-none',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
-                style={{ width: `${openWidth}px`, overflowX: 'hidden' }}
+                style={{ width: 'var(--oc-left-sidebar-width)', overflowX: 'hidden' }}
                 aria-hidden={!isOpen}
             >
                 <div className="flex-1 overflow-y-auto">
