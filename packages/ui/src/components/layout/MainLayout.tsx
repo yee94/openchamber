@@ -606,58 +606,54 @@ export const MainLayout: React.FC = () => {
                     <div className="flex flex-1 flex-col overflow-hidden">
                         <Header />
                         <div className="relative flex flex-1 min-h-0 overflow-hidden bg-sidebar" data-page-scroll-lock="true">
-                            {isSidebarOpen ? (
-                                <>
-                                    <div
-                                        aria-hidden
-                                        className="pointer-events-none absolute top-0 z-0 bg-sidebar"
-                                        style={{
-                                            left: `${visibleSidebarWidth}px`,
-                                            width: '10px',
-                                            height: '10px',
-                                            WebkitMaskImage: 'radial-gradient(circle at 100% 100%, transparent calc(10px - 1px), black 10px)',
-                                            maskImage: 'radial-gradient(circle at 100% 100%, transparent calc(10px - 1px), black 10px)',
-                                        }}
-                                    />
-                                    <div
-                                        aria-hidden
-                                        className="pointer-events-none absolute bottom-0 z-0 bg-sidebar"
-                                        style={{
-                                            left: `${visibleSidebarWidth}px`,
-                                            width: '10px',
-                                            height: '10px',
-                                            WebkitMaskImage: 'radial-gradient(circle at 100% 0%, transparent calc(10px - 1px), black 10px)',
-                                            maskImage: 'radial-gradient(circle at 100% 0%, transparent calc(10px - 1px), black 10px)',
-                                        }}
-                                    />
-                                </>
-                            ) : null}
-                            {isRightSidebarOpen ? (
-                                <>
-                                    <div
-                                        aria-hidden
-                                        className="pointer-events-none absolute top-0 z-0 bg-sidebar"
-                                        style={{
-                                            right: `${visibleRightSidebarWidth}px`,
-                                            width: '10px',
-                                            height: '10px',
-                                            WebkitMaskImage: 'radial-gradient(circle at 0 100%, transparent calc(10px - 1px), black 10px)',
-                                            maskImage: 'radial-gradient(circle at 0 100%, transparent calc(10px - 1px), black 10px)',
-                                        }}
-                                    />
-                                    <div
-                                        aria-hidden
-                                        className="pointer-events-none absolute bottom-0 z-0 bg-sidebar"
-                                        style={{
-                                            right: `${visibleRightSidebarWidth}px`,
-                                            width: '10px',
-                                            height: '10px',
-                                            WebkitMaskImage: 'radial-gradient(circle at 0 0, transparent calc(10px - 1px), black 10px)',
-                                            maskImage: 'radial-gradient(circle at 0 0, transparent calc(10px - 1px), black 10px)',
-                                        }}
-                                    />
-                                </>
-                            ) : null}
+                            <div
+                                aria-hidden
+                                className="pointer-events-none absolute top-0 z-0 bg-sidebar transition-[left,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                                style={{
+                                    left: `${isSidebarOpen ? visibleSidebarWidth : 0}px`,
+                                    opacity: isSidebarOpen ? 1 : 0,
+                                    width: '10px',
+                                    height: '10px',
+                                    WebkitMaskImage: 'radial-gradient(circle at 100% 100%, transparent calc(10px - 1px), black 10px)',
+                                    maskImage: 'radial-gradient(circle at 100% 100%, transparent calc(10px - 1px), black 10px)',
+                                }}
+                            />
+                            <div
+                                aria-hidden
+                                className="pointer-events-none absolute bottom-0 z-0 bg-sidebar transition-[left,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                                style={{
+                                    left: `${isSidebarOpen ? visibleSidebarWidth : 0}px`,
+                                    opacity: isSidebarOpen ? 1 : 0,
+                                    width: '10px',
+                                    height: '10px',
+                                    WebkitMaskImage: 'radial-gradient(circle at 100% 0%, transparent calc(10px - 1px), black 10px)',
+                                    maskImage: 'radial-gradient(circle at 100% 0%, transparent calc(10px - 1px), black 10px)',
+                                }}
+                            />
+                            <div
+                                aria-hidden
+                                className="pointer-events-none absolute top-0 z-0 bg-sidebar transition-[right,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                                style={{
+                                    right: `${isRightSidebarOpen ? visibleRightSidebarWidth : 0}px`,
+                                    opacity: isRightSidebarOpen ? 1 : 0,
+                                    width: '10px',
+                                    height: '10px',
+                                    WebkitMaskImage: 'radial-gradient(circle at 0 100%, transparent calc(10px - 1px), black 10px)',
+                                    maskImage: 'radial-gradient(circle at 0 100%, transparent calc(10px - 1px), black 10px)',
+                                }}
+                            />
+                            <div
+                                aria-hidden
+                                className="pointer-events-none absolute bottom-0 z-0 bg-sidebar transition-[right,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                                style={{
+                                    right: `${isRightSidebarOpen ? visibleRightSidebarWidth : 0}px`,
+                                    opacity: isRightSidebarOpen ? 1 : 0,
+                                    width: '10px',
+                                    height: '10px',
+                                    WebkitMaskImage: 'radial-gradient(circle at 0 0, transparent calc(10px - 1px), black 10px)',
+                                    maskImage: 'radial-gradient(circle at 0 0, transparent calc(10px - 1px), black 10px)',
+                                }}
+                            />
                             <Sidebar
                                 isOpen={isSidebarOpen}
                                 isMobile={isMobile}
@@ -668,9 +664,9 @@ export const MainLayout: React.FC = () => {
                             <div className={cn(
                                 'relative flex flex-1 min-w-0 flex-col overflow-hidden',
                                 'bg-background',
-                                'border-y border-border/50',
-                                isSidebarOpen && 'border-l border-border/50 rounded-tl-[10px] rounded-bl-[10px]',
-                                isRightSidebarOpen && 'border-r border-border/50 rounded-tr-[10px] rounded-br-[10px]'
+                                'border border-border/50 rounded-[10px]',
+                                !isSidebarOpen && 'border-l-transparent',
+                                !isRightSidebarOpen && 'border-r-transparent'
                             )} data-page-scroll-lock="true">
                                 <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
                                     <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">

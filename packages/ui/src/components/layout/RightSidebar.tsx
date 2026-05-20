@@ -34,12 +34,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
       return;
     }
 
-    sidebar.style.setProperty('--oc-right-sidebar-width', `${nextWidth}px`);
+    sidebar.style.width = `${nextWidth}px`;
+    sidebar.style.minWidth = `${nextWidth}px`;
+    sidebar.style.maxWidth = `${nextWidth}px`;
   }, []);
 
-  const appliedWidth = isOpen
-    ? Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || RIGHT_SIDEBAR_CONTENT_WIDTH))
-    : 0;
+  const openWidth = Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || RIGHT_SIDEBAR_CONTENT_WIDTH));
+  const appliedWidth = isOpen ? openWidth : 0;
 
   const handlePointerDown = (event: React.PointerEvent) => {
     if (!isOpen) {
@@ -101,22 +102,25 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
     }
   }, [isResizing]);
 
+  const currentWidth = isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth;
+
   return (
     <aside
       ref={sidebarRef}
       className={cn(
-        'relative flex h-full overflow-hidden border-l border-border/40',
+        'relative flex h-full overflow-hidden border-l border-border/40 will-change-[width] motion-reduce:transition-none',
         'bg-sidebar',
-        isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
         !isOpen && 'border-l-0',
         className,
       )}
       style={{
-        width: 'var(--oc-right-sidebar-width)',
-        minWidth: 'var(--oc-right-sidebar-width)',
-        maxWidth: 'var(--oc-right-sidebar-width)',
-        ['--oc-right-sidebar-width' as string]: `${isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth}px`,
+        width: `${currentWidth}px`,
+        minWidth: `${currentWidth}px`,
+        maxWidth: `${currentWidth}px`,
         overflowX: 'clip',
+        transitionProperty: isResizing ? 'none' : 'width, min-width, max-width',
+        transitionDuration: '200ms',
+        transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
       }}
       aria-hidden={!isOpen || appliedWidth === 0}
     >
@@ -137,10 +141,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
       )}
       <div
         className={cn(
-          'relative z-10 flex h-full min-h-0 w-full flex-col transition-opacity duration-300 ease-in-out',
+          'relative z-10 flex h-full min-h-0 shrink-0 flex-col transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
           isResizing && 'pointer-events-none',
           !isOpen && 'pointer-events-none select-none opacity-0'
         )}
+        style={{ width: `${openWidth}px` }}
         aria-hidden={!isOpen}
       >
         {isOpen ? children : null}
