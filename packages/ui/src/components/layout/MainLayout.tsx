@@ -23,7 +23,6 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useVisualViewport } from '@/hooks/useVisualViewport';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { isDesktopShell } from '@/lib/desktop';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
 import { ChatView } from '@/components/views/ChatView';
@@ -86,10 +85,8 @@ export const MainLayout: React.FC = () => {
 
     const { isMobile, isTablet } = useDeviceInfo();
     const visualViewport = useVisualViewport();
-    const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
     const sidebarWidth = useUIStore((state) => state.sidebarWidth);
     const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
-    const [desktopRightSidebarActionsHost, setDesktopRightSidebarActionsHost] = React.useState<HTMLDivElement | null>(null);
     const effectiveDirectory = useEffectiveDirectory() ?? '';
     const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
     const isContextPanelOpen = useUIStore((state) => {
@@ -605,20 +602,15 @@ export const MainLayout: React.FC = () => {
                 </DrawerProvider>
             ) : (
                 <>
-                    {/* Desktop: Sidebar is a left column; header belongs to content column */}
-                    <div className="flex flex-1 overflow-hidden relative">
-                        <div className={cn(
-                            'absolute inset-0 flex overflow-hidden',
-                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
-                        )} data-page-scroll-lock="true">
+                    {/* Desktop: full-width Header above [Sidebar | chat-frame | RightSidebar] row */}
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                        <Header />
+                        <div className="relative flex flex-1 min-h-0 overflow-hidden bg-sidebar" data-page-scroll-lock="true">
                             {isSidebarOpen ? (
                                 <>
                                     <div
                                         aria-hidden
-                                        className={cn(
-                                            'pointer-events-none absolute top-0 z-0',
-                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
-                                        )}
+                                        className="pointer-events-none absolute top-0 z-0 bg-sidebar"
                                         style={{
                                             left: `${visibleSidebarWidth}px`,
                                             width: '10px',
@@ -629,10 +621,7 @@ export const MainLayout: React.FC = () => {
                                     />
                                     <div
                                         aria-hidden
-                                        className={cn(
-                                            'pointer-events-none absolute bottom-0 z-0',
-                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
-                                        )}
+                                        className="pointer-events-none absolute bottom-0 z-0 bg-sidebar"
                                         style={{
                                             left: `${visibleSidebarWidth}px`,
                                             width: '10px',
@@ -647,10 +636,7 @@ export const MainLayout: React.FC = () => {
                                 <>
                                     <div
                                         aria-hidden
-                                        className={cn(
-                                            'pointer-events-none absolute top-0 z-0',
-                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
-                                        )}
+                                        className="pointer-events-none absolute top-0 z-0 bg-sidebar"
                                         style={{
                                             right: `${visibleRightSidebarWidth}px`,
                                             width: '10px',
@@ -661,10 +647,7 @@ export const MainLayout: React.FC = () => {
                                     />
                                     <div
                                         aria-hidden
-                                        className={cn(
-                                            'pointer-events-none absolute bottom-0 z-0',
-                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
-                                        )}
+                                        className="pointer-events-none absolute bottom-0 z-0 bg-sidebar"
                                         style={{
                                             right: `${visibleRightSidebarWidth}px`,
                                             width: '10px',
@@ -684,16 +667,12 @@ export const MainLayout: React.FC = () => {
                             </Sidebar>
                             <div className={cn(
                                 'relative flex flex-1 min-w-0 flex-col overflow-hidden',
-                                'bg-sidebar',
+                                'bg-background',
+                                'border-y border-border/50',
                                 isSidebarOpen && 'border-l border-border/50 rounded-tl-[10px] rounded-bl-[10px]',
                                 isRightSidebarOpen && 'border-r border-border/50 rounded-tr-[10px] rounded-br-[10px]'
                             )} data-page-scroll-lock="true">
-                                <Header desktopRightSidebarActionsHost={desktopRightSidebarActionsHost} />
-                                <div className={cn(
-                                    'flex flex-1 min-h-0 overflow-hidden',
-                                    isSidebarOpen || isChatActive ? '' : 'border-l border-border/50',
-                                    isRightSidebarOpen ? '' : 'border-r border-border/50'
-                                )} data-page-scroll-lock="true">
+                                <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
                                     <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">
                                         <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
                                             <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
@@ -721,12 +700,10 @@ export const MainLayout: React.FC = () => {
                             <RightSidebar
                                 isOpen={isRightSidebarOpen}
                                 className="border-0"
-                                onTopActionsHostChange={setDesktopRightSidebarActionsHost}
                             >
                                 <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
                             </RightSidebar>
                         </div>
-
                     </div>
 
                     {/* Desktop settings: windowed dialog with blur */}

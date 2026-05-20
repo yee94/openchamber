@@ -75,7 +75,15 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const ensureSessionRenderable = useSync().ensureSessionRenderable;
+  const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const { t } = useI18n();
+
+  const handleNewSession = React.useCallback(() => {
+    setActiveMainTab('chat');
+    onSelect();
+    openNewSessionDraft();
+  }, [onSelect, openNewSessionDraft, setActiveMainTab]);
 
   const prefetchedRef = React.useRef<Set<string>>(new Set());
 
@@ -134,13 +142,25 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
 
   return (
     <div className="max-h-[60vh] overflow-y-auto">
-      {items.length === 0 ? (
-        <div className="px-3 py-4 text-center typography-meta text-muted-foreground">
-          {t('sessions.switcher.empty')}
-        </div>
-      ) : (
-        <div className="space-y-0.5">
-          {items.map((item) => (
+      <div className="space-y-0.5">
+        <BaseMenu.Item
+          onClick={handleNewSession}
+          className={cn(
+            'group relative flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 outline-hidden select-none',
+            'data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover',
+          )}
+        >
+          <Icon name="chat-new" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <span className="truncate text-[14px] font-normal leading-tight text-foreground">
+            {t('sessions.sidebar.header.actions.newSession')}
+          </span>
+        </BaseMenu.Item>
+        {items.length === 0 ? (
+          <div className="px-3 py-4 text-center typography-meta text-muted-foreground">
+            {t('sessions.switcher.empty')}
+          </div>
+        ) : (
+          items.map((item) => (
             <SwitcherNode
               key={item.node.session.id}
               item={item}
@@ -150,9 +170,9 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
               toggleParent={toggleParent}
               closeDropdown={onSelect}
             />
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }

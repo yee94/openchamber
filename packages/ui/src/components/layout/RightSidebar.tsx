@@ -2,8 +2,6 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
-import { isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag } from '@/lib/desktop';
-import { useTabletStandalonePwaRuntime } from '@/lib/device';
 
 export const RIGHT_SIDEBAR_CONTENT_WIDTH = 420;
 const RIGHT_SIDEBAR_MIN_WIDTH = 400;
@@ -13,16 +11,12 @@ interface RightSidebarProps {
   isOpen: boolean;
   children: React.ReactNode;
   className?: string;
-  onTopActionsHostChange?: (element: HTMLDivElement | null) => void;
 }
 
-export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, className, onTopActionsHostChange }) => {
+export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, className }) => {
   const { t } = useI18n();
   const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
   const setRightSidebarWidth = useUIStore((state) => state.setRightSidebarWidth);
-  const isDesktopApp = React.useMemo(() => isDesktopShell(), []);
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-  const isTabletStandalonePwa = useTabletStandalonePwaRuntime();
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(rightSidebarWidth || 420);
@@ -107,42 +101,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
     }
   }, [isResizing]);
 
-  React.useEffect(() => {
-    if (!isOpen) {
-      onTopActionsHostChange?.(null);
-    }
-  }, [isOpen, onTopActionsHostChange]);
-
-  const handleDragStart = React.useCallback(async (event: React.MouseEvent) => {
-    const target = event.target as HTMLElement;
-    if (target.closest('.app-region-no-drag')) {
-      return;
-    }
-    if (target.closest('button, a, input, select, textarea')) {
-      return;
-    }
-    if (event.button !== 0) {
-      return;
-    }
-    if (!isDesktopApp) {
-      return;
-    }
-
-    await startDesktopWindowDrag();
-  }, [isDesktopApp]);
-
-  const webWindowControlsOverlayStyle = React.useMemo<React.CSSProperties | undefined>(() => {
-    if (isDesktopApp || isVSCode) {
-      return undefined;
-    }
-
-    return {
-      paddingLeft: 'calc(0.75rem + var(--oc-wco-left-inset, 0px))',
-      paddingRight: 'calc(0.75rem + var(--oc-wco-right-inset, 0px))',
-      ...(isTabletStandalonePwa ? { paddingTop: 'var(--oc-safe-area-top, 0px)' } : null),
-    };
-  }, [isDesktopApp, isTabletStandalonePwa, isVSCode]);
-
   return (
     <aside
       ref={sidebarRef}
@@ -162,22 +120,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
       }}
       aria-hidden={!isOpen || appliedWidth === 0}
     >
-      {isOpen ? (
-        <div
-          onMouseDown={handleDragStart}
-          className={cn(
-            'app-region-drag absolute inset-x-0 top-0 z-20 flex items-center justify-end px-3',
-            'h-[var(--oc-header-height,56px)]',
-          )}
-          style={webWindowControlsOverlayStyle}
-          aria-hidden
-        >
-          <div
-            ref={onTopActionsHostChange}
-            className="app-region-no-drag flex items-center gap-1"
-          />
-        </div>
-      ) : null}
       {isOpen && (
         <div
           className={cn(
@@ -199,7 +141,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
           isResizing && 'pointer-events-none',
           !isOpen && 'pointer-events-none select-none opacity-0'
         )}
-        style={isOpen ? { paddingTop: 'var(--oc-header-height, 56px)' } : undefined}
         aria-hidden={!isOpen}
       >
         {isOpen ? children : null}
