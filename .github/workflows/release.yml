@@ -305,9 +305,14 @@ jobs:
           set -euo pipefail
 
           if [ ! -d staged/OpenChamber.app ]; then
-            echo "Error: staged/OpenChamber.app not found"
-            ls -la staged
-            exit 1
+            if [ -d staged/Contents ]; then
+              mkdir -p staged/OpenChamber.app
+              mv staged/Contents staged/OpenChamber.app/Contents
+            else
+              echo "Error: staged/OpenChamber.app not found"
+              ls -la staged
+              exit 1
+            fi
           fi
 
           cd staged

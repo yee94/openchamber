@@ -114,6 +114,11 @@ only verifies the signature and extracts the bundle over the existing
 `/Applications/OpenChamber.app`. After restart, the app is Electron and future
 updates use `latest-mac.yml` through `electron-updater`.
 
+Note: `actions/upload-artifact` can download a `.app` directory artifact as its
+inner `Contents/` folder instead of `OpenChamber.app/Contents`. The repackage
+job handles both shapes and wraps `Contents/` back into `OpenChamber.app` before
+creating the tarball.
+
 ## Historical release workflow changes
 
 The file edited for the cutover was `.github/workflows/release.yml`.
