@@ -97,6 +97,8 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const { t } = useI18n();
     const hasEnded = typeof time?.end === 'number';
     const [isExpanded, setIsExpanded] = React.useState(hasEnded ? false : (defaultExpanded ?? isStreaming));
+    const userToggledRef = React.useRef(false);
+    const effectiveIsExpanded = hasEnded && !userToggledRef.current ? false : isExpanded;
     const contentId = React.useId();
     const scrollRef = React.useRef<HTMLElement>(null);
     const contentRef = React.useRef<HTMLDivElement>(null);
@@ -107,11 +109,12 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const prevIsStreamingRef = React.useRef(isStreaming);
 
     const summary = React.useMemo(() => getReasoningSummary(text), [text]);
-    const toggleAriaLabel = isExpanded
+    const toggleAriaLabel = effectiveIsExpanded
         ? t('chat.reasoningTrace.collapseAria')
         : t('chat.reasoningTrace.expandAria');
 
     const handleToggle = React.useCallback(() => {
+        userToggledRef.current = true;
         setIsExpanded((prev) => !prev);
         onContentChange?.('structural');
     }, [onContentChange]);
@@ -141,10 +144,10 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     }, [onContentChange, text]);
 
     React.useEffect(() => {
-        if (isStreaming && isExpanded && scrollRef.current) {
+        if (isStreaming && effectiveIsExpanded && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [text, isStreaming, isExpanded]);
+    }, [text, isStreaming, effectiveIsExpanded]);
 
     React.useLayoutEffect(() => {
         const element = contentRef.current;
@@ -154,17 +157,25 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
         contentAnimationRef.current?.stop();
 
+        if (hasEnded && !userToggledRef.current) {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+            element.style.overflow = 'hidden';
+            contentMountedRef.current = true;
+            return;
+        }
+
         if (!contentMountedRef.current) {
             contentMountedRef.current = true;
-            element.style.height = isExpanded ? 'auto' : '0px';
-            element.style.opacity = isExpanded ? '1' : '0';
-            element.style.overflow = isExpanded ? 'visible' : 'hidden';
+            element.style.height = effectiveIsExpanded ? 'auto' : '0px';
+            element.style.opacity = effectiveIsExpanded ? '1' : '0';
+            element.style.overflow = effectiveIsExpanded ? 'visible' : 'hidden';
             return;
         }
 
         element.style.overflow = 'hidden';
 
-        if (isExpanded) {
+        if (effectiveIsExpanded) {
             element.style.height = '0px';
             element.style.opacity = '0';
         } else {
@@ -174,7 +185,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
         const animation = animate(
             element,
-            { height: isExpanded ? 'auto' : '0px', opacity: isExpanded ? 1 : 0 },
+            { height: effectiveIsExpanded ? 'auto' : '0px', opacity: effectiveIsExpanded ? 1 : 0 },
             EXPANDED_CONTENT_SPRING,
         );
         contentAnimationRef.current = animation;
@@ -184,7 +195,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 return;
             }
             contentAnimationRef.current = null;
-            if (isExpanded) {
+            if (effectiveIsExpanded) {
                 element.style.overflow = 'visible';
                 element.style.height = 'auto';
             } else {
@@ -198,7 +209,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 contentAnimationRef.current = null;
             }
         };
-    }, [isExpanded]);
+    }, [effectiveIsExpanded, hasEnded]);
 
     React.useEffect(() => {
         return () => {
@@ -242,7 +253,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
             <div
                 role="button"
                 tabIndex={0}
-                aria-expanded={isExpanded}
+                aria-expanded={effectiveIsExpanded}
                 aria-controls={contentId}
                 aria-label={toggleAriaLabel}
                 className={cn(
@@ -256,8 +267,8 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                         <div
                             className={cn(
                                 'absolute inset-0 transition-opacity',
-                                isExpanded && 'opacity-0',
-                                !isExpanded && 'group-hover/tool:opacity-0',
+                                effectiveIsExpanded && 'opacity-0',
+                                !effectiveIsExpanded && 'group-hover/tool:opacity-0',
                             )}
                             style={{ color: 'var(--tools-icon)' }}
                         >
@@ -266,12 +277,12 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                         <div
                             className={cn(
                                 'absolute inset-0 transition-opacity flex items-center justify-center',
-                                isExpanded && 'opacity-100',
-                                !isExpanded && 'opacity-0 group-hover/tool:opacity-100',
+                                effectiveIsExpanded && 'opacity-100',
+                                !effectiveIsExpanded && 'opacity-0 group-hover/tool:opacity-100',
                             )}
                             style={{ color: 'var(--tools-icon)' }}
                         >
-                            {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
+                            {effectiveIsExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
                         </div>
                     </div>
 
@@ -280,7 +291,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                             <span>{t(variant === 'justification' ? 'chat.reasoningTrace.justification' : 'chat.reasoningTrace.thinking')}</span>
                             <BusyDots />
                         </span>
-                    ) : isExpanded ? (
+                    ) : effectiveIsExpanded ? (
                         <span
                             className="typography-meta font-medium"
                             style={{ color: 'var(--tools-title)' }}
@@ -298,7 +309,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
-                    {!isStreaming && !isExpanded && summary ? (
+                    {!isStreaming && !effectiveIsExpanded && summary ? (
                         <span
                             className="min-w-0 truncate typography-meta"
                             style={{ color: 'var(--tools-description)', opacity: 0.8 }}
@@ -316,11 +327,11 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
             <div
                 ref={contentRef}
                 id={contentId}
-                aria-hidden={!isExpanded}
+                aria-hidden={!effectiveIsExpanded}
                 style={{
-                    height: isExpanded ? 'auto' : '0px',
-                    opacity: isExpanded ? 1 : 0,
-                    overflow: isExpanded ? 'visible' : 'hidden',
+                    height: effectiveIsExpanded ? 'auto' : '0px',
+                    opacity: effectiveIsExpanded ? 1 : 0,
+                    overflow: effectiveIsExpanded ? 'visible' : 'hidden',
                     overflowAnchor: 'none',
                 }}
             >
