@@ -19,7 +19,6 @@ import { DrawerProvider } from '@/contexts/DrawerContext';
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useVisualViewport } from '@/hooks/useVisualViewport';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -39,29 +38,10 @@ const MultiRunWindow = lazyWithChunkRecovery(() => import('@/components/views/Mu
 
 // Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
-const DESKTOP_SIDEBAR_MIN_WIDTH = 250;
+const DESKTOP_SIDEBAR_MIN_WIDTH = 280;
 const DESKTOP_SIDEBAR_MAX_WIDTH = 500;
-const DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH = 400;
+const DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH = 360;
 const DESKTOP_RIGHT_SIDEBAR_MAX_WIDTH = 860;
-
-const normalizeDirectoryKey = (value: string): string => {
-    if (!value) return '';
-
-    const raw = value.replace(/\\/g, '/');
-    const hadUncPrefix = raw.startsWith('//');
-    let normalized = raw.replace(/\/+$/g, '');
-    normalized = normalized.replace(/\/+/g, '/');
-
-    if (hadUncPrefix && !normalized.startsWith('//')) {
-        normalized = `/${normalized}`;
-    }
-
-    if (normalized === '') {
-        return raw.startsWith('/') ? '/' : '';
-    }
-
-    return normalized;
-};
 
 export const MainLayout: React.FC = () => {
     const { t } = useI18n();
@@ -87,21 +67,8 @@ export const MainLayout: React.FC = () => {
     const visualViewport = useVisualViewport();
     const sidebarWidth = useUIStore((state) => state.sidebarWidth);
     const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
-    const effectiveDirectory = useEffectiveDirectory() ?? '';
-    const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
-    const isContextPanelOpen = useUIStore((state) => {
-        if (!directoryKey) {
-            return false;
-        }
-        const panelState = state.contextPanelByDirectory[directoryKey];
-        const tabs = panelState?.tabs ?? [];
-        const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1];
-        return Boolean(panelState?.isOpen && activeTab);
-    });
-    const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
     const rightSidebarAutoClosedRef = React.useRef(false);
     const bottomTerminalAutoClosedRef = React.useRef(false);
-    const leftSidebarAutoClosedByContextRef = React.useRef(false);
 
     // Mobile drawer state
     const [mobileLeftDrawerOpen, setMobileLeftDrawerOpen] = React.useState(false);
@@ -246,22 +213,6 @@ export const MainLayout: React.FC = () => {
             }
         };
     }, []);
-
-    React.useEffect(() => {
-        if (isContextPanelOpen) {
-            const currentlyOpen = useUIStore.getState().isSidebarOpen;
-            if (currentlyOpen) {
-                setSidebarOpen(false);
-                leftSidebarAutoClosedByContextRef.current = true;
-            }
-            return;
-        }
-
-        if (leftSidebarAutoClosedByContextRef.current) {
-            setSidebarOpen(true);
-            leftSidebarAutoClosedByContextRef.current = false;
-        }
-    }, [isContextPanelOpen, setSidebarOpen]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {
