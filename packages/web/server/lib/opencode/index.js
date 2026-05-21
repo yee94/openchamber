@@ -66,10 +66,10 @@ export {
 } from './mcp.js';
 
 export {
-  listPromptTemplates,
-  getPromptTemplate,
-  createPromptTemplate,
-  updatePromptTemplate,
-  deletePromptTemplate,
-  slugify as slugifyPromptTemplate,
-} from './prompt-templates.js';
+  listSnippets,
+  getSnippet,
+  createSnippet,
+  updateSnippet,
+  deleteSnippet,
+  expandSnippets,
+} from './snippets.js';

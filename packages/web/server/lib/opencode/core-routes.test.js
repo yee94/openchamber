@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { registerServerStatusRoutes } from './core-routes.js';
+import { registerCommonRequestMiddleware, registerServerStatusRoutes } from './core-routes.js';
 
 describe('core-routes', () => {
   it('should call gracefulShutdown with exitProcess: true on /api/system/shutdown', async () => {
@@ -14,6 +14,7 @@ describe('core-routes', () => {
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
+      express,
     };
 
     registerServerStatusRoutes(app, dependencies);
@@ -22,5 +23,20 @@ describe('core-routes', () => {
 
     expect(dependencies.gracefulShutdown).toHaveBeenCalled();
     expect(shutdownOpts).toEqual({ exitProcess: true });
+  });
+
+  it('should parse JSON bodies for snippet config routes', async () => {
+    const app = express();
+    registerCommonRequestMiddleware(app, { express });
+    app.post('/api/config/snippets/example', (req, res) => {
+      res.json({ body: req.body });
+    });
+
+    const response = await request(app)
+      .post('/api/config/snippets/example')
+      .send({ content: 'Snippet body' })
+      .expect(200);
+
+    expect(response.body).toEqual({ body: { content: 'Snippet body' } });
   });
 });

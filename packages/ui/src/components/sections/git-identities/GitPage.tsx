@@ -22,10 +22,11 @@ import { GitHubSettings } from '@/components/sections/openchamber/GitHubSettings
 import { GitIdentityEditorDialog } from './GitIdentityEditorDialog';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
+import type { IconName } from "@/components/icon/icons";
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 
-const ICON_MAP: Record<string, string> = {
+const ICON_MAP: Record<string, IconName> = {
   branch: 'git-branch',
   briefcase: 'briefcase',
   house: 'home',
