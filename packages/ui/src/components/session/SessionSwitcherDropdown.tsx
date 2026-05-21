@@ -11,12 +11,10 @@ import { Icon } from '@/components/icon/Icon';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionStatus } from '@/sync/sync-context';
 import { useSessionUnseenCount } from '@/sync/notification-store';
-import { useSync } from '@/sync/use-sync';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSwitcherItems, type SwitcherItem } from '@/components/session/sidebar/hooks/useSwitcherItems';
 import { useUIStore } from '@/stores/useUIStore';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
-import { formatSessionCompactDateLabel, normalizePath, resolveSessionDiffStats } from './sidebar/utils';
+import { formatSessionCompactDateLabel, resolveSessionDiffStats } from './sidebar/utils';
 import type { SessionNode, SessionSummaryMeta } from './sidebar/types';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -72,9 +70,6 @@ type SwitcherContentProps = {
 
 function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentProps): React.ReactElement {
   const items = useSwitcherItems(true, { scopeProjectId });
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const ensureSessionRenderable = useSync().ensureSessionRenderable;
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const { t } = useI18n();
@@ -84,48 +79,6 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
     onSelect();
     openNewSessionDraft();
   }, [onSelect, openNewSessionDraft, setActiveMainTab]);
-
-  const prefetchedRef = React.useRef<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    // Prefetch only sessions that live in the currently mounted sync directory.
-    // ensureSessionRenderable closes over SyncProvider's directory, so a cross-directory
-    // call would hit the wrong backend context. Switching to such a session re-mounts
-    // SyncProvider anyway, so the prefetch wouldn't have survived either way.
-    const normalizedCurrent = normalizePath(currentDirectory);
-    const queue: string[] = [];
-    for (const item of items) {
-      const id = item.node.session.id;
-      if (id === currentSessionId) continue;
-      if (prefetchedRef.current.has(id)) continue;
-      const sessionDir = normalizePath(resolveGlobalSessionDirectory(item.node.session));
-      if (!sessionDir || sessionDir !== normalizedCurrent) continue;
-      prefetchedRef.current.add(id);
-      queue.push(id);
-    }
-    if (queue.length === 0) return;
-
-    let cancelled = false;
-    const CONCURRENCY = 2;
-    const runNext = async (): Promise<void> => {
-      while (!cancelled) {
-        const id = queue.shift();
-        if (!id) return;
-        try {
-          await ensureSessionRenderable(id);
-        } catch {
-          // best-effort prefetch; ignore errors
-        }
-      }
-    };
-
-    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, () => runNext());
-    void Promise.all(workers);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentDirectory, currentSessionId, ensureSessionRenderable, items]);
 
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
   const toggleParent = React.useCallback((sessionId: string) => {
