@@ -1595,6 +1595,7 @@ const AssistantMessageBody = React.memo(({
                                     key={`reasoning-merged-${messageId}`}
                                     parts={flatReasoningParts}
                                     messageId={messageId}
+                                    streamPhase={streamPhase}
                                     onContentChange={onContentChange}
                                 />
                             );
@@ -1606,6 +1607,7 @@ const AssistantMessageBody = React.memo(({
                                 key={`reasoning-${messageId}-${i}`}
                                 part={part}
                                 messageId={messageId}
+                                streamPhase={streamPhase}
                                 onContentChange={onContentChange}
                             />
                         );

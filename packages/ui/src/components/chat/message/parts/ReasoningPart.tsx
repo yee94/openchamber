@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownRenderer } from '../../MarkdownRenderer';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
+import type { StreamPhase } from '../types';
 
 type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
 
@@ -97,8 +98,6 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const { t } = useI18n();
     const hasEnded = typeof time?.end === 'number';
     const [isExpanded, setIsExpanded] = React.useState(hasEnded ? false : (defaultExpanded ?? isStreaming));
-    const userToggledRef = React.useRef(false);
-    const effectiveIsExpanded = hasEnded && !userToggledRef.current ? false : isExpanded;
     const contentId = React.useId();
     const scrollRef = React.useRef<HTMLElement>(null);
     const contentRef = React.useRef<HTMLDivElement>(null);
@@ -109,12 +108,11 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const prevIsStreamingRef = React.useRef(isStreaming);
 
     const summary = React.useMemo(() => getReasoningSummary(text), [text]);
-    const toggleAriaLabel = effectiveIsExpanded
+    const toggleAriaLabel = isExpanded
         ? t('chat.reasoningTrace.collapseAria')
         : t('chat.reasoningTrace.expandAria');
 
     const handleToggle = React.useCallback(() => {
-        userToggledRef.current = true;
         setIsExpanded((prev) => !prev);
         onContentChange?.('structural');
     }, [onContentChange]);
@@ -129,8 +127,8 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     React.useEffect(() => {
         const wasStreaming = prevIsStreamingRef.current;
         prevIsStreamingRef.current = isStreaming;
-        // Auto-collapse only when streaming ends (true → false).
-        // Do not fire on mount so that defaultExpanded is respected.
+        // Auto-collapse when live streaming ends or when an end timestamp arrives.
+        // Completed blocks initialize collapsed, so historical loads do not animate closed.
         if (hasEnded || (wasStreaming && !isStreaming)) {
             setIsExpanded(false);
         }
@@ -144,10 +142,10 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     }, [onContentChange, text]);
 
     React.useEffect(() => {
-        if (isStreaming && effectiveIsExpanded && scrollRef.current) {
+        if (isStreaming && isExpanded && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [text, isStreaming, effectiveIsExpanded]);
+    }, [text, isStreaming, isExpanded]);
 
     React.useLayoutEffect(() => {
         const element = contentRef.current;
@@ -157,25 +155,17 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
         contentAnimationRef.current?.stop();
 
-        if (hasEnded && !userToggledRef.current) {
-            element.style.height = '0px';
-            element.style.opacity = '0';
-            element.style.overflow = 'hidden';
-            contentMountedRef.current = true;
-            return;
-        }
-
         if (!contentMountedRef.current) {
             contentMountedRef.current = true;
-            element.style.height = effectiveIsExpanded ? 'auto' : '0px';
-            element.style.opacity = effectiveIsExpanded ? '1' : '0';
-            element.style.overflow = effectiveIsExpanded ? 'visible' : 'hidden';
+            element.style.height = isExpanded ? 'auto' : '0px';
+            element.style.opacity = isExpanded ? '1' : '0';
+            element.style.overflow = isExpanded ? 'visible' : 'hidden';
             return;
         }
 
         element.style.overflow = 'hidden';
 
-        if (effectiveIsExpanded) {
+        if (isExpanded) {
             element.style.height = '0px';
             element.style.opacity = '0';
         } else {
@@ -185,7 +175,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
         const animation = animate(
             element,
-            { height: effectiveIsExpanded ? 'auto' : '0px', opacity: effectiveIsExpanded ? 1 : 0 },
+            { height: isExpanded ? 'auto' : '0px', opacity: isExpanded ? 1 : 0 },
             EXPANDED_CONTENT_SPRING,
         );
         contentAnimationRef.current = animation;
@@ -195,7 +185,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 return;
             }
             contentAnimationRef.current = null;
-            if (effectiveIsExpanded) {
+            if (isExpanded) {
                 element.style.overflow = 'visible';
                 element.style.height = 'auto';
             } else {
@@ -209,7 +199,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 contentAnimationRef.current = null;
             }
         };
-    }, [effectiveIsExpanded, hasEnded]);
+    }, [isExpanded]);
 
     React.useEffect(() => {
         return () => {
@@ -253,7 +243,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
             <div
                 role="button"
                 tabIndex={0}
-                aria-expanded={effectiveIsExpanded}
+                aria-expanded={isExpanded}
                 aria-controls={contentId}
                 aria-label={toggleAriaLabel}
                 className={cn(
@@ -267,8 +257,8 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                         <div
                             className={cn(
                                 'absolute inset-0 transition-opacity',
-                                effectiveIsExpanded && 'opacity-0',
-                                !effectiveIsExpanded && 'group-hover/tool:opacity-0',
+                                isExpanded && 'opacity-0',
+                                !isExpanded && 'group-hover/tool:opacity-0',
                             )}
                             style={{ color: 'var(--tools-icon)' }}
                         >
@@ -277,12 +267,12 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                         <div
                             className={cn(
                                 'absolute inset-0 transition-opacity flex items-center justify-center',
-                                effectiveIsExpanded && 'opacity-100',
-                                !effectiveIsExpanded && 'opacity-0 group-hover/tool:opacity-100',
+                                isExpanded && 'opacity-100',
+                                !isExpanded && 'opacity-0 group-hover/tool:opacity-100',
                             )}
                             style={{ color: 'var(--tools-icon)' }}
                         >
-                            {effectiveIsExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
+                            {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
                         </div>
                     </div>
 
@@ -291,7 +281,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                             <span>{t(variant === 'justification' ? 'chat.reasoningTrace.justification' : 'chat.reasoningTrace.thinking')}</span>
                             <BusyDots />
                         </span>
-                    ) : effectiveIsExpanded ? (
+                    ) : isExpanded ? (
                         <span
                             className="typography-meta font-medium"
                             style={{ color: 'var(--tools-title)' }}
@@ -309,7 +299,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
-                    {!isStreaming && !effectiveIsExpanded && summary ? (
+                    {!isStreaming && !isExpanded && summary ? (
                         <span
                             className="min-w-0 truncate typography-meta"
                             style={{ color: 'var(--tools-description)', opacity: 0.8 }}
@@ -327,11 +317,11 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
             <div
                 ref={contentRef}
                 id={contentId}
-                aria-hidden={!effectiveIsExpanded}
+                aria-hidden={!isExpanded}
                 style={{
-                    height: effectiveIsExpanded ? 'auto' : '0px',
-                    opacity: effectiveIsExpanded ? 1 : 0,
-                    overflow: effectiveIsExpanded ? 'visible' : 'hidden',
+                    height: isExpanded ? 'auto' : '0px',
+                    opacity: isExpanded ? 1 : 0,
+                    overflow: isExpanded ? 'visible' : 'hidden',
                     overflowAnchor: 'none',
                 }}
             >
@@ -377,19 +367,22 @@ type ReasoningPartProps = {
     part: Part;
     onContentChange?: (reason?: ContentChangeReason) => void;
     messageId: string;
+    streamPhase?: StreamPhase;
 };
 
 const ReasoningPart = React.memo(({
     part,
     onContentChange,
     messageId,
+    streamPhase,
 }: ReasoningPartProps) => {
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const partWithText = part as PartWithText;
     const rawText = partWithText.text || partWithText.content || '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
     const time = partWithText.time;
-    const isStreaming = chatRenderMode === 'live' && typeof time?.end !== 'number';
+    const canBeStreaming = streamPhase === undefined || streamPhase !== 'completed';
+    const isStreaming = chatRenderMode === 'live' && canBeStreaming && typeof time?.end !== 'number';
     const throttledText = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
@@ -418,6 +411,7 @@ type MergedReasoningPartProps = {
     parts: Part[];
     onContentChange?: (reason?: ContentChangeReason) => void;
     messageId: string;
+    streamPhase?: StreamPhase;
 };
 
 /**
@@ -429,6 +423,7 @@ export const MergedReasoningPart = React.memo(({
     parts,
     onContentChange,
     messageId,
+    streamPhase,
 }: MergedReasoningPartProps) => {
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
 
@@ -463,7 +458,8 @@ export const MergedReasoningPart = React.memo(({
         return earliestStart !== undefined ? { start: earliestStart, end: latestEnd } : undefined;
     }, [parts]);
 
-    const isStreaming = chatRenderMode === 'live' && parts.some(
+    const canBeStreaming = streamPhase === undefined || streamPhase !== 'completed';
+    const isStreaming = chatRenderMode === 'live' && canBeStreaming && parts.some(
         (part) => typeof (part as PartWithText).time?.end !== 'number',
     );
 
