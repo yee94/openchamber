@@ -162,7 +162,6 @@ export const TerminalView: React.FC = () => {
     const [isReconnectPending, setIsReconnectPending] = React.useState(false);
     const [activeModifier, setActiveModifier] = React.useState<Modifier | null>(null);
     const [isRestarting, setIsRestarting] = React.useState(false);
-    const [viewportLayoutVersion, setViewportLayoutVersion] = React.useState(0);
 
     const streamCleanupRef = React.useRef<(() => void) | null>(null);
     const activeTerminalIdRef = React.useRef<string | null>(null);
@@ -835,29 +834,6 @@ export const TerminalView: React.FC = () => {
         return `${directoryPart}::${tabPart}::${terminalPart}`;
     }, [effectiveDirectory, activeTabId, terminalSessionId]);
 
-    const viewportSessionKey = React.useMemo(() => {
-        return `${terminalViewportKey}::layout-${viewportLayoutVersion}`;
-    }, [terminalViewportKey, viewportLayoutVersion]);
-
-    React.useEffect(() => {
-        if (useTouchTerminalInput || !isBottomTerminalOpen || !isTerminalVisible) {
-            return;
-        }
-
-        if (typeof window === 'undefined') {
-            setViewportLayoutVersion((value) => value + 1);
-            return;
-        }
-
-        const timeoutId = window.setTimeout(() => {
-            setViewportLayoutVersion((value) => value + 1);
-        }, 140);
-
-        return () => {
-            window.clearTimeout(timeoutId);
-        };
-    }, [bottomTerminalHeight, isBottomTerminalExpanded, isBottomTerminalOpen, isTerminalVisible, useTouchTerminalInput]);
-
     React.useEffect(() => {
         if (!isTerminalVisible || useTouchTerminalInput) {
             return;
@@ -1139,7 +1115,7 @@ export const TerminalView: React.FC = () => {
                             ref={(controller) => {
                                 terminalControllerRef.current = controller;
                             }}
-                            sessionKey={viewportSessionKey}
+                            sessionKey={terminalViewportKey}
                             chunks={bufferChunks}
                             onInput={handleViewportInput}
                             onResize={handleViewportResize}
