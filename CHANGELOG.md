@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.11.4] - 2026-05-22
+
+- Desktop: Electron is now the desktop release target, with updated macOS menu actions for the right sidebar and terminal dock.
+- Chat: added reusable snippets with `#` autocomplete in the composer and a Snippets settings page for global and project snippets with [opencode-snippets](https://github.com/JosXa/opencode-snippets) plugin compatibility.
+- Multi-Run: runs can now be split into separate prompt/model groups, and Multi-Run prompts support command, file, agent, and snippet autocomplete (thanks to @roctom).
+- UI: refreshed the desktop workspace shell with a full-width header, framed chat area, and smooth left/right sidebar open and close states.
+- Chat: completed reasoning blocks stay collapsed without replaying the collapse animation when you reopen a session.
+- Files: file search and mention results avoid mixing entries from similar query/cache keys (thanks to @isanchez404).
+- VSCode: switching between chat sessions is less likely to stall on very large conversations.
+- Voice: preview audio now stops and cleans up correctly when you stop playback or leave Voice settings (thanks to @isanchez404).
+- UI/Localization: refreshed Simplified Chinese terminology across the interface (thanks to @luojiyin).
+
 ## [1.11.3] - 2026-05-19
 
 - Chat: question cards now include copy buttons for Markdown and JSON (thanks to @robertoberto).
