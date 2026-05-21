@@ -89,12 +89,14 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     variant,
     onContentChange,
     blockId,
+    time,
     isStreaming = false,
     actions,
     defaultExpanded,
 }) => {
     const { t } = useI18n();
-    const [isExpanded, setIsExpanded] = React.useState(defaultExpanded ?? isStreaming);
+    const hasEnded = typeof time?.end === 'number';
+    const [isExpanded, setIsExpanded] = React.useState(hasEnded ? false : (defaultExpanded ?? isStreaming));
     const contentId = React.useId();
     const scrollRef = React.useRef<HTMLElement>(null);
     const contentRef = React.useRef<HTMLDivElement>(null);
@@ -126,10 +128,10 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
         prevIsStreamingRef.current = isStreaming;
         // Auto-collapse only when streaming ends (true → false).
         // Do not fire on mount so that defaultExpanded is respected.
-        if (wasStreaming && !isStreaming) {
+        if (hasEnded || (wasStreaming && !isStreaming)) {
             setIsExpanded(false);
         }
-    }, [isStreaming]);
+    }, [hasEnded, isStreaming]);
 
     React.useEffect(() => {
         if (text.trim().length === 0) {
