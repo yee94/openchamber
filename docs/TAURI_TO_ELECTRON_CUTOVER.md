@@ -96,7 +96,8 @@ create-release
 The transition works like this:
 
 1. `build-desktop-electron-macos` builds, signs, and notarizes the Electron app.
-2. It uploads the signed `OpenChamber.app` as a short-lived Actions artifact.
+2. It wraps the signed `OpenChamber.app` in a tarball and uploads that tarball
+   as a short-lived Actions artifact.
 3. `repackage-electron-as-tauri-update` downloads that Electron `.app`.
 4. It packs it into `OpenChamber-<version>-darwin-*.app.tar.gz`.
 5. It signs that tarball with `tauri signer sign` and the existing Tauri signing key.
@@ -114,10 +115,13 @@ only verifies the signature and extracts the bundle over the existing
 `/Applications/OpenChamber.app`. After restart, the app is Electron and future
 updates use `latest-mac.yml` through `electron-updater`.
 
-Note: `actions/upload-artifact` can download a `.app` directory artifact as its
-inner `Contents/` folder instead of `OpenChamber.app/Contents`. The repackage
-job handles both shapes and wraps `Contents/` back into `OpenChamber.app` before
-creating the tarball.
+Note: do not upload the `.app` directory directly with `actions/upload-artifact`.
+That action can flatten the app to its inner `Contents/` folder and can also
+normalize file modes. Losing the executable bit on `Contents/MacOS/*` makes the
+updated app fail to launch with a permissions/package error. The workflow wraps
+the `.app` in a tarball before upload so permissions survive the handoff between
+jobs, then verifies the app executable is still executable before creating the
+Tauri updater tarball.
 
 ## Historical release workflow changes
 

@@ -259,12 +259,13 @@ jobs:
           rm -rf electron-app-artifact
           mkdir -p electron-app-artifact
           cp -R "$APP_PATH" electron-app-artifact/OpenChamber.app
+          tar -C electron-app-artifact -czf electron-app-${{ matrix.arch }}.tar.gz OpenChamber.app
 
       - name: Upload signed Electron app for Tauri updater repackage
         uses: actions/upload-artifact@v4
         with:
           name: electron-app-${{ matrix.arch }}
-          path: electron-app-artifact/OpenChamber.app
+          path: electron-app-${{ matrix.arch }}.tar.gz
           retention-days: 1
 
       - name: Upload per-arch latest-mac.yml for merge
@@ -308,15 +309,24 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ -f staged/electron-app-${{ matrix.arch }}.tar.gz ]; then
+            tar -C staged -xzf staged/electron-app-${{ matrix.arch }}.tar.gz
+          elif [ ! -d staged/OpenChamber.app ] && [ -d staged/Contents ]; then
+            mkdir -p staged/OpenChamber.app
+            mv staged/Contents staged/OpenChamber.app/Contents
+          fi
+
           if [ ! -d staged/OpenChamber.app ]; then
-            if [ -d staged/Contents ]; then
-              mkdir -p staged/OpenChamber.app
-              mv staged/Contents staged/OpenChamber.app/Contents
-            else
-              echo "Error: staged/OpenChamber.app not found"
-              ls -la staged
-              exit 1
-            fi
+            echo "Error: staged/OpenChamber.app not found"
+            ls -la staged
+            exit 1
+          fi
+
+          APP_EXECUTABLE=$(find staged/OpenChamber.app/Contents/MacOS -type f -maxdepth 1 -print -quit)
+          if [ -z "$APP_EXECUTABLE" ] || [ ! -x "$APP_EXECUTABLE" ]; then
+            echo "Error: Electron app executable is missing or not executable"
+            ls -la staged/OpenChamber.app/Contents/MacOS
+            exit 1
           fi
 
           cd staged
