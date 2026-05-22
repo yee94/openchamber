@@ -2,6 +2,85 @@
 
 This package is docs content source-of-truth for OpenChamber.
 
+## Voice & style
+
+Write for someone trying to get something done — not for an engineer reading a
+spec. Assume the reader may be non-technical. A page should feel quick to read,
+never like a separate chore just to get through one screen.
+
+These rules describe how we already write the docs. Follow them so the style
+stays the same no matter who is writing.
+
+### Who you're writing for
+
+- Assume curiosity, not expertise. The reader knows what they want to do, not
+  how OpenChamber works inside.
+- One page = one job. If a page is answering two unrelated questions, split it.
+
+### Keep it short
+
+- Lead with the task, not background. The first line should say what the page is
+  for ("Use `openchamber tunnel` to expose a running OpenChamber instance.").
+- Cut anything that doesn't change what the reader does next.
+- A basic page should fit in a screen or two. Long, dense reference pages (like
+  Reverse Proxy) are the exception — and they say so in their first line ("Use
+  this page if you run OpenChamber behind...").
+
+### Steps
+
+- Number sequential actions; use bullets for options or unordered notes.
+- Start each step with a verb: "Run", "Open", "Pick".
+- End a procedure by telling the reader what success looks like, so they know
+  they did it right.
+
+```mdx
+3. Run `openchamber --ui-password be-creative-here`.
+4. Open the printed URL (usually `http://localhost:3000`).
+
+You should land on the OpenChamber session list. If you see it, the server is
+running.
+```
+
+### Plain language
+
+- Explain a term the first time it appears, in parentheses, in everyday words:
+  - good: start a tunnel (a public link to your local OpenChamber)
+  - bad: start a tunnel — the reader doesn't know what that is yet
+- Prefer common words over internal ones. "App", "version", "page" beat
+  "surface", "instance", "route" when the meaning is the same. If an internal
+  term is unavoidable, define it once.
+- Don't reach for `SSE`, `WebSocket`, `buffering`, or header names unless the
+  page is explicitly an advanced/operator page.
+
+### Bullets and sentences
+
+- Be consistent within a single list. Either all short fragments (lowercase, no
+  period) or all full sentences (capital letter, period) — don't mix the two in
+  one list.
+- Use fragments for quick option lists; use full sentences for rules, warnings,
+  or anything the reader must not misread.
+
+### Link out instead of re-explaining
+
+- Where a step can realistically fail, link to
+  [Troubleshooting](/troubleshooting/) right there, not only at the bottom.
+- Don't re-document something another page owns — link to it. (Quickstart points
+  at Install for the actual install command instead of copying it.)
+
+### Show, don't only tell
+
+- A screenshot beats a paragraph for anything visual (where a button is, what a
+  screen looks like). See [Images](#images) for how to add one.
+- Always pair a screenshot with one line of text — the image supports the step,
+  it isn't the whole step.
+
+### Commands and code
+
+- Make code blocks copy-paste-ready: real, working values. Only use a
+  `<placeholder>` when the value is genuinely user-specific, and make that
+  obvious (e.g. `app.example.com`, `~/.secrets/cf-token`).
+- One command per idea. Don't chain unrelated commands just to look compact.
+
 ## Add a new docs page
 
 1. Create a new file in `packages/docs/content/docs/`.

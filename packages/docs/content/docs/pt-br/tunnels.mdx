@@ -5,7 +5,7 @@ description: Exponha o OpenChamber com segurança para acesso remoto e móvel.
 
 # Túneis
 
-Use `openchamber tunnel` para expor uma instância do OpenChamber em execução.
+Um túnel é um link público para o seu OpenChamber, para que você possa acessá-lo pelo celular ou de outra rede. Use `openchamber tunnel` para criar um para uma instância em execução.
 
 ## Início rápido (modo rápido da Cloudflare)
 
@@ -26,6 +26,8 @@ openchamber tunnel start --provider cloudflare --mode quick
 ```bash
 openchamber tunnel status
 ```
+
+Quando o túnel estiver no ar, o `status` mostra uma URL pública. Abra-a, ou escaneie o QR code, para acessar o OpenChamber de qualquer lugar.
 
 Por padrão, o OpenChamber imprime um QR code em sessões TTY interativas. Use `--qr` para forçar a saída do QR, ou `--no-qr` para desativá-la.
 
@@ -75,3 +77,7 @@ openchamber tunnel stop --port 3000
 - um único túnel ativo por instância do OpenChamber (porta)
 - iniciar um novo modo/provedor na mesma instância substitui o túnel anterior
 - gerar um novo link de conexão revoga o anterior não utilizado
+
+## Relacionado
+
+- [Solução de problemas](/pt-br/troubleshooting/) — se o link do túnel não funcionar

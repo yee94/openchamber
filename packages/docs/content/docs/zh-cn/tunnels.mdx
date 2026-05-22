@@ -5,7 +5,7 @@ description: 安全地将 OpenChamber 开放给远程和移动访问。
 
 # 隧道
 
-使用 `openchamber tunnel` 来开放正在运行的 OpenChamber 实例。
+隧道是指向你的 OpenChamber 的一个公开链接，让你可以从手机或另一个网络访问它。使用 `openchamber tunnel` 为正在运行的实例创建一个隧道。
 
 ## 快速开始（Cloudflare 快速模式）
 
@@ -26,6 +26,8 @@ openchamber tunnel start --provider cloudflare --mode quick
 ```bash
 openchamber tunnel status
 ```
+
+隧道建立后，`status` 会显示一个公开 URL。打开它，或扫描二维码，即可从任何地方访问 OpenChamber。
 
 默认情况下，OpenChamber 会在交互式 TTY 会话中输出二维码。使用 `--qr` 强制输出二维码，或使用 `--no-qr` 将其禁用。
 
@@ -75,3 +77,7 @@ openchamber tunnel stop --port 3000
 - 每个 OpenChamber 实例（端口）只有一个活动隧道
 - 在同一实例上启动新的模式/提供商会替换之前的隧道
 - 生成新的连接链接会吊销之前未使用的链接
+
+## 相关内容
+
+- [问题排查](/zh-cn/troubleshooting/) — 如果隧道链接无法使用
