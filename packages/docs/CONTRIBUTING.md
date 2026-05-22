@@ -49,6 +49,64 @@ Rules:
 - every sidebar link must map to an existing MDX file
 - keep section labels short and task-oriented
 
+## Images
+
+Images live inside the docs content tree so they sync to the website with the
+pages (the sync copies all of `content/docs/`, not just `.mdx`). Reference them
+with a **relative path**; Astro optimizes them at build time.
+
+```
+content/docs/
+  install.mdx          ->  ![Desktop app](./images/desktop.png)
+  images/
+    desktop.png
+```
+
+Rules:
+
+- co-locate images under `content/docs/` (e.g. `content/docs/images/`); a
+  relative `./images/...` reference is resolved and optimized at build
+- always set meaningful `alt` text (and translate it in localized pages)
+- do **not** put docs images in the website repo's `public/` — it is not the
+  source of truth and the sync will not pick them up
+- keep originals reasonably sized; the build generates responsive variants
+
+For translations, reuse the same shared image when it carries no text. If a
+screenshot contains localized UI text, add a per-locale copy under that locale's
+folder (e.g. `uk/images/...`) and point the translated page at it.
+
+`docs:validate` only checks `.mdx`, so images never block validation.
+
+### Light / dark variants
+
+To show a different screenshot per theme, add a `-light` / `-dark` pair and tag
+each with `oc-light-only` / `oc-dark-only`. The website ships CSS for these
+classes (keyed on Starlight's `data-theme`), so the right one shows and follows
+the in-page theme toggle.
+
+Use the `<Image>` component so the images stay optimized while taking a class.
+Add the imports right under the frontmatter:
+
+```mdx
+---
+title: Install
+description: ...
+---
+
+import { Image } from "astro:assets";
+import desktopLight from "./images/desktop-light.png";
+import desktopDark from "./images/desktop-dark.png";
+
+<Image src={desktopLight} alt="Desktop app" class="oc-light-only" />
+<Image src={desktopDark} alt="Desktop app" class="oc-dark-only" />
+```
+
+Notes:
+
+- both files live under `content/docs/` like any other image and sync normally
+- give both the same `alt` (and translate it in localized pages)
+- if you only have one image, just use the normal `![alt](./path.png)` form
+
 ## Localization
 
 The docs are translated into the same languages the OpenChamber app ships in.
