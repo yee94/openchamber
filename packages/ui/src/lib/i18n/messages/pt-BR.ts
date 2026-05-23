@@ -1132,6 +1132,7 @@ export const dict: Record<I18nKey, string> = {
   "directoryExplorerDialog.browse.empty": "Nenhum diretório correspondente.",
   "directoryExplorerDialog.browse.parentDirectory": "Diretório pai",
   "directoryExplorerDialog.browse.addedBadge": "Adicionado",
+  "directoryExplorerDialog.browse.quickAdd": "Adicionar",
   "directoryExplorerDialog.footer.navigate": "Navegar",
   "directoryExplorerDialog.footer.select": "Selecionar",
   "directoryExplorerDialog.footer.add": "Adicionar",
