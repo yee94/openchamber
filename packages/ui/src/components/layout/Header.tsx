@@ -655,6 +655,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { t } = useI18n();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen);
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
@@ -1506,6 +1507,7 @@ export const Header: React.FC<HeaderProps> = ({
         { id: 'diff', label: t('layout.mainTab.diff'), icon: 'diff' },
         { id: 'files', label: t('layout.mainTab.files'), icon: "folder-6" },
         { id: 'terminal', label: t('layout.mainTab.terminal'), icon: "terminal-box" },
+        { id: 'context', label: t('layout.mainTab.context'), icon: "file-list-2" },
       );
 
       return base;
@@ -1520,7 +1522,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, [shortcutOverrides]);
 
   useEffect(() => {
-    if (!isMobile && (activeMainTab === 'git' || activeMainTab === 'terminal' || activeMainTab === 'diff' || activeMainTab === 'files')) {
+    if (!isMobile && (activeMainTab === 'git' || activeMainTab === 'terminal' || activeMainTab === 'diff' || activeMainTab === 'files' || activeMainTab === 'context')) {
       setActiveMainTab('chat');
     }
   }, [activeMainTab, isMobile, setActiveMainTab]);
@@ -1626,13 +1628,16 @@ export const Header: React.FC<HeaderProps> = ({
         const num = parseInt(e.key, 10);
         if (num >= 1 && num <= tabs.length) {
           e.preventDefault();
+          if (isMobile) {
+            setRightSidebarOpen(false);
+          }
           setActiveMainTab(tabs[num - 1].id);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs, setActiveMainTab]);
+  }, [isMobile, setActiveMainTab, setRightSidebarOpen, tabs]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1995,6 +2000,7 @@ export const Header: React.FC<HeaderProps> = ({
                             onClick={() => {
                               if (isMobile) {
                                 blurActiveElement();
+                                setRightSidebarOpen(false);
                               }
                               setActiveMainTab(tab.id);
                             }}
