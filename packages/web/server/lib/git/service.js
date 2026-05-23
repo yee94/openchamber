@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 let resolvedGitBinary = null;
 const worktreeBootstrapState = new Map();
+const gitIndexMutationQueues = new Map();
 
 const WORKTREE_BOOTSTRAP_PENDING = 'pending';
 const WORKTREE_BOOTSTRAP_READY = 'ready';
@@ -305,6 +306,60 @@ const normalizeDirectoryPath = (value) => {
   }
 
   return trimmed;
+};
+
+const getGitIndexMutationQueueKey = (directory) => {
+  const normalized = normalizeDirectoryPath(directory);
+  if (!normalized) {
+    return '';
+  }
+  return path.resolve(normalized);
+};
+
+const withGitIndexMutationQueue = async (directory, task) => {
+  let key = getGitIndexMutationQueueKey(directory);
+  try {
+    const directoryPath = normalizeDirectoryPath(directory);
+    if (directoryPath) {
+      const git = await createGit(directoryPath);
+      key = await resolveGitRepositoryRoot(directoryPath, git);
+    }
+  } catch {
+    // Fall back to the normalized directory key when the repo root is unavailable.
+  }
+  if (!key) {
+    return task();
+  }
+
+  const previous = gitIndexMutationQueues.get(key) || Promise.resolve();
+  const current = previous.catch(() => {}).then(task);
+  const tail = current.catch(() => {});
+  gitIndexMutationQueues.set(key, tail);
+
+  try {
+    return await current;
+  } finally {
+    if (gitIndexMutationQueues.get(key) === tail) {
+      gitIndexMutationQueues.delete(key);
+    }
+  }
+};
+
+const normalizeFilePathList = (paths) => Array.from(new Set(
+  (Array.isArray(paths) ? paths : [paths])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+));
+
+const validateRepositoryFilePaths = (directoryPath, filePaths) => {
+  const repoRoot = path.resolve(directoryPath);
+
+  for (const filePath of filePaths) {
+    const absoluteTarget = path.resolve(repoRoot, filePath);
+    if (!absoluteTarget.startsWith(repoRoot + path.sep) && absoluteTarget !== repoRoot) {
+      throw new Error(`Path is outside repository: ${filePath}`);
+    }
+  }
 };
 
 const toGitPath = (value) => value.replace(/\\/g, '/');
@@ -1811,14 +1866,30 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
 
   let modified = '';
   try {
-    const stat = await fsp.stat(absolutePath);
-    if (stat.isFile()) {
+    if (staged) {
       if (isImage) {
-        // For images, read as binary and convert to data URL
-        const buffer = await fsp.readFile(absolutePath);
-        modified = `data:${mimeType};base64,${buffer.toString('base64')}`;
+        const { stdout } = await execFileAsync(getGitBinary(), ['show', `:${repoPath}`], {
+          cwd: repoRoot,
+          encoding: 'buffer',
+          windowsHide: true,
+          maxBuffer: 50 * 1024 * 1024,
+        });
+        if (stdout && stdout.length > 0) {
+          modified = `data:${mimeType};base64,${stdout.toString('base64')}`;
+        }
       } else {
-        modified = await fsp.readFile(absolutePath, 'utf8');
+        modified = await git.show([`:${repoPath}`]);
+      }
+    } else {
+      const stat = await fsp.stat(absolutePath);
+      if (stat.isFile()) {
+        if (isImage) {
+          // For images, read as binary and convert to data URL
+          const buffer = await fsp.readFile(absolutePath);
+          modified = `data:${mimeType};base64,${buffer.toString('base64')}`;
+        } else {
+          modified = await fsp.readFile(absolutePath, 'utf8');
+        }
       }
     }
   } catch (error) {
@@ -1838,52 +1909,57 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
   };
 }
 
-export async function revertFile(directory, filePath) {
-  const directoryPath = normalizeDirectoryPath(directory);
-  const directoryGit = await createGit(directoryPath);
-  const repoRoot = await resolveGitRepositoryRoot(directoryPath, directoryGit);
-  const { absolutePath, repoPath } = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
-  const git = await createGit(repoRoot);
+export async function revertFile(directory, filePath, options = {}) {
+  return withGitIndexMutationQueue(directory, async () => {
+    const scope = options?.scope === 'working' ? 'working' : 'all';
+    const directoryPath = normalizeDirectoryPath(directory);
+    const directoryGit = await createGit(directoryPath);
+    const repoRoot = await resolveGitRepositoryRoot(directoryPath, directoryGit);
+    const { absolutePath, repoPath } = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+    const git = await createGit(repoRoot);
 
-  const isTracked = await git
-    .raw(['ls-files', '--error-unmatch', '--', repoPath])
-    .then(() => true)
-    .catch(() => false);
+    const isTracked = await git
+      .raw(['ls-files', '--error-unmatch', '--', repoPath])
+      .then(() => true)
+      .catch(() => false);
 
-  if (!isTracked) {
-    try {
-      await git.raw(['clean', '-f', '-d', '--', repoPath]);
-      return;
-    } catch (cleanError) {
+    if (!isTracked) {
       try {
-        await fsp.rm(absolutePath, { recursive: true, force: true });
+        await git.raw(['clean', '-f', '-d', '--', repoPath]);
         return;
-      } catch (fsError) {
-        if (fsError && typeof fsError === 'object' && fsError.code === 'ENOENT') {
+      } catch (cleanError) {
+        try {
+          await fsp.rm(absolutePath, { recursive: true, force: true });
           return;
+        } catch (fsError) {
+          if (fsError && typeof fsError === 'object' && fsError.code === 'ENOENT') {
+            return;
+          }
+          console.error('Failed to remove untracked file during revert:', fsError);
+          throw fsError;
         }
-        console.error('Failed to remove untracked file during revert:', fsError);
-        throw fsError;
       }
     }
-  }
 
-  try {
-    await git.raw(['restore', '--staged', '--', repoPath]);
-  } catch (error) {
-    await git.raw(['reset', 'HEAD', '--', repoPath]).catch(() => {});
-  }
-
-  try {
-    await git.raw(['restore', '--', repoPath]);
-  } catch (error) {
-    try {
-      await git.raw(['checkout', '--', repoPath]);
-    } catch (fallbackError) {
-      console.error('Failed to revert git file:', fallbackError);
-      throw fallbackError;
+    if (scope === 'all') {
+      try {
+        await git.raw(['restore', '--staged', '--', repoPath]);
+      } catch (error) {
+        await git.raw(['reset', 'HEAD', '--', repoPath]).catch(() => {});
+      }
     }
-  }
+
+    try {
+      await git.raw(['restore', '--', repoPath]);
+    } catch (error) {
+      try {
+        await git.raw(['checkout', '--', repoPath]);
+      } catch (fallbackError) {
+        console.error('Failed to revert git file:', fallbackError);
+        throw fallbackError;
+      }
+    }
+  });
 }
 
 export async function collectDiffs(directory, files = []) {
@@ -1981,7 +2057,12 @@ export async function stashPush(directory, options = {}) {
 export async function stashApply(directory, options = {}) {
   const { git } = await createRepositoryGitContext(directory);
   const ref = typeof options.ref === 'string' && options.ref.trim() ? options.ref.trim() : 'stash@{0}';
-  await git.raw(['stash', 'apply', ref]);
+  // Prefer --index so the staged/unstaged split captured in the stash is restored
+  // faithfully. Fall back to a plain apply when the index can't be reinstated
+  // cleanly (e.g. conflicts), which is the prior behavior.
+  await git.raw(['stash', 'apply', '--index', ref]).catch(async () => {
+    await git.raw(['stash', 'apply', ref]);
+  });
   return { success: true, ref };
 }
 
@@ -2172,77 +2253,197 @@ export async function fetch(directory, options = {}) {
   }
 }
 
-export async function commit(directory, message, options = {}) {
-  const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+export async function stageFile(directory, filePath) {
+  await stageFiles(directory, [filePath]);
+}
 
-  try {
-    const requestedFiles = Array.isArray(options.files)
-      ? options.files
-        .map((value) => String(value || '').trim())
-        .filter(Boolean)
-      : [];
-    let filesToCommit = [];
+export async function stageFiles(directory, paths) {
+  if (!directory) {
+    throw new Error('directory and path are required for stageFile');
+  }
 
-    if (options.addAll) {
-      await git.add('.');
-    } else if (requestedFiles.length > 0) {
-      filesToCommit = Array.from(new Set(await Promise.all(requestedFiles.map(async (filePath) => {
-        const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
-        return fileContext.repoPath;
-      }))));
+  const filePaths = normalizeFilePathList(paths);
+  if (filePaths.length === 0) {
+    throw new Error('directory and path are required for stageFile');
+  }
+  validateRepositoryFilePaths(normalizeDirectoryPath(directory), filePaths);
 
-      const status = await git.status();
-      const fileStatusByPath = new Map(status.files.map((file) => [file.path, file]));
-      filesToCommit = filesToCommit.filter((filePath) => fileStatusByPath.has(filePath));
-
-      if (filesToCommit.length === 0) {
-        throw new Error('No selected files are available to commit. Refresh git status and try again.');
-      }
-
-      const filesNeedingAdd = filesToCommit.filter((filePath) => {
-        const fileStatus = fileStatusByPath.get(filePath);
-        if (!fileStatus) {
-          return false;
-        }
-
-        const alreadyFullyStaged = fileStatus.index !== ' ' && fileStatus.working_dir === ' ';
-        return !alreadyFullyStaged;
-      });
-
-      if (filesNeedingAdd.length > 0) {
-        await git.add(filesNeedingAdd);
-      }
-    }
-
-    const commitArgs =
-      !options.addAll && filesToCommit.length > 0
-        ? filesToCommit
-        : undefined;
-
-    let result;
-    try {
-      result = await git.commit(message, commitArgs);
-    } catch (error) {
+  await withGitIndexMutationQueue(directory, async () => {
+    const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+    const repoPaths = Array.from(new Set(await Promise.all(filePaths.map(async (filePath) => {
+      const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+      return fileContext.repoPath;
+    }))));
+    validateRepositoryFilePaths(repoRoot, repoPaths);
+    await git.raw(['add', '--', ...repoPaths]).catch(async (error) => {
       const gitErrorText = parseGitErrorText(error);
       const isPathspecError = gitErrorText.includes('pathspec') && gitErrorText.includes('did not match any files');
-      if (!isPathspecError || !commitArgs || commitArgs.length === 0) {
+      if (!isPathspecError) {
         throw error;
       }
 
-      // Fallback for deleted/stale selections: commit currently staged changes.
-      result = await git.commit(message);
-    }
+      // During rapid stage/unstage toggling the optimistic UI can request staging a
+      // path that a prior queued mutation already staged (most visibly a deletion,
+      // whose file is gone from the working tree). `git add` aborts the whole batch
+      // on a single unmatched pathspec, so retry per-path and skip the ones already
+      // in their target state rather than failing the entire "stage all".
+      for (const repoPath of repoPaths) {
+        await git.raw(['add', '--', repoPath]).catch((perPathError) => {
+          const perPathText = parseGitErrorText(perPathError);
+          const perPathIsPathspecError =
+            perPathText.includes('pathspec') && perPathText.includes('did not match any files');
+          if (!perPathIsPathspecError) {
+            throw perPathError;
+          }
+        });
+      }
+    });
+  });
+}
 
-    return {
-      success: true,
-      commit: result.commit,
-      branch: result.branch,
-      summary: result.summary
-    };
-  } catch (error) {
-    console.error('Failed to commit:', error);
-    throw error;
+export async function unstageFile(directory, filePath) {
+  await unstageFiles(directory, [filePath]);
+}
+
+export async function unstageFiles(directory, paths) {
+  if (!directory) {
+    throw new Error('directory and path are required for unstageFile');
   }
+
+  const filePaths = normalizeFilePathList(paths);
+  if (filePaths.length === 0) {
+    throw new Error('directory and path are required for unstageFile');
+  }
+  validateRepositoryFilePaths(normalizeDirectoryPath(directory), filePaths);
+
+  await withGitIndexMutationQueue(directory, async () => {
+    const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+    const repoPaths = Array.from(new Set(await Promise.all(filePaths.map(async (filePath) => {
+      const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+      return fileContext.repoPath;
+    }))));
+    validateRepositoryFilePaths(repoRoot, repoPaths);
+    await git.raw(['restore', '--staged', '--', ...repoPaths]).catch(async () => {
+      await git.raw(['reset', 'HEAD', '--', ...repoPaths]);
+    });
+  });
+}
+
+export async function commit(directory, message, options = {}) {
+  return withGitIndexMutationQueue(directory, async () => {
+    const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+    let temporarilyUnstagedFiles = [];
+
+    try {
+      const requestedFiles = Array.isArray(options.files)
+        ? options.files
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+        : [];
+      const requestedStageFiles = Array.isArray(options.stageFiles)
+        ? options.stageFiles
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+        : null;
+      let filesToCommit = [];
+      let commitFromIndexOnly = false;
+
+      if (options.addAll) {
+        await git.add('.');
+      } else if (requestedFiles.length > 0) {
+        filesToCommit = Array.from(new Set(await Promise.all(requestedFiles.map(async (filePath) => {
+          const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+          return fileContext.repoPath;
+        }))));
+
+        const stageFilesToCommit = requestedStageFiles
+          ? Array.from(new Set(await Promise.all(requestedStageFiles.map(async (filePath) => {
+            const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+            return fileContext.repoPath;
+          }))))
+          : null;
+
+        const status = await git.status();
+        const fileStatusByPath = new Map(status.files.map((file) => [file.path, file]));
+      filesToCommit = filesToCommit.filter((filePath) => fileStatusByPath.has(filePath));
+
+        if (filesToCommit.length === 0) {
+          throw new Error('No selected files are available to commit. Refresh git status and try again.');
+        }
+
+        if (requestedStageFiles) {
+          commitFromIndexOnly = true;
+          const selectedFileSet = new Set(filesToCommit);
+          temporarilyUnstagedFiles = status.files
+            .filter((file) => {
+              const indexStatus = (file.index || '').trim();
+              return indexStatus && indexStatus !== '?' && !selectedFileSet.has(file.path);
+            })
+            .map((file) => file.path);
+
+          if (temporarilyUnstagedFiles.length > 0) {
+            await git.raw(['restore', '--staged', '--', ...temporarilyUnstagedFiles]);
+          }
+        }
+
+        const filesNeedingAdd = requestedStageFiles
+          ? (stageFilesToCommit || []).filter((filePath) => fileStatusByPath.has(filePath))
+          : filesToCommit.filter((filePath) => {
+            const fileStatus = fileStatusByPath.get(filePath);
+            if (!fileStatus) {
+              return false;
+            }
+
+            const alreadyFullyStaged = fileStatus.index !== ' ' && fileStatus.working_dir === ' ';
+            return !alreadyFullyStaged;
+          });
+
+        if (filesNeedingAdd.length > 0) {
+          await git.raw(['add', '--', ...filesNeedingAdd]);
+        }
+      }
+
+      const commitArgs =
+        !commitFromIndexOnly && !options.addAll && filesToCommit.length > 0
+          ? filesToCommit
+          : undefined;
+
+      let result;
+      try {
+        result = await git.commit(message, commitArgs);
+      } catch (error) {
+        const gitErrorText = parseGitErrorText(error);
+        const isPathspecError = gitErrorText.includes('pathspec') && gitErrorText.includes('did not match any files');
+        if (!isPathspecError || !commitArgs || commitArgs.length === 0) {
+          throw error;
+        }
+
+        // Fallback for deleted/stale selections: commit currently staged changes.
+        result = await git.commit(message);
+      }
+
+      if (temporarilyUnstagedFiles.length > 0) {
+        await git.raw(['add', '--', ...temporarilyUnstagedFiles]).catch((restoreError) => {
+          console.error('Failed to restore temporarily unstaged files:', restoreError);
+        });
+      }
+
+      return {
+        success: true,
+        commit: result.commit,
+        branch: result.branch,
+        summary: result.summary
+      };
+    } catch (error) {
+      if (temporarilyUnstagedFiles.length > 0) {
+        await git.raw(['add', '--', ...temporarilyUnstagedFiles]).catch((restoreError) => {
+          console.error('Failed to restore temporarily unstaged files after commit failure:', restoreError);
+        });
+      }
+      console.error('Failed to commit:', error);
+      throw error;
+    }
+  });
 }
 
 export async function getBranches(directory) {
