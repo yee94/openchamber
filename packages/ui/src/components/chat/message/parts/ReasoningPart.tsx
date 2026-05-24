@@ -247,7 +247,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 aria-controls={contentId}
                 aria-label={toggleAriaLabel}
                 className={cn(
-                    'group/tool flex gap-1.5 pr-2 pl-px py-2 rounded-xl cursor-pointer items-center',
+                    'group/tool flex gap-1.5 pr-2 pl-px py-1.5 rounded-xl cursor-pointer items-center',
                 )}
                 onClick={handleToggle}
                 onKeyDown={handleKeyDown}
