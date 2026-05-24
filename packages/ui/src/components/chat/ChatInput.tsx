@@ -57,6 +57,7 @@ import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from '@/l
 import { useGitBranches, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
@@ -68,12 +69,22 @@ import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import { isSyntheticPart } from '@/lib/messages/synthetic';
+import {
+    buildHighlightParts,
+    mentionRangesToHighlightRanges,
+    tokenizeMarkdown,
+    type HighlightRange,
+    type MentionRange,
+} from './composerHighlight';
+import { highlightFencedCode } from './composerCodeHighlight';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
 const EMPTY_MESSAGES: Message[] = [];
 const FILE_MENTION_TOKEN = /^@[^\s]+$/;
+// Single-line URL pasted over a selection becomes a markdown link.
+const PASTE_LINK_URL_PATTERN = /^(https?:\/\/|mailto:)\S+$/i;
 const INLINE_SKILL_TOKEN_PATTERN = /(^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 500;
 const COMPACT_CHAT_PLACEHOLDER_MAX_WIDTH = 560;
@@ -1038,42 +1049,78 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const knownAgentNamesRef = React.useRef(knownAgentNames);
     knownAgentNamesRef.current = knownAgentNames;
 
-    const hasInlineMentionForHighlight = React.useMemo(() => {
+    // Known slash-invocations (commands + skills + built-ins) used to highlight
+    // matching /tokens in the composer, the same way confirmed @files are.
+    const availableCommands = useCommandsStore((s) => s.commands);
+    const availableSkills = useSkillsStore((s) => s.skills);
+    const knownSlashNames = React.useMemo(() => {
+        const names = new Set<string>([
+            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review',
+        ]);
+        for (const command of availableCommands) names.add(command.name.toLowerCase());
+        for (const skill of availableSkills) names.add(skill.name.toLowerCase());
+        return names;
+    }, [availableCommands, availableSkills]);
+
+    // /command and /skill spans (primary color). Only tokens that match a known
+    // command/skill name are highlighted — partial/unknown tokens stay plain.
+    const composerCommandRanges = React.useMemo<HighlightRange[]>(() => {
+        if (!message || !message.includes('/') || inputMode === 'shell' || knownSlashNames.size === 0) {
+            return [];
+        }
+        const ranges: HighlightRange[] = [];
+        const slashRegex = /(^|\s)\/([A-Za-z0-9][A-Za-z0-9_-]*)/g;
+        let match: RegExpExecArray | null;
+        while ((match = slashRegex.exec(message)) !== null) {
+            const name = match[2];
+            if (!knownSlashNames.has(name.toLowerCase())) {
+                continue;
+            }
+            const slashStart = match.index + match[1].length;
+            ranges.push({ start: slashStart, end: slashStart + 1 + name.length, style: 'mentionCommand' });
+        }
+        return ranges;
+    }, [inputMode, knownSlashNames, message]);
+
+    // Snippet triggers (#name / #alias). Highlighted like commands once the
+    // trigger matches a known snippet name or alias.
+    const availableSnippets = useSnippetsStore((s) => s.snippets);
+    const knownSnippetTriggers = React.useMemo(() => {
+        const triggers = new Set<string>();
+        for (const snippet of availableSnippets) {
+            triggers.add(snippet.name.toLowerCase());
+            for (const alias of snippet.aliases ?? []) triggers.add(alias.toLowerCase());
+        }
+        return triggers;
+    }, [availableSnippets]);
+
+    const composerSnippetRanges = React.useMemo<HighlightRange[]>(() => {
+        if (!message || !message.includes('#') || inputMode === 'shell' || knownSnippetTriggers.size === 0) {
+            return [];
+        }
+        const ranges: HighlightRange[] = [];
+        const snippetRegex = /(^|\s)#([A-Za-z0-9][A-Za-z0-9_-]*)/g;
+        let match: RegExpExecArray | null;
+        while ((match = snippetRegex.exec(message)) !== null) {
+            const trigger = match[2];
+            if (!knownSnippetTriggers.has(trigger.toLowerCase())) {
+                continue;
+            }
+            const hashStart = match.index + match[1].length;
+            ranges.push({ start: hashStart, end: hashStart + 1 + trigger.length, style: 'mentionSnippet' });
+        }
+        return ranges;
+    }, [inputMode, knownSnippetTriggers, message]);
+
+    // @mention spans (file = blue, agent = green). Computed as character ranges
+    // so they can be merged with markdown highlight ranges in a single overlay.
+    const composerMentionRanges = React.useMemo<MentionRange[]>(() => {
         if (!message || !message.includes('@') || inputMode === 'shell') {
-            return false;
+            return [];
         }
+        const ranges: MentionRange[] = [];
         const mentionRegex = /@([^\s]+)/g;
         let match: RegExpExecArray | null;
-        while ((match = mentionRegex.exec(message)) !== null) {
-            const offset = match.index;
-            const charBefore = offset > 0 ? message[offset - 1] : null;
-            if (charBefore && !/(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore)) {
-                continue;
-            }
-            const mentionPath = String(match[1] || '').trim().replace(/[),.;:!?`"'>]+$/g, '');
-            if (!mentionPath) {
-                continue;
-            }
-            if (knownAgentNames.has(mentionPath.toLowerCase())) {
-                return true;
-            }
-            if (isConfirmedFilePath(mentionPath)) {
-                return true;
-            }
-        }
-        return false;
-    }, [inputMode, message, knownAgentNames]);
-
-    const highlightedComposerContent = React.useMemo(() => {
-        if (!hasInlineMentionForHighlight) {
-            return null;
-        }
-
-        const parts: Array<{ text: string; mentionKind: 'none' | 'file' | 'agent' }> = [];
-        const mentionRegex = /@([^\s]+)/g;
-        let lastIndex = 0;
-        let match: RegExpExecArray | null;
-
         while ((match = mentionRegex.exec(message)) !== null) {
             const full = match[0];
             const mention = String(match[1] || '').trim().replace(/[),.;:!?`"'>]+$/g, '');
@@ -1081,28 +1128,33 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const end = start + full.length;
             const charBefore = start > 0 ? message[start - 1] : null;
             const isBoundary = !charBefore || /(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore);
-            const isAgentMention = isBoundary && mention.length > 0 && knownAgentNames.has(mention.toLowerCase());
-            const isFileMention = isBoundary
-                && mention.length > 0
-                && !knownAgentNames.has(mention.toLowerCase())
-                && isConfirmedFilePath(mention);
-
-            if (start > lastIndex) {
-                parts.push({ text: message.slice(lastIndex, start), mentionKind: 'none' });
+            if (!isBoundary || mention.length === 0) {
+                continue;
             }
-            parts.push({
-                text: full,
-                mentionKind: isFileMention ? 'file' : isAgentMention ? 'agent' : 'none',
-            });
-            lastIndex = end;
+            if (knownAgentNames.has(mention.toLowerCase())) {
+                ranges.push({ start, end, kind: 'agent' });
+            } else if (isConfirmedFilePath(mention)) {
+                ranges.push({ start, end, kind: 'file' });
+            }
         }
+        return ranges;
+    }, [inputMode, message, knownAgentNames]);
 
-        if (lastIndex < message.length) {
-            parts.push({ text: message.slice(lastIndex), mentionKind: 'none' });
+    // Combined source-mode highlight: markdown syntax + @mentions. Returns null
+    // when there's nothing to highlight so the overlay stays off for plain text.
+    const highlightedComposerContent = React.useMemo(() => {
+        if (!message || inputMode === 'shell') {
+            return null;
         }
-
-        return parts;
-    }, [hasInlineMentionForHighlight, message, knownAgentNames]);
+        const ranges = [
+            ...tokenizeMarkdown(message),
+            ...highlightFencedCode(message),
+            ...mentionRangesToHighlightRanges(composerMentionRanges),
+            ...composerCommandRanges,
+            ...composerSnippetRanges,
+        ];
+        return buildHighlightParts(message, ranges);
+    }, [composerCommandRanges, composerSnippetRanges, composerMentionRanges, inputMode, message]);
 
     const sanitizeAttachmentsForSend = React.useCallback(
         (files: AttachedFile[] | undefined): AttachedFile[] => (files ?? [])
@@ -2046,6 +2098,56 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const canNavigateHistoryUp = !isAnyAutocompleteOpen && (message.length === 0 || cursorAtStart);
         const canNavigateHistoryDown = !isAnyAutocompleteOpen && (message.length === 0 || cursorAtEnd);
 
+        // Markdown-aware auto-pairing (source mode), normal input only.
+        if (inputMode === 'normal' && !isAnyAutocompleteOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            const ta = textareaRef.current;
+            const selStart = ta?.selectionStart ?? -1;
+            const selEnd = ta?.selectionEnd ?? -1;
+
+            if (ta && selStart >= 0) {
+                const applyEdit = (next: string, caretStart: number, caretEnd: number) => {
+                    e.preventDefault();
+                    setMessage(next);
+                    requestAnimationFrame(() => {
+                        const current = textareaRef.current;
+                        if (current) {
+                            current.selectionStart = caretStart;
+                            current.selectionEnd = caretEnd;
+                        }
+                        adjustTextareaHeight();
+                    });
+                    updateAutocompleteState(next, caretEnd);
+                };
+
+                // Wrap the current selection: select text, press ` * _ ~ ( [ { " '
+                const WRAP_PAIRS: Record<string, [string, string]> = {
+                    '`': ['`', '`'], '*': ['*', '*'], '_': ['_', '_'], '~': ['~', '~'],
+                    '(': ['(', ')'], '[': ['[', ']'], '{': ['{', '}'],
+                    '"': ['"', '"'], "'": ["'", "'"],
+                };
+                if (selEnd > selStart && WRAP_PAIRS[e.key]) {
+                    const [open, close] = WRAP_PAIRS[e.key];
+                    const selected = message.slice(selStart, selEnd);
+                    const next = `${message.slice(0, selStart)}${open}${selected}${close}${message.slice(selEnd)}`;
+                    applyEdit(next, selStart + open.length, selEnd + open.length);
+                    return;
+                }
+
+                // Typing the third backtick at line start expands into a fenced
+                // code block with the caret on the empty middle line (Slack-like).
+                if (e.key === '`' && selStart === selEnd) {
+                    const before = message.slice(0, selStart);
+                    if (/(^|\n)``$/.test(before)) {
+                        const after = message.slice(selEnd);
+                        const next = `${before}\`\n\n\`\`\`${after}`;
+                        const caret = before.length + 2; // after the completed ``` and first newline
+                        applyEdit(next, caret, caret);
+                        return;
+                    }
+                }
+            }
+        }
+
         if (e.key === 'ArrowUp' && canNavigateHistoryUp && userMessageHistory.length > 0) {
             e.preventDefault();
             if (historyIndex === -1) {
@@ -2603,6 +2705,40 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [clearDropTextSuppression]);
 
     const handlePaste = React.useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        // Pasting a URL over a selection wraps it as a markdown link:
+        // [selected text](pasted url).
+        if (inputMode === 'normal' && (currentSessionId || newSessionDraftOpen)) {
+            const ta = textareaRef.current;
+            const selStart = ta?.selectionStart ?? -1;
+            const selEnd = ta?.selectionEnd ?? -1;
+            if (ta && selEnd > selStart) {
+                const clipboardText = e.clipboardData.getData('text');
+                const url = clipboardText.trim();
+                const selected = message.slice(selStart, selEnd);
+                if (
+                    PASTE_LINK_URL_PATTERN.test(url)
+                    && !/\s/.test(url)
+                    && selected.trim().length > 0
+                    && !selected.includes('](')
+                ) {
+                    e.preventDefault();
+                    const next = `${message.slice(0, selStart)}[${selected}](${url})${message.slice(selEnd)}`;
+                    const caret = selStart + 1 + selected.length + 2 + url.length + 1;
+                    setMessage(next);
+                    requestAnimationFrame(() => {
+                        const current = textareaRef.current;
+                        if (current) {
+                            current.selectionStart = caret;
+                            current.selectionEnd = caret;
+                        }
+                        adjustTextareaHeight();
+                    });
+                    updateAutocompleteState(next, caret);
+                    return;
+                }
+            }
+        }
+
         const fileMap = new Map<string, File>();
 
         Array.from(e.clipboardData.files || []).forEach(file => {
@@ -2644,7 +2780,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.clipboardAttachFailed'));
             }
         }
-    }, [addAttachedFile, currentSessionId, newSessionDraftOpen, insertTextAtSelection, t]);
+    }, [addAttachedFile, adjustTextareaHeight, currentSessionId, inputMode, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState]);
 
     const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
 
@@ -4052,13 +4188,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     {highlightedComposerContent.map((part, index) => (
                                         <span
                                             key={`${index}-${part.text.length}`}
-                                            className={
-                                                part.mentionKind === 'file'
-                                                    ? 'text-[var(--status-info)]'
-                                                    : part.mentionKind === 'agent'
-                                                        ? 'text-[var(--status-success)]'
-                                                        : 'text-foreground'
-                                            }
+                                            className={part.className}
                                         >
                                             {part.text}
                                         </span>
