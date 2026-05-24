@@ -12,6 +12,7 @@ import { dropCachedSessionMessageRecordsSnapshots, useDirectoryStore, useSyncSDK
 import { dropSessionCaches, getProtectedSessionCacheIds } from "./session-cache"
 import { stripMessageDiffSnapshots } from "./sanitize"
 import { isVSCodeRuntime } from "@/lib/desktop"
+import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import {
   shouldSkipSessionPrefetch,
   getSessionPrefetch,
@@ -23,9 +24,11 @@ import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const MESSAGE_PAGE_SIZE = 150
 const VSCODE_MESSAGE_PAGE_SIZE = 30
+const MOBILE_MESSAGE_PAGE_SIZE = 30
 const VSCODE_INITIAL_PAGE_EXPANSION_LIMITS = [50, 80, 120] as const
 const MAX_SEEN_DIRS = 30
 const VSCODE_SESSION_CACHE_LIMIT = 4
+const MOBILE_SESSION_CACHE_LIMIT = 4
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 // Shared across useSync() instances so cache eviction is based on app-level
@@ -39,9 +42,18 @@ type SyncMeta = {
   loading: boolean
 }
 
-const getEffectiveSessionCacheLimit = () => isVSCodeRuntime() ? VSCODE_SESSION_CACHE_LIMIT : SESSION_CACHE_LIMIT
-const getEffectiveMessagePageSize = () => isVSCodeRuntime() ? VSCODE_MESSAGE_PAGE_SIZE : MESSAGE_PAGE_SIZE
-const getVSCodeInitialPageExpansionMax = () => VSCODE_INITIAL_PAGE_EXPANSION_LIMITS[VSCODE_INITIAL_PAGE_EXPANSION_LIMITS.length - 1]
+const isConstrainedSessionRuntime = () => isVSCodeRuntime() || isMobileSurfaceRuntime()
+const getConstrainedInitialPageExpansionMax = () => VSCODE_INITIAL_PAGE_EXPANSION_LIMITS[VSCODE_INITIAL_PAGE_EXPANSION_LIMITS.length - 1]
+const getEffectiveSessionCacheLimit = () => {
+  if (isVSCodeRuntime()) return VSCODE_SESSION_CACHE_LIMIT
+  if (isMobileSurfaceRuntime()) return MOBILE_SESSION_CACHE_LIMIT
+  return SESSION_CACHE_LIMIT
+}
+const getEffectiveMessagePageSize = () => {
+  if (isVSCodeRuntime()) return VSCODE_MESSAGE_PAGE_SIZE
+  if (isMobileSurfaceRuntime()) return MOBILE_MESSAGE_PAGE_SIZE
+  return MESSAGE_PAGE_SIZE
+}
 const getDefaultMeta = (): SyncMeta => ({ limit: getEffectiveMessagePageSize(), cursor: undefined, complete: false, loading: false })
 
 function getPrefetchMeta(directory: string, sessionID: string): SyncMeta | undefined {
@@ -59,10 +71,10 @@ function sortParts(parts: Part[]) {
   return parts.filter((p) => !!p?.id).sort((a, b) => cmp(a.id, b.id))
 }
 
-function isHeavyVSCodeSessionCache(state: Pick<State, "message" | "part">, sessionID: string): boolean {
+function isHeavyConstrainedSessionCache(state: Pick<State, "message" | "part">, sessionID: string): boolean {
   const messages = state.message[sessionID]
   if (!messages || messages.length === 0) return false
-  return messages.length > VSCODE_MESSAGE_PAGE_SIZE
+  return messages.length > getEffectiveMessagePageSize()
 }
 
 function isUserMessage(message: Message): boolean {
@@ -187,7 +199,7 @@ export function useSync() {
       })
       evict(directory, stale)
 
-      if (isVSCodeRuntime()) {
+      if (isConstrainedSessionRuntime()) {
         const state = store.getState()
         const keep = new Set([sessionID, ...s, ...protectedIds])
         const prefetched = Object.keys(state.message).filter((id) => !keep.has(id))
@@ -195,11 +207,11 @@ export function useSync() {
 
         // One very large inactive session can create memory/GC pressure that
         // makes later small-session switches feel slow. Keep it while active,
-        // but do not retain it as a warm cache in the VSCode webview.
+        // but do not retain it as a warm cache in constrained shells.
         const afterPrefetchEviction = prefetched.length > 0 ? store.getState() : state
         const heavyInactive = Object.keys(afterPrefetchEviction.message).filter((id) => {
           if (id === sessionID || protectedIds.has(id)) return false
-          return isHeavyVSCodeSessionCache(afterPrefetchEviction, id)
+          return isHeavyConstrainedSessionCache(afterPrefetchEviction, id)
         })
         if (heavyInactive.length > 0) {
           for (const id of heavyInactive) s.delete(id)
@@ -279,12 +291,12 @@ export function useSync() {
         const limit = options?.before ? getEffectiveMessagePageSize() : m.limit
         let page = await fetchMessages(sessionID, limit, options?.before)
 
-        // VSCode keeps the initial page small for switch performance. Some
+        // Constrained shells keep the initial page small for switch performance. Some
         // sessions have a very large final turn, so the latest 30 records can
         // contain only assistant/tool records and no user boundary. That makes
         // turn projection render an empty chat until the user manually loads
         // older messages. Expand only this initial tail fetch, with a hard cap.
-        if (!options?.before && isVSCodeRuntime() && !page.complete && !hasUserMessage(page.session)) {
+        if (!options?.before && isConstrainedSessionRuntime() && !page.complete && !hasUserMessage(page.session)) {
           for (const nextLimit of VSCODE_INITIAL_PAGE_EXPANSION_LIMITS) {
             if (nextLimit <= limit) continue
             page = await fetchMessages(sessionID, nextLimit)
@@ -347,26 +359,26 @@ export function useSync() {
       const cached = materialization.hasMessages && materialization.renderable && m.limit > 0
       const prefetchInfo = !force ? getSessionPrefetch(directory, sessionID) : undefined
       const knownCachedLimit = Math.max(m.limit, prefetchInfo?.limit ?? 0)
-      const needsVSCodeInitialTurnBoundary = isVSCodeRuntime()
+      const needsConstrainedInitialTurnBoundary = isConstrainedSessionRuntime()
         && cached
         && !hasUserMessage(current.message[sessionID])
-        && knownCachedLimit < getVSCodeInitialPageExpansionMax()
+        && knownCachedLimit < getConstrainedInitialPageExpansionMax()
         && !m.complete
         && prefetchInfo?.complete !== true
         && Boolean(m.cursor ?? prefetchInfo?.cursor)
-      if (needsVSCodeInitialTurnBoundary && prefetchInfo && prefetchInfo.limit > m.limit) {
+      if (needsConstrainedInitialTurnBoundary && prefetchInfo && prefetchInfo.limit > m.limit) {
         setMetaFor(sessionID, {
           limit: prefetchInfo.limit,
           cursor: prefetchInfo.cursor,
           complete: prefetchInfo.complete,
         })
       }
-      const cachedReady = cached && !needsVSCodeInitialTurnBoundary
+      const cachedReady = cached && !needsConstrainedInitialTurnBoundary
       const hasSession = Binary.search(current.session, sessionID, (s) => s.id).found
       if (cachedReady && hasSession && !force) return
 
       // Skip if recently fetched (TTL)
-      if (!force && !needsVSCodeInitialTurnBoundary) {
+      if (!force && !needsConstrainedInitialTurnBoundary) {
         if (shouldSkipSessionPrefetch({
           hasMessages: cachedReady,
           info: prefetchInfo,
