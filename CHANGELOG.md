@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.11.5] - 2026-05-25
+
+- Chat/Input: pending image attachments now show previews, sent image attachments can be cited from assistant messages, and markdown source mode highlights formatting while you type.
+- Chat: queued messages now send to the session they were queued from, even if you switch sessions before they are sent.
+- Chat/UI: chats keep following the latest response after final task summaries, activity reasoning no longer flashes before settling, and assistant timestamps stay visible on narrow layouts.
+- Sessions: session titles can now be renamed inline with a double-click (thanks to @robertoberto).
+- Git: changed files are split into staged and unstaged sections, and Git operations work correctly from repository subdirectories (thanks to @ShogunPanda, @kostazol).
+- Files: file search now shows the number of matches in the editor panel, and directory rows include a quick-add button (thanks to @attackonryan, @tomzx).
+- Settings/Skills: installed skills are discovered more accurately, skill files opened from tool messages now load correctly, and snippet names keep their canonical casing (thanks to @jkker, @isanchez404).
+- Mobile/PWA: long-press tooltips work on touch screens, fullscreen panels keep the right header state, deleted or long-named files behave better in file lists, and Android PWA dialogs stay visible (thanks to @kostazol, @lilyzhaun).
+- Voice: OpenAI-compatible custom speech providers can now use API keys (thanks to @yangyaofei).
+
 ## [1.11.4] - 2026-05-22
 
 - Desktop: Electron is now the desktop release target, with updated macOS menu actions for the right sidebar and terminal dock.
