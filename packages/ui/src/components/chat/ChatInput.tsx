@@ -16,6 +16,8 @@ import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { appendInlineComments } from '@/lib/messages/inlineComments';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { AttachedFilesList, AttachedVSCodeFileChips, ActiveEditorFileSuggestion } from './FileAttachment';
+import ToolOutputDialog from './message/ToolOutputDialog';
+import type { ToolPopupContent } from './message/types';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from './CommandAutocomplete';
@@ -990,6 +992,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
     const agents = getVisibleAgents();
     const isMobile = useUIStore((state) => state.isMobile);
+    const setImagePreviewOpen = useUIStore((state) => state.setImagePreviewOpen);
     const inputBarOffset = useUIStore((state) => state.inputBarOffset);
     const persistChatDraft = useUIStore((state) => state.persistChatDraft);
     const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
@@ -1011,6 +1014,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const setSessionAutoAccept = usePermissionStore((state) => state.setSessionAutoAccept);
     const composerHighlightRef = React.useRef<HTMLDivElement | null>(null);
     const [isNarrowComposer, setIsNarrowComposer] = React.useState(false);
+    const [attachmentPreview, setAttachmentPreview] = React.useState<ToolPopupContent>({
+        open: false,
+        title: '',
+        content: '',
+    });
+
+    const handleShowAttachmentPreview = React.useCallback((content: ToolPopupContent) => {
+        if (!content.image) return;
+        setAttachmentPreview(content);
+        setImagePreviewOpen(true);
+    }, [setImagePreviewOpen]);
+
+    const handleAttachmentPreviewOpenChange = React.useCallback((open: boolean) => {
+        setAttachmentPreview((prev) => ({ ...prev, open }));
+        setImagePreviewOpen(open);
+    }, [setImagePreviewOpen]);
 
     const isDesktopExpanded = isExpandedInput && !isMobile;
     const chatInputRadius = 'var(--radius-xl)';
@@ -3787,7 +3806,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             <div className={cn('chat-input-column relative overflow-visible', isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
-                <AttachedFilesList />
+                <AttachedFilesList onShowPopup={handleShowAttachmentPreview} />
                 <QueuedMessageChips
                     onEditMessage={handleQueuedMessageEdit}
                 />
@@ -4167,7 +4186,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     )}
                     <div className={cn("overflow-hidden", isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
-                            <AttachedVSCodeFileChips />
+                            <AttachedVSCodeFileChips onShowPopup={handleShowAttachmentPreview} />
                             <ActiveEditorFileSuggestion />
                         </div>
                         <div className={cn("relative overflow-hidden", isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
@@ -4402,6 +4421,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 setLinkedPr(pr);
                 setLinkedIssue(null);
             }}
+        />
+        <ToolOutputDialog
+            popup={attachmentPreview}
+            onOpenChange={handleAttachmentPreviewOpenChange}
+            syntaxTheme={{}}
+            isMobile={isMobile}
         />
         </>
     );
