@@ -726,7 +726,7 @@ const processForwardedEventPayload = (payload, emitSyntheticEvent) => {
   emitSyntheticEvent({
     type: 'openchamber:session-status',
     properties: {
-      sessionId,
+      sessionID: sessionId,
       status,
       timestamp: Date.now(),
       metadata: {
