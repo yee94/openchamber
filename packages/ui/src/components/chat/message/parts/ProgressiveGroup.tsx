@@ -130,6 +130,14 @@ const getToolFilePath = (activity: TurnActivityPart): string | null => {
     return typeof filePath === 'string' && filePath.trim().length > 0 ? filePath : null;
 };
 
+const getToolSkillDirectory = (activity: TurnActivityPart): string | null => {
+    const part = activity.part as ToolPartType;
+    const state = part.state as { metadata?: Record<string, unknown> } | undefined;
+    const dir = state?.metadata?.dir;
+
+    return typeof dir === 'string' && dir.trim().length > 0 ? dir : null;
+};
+
 const toTodoStatusKey = (value: unknown): 'pending' | 'in_progress' | 'completed' | 'cancelled' | null => {
     if (typeof value !== 'string') {
         return null;
@@ -327,6 +335,15 @@ const resolveAbsolutePath = (currentDirectory: string, filePath: string): string
         return normalizedPath;
     }
     return normalizedDirectory.endsWith('/') ? `${normalizedDirectory}${normalizedPath}` : `${normalizedDirectory}/${normalizedPath}`;
+};
+
+const resolveSkillFilePath = (skillPathOrDir: string): string => {
+    const normalizedPath = trimTrailingSlashes(normalizePathValue(skillPathOrDir));
+    if (!normalizedPath) {
+        return '';
+    }
+
+    return normalizedPath.toLowerCase().endsWith('/skill.md') ? normalizedPath : `${normalizedPath}/SKILL.md`;
 };
 
 const getContextDirectoryForPath = (currentDirectory: string, absolutePath: string): string => {
@@ -639,6 +656,24 @@ const StaticToolRowInner: React.FC<{
         return descs;
     }, [activities]);
 
+    const skillEntries = React.useMemo(() => {
+        if (toolName.toLowerCase() !== 'skill') return [] as Array<{ name: string; path: string }>;
+
+        const entries: Array<{ name: string; path: string }> = [];
+        for (const activity of activities) {
+            const name = getToolShortDescription(activity);
+            if (!name) continue;
+
+            const skill = skillByName.get(name);
+            const rawPath = skill?.path || getToolSkillDirectory(activity);
+            const path = rawPath ? resolveSkillFilePath(rawPath) : '';
+            if (!path || entries.some((entry) => entry.name === name && entry.path === path)) continue;
+            entries.push({ name, path });
+        }
+
+        return entries;
+    }, [activities, skillByName, toolName]);
+
     const readFileEntries = React.useMemo(() => {
         if (!isReadGroup) return [] as Array<{ path: string; displayPath: string; offset?: number }>;
 
@@ -675,14 +710,13 @@ const StaticToolRowInner: React.FC<{
         uiStore.openContextFile(contextDirectory, absolutePath);
     }, [currentDirectory, runtime]);
 
-    const handleSkillClick = React.useCallback((skillName: string) => {
-        const skill = skillByName.get(skillName);
-        if (!skill?.path) {
+    const handleSkillClick = React.useCallback((skillPath: string) => {
+        if (!skillPath) {
             return;
         }
         const uiStore = useUIStore.getState();
-        uiStore.openContextFile(currentDirectory || getContextDirectoryForPath('', skill.path), skill.path);
-    }, [currentDirectory, skillByName]);
+        uiStore.openContextFile(currentDirectory || getContextDirectoryForPath('', skillPath), skillPath);
+    }, [currentDirectory]);
 
     const normalizedToolName = toolName.toLowerCase();
     const isSearchGroup = normalizedToolName === 'grep'
@@ -763,21 +797,21 @@ const StaticToolRowInner: React.FC<{
                     </a>
                 ))
                 : null}
-            {isSkillGroup && descriptions.length > 0
-                ? descriptions.map((skillName, index) => (
+            {isSkillGroup && skillEntries.length > 0
+                ? skillEntries.map((entry, index) => (
                     <button
-                        key={`${skillName}-${index}`}
+                        key={`${entry.name}-${entry.path}-${index}`}
                         type="button"
                         onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
-                            handleSkillClick(skillName);
+                            handleSkillClick(entry.path);
                         }}
                         className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5 text-left hover:opacity-90"
                         style={{ color: 'var(--tools-description)' }}
-                        title={skillName}
+                        title={entry.path}
                     >
-                        {skillName}
+                        {entry.name}
                     </button>
                 ))
                 : null}
