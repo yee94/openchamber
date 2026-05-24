@@ -79,6 +79,11 @@ import {
     type MentionRange,
 } from './composerHighlight';
 import { highlightFencedCode } from './composerCodeHighlight';
+import {
+    assignImageAttachmentFilenames,
+    buildAttachmentCitationText,
+    findAttachmentCitationRanges,
+} from './attachmentCitations';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
@@ -98,6 +103,42 @@ const VS_CODE_DROP_DATA_TYPES = [
     'text/uri-list',
     'text/plain',
 ];
+
+const renameFileForAttachmentCitation = (file: File, filename: string): File => {
+    if (file.name === filename) {
+        return file;
+    }
+
+    return new File([file], filename, {
+        type: file.type,
+        lastModified: file.lastModified,
+    });
+};
+
+const buildImagePasteInsertion = (pastedText: string, citationText: string): string => {
+    const text = pastedText;
+    if (!text) {
+        return citationText;
+    }
+    return `${text}${/\s$/.test(text) ? '' : ' '}${citationText}`;
+};
+
+const withInlineInsertionBoundaries = (content: string, before: string, after: string): string => {
+    if (!content) {
+        return content;
+    }
+
+    const needsLeadingSpace = before.length > 0
+        && !/\s$/.test(before)
+        && !/^\s/.test(content)
+        && !/[([{]$/.test(before);
+    const needsTrailingSpace = after.length > 0
+        && !/\s$/.test(content)
+        && !/^\s/.test(after)
+        && !/^[\])}.,;:!?]/.test(after);
+
+    return `${needsLeadingSpace ? ' ' : ''}${content}${needsTrailingSpace ? ' ' : ''}`;
+};
 
 const collectInlineSkillMentions = (text: string, skillNames: Set<string>): string[] => {
     const mentions: string[] = [];
@@ -949,6 +990,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const skipNextDraftPersistRef = React.useRef(false);
     const lastPersistedDraftRef = React.useRef<Map<string, string>>(new Map());
     const currentSessionIdForDraftRef = React.useRef<string | null>(null);
+    const pendingPastedAttachmentFilenamesRef = React.useRef<Set<string>>(new Set());
 
     // TODO: port sendMessage to session-actions (complex — creates sessions, handles attachments, etc.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1159,6 +1201,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return ranges;
     }, [inputMode, message, knownAgentNames]);
 
+    const attachmentCitationRanges = React.useMemo<HighlightRange[]>(() => {
+        if (!message || !message.includes('[') || inputMode === 'shell' || sendableAttachedFiles.length === 0) {
+            return [];
+        }
+
+        return findAttachmentCitationRanges(
+            message,
+            sendableAttachedFiles.map((file) => file.filename),
+        ).map((range) => ({
+            ...range,
+            style: 'mentionFile' as const,
+        }));
+    }, [inputMode, message, sendableAttachedFiles]);
+
     // Combined source-mode highlight: markdown syntax + @mentions. Returns null
     // when there's nothing to highlight so the overlay stays off for plain text.
     const highlightedComposerContent = React.useMemo(() => {
@@ -1171,9 +1227,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             ...mentionRangesToHighlightRanges(composerMentionRanges),
             ...composerCommandRanges,
             ...composerSnippetRanges,
+            ...attachmentCitationRanges,
         ];
         return buildHighlightParts(message, ranges);
-    }, [composerCommandRanges, composerSnippetRanges, composerMentionRanges, inputMode, message]);
+    }, [attachmentCitationRanges, composerCommandRanges, composerSnippetRanges, composerMentionRanges, inputMode, message]);
 
     const sanitizeAttachmentsForSend = React.useCallback(
         (files: AttachedFile[] | undefined): AttachedFile[] => (files ?? [])
@@ -2787,19 +2844,39 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         e.preventDefault();
 
         const pastedText = e.clipboardData.getData('text');
-        if (pastedText) {
-            insertTextAtSelection(pastedText);
-        }
+        const assignedFilenames = assignImageAttachmentFilenames(
+            imageFiles,
+            [
+                ...attachedFiles.map((file) => file.filename),
+                ...pendingPastedAttachmentFilenamesRef.current,
+            ],
+        );
+        const citationText = buildAttachmentCitationText(assignedFilenames);
+        const textarea = textareaRef.current;
+        const selectionStart = textarea?.selectionStart ?? message.length;
+        const selectionEnd = textarea?.selectionEnd ?? message.length;
+        const insertionText = withInlineInsertionBoundaries(
+            buildImagePasteInsertion(pastedText, citationText),
+            message.slice(0, selectionStart),
+            message.slice(selectionEnd),
+        );
 
-        for (const file of imageFiles) {
+        insertTextAtSelection(insertionText);
+
+        for (let index = 0; index < imageFiles.length; index += 1) {
+            const filename = assignedFilenames[index];
+            const file = renameFileForAttachmentCitation(imageFiles[index], filename);
+            pendingPastedAttachmentFilenamesRef.current.add(filename);
             try {
                 await addAttachedFile(file);
             } catch (error) {
                 console.error('Clipboard image attach failed', error);
                 toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.clipboardAttachFailed'));
+            } finally {
+                pendingPastedAttachmentFilenamesRef.current.delete(filename);
             }
         }
-    }, [addAttachedFile, adjustTextareaHeight, currentSessionId, inputMode, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState]);
+    }, [addAttachedFile, attachedFiles, adjustTextareaHeight, currentSessionId, inputMode, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState]);
 
     const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
 
