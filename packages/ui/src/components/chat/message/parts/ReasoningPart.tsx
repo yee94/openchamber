@@ -12,6 +12,10 @@ import { MarkdownRenderer } from '../../MarkdownRenderer';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
 import type { StreamPhase } from '../types';
 
+const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal';
+const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
+const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
+
 type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
 
 export type ReasoningVariant = 'thinking' | 'justification';
@@ -217,7 +221,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     // Short blocks: render content directly without a collapsible toggle.
     if (isShort) {
         return (
-            <div className="my-1" data-reasoning-block-id={blockId} data-message-text-export-root="true">
+            <div data-reasoning-block-id={blockId} data-message-text-export-root="true">
                 <div data-message-text-export-source="true">
                     <MarkdownRenderer
                         content={text}
@@ -239,7 +243,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     }
 
     return (
-        <div className="my-1" data-reasoning-block-id={blockId} data-message-text-export-root="true">
+        <div data-reasoning-block-id={blockId} data-message-text-export-root="true">
             <div
                 role="button"
                 tabIndex={0}
@@ -277,20 +281,20 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                     </div>
 
                     {isStreaming ? (
-                        <span className="flex items-center gap-1 typography-meta font-medium" style={{ color: 'var(--tools-title)' }}>
+                        <span className={cn('flex items-center gap-1', TOOL_ROW_TITLE_CLASS)} style={{ color: 'var(--tools-title)' }}>
                             <span>{t(variant === 'justification' ? 'chat.reasoningTrace.justification' : 'chat.reasoningTrace.thinking')}</span>
                             <BusyDots />
                         </span>
                     ) : isExpanded ? (
                         <span
-                            className="typography-meta font-medium"
+                            className={TOOL_ROW_TITLE_CLASS}
                             style={{ color: 'var(--tools-title)' }}
                         >
                             {t(variant === 'justification' ? 'chat.reasoningTrace.justification' : 'chat.reasoningTrace.thinking')}
                         </span>
                     ) : (
                         <span
-                            className="typography-meta font-medium"
+                            className={TOOL_ROW_TITLE_CLASS}
                             style={{ color: 'var(--tools-title)' }}
                         >
                             {t(variant === 'justification' ? 'chat.reasoningTrace.justification' : 'chat.reasoningTrace.thinking')}
@@ -298,10 +302,10 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                     )}
                 </div>
 
-                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
+                <div className={cn('flex items-center gap-1 flex-1 min-w-0', TOOL_ROW_DESCRIPTION_CLASS)} style={{ color: 'var(--tools-description)' }}>
                     {!isStreaming && !isExpanded && summary ? (
                         <span
-                            className="min-w-0 truncate typography-meta"
+                            className={cn('min-w-0 truncate', TOOL_ROW_DESCRIPTION_CLASS)}
                             style={{ color: 'var(--tools-description)', opacity: 0.8 }}
                             title={summary}
                         >

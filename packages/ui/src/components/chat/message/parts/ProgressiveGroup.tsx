@@ -24,6 +24,10 @@ import JustificationBlock from './JustificationBlock';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { getExternalFaviconUrl } from '@/lib/url';
 
+const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal';
+const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
+const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
+
 interface ProgressiveGroupProps {
     parts: TurnActivityPart[];
     isExpanded: boolean;
@@ -282,7 +286,7 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
         return (
             <Text
                 variant={animate ? 'generate-effect' : 'static'}
-                className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5"
+                className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
                 style={{ color: 'var(--tools-title)' }}
                 title={displayPath}
             >
@@ -297,7 +301,7 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
     const displayDir = hasAbsoluteRoot ? dir.slice(1) : dir;
 
     return (
-        <span className="min-w-0 inline-flex max-w-full flex-1 items-baseline overflow-hidden typography-meta leading-5" title={displayPath}>
+        <span className={cn('min-w-0 inline-flex max-w-full flex-1 items-baseline overflow-hidden', TOOL_ROW_DESCRIPTION_CLASS)} title={displayPath}>
             {hasAbsoluteRoot ? <span className="flex-shrink-0" style={{ color: 'var(--tools-description)' }}>/</span> : null}
             <span
                 className="min-w-0 shrink truncate whitespace-nowrap"
@@ -739,7 +743,7 @@ const StaticToolRowInner: React.FC<{
             <MinDurationShineText
                 active={hasRunningActivity}
                 minDurationMs={1000}
-                className="typography-meta leading-5 font-medium inline-flex h-5 items-center flex-shrink-0 opacity-85"
+                className={cn(TOOL_ROW_TITLE_CLASS, 'inline-flex items-center flex-shrink-0 opacity-85')}
                 style={{ color: 'var(--tools-title)' }}
                 title={displayName}
             >
@@ -755,7 +759,7 @@ const StaticToolRowInner: React.FC<{
                             event.stopPropagation();
                             handleReadFileClick(entry.path, entry.offset);
                         }}
-                        className="inline-flex items-center justify-start gap-1 min-w-0 flex-1 text-left typography-meta leading-5 hover:opacity-90"
+                        className={cn('inline-flex !min-h-0 items-center justify-start gap-1 min-w-0 flex-1 text-left hover:opacity-90', TOOL_ROW_DESCRIPTION_CLASS)}
                         style={{ color: 'var(--tools-description)' }}
                         title={entry.offset ? `${entry.displayPath}:${entry.offset}` : entry.displayPath}
                     >
@@ -769,7 +773,7 @@ const StaticToolRowInner: React.FC<{
                     <span key={`${desc}-${index}`} className="inline-flex min-w-0 flex-1">
                         <Text
                             variant={animateTailText ? 'generate-effect' : 'static'}
-                            className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5"
+                            className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
                             style={{ color: 'var(--tools-description)' }}
                             title={desc}
                         >
@@ -787,7 +791,7 @@ const StaticToolRowInner: React.FC<{
                         rel="noopener noreferrer"
                         className={cn(
                             'min-w-0 flex-1 inline-flex items-center gap-1.5 underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
-                            'truncate whitespace-nowrap typography-meta'
+                            'truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS
                         )}
                         style={{ color: 'var(--status-info)' }}
                         title={url}
@@ -807,7 +811,7 @@ const StaticToolRowInner: React.FC<{
                             event.stopPropagation();
                             handleSkillClick(entry.path);
                         }}
-                        className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5 text-left hover:opacity-90"
+                        className={cn('!min-h-0 min-w-0 flex-1 truncate whitespace-nowrap text-left hover:opacity-90', TOOL_ROW_DESCRIPTION_CLASS)}
                         style={{ color: 'var(--tools-description)' }}
                         title={entry.path}
                     >
@@ -818,7 +822,7 @@ const StaticToolRowInner: React.FC<{
             {!isReadGroup && !isSearchGroup && !isFetchGroup && !isSkillGroup && descriptions.length > 0 ? (
                 <Text
                     variant={animateTailText ? 'generate-effect' : 'static'}
-                    className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5"
+                    className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
                     style={{ color: 'var(--tools-description)' }}
                 >
                     {descriptions.join(' ')}
@@ -1050,7 +1054,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                             <button
                                 type="button"
                                 onClick={onToggle}
-                                className="typography-meta leading-5 px-2 py-1 text-muted-foreground/45 hover:text-muted-foreground/65 text-left"
+                                className="typography-meta leading-4 px-2 py-1 text-muted-foreground/45 hover:text-muted-foreground/65 text-left"
                             >
                                 +{previewHiddenCount} more...
                             </button>
