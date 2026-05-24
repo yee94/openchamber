@@ -807,8 +807,8 @@ html:not(.dark) .chat-scroll {
   }
 }
 
-/* Assistant message footer: collapse text labels to icons when narrow. */
-@container message-footer (max-width: 24rem) {
+/* Assistant message footer: collapse text labels only on very narrow layouts. */
+@container message-footer (max-width: 16rem) {
   .message-footer__label {
     display: none;
   }
