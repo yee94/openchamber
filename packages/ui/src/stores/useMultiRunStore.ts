@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { routeMessage, useSessionUIStore } from '@/sync/session-ui-store';
 import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -244,17 +244,16 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 createdRuns.map(async (run) => {
                   try {
                     const text = await expandText(run.prompt).catch(() => run.prompt);
-                    await opencodeClient.withDirectory(run.worktreePath, () =>
-                      opencodeClient.sendMessage({
-                        id: run.sessionId,
-                        providerID: run.providerID,
-                        modelID: run.modelID,
-                        variant: run.variant,
-                        text,
-                        agent,
-                        files: filesForMessage,
-                      }),
-                    );
+                    await routeMessage({
+                      sessionId: run.sessionId,
+                      directory: run.worktreePath,
+                      content: text,
+                      providerID: run.providerID,
+                      modelID: run.modelID,
+                      variant: run.variant,
+                      agent,
+                      files: filesForMessage,
+                    });
                   } catch (err) {
                     console.warn('[MultiRun] Failed to start run:', err);
                   }
