@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Settings: added a Plugins page to view, add, edit, and remove opencode plugins. Supports `plugin` array entries (npm packages, scoped npm, versioned specs, local paths) with optional options JSON, plus auto-loaded plugin files in `~/.config/opencode/plugins/` and `<project>/.opencode/plugins/`.
+- Settings/Plugins: the Plugins page now talks to the npm registry. Sidebar rows show an update badge with the latest available version, group headers show how many updates are available, the kebab menu adds an "Update to latest" action, and the editor surfaces a banner for available updates, missing/invalid versions, missing-package, missing local file, and offline-registry states. Results are cached for one hour with a "Check for updates" button in the sidebar header for forced refresh.
+
 ## [1.11.5] - 2026-05-25
 
 - Chat/Input: pending image attachments now show previews, sent image attachments can be cited from assistant messages, and markdown source mode highlights formatting while you type.
