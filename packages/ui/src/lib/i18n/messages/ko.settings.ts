@@ -119,7 +119,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.actions.retry': '다시 시도',
   'settings.openchamber.tunnel.option.moreProvidersSoon': '더 많은 프로바이더가 곧 추가됩니다',
   'settings.openchamber.tunnel.option.mode.quick.label': 'Quick',
-  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel은 best effort로 제공되며 Cloudflare는 가동 시간을 보장하지 않습니다.',
+  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel은 best effort로 제공되며 가동 시간이 보장되지 않습니다.',
   'settings.openchamber.tunnel.option.mode.managedRemote.label': 'Managed Remote',
   'settings.openchamber.tunnel.option.mode.managedRemote.tooltip': 'Managed Remote는 장기 접속을 위해 Cloudflare 계정과 hostname을 사용합니다.',
   'settings.openchamber.tunnel.option.mode.managedLocal.label': 'Managed Local',

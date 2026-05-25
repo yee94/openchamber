@@ -384,6 +384,10 @@ export const TunnelSettings: React.FC = () => {
     }
     return TUNNEL_MODE_OPTIONS.filter((option) => supportedModes.has(option.value));
   }, [selectedProviderCapability]);
+  const providerSupportsManagedModes = React.useMemo(
+    () => tunnelModeOptions.some((option) => option.value === 'managed-remote' || option.value === 'managed-local'),
+    [tunnelModeOptions],
+  );
   const installCommand = tunnelProvider === 'ngrok'
     ? 'brew install ngrok'
     : 'brew install cloudflared';
@@ -1302,9 +1306,11 @@ export const TunnelSettings: React.FC = () => {
                   <p className="typography-meta text-[var(--status-warning)]">
                     {t('settings.openchamber.tunnel.option.mode.quick.tooltip')}
                   </p>
-                  <p className="typography-meta mt-1 text-[var(--status-warning)]">
-                    {t('settings.openchamber.tunnel.warning.quickModeReliability')}
-                  </p>
+                  {providerSupportsManagedModes && (
+                    <p className="typography-meta mt-1 text-[var(--status-warning)]">
+                      {t('settings.openchamber.tunnel.warning.quickModeReliability')}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

@@ -744,7 +744,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.option.mode.managedRemote.label': 'Managed Remote',
   'settings.openchamber.tunnel.option.mode.managedRemote.tooltip': 'Managed Remote używa Twojego konta Cloudflare i nazwy hosta do długotrwałego dostępu.',
   'settings.openchamber.tunnel.option.mode.quick.label': 'Quick',
-  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel działa w trybie best effort i Cloudflare nie gwarantuje jego dostępności.',
+  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel działa w trybie best effort i jego dostępność nie jest gwarantowana.',
   'settings.openchamber.tunnel.option.moreProvidersSoon': 'Wkrótce pojawi się więcej dostawców',
   'settings.openchamber.tunnel.section.redeemedAccessLinks': 'Wykorzystane linki dostępu',
   'settings.openchamber.tunnel.section.savedManagedRemoteTunnels': 'Zapisane tunele managed remote',

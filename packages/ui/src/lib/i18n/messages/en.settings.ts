@@ -152,7 +152,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.actions.retry': 'Retry',
   'settings.openchamber.tunnel.option.moreProvidersSoon': 'More providers coming soon',
   'settings.openchamber.tunnel.option.mode.quick.label': 'Quick',
-  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel is best effort and Cloudflare does not guarantee uptime.',
+  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel is best effort and uptime is not guaranteed.',
   'settings.openchamber.tunnel.option.mode.managedRemote.label': 'Managed Remote',
   'settings.openchamber.tunnel.option.mode.managedRemote.tooltip': 'Managed Remote uses your Cloudflare account and hostname for long-lived access.',
   'settings.openchamber.tunnel.option.mode.managedLocal.label': 'Managed Local',

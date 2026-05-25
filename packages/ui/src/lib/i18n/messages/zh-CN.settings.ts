@@ -119,7 +119,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.actions.retry': '重试',
   'settings.openchamber.tunnel.option.moreProvidersSoon': '更多提供商即将上线',
   'settings.openchamber.tunnel.option.mode.quick.label': 'Quick',
-  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel 仅尽力提供，Cloudflare 不保证可用性。',
+  'settings.openchamber.tunnel.option.mode.quick.tooltip': 'Quick Tunnel 仅尽力提供，不保证可用性。',
   'settings.openchamber.tunnel.option.mode.managedRemote.label': 'Managed Remote',
   'settings.openchamber.tunnel.option.mode.managedRemote.tooltip': 'Managed Remote 使用你的 Cloudflare 账户与主机名提供长期访问。',
   'settings.openchamber.tunnel.option.mode.managedLocal.label': 'Managed Local',

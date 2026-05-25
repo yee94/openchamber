@@ -119,7 +119,7 @@ export const settingsDict = {
   "settings.openchamber.tunnel.actions.retry": "Повторити спробу",
   "settings.openchamber.tunnel.option.moreProvidersSoon": "Інші провайдери з’являться пізніше",
   "settings.openchamber.tunnel.option.mode.quick.label": "Швидкий",
-  "settings.openchamber.tunnel.option.mode.quick.tooltip": "Швидкий тунель найпростіший, але Cloudflare не гарантує його стабільність.",
+  "settings.openchamber.tunnel.option.mode.quick.tooltip": "Швидкий тунель найпростіший, але його стабільність не гарантується.",
   "settings.openchamber.tunnel.option.mode.managedRemote.label": "Керований віддалений",
   "settings.openchamber.tunnel.option.mode.managedRemote.tooltip": "Керований віддалений тунель використовує ваш обліковий запис Cloudflare та hostname для довготривалого доступу.",
   "settings.openchamber.tunnel.option.mode.managedLocal.label": "Керований локальний",

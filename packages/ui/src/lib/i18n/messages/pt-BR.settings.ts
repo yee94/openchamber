@@ -119,7 +119,7 @@ export const settingsDict = {
   "settings.openchamber.tunnel.actions.retry": "Tentar novamente",
   "settings.openchamber.tunnel.option.moreProvidersSoon": "Mais provedores chegarão em breve",
   "settings.openchamber.tunnel.option.mode.quick.label": "Rápido",
-  "settings.openchamber.tunnel.option.mode.quick.tooltip": "O túnel rápido funciona em modo best effort e a Cloudflare não garante sua disponibilidade.",
+  "settings.openchamber.tunnel.option.mode.quick.tooltip": "O túnel rápido funciona em modo best effort e sua disponibilidade não é garantida.",
   "settings.openchamber.tunnel.option.mode.managedRemote.label": "Remoto gerenciado",
   "settings.openchamber.tunnel.option.mode.managedRemote.tooltip": "O modo remoto gerenciado usa sua conta da Cloudflare e um nome de host para acesso de longa duração.",
   "settings.openchamber.tunnel.option.mode.managedLocal.label": "Local gerenciado",
