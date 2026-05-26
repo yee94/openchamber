@@ -77,7 +77,7 @@ type HeaderIconActionButtonProps = {
   visible?: boolean;
   title: string;
   ariaLabel: string;
-  onClick: () => void;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
   className?: string;
   Icon: IconName;
   iconClassName?: string;
@@ -112,6 +112,83 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
         <p>{title}</p>
       </TooltipContent>
     </Tooltip>
+  );
+});
+
+type WindowsWindowControlsProps = {
+  visible: boolean;
+};
+
+const WindowsWindowControls = React.memo(function WindowsWindowControls({ visible }: WindowsWindowControlsProps) {
+  const { t } = useI18n();
+  const [isMaximized, setIsMaximized] = React.useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    let disposed = false;
+    void invokeDesktop<{ maximized?: boolean }>('desktop_get_current_window_state')
+      .then((state) => {
+        if (!disposed) {
+          setIsMaximized(Boolean(state?.maximized));
+        }
+      })
+      .catch(() => {});
+
+    const handleMaximizedChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ maximized?: boolean }>).detail;
+      setIsMaximized(Boolean(detail?.maximized));
+    };
+
+    window.addEventListener('openchamber:window-maximized-changed', handleMaximizedChange);
+    return () => {
+      disposed = true;
+      window.removeEventListener('openchamber:window-maximized-changed', handleMaximizedChange);
+    };
+  }, [visible]);
+
+  if (!visible) {
+    return null;
+  }
+
+  const buttonClassName = 'app-region-no-drag inline-flex h-12 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
+  return (
+    <div className="app-region-no-drag -mr-3 ml-2 flex h-12 shrink-0 items-center" aria-label={t('header.windowControls.groupAria')}>
+      <button
+        type="button"
+        className={buttonClassName}
+        onClick={() => { void invokeDesktop('desktop_minimize_current_window'); }}
+        title={t('header.windowControls.minimize')}
+        aria-label={t('header.windowControls.minimize')}
+      >
+        <Icon name="subtract" className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        className={buttonClassName}
+        onClick={() => {
+          void invokeDesktop<{ maximized?: boolean }>('desktop_toggle_current_window_maximized')
+            .then((state) => setIsMaximized(Boolean(state?.maximized)))
+            .catch(() => {});
+        }}
+        title={isMaximized ? t('header.windowControls.restore') : t('header.windowControls.maximize')}
+        aria-label={isMaximized ? t('header.windowControls.restore') : t('header.windowControls.maximize')}
+      >
+        <Icon name={isMaximized ? 'fullscreen-exit' : 'checkbox-blank'} className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className={cn(buttonClassName, 'hover:bg-status-error hover:text-status-error-foreground')}
+        onClick={() => { void invokeDesktop('desktop_close_current_window'); }}
+        title={t('header.windowControls.close')}
+        aria-label={t('header.windowControls.close')}
+      >
+        <Icon name="close" className="h-4 w-4" />
+      </button>
+    </div>
   );
 });
 
@@ -731,6 +808,13 @@ export const Header: React.FC<HeaderProps> = ({
     return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
   }, []);
 
+  const isWindowsElectronDesktop = React.useMemo(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return Boolean(window.__OPENCHAMBER_ELECTRON__) && window.__OPENCHAMBER_PLATFORM__ === 'win32';
+  }, []);
+
   const macosMajorVersion = React.useMemo(() => {
     if (typeof window === 'undefined') {
       return null;
@@ -1262,6 +1346,16 @@ export const Header: React.FC<HeaderProps> = ({
     toggleSidebar();
   }, [blurActiveElement, isMobile, isSessionSwitcherOpen, setSessionSwitcherOpen, toggleSidebar]);
 
+  const handleOpenWindowsAppMenu = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    void invokeDesktop('desktop_show_app_menu', {
+      x: rect.left,
+      y: rect.bottom,
+    }).catch((error) => {
+      console.warn('[header] failed to open app menu', error);
+    });
+  }, []);
+
   const handleOpenDraftMiniChat = React.useCallback(() => {
     void invokeDesktop('desktop_open_draft_mini_chat_window', {
       directory: normalize(openDirectory || activeProject?.path || ''),
@@ -1454,7 +1548,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
 
   const webWindowControlsOverlayStyle = React.useMemo<React.CSSProperties | undefined>(() => {
-    if (isDesktopApp || isVSCode) {
+    if ((isDesktopApp && !isWindowsElectronDesktop) || isVSCode) {
       return undefined;
     }
 
@@ -1466,7 +1560,7 @@ export const Header: React.FC<HeaderProps> = ({
       minHeight: 'max(3rem, var(--oc-wco-titlebar-height, 0px))',
       height: 'max(3rem, var(--oc-wco-titlebar-height, 0px))',
     };
-  }, [isDesktopApp, isTabletStandalonePwa, isVSCode]);
+  }, [isDesktopApp, isTabletStandalonePwa, isVSCode, isWindowsElectronDesktop]);
 
   const updateHeaderHeight = React.useCallback(() => {
     if (typeof document === 'undefined') {
@@ -1884,6 +1978,15 @@ export const Header: React.FC<HeaderProps> = ({
       role="tablist"
       aria-label={t('header.navigation.mainAria')}
     >
+      {isWindowsElectronDesktop ? (
+        <HeaderIconActionButton
+          title={t('header.actions.openAppMenu')}
+          ariaLabel={t('header.actions.openAppMenuAria')}
+          onClick={handleOpenWindowsAppMenu}
+          className={`${desktopHeaderIconButtonClass} shrink-0`}
+          Icon={'menu-2'}
+        />
+      ) : null}
       <HeaderIconActionButton
         title={t('header.actions.openSessionsWithShortcut', { shortcut: shortcutLabel('toggle_sidebar') })}
         ariaLabel={t('header.actions.openSessionsAria')}
@@ -1974,6 +2077,7 @@ export const Header: React.FC<HeaderProps> = ({
             Icon={'picture-in-picture-2'}
           />
           {desktopSidebarActions}
+          <WindowsWindowControls visible={isWindowsElectronDesktop} />
         </div>
       </div>
     </div>

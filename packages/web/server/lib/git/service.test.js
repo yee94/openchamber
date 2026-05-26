@@ -1,6 +1,39 @@
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolveBaseRefForLog, stageFiles, unstageFiles } from './service.js';
+import { getStatus, resolveBaseRefForLog, stageFiles, unstageFiles } from './service.js';
+
+const tempDirs = [];
+
+const createTempDir = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-git-service-'));
+  tempDirs.push(dir);
+  return dir;
+};
+
+const runGit = (cwd, args) => execFileSync('git', args, {
+  cwd,
+  encoding: 'utf8',
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+
+const canRunGit = () => {
+  try {
+    execFileSync('git', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe('resolveBaseRefForLog', () => {
   it('returns the local ref unchanged when it exists, even if origin also exists', async () => {
@@ -45,5 +78,25 @@ describe('git index path validation', () => {
 
   it('rejects unstage paths outside the repository before invoking git', async () => {
     await expect(unstageFiles('/repo', ['../secret.txt'])).rejects.toThrow('Path is outside repository: ../secret.txt');
+  });
+});
+
+describe('getStatus', () => {
+  it('handles repositories without upstream tracking', async () => {
+    if (!canRunGit()) {
+      return;
+    }
+
+    const repo = createTempDir();
+    runGit(repo, ['init', '-b', 'main']);
+    runGit(repo, ['config', 'user.email', 'test@example.com']);
+    runGit(repo, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
+    runGit(repo, ['add', 'README.md']);
+    runGit(repo, ['commit', '-m', 'Initial commit']);
+
+    await expect(getStatus(repo)).resolves.toMatchObject({
+      current: 'main',
+    });
   });
 });
