@@ -31,7 +31,7 @@ jobs:
       release_upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get version
         id: get_version
@@ -82,13 +82,13 @@ jobs:
     needs: create-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -133,13 +133,13 @@ jobs:
             arch: x64
             platform: darwin-x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -262,14 +262,14 @@ jobs:
           tar -C electron-app-artifact -czf electron-app-${{ matrix.arch }}.tar.gz OpenChamber.app
 
       - name: Upload signed Electron app for Tauri updater repackage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-app-${{ matrix.arch }}
           path: electron-app-${{ matrix.arch }}.tar.gz
           retention-days: 1
 
       - name: Upload per-arch latest-mac.yml for merge
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: latest-yml-${{ matrix.target }}
           path: packages/electron/dist/latest-mac.yml
@@ -286,13 +286,13 @@ jobs:
             target: x86_64-pc-windows-msvc
             platform: win32-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -331,7 +331,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload update manifest as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: latest-yml-${{ matrix.target }}
           path: packages/electron/dist/latest.yml
@@ -349,7 +349,7 @@ jobs:
           - arch: x64
             platform: darwin-x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
@@ -430,7 +430,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload per-platform Tauri manifest for merge
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-manifest-${{ matrix.platform }}
           path: staged/latest-${{ matrix.platform }}.json
@@ -514,10 +514,10 @@ jobs:
     needs: [create-release, build-desktop-electron-macos, build-desktop-electron-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 

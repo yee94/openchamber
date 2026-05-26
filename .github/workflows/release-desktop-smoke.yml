@@ -54,7 +54,7 @@ jobs:
             platform: darwin-x86_64
     steps:
       - name: Checkout selected ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -63,7 +63,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -151,7 +151,7 @@ jobs:
           done
 
       - name: Upload macOS installable artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-release-smoke-macos-${{ matrix.arch }}
           path: |
@@ -175,7 +175,7 @@ jobs:
             platform: win32-x64
     steps:
       - name: Checkout selected ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -184,7 +184,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -213,7 +213,7 @@ jobs:
         run: node ./scripts/package.mjs --win --${{ matrix.arch }} --publish=never
 
       - name: Upload Windows installable artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-release-smoke-windows-${{ matrix.arch }}
           path: |
