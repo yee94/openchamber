@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { animate, type AnimationPlaybackControls } from 'motion';
+import type { AnimationPlaybackControls } from 'motion';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { PatchDiff } from '@pierre/diffs/react';
 import { cn } from '@/lib/utils';
@@ -197,8 +197,7 @@ const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> =
     return <>{formatDuration(start, end, now)}</>;
 };
 
-const EXPANDED_CONTENT_TRANSITION_MS = 200;
-const EXPANDED_CONTENT_TRANSITION = { duration: 0.2, ease: 'easeOut' as const };
+const EXPANDED_CONTENT_TRANSITION_MS = 0;
 
 const useAnimatedExpandedContent = (isExpanded: boolean) => {
     const [shouldRender, setShouldRender] = React.useState(isExpanded);
@@ -1871,52 +1870,15 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             return;
         }
 
+        expandedContentMountedRef.current = true;
         expandedContentAnimationRef.current?.stop();
+        expandedContentAnimationRef.current = null;
+        element.style.height = isExpanded ? 'auto' : '0px';
+        element.style.overflow = isExpanded ? 'visible' : 'hidden';
 
-        if (!expandedContentMountedRef.current) {
-            expandedContentMountedRef.current = true;
-            element.style.height = isExpanded ? 'auto' : '0px';
-            element.style.overflow = isExpanded ? 'visible' : 'hidden';
-            return;
+        if (shouldNotifyStructuralChange) {
+            onContentChangeRef.current?.('structural');
         }
-
-        element.style.overflow = 'hidden';
-
-        if (isExpanded) {
-            element.style.height = '0px';
-        } else {
-            element.style.height = `${element.scrollHeight}px`;
-        }
-
-        const animation = animate(
-            element,
-            { height: isExpanded ? 'auto' : '0px' },
-            EXPANDED_CONTENT_TRANSITION,
-        );
-        expandedContentAnimationRef.current = animation;
-
-        void animation.finished.then(() => {
-            if (expandedContentAnimationRef.current !== animation) {
-                return;
-            }
-            expandedContentAnimationRef.current = null;
-            if (isExpanded) {
-                element.style.overflow = 'visible';
-                element.style.height = 'auto';
-            } else {
-                element.style.overflow = 'hidden';
-            }
-            if (shouldNotifyStructuralChange) {
-                onContentChangeRef.current?.('structural');
-            }
-        }).catch(() => undefined);
-
-        return () => {
-            animation.stop();
-            if (expandedContentAnimationRef.current === animation) {
-                expandedContentAnimationRef.current = null;
-            }
-        };
     }, [isExpanded, isTaskTool, shouldNotifyStructuralChange]);
 
     React.useEffect(() => {
@@ -2732,7 +2694,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                             style={{
                                 opacity: isExpanded ? 1 : 0,
                                 transform: isExpanded ? 'translateY(0)' : 'translateY(-4px)',
-                                transition: 'opacity 180ms ease-out, transform 180ms ease-out',
                             }}
                         >
                             <span
