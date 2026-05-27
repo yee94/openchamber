@@ -3787,7 +3787,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             )}
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
-            {newSessionDraftOpen && !isDesktopExpanded && !isMobile ? (
+            {newSessionDraftOpen && !isDesktopExpanded && !isMobile && !isVSCode ? (
                 <div className="chat-input-column mb-7 text-center">
                     <h1 className="text-balance text-2xl font-medium tracking-tight text-foreground md:text-3xl">
                         {draftProjectLabel

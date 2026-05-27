@@ -45,6 +45,7 @@ import { getSessionMaterializationStatus } from '@/sync/materialization';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useI18n } from '@/lib/i18n';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
 const EMPTY_PERMISSIONS: PermissionRequest[] = [];
@@ -527,8 +528,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     }, [currentSessionId, sessionMessages.length, sessionPrefetchInfo, sync]);
 
     const { isMobile } = useDeviceInfo();
+    const isVSCode = isVSCodeRuntime();
     const draftOpen = Boolean(newSessionDraft?.open);
     const isDesktopExpandedInput = isExpandedInput && !isMobile;
+    const useCompactDraftLayout = isMobile || isVSCode;
     const messageListRef = React.useRef<MessageListHandle | null>(null);
     const draftProjectLabel = React.useMemo(() => {
         const selectedProject = newSessionDraft?.selectedProjectId
@@ -787,7 +790,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 	if (!currentSessionId && draftOpen) {
 		return (
 			<div className="relative flex h-full flex-col bg-background transform-gpu">
-				{isMobile && !isDesktopExpandedInput ? (
+				{useCompactDraftLayout && !isDesktopExpandedInput ? (
 					<div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
 						<h1 className="text-balance text-3xl font-medium tracking-tight text-foreground">
 							{draftProjectLabel
@@ -801,7 +804,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 						'relative z-10 flex min-h-0',
 						isDesktopExpandedInput
 							? 'flex-1 bg-background'
-							: isMobile
+							: useCompactDraftLayout
 								? 'bg-background px-0'
 								: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
