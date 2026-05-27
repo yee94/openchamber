@@ -452,6 +452,40 @@ const DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT = `(() => {
   if (overlay) overlay.remove();
 })()`;
 
+const DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT = `(() => {
+  if (window.__openchamberSameWebviewNavigationInstalled) return;
+  window.__openchamberSameWebviewNavigationInstalled = true;
+
+  const navigate = (rawUrl) => {
+    if (typeof rawUrl !== 'string' || rawUrl.length === 0) return false;
+    try {
+      const url = new URL(rawUrl, window.location.href);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+      window.location.assign(url.href);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const originalOpen = window.open.bind(window);
+  window.open = (url, target, features) => {
+    if (navigate(url)) return null;
+    return originalOpen(url, target, features);
+  };
+
+  document.addEventListener('click', (event) => {
+    if (event.defaultPrevented) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest('a[target="_blank"][href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    if (!navigate(anchor.href)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+})()`;
+
 const normalizeBrowserUrl = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed) return 'about:blank';
@@ -1377,11 +1411,18 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       }
     };
 
+    const installSameWebviewNavigation = () => {
+      try {
+        webview.executeJavaScript?.(DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT, true).catch(() => {});
+      } catch { /* webview not ready */ }
+    };
+
     webview.addEventListener('did-navigate', onNavigate);
     webview.addEventListener('did-navigate-in-page', onNavigate);
     webview.addEventListener('did-start-loading', onStartLoading);
     webview.addEventListener('did-stop-loading', onStopLoading);
     webview.addEventListener('new-window', onNewWindow);
+    webview.addEventListener('dom-ready', installSameWebviewNavigation);
 
     // Check current loading state imperatively — we may have missed the event
     try {
@@ -1390,6 +1431,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
         syncUrl();
       }
     } catch { /* webview not ready */ }
+    installSameWebviewNavigation();
 
     return () => {
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
@@ -1398,6 +1440,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       webview.removeEventListener('did-start-loading', onStartLoading);
       webview.removeEventListener('did-stop-loading', onStopLoading);
       webview.removeEventListener('new-window', onNewWindow);
+      webview.removeEventListener('dom-ready', installSameWebviewNavigation);
     };
   }, [persistUrl]);
 
@@ -1547,6 +1590,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
           ref={webviewRef}
           src={normalizeBrowserUrl(initialUrl)}
           partition="persist:openchamber-browser"
+          allowpopups
           style={{ width: '100%', height: '100%', border: 'none' }}
         />
         {(!currentUrl || currentUrl === 'about:blank') && !isLoading ? (
