@@ -21,7 +21,8 @@ import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { Icon } from "@/components/icon/Icon";
 import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
-import { cn } from '@/lib/utils';
+import { cn, formatDirectoryName } from '@/lib/utils';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import {
     collectVisibleSessionIdsForBlockingRequests,
     flattenBlockingRequests,
@@ -329,6 +330,11 @@ const ReadOnlyPromptBanner: React.FC = () => {
     );
 };
 
+const getProjectDisplayLabel = (project: { label?: string; path: string }): string => {
+    const label = project.label?.trim();
+    return label || formatDirectoryName(project.path);
+};
+
 type ChatContainerProps = {
     autoOpenDraft?: boolean;
     readOnly?: boolean;
@@ -341,6 +347,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
+    const projects = useProjectsStore((s) => s.projects);
+    const activeProjectId = useProjectsStore((s) => s.activeProjectId);
 
     // Sync actions
     const sync = useSync();
@@ -522,6 +530,16 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     const draftOpen = Boolean(newSessionDraft?.open);
     const isDesktopExpandedInput = isExpandedInput && !isMobile;
     const messageListRef = React.useRef<MessageListHandle | null>(null);
+    const draftProjectLabel = React.useMemo(() => {
+        const selectedProject = newSessionDraft?.selectedProjectId
+            ? projects.find((project) => project.id === newSessionDraft.selectedProjectId) ?? null
+            : null;
+        const activeProject = activeProjectId
+            ? projects.find((project) => project.id === activeProjectId) ?? null
+            : null;
+        const project = selectedProject ?? activeProject ?? projects[0] ?? null;
+        return project ? getProjectDisplayLabel(project) : null;
+    }, [activeProjectId, newSessionDraft?.selectedProjectId, projects]);
 
     const parentSession = React.useMemo(() => {
         if (!currentSessionId) return null;
@@ -769,12 +787,23 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 	if (!currentSessionId && draftOpen) {
 		return (
 			<div className="relative flex h-full flex-col bg-background transform-gpu">
+				{isMobile && !isDesktopExpandedInput ? (
+					<div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+						<h1 className="text-balance text-3xl font-medium tracking-tight text-foreground">
+							{draftProjectLabel
+								? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
+								: t('chat.emptyState.draftTitle')}
+						</h1>
+					</div>
+				) : null}
 				<div
 					className={cn(
 						'relative z-10 flex min-h-0',
 						isDesktopExpandedInput
 							? 'flex-1 bg-background'
-							: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
+							: isMobile
+								? 'bg-background px-0'
+								: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
 				>
 						{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={resumeToLatestInstant} />}
