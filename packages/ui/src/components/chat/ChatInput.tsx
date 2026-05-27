@@ -1332,6 +1332,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     );
     const addToQueue = useMessageQueueStore((state) => state.addToQueue);
     const clearQueue = useMessageQueueStore((state) => state.clearQueue);
+    const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
 
     // Inline comment drafts
     const draftCount = useInlineCommentDraftStore(
@@ -1579,6 +1580,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // Keep a ref to handleSubmit so callbacks don't depend on it.
     type SubmitOptions = {
         queuedOnly?: boolean;
+        queuedMessageId?: string;
     };
     const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
 
@@ -1627,6 +1629,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }, 0);
     }, []);
 
+    const handleQueuedMessageSend = React.useCallback((messageId: string) => {
+        void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId });
+    }, []);
+
     const handleOpenAgentPanel = React.useCallback(() => {
         setMobileControlsPanel('agent');
     }, []);
@@ -1645,15 +1651,25 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     const handleSubmit = async (options?: SubmitOptions) => {
         const queuedOnly = options?.queuedOnly ?? false;
+        const queuedMessageId = options?.queuedMessageId;
         const inputSnapshot = getCurrentInputSnapshot();
+        const queuedMessagesToSend = queuedMessageId
+            ? queuedMessages.filter((message) => message.id === queuedMessageId)
+            : queuedMessages;
 
         if (queuedOnly) {
-            if (!hasQueuedMessages || !currentSessionId) return;
+            if (queuedMessagesToSend.length === 0 || !currentSessionId) return;
         } else if ((!inputSnapshot.hasContent && !hasQueuedMessages) || (!currentSessionId && !newSessionDraftOpen)) {
             return;
         }
 
-        if (!currentProviderId || !currentModelId) {
+        const capturedSendConfig = queuedOnly ? queuedMessagesToSend[0]?.sendConfig : undefined;
+        const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
+        const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
+        const agentNameToSend = capturedSendConfig?.agent ?? currentAgentName;
+        const variantToSend = capturedSendConfig?.variant ?? currentVariant;
+
+        if (!providerIdToSend || !modelIdToSend) {
             console.warn('Cannot send message: provider or model not selected');
             return;
         }
@@ -1675,8 +1691,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const syntheticParts = consumePendingSyntheticParts();
 
         // Process queued messages first
-        for (let i = 0; i < queuedMessages.length; i++) {
-            const queuedMsg = queuedMessages[i];
+        for (let i = 0; i < queuedMessagesToSend.length; i++) {
+            const queuedMsg = queuedMessagesToSend[i];
             const { sanitizedText, mention } = parseAgentMentions(queuedMsg.content, agents);
             const { sanitizedText: queuedText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
             addMentionedSkills(queuedText);
@@ -1715,7 +1731,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 agentMentionName = mention.name;
             }
 
-            if (queuedMessages.length === 0) {
+            if (queuedMessagesToSend.length === 0) {
                 // No queue - current input is primary
                 primaryText = messageText;
                 primaryAttachments = [...attachmentsToSend, ...mentionAttachments];
@@ -1735,7 +1751,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         if (drafts.length > 0) {
-            if (queuedMessages.length === 0) {
+            if (queuedMessagesToSend.length === 0) {
                 primaryText = appendInlineComments(primaryText, drafts);
             } else if (additionalParts.length > 0) {
                 const lastPart = additionalParts[additionalParts.length - 1];
@@ -1786,7 +1802,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!primaryText && primaryAttachments.length === 0 && additionalParts.length === 0) return;
 
         // Clear queue and input
-        if (currentSessionId && hasQueuedMessages) {
+        if (currentSessionId && queuedMessageId) {
+            removeFromQueue(currentSessionId, queuedMessageId);
+        } else if (currentSessionId && hasQueuedMessages) {
             clearQueue(currentSessionId);
         }
         if (!queuedOnly) {
@@ -1862,13 +1880,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     const instructionsText = await renderMagicPrompt('session.summary.instructions', { topic_block: topicBlock });
                     await sendMessage(
                         visibleText,
-                        currentProviderId,
-                        currentModelId,
-                        currentAgentName,
+                        providerIdToSend,
+                        modelIdToSend,
+                        agentNameToSend,
                         [],
                         agentMentionName,
                         [{ text: instructionsText, synthetic: true }],
-                        currentVariant,
+                        variantToSend,
                         inputMode,
                     );
                     scrollToBottom?.();
@@ -1884,13 +1902,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     const instructionsText = await renderMagicPrompt('session.review.instructions');
                     await sendMessage(
                         visibleText,
-                        currentProviderId,
-                        currentModelId,
-                        currentAgentName,
+                        providerIdToSend,
+                        modelIdToSend,
+                        agentNameToSend,
                         [],
                         agentMentionName,
                         [{ text: instructionsText, synthetic: true }],
-                        currentVariant,
+                        variantToSend,
                         inputMode,
                     );
                     scrollToBottom?.();
@@ -1933,13 +1951,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         const sendPromise = sendMessage(
             primaryText,
-            currentProviderId,
-            currentModelId,
-            currentAgentName,
+            providerIdToSend,
+            modelIdToSend,
+            agentNameToSend,
             primaryAttachments,
             agentMentionName,
             additionalParts.length > 0 ? additionalParts : undefined,
-            currentVariant,
+            variantToSend,
             inputMode
         );
 
@@ -3772,6 +3790,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 <AttachedFilesList onShowPopup={handleShowAttachmentPreview} />
                 <QueuedMessageChips
                     onEditMessage={handleQueuedMessageEdit}
+                    onSendMessage={handleQueuedMessageSend}
                 />
                 {hasDrafts && (
                     <div className="flex flex-wrap items-center gap-2 pb-2">
