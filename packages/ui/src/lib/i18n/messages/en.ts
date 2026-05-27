@@ -1449,6 +1449,8 @@ export const dict = {
   'chat.changedFiles.actions.openFileTitle': 'Open {path}',
   'chat.emptyState.opencodeUnreachable': 'OpenCode is not reachable',
   'chat.emptyState.startNewChat': 'Start a new chat',
+  'chat.emptyState.draftTitle': 'What are we working on?',
+  'chat.emptyState.draftTitleWithProject': 'What are we working on in {project}?',
   'chat.scrollToBottom.aria': 'Scroll to bottom',
   'chat.timeline.relative.justNow': 'just now',
   'chat.timeline.relative.minutesAgo': '{count}m ago',

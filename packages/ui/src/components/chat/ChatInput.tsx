@@ -3459,6 +3459,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         () => normalizePath(selectedDraftProject?.path ?? null),
         [selectedDraftProject?.path],
     );
+    const draftProjectLabel = selectedDraftProject ? getProjectDisplayLabel(selectedDraftProject) : null;
 
     const selectedDraftProjectBranches = useGitBranches(selectedDraftProjectPath);
     const selectedDraftProjectIsGitRepo = useIsGitRepo(selectedDraftProjectPath);
@@ -3780,12 +3781,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         <form
             onSubmit={(e) => { e.preventDefault(); handlePrimaryAction(); }}
             className={cn(
-                "relative pt-0 pb-4",
+                "relative w-full pt-0 pb-4",
                 isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
                 isMobile && 'bottom-safe-area'
             )}
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
+            {newSessionDraftOpen && !isDesktopExpanded ? (
+                <div className="chat-input-column mb-7 text-center">
+                    <h1 className="text-balance text-2xl font-medium tracking-tight text-foreground md:text-3xl">
+                        {draftProjectLabel
+                            ? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
+                            : t('chat.emptyState.draftTitle')}
+                    </h1>
+                </div>
+            ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 <AttachedFilesList onShowPopup={handleShowAttachmentPreview} />
                 <QueuedMessageChips

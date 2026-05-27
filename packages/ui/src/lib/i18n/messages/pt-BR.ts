@@ -1415,6 +1415,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.changedFiles.actions.openFileTitle": "Abrir {path}",
   "chat.emptyState.opencodeUnreachable": "OpenCode não está acessível",
   "chat.emptyState.startNewChat": "Iniciar uma nova conversa",
+  "chat.emptyState.draftTitle": "What are we working on?",
+  "chat.emptyState.draftTitleWithProject": "What are we working on in {project}?",
   "chat.scrollToBottom.aria": "Ir ao final",
   "chat.timeline.relative.justNow": "agora mesmo",
   "chat.timeline.relative.minutesAgo": "há {count}m",

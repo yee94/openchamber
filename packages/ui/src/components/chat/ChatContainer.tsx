@@ -768,18 +768,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 
 	if (!currentSessionId && draftOpen) {
 		return (
-			<div className="relative flex flex-col h-full bg-background transform-gpu">
-				{!isDesktopExpandedInput ? (
-				<div className="flex-1 flex items-center justify-center">
-					<ChatEmptyState />
-				</div>
-				) : null}
-                <div
-                    className={cn(
-                        'relative z-10',
+			<div className="relative flex h-full flex-col bg-background transform-gpu">
+				<div
+					className={cn(
+						'relative z-10 flex min-h-0',
 						isDesktopExpandedInput
-							? 'flex-1 min-h-0 bg-background'
-							: 'bg-background'
+							? 'flex-1 bg-background'
+							: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
 				>
 						{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={resumeToLatestInstant} />}

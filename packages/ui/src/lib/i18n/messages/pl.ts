@@ -443,6 +443,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.changedFiles.actions.openFileTitle': 'Otwórz {path}',
   'chat.emptyState.opencodeUnreachable': 'OpenCode jest nieosiągalny',
   'chat.emptyState.startNewChat': 'Rozpocznij nowy czat',
+  'chat.emptyState.draftTitle': 'What are we working on?',
+  'chat.emptyState.draftTitleWithProject': 'What are we working on in {project}?',
   'chat.scrollToBottom.aria': 'Przewiń na dół',
   'chat.timeline.relative.justNow': 'przed chwilą',
   'chat.timeline.relative.minutesAgo': '{count}m temu',

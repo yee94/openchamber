@@ -1451,6 +1451,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.changedFiles.actions.openFileTitle': '{path} 열기',
   'chat.emptyState.opencodeUnreachable': 'OpenCode에 연결할 수 없음',
   'chat.emptyState.startNewChat': '새 채팅 시작',
+  'chat.emptyState.draftTitle': 'What are we working on?',
+  'chat.emptyState.draftTitleWithProject': 'What are we working on in {project}?',
   'chat.scrollToBottom.aria': '맨 아래로 스크롤',
   'chat.timeline.relative.justNow': '방금 전',
   'chat.timeline.relative.minutesAgo': '{count}분 전',

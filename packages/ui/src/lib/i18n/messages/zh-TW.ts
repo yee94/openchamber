@@ -1412,6 +1412,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.changedFiles.actions.openFileTitle': '開啟 {path}',
   'chat.emptyState.opencodeUnreachable': '無法連線 OpenCode',
   'chat.emptyState.startNewChat': '開始新的聊天',
+  'chat.emptyState.draftTitle': 'What are we working on?',
+  'chat.emptyState.draftTitleWithProject': 'What are we working on in {project}?',
   'chat.scrollToBottom.aria': '捲動到底部',
   'chat.timeline.relative.justNow': '剛剛',
   'chat.timeline.relative.minutesAgo': '{count} 分鐘前',
