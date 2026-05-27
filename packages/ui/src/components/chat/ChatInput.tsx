@@ -318,6 +318,20 @@ const getProjectDisplayLabel = (project: { label?: string; path: string }): stri
     return formatDirectoryName(project.path);
 };
 
+const renderDraftTitle = (title: string, projectLabel: string | null): React.ReactNode => {
+    if (!projectLabel) return title;
+    const projectIndex = title.indexOf(projectLabel);
+    if (projectIndex === -1) return title;
+
+    return (
+        <>
+            {title.slice(0, projectIndex)}
+            <span className="font-medium">{projectLabel}</span>
+            {title.slice(projectIndex + projectLabel.length)}
+        </>
+    );
+};
+
 const getProjectIconColor = (projectColor?: string | null): string | undefined => {
     if (!projectColor) {
         return undefined;
@@ -3789,10 +3803,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         >
             {newSessionDraftOpen && !isDesktopExpanded && !isMobile && !isVSCode && !isMiniChatSurface ? (
                 <div className="chat-input-column mb-7 text-center">
-                    <h1 className="text-balance text-2xl font-medium tracking-tight text-foreground md:text-3xl">
-                        {draftProjectLabel
-                            ? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
-                            : t('chat.emptyState.draftTitle')}
+                    <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
+                        {renderDraftTitle(
+                            draftProjectLabel
+                                ? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
+                                : t('chat.emptyState.draftTitle'),
+                            draftProjectLabel,
+                        )}
                     </h1>
                 </div>
             ) : null}
