@@ -148,6 +148,22 @@ const PROMPT_PAGE_MAP: Record<string, PromptPageConfig> = {
       { id: 'session.plan.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
     ],
   },
+  'session.catchup': {
+    titleKey: 'settings.magicPrompts.page.group.sessionCatchUp.title',
+    descriptionKey: 'settings.magicPrompts.page.group.sessionCatchUp.description',
+    blocks: [
+      { id: 'session.catchup.visible', titleKey: 'settings.magicPrompts.page.block.visiblePrompt' },
+      { id: 'session.catchup.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
+    ],
+  },
+  'session.debug': {
+    titleKey: 'settings.magicPrompts.page.group.sessionDebug.title',
+    descriptionKey: 'settings.magicPrompts.page.group.sessionDebug.description',
+    blocks: [
+      { id: 'session.debug.visible', titleKey: 'settings.magicPrompts.page.block.visiblePrompt' },
+      { id: 'session.debug.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
+    ],
+  },
   'session.fusion': {
     titleKey: 'settings.magicPrompts.page.group.sessionFusion.title',
     descriptionKey: 'settings.magicPrompts.page.group.sessionFusion.description',

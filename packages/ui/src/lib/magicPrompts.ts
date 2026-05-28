@@ -29,6 +29,10 @@ export type MagicPromptId =
   | 'session.review.instructions'
   | 'session.plan.visible'
   | 'session.plan.instructions'
+  | 'session.catchup.visible'
+  | 'session.catchup.instructions'
+  | 'session.debug.visible'
+  | 'session.debug.instructions'
   | 'session.fusion.visible'
   | 'session.fusion.instructions';
 
@@ -601,6 +605,62 @@ Run this as a dialogue, not a one-shot answer.
 5. Do not write code or begin implementing during this phase. Planning is for understanding and deciding only.
 
 6. When everything is settled, produce the final implementation plan: a clear, ordered breakdown of the work, the files and areas affected, the decisions that were made (and why), known risks, and any remaining assumptions flagged explicitly. The plan must reflect the user's actual answers — never fill gaps with guesses.
+
+Respond in the same language the user uses.`,
+  },
+  {
+    id: 'session.catchup.visible',
+    title: 'Catch Up Visible Prompt',
+    group: 'Session',
+    description: 'Visible user message sent by the /catch-up command.',
+    template: 'Catch me up on where this project is right now.',
+  },
+  {
+    id: 'session.catchup.instructions',
+    title: 'Catch Up Instructions',
+    group: 'Session',
+    description: 'Hidden instructions attached to the /catch-up command. Inspects git state and branches on it: in-progress diff, open PR review state, or recent commits.',
+    template: `The user is returning to this project and wants to quickly re-establish context — what they were doing and where to pick up. Investigate the actual repository state first, then orient them. Do not assume; check.
+
+Start by inspecting git state: the current branch, uncommitted changes (status and diff), and recent commits.
+
+Then follow whichever case applies:
+
+1. Working tree has uncommitted changes → They were mid-task. Read the diff, reconstruct what they were working on and the intent behind it, identify what looks finished versus in-progress, and point out where they likely stopped. End with a concrete suggestion for the next step to resume.
+
+2. Working tree is clean AND the current branch has an open pull request → Check the PR's status: review state, requested changes, comments, and any unresolved threads or failing checks. Surface what is still open and what they can continue from. If the tools to inspect the PR are unavailable, say so briefly and fall back to case 3.
+
+3. Working tree is clean and there is no open PR → Give a brief overview of the latest commits: what has been done recently and the apparent direction, so they can decide what to do next.
+
+Keep it short and scannable — a quick orientation, not an exhaustive report. Lead with the single most useful "here is where you are" sentence, then the supporting detail.
+
+Respond in the same language the user uses.`,
+  },
+  {
+    id: 'session.debug.visible',
+    title: 'Debugging Visible Prompt',
+    group: 'Session',
+    description: 'Visible user message sent by the /debug command.',
+    template: 'I want to debug an issue.',
+  },
+  {
+    id: 'session.debug.instructions',
+    title: 'Debugging Instructions',
+    group: 'Session',
+    description: 'Hidden instructions attached to the /debug command. Runs a guided root-cause investigation before proposing a fix.',
+    template: `The user wants help debugging an issue. Drive this as a focused root-cause investigation — not a plan, and not an immediate fix.
+
+1. Get the symptom. When the user describes the problem, capture exactly what is observed versus expected — error messages, stack traces, failing behavior, and when it started. If a key detail is missing to even begin, ask for it briefly.
+
+2. Form hypotheses. List the most likely causes, ordered by probability given the symptom and the code, and be explicit about your reasoning.
+
+3. Investigate to confirm or rule out. Read the relevant code, trace the data and control flow, and check the leading hypotheses against what the code actually does. Prefer evidence from the code over speculation.
+
+4. Ask only what you need. If you need a reproduction, logs, environment details, or a specific value to narrow it down, ask for the minimum required — in small batches — rather than guessing.
+
+5. Identify the root cause. Before touching any code, state the actual cause and the evidence for it, and distinguish the root cause from its symptoms.
+
+6. Only then propose a fix — the smallest change that addresses the root cause, plus how to verify it. Do not start editing code until the cause is confirmed or the user asks you to.
 
 Respond in the same language the user uses.`,
   },

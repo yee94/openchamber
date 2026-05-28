@@ -100,8 +100,9 @@ type DraftPreset = {
 };
 const DRAFT_PRESETS: readonly DraftPreset[] = [
     { id: 'explore', icon: 'compass-3', labelKey: 'chat.draftPresets.explore.label', promptKey: 'chat.draftPresets.explore.prompt' },
-    { id: 'changes', icon: 'git-branch', labelKey: 'chat.draftPresets.changes.label', promptKey: 'chat.draftPresets.changes.prompt' },
+    { id: 'catchup', icon: 'history', labelKey: 'chat.draftPresets.catchup.label', command: '/catch-up' },
     { id: 'plan', icon: 'survey', labelKey: 'chat.draftPresets.plan.label', command: '/plan-feature' },
+    { id: 'debug', icon: 'bug', labelKey: 'chat.draftPresets.debug.label', command: '/debug' },
     { id: 'review', icon: 'search-eye', labelKey: 'chat.draftPresets.review.label', command: '/workspace-review' },
 ];
 
@@ -1122,7 +1123,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const availableSkills = useSkillsStore((s) => s.skills);
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
-            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review', 'plan-feature',
+            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review', 'plan-feature', 'catch-up', 'debug',
         ]);
         for (const command of availableCommands) names.add(command.name.toLowerCase());
         for (const skill of availableSkills) names.add(skill.name.toLowerCase());
@@ -1969,6 +1970,50 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     scrollToBottom?.();
                 } catch (error) {
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.planFeatureFailed'));
+                }
+                return;
+            }
+            else if (commandName === 'catch-up' && (currentSessionId || newSessionDraftOpen)) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    const visibleText = await renderMagicPrompt('session.catchup.visible');
+                    const instructionsText = await renderMagicPrompt('session.catchup.instructions');
+                    await sendMessage(
+                        visibleText,
+                        providerIdToSend,
+                        modelIdToSend,
+                        agentNameToSend,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        variantToSend,
+                        inputMode,
+                    );
+                    scrollToBottom?.();
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.catchUpFailed'));
+                }
+                return;
+            }
+            else if (commandName === 'debug' && (currentSessionId || newSessionDraftOpen)) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    const visibleText = await renderMagicPrompt('session.debug.visible');
+                    const instructionsText = await renderMagicPrompt('session.debug.instructions');
+                    await sendMessage(
+                        visibleText,
+                        providerIdToSend,
+                        modelIdToSend,
+                        agentNameToSend,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        variantToSend,
+                        inputMode,
+                    );
+                    scrollToBottom?.();
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.debugFailed'));
                 }
                 return;
             }
