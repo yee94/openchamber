@@ -1094,6 +1094,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.addressAria': 'Adres przeglądarki',
   'contextPanel.browser.empty': 'Przeglądarka internetowa',
   'contextPanel.browser.emptyHint': 'Wprowadź adres powyżej, aby rozpocząć przeglądanie',
+  'contextPanel.browser.inspectUnavailable': 'Nie można sprawdzić tej strony z panelu przeglądarki.',
+  'contextPanel.browser.trustNotice': 'Strony otwierane tutaj działają z pełnym dostępem do OpenChamber — jest to wymagane do inspekcji i zrzutów ekranu. Otwieraj tylko zaufane witryny: złośliwa strona może odczytać Twoje dane lub działać w Twoim imieniu.',
   'contextPanel.preview.actions.openExternal': 'Otwórz w przeglądarce',
   'contextPanel.preview.actions.reload': 'Odśwież podgląd',
   'contextPanel.preview.actions.retry': 'Ponów',

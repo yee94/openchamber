@@ -842,6 +842,8 @@ export const dict = {
   'contextPanel.browser.addressAria': 'Browser address',
   'contextPanel.browser.empty': 'Web browser',
   'contextPanel.browser.emptyHint': 'Enter an address above to start browsing the web',
+  'contextPanel.browser.inspectUnavailable': 'This page cannot be inspected from the browser panel.',
+  'contextPanel.browser.trustNotice': 'Pages opened here run with full access to OpenChamber — needed for inspect and screenshots. Only open sites you trust: a malicious page could read your data or act on your behalf.',
   'contextPanel.tab.closeTabAria': 'Close {label} tab',
   'contextPanel.actions.collapsePanel': 'Collapse panel',
   'contextPanel.actions.expandPanel': 'Expand panel',

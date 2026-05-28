@@ -843,6 +843,8 @@ export const dict: Record<I18nKey, string> = {
   "contextPanel.browser.addressAria": "Endereço do navegador",
   "contextPanel.browser.empty": "Navegador web",
   "contextPanel.browser.emptyHint": "Digite um endereço acima para começar a navegar",
+  "contextPanel.browser.inspectUnavailable": "Esta página não pode ser inspecionada pelo painel do navegador.",
+  "contextPanel.browser.trustNotice": "As páginas abertas aqui são executadas com acesso total ao OpenChamber — necessário para inspeção e capturas de tela. Abra apenas sites confiáveis: uma página maliciosa pode ler seus dados ou agir em seu nome.",
   "contextPanel.tab.closeTabAria": "Fechar aba {label}",
   "contextPanel.actions.collapsePanel": "Recolher painel",
   "contextPanel.actions.expandPanel": "Expandir painel",
