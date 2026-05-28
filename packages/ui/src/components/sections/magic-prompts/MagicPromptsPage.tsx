@@ -140,6 +140,14 @@ const PROMPT_PAGE_MAP: Record<string, PromptPageConfig> = {
       { id: 'session.review.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
     ],
   },
+  'session.plan': {
+    titleKey: 'settings.magicPrompts.page.group.sessionFeaturePlan.title',
+    descriptionKey: 'settings.magicPrompts.page.group.sessionFeaturePlan.description',
+    blocks: [
+      { id: 'session.plan.visible', titleKey: 'settings.magicPrompts.page.block.visiblePrompt' },
+      { id: 'session.plan.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
+    ],
+  },
   'session.fusion': {
     titleKey: 'settings.magicPrompts.page.group.sessionFusion.title',
     descriptionKey: 'settings.magicPrompts.page.group.sessionFusion.description',

@@ -52,6 +52,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { GitHubIssuePickerDialog } from '@/components/session/GitHubIssuePickerDialog';
 import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog';
 import { Icon } from "@/components/icon/Icon";
+import type { IconName } from "@/components/icon/icons";
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -66,6 +67,7 @@ import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
+import type { I18nKey } from '@/lib/i18n';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
@@ -85,6 +87,23 @@ import {
     findAttachmentCitationRanges,
 } from './attachmentCitations';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
+
+// Starter presets shown under the composer on the desktop draft welcome screen.
+// `promptKey` presets send a plain natural-language prompt; `command` presets
+// send a built-in slash command (e.g. /workspace-review) through the normal submit path.
+type DraftPreset = {
+    id: string;
+    icon: IconName;
+    labelKey: I18nKey;
+    promptKey?: I18nKey;
+    command?: string;
+};
+const DRAFT_PRESETS: readonly DraftPreset[] = [
+    { id: 'explore', icon: 'compass-3', labelKey: 'chat.draftPresets.explore.label', promptKey: 'chat.draftPresets.explore.prompt' },
+    { id: 'changes', icon: 'git-branch', labelKey: 'chat.draftPresets.changes.label', promptKey: 'chat.draftPresets.changes.prompt' },
+    { id: 'plan', icon: 'survey', labelKey: 'chat.draftPresets.plan.label', command: '/plan-feature' },
+    { id: 'review', icon: 'search-eye', labelKey: 'chat.draftPresets.review.label', command: '/workspace-review' },
+];
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -1103,7 +1122,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const availableSkills = useSkillsStore((s) => s.skills);
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
-            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review',
+            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review', 'plan-feature',
         ]);
         for (const command of availableCommands) names.add(command.name.toLowerCase());
         for (const skill of availableSkills) names.add(skill.name.toLowerCase());
@@ -1931,6 +1950,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 }
                 return;
             }
+            else if (commandName === 'plan-feature' && (currentSessionId || newSessionDraftOpen)) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    const visibleText = await renderMagicPrompt('session.plan.visible');
+                    const instructionsText = await renderMagicPrompt('session.plan.instructions');
+                    await sendMessage(
+                        visibleText,
+                        providerIdToSend,
+                        modelIdToSend,
+                        agentNameToSend,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        variantToSend,
+                        inputMode,
+                    );
+                    scrollToBottom?.();
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.planFeatureFailed'));
+                }
+                return;
+            }
         }
 
         const currentSessionDirectory = currentSessionId
@@ -2053,6 +2094,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             void handleSubmitRef.current();
         }
     }, [inputMode, getCurrentInputSnapshot, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage]);
+
+    // Draft welcome presets: populate the composer and submit immediately.
+    // getCurrentInputSnapshot reads textareaRef.current.value first, so setting it
+    // synchronously lets handleSubmit pick up the preset text in the same tick.
+    const submitPresetPrompt = React.useCallback((text: string) => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+            textarea.value = text;
+        }
+        setMessage(text);
+        void handleSubmitRef.current();
+    }, []);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Early return during IME composition to prevent interference with autocomplete.
@@ -4401,6 +4454,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     {isMobile && <MobileSessionStatusBar />}
                 </div>
             </div>
+            {newSessionDraftOpen && !isDesktopExpanded && !isMobile && !isVSCode && !isMiniChatSurface ? (
+                <div className="chat-input-column mt-4 flex flex-wrap justify-center gap-2">
+                    {DRAFT_PRESETS.map((preset) => (
+                        <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                                const text = preset.command ?? (preset.promptKey ? t(preset.promptKey) : '');
+                                if (text) submitPresetPrompt(text);
+                            }}
+                            className="group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
+                            style={{
+                                backgroundColor: currentTheme?.colors?.surface?.elevated,
+                                borderColor: currentTheme?.colors?.interactive?.border,
+                            }}
+                        >
+                            <Icon name={preset.icon} className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
+                            <span>{t(preset.labelKey)}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
         </form>
 
         {/* Issue Picker Dialog */}
