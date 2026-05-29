@@ -2,6 +2,8 @@ import React from 'react';
 import type { Message, Part, Session } from '@opencode-ai/sdk/v2';
 
 import { ChatInput } from './ChatInput';
+import { DraftPresetChips } from './DraftPresetChips';
+import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
@@ -811,7 +813,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 		return (
 			<div className="relative flex h-full flex-col bg-background transform-gpu">
 				{useCompactDraftLayout && !isDesktopExpandedInput ? (
-					<div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+					<div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
 						<h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
 							{renderDraftTitle(
 								draftProjectLabel
@@ -820,6 +822,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 								draftProjectLabel,
 							)}
 						</h1>
+						{chatSurfaceMode !== 'mini-chat' ? (
+							<DraftPresetChips
+								onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
+								className="mt-8 max-w-md"
+							/>
+						) : null}
 					</div>
 				) : null}
 				<div

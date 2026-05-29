@@ -52,7 +52,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { GitHubIssuePickerDialog } from '@/components/session/GitHubIssuePickerDialog';
 import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog';
 import { Icon } from "@/components/icon/Icon";
-import type { IconName } from "@/components/icon/icons";
+import { DraftPresetChips } from './DraftPresetChips';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -67,7 +67,6 @@ import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
-import type { I18nKey } from '@/lib/i18n';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
@@ -87,25 +86,6 @@ import {
     findAttachmentCitationRanges,
 } from './attachmentCitations';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
-
-// Starter presets shown under the composer on the desktop draft welcome screen.
-// `promptKey` presets send a plain natural-language prompt; `command` presets
-// send a built-in slash command (e.g. /workspace-review) through the normal submit path.
-type DraftPreset = {
-    id: string;
-    icon: IconName;
-    labelKey: I18nKey;
-    promptKey?: I18nKey;
-    command?: string;
-};
-const DRAFT_PRESETS: readonly DraftPreset[] = [
-    { id: 'explore', icon: 'compass-3', labelKey: 'chat.draftPresets.explore.label', command: '/explore' },
-    { id: 'catchup', icon: 'history', labelKey: 'chat.draftPresets.catchup.label', command: '/catch-up' },
-    { id: 'weigh', icon: 'scales-3', labelKey: 'chat.draftPresets.weigh.label', command: '/weigh' },
-    { id: 'plan', icon: 'survey', labelKey: 'chat.draftPresets.plan.label', command: '/plan-feature' },
-    { id: 'debug', icon: 'bug', labelKey: 'chat.draftPresets.debug.label', command: '/debug' },
-    { id: 'review', icon: 'search-eye', labelKey: 'chat.draftPresets.review.label', command: '/workspace-review' },
-];
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -1021,6 +1001,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const clearAttachedFiles = useInputStore((s) => s.clearAttachedFiles);
     const saveSessionAgentSelection = useSelectionStore((s) => s.saveSessionAgentSelection);
     const consumePendingInputText = useInputStore((s) => s.consumePendingInputText);
+    const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
     const setPendingInputText = useInputStore((s) => s.setPendingInputText);
     const pendingInputText = useInputStore((s) => s.pendingInputText);
     const consumePendingSyntheticParts = useInputStore((s) => s.consumePendingSyntheticParts);
@@ -2196,6 +2177,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         setMessage(text);
         void handleSubmitRef.current();
     }, []);
+
+    // Preset chips rendered outside this component (e.g. under the welcome
+    // message on narrow surfaces) request a submit via the input store; consume
+    // it here so it routes through the same command-aware submit path.
+    React.useEffect(() => {
+        if (pendingPresetSubmit == null) return;
+        const text = useInputStore.getState().consumePendingPresetSubmit();
+        if (text) submitPresetPrompt(text);
+    }, [pendingPresetSubmit, submitPresetPrompt]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Early return during IME composition to prevent interference with autocomplete.
@@ -4545,26 +4535,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 </div>
             </div>
             {newSessionDraftOpen && !isDesktopExpanded && !isMobile && !isVSCode && !isMiniChatSurface ? (
-                <div className="chat-input-column mt-4 flex flex-wrap justify-center gap-2">
-                    {DRAFT_PRESETS.map((preset) => (
-                        <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => {
-                                const text = preset.command ?? (preset.promptKey ? t(preset.promptKey) : '');
-                                if (text) submitPresetPrompt(text);
-                            }}
-                            className="group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
-                            style={{
-                                backgroundColor: currentTheme?.colors?.surface?.elevated,
-                                borderColor: currentTheme?.colors?.interactive?.border,
-                            }}
-                        >
-                            <Icon name={preset.icon} className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
-                            <span>{t(preset.labelKey)}</span>
-                        </button>
-                    ))}
-                </div>
+                <DraftPresetChips onSubmit={submitPresetPrompt} className="chat-input-column mt-4" />
             ) : null}
         </form>
 
