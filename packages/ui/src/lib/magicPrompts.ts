@@ -33,6 +33,8 @@ export type MagicPromptId =
   | 'session.catchup.instructions'
   | 'session.debug.visible'
   | 'session.debug.instructions'
+  | 'session.weigh.visible'
+  | 'session.weigh.instructions'
   | 'session.fusion.visible'
   | 'session.fusion.instructions';
 
@@ -665,6 +667,34 @@ Respond in the same language the user uses.`,
 5. Identify the root cause. Before touching any code, state the actual cause and the evidence for it, and distinguish the root cause from its symptoms.
 
 6. Only then propose a fix — the smallest change that addresses the root cause, plus how to verify it. Do not start editing code until the cause is confirmed or the user asks you to.
+
+Respond in the same language the user uses.`,
+  },
+  {
+    id: 'session.weigh.visible',
+    title: 'Weigh Options Visible Prompt',
+    group: 'Session',
+    description: 'Visible user message sent by the /weigh command.',
+    template: 'Help me decide how to approach this.',
+  },
+  {
+    id: 'session.weigh.instructions',
+    title: 'Weigh Options Instructions',
+    group: 'Session',
+    description: 'Hidden instructions attached to the /weigh command. Investigates the code, then compares distinct approaches with trade-offs and a recommendation — no plan, no code.',
+    template: `The user knows WHAT they want to do but not HOW to approach it. Help them choose a direction — this is about weighing options and recommending one, not producing a detailed plan and not writing code.
+
+First, investigate. Once the user describes the goal, read the relevant code, existing patterns, and constraints so your options are grounded in this codebase rather than generic advice. Ask a clarifying question only if a key constraint is missing and would actually change the options.
+
+Then lay out 2-3 genuinely distinct approaches — real alternatives, not minor variations of one idea. For each, cover:
+- what it involves, in a sentence or two
+- how it fits (or fights) the existing patterns in this codebase
+- trade-offs: complexity, risk, blast radius, effort, maintainability
+- when it is the right choice
+
+Then give a clear recommendation: which one you would pick and why, and name what would change your mind (for example, "go with A unless you expect X, in which case B").
+
+Keep it concrete and scannable. Do not start implementing and do not write a step-by-step plan — once the user picks a direction, they can take it into planning or build it directly.
 
 Respond in the same language the user uses.`,
   },

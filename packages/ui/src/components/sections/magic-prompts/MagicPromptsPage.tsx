@@ -164,6 +164,14 @@ const PROMPT_PAGE_MAP: Record<string, PromptPageConfig> = {
       { id: 'session.debug.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
     ],
   },
+  'session.weigh': {
+    titleKey: 'settings.magicPrompts.page.group.sessionWeigh.title',
+    descriptionKey: 'settings.magicPrompts.page.group.sessionWeigh.description',
+    blocks: [
+      { id: 'session.weigh.visible', titleKey: 'settings.magicPrompts.page.block.visiblePrompt' },
+      { id: 'session.weigh.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
+    ],
+  },
   'session.fusion': {
     titleKey: 'settings.magicPrompts.page.group.sessionFusion.title',
     descriptionKey: 'settings.magicPrompts.page.group.sessionFusion.description',

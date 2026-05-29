@@ -50,6 +50,7 @@ export const MagicPromptsSidebar: React.FC<MagicPromptsSidebarProps> = ({ onItem
           { id: 'session.plan', titleKey: 'settings.magicPrompts.sidebar.item.sessionFeaturePlan' },
           { id: 'session.catchup', titleKey: 'settings.magicPrompts.sidebar.item.sessionCatchUp' },
           { id: 'session.debug', titleKey: 'settings.magicPrompts.sidebar.item.sessionDebug' },
+          { id: 'session.weigh', titleKey: 'settings.magicPrompts.sidebar.item.sessionWeigh' },
           { id: 'session.fusion', titleKey: 'settings.magicPrompts.sidebar.item.sessionFusion' },
         ],
       },
