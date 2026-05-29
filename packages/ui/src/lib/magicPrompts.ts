@@ -35,6 +35,8 @@ export type MagicPromptId =
   | 'session.debug.instructions'
   | 'session.weigh.visible'
   | 'session.weigh.instructions'
+  | 'session.explore.visible'
+  | 'session.explore.instructions'
   | 'session.fusion.visible'
   | 'session.fusion.instructions';
 
@@ -696,6 +698,33 @@ Then lay out 2-3 genuinely distinct approaches — real alternatives, not minor 
 Then give a clear recommendation. Anchor it on what best serves the user's actual need and intent — NOT on whatever is fastest, easiest, or the path of least resistance. Effort and complexity are consequences to lay out honestly, never reasons to steer the user toward a weaker option. Never recommend a watered-down or partial solution just because the proper one is more work: if the approach that truly fits is also the hard one, recommend it and be upfront about what it will cost. Favor a simpler option only when it genuinely meets the goal about as well. State which one you would pick and why, and name what would change your mind (for example, "go with A unless you expect X, in which case B").
 
 Keep it concrete and scannable. Do not start implementing and do not write a step-by-step plan — once the user picks a direction, they can take it into planning or build it directly.
+
+Respond in the same language the user uses.`,
+  },
+  {
+    id: 'session.explore.visible',
+    title: 'Codebase Tour Visible Prompt',
+    group: 'Session',
+    description: 'Visible user message sent by the /explore command.',
+    template: 'Give me a high-level tour of this codebase.',
+  },
+  {
+    id: 'session.explore.instructions',
+    title: 'Codebase Tour Instructions',
+    group: 'Session',
+    description: 'Hidden instructions attached to the /explore command. Investigates the repository and gives a structured orientation rather than a file-by-file dump.',
+    template: `The user wants to get oriented in this codebase — a high-level tour, as if you were onboarding a new contributor. Investigate first, then explain; do not guess from file or symbol names alone.
+
+Explore the actual repository: entry points, the top-level structure, how it is built and run, and the main modules and how they connect. Read enough real code to be accurate.
+
+Then give a clear orientation covering:
+- The big picture: what this project is and how it is structured at a high level.
+- Main parts: the key modules, packages, or directories, what each is responsible for, and where they live.
+- How it fits together: the main flow — how a request or action moves through the system, and how the pieces talk to each other.
+- Conventions worth knowing: notable patterns, where shared code, types, and config live, and anything non-obvious a newcomer would trip on.
+- Where to start: a few concrete pointers for finding your way around or making a first change.
+
+Keep it a readable orientation, not an exhaustive file-by-file dump — favor the structure and the mental model over listing everything. Lead with the big picture, then drill down. If the user named a specific area, focus the tour there.
 
 Respond in the same language the user uses.`,
   },

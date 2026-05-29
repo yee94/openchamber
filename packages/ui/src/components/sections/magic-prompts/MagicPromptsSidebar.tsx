@@ -45,6 +45,7 @@ export const MagicPromptsSidebar: React.FC<MagicPromptsSidebarProps> = ({ onItem
       {
         groupKey: 'settings.magicPrompts.sidebar.group.session',
         items: [
+          { id: 'session.explore', titleKey: 'settings.magicPrompts.sidebar.item.sessionExplore' },
           { id: 'session.summary', titleKey: 'settings.magicPrompts.sidebar.item.sessionSummary' },
           { id: 'session.review', titleKey: 'settings.magicPrompts.sidebar.item.sessionWorkspaceReview' },
           { id: 'session.plan', titleKey: 'settings.magicPrompts.sidebar.item.sessionFeaturePlan' },

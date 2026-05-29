@@ -99,7 +99,7 @@ type DraftPreset = {
     command?: string;
 };
 const DRAFT_PRESETS: readonly DraftPreset[] = [
-    { id: 'explore', icon: 'compass-3', labelKey: 'chat.draftPresets.explore.label', promptKey: 'chat.draftPresets.explore.prompt' },
+    { id: 'explore', icon: 'compass-3', labelKey: 'chat.draftPresets.explore.label', command: '/explore' },
     { id: 'catchup', icon: 'history', labelKey: 'chat.draftPresets.catchup.label', command: '/catch-up' },
     { id: 'weigh', icon: 'scales-3', labelKey: 'chat.draftPresets.weigh.label', command: '/weigh' },
     { id: 'plan', icon: 'survey', labelKey: 'chat.draftPresets.plan.label', command: '/plan-feature' },
@@ -1124,7 +1124,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const availableSkills = useSkillsStore((s) => s.skills);
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
-            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review', 'plan-feature', 'catch-up', 'debug', 'weigh',
+            'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'summary', 'workspace-review', 'plan-feature', 'catch-up', 'debug', 'weigh', 'explore',
         ]);
         for (const command of availableCommands) names.add(command.name.toLowerCase());
         for (const skill of availableSkills) names.add(skill.name.toLowerCase());
@@ -2037,6 +2037,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     scrollToBottom?.();
                 } catch (error) {
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.weighFailed'));
+                }
+                return;
+            }
+            else if (commandName === 'explore' && (currentSessionId || newSessionDraftOpen)) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    const visibleText = await renderMagicPrompt('session.explore.visible');
+                    const instructionsText = await renderMagicPrompt('session.explore.instructions');
+                    await sendMessage(
+                        visibleText,
+                        providerIdToSend,
+                        modelIdToSend,
+                        agentNameToSend,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        variantToSend,
+                        inputMode,
+                    );
+                    scrollToBottom?.();
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.exploreFailed'));
                 }
                 return;
             }
