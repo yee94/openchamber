@@ -7,6 +7,7 @@ import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
+import { useGlobalSyncStore } from '@/sync/global-sync-store';
 import MessageList, { type MessageListHandle } from './MessageList';
 import { PermissionCard } from './PermissionCard';
 import { QuestionCard } from './QuestionCard';
@@ -552,6 +553,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     const isVSCode = isVSCodeRuntime();
     const chatSurfaceMode = useChatSurfaceMode();
     const draftOpen = Boolean(newSessionDraft?.open);
+    const initError = useGlobalSyncStore((s) => s.error);
     const isDesktopExpandedInput = isExpandedInput && !isMobile;
     const useCompactDraftLayout = isMobile || isVSCode || chatSurfaceMode === 'mini-chat';
     const messageListRef = React.useRef<MessageListHandle | null>(null);
@@ -802,6 +804,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     }, [currentSessionId, ensureSessionRenderable, hasRenderableSessionSnapshot]);
 
 	if (!currentSessionId && !draftOpen) {
+		// With auto-open, the draft welcome opens on the next tick (effect below),
+		// so the empty state is only ever transient here — render a neutral
+		// background instead of flashing the logo / "start a new chat" on refresh.
+		// Keep the empty state when there's nothing to auto-open or an init error to show.
+		if (autoOpenDraft && !initError) {
+			return <div className="flex h-full flex-col bg-background" />;
+		}
 		return (
 			<div className="flex flex-col h-full bg-background">
 				<ChatEmptyState />
