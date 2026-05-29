@@ -822,12 +822,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 								draftProjectLabel,
 							)}
 						</h1>
-						{chatSurfaceMode !== 'mini-chat' ? (
-							<DraftPresetChips
-								onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
-								className="mt-8 max-w-md"
-							/>
-						) : null}
+						<DraftPresetChips
+							onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
+							className="mt-8 max-w-md"
+						/>
 					</div>
 				) : null}
 				<div
