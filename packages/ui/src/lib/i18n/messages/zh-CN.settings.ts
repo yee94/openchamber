@@ -1659,7 +1659,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionWorkspaceReview.title': '工作区审查',
   'settings.magicPrompts.page.group.sessionExplore.title': '代码库导览',
   'settings.magicPrompts.page.group.sessionExplore.description': '由 /explore 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。调研仓库并给出结构化的导览——整体概貌、主要模块、它们如何连接以及从哪里入手——而不是逐文件罗列。',
-  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': '由 /workspace-review 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。仅审查当前工作区的高信号问题。',
+  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': '由 /workspace-review 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。审查工作区 diff：是否达成其意图、实现是否正确且充分，并按严重程度对发现进行分类。',
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': '功能规划',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': '由 /plan-feature 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。运行引导式对话，先调研代码并分小批提出澄清问题，然后生成实现计划。',
   'settings.magicPrompts.page.group.sessionCatchUp.title': '快速回顾',

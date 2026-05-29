@@ -1520,7 +1520,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.timelineDescription': '대화 타임라인 열기',
   'chat.commandAutocomplete.command.compactDescription': 'AI로 세션 기록을 압축해 컨텍스트 크기를 줄입니다',
   'chat.commandAutocomplete.command.summaryDescription': '세션 기록을 안전하게 요약합니다. 명령 뒤에 선택적으로 주제 힌트를 넣을 수 있습니다.',
-  'chat.commandAutocomplete.command.workspaceReviewDescription': '현재 워크스페이스 변경 사항에서 중요한 이슈만 리뷰합니다.',
+  'chat.commandAutocomplete.command.workspaceReviewDescription': '워크스페이스 diff의 의도, 정확성, 적절성을 검토하고 심각도별로 분류합니다.',
   'chat.commandAutocomplete.command.featurePlanDescription': '새 기능을 위한 대화형 가이드 계획 세션을 시작합니다.',
   'chat.commandAutocomplete.command.catchUpDescription': '맥락을 다시 파악합니다: 무엇을 하고 있었고 어디서 이어서 할지.',
   'chat.commandAutocomplete.command.debugDescription': '수정안을 제시하기 전에 버그의 근본 원인을 단계적으로 조사합니다.',

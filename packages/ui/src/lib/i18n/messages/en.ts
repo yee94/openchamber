@@ -1518,7 +1518,7 @@ export const dict = {
   'chat.commandAutocomplete.command.timelineDescription': 'Open the conversation timeline',
   'chat.commandAutocomplete.command.compactDescription': 'Compress session history using AI to reduce context size',
   'chat.commandAutocomplete.command.summaryDescription': 'Non-destructive session summary. Optional topic hint after the command.',
-  'chat.commandAutocomplete.command.workspaceReviewDescription': 'Review current workspace changes for high-signal issues only.',
+  'chat.commandAutocomplete.command.workspaceReviewDescription': 'Review the workspace diff for intent, correctness, and adequacy, graded by severity.',
   'chat.commandAutocomplete.command.featurePlanDescription': 'Start a guided, back-and-forth planning session for a new feature.',
   'chat.commandAutocomplete.command.catchUpDescription': 'Re-establish context: what you were doing and where to pick up.',
   'chat.commandAutocomplete.command.debugDescription': 'Guided root-cause investigation for a bug before proposing a fix.',

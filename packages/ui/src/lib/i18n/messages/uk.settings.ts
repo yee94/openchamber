@@ -1659,7 +1659,7 @@ export const settingsDict = {
   "settings.magicPrompts.page.group.sessionWorkspaceReview.title": "Огляд робочого простору",
   "settings.magicPrompts.page.group.sessionExplore.title": "Огляд кодової бази",
   "settings.magicPrompts.page.group.sessionExplore.description": "Промпти, які використовуються командою /explore: видиме повідомлення користувача + приховані інструкції. Досліджує репозиторій і дає структуровану орієнтацію — загальна картина, основні модулі, як вони пов'язані й звідки почати — а не дамп файл за файлом.",
-  "settings.magicPrompts.page.group.sessionWorkspaceReview.description": "Промпти, які використовуються командою /workspace-review: видиме повідомлення користувача + приховані інструкції. Переглядає поточні зміни робочого простору лише для проблем із сильним сигналом.",
+  "settings.magicPrompts.page.group.sessionWorkspaceReview.description": "Промпти, які використовуються командою /workspace-review: видиме повідомлення користувача + приховані інструкції. Перевіряє diff робочого простору — чи досягнуто наміру і чи реалізація коректна й адекватна, класифікуючи знахідки за рівнем критичності.",
   "settings.magicPrompts.page.group.sessionFeaturePlan.title": "Планування фічі",
   "settings.magicPrompts.page.group.sessionFeaturePlan.description": "Промпти, які використовуються командою /plan-feature: видиме повідомлення користувача + приховані інструкції. Запускає кероване діалогове планування — досліджує код і ставить уточнюючі запитання невеликими батчами, перш ніж скласти план імплементації.",
   "settings.magicPrompts.page.group.sessionCatchUp.title": "Повернення в контекст",

@@ -1659,7 +1659,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionWorkspaceReview.title': '워크스페이스 리뷰',
   'settings.magicPrompts.page.group.sessionExplore.title': '코드베이스 둘러보기',
   'settings.magicPrompts.page.group.sessionExplore.description': '/explore slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 저장소를 조사하여 파일별 나열이 아니라 큰 그림, 주요 모듈, 연결 방식, 시작점 등 구조적인 방향을 제시합니다.',
-  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': '/workspace-review slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 현재 workspace 변경 사항에서 중요한 문제만 리뷰합니다.',
+  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': '/workspace-review slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 워크스페이스 diff가 의도를 달성했는지, 구현이 정확하고 적절한지 검토하고 심각도별로 분류합니다.',
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': '기능 계획',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': '/plan-feature slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 코드를 조사하고 작은 묶음으로 명확화 질문을 한 뒤 구현 계획을 만드는 가이드 대화를 실행합니다.',
   'settings.magicPrompts.page.group.sessionCatchUp.title': '따라잡기',

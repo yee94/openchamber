@@ -1484,7 +1484,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.timelineDescription': '打开对话时间线',
   'chat.commandAutocomplete.command.compactDescription': '使用 AI 压缩会话历史以减少上下文大小',
   'chat.commandAutocomplete.command.summaryDescription': '非破坏性会话总结。命令后可选填主题提示。',
-  'chat.commandAutocomplete.command.workspaceReviewDescription': '仅审查当前工作区中高价值的问题。',
+  'chat.commandAutocomplete.command.workspaceReviewDescription': '审查工作区 diff 的意图、正确性与充分性，并按严重程度分级。',
   'chat.commandAutocomplete.command.featurePlanDescription': '为新功能开始一次引导式的来回规划会话。',
   'chat.commandAutocomplete.command.catchUpDescription': '重新进入上下文：你之前在做什么、从哪里继续。',
   'chat.commandAutocomplete.command.debugDescription': '在提出修复方案前，引导式地排查 bug 的根本原因。',

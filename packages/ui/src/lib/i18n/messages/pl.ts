@@ -509,7 +509,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.redoDescription': 'Ponów poprzednio cofnięte wiadomości',
   'chat.commandAutocomplete.command.compactDescription': 'Skompresuj historię sesji używając AI aby zredukować rozmiar kontekstu',
   'chat.commandAutocomplete.command.summaryDescription': 'Niedestrukcyjne podsumowanie sesji. Opcjonalna wskazówka tematu po poleceniu.',
-  'chat.commandAutocomplete.command.workspaceReviewDescription': 'Recenzja obecnych zmian w przestrzeni roboczej tylko dla problemów o wysokim sygnale.',
+  'chat.commandAutocomplete.command.workspaceReviewDescription': 'Sprawdź diff obszaru roboczego pod kątem zamiaru, poprawności i adekwatności — ze znaleziskami według wagi.',
   'chat.commandAutocomplete.command.featurePlanDescription': 'Rozpocznij prowadzoną, interaktywną sesję planowania nowej funkcji.',
   'chat.commandAutocomplete.command.catchUpDescription': 'Przywróć kontekst: nad czym pracowałeś i od czego kontynuować.',
   'chat.commandAutocomplete.command.debugDescription': 'Prowadzone badanie pierwotnej przyczyny błędu przed zaproponowaniem poprawki.',

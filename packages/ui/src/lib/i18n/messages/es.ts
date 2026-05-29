@@ -1484,7 +1484,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.commandAutocomplete.command.timelineDescription": "Abrir la línea de tiempo de la conversación",
   "chat.commandAutocomplete.command.compactDescription": "Comprimir el historial de la sesión usando IA para reducir el tamaño del contexto",
   "chat.commandAutocomplete.command.summaryDescription": "Resumen no destructivo de la sesión. Pista opcional del tema después del comando.",
-  "chat.commandAutocomplete.command.workspaceReviewDescription": "Revisar los cambios actuales del espacio de trabajo solo para problemas de alto impacto.",
+  "chat.commandAutocomplete.command.workspaceReviewDescription": "Revisa el diff del espacio de trabajo en intención, corrección y adecuación, con hallazgos por severidad.",
   "chat.commandAutocomplete.command.featurePlanDescription": "Inicia una sesión de planificación guiada e interactiva para una nueva función.",
   "chat.commandAutocomplete.command.catchUpDescription": "Recupera el contexto: qué estabas haciendo y por dónde continuar.",
   "chat.commandAutocomplete.command.debugDescription": "Investigación guiada de la causa raíz de un error antes de proponer una solución.",

@@ -1484,7 +1484,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.commandAutocomplete.command.timelineDescription": "Відкрити хронологію розмови",
   "chat.commandAutocomplete.command.compactDescription": "Стиснути історію сесії за допомогою ШІ, щоб зменшити розмір контексту",
   "chat.commandAutocomplete.command.summaryDescription": "Неруйнівний підсумок сесії. Після команди можна додати тему.",
-  "chat.commandAutocomplete.command.workspaceReviewDescription": "Перегляньте поточні зміни в робочому середовищі лише для проблем із сильним сигналом.",
+  "chat.commandAutocomplete.command.workspaceReviewDescription": "Перевірити diff робочого простору на намір, коректність і адекватність — зі знахідками за рівнем критичності.",
   "chat.commandAutocomplete.command.featurePlanDescription": "Розпочати покрокову діалогову сесію планування нової фічі.",
   "chat.commandAutocomplete.command.catchUpDescription": "Повернутись у контекст: над чим працювали і звідки продовжити.",
   "chat.commandAutocomplete.command.debugDescription": "Кероване дослідження першопричини бага перед тим, як пропонувати фікс.",

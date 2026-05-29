@@ -1659,7 +1659,7 @@ export const settingsDict = {
   "settings.magicPrompts.page.group.sessionWorkspaceReview.title": "Revisión del espacio de trabajo",
   "settings.magicPrompts.page.group.sessionExplore.title": "Recorrido del código",
   "settings.magicPrompts.page.group.sessionExplore.description": "Prompts usados por el comando /explore: mensaje visible del usuario + instrucciones ocultas. Investiga el repositorio y ofrece una orientación estructurada — la visión general, los módulos principales, cómo se conectan y por dónde empezar — en lugar de un listado archivo por archivo.",
-  "settings.magicPrompts.page.group.sessionWorkspaceReview.description": "Prompts usados por el comando /workspace-review: mensaje visible del usuario + instrucciones ocultas. Revisa los cambios actuales del espacio de trabajo solo para problemas de alta señal.",
+  "settings.magicPrompts.page.group.sessionWorkspaceReview.description": "Prompts usados por el comando /workspace-review: mensaje visible del usuario + instrucciones ocultas. Revisa el diff del espacio de trabajo: si logra su intención y si es correcto y adecuado, clasificando los hallazgos por severidad.",
   "settings.magicPrompts.page.group.sessionFeaturePlan.title": "Planificación de funciones",
   "settings.magicPrompts.page.group.sessionFeaturePlan.description": "Prompts usados por el comando /plan-feature: mensaje visible del usuario + instrucciones ocultas. Ejecuta un diálogo guiado que investiga el código y hace preguntas aclaratorias en lotes pequeños antes de producir un plan de implementación.",
   "settings.magicPrompts.page.group.sessionCatchUp.title": "Ponerse al día",

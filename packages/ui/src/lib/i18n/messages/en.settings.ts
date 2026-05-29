@@ -1692,7 +1692,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionWorkspaceReview.title': 'Workspace Review',
   'settings.magicPrompts.page.group.sessionExplore.title': 'Codebase Tour',
   'settings.magicPrompts.page.group.sessionExplore.description': 'Prompts used by the /explore slash command: visible user message + hidden instructions. Investigates the repository and gives a structured orientation — the big picture, main modules, how they connect, and where to start — rather than a file-by-file dump.',
-  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': 'Prompts used by the /workspace-review slash command: visible user message + hidden instructions. Reviews current workspace changes for high-signal issues only.',
+  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': 'Prompts used by the /workspace-review slash command: visible user message + hidden instructions. Reviews the workspace diff for whether it achieves its intent and is correct and adequate, classifying findings by severity.',
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': 'Feature Planning',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': 'Prompts used by the /plan-feature slash command: visible user message + hidden instructions. Runs a guided dialogue that researches the code and asks clarifying questions in small batches before producing an implementation plan.',
   'settings.magicPrompts.page.group.sessionCatchUp.title': 'Catch Up',

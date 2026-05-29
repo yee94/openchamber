@@ -1580,7 +1580,7 @@
   'settings.magicPrompts.page.group.sessionWorkspaceReview.title': '工作區審查',
   'settings.magicPrompts.page.group.sessionExplore.title': '程式碼庫導覽',
   'settings.magicPrompts.page.group.sessionExplore.description': '由 /explore 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。調研儲存庫並給出結構化的導覽——整體概貌、主要模組、它們如何連接以及從哪裡入手——而不是逐檔案羅列。',
-  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': '由 /workspace-review 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。僅審查目前工作區中的高訊號問題。',
+  'settings.magicPrompts.page.group.sessionWorkspaceReview.description': '由 /workspace-review 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。審查工作區 diff：是否達成其意圖、實作是否正確且充分，並依嚴重程度對發現進行分類。',
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': '功能規劃',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': '由 /plan-feature 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。執行引導式對話，先調研程式碼並分小批提出釐清問題，然後產生實作計畫。',
   'settings.magicPrompts.page.group.sessionCatchUp.title': '快速回顧',
