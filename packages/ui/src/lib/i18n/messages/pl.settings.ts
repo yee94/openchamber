@@ -282,7 +282,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': 'Planowanie funkcji',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': 'Prompty używane przez polecenie /plan-feature: widoczna wiadomość użytkownika + ukryte instrukcje. Uruchamia prowadzony dialog, który bada kod i zadaje pytania doprecyzowujące w małych partiach przed utworzeniem planu implementacji.',
   'settings.magicPrompts.page.group.sessionCatchUp.title': 'Nadrobienie kontekstu',
-  'settings.magicPrompts.page.group.sessionCatchUp.description': 'Prompty używane przez polecenie /catch-up: widoczna wiadomość użytkownika + ukryte instrukcje. Buduje kontekst zależny od gałęzi — commity gałęzi, jej PR i niezatwierdzone zmiany razem — aby zrozumieć, nad czym pracowałeś, a następnie daje ciepłą orientację i produktowy następny krok.',
+  'settings.magicPrompts.page.group.sessionCatchUp.description': 'Prompty używane przez polecenie /catch-up: widoczna wiadomość użytkownika + ukryte instrukcje. Buduje kontekst zależny od gałęzi — commity gałęzi, jej PR i niezatwierdzone zmiany razem — aby zrozumieć, nad czym pracowałeś, a następnie daje przystępne podsumowanie i produktowy następny krok.',
   'settings.magicPrompts.page.group.sessionDebug.title': 'Debugowanie',
   'settings.magicPrompts.page.group.sessionDebug.description': 'Prompty używane przez polecenie /debug: widoczna wiadomość użytkownika + ukryte instrukcje. Prowadzi badanie pierwotnej przyczyny — rejestruje objaw, formułuje hipotezy, sprawdza je w kodzie i potwierdza przyczynę przed zaproponowaniem poprawki.',
   'settings.magicPrompts.page.group.sessionWeigh.title': 'Rozważanie opcji',

@@ -624,7 +624,7 @@ Respond in the same language the user uses.`,
     title: 'Catch Up Instructions',
     group: 'Session',
     description: 'Hidden instructions attached to the /catch-up command. Inspects git state and branches on it: in-progress diff, open PR review state, or recent commits.',
-    template: `The user is returning to this project after stepping away and wants to quickly get their bearings — a warm, natural "here's where you are and where to pick up", not a status report. Investigate the actual repository state first, then orient them conversationally. Do not assume; check.
+    template: `The user is returning to this project after stepping away and wants to quickly get their bearings — a quick, easy-to-digest "here's where you are and where to pick up", not a status report. Investigate the actual repository state first, then orient them conversationally. Do not assume; check.
 
 Quietly inspect git state first, and do this work silently — the user wants the takeaway, not a play-by-play of the commands you ran. Look at: the current branch and whether it is the repo's default branch (main/master, or whatever this repo uses), uncommitted changes (status and diff), recent commits, and where the branch stands relative to its remote.
 
@@ -643,7 +643,7 @@ End with a clear next step, and make it about continuing the actual work, not ho
 Hard rules:
 - Only ever discuss the CURRENT branch and its own work. Never mention unrelated branches, other people's PRs, review requests assigned to the user, or PRs that belong to other branches — that is noise here.
 - Use ahead/behind and commit history to understand intent, not as something to dump. Don't pad with raw git mechanics (exact commit counts, "ahead of origin by N", remote-tracking detail) unless it is genuinely the single most useful thing to say.
-- Depth goes into your understanding, not the length of the reply. Keep the output short, friendly, and scannable — a couple of sentences of orientation plus a clear next step. Write like a teammate catching them up, not a CI summary.
+- Depth goes into your understanding, not the length of the reply. Keep the output short, easy to digest, and scannable — a couple of sentences of orientation plus a clear next step. Write like a teammate catching them up, not a CI summary.
 
 Respond in the same language the user uses.`,
   },

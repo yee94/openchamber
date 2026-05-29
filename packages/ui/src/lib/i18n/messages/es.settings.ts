@@ -1663,7 +1663,7 @@ export const settingsDict = {
   "settings.magicPrompts.page.group.sessionFeaturePlan.title": "Planificación de funciones",
   "settings.magicPrompts.page.group.sessionFeaturePlan.description": "Prompts usados por el comando /plan-feature: mensaje visible del usuario + instrucciones ocultas. Ejecuta un diálogo guiado que investiga el código y hace preguntas aclaratorias en lotes pequeños antes de producir un plan de implementación.",
   "settings.magicPrompts.page.group.sessionCatchUp.title": "Ponerse al día",
-  "settings.magicPrompts.page.group.sessionCatchUp.description": "Prompts usados por el comando /catch-up: mensaje visible del usuario + instrucciones ocultas. Construye contexto según la rama — los commits de la rama, su PR y el trabajo sin confirmar juntos — para entender qué estabas haciendo, y luego da una orientación cálida y un siguiente paso centrado en el producto.",
+  "settings.magicPrompts.page.group.sessionCatchUp.description": "Prompts usados por el comando /catch-up: mensaje visible del usuario + instrucciones ocultas. Construye contexto según la rama — los commits de la rama, su PR y el trabajo sin confirmar juntos — para entender qué estabas haciendo, y luego da un resumen fácil de digerir y un siguiente paso centrado en el producto.",
   "settings.magicPrompts.page.group.sessionDebug.title": "Depuración",
   "settings.magicPrompts.page.group.sessionDebug.description": "Prompts usados por el comando /debug: mensaje visible del usuario + instrucciones ocultas. Ejecuta una investigación guiada de la causa raíz: captura el síntoma, formula hipótesis, las verifica contra el código y confirma la causa antes de proponer una solución.",
   "settings.magicPrompts.page.group.sessionWeigh.title": "Comparar enfoques",

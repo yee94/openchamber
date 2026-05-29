@@ -1696,7 +1696,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': 'Feature Planning',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': 'Prompts used by the /plan-feature slash command: visible user message + hidden instructions. Runs a guided dialogue that researches the code and asks clarifying questions in small batches before producing an implementation plan.',
   'settings.magicPrompts.page.group.sessionCatchUp.title': 'Catch Up',
-  'settings.magicPrompts.page.group.sessionCatchUp.description': 'Prompts used by the /catch-up slash command: visible user message + hidden instructions. Builds branch-aware context — the branch\'s commits, its PR, and uncommitted work together — to understand what you were doing, then gives a warm orientation and a product-focused next step.',
+  'settings.magicPrompts.page.group.sessionCatchUp.description': 'Prompts used by the /catch-up slash command: visible user message + hidden instructions. Builds branch-aware context — the branch\'s commits, its PR, and uncommitted work together — to understand what you were doing, then gives a digestible summary and a product-focused next step.',
   'settings.magicPrompts.page.group.sessionDebug.title': 'Debugging',
   'settings.magicPrompts.page.group.sessionDebug.description': 'Prompts used by the /debug slash command: visible user message + hidden instructions. Runs a guided root-cause investigation — captures the symptom, forms hypotheses, checks them against the code, and confirms the cause before proposing a fix.',
   'settings.magicPrompts.page.group.sessionWeigh.title': 'Weigh Options',

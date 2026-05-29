@@ -1663,7 +1663,7 @@ export const settingsDict = {
   "settings.magicPrompts.page.group.sessionFeaturePlan.title": "Планування фічі",
   "settings.magicPrompts.page.group.sessionFeaturePlan.description": "Промпти, які використовуються командою /plan-feature: видиме повідомлення користувача + приховані інструкції. Запускає кероване діалогове планування — досліджує код і ставить уточнюючі запитання невеликими батчами, перш ніж скласти план імплементації.",
   "settings.magicPrompts.page.group.sessionCatchUp.title": "Повернення в контекст",
-  "settings.magicPrompts.page.group.sessionCatchUp.description": "Промпти, які використовуються командою /catch-up: видиме повідомлення користувача + приховані інструкції. Будує контекст з урахуванням гілки — коміти гілки, її PR і незакомічену роботу разом — щоб зрозуміти, що ти робив, а тоді дає теплу орієнтацію й продуктовий наступний крок.",
+  "settings.magicPrompts.page.group.sessionCatchUp.description": "Промпти, які використовуються командою /catch-up: видиме повідомлення користувача + приховані інструкції. Будує контекст з урахуванням гілки — коміти гілки, її PR і незакомічену роботу разом — щоб зрозуміти, що ти робив, а тоді дає легкозасвоюваний підсумок і продуктовий наступний крок.",
   "settings.magicPrompts.page.group.sessionDebug.title": "Дебаг",
   "settings.magicPrompts.page.group.sessionDebug.description": "Промпти, які використовуються командою /debug: видиме повідомлення користувача + приховані інструкції. Веде кероване дослідження першопричини — фіксує симптом, формує гіпотези, перевіряє їх по коду й підтверджує причину перш ніж пропонувати фікс.",
   "settings.magicPrompts.page.group.sessionWeigh.title": "Зважування варіантів",
