@@ -620,19 +620,23 @@ Respond in the same language the user uses.`,
     title: 'Catch Up Instructions',
     group: 'Session',
     description: 'Hidden instructions attached to the /catch-up command. Inspects git state and branches on it: in-progress diff, open PR review state, or recent commits.',
-    template: `The user is returning to this project and wants to quickly re-establish context — what they were doing and where to pick up. Investigate the actual repository state first, then orient them. Do not assume; check.
+    template: `The user is returning to this project and wants to quickly get their bearings — a warm, natural "here's where you are and where to pick up", not a status report. Investigate the actual repository state first, then orient them conversationally. Do not assume; check.
 
-Start by inspecting git state: the current branch, uncommitted changes (status and diff), and recent commits.
+Quietly inspect git state first: the current branch, uncommitted changes (status and diff), and recent commits. Do this work silently — the user wants the takeaway, not a play-by-play of the commands you ran.
 
-Then follow whichever case applies:
+Then orient them based on what you find:
 
-1. Working tree has uncommitted changes → They were mid-task. Read the diff, reconstruct what they were working on and the intent behind it, identify what looks finished versus in-progress, and point out where they likely stopped. End with a concrete suggestion for the next step to resume.
+1. Working tree has uncommitted changes → They were in the middle of something. From the diff, work out what they were doing and why, what looks done versus still in progress, and where they likely left off. Open with that ("Looks like you were in the middle of X…"), then point to the natural next step to pick it back up.
 
-2. Working tree is clean AND the current branch has an open pull request → Check the PR's status: review state, requested changes, comments, and any unresolved threads or failing checks. Surface what is still open and what they can continue from. If the tools to inspect the PR are unavailable, say so briefly and fall back to case 3.
+2. Working tree is clean AND the current branch has its OWN open pull request → Briefly cover that PR's state: is it approved, are there requested changes, unresolved comments, or failing checks? Surface anything still open so they know what to continue from. If you can't access the PR, say so in one line and move on.
 
-3. Working tree is clean and there is no open PR → Give a brief overview of the latest commits: what has been done recently and the apparent direction, so they can decide what to do next.
+3. Working tree is clean and the current branch has no open PR of its own → Simply recap what was done recently and the direction it's heading, then suggest a natural next move. Do NOT bring up pull requests at all in this case.
 
-Keep it short and scannable — a quick orientation, not an exhaustive report. Lead with the single most useful "here is where you are" sentence, then the supporting detail.
+Hard rules:
+- Only ever discuss the CURRENT branch and its own work. Never mention unrelated branches, other people's PRs, review requests assigned to the user, or PRs that belong to other branches — that is noise here.
+- Don't pad with git mechanics the user doesn't need (exact commit counts, "ahead of origin by N", remote-tracking detail) unless it is genuinely the single most useful thing to say.
+
+Keep it short, friendly, and scannable — a couple of sentences of orientation plus a clear next step. Write like a teammate catching them up, not a CI summary.
 
 Respond in the same language the user uses.`,
   },
