@@ -1663,7 +1663,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': '功能规划',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': '由 /plan-feature 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。运行引导式对话，先调研代码并分小批提出澄清问题，然后生成实现计划。',
   'settings.magicPrompts.page.group.sessionCatchUp.title': '快速回顾',
-  'settings.magicPrompts.page.group.sessionCatchUp.description': '由 /catch-up 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。检查 git 状态并据此处理——从进行中的 diff 还原意图、查看已开启 PR 的评审状态，或总结最近的提交。',
+  'settings.magicPrompts.page.group.sessionCatchUp.description': '由 /catch-up 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。结合分支的提交、PR 以及未提交的改动，建立与分支相关的上下文，理解你之前在做什么，然后给出温和的导览和以产品为中心的下一步。',
   'settings.magicPrompts.page.group.sessionDebug.title': '调试',
   'settings.magicPrompts.page.group.sessionDebug.description': '由 /debug 斜杠命令使用的提示词：可见用户消息 + 隐藏说明。引导式排查根本原因——记录症状、提出假设、对照代码验证，并在提出修复方案前确认原因。',
   'settings.magicPrompts.page.group.sessionWeigh.title': '权衡方案',

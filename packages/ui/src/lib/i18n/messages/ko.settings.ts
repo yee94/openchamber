@@ -1663,7 +1663,7 @@ export const settingsDict = {
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': '기능 계획',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': '/plan-feature slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 코드를 조사하고 작은 묶음으로 명확화 질문을 한 뒤 구현 계획을 만드는 가이드 대화를 실행합니다.',
   'settings.magicPrompts.page.group.sessionCatchUp.title': '따라잡기',
-  'settings.magicPrompts.page.group.sessionCatchUp.description': '/catch-up slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. git 상태를 확인하고 그에 따라 진행 중인 diff에서 의도를 재구성하거나, 열린 PR의 리뷰 상태를 확인하거나, 최근 커밋을 요약합니다.',
+  'settings.magicPrompts.page.group.sessionCatchUp.description': '/catch-up slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 브랜치의 커밋, PR, 커밋되지 않은 작업을 함께 보는 브랜치 기반 컨텍스트를 구성해 무엇을 하고 있었는지 이해한 뒤, 따뜻한 방향 안내와 제품 중심의 다음 단계를 제시합니다.',
   'settings.magicPrompts.page.group.sessionDebug.title': '디버깅',
   'settings.magicPrompts.page.group.sessionDebug.description': '/debug slash command에서 사용하는 프롬프트입니다: 표시 사용자 메시지 + 숨겨진 지침. 근본 원인 조사를 단계적으로 진행합니다 — 증상을 파악하고 가설을 세워 코드와 대조하며, 수정안을 제시하기 전에 원인을 확정합니다.',
   'settings.magicPrompts.page.group.sessionWeigh.title': '옵션 비교',

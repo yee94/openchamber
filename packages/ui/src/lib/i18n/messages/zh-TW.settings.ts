@@ -1584,7 +1584,7 @@
   'settings.magicPrompts.page.group.sessionFeaturePlan.title': '功能規劃',
   'settings.magicPrompts.page.group.sessionFeaturePlan.description': '由 /plan-feature 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。執行引導式對話，先調研程式碼並分小批提出釐清問題，然後產生實作計畫。',
   'settings.magicPrompts.page.group.sessionCatchUp.title': '快速回顧',
-  'settings.magicPrompts.page.group.sessionCatchUp.description': '由 /catch-up 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。檢查 git 狀態並據此處理——從進行中的 diff 還原意圖、查看已開啟 PR 的審查狀態，或總結最近的提交。',
+  'settings.magicPrompts.page.group.sessionCatchUp.description': '由 /catch-up 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。結合分支的提交、PR 以及未提交的變更，建立與分支相關的上下文，理解你之前在做什麼，然後給出溫和的導覽和以產品為中心的下一步。',
   'settings.magicPrompts.page.group.sessionDebug.title': '除錯',
   'settings.magicPrompts.page.group.sessionDebug.description': '由 /debug 斜線命令使用的提示詞：可見使用者訊息 + 隱藏說明。引導式排查根本原因——記錄症狀、提出假設、對照程式碼驗證，並在提出修復方案前確認原因。',
   'settings.magicPrompts.page.group.sessionWeigh.title': '權衡方案',

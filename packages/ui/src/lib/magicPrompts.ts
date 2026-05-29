@@ -624,23 +624,26 @@ Respond in the same language the user uses.`,
     title: 'Catch Up Instructions',
     group: 'Session',
     description: 'Hidden instructions attached to the /catch-up command. Inspects git state and branches on it: in-progress diff, open PR review state, or recent commits.',
-    template: `The user is returning to this project and wants to quickly get their bearings — a warm, natural "here's where you are and where to pick up", not a status report. Investigate the actual repository state first, then orient them conversationally. Do not assume; check.
+    template: `The user is returning to this project after stepping away and wants to quickly get their bearings — a warm, natural "here's where you are and where to pick up", not a status report. Investigate the actual repository state first, then orient them conversationally. Do not assume; check.
 
-Quietly inspect git state first: the current branch, uncommitted changes (status and diff), and recent commits. Do this work silently — the user wants the takeaway, not a play-by-play of the commands you ran.
+Quietly inspect git state first, and do this work silently — the user wants the takeaway, not a play-by-play of the commands you ran. Look at: the current branch and whether it is the repo's default branch (main/master, or whatever this repo uses), uncommitted changes (status and diff), recent commits, and where the branch stands relative to its remote.
 
-Then orient them based on what you find:
+Build context in LAYERS — they combine, they are not either/or. Uncommitted changes (when present) are the focal point, but understand them THROUGH the surrounding context, because work in progress is usually part of something bigger.
 
-1. Working tree has uncommitted changes → They were in the middle of something. From the diff, work out what they were doing and why, what looks done versus still in progress, and where they likely left off. Open with that ("Looks like you were in the middle of X…"), then point to the natural next step to pick it back up.
+First, get the branch context:
+- If this is NOT the default branch (a feature branch): understand what the branch is for as a whole. Read its recent commits and their diffs — not all of them, just enough, going back until the intent and how it is being implemented become clear. Also check whether the branch has its OWN open pull request, even when there are uncommitted changes — the PR explains what the current diff is in service of (continuing the feature, or addressing review feedback) and helps you judge whether the work looks finished or still mid-flight. If the branch is behind its remote (someone pushed), mention that as a heads-up.
+- If this IS the default branch: take a light skim of the last few commits (no deep dive) to see whether the uncommitted work is a continuation of recent work, and of what.
 
-2. Working tree is clean AND the current branch has its OWN open pull request → Briefly cover that PR's state: is it approved, are there requested changes, unresolved comments, or failing checks? Surface anything still open so they know what to continue from. If you can't access the PR, say so in one line and move on.
+Then focus and synthesize:
+- If there are uncommitted changes, lead with them — what they were doing and why, what looks done versus still in progress, and where they likely stopped — interpreted through the branch context above (is this completing the feature? addressing review? a new direction?). Open with that, e.g. "Looks like you were in the middle of X…".
+- If the tree is clean, orient from the branch's own work and PR (feature branch) or the recent commits (default branch).
 
-3. Working tree is clean and the current branch has no open PR of its own → Simply recap what was done recently and the direction it's heading, then suggest a natural next move. Do NOT bring up pull requests at all in this case.
+End with a clear next step, and make it about continuing the actual work, not housekeeping. The fact that they ran this command means they stepped away — if the work were finished they would most likely have shipped it already, so assume there is more to do and point to the substantive next piece ("next you'd wire X into Y and handle Z"). Only suggest housekeeping — pushing, opening a PR, running checks — when there is genuinely nothing left to build, or when it is truly the most useful thing to do next.
 
 Hard rules:
 - Only ever discuss the CURRENT branch and its own work. Never mention unrelated branches, other people's PRs, review requests assigned to the user, or PRs that belong to other branches — that is noise here.
-- Don't pad with git mechanics the user doesn't need (exact commit counts, "ahead of origin by N", remote-tracking detail) unless it is genuinely the single most useful thing to say.
-
-Keep it short, friendly, and scannable — a couple of sentences of orientation plus a clear next step. Write like a teammate catching them up, not a CI summary.
+- Use ahead/behind and commit history to understand intent, not as something to dump. Don't pad with raw git mechanics (exact commit counts, "ahead of origin by N", remote-tracking detail) unless it is genuinely the single most useful thing to say.
+- Depth goes into your understanding, not the length of the reply. Keep the output short, friendly, and scannable — a couple of sentences of orientation plus a clear next step. Write like a teammate catching them up, not a CI summary.
 
 Respond in the same language the user uses.`,
   },
