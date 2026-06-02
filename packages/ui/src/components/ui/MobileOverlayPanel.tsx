@@ -16,6 +16,9 @@ interface MobileOverlayPanelProps {
 }
 
 const OVERLAY_ROOT_ID = 'mobile-overlay-root';
+// Entrance animation: classic slide up from the bottom + scrim fade.
+const ENTER_DELAY_MS = 16;
+const ENTER_DURATION_MS = 200;
 
 const ensureOverlayRoot = () => {
   if (typeof document === 'undefined') return null;
@@ -39,10 +42,21 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   renderHeader,
 }) => {
   const overlayRootRef = React.useRef<HTMLElement | null>(null);
+  const [entered, setEntered] = React.useState(false);
 
   if (typeof document !== 'undefined' && !overlayRootRef.current) {
     overlayRootRef.current = ensureOverlayRoot();
   }
+
+  // Replay the enter transition on each open (rise + scrim fade).
+  React.useEffect(() => {
+    if (!open) {
+      setEntered(false);
+      return;
+    }
+    const id = window.setTimeout(() => setEntered(true), ENTER_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [open]);
 
   React.useEffect(() => {
     if (!open) {
@@ -70,7 +84,10 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
 
   const content = (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-[rgb(0_0_0_/_0.45)]"
+      className={cn(
+        'fixed inset-0 z-[60] flex flex-col bg-[rgb(0_0_0_/_0.45)] transition-opacity duration-200 ease-out',
+        entered ? 'opacity-100' : 'opacity-0',
+      )}
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -81,6 +98,10 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             'mx-auto max-w-lg',
             className
           )}
+          style={{
+            transform: entered ? 'none' : 'translateY(100%)',
+            transition: `transform ${ENTER_DURATION_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
+          }}
           onClick={(event) => event.stopPropagation()}
         >
         {(() => {
