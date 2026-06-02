@@ -69,7 +69,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
       return () => window.clearTimeout(id);
     }
     setEntered(false);
-    const id = window.setTimeout(() => setMounted(false), 220);
+    const id = window.setTimeout(() => setMounted(false), 300);
     return () => window.clearTimeout(id);
   }, [open]);
 
@@ -180,31 +180,32 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-end',
-        'bg-[rgb(0_0_0_/_0.45)]',
+        'fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
+        // The opacity transition keeps the scrim on its own compositing layer,
+        // which iOS Safari clips to the viewport — without it, a static scrim
+        // bleeds the dim into the bottom toolbar overscroll zone. Quick fade so
+        // it still feels near-instant.
         'transition-opacity duration-200 ease-out',
         entered ? 'opacity-100' : 'opacity-0',
       )}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
+      onClick={onClose}
     >
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        aria-label={t('mobile.surface.closeAria')}
-        onClick={onClose}
-      />
+      {/* Sheet is a normal flex child — mirroring MobileOverlayPanel. */}
       <section
         ref={surfaceRef}
-        className="relative flex h-[100dvh] w-full flex-col overflow-hidden rounded-t-[20px] border-t border-border/40 bg-background text-foreground shadow-[0_-12px_48px_rgb(0_0_0_/_0.35)] will-change-transform"
+        className="mt-auto flex min-h-0 w-full flex-col overflow-hidden rounded-t-[20px] border-t border-border/40 bg-background text-foreground"
         tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
         style={{
+          // Sized to leave the top safe area uncovered so the scrim dims it.
+          height: 'calc(100% - var(--oc-safe-area-top, 0px))',
           transform: visualTransform,
           transition: isDraggingRef.current
             ? 'none'
-            : 'transform 220ms cubic-bezier(0.32, 0.72, 0, 1)',
-          paddingTop: 'var(--oc-safe-area-top, 0px)',
+            : 'transform 300ms cubic-bezier(0.32, 0.72, 0, 1)',
         }}
       >
         <div

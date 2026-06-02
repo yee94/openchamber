@@ -70,7 +70,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
 
   const content = (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-background/70"
+      className="fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
