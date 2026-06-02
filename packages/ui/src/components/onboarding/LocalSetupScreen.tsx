@@ -1,5 +1,5 @@
 import React from 'react';
-import { isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopShell, requestFileAccess, startDesktopWindowDrag } from '@/lib/desktop';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Icon } from "@/components/icon/Icon";
@@ -122,14 +122,8 @@ export function LocalSetupScreen({
       return;
     }
     if (e.button !== 0) return;
-    if (isDesktopApp && isTauriShell()) {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const window = getCurrentWindow();
-        await window.startDragging();
-      } catch (error) {
-        console.error('Failed to start window dragging:', error);
-      }
+    if (isDesktopApp) {
+      await startDesktopWindowDrag();
     }
   }, [isDesktopApp]);
 
@@ -148,37 +142,28 @@ export function LocalSetupScreen({
     if (typeof window === 'undefined') {
       return;
     }
-    if (!isDesktopApp || !isTauriShell()) {
-      return;
-    }
-
-    const tauri = (window as unknown as { __TAURI__?: { dialog?: { open?: (opts: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
-    if (!tauri?.dialog?.open) {
+    if (!isDesktopApp) {
       return;
     }
 
     try {
-      const selected = await tauri.dialog.open({
-        title: t('onboarding.localSetup.dialog.selectOpencodeBinary'),
-        multiple: false,
-        directory: false,
-      });
-      if (typeof selected === 'string' && selected.trim().length > 0) {
-        setOpencodeBinary(selected.trim());
+      const selected = await requestFileAccess();
+      if (selected.success && selected.path && selected.path.trim().length > 0) {
+        setOpencodeBinary(selected.path.trim());
       }
     } catch {
       // ignore
     }
-  }, [isDesktopApp, t]);
+  }, [isDesktopApp]);
 
   const handleApplyPath = React.useCallback(async () => {
     setIsRetrying(true);
     try {
       await updateDesktopSettings({ opencodeBinary: opencodeBinary.trim() });
 
-      // In desktop boot flow, always restart the entire Tauri app so Rust
-      // can re-evaluate the boot outcome with the updated binary path.
-      if (isTauriShell()) {
+      // In desktop boot flow, restart the app so the native host can
+      // re-evaluate the boot outcome with the updated binary path.
+      if (isDesktopApp) {
         await restartDesktopApp();
         return;
       }
@@ -187,7 +172,7 @@ export function LocalSetupScreen({
     } finally {
       setTimeout(() => setIsRetrying(false), 1000);
     }
-  }, [opencodeBinary]);
+  }, [isDesktopApp, opencodeBinary]);
 
   const handleCopy = React.useCallback(async () => {
     const result = await copyTextToClipboard(INSTALL_COMMAND);
@@ -321,7 +306,7 @@ export function LocalSetupScreen({
                 type="button"
                 variant="secondary"
                 onClick={handleBrowse}
-                disabled={isRetrying || !isDesktopApp || !isTauriShell()}
+                disabled={isRetrying || !isDesktopApp}
               >
                 {t('onboarding.localSetup.actions.browse')}
               </Button>

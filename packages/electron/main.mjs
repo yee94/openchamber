@@ -152,7 +152,6 @@ const LOCAL_DESKTOP_CLIENT_KIND = 'desktop-local';
 const LOCAL_DESKTOP_CLIENT_DEDUPE_KEY = 'desktop-local';
 const ENV_OVERRIDE_HOST_ID = '__env';
 const CHANGELOG_URL = 'https://raw.githubusercontent.com/openchamber/openchamber/main/CHANGELOG.md';
-const UPDATE_METADATA_URL = 'https://github.com/openchamber/openchamber/releases/latest/download/latest.json';
 const GITHUB_BUG_REPORT_URL = 'https://github.com/openchamber/openchamber/issues/new?template=bug_report.yml';
 const GITHUB_FEATURE_REQUEST_URL = 'https://github.com/openchamber/openchamber/issues/new?template=feature_request.yml';
 const DISCORD_INVITE_URL = 'https://discord.gg/ZYRSdnwwKA';
@@ -1681,7 +1680,6 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
     backgroundColor: '#151313',
     frame: process.platform === 'win32' ? false : undefined,
     autoHideMenuBar: autoHidesNativeMenuBar,
-    // Tauri used an overlay title bar with explicit traffic-light placement.
     // Electron's hiddenInset adds its own extra inset, which leaves the controls
     // visibly lower than the app header. Use a plain hidden title bar instead.
     titleBarStyle: usesCustomTitleBar ? 'hidden' : 'default',
@@ -1704,7 +1702,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
       // sandbox must stay off: the preload uses contextBridge + ipcRenderer
       // from Electron's Node layer. contextIsolation + nodeIntegration:false
       // keep the renderer world walled off from Node. Do NOT flip to true —
-      // the preload would fail to load and __TAURI__ would go undefined.
+      // the preload would fail to load and the desktop bridge would be unavailable.
       sandbox: false,
     },
   };
@@ -3028,9 +3026,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_set_vibrancy': {
-      // Vibrancy (macOS blur) is not supported in the Electron shell — the
-      // Tauri build used NSVisualEffectView via Tauri plugin, Electron has
-      // no equivalent for our titleBarStyle:'hidden' setup. Persist the
+      // Vibrancy (macOS blur) is not supported in the Electron shell for our
+      // titleBarStyle:'hidden' setup. Persist the
       // disabled state so settings UI reflects it; args.enabled is ignored.
       await mutateSettingsRoot((root) => {
         root.desktopVibrancy = false;
@@ -3040,13 +3037,6 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 
     case 'desktop_check_for_updates': {
       const currentVersion = APP_VERSION;
-      let payload = null;
-      try {
-        const response = await fetch(UPDATE_METADATA_URL, { signal: AbortSignal.timeout(10_000) });
-        payload = await response.json();
-      } catch {
-      }
-
       let updateResult = null;
       try {
         updateResult = await autoUpdater.checkForUpdates();
@@ -3056,14 +3046,12 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       const updateInfo = updateResult?.updateInfo;
       const nextVersion =
         (typeof updateInfo?.version === 'string' && updateInfo.version) ||
-        (typeof payload?.version === 'string' && payload.version) ||
         currentVersion;
       const available = compareSemver(nextVersion, currentVersion) > 0;
       const body =
-        (typeof payload?.notes === 'string' && payload.notes.trim() ? payload.notes : null) ||
         (typeof updateInfo?.releaseNotes === 'string' && updateInfo.releaseNotes.trim() ? updateInfo.releaseNotes : null) ||
         await parseRelevantChangelogNotes(currentVersion, nextVersion);
-      state.pendingUpdate = available ? { version: nextVersion, metadata: payload, electronUpdate: updateResult } : null;
+      state.pendingUpdate = available ? { version: nextVersion, electronUpdate: updateResult } : null;
       return {
         available,
         currentVersion,
@@ -3071,7 +3059,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         body: body || null,
         date:
           (typeof updateInfo?.releaseDate === 'string' && updateInfo.releaseDate) ||
-          (typeof payload?.pub_date === 'string' ? payload.pub_date : null),
+          null,
       };
     }
 

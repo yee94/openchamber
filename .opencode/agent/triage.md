@@ -49,7 +49,7 @@ Only use labels that already exist in this repository. Do not create labels.
 | `area:sync` | State sync, cross-runtime consistency |
 | `area:auth` | Authentication, passwords, OAuth, tunnels |
 | `area:installation` | Install, Docker, Nix, deployment |
-| `area:desktop` | Desktop shell (Electron/Tauri), window management |
+| `area:desktop` | Desktop shell (Electron), window management |
 | `area:keyboard` | Keyboard shortcuts, keybinds, input handling |
 | `area:permissions` | Permission prompts, allow/deny flows |
 | `area:compact` | Context compaction, /compact command |
@@ -63,7 +63,7 @@ Only use labels that already exist in this repository. Do not create labels.
 | Label | Covers |
 |---|---|
 | `platform:web` | Desktop web browser (incl. CLI serve) |
-| `platform:macos` | macOS desktop (Electron/Tauri) |
+| `platform:macos` | macOS desktop (Electron) |
 | `platform:linux` | Linux desktop |
 | `platform:windows` | Windows desktop / WSL |
 | `platform:mobile` | Mobile web/PWA (iOS/Android) |
@@ -105,4 +105,3 @@ For each issue:
 - Add a small set of accurate existing labels following the steps above.
 - In a single comment summarize the issue and ask the reporter for any additional information needed to complete the request.
 - Keep the comment friendly and concise.
-

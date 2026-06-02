@@ -19,13 +19,13 @@ bun install
 
 Both are configurable via env vars: `OPENCHAMBER_PORT`, `OPENCHAMBER_HMR_UI_PORT`, `OPENCHAMBER_HMR_API_PORT`.
 
-### Desktop (Tauri)
+### Desktop (Electron)
 
 ```bash
-bun run desktop:dev
+bun run electron:dev
 ```
 
-Launches Tauri in dev mode with WebView devtools enabled and a distinct dev icon.
+Launches the Electron desktop shell in dev mode.
 
 ### VS Code Extension
 
@@ -72,7 +72,7 @@ bun run build        # Must succeed
 packages/
   ui/        Shared React components, hooks, stores, and theme system
   web/       Web server (Express) + frontend (Vite) + CLI
-  desktop/   Tauri macOS app (thin shell around the web UI)
+  electron/  Electron desktop shell
   vscode/    VS Code extension (extension host + webview)
 ```
 

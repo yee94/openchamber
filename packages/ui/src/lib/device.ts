@@ -45,7 +45,7 @@ const getNavigatorDeviceHints = (maxTouchPoints: number) => {
 };
 
 const setRootDeviceAttributes = (
-  isTauriShellRuntime: boolean,
+  isDesktopShellRuntime: boolean,
   deviceType: DeviceType,
   hasTouchInput: boolean,
 ) => {
@@ -66,7 +66,7 @@ const setRootDeviceAttributes = (
         : 'device-desktop'
   );
 
-  if (isTauriShellRuntime) {
+  if (isDesktopShellRuntime) {
     root.classList.add('desktop-runtime');
     root.style.setProperty('--is-mobile', '0');
     root.style.setProperty('--device-type', 'desktop');

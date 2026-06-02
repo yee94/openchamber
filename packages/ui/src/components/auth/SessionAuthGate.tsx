@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
-import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { invokeDesktop, isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/persistence';
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 import { DesktopHostSwitcherInline } from '@/components/desktop/DesktopHostSwitcher';
@@ -129,11 +129,7 @@ const issueDesktopClientTokenViaShell = async (password: string, trustDevice: bo
   if (!isDesktopShell() || typeof window === 'undefined') {
     return '';
   }
-  const invoke = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__?.core?.invoke;
-  if (typeof invoke !== 'function') {
-    return '';
-  }
-  const response = await invoke('desktop_remote_password_login', {
+  const response = await invokeDesktop('desktop_remote_password_login', {
     url: getRuntimeApiBaseUrl(),
     password,
     trustDevice,

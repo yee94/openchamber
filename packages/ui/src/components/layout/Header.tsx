@@ -1660,15 +1660,12 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     let disposed = false;
-    let unlistenResize: (() => void) | null = null;
 
     const syncFullscreenState = async () => {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const currentWindow = getCurrentWindow();
-        const fullscreen = await currentWindow.isFullscreen();
+        const fullscreen = await invokeDesktop<boolean>('desktop_is_window_fullscreen');
         if (!disposed) {
-          setIsDesktopWindowFullscreen(fullscreen);
+          setIsDesktopWindowFullscreen(fullscreen === true);
         }
       } catch {
         if (!disposed) {
@@ -1677,26 +1674,16 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
 
-    const attach = async () => {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const currentWindow = getCurrentWindow();
-        unlistenResize = await currentWindow.onResized(() => {
-          void syncFullscreenState();
-        });
-      } catch {
-        // Ignore listener setup failures; fallback state remains false.
-      }
+    const onResize = () => {
+      void syncFullscreenState();
     };
 
     void syncFullscreenState();
-    void attach();
+    window.addEventListener('openchamber:window-resized', onResize);
 
     return () => {
       disposed = true;
-      if (unlistenResize) {
-        unlistenResize();
-      }
+      window.removeEventListener('openchamber:window-resized', onResize);
     };
   }, [isDesktopApp, isMacPlatform]);
 

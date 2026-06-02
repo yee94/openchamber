@@ -51,8 +51,8 @@ const getOpenChamberConfigDir = (): string => {
   return path.join(os.homedir(), '.config', 'openchamber');
 };
 
-const sanitizeInstallScope = (scope: string): 'desktop-tauri' | 'vscode' | 'web' => {
-  if (scope === 'desktop-tauri' || scope === 'vscode' || scope === 'web') return scope;
+const sanitizeInstallScope = (scope: string): 'vscode' | 'web' => {
+  if (scope === 'vscode' || scope === 'web') return scope;
   return 'web';
 };
 

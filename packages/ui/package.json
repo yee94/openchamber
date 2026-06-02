@@ -83,7 +83,6 @@
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@tailwindcss/postcss": "^4.0.0",
-    "@tauri-apps/api": "^2.10.1",
     "@types/node": "^24.3.1",
     "@types/prismjs": "^1.26.6",
     "@types/qrcode": "^1.5.5",

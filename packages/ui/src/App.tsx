@@ -17,7 +17,7 @@ import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, restartDesktopApp } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, restartDesktopApp } from '@/lib/desktop';
 import {
   getInjectedBootOutcome,
   getBootInjectionStatus,
@@ -758,7 +758,7 @@ function App({ apis }: AppProps) {
 
   const handleDesktopBootDismiss = React.useCallback(async () => {
     if (shouldRestartDesktopBootFlow({
-      isTauriShell: isTauriShell(),
+      isDesktopShell: isDesktopShell(),
       isDesktopLocalOriginActive: isDesktopLocalOriginActive(),
     })) {
       await restartDesktopApp();

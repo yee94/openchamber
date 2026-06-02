@@ -42,7 +42,6 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
@@ -2629,7 +2628,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
       const srcPromise = files.readFileBinary
         ? files.readFileBinary(selectedFile.path, selectedFileReadOptions).then((result) => result.dataUrl)
-        : Promise.resolve(convertFileSrc(selectedFile.path, 'asset'));
+        : Promise.resolve(getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
+          path: selectedFile.path,
+          allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
+        }));
 
       await srcPromise
         .then((src) => {

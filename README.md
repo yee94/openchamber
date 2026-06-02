@@ -419,7 +419,6 @@ Independent project, not affiliated with the OpenCode team.
 - [OpenCode](https://opencode.ai) - For the excellent API and extensible architecture.
 - [Flexoki](https://github.com/kepano/flexoki) - Beautiful color scheme by [Steph Ango](https://stephango.com/flexoki).
 - [Pierre](https://pierrejs-docs.vercel.app/) - Fast, beautiful diff viewer with syntax highlighting.
-- [Tauri](https://github.com/tauri-apps/tauri) - Desktop application framework.
 - [Ghostty-web](https://github.com/coder/ghostty-web) - Great implementation of a Ghostty web renderer.
 - [David Hill](https://x.com/iamdavidhill) - Who inspired me to release this without [overthinking](https://x.com/iamdavidhill/status/1993648326450020746).
 - [My wife](https://github.com/yulia-ivashko), who - with zero AI background - sat down with the app for the first time and built the firework celebration that plays on every successful push.
