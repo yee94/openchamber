@@ -1394,6 +1394,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
         }
     }, [currentSessionId, newSessionDraftOpen, removeInlineCommentDraft]);
+    // Review comments are the inline-comment drafts that aren't preview sources.
+    const removeReviewDrafts = React.useCallback(() => {
+        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
+        if (!sessionKey) return;
+        const drafts = useInlineCommentDraftStore.getState().drafts[sessionKey] ?? [];
+        for (const draft of drafts) {
+            if (draft.source !== 'preview-console' && draft.source !== 'preview-annotation') {
+                removeInlineCommentDraft(sessionKey, draft.id);
+            }
+        }
+    }, [currentSessionId, newSessionDraftOpen, removeInlineCommentDraft]);
 
     // User message history for up/down arrow navigation.
     // Keep this on a narrow hook instead of full session message records.
@@ -3973,6 +3984,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             >
                                 <span className="text-xs font-medium text-muted-foreground">{t('chat.chatInput.reviewComments')}</span>
                                 <span className="text-xs font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>{reviewCount}</span>
+                                <button
+                                    type="button"
+                                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
+                                    style={{ minHeight: 0, minWidth: 0 }}
+                                    onClick={removeReviewDrafts}
+                                    aria-label={t('chat.chatInput.reviewCommentsRemove')}
+                                    title={t('chat.chatInput.reviewCommentsRemove')}
+                                >
+                                    <Icon name="close" className="h-3 w-3" />
+                                </button>
                             </div>
                         ) : null}
                         {previewConsoleCount > 0 ? (
@@ -3988,6 +4009,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 <button
                                     type="button"
                                     className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
+                                    style={{ minHeight: 0, minWidth: 0 }}
                                     onClick={() => removePreviewDrafts('preview-console')}
                                     aria-label={t('chat.chatInput.devServerLogsRemove')}
                                     title={t('chat.chatInput.devServerLogsRemove')}
@@ -4009,6 +4031,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 <button
                                     type="button"
                                     className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
+                                    style={{ minHeight: 0, minWidth: 0 }}
                                     onClick={() => removePreviewDrafts('preview-annotation')}
                                     aria-label={t('chat.chatInput.previewContextRemove')}
                                     title={t('chat.chatInput.previewContextRemove')}
