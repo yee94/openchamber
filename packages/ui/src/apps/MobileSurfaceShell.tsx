@@ -8,6 +8,15 @@ import { cn } from '@/lib/utils';
 const SURFACE_ROOT_ID = 'mobile-surface-root';
 const DISMISS_THRESHOLD_PX = 90;
 const ENTER_DELAY_MS = 16;
+// Enter-slide duration. Heavy content is revealed when this transition actually
+// ends (transitionend); this also feeds the fallback timer.
+const ENTER_DURATION_MS = 100;
+// How far below its resting position the sheet starts the enter slide. Small
+// offset → a short "rise + fade" rather than a full slide up from the bottom.
+const ENTER_OFFSET_PX = 48;
+// Extra gap above the sheet (below the top safe area) so it doesn't sit flush
+// against the very top of the app.
+const TOP_GAP_PX = 8;
 
 const ensureSurfaceRoot = (): HTMLElement | null => {
   if (typeof document === 'undefined') return null;
@@ -52,6 +61,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   const rootRef = React.useRef<HTMLElement | null>(null);
   const [mounted, setMounted] = React.useState(false);
   const [entered, setEntered] = React.useState(false);
+  const [contentReady, setContentReady] = React.useState(false);
   const [dragOffset, setDragOffset] = React.useState(0);
   const dragStartYRef = React.useRef<number | null>(null);
   const isDraggingRef = React.useRef(false);
@@ -70,6 +80,19 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
     }
     setEntered(false);
     const id = window.setTimeout(() => setMounted(false), 300);
+    return () => window.clearTimeout(id);
+  }, [open]);
+
+  // Defer mounting heavy children until the enter slide finishes, so the
+  // animation stays smooth instead of competing with a large content render.
+  // Primary trigger is the slide's transitionend (below); this is just a
+  // fallback in case it never fires (reduced motion / interrupted transition).
+  React.useEffect(() => {
+    if (!open) {
+      setContentReady(false);
+      return;
+    }
+    const id = window.setTimeout(() => setContentReady(true), ENTER_DELAY_MS + ENTER_DURATION_MS + 80);
     return () => window.clearTimeout(id);
   }, [open]);
 
@@ -177,7 +200,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   // compositing layer — that layer is clipped to the safe-area viewport on iOS,
   // leaving a scrim gap below it over the home-indicator inset.
   const visualTransform = !entered
-    ? 'translateY(100%)'
+    ? `translateY(${ENTER_OFFSET_PX}px)`
     : dragOffset > 0
       ? `translateY(${dragOffset}px)`
       : 'none';
@@ -185,7 +208,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-x-0 top-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
+        'fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
         // The opacity transition keeps the scrim on its own compositing layer,
         // which iOS Safari clips to the viewport — without it, a static scrim
         // bleeds the dim into the bottom toolbar overscroll zone. Quick fade so
@@ -193,11 +216,6 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
         'transition-opacity duration-200 ease-out',
         entered ? 'opacity-100' : 'opacity-0',
       )}
-      // 100dvh (not inset-0/100%): on iOS 26 the layout viewport ends above the
-      // bottom safe area, so a fixed inset:0 element stops short and leaves a gap
-      // over the home indicator. dvh spans the full dynamic viewport (incl. the
-      // home-indicator inset in standalone PWA).
-      style={{ height: '100dvh' }}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
@@ -209,13 +227,20 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
         className="mt-auto flex min-h-0 w-full flex-col overflow-hidden rounded-t-[20px] border-t border-border/40 bg-background text-foreground"
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
+        onTransitionEnd={(event) => {
+          // Reveal content exactly when the enter slide ends — not on a fixed timer.
+          if (entered && event.target === event.currentTarget && event.propertyName === 'transform') {
+            setContentReady(true);
+          }
+        }}
         style={{
-          // Sized to leave the top safe area uncovered so the scrim dims it.
-          height: 'calc(100dvh - var(--oc-safe-area-top, 0px))',
+          // Sized to leave the top safe area (plus a small gap) uncovered so the
+          // scrim dims it and the sheet sits a few px below the very top.
+          height: `calc(100% - var(--oc-safe-area-top, 0px) - ${TOP_GAP_PX}px)`,
           transform: visualTransform,
           transition: isDraggingRef.current
             ? 'none'
-            : 'transform 300ms cubic-bezier(0.32, 0.72, 0, 1)',
+            : `transform ${ENTER_DURATION_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
         }}
       >
         <div
@@ -252,9 +277,14 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
           ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          {children}
+          {contentReady ? (
+            <div className="h-full" style={{ animation: 'oc-surface-content-in 200ms ease-out' }}>
+              {children}
+            </div>
+          ) : null}
         </div>
       </section>
+      <style>{'@keyframes oc-surface-content-in { from { opacity: 0 } to { opacity: 1 } }'}</style>
     </div>,
     rootRef.current,
   );
