@@ -3693,7 +3693,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             rootBranch: selectedDraftProjectCurrentBranch,
             worktrees,
             pendingBootstrapDirectory: newSessionDraft?.bootstrapPendingDirectory ?? null,
-        });
+        }).filter((option) => option.kind === 'worktree');
     }, [availableWorktreesByProject, newSessionDraft?.bootstrapPendingDirectory, selectedDraftProject, selectedDraftProjectCurrentBranch, selectedDraftProjectPath]);
 
     const selectedDraftDirectory = React.useMemo(
@@ -4170,7 +4170,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         {selectedDraftBranchLabel ?? t('chat.chatInput.branch')}
                                     </SelectValue>
                                 </SelectTrigger>
-                                <SelectContent fitContent>
+                                <SelectContent className="w-max min-w-48">
                                     {projectRootBranchOption ? (
                                         <SelectGroup>
                                             <SelectLabel>{t('chat.chatInput.projectRoot')}</SelectLabel>
