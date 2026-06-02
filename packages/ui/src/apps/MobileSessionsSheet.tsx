@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   RiAddLine,
+  RiArchiveLine,
   RiArrowDownSLine,
   RiArrowUpSLine,
   RiCheckLine,
@@ -245,8 +246,22 @@ const SessionRow: React.FC<{
   indent: number;
   /** When provided, shown as a small second-line subtitle below the title (e.g. "Project · branch"). */
   contextLabel?: string;
+  /** When true, the row shows the two-step archive confirmation. */
+  confirmingArchive?: boolean;
   onSelect: () => void;
-}> = ({ session, active, indent, contextLabel, onSelect }) => {
+  /** When provided, an archive affordance is shown; first tap arms confirm, X cancels. */
+  onRequestArchive?: () => void;
+  onConfirmArchive?: () => void;
+}> = ({
+  session,
+  active,
+  indent,
+  contextLabel,
+  confirmingArchive = false,
+  onSelect,
+  onRequestArchive,
+  onConfirmArchive,
+}) => {
   const { t } = useI18n();
   const time = formatRelativeShort(getSessionTimestamp(session));
   const title = session.title?.trim() || t('mobile.sessions.untitled');
@@ -254,14 +269,19 @@ const SessionRow: React.FC<{
     <div
       className={cn(
         'flex items-center gap-1 transition-colors',
-        active && 'bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]',
+        active && !confirmingArchive && 'bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]',
+        confirmingArchive && 'bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)]',
       )}
     >
       <button
         type="button"
-        className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+        className={cn(
+          'flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
+          confirmingArchive && 'opacity-50',
+        )}
         style={{ paddingLeft: indent, touchAction: 'manipulation' }}
         onClick={onSelect}
+        disabled={confirmingArchive}
       >
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-2.5">
@@ -289,6 +309,35 @@ const SessionRow: React.FC<{
           ) : null}
         </span>
       </button>
+      {onRequestArchive ? (
+        <>
+          {confirmingArchive ? (
+            <button
+              type="button"
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-destructive px-3 text-destructive-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+              aria-label={t('mobile.sessions.archiveSessionAria', { title })}
+              onClick={onConfirmArchive}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <RiArchiveLine className="size-4" />
+              <span className="typography-ui-label">{t('sessions.sidebar.bulkActions.archive')}</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="mr-1.5 flex size-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground/70 transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={
+              confirmingArchive
+                ? t('mobile.sessions.cancelArchiveAria', { title })
+                : t('mobile.sessions.archiveSessionAria', { title })
+            }
+            onClick={onRequestArchive}
+            style={{ touchAction: 'manipulation' }}
+          >
+            {confirmingArchive ? <RiCloseLine className="size-4" /> : <RiArchiveLine className="size-4" />}
+          </button>
+        </>
+      ) : null}
     </div>
   );
 };
@@ -429,6 +478,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+  const archiveSession = useSessionUIStore((state) => state.archiveSession);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
@@ -441,6 +491,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const worktreeOrderByProject = useWorktreeOrderStore((state) => state.orderByProject);
   const [query, setQuery] = React.useState('');
   const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
+  const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = React.useState<string | null>(null);
   // Bumped to force a re-list of worktrees (e.g. after one is deleted in the editor).
   const [worktreeRefreshKey, setWorktreeRefreshKey] = React.useState(0);
   const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
@@ -463,6 +514,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       setConfirmingDeleteId(null);
       setVisibleCountByBucket(new Map());
       setEditingProjectId(null);
+      setConfirmingArchiveSessionId(null);
       return;
     }
     void refreshGlobalSessions(liveSessions);
@@ -663,7 +715,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             session={session}
             active={currentSessionId === session.id}
             indent={indent}
+            confirmingArchive={confirmingArchiveSessionId === session.id}
             onSelect={() => handleSelectSession(session)}
+            onRequestArchive={() => handleRequestArchive(session.id)}
+            onConfirmArchive={() => void handleConfirmArchive(session)}
           />
         ))}
         {remaining > 0 ? (
@@ -700,6 +755,19 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     if (project) setActiveProjectIdOnly(project.id);
     void setCurrentSession(session.id, directory);
     onOpenChange(false);
+  };
+
+  // Two-step archive: first tap arms the confirm on that row, second confirms.
+  // Only one row can be in the confirming state at a time.
+  const handleRequestArchive = (sessionId: string) => {
+    setConfirmingArchiveSessionId((current) => (current === sessionId ? null : sessionId));
+  };
+
+  const handleConfirmArchive = async (session: Session) => {
+    setConfirmingArchiveSessionId(null);
+    const ok = await archiveSession(session.id);
+    if (ok) toast.success(t('sessions.sidebar.session.archive.success'));
+    else toast.error(t('sessions.sidebar.session.archive.error'));
   };
 
   const handleStartNewChat = () => {
