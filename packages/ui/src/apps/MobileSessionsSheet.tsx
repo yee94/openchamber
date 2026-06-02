@@ -1174,7 +1174,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                         style={{ touchAction: 'manipulation' }}
                       >
                         <MobileProjectIcon project={node.project} />
-                        <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">
+                        <span className="block min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
                           {node.project.label}
                         </span>
                         {node.isActive ? <ActiveDot ariaLabel={t('mobile.sessions.activeProjectAria')} /> : null}
@@ -1230,7 +1230,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                                       />
                                       <span
                                         className={cn(
-                                          'block min-w-0 flex-1 truncate typography-ui-label',
+                                          'block min-w-0 flex-1 truncate typography-ui-label font-semibold',
                                           isActiveWt ? 'text-foreground' : 'text-foreground/90',
                                         )}
                                       >
