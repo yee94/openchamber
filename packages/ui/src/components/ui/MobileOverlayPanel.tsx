@@ -70,14 +70,14 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
 
   const content = (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]"
+      className="fixed inset-0 z-[60] flex flex-col bg-[rgb(0_0_0_/_0.45)]"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
         <div
           className={cn(
-            'mt-auto flex max-h-[calc(100dvh-0.75rem)] min-h-0 w-full flex-col rounded-t-xl border border-border/50 bg-background shadow-none pwa-overlay-panel',
+            'mt-auto flex max-h-[calc(100dvh-0.75rem)] min-h-0 w-full flex-col rounded-t-xl border-x border-t border-border/50 bg-background shadow-none pwa-overlay-panel',
             'mx-auto max-w-lg',
             className
           )}
@@ -105,7 +105,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             </div>
           );
         })()}
-        <ScrollableOverlay outerClassName={cn('min-h-0 flex-1', contentMaxHeight)} className="px-2 py-2 pwa-overlay-scroll">
+        <ScrollableOverlay useScrollShadow disableHorizontal outerClassName={cn('min-h-0 flex-1', contentMaxHeight)} className="px-2 py-2 pwa-overlay-scroll">
           {children}
         </ScrollableOverlay>
         {footer ? (
