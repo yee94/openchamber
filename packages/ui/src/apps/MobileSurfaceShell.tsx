@@ -173,14 +173,19 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
     </button>
   );
 
-  const visualTransform = entered
-    ? `translateY(${dragOffset}px)`
-    : 'translateY(100%)';
+  // When settled, use `none` (not translateY(0)) so the sheet isn't kept on a
+  // compositing layer — that layer is clipped to the safe-area viewport on iOS,
+  // leaving a scrim gap below it over the home-indicator inset.
+  const visualTransform = !entered
+    ? 'translateY(100%)'
+    : dragOffset > 0
+      ? `translateY(${dragOffset}px)`
+      : 'none';
 
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
+        'fixed inset-x-0 top-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
         // The opacity transition keeps the scrim on its own compositing layer,
         // which iOS Safari clips to the viewport — without it, a static scrim
         // bleeds the dim into the bottom toolbar overscroll zone. Quick fade so
@@ -188,6 +193,11 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
         'transition-opacity duration-200 ease-out',
         entered ? 'opacity-100' : 'opacity-0',
       )}
+      // 100dvh (not inset-0/100%): on iOS 26 the layout viewport ends above the
+      // bottom safe area, so a fixed inset:0 element stops short and leaves a gap
+      // over the home indicator. dvh spans the full dynamic viewport (incl. the
+      // home-indicator inset in standalone PWA).
+      style={{ height: '100dvh' }}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
@@ -201,7 +211,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
         onClick={(event) => event.stopPropagation()}
         style={{
           // Sized to leave the top safe area uncovered so the scrim dims it.
-          height: 'calc(100% - var(--oc-safe-area-top, 0px))',
+          height: 'calc(100dvh - var(--oc-safe-area-top, 0px))',
           transform: visualTransform,
           transition: isDraggingRef.current
             ? 'none'
@@ -241,7 +251,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
             </header>
           ) : null}
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: 'var(--oc-safe-area-bottom, 0px)' }}>
+        <div className="min-h-0 flex-1 overflow-hidden">
           {children}
         </div>
       </section>
