@@ -1,3 +1,12 @@
+## [1.12.0] - 2026-06-03
+
+- Chat: added customizable draft welcome starters from commands and skills, including guided commands for catch-up, debugging, exploration, and approach comparison.
+- Chat: assistant answers now have a dialog for starting a new session from that answer.
+- Chat/Input: queued messages no longer auto-send before the active session is ready, and thinking-variant choices are preserved for generated messages.
+- Chat/UI: markdown-rendered user messages now preserve line breaks.
+- UI/Theming: chat colors now map more closely to the active editor theme, and the session UI has been refined.
+- Reliability/Startup: Restart API Connection now uses the same loading and reload flow as startup.
+
 ## [1.11.7] - 2026-05-27
 
 - Chat/Input: selecting an agent now switches to that agent's configured model, and malformed tool diffs no longer break chat rendering (thanks to @Adrian-Eckardt).
