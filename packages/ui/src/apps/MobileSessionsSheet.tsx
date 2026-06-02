@@ -1,9 +1,7 @@
 import React from 'react';
 import {
   RiAddLine,
-  RiArrowDownLine,
   RiArrowDownSLine,
-  RiArrowUpLine,
   RiArrowUpSLine,
   RiCheckLine,
   RiCloseLine,
@@ -49,10 +47,12 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { orderWorktrees, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
 
+import { MobileProjectEditSurface } from './MobileProjectEditSurface';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
 
 type MobileSessionsSheetProps = {
@@ -332,21 +332,15 @@ const ShowFewerRow: React.FC<{
 const SortableProjectRow: React.FC<{
   project: ProjectMeta;
   totalSessions: number;
-  isFirst: boolean;
-  isLast: boolean;
   confirmingDelete: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  onEdit: () => void;
   onRequestRemove: () => void;
   onConfirmRemove: () => void;
 }> = ({
   project,
   totalSessions,
-  isFirst,
-  isLast,
   confirmingDelete,
-  onMoveUp,
-  onMoveDown,
+  onEdit,
   onRequestRemove,
   onConfirmRemove,
 }) => {
@@ -394,23 +388,12 @@ const SortableProjectRow: React.FC<{
           <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">{totalSessions}</span>
           <button
             type="button"
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-30"
-            aria-label={t('mobile.sessions.moveUpAria', { label: project.label })}
-            onClick={onMoveUp}
-            disabled={isFirst}
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={t('mobile.sessions.editProjectAria', { label: project.label })}
+            onClick={onEdit}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiArrowUpLine className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-30"
-            aria-label={t('mobile.sessions.moveDownAria', { label: project.label })}
-            onClick={onMoveDown}
-            disabled={isLast}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <RiArrowDownLine className="size-4" />
+            <RiEdit2Line className="size-4" />
           </button>
         </>
       )}
@@ -455,7 +438,11 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const worktreeExpandedMap = useMobileSessionTreeStore((state) => state.worktreeExpanded);
   const setProjectExpanded = useMobileSessionTreeStore((state) => state.setProjectExpanded);
   const setWorktreeExpanded = useMobileSessionTreeStore((state) => state.setWorktreeExpanded);
+  const worktreeOrderByProject = useWorktreeOrderStore((state) => state.orderByProject);
   const [query, setQuery] = React.useState('');
+  const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
+  // Bumped to force a re-list of worktrees (e.g. after one is deleted in the editor).
+  const [worktreeRefreshKey, setWorktreeRefreshKey] = React.useState(0);
   const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
@@ -475,6 +462,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       setEditingOrder(false);
       setConfirmingDeleteId(null);
       setVisibleCountByBucket(new Map());
+      setEditingProjectId(null);
       return;
     }
     void refreshGlobalSessions(liveSessions);
@@ -517,7 +505,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     return () => {
       cancelled = true;
     };
-  }, [git, open, projects]);
+  }, [git, open, projects, worktreeRefreshKey]);
 
   const projectsMeta = React.useMemo<ProjectMeta[]>(
     () =>
@@ -530,9 +518,12 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         iconImage: project.iconImage,
         iconBackground: project.iconBackground,
         isGitRepo: gitProjectPaths.has(normalizePath(project.path)),
-        worktrees: worktreesByProject.get(normalizePath(project.path)) ?? [],
+        worktrees: orderWorktrees(
+          worktreeOrderByProject[project.id],
+          worktreesByProject.get(normalizePath(project.path)) ?? [],
+        ),
       })),
-    [gitProjectPaths, projects, worktreesByProject],
+    [gitProjectPaths, projects, worktreeOrderByProject, worktreesByProject],
   );
 
   /**
@@ -1001,18 +992,15 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="flex flex-col gap-1.5">
-                    {projectsMeta.map((project, index) => {
+                    {projectsMeta.map((project) => {
                       const node = projectNodes.find((n) => n.project.id === project.id);
                       return (
                         <SortableProjectRow
                           key={project.id}
                           project={project}
                           totalSessions={node?.totalSessions ?? 0}
-                          isFirst={index === 0}
-                          isLast={index === projectsMeta.length - 1}
                           confirmingDelete={confirmingDeleteId === project.id}
-                          onMoveUp={() => reorderProjects(index, index - 1)}
-                          onMoveDown={() => reorderProjects(index, index + 1)}
+                          onEdit={() => setEditingProjectId(project.id)}
                           onRequestRemove={() => handleRequestRemoveProject(project.id)}
                           onConfirmRemove={() => handleConfirmRemoveProject(project)}
                         />
@@ -1157,6 +1145,12 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
               });
             onOpenChange(false);
           }}
+        />
+        <MobileProjectEditSurface
+          open={editingProjectId !== null}
+          project={projectsMeta.find((entry) => entry.id === editingProjectId) ?? null}
+          onClose={() => setEditingProjectId(null)}
+          onWorktreesChanged={() => setWorktreeRefreshKey((value) => value + 1)}
         />
       </div>
     </MobileSurfaceShell>
