@@ -46,6 +46,7 @@ import { cn } from '@/lib/utils';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useMobileSessionExpansionStore } from '@/stores/useMobileSessionExpansionStore';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { orderWorktrees, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
@@ -100,6 +101,11 @@ const SESSIONS_PER_BUCKET = 7;
 // worktree sessions sit one level deeper. SessionRow adds 16px (dot + gap) on top.
 const PROJECT_SESSION_INDENT = 36;
 const WORKTREE_SESSION_INDENT = 52;
+// Extra left padding applied to each nested subsession level.
+const CHILD_INDENT_STEP = 18;
+
+const getParentId = (session: Session): string | null =>
+  (session as Session & { parentID?: string | null }).parentID ?? null;
 
 const normalizePath = (value?: string | null): string =>
   (value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
@@ -248,6 +254,10 @@ const SessionRow: React.FC<{
   contextLabel?: string;
   /** When true, the row shows the two-step archive confirmation. */
   confirmingArchive?: boolean;
+  /** When true, a chevron is shown in the left gutter to toggle nested subsessions. */
+  hasChildren?: boolean;
+  expanded?: boolean;
+  onToggleChildren?: () => void;
   onSelect: () => void;
   /** When provided, an archive affordance is shown; first tap arms confirm, X cancels. */
   onRequestArchive?: () => void;
@@ -258,6 +268,9 @@ const SessionRow: React.FC<{
   indent,
   contextLabel,
   confirmingArchive = false,
+  hasChildren = false,
+  expanded = false,
+  onToggleChildren,
   onSelect,
   onRequestArchive,
   onConfirmArchive,
@@ -268,11 +281,27 @@ const SessionRow: React.FC<{
   return (
     <div
       className={cn(
-        'flex items-center gap-1 transition-colors',
+        'relative flex items-center gap-1 transition-colors',
         active && !confirmingArchive && 'bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]',
         confirmingArchive && 'bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)]',
       )}
     >
+      {hasChildren && onToggleChildren ? (
+        <button
+          type="button"
+          className="absolute z-10 flex w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          style={{ left: Math.max(indent - 32, 2), top: 0, bottom: 0, touchAction: 'manipulation' }}
+          aria-label={expanded
+            ? t('sessions.sidebar.session.subsessions.collapse')
+            : t('sessions.sidebar.session.subsessions.expand')}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleChildren();
+          }}
+        >
+          <RiArrowDownSLine className={cn('size-[18px] transition-transform duration-150', expanded ? 'rotate-0' : '-rotate-90')} />
+        </button>
+      ) : null}
       <button
         type="button"
         className={cn(
@@ -489,6 +518,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const setProjectExpanded = useMobileSessionTreeStore((state) => state.setProjectExpanded);
   const setWorktreeExpanded = useMobileSessionTreeStore((state) => state.setWorktreeExpanded);
   const worktreeOrderByProject = useWorktreeOrderStore((state) => state.orderByProject);
+  const expandedParents = useMobileSessionExpansionStore((state) => state.expandedParents);
+  const toggleParent = useMobileSessionExpansionStore((state) => state.toggleParent);
   const [query, setQuery] = React.useState('');
   const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
   const [confirmingArchiveSessionId, setConfirmingArchiveSessionId] = React.useState<string | null>(null);
@@ -699,30 +730,64 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     });
   };
 
-  // Paginated flat list of a bucket's sessions. Used for both root/project-level
-  // sessions and the sessions nested under a worktree group.
+  // Paginated, tree-aware list of a bucket's sessions: top-level sessions paginate,
+  // and a parent with subsessions can be expanded to reveal its children (nested,
+  // recursively). Pagination counts only top-level sessions.
   const renderBucketSessions = (node: ProjectNode, bucket: WorktreeBucket, indent: number) => {
     const bucketKey = `${node.project.id}::${bucket.key}`;
+
+    // Group children by parent within this bucket, and treat sessions whose parent
+    // is not in this bucket as top-level so nothing is hidden.
+    const idsInBucket = new Set(bucket.sessions.map((entry) => entry.id));
+    const childrenByParent = new Map<string, Session[]>();
+    for (const candidate of bucket.sessions) {
+      const parentId = getParentId(candidate);
+      if (parentId && idsInBucket.has(parentId)) {
+        const list = childrenByParent.get(parentId) ?? [];
+        list.push(candidate);
+        childrenByParent.set(parentId, list);
+      }
+    }
+    const roots = bucket.sessions.filter((entry) => {
+      const parentId = getParentId(entry);
+      return !parentId || !idsInBucket.has(parentId);
+    });
+
     const visibleCount = visibleCountByBucket.get(bucketKey) ?? SESSIONS_PER_BUCKET;
-    const visibleSessions = bucket.sessions.slice(0, visibleCount);
-    const remaining = bucket.sessions.length - visibleSessions.length;
-    const canShowFewer = bucket.sessions.length > SESSIONS_PER_BUCKET && remaining === 0;
-    return (
-      <div>
-        {visibleSessions.map((session) => (
+    const visibleRoots = roots.slice(0, visibleCount);
+    const remaining = roots.length - visibleRoots.length;
+    const canShowFewer = roots.length > SESSIONS_PER_BUCKET && remaining === 0;
+
+    const renderNode = (session: Session, rowIndent: number): React.ReactNode => {
+      const children = childrenByParent.get(session.id) ?? [];
+      const hasChildren = children.length > 0;
+      const expanded = Boolean(expandedParents[session.id]);
+      return (
+        <React.Fragment key={session.id}>
           <SessionRow
-            key={session.id}
             session={session}
             active={currentSessionId === session.id}
-            indent={indent}
+            indent={rowIndent}
+            hasChildren={hasChildren}
+            expanded={expanded}
+            onToggleChildren={hasChildren ? () => toggleParent(session.id) : undefined}
             confirmingArchive={confirmingArchiveSessionId === session.id}
             onSelect={() => handleSelectSession(session)}
             onRequestArchive={() => handleRequestArchive(session.id)}
             onConfirmArchive={() => void handleConfirmArchive(session)}
           />
-        ))}
+          {hasChildren && expanded
+            ? children.map((child) => renderNode(child, rowIndent + CHILD_INDENT_STEP))
+            : null}
+        </React.Fragment>
+      );
+    };
+
+    return (
+      <div>
+        {visibleRoots.map((session) => renderNode(session, indent))}
         {remaining > 0 ? (
-          <ShowMoreRow indent={indent} onClick={() => showMoreBucketSessions(bucketKey, visibleSessions.length)} />
+          <ShowMoreRow indent={indent} onClick={() => showMoreBucketSessions(bucketKey, visibleRoots.length)} />
         ) : null}
         {canShowFewer ? (
           <ShowFewerRow indent={indent} onClick={() => resetBucketVisibleCount(bucketKey)} />
