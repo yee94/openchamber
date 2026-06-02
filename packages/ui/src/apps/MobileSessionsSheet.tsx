@@ -4,6 +4,7 @@ import {
   RiArrowDownLine,
   RiArrowDownSLine,
   RiArrowUpLine,
+  RiArrowUpSLine,
   RiCheckLine,
   RiCloseLine,
   RiDeleteBinLine,
@@ -46,6 +47,7 @@ import { cn } from '@/lib/utils';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions } from '@/sync/sync-context';
@@ -91,6 +93,12 @@ type ProjectNode = {
 };
 
 const SESSIONS_PER_BUCKET = 7;
+
+// Left padding for session rows so the title's first letter aligns with its
+// parent label. Root/project-level sessions align with the project label;
+// worktree sessions sit one level deeper. SessionRow adds 16px (dot + gap) on top.
+const PROJECT_SESSION_INDENT = 36;
+const WORKTREE_SESSION_INDENT = 52;
 
 const normalizePath = (value?: string | null): string =>
   (value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
@@ -251,19 +259,19 @@ const SessionRow: React.FC<{
     >
       <button
         type="button"
-        className="flex min-h-12 min-w-0 flex-1 items-start gap-2.5 py-2 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
         style={{ paddingLeft: indent, touchAction: 'manipulation' }}
         onClick={onSelect}
       >
-        <span
-          className={cn(
-            'mt-1.5 size-1.5 shrink-0 rounded-full',
-            active ? 'bg-primary' : 'bg-muted-foreground/30',
-          )}
-          aria-hidden
-        />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2.5">
+            <span
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                active ? 'bg-primary' : 'bg-muted-foreground/30',
+              )}
+              aria-hidden
+            />
             <span
               className={cn(
                 'block min-w-0 flex-1 truncate typography-ui-label',
@@ -277,7 +285,7 @@ const SessionRow: React.FC<{
             ) : null}
           </span>
           {contextLabel ? (
-            <span className="block truncate typography-micro text-muted-foreground">{contextLabel}</span>
+            <span className="block truncate typography-micro text-muted-foreground pl-4">{contextLabel}</span>
           ) : null}
         </span>
       </button>
@@ -286,10 +294,9 @@ const SessionRow: React.FC<{
 };
 
 const ShowMoreRow: React.FC<{
-  remaining: number;
   indent: number;
   onClick: () => void;
-}> = ({ remaining, indent, onClick }) => {
+}> = ({ indent, onClick }) => {
   const { t } = useI18n();
   return (
     <button
@@ -299,7 +306,25 @@ const ShowMoreRow: React.FC<{
       onClick={onClick}
     >
       <RiArrowDownSLine className="size-4" />
-      <span className="typography-micro">{t('mobile.sessions.showMore', { count: remaining })}</span>
+      <span className="typography-micro">{t('sessions.sidebar.group.showMore')}</span>
+    </button>
+  );
+};
+
+const ShowFewerRow: React.FC<{
+  indent: number;
+  onClick: () => void;
+}> = ({ indent, onClick }) => {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      className="flex min-h-10 w-full items-center gap-2 py-1.5 pr-3 text-left text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+      style={{ paddingLeft: indent, touchAction: 'manipulation' }}
+      onClick={onClick}
+    >
+      <RiArrowUpSLine className="size-4" />
+      <span className="typography-micro">{t('sessions.sidebar.group.showFewer')}</span>
     </button>
   );
 };
@@ -426,6 +451,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
   const reorderProjects = useProjectsStore((state) => state.reorderProjects);
   const removeProject = useProjectsStore((state) => state.removeProject);
+  const projectExpandedMap = useMobileSessionTreeStore((state) => state.projectExpanded);
+  const worktreeExpandedMap = useMobileSessionTreeStore((state) => state.worktreeExpanded);
+  const setProjectExpanded = useMobileSessionTreeStore((state) => state.setProjectExpanded);
+  const setWorktreeExpanded = useMobileSessionTreeStore((state) => state.setWorktreeExpanded);
   const [query, setQuery] = React.useState('');
   const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
@@ -434,21 +463,18 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const [gitProjectPaths, setGitProjectPaths] = React.useState<Set<string>>(new Set());
   const [editingOrder, setEditingOrder] = React.useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = React.useState<string | null>(null);
-  // Buckets the user explicitly expanded past the SESSIONS_PER_BUCKET cap. Key: `${projectId}::${bucketKey}`.
-  const [expandedBucketsAll, setExpandedBucketsAll] = React.useState<Set<string>>(new Set());
-  // User overrides: true = user explicitly expanded, false = user explicitly collapsed,
-  // missing key = use the default rule (active project/worktree expanded).
-  const [projectOverrides, setProjectOverrides] = React.useState<Map<string, boolean>>(new Map());
-  const [worktreeOverrides, setWorktreeOverrides] = React.useState<Map<string, boolean>>(new Map());
+  // Per-bucket count of sessions revealed past the default page. Ephemeral —
+  // resets when the sheet closes or when a group/project is toggled. Expand
+  // state itself lives in useMobileSessionTreeStore (persisted).
+  // Key: `${projectId}::${bucketKey}`.
+  const [visibleCountByBucket, setVisibleCountByBucket] = React.useState<Map<string, number>>(new Map());
 
   React.useEffect(() => {
     if (!open) {
       setQuery('');
-      setProjectOverrides(new Map());
-      setWorktreeOverrides(new Map());
       setEditingOrder(false);
       setConfirmingDeleteId(null);
-      setExpandedBucketsAll(new Set());
+      setVisibleCountByBucket(new Map());
       return;
     }
     void refreshGlobalSessions(liveSessions);
@@ -590,50 +616,98 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     return matched?.path ?? node.project.path;
   };
 
-  // Default rule for a project: active project expanded; non-empty query expands any node
-  // that contains a matching session. User override (true/false) wins over defaults.
-  const isProjectExpanded = (node: ProjectNode): boolean => {
-    const override = projectOverrides.get(node.project.id);
-    if (override !== undefined) return override;
-    if (normalizedQuery) {
-      return node.buckets.some((bucket) =>
-        bucket.sessions.some((session) => sessionMatchesQuery(session, node.project.label, normalizedQuery)),
-      );
-    }
-    return node.isActive;
-  };
+  // Expansion is the user's own choice (persisted), independent of the active
+  // directory: projects default to expanded, worktree groups to collapsed.
+  const isProjectExpanded = (node: ProjectNode): boolean =>
+    projectExpandedMap[node.project.id] ?? true;
 
-  const isWorktreeExpanded = (node: ProjectNode, bucket: WorktreeBucket): boolean => {
-    const key = `${node.project.id}::${bucket.key}`;
-    const override = worktreeOverrides.get(key);
-    if (override !== undefined) return override;
-    if (normalizedQuery) {
-      return bucket.sessions.some((session) =>
-        sessionMatchesQuery(session, node.project.label, normalizedQuery),
-      );
-    }
-    return findActiveWorktreePath(node) === bucket.path;
-  };
+  const isWorktreeExpanded = (node: ProjectNode, bucket: WorktreeBucket): boolean =>
+    worktreeExpandedMap[`${node.project.id}::${bucket.key}`] ?? false;
 
-  const toggleProject = (projectId: string, currentlyExpanded: boolean) => {
-    setProjectOverrides((previous) => {
+  const resetBucketVisibleCount = (bucketKey: string) => {
+    setVisibleCountByBucket((previous) => {
+      if (!previous.has(bucketKey)) return previous;
       const next = new Map(previous);
-      next.set(projectId, !currentlyExpanded);
+      next.delete(bucketKey);
       return next;
     });
+  };
+
+  const resetProjectVisibleCounts = (projectId: string) => {
+    setVisibleCountByBucket((previous) => {
+      let changed = false;
+      const next = new Map(previous);
+      const prefix = `${projectId}::`;
+      for (const key of next.keys()) {
+        if (key.startsWith(prefix)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  };
+
+  const showMoreBucketSessions = (bucketKey: string, currentVisibleCount: number) => {
+    setVisibleCountByBucket((previous) => {
+      const next = new Map(previous);
+      next.set(bucketKey, currentVisibleCount + SESSIONS_PER_BUCKET);
+      return next;
+    });
+  };
+
+  // Paginated flat list of a bucket's sessions. Used for both root/project-level
+  // sessions and the sessions nested under a worktree group.
+  const renderBucketSessions = (node: ProjectNode, bucket: WorktreeBucket, indent: number) => {
+    const bucketKey = `${node.project.id}::${bucket.key}`;
+    const visibleCount = visibleCountByBucket.get(bucketKey) ?? SESSIONS_PER_BUCKET;
+    const visibleSessions = bucket.sessions.slice(0, visibleCount);
+    const remaining = bucket.sessions.length - visibleSessions.length;
+    const canShowFewer = bucket.sessions.length > SESSIONS_PER_BUCKET && remaining === 0;
+    return (
+      <div>
+        {visibleSessions.map((session) => (
+          <SessionRow
+            key={session.id}
+            session={session}
+            active={currentSessionId === session.id}
+            indent={indent}
+            onSelect={() => handleSelectSession(session)}
+          />
+        ))}
+        {remaining > 0 ? (
+          <ShowMoreRow indent={indent} onClick={() => showMoreBucketSessions(bucketKey, visibleSessions.length)} />
+        ) : null}
+        {canShowFewer ? (
+          <ShowFewerRow indent={indent} onClick={() => resetBucketVisibleCount(bucketKey)} />
+        ) : null}
+      </div>
+    );
+  };
+
+  // Toggling resets the visible-session count for the affected buckets so a
+  // re-expanded group starts from the default page again.
+  const toggleProject = (projectId: string, currentlyExpanded: boolean) => {
+    setProjectExpanded(projectId, !currentlyExpanded);
+    resetProjectVisibleCounts(projectId);
   };
 
   const toggleWorktree = (projectId: string, bucketKey: string, currentlyExpanded: boolean) => {
-    const key = `${projectId}::${bucketKey}`;
-    setWorktreeOverrides((previous) => {
-      const next = new Map(previous);
-      next.set(key, !currentlyExpanded);
-      return next;
-    });
+    setWorktreeExpanded(`${projectId}::${bucketKey}`, !currentlyExpanded);
+    resetBucketVisibleCount(`${projectId}::${bucketKey}`);
   };
 
   const handleSelectSession = (session: Session) => {
-    void setCurrentSession(session.id, getSessionDirectory(session) || null);
+    const directory = getSessionDirectory(session) || null;
+    // Switching session switches the working directory (handled by
+    // setCurrentSession) — also move the active project so the rest of the app
+    // and the active highlight follow the selected session, not just the draft.
+    const project = projectsMeta.find((entry) => {
+      if (pathBelongsToRoot(directory ?? '', entry.path)) return true;
+      return entry.worktrees.some((worktree) => pathBelongsToRoot(directory ?? '', worktree.path));
+    });
+    if (project) setActiveProjectIdOnly(project.id);
+    void setCurrentSession(session.id, directory);
     onOpenChange(false);
   };
 
@@ -959,10 +1033,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                       ),
                     )
                   : node.buckets;
-                const showWorktreeLevel = node.buckets.length > 1;
-                // Align session title left edge with the parent label's letters.
-                // Project label sits at ≈52px; worktree label at ≈68px. SessionRow adds 16px (dot + gap) on top of indent.
-                const sessionsIndent = showWorktreeLevel ? 52 : 36;
                 const activeWorktreePath = findActiveWorktreePath(node);
                 return (
                   <section
@@ -1001,122 +1071,66 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
 
                     {projectExpanded ? (
                       <div className="pb-2">
-                        {showWorktreeLevel
-                          ? buckets.map((bucket) => {
-                              const worktreeExpanded = isWorktreeExpanded(node, bucket);
-                              const isActiveWt = activeWorktreePath === bucket.path;
-                              return (
-                                <div key={bucket.key}>
-                                  <button
-                                    type="button"
-                                    className="flex min-h-11 w-full items-center gap-2 py-1.5 pl-4 pr-3 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                    onClick={() => toggleWorktree(node.project.id, bucket.key, worktreeExpanded)}
-                                    aria-expanded={worktreeExpanded}
-                                    aria-label={
-                                      worktreeExpanded
-                                        ? t('sessions.sidebar.group.collapseAria', { label: bucket.label })
-                                        : t('sessions.sidebar.group.expandAria', { label: bucket.label })
-                                    }
-                                    style={{ touchAction: 'manipulation' }}
-                                  >
-                                    <ChevronToggle expanded={worktreeExpanded} />
-                                    <Icon
-                                      name="node-tree"
-                                      className={cn(
-                                        'size-4 shrink-0',
-                                        isActiveWt ? 'text-primary' : 'text-muted-foreground',
-                                      )}
-                                    />
-                                    <span
-                                      className={cn(
-                                        'block min-w-0 flex-1 truncate typography-ui-label',
-                                        isActiveWt ? 'text-foreground' : 'text-foreground/90',
-                                      )}
-                                    >
-                                      {bucket.label}
-                                    </span>
-                                    {isActiveWt ? (
-                                      <ActiveDot ariaLabel={t('mobile.sessions.activeWorktreeAria')} />
-                                    ) : null}
-                                    <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">
-                                      {bucket.sessions.length}
-                                    </span>
-                                  </button>
-                                  {worktreeExpanded ? (
-                                    (() => {
-                                      const bucketKey = `${node.project.id}::${bucket.key}`;
-                                      const showAll = Boolean(normalizedQuery) || expandedBucketsAll.has(bucketKey);
-                                      const visibleSessions = showAll
-                                        ? bucket.sessions
-                                        : bucket.sessions.slice(0, SESSIONS_PER_BUCKET);
-                                      const remaining = bucket.sessions.length - visibleSessions.length;
-                                      return (
-                                        <div>
-                                          {visibleSessions.map((session) => (
-                                            <SessionRow
-                                              key={session.id}
-                                              session={session}
-                                              active={currentSessionId === session.id}
-                                              indent={sessionsIndent}
-                                              onSelect={() => handleSelectSession(session)}
-                                            />
-                                          ))}
-                                          {remaining > 0 ? (
-                                            <ShowMoreRow
-                                              remaining={remaining}
-                                              indent={sessionsIndent}
-                                              onClick={() =>
-                                                setExpandedBucketsAll((previous) => {
-                                                  const next = new Set(previous);
-                                                  next.add(bucketKey);
-                                                  return next;
-                                                })
-                                              }
-                                            />
-                                          ) : null}
-                                        </div>
-                                      );
-                                    })()
-                                  ) : null}
-                                </div>
-                              );
-                            })
-                          : (() => {
-                              const bucket = buckets[0];
-                              if (!bucket) return null;
-                              const bucketKey = `${node.project.id}::${bucket.key}`;
-                              const showAll = Boolean(normalizedQuery) || expandedBucketsAll.has(bucketKey);
-                              const visibleSessions = showAll
-                                ? bucket.sessions
-                                : bucket.sessions.slice(0, SESSIONS_PER_BUCKET);
-                              const remaining = bucket.sessions.length - visibleSessions.length;
-                              return (
-                                <div>
-                                  {visibleSessions.map((session) => (
-                                    <SessionRow
-                                      key={session.id}
-                                      session={session}
-                                      active={currentSessionId === session.id}
-                                      indent={sessionsIndent}
-                                      onSelect={() => handleSelectSession(session)}
-                                    />
-                                  ))}
-                                  {remaining > 0 ? (
-                                    <ShowMoreRow
-                                      remaining={remaining}
-                                      indent={sessionsIndent}
-                                      onClick={() =>
-                                        setExpandedBucketsAll((previous) => {
-                                          const next = new Set(previous);
-                                          next.add(bucketKey);
-                                          return next;
-                                        })
+                        {(() => {
+                          // Root (project-level) sessions always render as a flat list
+                          // at the top — same as a project without worktrees — never
+                          // hidden behind a worktree-style group.
+                          const rootBucket = buckets.find((bucket) => bucket.worktree === null);
+                          const worktreeBuckets = buckets.filter((bucket) => bucket.worktree !== null);
+                          return (
+                            <>
+                              {rootBucket && rootBucket.sessions.length > 0
+                                ? renderBucketSessions(node, rootBucket, PROJECT_SESSION_INDENT)
+                                : null}
+                              {worktreeBuckets.map((bucket) => {
+                                const worktreeExpanded = isWorktreeExpanded(node, bucket);
+                                const isActiveWt = activeWorktreePath === bucket.path;
+                                return (
+                                  <div key={bucket.key}>
+                                    <button
+                                      type="button"
+                                      className="flex min-h-11 w-full items-center gap-2 py-1.5 pl-4 pr-3 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                      onClick={() => toggleWorktree(node.project.id, bucket.key, worktreeExpanded)}
+                                      aria-expanded={worktreeExpanded}
+                                      aria-label={
+                                        worktreeExpanded
+                                          ? t('sessions.sidebar.group.collapseAria', { label: bucket.label })
+                                          : t('sessions.sidebar.group.expandAria', { label: bucket.label })
                                       }
-                                    />
-                                  ) : null}
-                                </div>
-                              );
-                            })()}
+                                      style={{ touchAction: 'manipulation' }}
+                                    >
+                                      <ChevronToggle expanded={worktreeExpanded} />
+                                      <Icon
+                                        name="node-tree"
+                                        className={cn(
+                                          'size-4 shrink-0',
+                                          isActiveWt ? 'text-primary' : 'text-muted-foreground',
+                                        )}
+                                      />
+                                      <span
+                                        className={cn(
+                                          'block min-w-0 flex-1 truncate typography-ui-label',
+                                          isActiveWt ? 'text-foreground' : 'text-foreground/90',
+                                        )}
+                                      >
+                                        {bucket.label}
+                                      </span>
+                                      {isActiveWt ? (
+                                        <ActiveDot ariaLabel={t('mobile.sessions.activeWorktreeAria')} />
+                                      ) : null}
+                                      <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">
+                                        {bucket.sessions.length}
+                                      </span>
+                                    </button>
+                                    {worktreeExpanded
+                                      ? renderBucketSessions(node, bucket, WORKTREE_SESSION_INDENT)
+                                      : null}
+                                  </div>
+                                );
+                              })}
+                            </>
+                          );
+                        })()}
                       </div>
                     ) : null}
                   </section>
