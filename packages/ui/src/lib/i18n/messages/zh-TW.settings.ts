@@ -1469,7 +1469,7 @@
   'settings.openchamber.visual.field.mobileKeyboardModeAria': '行動裝置鍵盤行為',
   'settings.openchamber.visual.field.selectMobileKeyboardModePlaceholder': '選擇鍵盤行為',
   'settings.openchamber.visual.actions.resetMobileKeyboardModeAria': '重設行動裝置鍵盤行為',
-  'settings.openchamber.visual.option.mobileLayout.default': '預設',
+  'settings.openchamber.visual.option.mobileLayout.default': '舊版',
   'settings.openchamber.visual.option.mobileLayout.new': '新版',
   'settings.openchamber.visual.field.interfaceFontSize': '介面字體大小',
   'settings.openchamber.visual.field.interfaceFont': '介面字體',

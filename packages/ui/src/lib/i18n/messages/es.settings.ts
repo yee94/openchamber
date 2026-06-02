@@ -1503,7 +1503,7 @@ export const settingsDict = {
   "settings.voice.page.preview.customServerLine": "¡Hola! Esta es una previsualización del servidor TTS personalizado.",
   "settings.openchamber.visual.section.colorMode": "Modo de color",
   "settings.openchamber.visual.section.mobileLayout": "Diseño móvil",
-  "settings.openchamber.visual.option.mobileLayout.default": "Predeterminado",
+  "settings.openchamber.visual.option.mobileLayout.default": "Anterior",
   "settings.openchamber.visual.option.mobileLayout.new": "Nuevo",
   "settings.openchamber.visual.section.localization": "Localización",
   "settings.openchamber.visual.section.spacingAndLayout": "Espaciado y diseño",

@@ -1503,7 +1503,7 @@ export const settingsDict = {
   "settings.voice.page.preview.customServerLine": "Привіт! Це попередній перегляд спеціального сервера TTS.",
   "settings.openchamber.visual.section.colorMode": "Режим теми",
   "settings.openchamber.visual.section.mobileLayout": "Мобільний макет",
-  "settings.openchamber.visual.option.mobileLayout.default": "Стандартний",
+  "settings.openchamber.visual.option.mobileLayout.default": "Попередній",
   "settings.openchamber.visual.option.mobileLayout.new": "Новий",
   "settings.openchamber.visual.section.localization": "Локалізація",
   "settings.openchamber.visual.section.spacingAndLayout": "Відступи й компонування",

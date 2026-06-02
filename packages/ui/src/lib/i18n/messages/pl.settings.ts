@@ -1008,7 +1008,7 @@ export const settingsDict = {
   'settings.openchamber.visual.section.chatRenderModeAria': 'Tryb renderowania czatu',
   'settings.openchamber.visual.section.colorMode': 'Tryb kolorów',
   'settings.openchamber.visual.section.mobileLayout': 'Układ mobilny',
-  'settings.openchamber.visual.option.mobileLayout.default': 'Domyślny',
+  'settings.openchamber.visual.option.mobileLayout.default': 'Poprzedni',
   'settings.openchamber.visual.option.mobileLayout.new': 'Nowy',
   'settings.openchamber.visual.section.diffLayout': 'Układ diffa',
   'settings.openchamber.visual.section.diffLayoutAria': 'Układ diffa',

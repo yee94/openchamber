@@ -1503,7 +1503,7 @@ export const settingsDict = {
   'settings.voice.page.preview.customServerLine': '안녕하세요! 사용자 정의 TTS 서버 미리보기입니다.',
   'settings.openchamber.visual.section.colorMode': '색상 모드',
   'settings.openchamber.visual.section.mobileLayout': '모바일 레이아웃',
-  'settings.openchamber.visual.option.mobileLayout.default': '기본값',
+  'settings.openchamber.visual.option.mobileLayout.default': '이전',
   'settings.openchamber.visual.option.mobileLayout.new': '새로움',
   'settings.openchamber.visual.section.localization': '지역화',
   'settings.openchamber.visual.section.spacingAndLayout': '간격 및 레이아웃',

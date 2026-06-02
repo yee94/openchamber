@@ -1503,7 +1503,7 @@ export const settingsDict = {
   'settings.voice.page.preview.customServerLine': '你好！这是自定义 TTS 服务器的预览。',
   'settings.openchamber.visual.section.colorMode': '颜色模式',
   'settings.openchamber.visual.section.mobileLayout': '移动端布局',
-  'settings.openchamber.visual.option.mobileLayout.default': '默认',
+  'settings.openchamber.visual.option.mobileLayout.default': '旧版',
   'settings.openchamber.visual.option.mobileLayout.new': '新版',
   'settings.openchamber.visual.section.localization': '本地化',
   'settings.openchamber.visual.section.spacingAndLayout': '间距与布局',
