@@ -49,6 +49,16 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
+// In Markdown a single "\n" is a soft break (rendered as a space). Users type plain
+// text where each newline is meant literally, so convert soft breaks into hard breaks
+// (two trailing spaces) outside of fenced code blocks, where newlines are already literal.
+const applyHardLineBreaks = (markdown: string): string => {
+    return markdown
+        .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
+        .map((segment, index) => (index % 2 === 1 ? segment : segment.replace(/ *\n/g, '  \n')))
+        .join('');
+};
+
 const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention }) => {
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
@@ -149,6 +159,9 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
             if (!skillByName.has(skillName)) return match;
             return `${prefix}[/${skillName}](${buildSkillHref(skillName)})`;
         });
+
+        // Step 4: Preserve user newlines (markdown soft breaks would otherwise collapse to spaces)
+        content = applyHardLineBreaks(content);
 
         return content;
     }, [agentMention, skillByName, textContent]);
