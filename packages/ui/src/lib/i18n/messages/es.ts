@@ -1658,6 +1658,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.messageBody.actions.saveAsPlan": "Guardar como plan",
   "chat.messageBody.actions.startNewSession": "Iniciar nueva sesión desde esta respuesta",
   "chat.messageBody.actions.startNewMultiRun": "Iniciar nuevo multi-run desde esta respuesta",
+  "chat.messageBody.forkDialog.instructions.label": "Instrucciones",
+  "chat.messageBody.forkDialog.instructions.placeholder": "Añade instrucciones para la nueva sesión…",
   "chat.generatedResult.actions.copy": "Copiar",
   "chat.generatedResult.actions.copied": "Copiado",
   "chat.generatedResult.commit.title": "Mensaje de commit generado",

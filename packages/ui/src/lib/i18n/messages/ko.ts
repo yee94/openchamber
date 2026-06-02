@@ -1692,6 +1692,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.messageBody.actions.saveAsPlan': '플랜으로 저장',
   'chat.messageBody.actions.startNewSession': '이 응답에서 새 세션 시작',
   'chat.messageBody.actions.startNewMultiRun': '이 응답에서 새 멀티런 시작',
+  'chat.messageBody.forkDialog.instructions.label': '지침',
+  'chat.messageBody.forkDialog.instructions.placeholder': '새 세션에 대한 지침을 입력하세요…',
   'chat.generatedResult.actions.copy': '복사',
   'chat.generatedResult.actions.copied': '복사됨',
   'chat.generatedResult.commit.title': '생성된 커밋 메시지',

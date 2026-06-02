@@ -1658,6 +1658,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.messageBody.actions.saveAsPlan': '保存为计划',
   'chat.messageBody.actions.startNewSession': '基于此回答开始新会话',
   'chat.messageBody.actions.startNewMultiRun': '基于此回答开始新的多运行',
+  'chat.messageBody.forkDialog.instructions.label': '说明',
+  'chat.messageBody.forkDialog.instructions.placeholder': '为新会话添加说明…',
   'chat.generatedResult.actions.copy': '复制',
   'chat.generatedResult.actions.copied': '已复制',
   'chat.generatedResult.commit.title': '生成的提交消息',

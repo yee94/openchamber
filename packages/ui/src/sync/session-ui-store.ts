@@ -27,7 +27,7 @@ import { useCommandsStore } from "@/stores/useCommandsStore"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { flattenAssistantTextParts } from "@/lib/messages/messageText"
-import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta"
+import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
@@ -269,7 +269,7 @@ export type SessionUIState = {
   forkFromMessage: (sessionId: string, messageId: string) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
   handleSlashRedo: (sessionId: string, options?: { fullUnrevert?: boolean }) => Promise<void>
-  createSessionFromAssistantMessage: (sourceMessageId: string) => Promise<void>
+  createSessionFromAssistantMessage: (sourceMessageId: string, execution: { providerID: string; modelID: string; variant: string; agent: string; instructions: string }) => Promise<void>
 
   // Data access helpers (read from sync)
   getSessionsByDirectory: (directory: string) => Session[]
@@ -1167,8 +1167,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // ---------------------------------------------------------------------------
   // createSessionFromAssistantMessage — reads from sync
   // ---------------------------------------------------------------------------
-  createSessionFromAssistantMessage: async (sourceMessageId) => {
+  createSessionFromAssistantMessage: async (sourceMessageId, execution) => {
     if (!sourceMessageId) return
+    if (!execution?.instructions?.trim()) return
 
     // Find which session this message belongs to by scanning sync state
     const state = getDirectoryState()
@@ -1200,9 +1201,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const session = await get().createSession(undefined, directory ?? null, null)
     if (!session) return
 
-    const { currentProviderId, currentModelId, currentAgentName } = useConfigStore.getState()
-    const pID = currentProviderId || useSelectionStore.getState().lastUsedProvider?.providerID
-    const mID = currentModelId || useSelectionStore.getState().lastUsedProvider?.modelID
+    const pID = execution.providerID || useSelectionStore.getState().lastUsedProvider?.providerID
+    const mID = execution.modelID || useSelectionStore.getState().lastUsedProvider?.modelID
 
     if (!pID || !mID) return
 
@@ -1211,9 +1211,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       id: session.id,
       providerID: pID,
       modelID: mID,
-      text: assistantPlanText,
-      prefaceText: EXECUTION_FORK_META_TEXT,
-      agent: currentAgentName ?? undefined,
+      variant: execution.variant || undefined,
+      text: composeForkSessionMessage(execution.instructions, assistantPlanText),
+      agent: execution.agent || undefined,
       directory: sessionDirectory,
     })
   },
