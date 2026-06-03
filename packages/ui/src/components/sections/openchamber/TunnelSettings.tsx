@@ -14,6 +14,8 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/url';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
+import { formatTimeForPreference } from '@/lib/timeFormat';
+import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 
 type TunnelState =
   | 'checking'
@@ -209,8 +211,8 @@ const formatRemaining = (remainingMs: number): string => {
   return `${seconds}s`;
 };
 
-const formatAbsoluteTime = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const formatAbsoluteTime = (timestamp: number, timeFormatPreference: TimeFormatPreference): string => {
+  return formatTimeForPreference(timestamp, timeFormatPreference, { hour: '2-digit', precision: 'second' });
 };
 
 const normalizePresetHostname = (value: string): string => {
@@ -267,6 +269,7 @@ const createPresetId = (): string => {
 
 export const TunnelSettings: React.FC = () => {
   const { t } = useI18n();
+  const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const tUnsafe = React.useCallback((key: string) => t(key as Parameters<typeof t>[0]), [t]);
   const [state, setState] = React.useState<TunnelState>('checking');
   const [tunnelInfo, setTunnelInfo] = React.useState<TunnelInfo | null>(null);
@@ -1167,7 +1170,7 @@ export const TunnelSettings: React.FC = () => {
                       {modeLabel}
                     </span>
                     <span className="typography-meta text-muted-foreground/80">
-                      {t('settings.openchamber.tunnel.session.redeemedAt', { time: formatAbsoluteTime(record.createdAt) })}
+                      {t('settings.openchamber.tunnel.session.redeemedAt', { time: formatAbsoluteTime(record.createdAt, timeFormatPreference) })}
                     </span>
                     <span className="typography-meta text-foreground">
                       {record.isActive

@@ -1038,6 +1038,7 @@ const AssistantMessageBody = React.memo(({
     const collapsibleThinkingBlocks = useUIStore((state) => state.collapsibleThinkingBlocks);
     const groupReasoningBlocks = useUIStore((state) => state.groupReasoningBlocks);
     const showSplitAssistantMessageActions = useUIStore((state) => state.showSplitAssistantMessageActions);
+    const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
     const vscodeApi = useRuntimeAPIs().vscode;
     const isSortedRenderMode = chatRenderMode === 'sorted';
     const collapsedPreviewCount = 7;
@@ -1757,9 +1758,9 @@ const AssistantMessageBody = React.memo(({
             : (typeof messageCreatedAt === 'number' && messageCreatedAt > 0 ? messageCreatedAt : null);
         if (timestamp === null) return null;
 
-        const formatted = formatTimestampForDisplay(timestamp);
+        const formatted = formatTimestampForDisplay(timestamp, timeFormatPreference);
         return formatted.length > 0 ? formatted : null;
-    }, [messageCompletedAt, messageCreatedAt]);
+    }, [messageCompletedAt, messageCreatedAt, timeFormatPreference]);
 
     const footerTimestampClassName = 'text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1';
     const canOpenMessagePreview = !isMiniChatSurface && !isMobile && !isVSCode;
