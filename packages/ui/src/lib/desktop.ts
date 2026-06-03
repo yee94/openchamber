@@ -131,6 +131,8 @@ export type DesktopSettings = {
   pwaOrientation?: 'system' | 'portrait' | 'landscape';
   mobileKeyboardMode?: MobileKeyboardMode;
   inputSpellcheckEnabled?: boolean;
+  showOpenCodeUpdateNotifications?: boolean;
+  openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;
   showExpandedBashTools?: boolean;
   showExpandedEditTools?: boolean;
@@ -151,6 +153,7 @@ export type DesktopSettings = {
   padding?: number;
   cornerRadius?: number;
   inputBarOffset?: number;
+  shortcutOverrides?: Record<string, string>;
 
   favoriteModels?: Array<{ providerID: string; modelID: string }>;
   recentModels?: Array<{ providerID: string; modelID: string }>;

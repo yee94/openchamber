@@ -82,6 +82,11 @@ export const OpenCodeCliSettings: React.FC = () => {
     }
   }, [t, value]);
 
+  const handleShowUpdateNotificationsChange = React.useCallback((enabled: boolean) => {
+    setShowOpenCodeUpdateNotifications(enabled);
+    void updateDesktopSettings({ showOpenCodeUpdateNotifications: enabled });
+  }, [setShowOpenCodeUpdateNotifications]);
+
   return (
     <div className="mb-8">
       <div className="mb-1 px-1">
@@ -147,7 +152,7 @@ export const OpenCodeCliSettings: React.FC = () => {
         <label className="flex cursor-pointer items-center gap-2 py-1.5">
           <Checkbox
             checked={showOpenCodeUpdateNotifications}
-            onChange={setShowOpenCodeUpdateNotifications}
+            onChange={handleShowUpdateNotificationsChange}
             ariaLabel={t('settings.openchamber.opencodeCli.field.showUpdateNotificationsAria')}
           />
           <span className="typography-ui-label text-foreground">
