@@ -821,7 +821,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     </Select>
                                 </div>
 
-                                {!isVSCode && (shouldShow('timeFormat') || shouldShow('weekStart')) && (
+                                {(shouldShow('timeFormat') || shouldShow('weekStart')) && (
                                     <div className="grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
                                         {shouldShow('timeFormat') && (
                                             <div className="flex min-w-0 items-center gap-2">

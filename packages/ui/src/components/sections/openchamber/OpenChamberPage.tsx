@@ -130,7 +130,7 @@ const VisualSectionContent: React.FC = () => {
         'pwaOrientation',
         'mobileKeyboardMode',
         'timeFormat',
-        'weekStart',
+        ...(!isVSCode ? ['weekStart' as const] : []),
         'fontSize',
         'terminalFontSize',
         'spacing',
