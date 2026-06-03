@@ -335,16 +335,16 @@ export async function createSession(
       parentID: parentID ?? undefined,
     }, directoryOverride ?? dir())
 
-      const sessionDirectory = (session as { directory?: string }).directory ?? directoryOverride ?? null
-      // Pre-populate routing index so SSE events arriving before session.created
-      // can be routed to the correct child store
-      if (sessionDirectory) {
-        registerSessionDirectory(session.id, sessionDirectory)
-      }
-      useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory)
-      useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.id)
-      useGlobalSessionsStore.getState().upsertSession(session)
-      return session
+    const sessionDirectory = (session as { directory?: string | null }).directory ?? null
+    // Pre-populate routing index so SSE events arriving before session.created
+    // can be routed to the correct child store
+    if (sessionDirectory) {
+      registerSessionDirectory(session.id, sessionDirectory)
+    }
+    useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory)
+    useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.id)
+    useGlobalSessionsStore.getState().upsertSession(session)
+    return session
   } catch (error) {
     console.error("[session-actions] createSession failed", error)
     return null

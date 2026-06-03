@@ -5,6 +5,7 @@ import type { QuestionRequest } from "@/types/question"
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
 const scopedClientDirectories: string[] = []
+const registeredSessionDirectories: Array<{ sessionID: string; directory: string }> = []
 let sessionRevertResult: { data?: unknown; error?: unknown; response?: { status?: number } } = {}
 let questionReplyError: unknown | null = null
 
@@ -139,14 +140,18 @@ mock.module("./input-store", () => ({
   },
 }))
 
-// Mock useGlobalSessionsStore (imported but not used in permission functions)
 mock.module("@/stores/useGlobalSessionsStore", () => ({
-  useGlobalSessionsStore: {},
+  useGlobalSessionsStore: {
+    getState: () => ({
+      upsertSession: () => {},
+    }),
+  },
 }))
 
-// Mock sync-refs (imported but not used in permission functions)
 mock.module("./sync-refs", () => ({
-  registerSessionDirectory: () => {},
+  registerSessionDirectory: (sessionID: string, directory: string) => {
+    registeredSessionDirectories.push({ sessionID, directory })
+  },
 }))
 
 import { create, type StoreApi } from "zustand"

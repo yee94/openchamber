@@ -1679,7 +1679,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             setSessionSwitcherOpen(false);
           }
           if (options?.sessionId) {
-            setCurrentSession(options.sessionId);
+            setCurrentSession(options.sessionId, worktreePath);
             return;
           }
           openNewSessionDraft({ directoryOverride: worktreePath });
