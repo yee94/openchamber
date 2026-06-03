@@ -1313,6 +1313,11 @@ async function main(options = {}) {
     }),
     isReady: () => isOpenCodeReady,
     restartOpenCode: () => restartOpenCode(),
+    getOpenCodeProcessInfo: () => ({
+      managed: Boolean((openCodeProcess || openCodePort) && !ENV_SKIP_OPENCODE_START && !isExternalOpenCode),
+      pid: typeof openCodeProcess?.pid === 'number' ? openCodeProcess.pid : null,
+      port: openCodePort,
+    }),
     stop: (shutdownOptions = {}) =>
       gracefulShutdown({ exitProcess: shutdownOptions.exitProcess ?? false })
   };
