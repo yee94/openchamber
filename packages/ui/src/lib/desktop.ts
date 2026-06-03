@@ -134,6 +134,7 @@ export type DesktopSettings = {
   showOpenCodeUpdateNotifications?: boolean;
   openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;
+  showTurnChangedFiles?: boolean;
   showExpandedBashTools?: boolean;
   showExpandedEditTools?: boolean;
   timeFormatPreference?: 'auto' | '12h' | '24h';

@@ -1512,6 +1512,8 @@
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': '在同一則回覆中，如果助理文字區塊後方還有工具呼叫，則顯示「複製回答」「儲存為圖片」和「朗讀」操作。',
   'settings.openchamber.visual.field.showToolFileIconsAria': '顯示工具檔案圖示',
   'settings.openchamber.visual.field.showToolFileIcons': '顯示工具檔案圖示',
+  'settings.openchamber.visual.field.showTurnChangedFilesAria': '顯示已完成回合的變更檔案',
+  'settings.openchamber.visual.field.showTurnChangedFiles': '顯示已完成回合的變更檔案',
   'settings.openchamber.visual.field.showMobileStatusBarAria': '顯示行動裝置狀態列',
   'settings.openchamber.visual.field.showMobileStatusBar': '顯示行動裝置狀態列',
   'settings.openchamber.visual.field.showDotfilesAria': '顯示點檔案',

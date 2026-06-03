@@ -1591,6 +1591,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': '在同一条回复中，如果助手文本块后面还有工具调用，则显示“复制回答”“保存为图片”和“朗读”操作。',
   'settings.openchamber.visual.field.showToolFileIconsAria': '显示工具文件图标',
   'settings.openchamber.visual.field.showToolFileIcons': '显示工具文件图标',
+  'settings.openchamber.visual.field.showTurnChangedFilesAria': '显示已完成回合的更改文件',
+  'settings.openchamber.visual.field.showTurnChangedFiles': '显示已完成回合的更改文件',
   'settings.openchamber.visual.field.showMobileStatusBarAria': '显示移动端状态栏',
   'settings.openchamber.visual.field.showMobileStatusBar': '显示移动端状态栏',
   'settings.openchamber.visual.field.showDotfilesAria': '显示点文件',

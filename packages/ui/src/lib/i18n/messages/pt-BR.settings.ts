@@ -1591,6 +1591,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Mostra Copiar resposta, Salvar como imagem e Ler em voz alta em blocos de texto do assistente que aparecem antes de chamadas de ferramenta posteriores na mesma resposta.",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Mostrar ícones de arquivos de ferramentas",
   "settings.openchamber.visual.field.showToolFileIcons": "Mostrar ícones de arquivos de ferramentas",
+  "settings.openchamber.visual.field.showTurnChangedFilesAria": "Mostrar arquivos alterados em turnos concluídos",
+  "settings.openchamber.visual.field.showTurnChangedFiles": "Mostrar arquivos alterados em turnos concluídos",
   "settings.openchamber.visual.field.showMobileStatusBarAria": "Mostrar barra de status móvel",
   "settings.openchamber.visual.field.showMobileStatusBar": "Mostrar barra de status móvel",
   "settings.openchamber.visual.field.showDotfilesAria": "Mostrar arquivos ocultos",

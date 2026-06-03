@@ -391,6 +391,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.showToolFileIcons === 'boolean') {
       result.showToolFileIcons = candidate.showToolFileIcons;
     }
+    if (typeof candidate.showTurnChangedFiles === 'boolean') {
+      result.showTurnChangedFiles = candidate.showTurnChangedFiles;
+    }
     if (typeof candidate.showExpandedBashTools === 'boolean') {
       result.showExpandedBashTools = candidate.showExpandedBashTools;
     }

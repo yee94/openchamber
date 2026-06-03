@@ -455,6 +455,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.showToolFileIcons === 'boolean' && settings.showToolFileIcons !== store.showToolFileIcons) {
     store.setShowToolFileIcons(settings.showToolFileIcons);
   }
+  if (typeof settings.showTurnChangedFiles === 'boolean' && settings.showTurnChangedFiles !== store.showTurnChangedFiles) {
+    store.setShowTurnChangedFiles(settings.showTurnChangedFiles);
+  }
   if (typeof settings.showExpandedBashTools === 'boolean' && settings.showExpandedBashTools !== store.showExpandedBashTools) {
     store.setShowExpandedBashTools(settings.showExpandedBashTools);
   }
@@ -956,6 +959,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.showToolFileIcons === 'boolean') {
     result.showToolFileIcons = candidate.showToolFileIcons;
+  }
+  if (typeof candidate.showTurnChangedFiles === 'boolean') {
+    result.showTurnChangedFiles = candidate.showTurnChangedFiles;
   }
   if (typeof candidate.showExpandedBashTools === 'boolean') {
     result.showExpandedBashTools = candidate.showExpandedBashTools;

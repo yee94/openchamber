@@ -1624,6 +1624,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Show Copy Answer, Save as image, and Read aloud on assistant text blocks that appear before later tool calls in the same response.',
   'settings.openchamber.visual.field.showToolFileIconsAria': 'Show tool file icons',
   'settings.openchamber.visual.field.showToolFileIcons': 'Show Tool File Icons',
+  'settings.openchamber.visual.field.showTurnChangedFilesAria': 'Show changed files for completed turns',
+  'settings.openchamber.visual.field.showTurnChangedFiles': 'Show Changed Files for Completed Turns',
   'settings.openchamber.visual.field.showMobileStatusBarAria': 'Show mobile status bar',
   'settings.openchamber.visual.field.showMobileStatusBar': 'Show Mobile Status Bar',
   'settings.openchamber.visual.field.showDotfilesAria': 'Show dotfiles',
