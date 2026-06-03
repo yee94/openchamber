@@ -832,27 +832,23 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
 
       const draftSyntheticParts = draft.syntheticParts
-      await activateConfigForDirectory(draftDirectoryOverride ?? created.directory ?? null)
-
+      const createdDirectory = normalizePath(draftDirectoryOverride ?? created.directory ?? null)
       const configState = useConfigStore.getState()
-      const draftAgentName = configState.currentAgentName
-      const effectiveDraftAgent = trimmedAgent ?? draftAgentName
+      void activateConfigForDirectory(createdDirectory).catch((error) => {
+        console.warn("Failed to activate directory after creating session:", error)
+      })
 
-      if (configState.currentProviderId && configState.currentModelId) {
-        useSelectionStore.getState().saveSessionModelSelection(created.id, configState.currentProviderId, configState.currentModelId)
-      }
+      const effectiveDraftAgent = trimmedAgent ?? configState.currentAgentName
+
+      useSelectionStore.getState().saveSessionModelSelection(created.id, providerID, modelID)
 
       if (effectiveDraftAgent) {
         useSelectionStore.getState().saveSessionAgentSelection(created.id, effectiveDraftAgent)
-        if (configState.currentProviderId && configState.currentModelId) {
-          useSelectionStore.getState().saveAgentModelForSession(created.id, effectiveDraftAgent, configState.currentProviderId, configState.currentModelId)
-          useSelectionStore.getState().saveAgentModelVariantForSession(created.id, effectiveDraftAgent, configState.currentProviderId, configState.currentModelId, variant)
-        }
+        useSelectionStore.getState().saveAgentModelForSession(created.id, effectiveDraftAgent, providerID, modelID)
+        useSelectionStore.getState().saveAgentModelVariantForSession(created.id, effectiveDraftAgent, providerID, modelID, variant)
       }
 
       get().initializeNewOpenChamberSession(created.id, configState.agents ?? [])
-
-      const createdDirectory = normalizePath(draftDirectoryOverride ?? created.directory ?? null)
 
       get().closeNewSessionDraft()
       get().setCurrentSession(created.id, createdDirectory)
