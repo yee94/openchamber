@@ -882,7 +882,7 @@ export const useUIStore = create<UIStore>()(
         weekStartPreference: 'auto',
         mermaidRenderingMode: 'svg',
         userMessageRenderingMode: 'markdown',
-        stickyUserHeader: true,
+        stickyUserHeader: false,
         showSplitAssistantMessageActions: false,
         showMobileSessionStatusBar: false,
         isMobileSessionStatusBarCollapsed: false,
