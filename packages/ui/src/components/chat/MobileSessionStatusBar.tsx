@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllSessionStatuses, useAllLiveSessions } from '@/sync/sync-context';
-import { useGlobalSessionsStore, ensureGlobalSessionsLoaded, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
+import { mergeSessionDirectoryMetadata, useGlobalSessionsStore, ensureGlobalSessionsLoaded, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -37,7 +37,10 @@ function useAllProjectSessions(): Session[] {
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   return React.useMemo(() => {
     const liveById = new Map(liveSessions.map((session) => [session.id, session]));
-    const merged = globalActiveSessions.map((session) => liveById.get(session.id) ?? session);
+    const merged = globalActiveSessions.map((session) => {
+      const liveSession = liveById.get(session.id);
+      return liveSession ? mergeSessionDirectoryMetadata(liveSession, session) : session;
+    });
     const seen = new Set(merged.map((session) => session.id));
     for (const session of liveSessions) {
       if (!seen.has(session.id)) merged.push(session);

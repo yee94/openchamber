@@ -52,6 +52,46 @@ export const resolveGlobalSessionDirectory = (session: Session): string | null =
     ?? normalizePath(record.project?.worktree ?? null);
 };
 
+export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Session | null): Session => {
+  if (!existing) {
+    return incoming;
+  }
+
+  const incomingRecord = incoming as Session & {
+    directory?: string | null;
+    project?: ({ worktree?: string | null } & Record<string, unknown>) | null;
+  };
+  const existingRecord = existing as Session & {
+    directory?: string | null;
+    project?: ({ worktree?: string | null } & Record<string, unknown>) | null;
+  };
+
+  const incomingDirectory = normalizePath(incomingRecord.directory ?? null);
+  const incomingWorktree = normalizePath(incomingRecord.project?.worktree ?? null);
+  const existingDirectory = normalizePath(existingRecord.directory ?? null);
+  const existingWorktree = normalizePath(existingRecord.project?.worktree ?? null);
+
+  let changed = false;
+  const next: typeof incomingRecord = { ...incomingRecord };
+
+  // Some live session updates omit stable raw directory metadata; keep the
+  // cached value so project grouping does not temporarily lose the session.
+  if (!incomingDirectory && existingDirectory) {
+    next.directory = existingRecord.directory;
+    changed = true;
+  }
+
+  if (!incomingWorktree && existingWorktree) {
+    next.project = {
+      ...(incomingRecord.project ?? {}),
+      worktree: existingRecord.project?.worktree,
+    };
+    changed = true;
+  }
+
+  return changed ? next : incoming;
+};
+
 const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> => {
   const next = new Map<string, Session[]>();
   for (const session of sessions) {
@@ -101,11 +141,12 @@ const upsertSessionIntoList = (sessions: Session[], session: Session): Session[]
   if (index === -1) {
     return [session, ...sessions];
   }
-  if (getSessionSignature(sessions[index]) === getSessionSignature(session)) {
+  const mergedSession = mergeSessionDirectoryMetadata(session, sessions[index]);
+  if (getSessionSignature(sessions[index]) === getSessionSignature(mergedSession)) {
     return sessions;
   }
   const next = [...sessions];
-  next[index] = session;
+  next[index] = mergedSession;
   return next;
 };
 
@@ -120,7 +161,7 @@ const mergeSessionLists = (existing: Session[], incoming?: Session[]): Session[]
 
   const byId = new Map(existing.map((session) => [session.id, session]));
   incoming.forEach((session) => {
-    byId.set(session.id, session);
+    byId.set(session.id, mergeSessionDirectoryMetadata(session, byId.get(session.id)));
   });
 
   const ordered: Session[] = [];
@@ -245,12 +286,16 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
 
   upsertSession: (session) => {
     set((state) => {
-      const isArchived = Boolean(session.time?.archived);
+      const existingSession = state.activeSessions.find((candidate) => candidate.id === session.id)
+        ?? state.archivedSessions.find((candidate) => candidate.id === session.id)
+        ?? null;
+      const sessionWithMetadata = mergeSessionDirectoryMetadata(session, existingSession);
+      const isArchived = Boolean(sessionWithMetadata.time?.archived);
       const nextActiveSessions = isArchived
         ? state.activeSessions.filter((candidate) => candidate.id !== session.id)
-        : upsertSessionIntoList(state.activeSessions, session);
+        : upsertSessionIntoList(state.activeSessions, sessionWithMetadata);
       const nextArchivedSessions = isArchived
-        ? upsertSessionIntoList(state.archivedSessions, session)
+        ? upsertSessionIntoList(state.archivedSessions, sessionWithMetadata)
         : state.archivedSessions.filter((candidate) => candidate.id !== session.id);
 
       if (
