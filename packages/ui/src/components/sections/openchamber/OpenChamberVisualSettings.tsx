@@ -247,7 +247,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-export type VisibleSetting = 'theme' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'stickyUserHeader' | 'wideChatLayout' | 'splitAssistantMessageActions' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'showToolFileIcons' | 'expandedTools' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck' | 'reportUsage';
+export type VisibleSetting = 'theme' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'stickyUserHeader' | 'wideChatLayout' | 'splitAssistantMessageActions' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'fileViewerPreview' | 'reasoning' | 'showToolFileIcons' | 'expandedTools' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck' | 'reportUsage';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -319,6 +319,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setShowMobileSessionStatusBar = useUIStore(state => state.setShowMobileSessionStatusBar);
     const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
     const setMessageStreamTransport = useConfigStore((state) => state.setSettingsMessageStreamTransport);
+    const settingsDefaultFileViewerPreview = useConfigStore((state) => state.settingsDefaultFileViewerPreview);
+    const setSettingsDefaultFileViewerPreview = useConfigStore((state) => state.setSettingsDefaultFileViewerPreview);
     const isSettingsDialogOpen = useUIStore(state => state.isSettingsDialogOpen);
     const {
         themeMode,
@@ -439,6 +441,12 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         void updateDesktopSettings({ showToolFileIcons: enabled });
     }, [setShowToolFileIcons]);
 
+    const handleFileViewerPreviewChange = React.useCallback((enabled: boolean) => {
+        setSettingsDefaultFileViewerPreview(enabled);
+        void updateDesktopSettings({ defaultFileViewerPreview: enabled });
+        window.dispatchEvent(new CustomEvent('openchamber:file-viewer-preview-mode-changed', { detail: { enabled } }));
+    }, [setSettingsDefaultFileViewerPreview]);
+
     const handleShowExpandedBashToolsChange = React.useCallback((enabled: boolean) => {
         setShowExpandedBashTools(enabled);
         void updateDesktopSettings({ showExpandedBashTools: enabled });
@@ -513,6 +521,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         || shouldShow('diffLayout')
         || (shouldShow('mobileStatusBar') && isMobile)
         || shouldShow('dotfiles')
+        || shouldShow('fileViewerPreview')
         || shouldShow('reasoning')
         || shouldShow('queueMode')
         || shouldShow('persistDraft')
@@ -1578,7 +1587,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </div>
                             )}
 
-                            {(shouldShow('stickyUserHeader') || shouldShow('wideChatLayout') || shouldShow('splitAssistantMessageActions') || (shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('showToolFileIcons') || (!isMobile && shouldShow('inputSpellcheck')) || shouldShow('reasoning')) && (
+                            {(shouldShow('stickyUserHeader') || shouldShow('wideChatLayout') || shouldShow('splitAssistantMessageActions') || (shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('fileViewerPreview') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('showToolFileIcons') || (!isMobile && shouldShow('inputSpellcheck')) || shouldShow('reasoning')) && (
                                 <section className="p-2 space-y-0.5">
                                     {shouldShow('reasoning') && (
                                         <div
@@ -1771,6 +1780,31 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 ariaLabel={t('settings.openchamber.visual.field.showDotfilesAria')}
                                             />
                                             <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.showDotfiles')}</span>
+                                        </div>
+                                    )}
+
+                                    {shouldShow('fileViewerPreview') && (
+                                        <div
+                                            className="group flex cursor-pointer items-center gap-2 py-0.5"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={settingsDefaultFileViewerPreview}
+                                            onClick={() => handleFileViewerPreviewChange(!settingsDefaultFileViewerPreview)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === ' ' || event.key === 'Enter') {
+                                                    event.preventDefault();
+                                                    handleFileViewerPreviewChange(!settingsDefaultFileViewerPreview);
+                                                }
+                                            }}
+                                        >
+                                            <span onClick={(event) => event.stopPropagation()}>
+                                                <Checkbox
+                                                    checked={settingsDefaultFileViewerPreview}
+                                                    onChange={handleFileViewerPreviewChange}
+                                                    ariaLabel={t('settings.openchamber.defaults.field.openFilesPreviewAria')}
+                                                />
+                                            </span>
+                                            <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.field.openFilesPreview')}</span>
                                         </div>
                                     )}
 

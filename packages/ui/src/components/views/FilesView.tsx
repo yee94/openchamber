@@ -2258,6 +2258,48 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const getHtmlViewMode = React.useCallback((): PreviewViewMode => {
     return htmlViewMode;
   }, [htmlViewMode]);
+
+  React.useEffect(() => {
+    const applyDefaultFileViewerMode = (enabled: boolean) => {
+      const textMode: TextViewMode = enabled ? 'view' : 'edit';
+      const previewMode: PreviewViewMode = enabled ? 'preview' : 'edit';
+      const nextJsonMode: 'tree' | 'text' = enabled ? 'tree' : 'text';
+
+      for (const path of openPaths) {
+        textViewModeByPathRef.current[path] = textMode;
+        if (isMarkdownFile(path)) {
+          mdViewModeByPathRef.current[path] = previewMode;
+        }
+        if (isHtmlFile(path)) {
+          htmlViewModeByPathRef.current[path] = previewMode;
+        }
+      }
+
+      setTextViewMode(textMode);
+      setMdViewMode(previewMode);
+      setHtmlViewMode(previewMode);
+      setJsonViewMode(nextJsonMode);
+
+      try {
+        localStorage.setItem(MD_VIEWER_MODE_KEY, previewMode);
+        localStorage.setItem(HTML_VIEWER_MODE_KEY, previewMode);
+        localStorage.setItem(JSON_VIEWER_MODE_KEY, nextJsonMode);
+      } catch {
+        // Ignore localStorage errors
+      }
+    };
+
+    const handleFileViewerModeChanged = (event: Event) => {
+      const enabled = Boolean((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled);
+      applyDefaultFileViewerMode(enabled);
+    };
+
+    window.addEventListener('openchamber:file-viewer-preview-mode-changed', handleFileViewerModeChanged);
+    return () => {
+      window.removeEventListener('openchamber:file-viewer-preview-mode-changed', handleFileViewerModeChanged);
+    };
+  }, [openPaths]);
+
   React.useEffect(() => {
     if (!pendingFileNavigation || !root) {
       return;
