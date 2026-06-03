@@ -57,7 +57,9 @@ type SdkResult<T> = {
 function unwrapSdkData<T>(result: SdkResult<T>, operation: string): T {
   if (result.error) {
     const status = result.response?.status;
-    throw new Error(`${operation} failed${status ? ` (${status})` : ""}: ${formatSdkError(result.error)}`);
+    const error = new Error(`${operation} failed${status ? ` (${status})` : ""}: ${formatSdkError(result.error)}`) as Error & { status?: number };
+    if (status !== undefined) error.status = status;
+    throw error;
   }
   if (result.data === undefined || result.data === null) {
     throw new Error(`${operation} failed: empty response`);
@@ -68,7 +70,9 @@ function unwrapSdkData<T>(result: SdkResult<T>, operation: string): T {
 function unwrapSdkOptional<T>(result: SdkResult<T>, operation: string): T | undefined {
   if (result.error) {
     const status = result.response?.status;
-    throw new Error(`${operation} failed${status ? ` (${status})` : ""}: ${formatSdkError(result.error)}`);
+    const error = new Error(`${operation} failed${status ? ` (${status})` : ""}: ${formatSdkError(result.error)}`) as Error & { status?: number };
+    if (status !== undefined) error.status = status;
+    throw error;
   }
   return result.data;
 }
