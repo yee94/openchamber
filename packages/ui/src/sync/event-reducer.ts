@@ -102,6 +102,44 @@ function areSessionStatusesEqual(left: SessionStatus | undefined, right: Session
   return true
 }
 
+function areJsonEquivalent(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (left === undefined || right === undefined) return left === right
+  try {
+    return JSON.stringify(left) === JSON.stringify(right)
+  } catch {
+    return false
+  }
+}
+
+function areMessageUpdateFieldsEqual(existing: Message, next: Message): boolean {
+  if (existing.role !== next.role) return false
+  if ((existing as { finish?: unknown }).finish !== (next as { finish?: unknown }).finish) return false
+  if ((existing.time as { completed?: number })?.completed !== (next.time as { completed?: number })?.completed) return false
+
+  const fields: Array<keyof Message | "structured" | "summary" | "tokens" | "error" | "cost" | "model" | "tools" | "format" | "variant" | "agent" | "system"> = [
+    "summary",
+    "error",
+    "cost",
+    "tokens",
+    "structured",
+    "model",
+    "tools",
+    "format",
+    "variant",
+    "agent",
+    "system",
+  ]
+
+  for (const field of fields) {
+    if (!areJsonEquivalent((existing as Record<string, unknown>)[field], (next as Record<string, unknown>)[field])) {
+      return false
+    }
+  }
+
+  return true
+}
+
 // ---------------------------------------------------------------------------
 // Global events
 // ---------------------------------------------------------------------------
@@ -269,9 +307,7 @@ export function applyDirectoryEvent(
       if (result.found) {
         // Skip message replacement if unchanged — preserves reference, avoids re-render
         const existing = messages[result.index]
-        const unchanged = existing.role === info.role
-          && (existing as { finish?: unknown }).finish === (info as { finish?: unknown }).finish
-          && (existing.time as { completed?: number })?.completed === (info.time as { completed?: number })?.completed
+        const unchanged = areMessageUpdateFieldsEqual(existing, info)
         if (unchanged) {
           syncDebug.reducer.messageUpdatedUnchanged(info.sessionID, info.id, info.role, (info as { finish?: unknown }).finish, (info.time as { completed?: number })?.completed)
           return false
