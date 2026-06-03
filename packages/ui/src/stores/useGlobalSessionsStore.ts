@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { OpencodeClient, Session } from '@opencode-ai/sdk/v2';
 import { opencodeClient } from '@/lib/opencode/client';
 import { listGlobalSessionPages } from '@/stores/globalSessions';
 
@@ -17,6 +17,7 @@ type GlobalSessionsState = {
   hasLoaded: boolean;
   status: GlobalSessionsStatus;
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>;
+  refreshSessionsForDirectories: (directories: Iterable<string>, fallbackActive?: Session[]) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   upsertSession: (session: Session) => void;
   removeSessions: (ids: Iterable<string>) => void;
@@ -83,9 +84,13 @@ export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Sess
 
   if (!incomingWorktree && existingWorktree) {
     next.project = {
+      ...(existingRecord.project ?? {}),
       ...(incomingRecord.project ?? {}),
       worktree: existingRecord.project?.worktree,
     };
+    changed = true;
+  } else if (!incomingRecord.project && existingRecord.project) {
+    next.project = existingRecord.project;
     changed = true;
   }
 
@@ -134,6 +139,92 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
     }
   }
   return true;
+};
+
+const getSessionUpdatedAt = (session: Session): number => {
+  const updatedAt = session.time?.updated;
+  if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
+    return updatedAt;
+  }
+  const createdAt = session.time?.created;
+  return typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : 0;
+};
+
+const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
+  return [...sessions].sort((left, right) => {
+    const timeDelta = getSessionUpdatedAt(right) - getSessionUpdatedAt(left);
+    if (timeDelta !== 0) return timeDelta;
+    return right.id.localeCompare(left.id);
+  });
+};
+
+const normalizeDirectorySet = (directories: Iterable<string>): Set<string> => {
+  const next = new Set<string>();
+  for (const directory of directories) {
+    const normalized = normalizePath(directory);
+    if (normalized) next.add(normalized);
+  }
+  return next;
+};
+
+const replaceSessionsForDirectories = (
+  existing: Session[],
+  incoming: Session[],
+  directories: Set<string>,
+): Session[] => {
+  if (directories.size === 0) {
+    return existing;
+  }
+
+  const existingById = new Map(existing.map((session) => [session.id, session]));
+  const incomingById = new Map<string, Session>();
+
+  for (const session of incoming) {
+    if (!session?.id) continue;
+    incomingById.set(session.id, mergeSessionDirectoryMetadata(session, existingById.get(session.id)));
+  }
+
+  const kept = existing.filter((session) => {
+    if (incomingById.has(session.id)) return false;
+    const directory = resolveGlobalSessionDirectory(session);
+    return !directory || !directories.has(directory);
+  });
+
+  return sortSessionsByUpdated([...incomingById.values(), ...kept]);
+};
+
+type DirectoryPageResult = {
+  directories: Set<string>;
+  sessions: Session[];
+  errors: unknown[];
+};
+
+const fetchDirectoryPages = async (
+  sdk: OpencodeClient,
+  directories: Set<string>,
+  archived: boolean,
+): Promise<DirectoryPageResult> => {
+  const results = await Promise.allSettled(
+    [...directories].map(async (directory) => ({
+      directory,
+      sessions: await listGlobalSessionPages(sdk, { directory, archived, pageSize: PAGE_SIZE }),
+    })),
+  );
+
+  const fulfilledDirectories = new Set<string>();
+  const sessions: Session[] = [];
+  const errors: unknown[] = [];
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      fulfilledDirectories.add(result.value.directory);
+      sessions.push(...result.value.sessions);
+    } else {
+      errors.push(result.reason);
+    }
+  }
+
+  return { directories: fulfilledDirectories, sessions, errors };
 };
 
 const upsertSessionIntoList = (sessions: Session[], session: Session): Session[] => {
@@ -284,6 +375,61 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     return inflightLoad;
   },
 
+  refreshSessionsForDirectories: async (directories, fallbackActive) => {
+    const directorySet = normalizeDirectorySet(directories);
+    if (directorySet.size === 0) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+    }
+
+    const sdk = opencodeClient.getSdkClient();
+    const [active, archived] = await Promise.all([
+      fetchDirectoryPages(sdk, directorySet, false),
+      fetchDirectoryPages(sdk, directorySet, true),
+    ]);
+
+    if (active.errors.length > 0) {
+      console.warn('[GlobalSessions] Failed to refresh active sessions for some directories:', active.errors[0]);
+    }
+    if (archived.errors.length > 0) {
+      console.warn('[GlobalSessions] Failed to refresh archived sessions for some directories:', archived.errors[0]);
+    }
+
+    set((state) => {
+      let nextActiveSessions = replaceSessionsForDirectories(state.activeSessions, active.sessions, active.directories);
+      nextActiveSessions = mergeSessionLists(nextActiveSessions, fallbackActive);
+      if (sameSessionList(state.activeSessions, nextActiveSessions)) {
+        nextActiveSessions = state.activeSessions;
+      }
+
+      let nextArchivedSessions = replaceSessionsForDirectories(state.archivedSessions, archived.sessions, archived.directories);
+      if (sameSessionList(state.archivedSessions, nextArchivedSessions)) {
+        nextArchivedSessions = state.archivedSessions;
+      }
+
+      const nextSessionsByDirectory = nextActiveSessions === state.activeSessions
+        ? state.sessionsByDirectory
+        : buildSessionsByDirectory(nextActiveSessions);
+
+      if (
+        nextActiveSessions === state.activeSessions
+        && nextArchivedSessions === state.archivedSessions
+        && nextSessionsByDirectory === state.sessionsByDirectory
+      ) {
+        return state;
+      }
+
+      return {
+        activeSessions: nextActiveSessions,
+        archivedSessions: nextArchivedSessions,
+        sessionsByDirectory: nextSessionsByDirectory,
+      };
+    });
+
+    const state = get();
+    return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+  },
+
   upsertSession: (session) => {
     set((state) => {
       const existingSession = state.activeSessions.find((candidate) => candidate.id === session.id)
@@ -391,4 +537,11 @@ export const ensureGlobalSessionsLoaded = async (fallbackActive?: Session[]): Pr
 
 export const refreshGlobalSessions = async (fallbackActive?: Session[]): Promise<LoadResult> => {
   return useGlobalSessionsStore.getState().loadSessions(fallbackActive);
+};
+
+export const refreshGlobalSessionsForDirectories = async (
+  directories: Iterable<string>,
+  fallbackActive?: Session[],
+): Promise<LoadResult> => {
+  return useGlobalSessionsStore.getState().refreshSessionsForDirectories(directories, fallbackActive);
 };

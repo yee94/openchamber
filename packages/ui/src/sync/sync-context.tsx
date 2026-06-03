@@ -44,6 +44,8 @@ import { getRuntimeLiveStatusSeed, LIVE_STATUS_TTL_MS } from "./runtime-live-mem
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { setSessionPrefetch } from "./session-prefetch-cache"
+import { listGlobalSessionPages } from "@/stores/globalSessions"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -587,6 +589,46 @@ const getSessionIdFromPayload = (event: Event): string | null => {
   }
 
   return null
+}
+
+const getSessionInfoFromPayload = (event: Event): Session | null => {
+  if (event.type !== "session.created" && event.type !== "session.updated" && event.type !== "session.deleted") {
+    return null
+  }
+
+  const properties = (event as { properties?: unknown }).properties
+  if (!properties || typeof properties !== "object") {
+    return null
+  }
+
+  const info = (properties as { info?: unknown }).info
+  if (!info || typeof info !== "object") {
+    return null
+  }
+
+  const session = info as Partial<Session>
+  if (typeof session.id !== "string" || !session.time) {
+    return null
+  }
+
+  return stripSessionDiffSnapshots(session as Session)
+}
+
+const applySessionEventToGlobalSessions = (payload: Event) => {
+  if (payload.type === "session.created" || payload.type === "session.updated") {
+    const session = getSessionInfoFromPayload(payload)
+    if (session) {
+      useGlobalSessionsStore.getState().upsertSession(session)
+    }
+    return
+  }
+
+  if (payload.type === "session.deleted") {
+    const sessionID = getSessionIdFromPayload(payload) ?? getSessionInfoFromPayload(payload)?.id
+    if (sessionID) {
+      useGlobalSessionsStore.getState().removeSessions([sessionID])
+    }
+  }
 }
 
 const getMessageIdFromPayload = (event: Event): string | null => {
@@ -1205,6 +1247,8 @@ function handleEvent(
     return
   }
 
+  applySessionEventToGlobalSessions(payload)
+
   // Global events
   if (directory === "global" || !directory) {
     const recent = isRecentBoot()
@@ -1561,27 +1605,12 @@ export function SyncProvider(props: {
               providers: globalState.providers,
             },
             loadSessions: (dir) => retry(async () => {
-              const result = await props.sdk.session.list({
+              const sessions = (await listGlobalSessionPages(props.sdk, {
                 directory: dir,
+                archived: false,
                 roots: true,
-                limit: 50,
-              })
-              // SDK returns { error } instead of { data } on non-ok responses (503).
-              // Preserve HTTP status so retry()'s transient detection works.
-              const rawError = (result as { error?: unknown }).error
-              if (rawError) {
-                const response = (result as { response?: { status?: number } }).response
-                const status = response?.status
-                const message = typeof rawError === "object" && rawError !== null && "message" in rawError
-                  ? String((rawError as { message?: unknown }).message)
-                  : String(rawError)
-                const wrapped = new Error(`session.list failed${status ? ` (${status})` : ""}: ${message}`)
-                if (status !== undefined) {
-                  ;(wrapped as Error & { status?: number }).status = status
-                }
-                throw wrapped
-              }
-              const sessions = (result.data ?? [])
+                pageSize: 500,
+              }))
                 .filter((s) => !!s?.id)
                 .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
               // Race guard: if the list came back empty but event pipeline
@@ -1591,7 +1620,7 @@ export function SyncProvider(props: {
               const currentSessions = store.getState().session
               if (sessions.length === 0 && currentSessions.length > 0) {
                 console.warn(
-                  `[bootstrap] session.list returned empty for ${dir}; preserving ${currentSessions.length} existing sessions`,
+                  `[bootstrap] experimental.session.list returned empty for ${dir}; preserving ${currentSessions.length} existing sessions`,
                 )
                 return
               }
