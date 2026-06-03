@@ -1065,7 +1065,7 @@ const spawnLocalServer = async () => {
     uiPassword: desktopUiPassword || null,
     attachSignals: false,
     exitOnShutdown: false,
-    apiOnly: shouldUsePackagedUi() && !lanAccessEnabled,
+    apiOnly: false,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
     getIsWindowFocused: isAnyWindowFocused,
   });
