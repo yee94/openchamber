@@ -32,7 +32,18 @@ export const createOpenCodeEnvRuntime = (deps) => {
       result[key] = value;
     }
 
-    return Object.keys(result).length > 0 ? result : null;
+    if (Object.keys(result).length === 0) {
+      return null;
+    }
+
+    if (process.platform === 'win32' && typeof result.PATH !== 'string') {
+      const pathEntry = Object.entries(result).find(([key]) => key.toLowerCase() === 'path');
+      if (pathEntry && typeof pathEntry[1] === 'string') {
+        result.PATH = pathEntry[1];
+      }
+    }
+
+    return result;
   };
 
   const isExecutable = (filePath) => {
@@ -122,8 +133,13 @@ export const createOpenCodeEnvRuntime = (deps) => {
   const getWindowsShellEnvSnapshot = () => {
     const parseResult = (stdout) => parseNullSeparatedEnvSnapshot(typeof stdout === 'string' ? stdout : '');
 
-    const psScript =
-      "Get-ChildItem Env: | ForEach-Object { [Console]::Out.Write($_.Name); [Console]::Out.Write('='); [Console]::Out.Write($_.Value); [Console]::Out.Write([char]0) }";
+    const psScript = [
+      '$entries = [ordered]@{}',
+      'Get-ChildItem Env: | ForEach-Object { $entries[$_.Name] = $_.Value }',
+      "$pathValues = @([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User'), [Environment]::GetEnvironmentVariable('Path', 'Process')) | Where-Object { $_ }",
+      "if ($pathValues.Count -gt 0) { $entries['Path'] = ($pathValues -join ';') }",
+      "$entries.GetEnumerator() | ForEach-Object { [Console]::Out.Write($_.Name); [Console]::Out.Write('='); [Console]::Out.Write($_.Value); [Console]::Out.Write([char]0) }",
+    ].join('; ');
 
     const powershellCandidates = [
       'pwsh.exe',
