@@ -2101,7 +2101,9 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     icon: getWindowIconPath(),
     show: false,
     backgroundColor: '#151313',
-    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    frame: process.platform === 'win32' ? false : undefined,
+    autoHideMenuBar: process.platform !== 'darwin',
+    titleBarStyle: process.platform === 'darwin' || process.platform === 'win32' ? 'hidden' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 17 } : undefined,
     webPreferences: {
       additionalArguments: [
