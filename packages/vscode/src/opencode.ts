@@ -10,7 +10,11 @@ import { randomBytes } from 'crypto';
 import { normalizeWindowsDriveLetter } from './pathUtils';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
-const WINDOWS_EXECUTABLE_EXTENSIONS = ['', '.exe', '.cmd', '.bat', '.com'];
+const WINDOWS_EXECUTABLE_EXTENSIONS = (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
+  .split(';')
+  .map((ext) => ext.trim().toLowerCase())
+  .filter(Boolean)
+  .map((ext) => (ext.startsWith('.') ? ext : `.${ext}`));
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export type OpenCodeDebugInfo = {
@@ -336,10 +340,12 @@ function resolveOpencodeCliPath(): string | null {
     ].filter(Boolean);
   })();
 
-  const fromPath = findExecutableInPath('opencode');
-  if (fromPath) {
-    cachedDetectedOpencodeCliPath = fromPath;
-    return fromPath;
+  if (process.platform !== 'win32') {
+    const fromPath = findExecutableInPath('opencode');
+    if (fromPath) {
+      cachedDetectedOpencodeCliPath = fromPath;
+      return fromPath;
+    }
   }
 
   const fallbacks = process.platform === 'win32' ? winFallbacks : unixFallbacks;
@@ -351,6 +357,12 @@ function resolveOpencodeCliPath(): string | null {
   }
 
   if (process.platform === 'win32') {
+    const fromPath = findExecutableInPath('opencode');
+    if (fromPath) {
+      cachedDetectedOpencodeCliPath = fromPath;
+      return fromPath;
+    }
+
     try {
       const result = spawnSync('where', ['opencode'], {
         encoding: 'utf8',
@@ -1054,16 +1066,17 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     getApiUrl,
     getOpenCodeAuthHeaders,
     getWorkingDirectory: () => workingDirectory,
-    isCliAvailable: () => !cliMissing,
+    isCliAvailable: () => !cliMissing || Boolean(cliPath || resolveOpencodeCliPath()),
     getDebugInfo: () => {
       const secureConnection = Boolean(getOpenCodeAuthHeaders().Authorization);
+      const detectedCliPath = cliPath || resolveOpencodeCliPath();
       return {
         mode: useConfiguredUrl && configuredApiUrl ? 'external' : 'managed',
         status,
         lastError,
         workingDirectory,
-        cliAvailable: !cliMissing,
-        cliPath,
+        cliAvailable: !cliMissing || Boolean(detectedCliPath),
+        cliPath: detectedCliPath,
         configuredApiUrl: useConfiguredUrl && configuredApiUrl ? configuredApiUrl.replace(/\/+$/, '') : null,
         configuredPort,
         detectedPort,
