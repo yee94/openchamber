@@ -15,6 +15,7 @@ OpenChamber provides UI runtimes (web/desktop/VS Code) for interacting with an O
 - **Desktop work goes into `packages/electron/`.**
 - Desktop-side changes (IPC handlers, native integrations, window/quit/notification behavior) land in `packages/electron/main.mjs` + `packages/electron/preload.mjs`.
 - Electron imports the server via `@openchamber/web/server/index.js` (workspace dep) and calls `startWebUiServer({...})`. The returned handle has `getPort()` / `stop()`. Notifications flow via an `onDesktopNotification` callback injected at startup — no stdout-parsing IPC.
+- Windows OS integrations must avoid console-window flashes. Any non-user-visible `child_process` call on Windows (system probes, tool discovery, updater/install helpers, SSH/tunnel helpers, cleanup, etc.) should run the target executable directly with `windowsHide: true`; detached/background helpers usually also need `stdio: 'ignore'`. Avoid `cmd.exe /c` pipelines and wrappers that spawn console grandchildren (`taskkill`, `ping`, nested `powershell`, batch shims), because `windowsHide` only reliably applies to the first child. If a delayed/background operation must outlive the app process, use a single hidden first-level helper (for example `powershell.exe -WindowStyle Hidden -EncodedCommand ...`) or a native Node/Electron API. Only omit this for intentionally user-visible shells/apps.
 - Build/release: Electron is the desktop release target.
 
 ## Tech stack (source of truth: `package.json`, resolved: `bun.lock`)
