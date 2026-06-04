@@ -26,8 +26,11 @@ const UNREVERT_REFETCH_RETRY_MS = 150
 let _sdk: OpencodeClient | null = null
 let _childStores: ChildStoreManager | null = null
 let _getDirectory: () => string = () => ""
-let _optimisticAdd: ((input: { sessionID: string; message: Message; parts: Part[] }) => void) | null = null
-let _optimisticRemove: ((input: { sessionID: string; messageID: string }) => void) | null = null
+type OptimisticAddInput = { sessionID: string; directory?: string | null; message: Message; parts: Part[] }
+type OptimisticRemoveInput = { sessionID: string; directory?: string | null; messageID: string }
+
+let _optimisticAdd: ((input: OptimisticAddInput) => void) | null = null
+let _optimisticRemove: ((input: OptimisticRemoveInput) => void) | null = null
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -84,8 +87,8 @@ export function setActionRefs(
 }
 
 export function setOptimisticRefs(
-  add: (input: { sessionID: string; message: Message; parts: Part[] }) => void,
-  remove: (input: { sessionID: string; messageID: string }) => void,
+  add: (input: OptimisticAddInput) => void,
+  remove: (input: OptimisticRemoveInput) => void,
 ) {
   _optimisticAdd = add
   _optimisticRemove = remove
@@ -539,6 +542,7 @@ export async function optimisticSend(input: {
   providerID: string
   modelID: string
   agent?: string
+  directory?: string | null
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
   /** The actual API call — receives the optimistic messageID so the server can use the same ID */
   send: (messageID: string) => Promise<void>
@@ -549,7 +553,8 @@ export async function optimisticSend(input: {
 
   await waitForConnectionOrThrow()
 
-  const store = dirStore()
+  const targetDirectory = input.directory ?? dir()
+  const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
   const messageID = ascendingId("msg")
   const textPartId = ascendingId("prt")
 
@@ -579,6 +584,7 @@ export async function optimisticSend(input: {
   // Insert into store + register in shadow Map (for mergeOptimisticPage cleanup)
   _optimisticAdd({
     sessionID: input.sessionId,
+    directory: targetDirectory,
     message: optimisticMessage,
     parts: optimisticParts,
   })
@@ -598,6 +604,7 @@ export async function optimisticSend(input: {
     // Rollback via optimistic infrastructure
     _optimisticRemove({
       sessionID: input.sessionId,
+      directory: targetDirectory,
       messageID,
     })
     const s = store.getState()

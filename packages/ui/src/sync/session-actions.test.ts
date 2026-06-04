@@ -159,6 +159,9 @@ import { INITIAL_STATE } from "./types"
 import type { DirectoryStore } from "./child-store"
 import type { Message, OpencodeClient, Part, Session } from "@opencode-ai/sdk/v2/client"
 
+type OptimisticAddCall = { sessionID: string; directory?: string | null; message: Message; parts: Part[] }
+type OptimisticRemoveCall = { sessionID: string; directory?: string | null; messageID: string }
+
 function createStore(
   permissions: Record<string, PermissionRequest[]>,
   state?: Partial<DirectoryStore>,
@@ -182,6 +185,56 @@ function createChildStores(entries: Array<[string, StoreApi<DirectoryStore>]>) {
     },
   } as unknown as import("./child-store").ChildStoreManager
 }
+
+describe("optimisticSend target directory", () => {
+  beforeEach(() => {
+    replyCalls.length = 0
+    scopedClientDirectories.length = 0
+  })
+
+  test("passes the prompt directory to optimistic state during session switch races", async () => {
+    const currentStore = createStore({})
+    const targetStore = createStore({})
+    const childStores = createChildStores([
+      ["/current/project", currentStore],
+      ["/target/project", targetStore],
+    ])
+    let optimisticAdd: OptimisticAddCall | null = null
+    let optimisticRemove: OptimisticRemoveCall | null = null
+    let sentMessageID = ""
+
+    const { optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+    setOptimisticRefs(
+      (input) => {
+        optimisticAdd = input
+      },
+      (input) => {
+        optimisticRemove = input
+      },
+    )
+
+    await optimisticSend({
+      sessionId: "session-new",
+      directory: "/target/project",
+      content: "hello",
+      providerID: "provider",
+      modelID: "model",
+      send: async (messageID) => {
+        sentMessageID = messageID
+      },
+    })
+
+    expect(optimisticAdd).not.toBeNull()
+    const add = optimisticAdd as unknown as OptimisticAddCall
+    expect(add.directory).toBe("/target/project")
+    expect(add.sessionID).toBe("session-new")
+    expect(add.message.id).toBe(sentMessageID)
+    expect(optimisticRemove).toBe(null)
+    expect(targetStore.getState().session_status["session-new"]?.type).toBe("busy")
+    expect(currentStore.getState().session_status["session-new"]).toBe(undefined)
+  })
+})
 
 describe("respondToPermission passes directory", () => {
   beforeEach(() => {

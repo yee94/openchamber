@@ -111,6 +111,7 @@ export function routeMessage(params: {
         providerID: params.providerID,
         modelID: params.modelID,
         agent: params.agent,
+        directory: requestDirectory,
         files: params.files,
         send: (messageID) => opencodeClient.sendCommand({
           id: params.sessionId,
@@ -135,6 +136,7 @@ export function routeMessage(params: {
     providerID: params.providerID,
     modelID: params.modelID,
     agent: params.agent,
+    directory: requestDirectory,
     files: params.files,
     send: (messageID) => opencodeClient.sendMessage({
       id: params.sessionId,
