@@ -1854,10 +1854,13 @@ export const useUIStore = create<UIStore>()(
             const updates: Partial<UIStore> = {};
 
             if (state.isBottomTerminalOpen && !state.hasManuallyResizedBottomTerminal) {
-              updates.bottomTerminalHeight = Math.floor(window.innerHeight * 0.32);
+              const nextHeight = Math.floor(window.innerHeight * 0.32);
+              if (state.bottomTerminalHeight !== nextHeight) {
+                updates.bottomTerminalHeight = nextHeight;
+              }
             }
 
-            return updates;
+            return Object.keys(updates).length > 0 ? updates : state;
           });
         },
 

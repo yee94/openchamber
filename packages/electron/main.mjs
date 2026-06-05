@@ -182,6 +182,7 @@ const state = {
   windowCounter: 1,
   focusedWindowIds: new Set(),
   windowGeometryRevisions: new Map(),
+  windowGeometryTimers: new Map(),
   miniChatWindowsBySession: new Map(),
   sshStatuses: new Map(),
   sshLogs: new Map(),
@@ -581,8 +582,15 @@ const debounceWindowStatePersist = (browserWindow, immediate = false) => {
   const revision = (state.windowGeometryRevisions.get(key) || 0) + 1;
   state.windowGeometryRevisions.set(key, revision);
 
+  const existingTimer = state.windowGeometryTimers.get(key);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    state.windowGeometryTimers.delete(key);
+  }
+
   const persist = async () => {
     if (state.windowGeometryRevisions.get(key) !== revision) return;
+    state.windowGeometryTimers.delete(key);
     await writeWindowState(browserWindow);
   };
 
@@ -591,9 +599,10 @@ const debounceWindowStatePersist = (browserWindow, immediate = false) => {
     return;
   }
 
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     void persist();
   }, 300);
+  state.windowGeometryTimers.set(key, timer);
 };
 
 const buildHealthUrl = (url) => {
@@ -1848,7 +1857,9 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   }
 
   browserWindow.on('resize', () => {
-    emitToWindow(browserWindow, 'openchamber:window-resized');
+    if (process.platform === 'darwin') {
+      emitToWindow(browserWindow, 'openchamber:window-resized');
+    }
     debounceWindowStatePersist(browserWindow, false);
   });
   browserWindow.on('maximize', () => {
