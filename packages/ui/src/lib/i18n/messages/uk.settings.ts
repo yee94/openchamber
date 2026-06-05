@@ -86,6 +86,7 @@ export const settingsDict = {
   "settings.openchamber.tunnel.section.redeemedAccessLinks": "Використані посилання доступу",
   "settings.openchamber.tunnel.section.savedManagedRemoteTunnels": "Збережені керовані віддалені тунелі",
   "settings.openchamber.tunnel.notAvailable.cloudflaredNotFound": "cloudflared не знайдено",
+  "settings.openchamber.tunnel.notAvailable.dependencyNotFound": "{dependency} не знайдено.",
   "settings.openchamber.tunnel.notAvailable.installHint": "Встановіть його, щоб увімкнути віддалений доступ через тунель:",
   "settings.openchamber.tunnel.field.provider": "Провайдер",
   "settings.openchamber.tunnel.field.providerPlaceholder": "Виберіть провайдера",

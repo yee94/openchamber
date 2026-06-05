@@ -86,6 +86,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.section.redeemedAccessLinks': '사용된 접속 링크',
   'settings.openchamber.tunnel.section.savedManagedRemoteTunnels': '저장된 Managed Remote 터널',
   'settings.openchamber.tunnel.notAvailable.cloudflaredNotFound': 'cloudflared를 찾을 수 없음',
+  'settings.openchamber.tunnel.notAvailable.dependencyNotFound': '{dependency}를 찾을 수 없습니다.',
   'settings.openchamber.tunnel.notAvailable.installHint': '원격 터널 접속을 사용하려면 설치하세요:',
   'settings.openchamber.tunnel.field.provider': '프로바이더',
   'settings.openchamber.tunnel.field.providerPlaceholder': '프로바이더 선택',

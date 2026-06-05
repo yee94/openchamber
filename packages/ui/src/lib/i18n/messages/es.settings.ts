@@ -86,6 +86,7 @@ export const settingsDict = {
   "settings.openchamber.tunnel.section.redeemedAccessLinks": "Enlaces de acceso canjeados",
   "settings.openchamber.tunnel.section.savedManagedRemoteTunnels": "Túneles remotos gestionados guardados",
   "settings.openchamber.tunnel.notAvailable.cloudflaredNotFound": "cloudflared no encontrado",
+  "settings.openchamber.tunnel.notAvailable.dependencyNotFound": "No se encontró {dependency}.",
   "settings.openchamber.tunnel.notAvailable.installHint": "Instálalo para habilitar el acceso al túnel remoto:",
   "settings.openchamber.tunnel.field.provider": "Proveedor",
   "settings.openchamber.tunnel.field.providerPlaceholder": "Seleccionar proveedor",

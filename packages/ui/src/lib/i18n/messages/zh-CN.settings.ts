@@ -86,6 +86,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.section.redeemedAccessLinks': '已兑换访问链接',
   'settings.openchamber.tunnel.section.savedManagedRemoteTunnels': '已保存的 Managed Remote 隧道',
   'settings.openchamber.tunnel.notAvailable.cloudflaredNotFound': '未找到 cloudflared',
+  'settings.openchamber.tunnel.notAvailable.dependencyNotFound': '未找到 {dependency}。',
   'settings.openchamber.tunnel.notAvailable.installHint': '安装它以启用远程隧道访问：',
   'settings.openchamber.tunnel.field.provider': '提供商',
   'settings.openchamber.tunnel.field.providerPlaceholder': '选择提供商',

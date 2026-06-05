@@ -83,6 +83,7 @@
   'settings.openchamber.tunnel.section.redeemedAccessLinks': '已兌換存取連結',
   'settings.openchamber.tunnel.section.savedManagedRemoteTunnels': '已儲存的 managed remote tunnel',
   'settings.openchamber.tunnel.notAvailable.cloudflaredNotFound': '找不到 cloudflared',
+  'settings.openchamber.tunnel.notAvailable.dependencyNotFound': '找不到 {dependency}。',
   'settings.openchamber.tunnel.notAvailable.installHint': '安裝它以啟用 remote tunnel 存取：',
   'settings.openchamber.tunnel.field.provider': '供應商',
   'settings.openchamber.tunnel.field.providerPlaceholder': '選擇供應商',

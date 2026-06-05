@@ -119,6 +119,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.section.redeemedAccessLinks': 'Redeemed access links',
   'settings.openchamber.tunnel.section.savedManagedRemoteTunnels': 'Saved managed remote tunnels',
   'settings.openchamber.tunnel.notAvailable.cloudflaredNotFound': 'cloudflared not found',
+  'settings.openchamber.tunnel.notAvailable.dependencyNotFound': '{dependency} was not found.',
   'settings.openchamber.tunnel.notAvailable.installHint': 'Install it to enable remote tunnel access:',
   'settings.openchamber.tunnel.field.provider': 'Provider',
   'settings.openchamber.tunnel.field.providerPlaceholder': 'Select provider',

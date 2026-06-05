@@ -814,6 +814,7 @@ export const settingsDict = {
   'settings.openchamber.tunnel.field.tunnelSessionTtl': 'TTL sesji tunelu',
   'settings.openchamber.tunnel.field.tunnelType': 'Typ tunelu',
   'settings.openchamber.tunnel.notAvailable.cloudflaredNotFound': 'Nie znaleziono cloudflared',
+  'settings.openchamber.tunnel.notAvailable.dependencyNotFound': 'Nie znaleziono {dependency}.',
   'settings.openchamber.tunnel.notAvailable.installHint': 'Zainstaluj go, aby włączyć zdalny dostęp przez tunel:',
   'settings.openchamber.tunnel.note.cloudflareConnectorTarget': 'Docelowy adres konektora Cloudflare:',
   'settings.openchamber.tunnel.note.cloudflareConnectorTargetUse': 'Dla docelowego adresu konektora Cloudflare użyj',
