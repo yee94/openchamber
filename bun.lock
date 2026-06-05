@@ -33,7 +33,7 @@
         "@ibm/plex": "^6.4.1",
         "@lezer/highlight": "^1.2.3",
         "@octokit/rest": "^22.0.1",
-        "@opencode-ai/sdk": "^1.15.13",
+        "@opencode-ai/sdk": "^1.16.0",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -98,7 +98,7 @@
     },
     "packages/electron": {
       "name": "@openchamber/electron",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@openchamber/web": "workspace:*",
         "electron-context-menu": "^4.1.2",
@@ -113,7 +113,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@base-ui/react": "^1.4.0",
         "@codemirror/autocomplete": "^6.20.0",
@@ -144,7 +144,7 @@
         "@fontsource/ibm-plex-sans": "^5.1.1",
         "@ibm/plex": "^6.4.1",
         "@lezer/highlight": "^1.2.3",
-        "@opencode-ai/sdk": "^1.15.13",
+        "@opencode-ai/sdk": "^1.16.0",
         "@pierre/diffs": "1.1.0-beta.13",
         "@simplewebauthn/browser": "13.3.0",
         "@tanstack/react-virtual": "^3.13.18",
@@ -213,10 +213,10 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
-        "@opencode-ai/sdk": "^1.15.13",
+        "@opencode-ai/sdk": "^1.16.0",
         "adm-zip": "^0.5.16",
         "jsonc-parser": "^3.3.1",
         "react": "^19.1.1",
@@ -236,14 +236,14 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@octokit/rest": "^22.0.1",
-        "@opencode-ai/sdk": "^1.15.13",
+        "@opencode-ai/sdk": "^1.16.0",
         "@simplewebauthn/server": "13.3.0",
         "adm-zip": "^0.5.16",
         "better-sqlite3": "^11.7.0",
@@ -938,7 +938,7 @@
 
     "@openchamber/web": ["@openchamber/web@workspace:packages/web"],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.15.13", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-4TwojIoQ8EG6/mVBuUVYZXiFcwNmiiytEnjnvyuvSJjGwFIlw2YIBFxtSVC3FbwwbwHT63teh1RHiQUUC4U5xw=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.16.0", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-S4H2e9j4rdHs5BQOCjmVEdqdXmKwPFKjXPbPUaWiRJpAjBcZ/uIBpoZkmV+x9BLzc+vrE6WAffMZieQgukt4DA=="],
 
     "@paralleldrive/cuid2": ["@paralleldrive/cuid2@2.3.1", "", { "dependencies": { "@noble/hashes": "^1.1.5" } }, "sha512-XO7cAxhnTZl0Yggq6jOgjiOHhbgcO4NqFqwSmQpjK3b6TEE6Uj/jfSk6wzYyemh3+I0sHirKSetjQwn5cZktFw=="],
 

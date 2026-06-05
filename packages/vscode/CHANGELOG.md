@@ -1,3 +1,9 @@
+## [1.12.2] - 2026-06-05
+
+- Startup/Windows: the extension now detects more OpenCode installs from PATH, npm, Scoop, and Chocolatey.
+- Chat: prompts sent while creating or switching target sessions now stay attached to the intended workspace directory.
+- Files: chat and tool links now handle Windows drive-letter and backslash paths.
+
 ## [1.12.1] - 2026-06-03
 
 - Chat: completed turns can now show changed-file chips with per-file additions and deletions, controlled by a new Chat setting.

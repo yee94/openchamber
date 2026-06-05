@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-06-05
+
+- **Desktop/Windows: the Windows app is now available publicly, with full functionality parity across the app.**
+- Tunnels: switching between Cloudflare and ngrok quick tunnels now replaces the active quick tunnel instead of reusing the previous provider.
+- Tunnels: ngrok startup failures now show the ngrok or authtoken error returned during startup.
+- Projects: the Add Project directory picker now starts with hidden files off each time it opens.
+- Chat: prompts sent while creating or switching target sessions now stay attached to the intended project directory.
+- VSCode: the extension now detects more Windows OpenCode installs from PATH, npm, Scoop, and Chocolatey.
+
 ## [1.12.1] - 2026-06-03
 
 - Chat: completed turns can now show changed-file chips with per-file additions and deletions, controlled by a new Chat setting.
