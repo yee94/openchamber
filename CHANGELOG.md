@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.12.3] - 2026-06-05
+
+- Windows/Startup: WSL OpenCode installs are no longer detected or launched; install OpenCode natively on Windows and configure `opencode.cmd` or `opencode.exe` instead.
+- Startup: OpenCode health checks now work with OpenCode 1.15.x.
+- Files: file trees now show directory loading errors with a retry action instead of leaving the folder empty, and slow Git ignore checks no longer block directory listings indefinitely.
+
 ## [1.12.2] - 2026-06-05
 
 - **Desktop/Windows: the Windows app is now available publicly, with full functionality parity across the app.**

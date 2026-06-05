@@ -1,3 +1,7 @@
+## [1.12.3] - 2026-06-05
+
+- Startup: OpenCode health checks now work with OpenCode 1.15.x.
+
 ## [1.12.2] - 2026-06-05
 
 - Startup/Windows: the extension now detects more OpenCode installs from PATH, npm, Scoop, and Chocolatey.
