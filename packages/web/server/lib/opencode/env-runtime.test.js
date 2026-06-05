@@ -90,7 +90,6 @@ const createRuntime = (settings, options = {}) => {
     state,
     normalizeDirectoryPath: (value) => value,
     readSettingsFromDiskMigrated: async () => settings,
-    ENV_CONFIGURED_OPENCODE_WSL_DISTRO: options.ENV_CONFIGURED_OPENCODE_WSL_DISTRO ?? null,
     spawnSync: options.spawnSync,
   });
 
@@ -139,7 +138,7 @@ describe('OpenCode env runtime', () => {
     });
   });
 
-  it('does not classify WSL settings as a native invalid configured binary in strict mode', async () => {
+  it('rejects WSL settings in strict mode', async () => {
     setPlatform('win32');
     const dir = createTempDir('openchamber-no-wsl-');
     process.env.PATH = dir;
@@ -148,18 +147,12 @@ describe('OpenCode env runtime', () => {
     process.env.OPENCHAMBER_WSL_BINARY = path.join(dir, 'missing-openchamber-wsl.exe');
     const { runtime } = createRuntime({ opencodeBinary: 'wsl:/usr/local/bin/opencode' });
 
-    const rejection = runtime.applyOpencodeBinaryFromSettings({ strict: true });
-
-    try {
-      await rejection;
-      expect(runtime.resolveManagedOpenCodeLaunchSpec('opencode').wrapperType).not.toBe('cmd-wrapper');
-    } catch (error) {
-      expect(error.message).toContain('uses WSL');
-      expect(error.code).toBeUndefined();
-    }
+    await expect(runtime.applyOpencodeBinaryFromSettings({ strict: true })).rejects.toMatchObject({
+      message: expect.stringContaining('uses WSL'),
+    });
   });
 
-  it('detects OpenCode installed in the default WSL home fallback path', () => {
+  it('does not auto-detect OpenCode from WSL fallback paths', () => {
     setPlatform('win32');
     const dir = createTempDir('openchamber-wsl-opencode-');
     const wslBinary = path.join(dir, 'wsl.exe');
@@ -182,15 +175,14 @@ describe('OpenCode env runtime', () => {
     };
     const { runtime, state } = createRuntime({}, { spawnSync: spawnSyncMock });
 
-    expect(runtime.resolveOpencodeCliPath()).toBe('wsl:/home/alice/.opencode/bin/opencode');
-    expect(state.useWslForOpencode).toBe(true);
-    expect(state.resolvedWslBinary).toBe(wslBinary);
-    expect(state.resolvedWslOpencodePath).toBe('/home/alice/.opencode/bin/opencode');
-    expect(state.resolvedOpencodeBinarySource).toBe('wsl');
+    expect(runtime.resolveOpencodeCliPath()).toBeNull();
+    expect(state.useWslForOpencode).toBe(false);
+    expect(state.resolvedWslBinary).toBeNull();
+    expect(state.resolvedWslOpencodePath).toBeNull();
+    expect(state.resolvedOpencodeBinarySource).toBeNull();
 
     const wslCall = calls.find((call) => call.command === wslBinary);
-    expect(wslCall?.args).toEqual(expect.arrayContaining(['sh', '-lc']));
-    expect(wslCall?.args.join('\n')).toContain('$HOME/.opencode/bin/opencode');
+    expect(wslCall).toBeUndefined();
   });
 
   it('launches Windows cmd shims through cmd call without embedded quotes', () => {

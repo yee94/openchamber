@@ -9,7 +9,6 @@ export const createOpenCodeEnvRuntime = (deps) => {
     state,
     normalizeDirectoryPath,
     readSettingsFromDiskMigrated,
-    ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
   } = deps;
   const runSpawnSync = typeof deps.spawnSync === 'function' ? deps.spawnSync : spawnSync;
 
@@ -268,135 +267,6 @@ export const createOpenCodeEnvRuntime = (deps) => {
     state.resolvedWslDistro = null;
   };
 
-  const resolveWslExecutablePath = () => {
-    if (process.platform !== 'win32') {
-      return null;
-    }
-
-    const explicit = [process.env.WSL_BINARY, process.env.OPENCHAMBER_WSL_BINARY]
-      .map((v) => (typeof v === 'string' ? v.trim() : ''))
-      .filter(Boolean);
-
-    for (const candidate of explicit) {
-      if (isExecutable(candidate)) {
-        return candidate;
-      }
-    }
-
-    try {
-      const result = runSpawnSync('where', ['wsl'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-      });
-      if (result.status === 0) {
-        const lines = (result.stdout || '')
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean);
-        const found = lines.find((line) => isExecutable(line));
-        if (found) {
-          return found;
-        }
-      }
-    } catch {
-    }
-
-    const systemRoot = process.env.SystemRoot || 'C:\\Windows';
-    const fallback = path.join(systemRoot, 'System32', 'wsl.exe');
-    if (isExecutable(fallback)) {
-      return fallback;
-    }
-
-    return null;
-  };
-
-  const buildWslExecArgs = (execArgs, distroOverride = null) => {
-    const distro = typeof distroOverride === 'string' && distroOverride.trim().length > 0
-      ? distroOverride.trim()
-      : ENV_CONFIGURED_OPENCODE_WSL_DISTRO;
-
-    const prefix = distro ? ['-d', distro] : [];
-    return [...prefix, '--exec', ...execArgs];
-  };
-
-  const wslOpencodeProbeScript = [
-    'found="$(command -v opencode 2>/dev/null || true)"',
-    'case "$found" in /*) case "$found" in /mnt/[a-zA-Z]/*) ;; *) printf "%s\\n" "$found"; exit 0 ;; esac ;; esac',
-    'for candidate in "$HOME/.opencode/bin/opencode" "$HOME/.bun/bin/opencode" "$HOME/.local/bin/opencode" "$HOME/bin/opencode" /usr/local/bin/opencode /usr/bin/opencode /bin/opencode; do',
-    '  if [ -x "$candidate" ]; then printf "%s\\n" "$candidate"; exit 0; fi',
-    'done',
-    'if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then',
-    '  found="$("$SHELL" -lic "command -v opencode" 2>/dev/null | sed -n "1p")"',
-    '  case "$found" in /*) case "$found" in /mnt/[a-zA-Z]/*) ;; *) printf "%s\\n" "$found"; exit 0 ;; esac ;; esac',
-    'fi',
-    'exit 1',
-  ].join('\n');
-
-  const probeWslForOpencode = () => {
-    if (process.platform !== 'win32') {
-      return null;
-    }
-
-    const wslBinary = resolveWslExecutablePath();
-    if (!wslBinary) {
-      return null;
-    }
-
-    try {
-      const result = runSpawnSync(
-        wslBinary,
-        buildWslExecArgs(['sh', '-lc', wslOpencodeProbeScript]),
-        {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: 6000,
-          windowsHide: true,
-        }
-      );
-
-      if (result.status !== 0) {
-        return null;
-      }
-
-      const lines = (result.stdout || '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const found = lines[0] || '';
-      if (!found) {
-        return null;
-      }
-
-      return {
-        wslBinary,
-        opencodePath: found,
-        distro: ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const applyWslOpencodeResolution = ({ wslBinary, opencodePath, source = 'wsl', distro = null } = {}) => {
-    const resolvedWsl = wslBinary || resolveWslExecutablePath();
-    if (!resolvedWsl) {
-      return null;
-    }
-
-    state.useWslForOpencode = true;
-    state.resolvedWslBinary = resolvedWsl;
-    state.resolvedWslOpencodePath = typeof opencodePath === 'string' && opencodePath.trim().length > 0
-      ? opencodePath.trim()
-      : 'opencode';
-    state.resolvedWslDistro = typeof distro === 'string' && distro.trim().length > 0 ? distro.trim() : ENV_CONFIGURED_OPENCODE_WSL_DISTRO;
-    state.resolvedOpencodeBinary = `wsl:${state.resolvedWslOpencodePath}`;
-    state.resolvedOpencodeBinarySource = source;
-
-    delete process.env.OPENCODE_BINARY;
-    return state.resolvedOpencodeBinary;
-  };
-
   const resolveOpencodeCliPath = () => {
     const explicit = [
       process.env.OPENCODE_BINARY,
@@ -483,15 +353,9 @@ export const createOpenCodeEnvRuntime = (deps) => {
         }
       } catch {
       }
-      const wsl = probeWslForOpencode();
-      if (wsl) {
-        return applyWslOpencodeResolution({
-          wslBinary: wsl.wslBinary,
-          opencodePath: wsl.opencodePath,
-          source: 'wsl',
-          distro: wsl.distro,
-        });
-      }
+      // Do not auto-detect OpenCode from WSL. OpenCode sessions are keyed by
+      // server-visible directories, and mixing Windows paths with WSL paths
+      // creates duplicate/missing project state in the desktop app.
       return null;
     }
 
@@ -1046,35 +910,21 @@ export const createOpenCodeEnvRuntime = (deps) => {
         : null;
 
       if (explicitWslPath && explicitWslPath[1] && explicitWslPath[1].trim().length > 0) {
-        const probe = probeWslForOpencode();
-        const applied = applyWslOpencodeResolution({
-          wslBinary: probe?.wslBinary || resolveWslExecutablePath(),
-          opencodePath: explicitWslPath[1].trim(),
-          source: 'settings-wsl-path',
-          distro: probe?.distro || ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
-        });
-        if (applied) {
-          return applied;
-        }
+        clearWslOpencodeResolution();
         if (strict) {
           throw createConfiguredWslOpencodeError(raw);
         }
+        console.warn(`Configured settings.opencodeBinary uses WSL, which is no longer supported by OpenChamber desktop: ${raw}`);
+        return null;
       }
 
       if (process.platform === 'win32' && (isWslExecutableValue(raw) || isWslExecutableValue(normalized || ''))) {
-        const probe = probeWslForOpencode();
-        const applied = applyWslOpencodeResolution({
-          wslBinary: probe?.wslBinary || normalized || raw || null,
-          opencodePath: probe?.opencodePath || 'opencode',
-          source: 'settings-wsl',
-          distro: probe?.distro || ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
-        });
-        if (applied) {
-          return applied;
-        }
+        clearWslOpencodeResolution();
         if (strict) {
           throw createConfiguredWslOpencodeError(raw);
         }
+        console.warn(`Configured settings.opencodeBinary points to WSL, which is no longer supported by OpenChamber desktop: ${raw}`);
+        return null;
       }
 
       if (normalized && isExecutable(normalized) && !isMacOpenCodeAppBundlePath(normalized)) {
@@ -1233,8 +1083,6 @@ export const createOpenCodeEnvRuntime = (deps) => {
     isExecutable,
     searchPathFor,
     resolveGitBinaryForSpawn,
-    resolveWslExecutablePath,
-    buildWslExecArgs,
     clearResolvedOpenCodeBinary,
   };
 };

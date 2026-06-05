@@ -28,8 +28,6 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     applyOpencodeBinaryFromSettings,
     ensureOpencodeCliEnv,
     ensureLocalOpenCodeServerPassword,
-    buildWslExecArgs,
-    resolveWslExecutablePath,
     resolveManagedOpenCodeLaunchSpec,
     setOpenCodePort,
     setDetectedOpenCodeApiPrefix,
@@ -231,25 +229,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     let launchWrapperType = null;
 
     if (process.platform === 'win32' && state.useWslForOpencode) {
-      const wslBinary = state.resolvedWslBinary || resolveWslExecutablePath();
-      if (!wslBinary) {
-        throw new Error('WSL executable not found while attempting to launch OpenCode from WSL');
-      }
-
-      const wslOpencode = state.resolvedWslOpencodePath && state.resolvedWslOpencodePath.trim().length > 0
-        ? state.resolvedWslOpencodePath.trim()
-        : 'opencode';
-      const serveHost = hostname === '127.0.0.1' ? '0.0.0.0' : hostname;
-
-      binary = wslBinary;
-      args = buildWslExecArgs([
-        wslOpencode,
-        'serve',
-        '--hostname',
-        serveHost,
-        '--port',
-        String(port),
-      ], state.resolvedWslDistro);
+      throw new Error('Launching OpenCode through WSL is no longer supported. Install OpenCode natively on Windows and configure opencode.cmd or opencode.exe.');
     }
 
     if (process.platform === 'win32' && !state.useWslForOpencode) {
