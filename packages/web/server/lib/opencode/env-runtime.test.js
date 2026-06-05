@@ -72,7 +72,7 @@ afterEach(() => {
   }
 });
 
-const createRuntime = (settings) => {
+const createRuntime = (settings, options = {}) => {
   const state = {
     cachedLoginShellEnvSnapshot: null,
     resolvedOpencodeBinary: null,
@@ -90,7 +90,8 @@ const createRuntime = (settings) => {
     state,
     normalizeDirectoryPath: (value) => value,
     readSettingsFromDiskMigrated: async () => settings,
-    ENV_CONFIGURED_OPENCODE_WSL_DISTRO: null,
+    ENV_CONFIGURED_OPENCODE_WSL_DISTRO: options.ENV_CONFIGURED_OPENCODE_WSL_DISTRO ?? null,
+    spawnSync: options.spawnSync,
   });
 
   return { runtime, state };
@@ -156,6 +157,40 @@ describe('OpenCode env runtime', () => {
       expect(error.message).toContain('uses WSL');
       expect(error.code).toBeUndefined();
     }
+  });
+
+  it('detects OpenCode installed in the default WSL home fallback path', () => {
+    setPlatform('win32');
+    const dir = createTempDir('openchamber-wsl-opencode-');
+    const wslBinary = path.join(dir, 'wsl.exe');
+    fs.writeFileSync(wslBinary, '');
+    process.env.PATH = dir;
+    process.env.SystemRoot = dir;
+    process.env.WSL_BINARY = wslBinary;
+    delete process.env.OPENCODE_BINARY;
+
+    const calls = [];
+    const spawnSyncMock = (command, args) => {
+      calls.push({ command, args });
+      if (command === 'where') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === wslBinary) {
+        return { status: 0, stdout: '/home/alice/.opencode/bin/opencode\n', stderr: '' };
+      }
+      return { status: 1, stdout: '', stderr: '' };
+    };
+    const { runtime, state } = createRuntime({}, { spawnSync: spawnSyncMock });
+
+    expect(runtime.resolveOpencodeCliPath()).toBe('wsl:/home/alice/.opencode/bin/opencode');
+    expect(state.useWslForOpencode).toBe(true);
+    expect(state.resolvedWslBinary).toBe(wslBinary);
+    expect(state.resolvedWslOpencodePath).toBe('/home/alice/.opencode/bin/opencode');
+    expect(state.resolvedOpencodeBinarySource).toBe('wsl');
+
+    const wslCall = calls.find((call) => call.command === wslBinary);
+    expect(wslCall?.args).toEqual(expect.arrayContaining(['sh', '-lc']));
+    expect(wslCall?.args.join('\n')).toContain('$HOME/.opencode/bin/opencode');
   });
 
   it('launches Windows cmd shims through cmd call without embedded quotes', () => {

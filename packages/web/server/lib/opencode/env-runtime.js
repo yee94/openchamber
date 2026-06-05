@@ -11,6 +11,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     readSettingsFromDiskMigrated,
     ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
   } = deps;
+  const runSpawnSync = typeof deps.spawnSync === 'function' ? deps.spawnSync : spawnSync;
 
   const parseNullSeparatedEnvSnapshot = (raw) => {
     if (typeof raw !== 'string' || raw.length === 0) {
@@ -149,7 +150,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
 
     for (const shellPath of powershellCandidates) {
       try {
-        const result = spawnSync(shellPath, ['-NoLogo', '-Command', psScript], {
+        const result = runSpawnSync(shellPath, ['-NoLogo', '-Command', psScript], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           maxBuffer: 10 * 1024 * 1024,
@@ -168,7 +169,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
 
     const comspec = process.env.ComSpec || 'cmd.exe';
     try {
-      const result = spawnSync(comspec, ['/d', '/s', '/c', 'set'], {
+      const result = runSpawnSync(comspec, ['/d', '/s', '/c', 'set'], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         maxBuffer: 10 * 1024 * 1024,
@@ -202,7 +203,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       }
 
       try {
-        const result = spawnSync(shellPath, ['-lic', 'env -0'], {
+        const result = runSpawnSync(shellPath, ['-lic', 'env -0'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           maxBuffer: 10 * 1024 * 1024,
@@ -283,7 +284,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     }
 
     try {
-      const result = spawnSync('where', ['wsl'], {
+      const result = runSpawnSync('where', ['wsl'], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -319,6 +320,19 @@ export const createOpenCodeEnvRuntime = (deps) => {
     return [...prefix, '--exec', ...execArgs];
   };
 
+  const wslOpencodeProbeScript = [
+    'found="$(command -v opencode 2>/dev/null || true)"',
+    'case "$found" in /*) case "$found" in /mnt/[a-zA-Z]/*) ;; *) printf "%s\\n" "$found"; exit 0 ;; esac ;; esac',
+    'for candidate in "$HOME/.opencode/bin/opencode" "$HOME/.bun/bin/opencode" "$HOME/.local/bin/opencode" "$HOME/bin/opencode" /usr/local/bin/opencode /usr/bin/opencode /bin/opencode; do',
+    '  if [ -x "$candidate" ]; then printf "%s\\n" "$candidate"; exit 0; fi',
+    'done',
+    'if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then',
+    '  found="$("$SHELL" -lic "command -v opencode" 2>/dev/null | sed -n "1p")"',
+    '  case "$found" in /*) case "$found" in /mnt/[a-zA-Z]/*) ;; *) printf "%s\\n" "$found"; exit 0 ;; esac ;; esac',
+    'fi',
+    'exit 1',
+  ].join('\n');
+
   const probeWslForOpencode = () => {
     if (process.platform !== 'win32') {
       return null;
@@ -330,9 +344,9 @@ export const createOpenCodeEnvRuntime = (deps) => {
     }
 
     try {
-      const result = spawnSync(
+      const result = runSpawnSync(
         wslBinary,
-        buildWslExecArgs(['sh', '-lc', 'command -v opencode']),
+        buildWslExecArgs(['sh', '-lc', wslOpencodeProbeScript]),
         {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -450,7 +464,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
 
     if (process.platform === 'win32') {
       try {
-        const result = spawnSync('where', ['opencode'], {
+        const result = runSpawnSync('where', ['opencode'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
@@ -485,7 +499,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     for (const shell of shells) {
       if (!isExecutable(shell)) continue;
       try {
-        const result = spawnSync(shell, ['-lic', 'command -v opencode'], {
+        const result = runSpawnSync(shell, ['-lic', 'command -v opencode'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
@@ -530,7 +544,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
 
     if (process.platform === 'win32') {
       try {
-        const result = spawnSync('where', ['node'], {
+        const result = runSpawnSync('where', ['node'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
@@ -552,7 +566,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     for (const shell of shells) {
       if (!isExecutable(shell)) continue;
       try {
-        const result = spawnSync(shell, ['-lic', 'command -v node'], {
+        const result = runSpawnSync(shell, ['-lic', 'command -v node'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
@@ -611,7 +625,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       }
 
       try {
-        const result = spawnSync('where', ['bun'], {
+        const result = runSpawnSync('where', ['bun'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
@@ -633,7 +647,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     for (const shell of shells) {
       if (!isExecutable(shell)) continue;
       try {
-        const result = spawnSync(shell, ['-lic', 'command -v bun'], {
+        const result = runSpawnSync(shell, ['-lic', 'command -v bun'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
@@ -764,7 +778,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
         return null;
       }
 
-      const launcherPath = path.resolve(path.dirname(wrapperPath), launcherMatch[0]);
+      const launcherPath = path.resolve(path.dirname(wrapperPath), launcherMatch[0].replace(/[\\/]+/g, path.sep));
       return path.dirname(path.dirname(path.dirname(launcherPath)));
     } catch {
       return null;
