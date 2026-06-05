@@ -53,7 +53,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
 
   React.useEffect(() => {
     if (!open) return;
-    void loadProviders({ directory: projectDirectory });
+    void loadProviders({ directory: projectDirectory, source: 'forkSessionDialog' });
     void loadConfigAgents({ directory: projectDirectory });
     void loadAgentsStoreAgents();
   }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);

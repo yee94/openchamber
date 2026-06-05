@@ -373,8 +373,8 @@ export function MobileApp({ apis }: MobileAppProps) {
 
   React.useEffect(() => {
     if (!isConnected) return;
-    if (providersCount === 0) void loadProviders();
-    if (agentsCount === 0) void loadAgents();
+    if (providersCount === 0) void loadProviders({ source: 'mobileApp:recovery' });
+    if (agentsCount === 0) void loadAgents({ source: 'mobileApp:recovery' });
   }, [agentsCount, isConnected, loadAgents, loadProviders, providersCount]);
 
   React.useEffect(() => {

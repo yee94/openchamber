@@ -320,10 +320,10 @@ export const VSCodeLayout: React.FC = () => {
         // Keep trying to fetch core datasets on cold starts.
         if (configStore.isConnected) {
           if (configStore.providers.length === 0) {
-            await configStore.loadProviders();
+            await configStore.loadProviders({ source: 'vscodeLayout:bootstrap' });
           }
           if (configStore.agents.length === 0) {
-            await configStore.loadAgents();
+            await configStore.loadAgents({ source: 'vscodeLayout:bootstrap' });
           }
         }
 

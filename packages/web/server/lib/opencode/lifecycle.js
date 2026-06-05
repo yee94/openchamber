@@ -392,7 +392,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     }
 
     try {
-      const response = await fetch(buildOpenCodeUrl('/global/health', ''), {
+      const response = await fetch(buildOpenCodeUrl('/api/health', ''), {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -417,7 +417,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
       const base = origin ?? `http://127.0.0.1:${port}`;
-      const response = await fetch(`${base}/global/health`, {
+      const response = await fetch(`${base}/api/health`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -659,51 +659,40 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     let lastError = null;
 
     while (Date.now() < deadline) {
+      let timeout = null;
       try {
-        const [configResult, agentResult] = await Promise.all([
-          fetch(buildOpenCodeUrl('/config', ''), {
-            method: 'GET',
-            headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
-          }).catch((error) => error),
-          fetch(buildOpenCodeUrl('/agent', ''), {
-            method: 'GET',
-            headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
-          }).catch((error) => error),
-        ]);
+        const controller = new AbortController();
+        timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+        const response = await fetch(buildOpenCodeUrl('/api/health', ''), {
+          method: 'GET',
+          headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        timeout = null;
 
-        if (configResult instanceof Error) {
-          lastError = configResult;
+        if (!response.ok) {
+          lastError = new Error(`OpenCode health endpoint responded with status ${response.status}`);
           await new Promise((resolve) => setTimeout(resolve, intervalMs));
           continue;
         }
 
-        if (!configResult.ok) {
-          lastError = new Error(`OpenCode config endpoint responded with status ${configResult.status}`);
+        const body = await response.json().catch(() => null);
+        if (body?.healthy !== true) {
+          lastError = new Error('OpenCode health endpoint returned unhealthy response');
           await new Promise((resolve) => setTimeout(resolve, intervalMs));
           continue;
         }
-
-        await configResult.json().catch(() => null);
-
-        if (agentResult instanceof Error) {
-          lastError = agentResult;
-          await new Promise((resolve) => setTimeout(resolve, intervalMs));
-          continue;
-        }
-
-        if (!agentResult.ok) {
-          lastError = new Error(`Agent endpoint responded with status ${agentResult.status}`);
-          await new Promise((resolve) => setTimeout(resolve, intervalMs));
-          continue;
-        }
-
-        await agentResult.json().catch(() => []);
 
         state.isOpenCodeReady = true;
         state.lastOpenCodeError = null;
         return;
       } catch (error) {
         lastError = error;
+      } finally {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
       }
 
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
