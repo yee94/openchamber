@@ -567,8 +567,8 @@ async function waitForReady(
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
 
-        // OpenCode readiness check.
-        const url = new URL(`${baseUrl}/api/health`);
+        // OpenCode readiness check. Use /global/health for OpenCode 1.15.x compatibility.
+        const url = new URL(`${baseUrl}/global/health`);
         const res = await fetch(url.toString(), {
           method: 'GET',
           headers: { Accept: 'application/json', ...authHeaders },

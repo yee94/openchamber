@@ -214,7 +214,7 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
 
   app.get('/api/opencode/health', async (_req, res) => {
     try {
-      const healthResponse = await fetch(buildOpenCodeUrl('/api/health', ''), {
+      const healthResponse = await fetch(buildOpenCodeUrl('/global/health', ''), {
         method: 'GET',
         headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
       });

@@ -33,7 +33,7 @@ export const createOpenCodeNetworkRuntime = (deps) => {
       try {
         const controller = new AbortController();
         timeout = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch(`${url.replace(/\/+$/, '')}/api/health`, {
+        const response = await fetch(`${url.replace(/\/+$/, '')}/global/health`, {
           method: 'GET',
           headers: {
             Accept: 'application/json',
