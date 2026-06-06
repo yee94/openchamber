@@ -226,7 +226,9 @@ export const sendImplementationResponseToReviewer = async (originalSessionID: st
   openReviewSessionPanel(directory, reviewSession);
 };
 
-export const getReviewTransferDirection = (session: Session | null | undefined): 'review-to-original' | 'original-to-review' | null => {
+export type ReviewTransferDirection = 'review-to-original' | 'original-to-review';
+
+export const getReviewTransferDirection = (session: Session | null | undefined): ReviewTransferDirection | null => {
   if (isReviewSession(session)) return 'review-to-original';
   if (getReviewSessionID(session)) return 'original-to-review';
   return null;

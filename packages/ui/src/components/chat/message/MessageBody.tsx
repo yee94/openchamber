@@ -48,9 +48,8 @@ import { useI18n } from '@/lib/i18n';
 import { extractLoopbackUrls } from '@/lib/url';
 import { useDeviceInfo } from '@/lib/device';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import {
-    getReviewTransferDirection,
+    type ReviewTransferDirection,
     sendImplementationResponseToReviewer,
     sendReviewFeedbackToOriginal,
 } from '@/lib/reviewFlow';
@@ -366,6 +365,7 @@ interface MessageBodyProps {
     errorVariant?: 'error' | 'info';
     userActionsMode?: 'inline' | 'external-content' | 'external-actions';
     stickyUserHeaderEnabled?: boolean;
+    reviewTransferDirection?: ReviewTransferDirection | null;
 }
 
 const TOOL_REVEAL_CACHE_MAX = 200;
@@ -967,6 +967,7 @@ const AssistantMessageBody = React.memo(({
     turnGroupingContext,
     errorMessage,
     errorVariant = 'error',
+    reviewTransferDirection = null,
 }: Omit<MessageBodyProps, 'isUser'>) => {
     const { t } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
@@ -1121,26 +1122,15 @@ const AssistantMessageBody = React.memo(({
     const createSessionFromAssistantMessage = useSessionUIStore((state) => state.createSessionFromAssistantMessage);
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const getDirectoryForSession = useSessionUIStore((state) => state.getDirectoryForSession);
-    const currentSession = useGlobalSessionsStore((state) => {
-        if (!sessionId) return null;
-        for (const candidate of state.activeSessions) {
-            if (candidate.id === sessionId) return candidate;
-        }
-        for (const candidate of state.archivedSessions) {
-            if (candidate.id === sessionId) return candidate;
-        }
-        return null;
-    });
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const projects = useProjectsStore((state) => state.projects);
     const effectiveDirectory = useEffectiveDirectory();
-    const currentReviewTransferDirection = getReviewTransferDirection(currentSession);
-    const isReviewSessionView = currentReviewTransferDirection === 'review-to-original';
-    const reviewTransferDirection = (!isMobile && !isVSCode) ? currentReviewTransferDirection : null;
+    const isReviewSessionView = reviewTransferDirection === 'review-to-original';
+    const effectiveReviewTransferDirection = (!isMobile && !isVSCode) ? reviewTransferDirection : null;
     const reviewTransferAction = React.useMemo(() => {
         const transferText = assistantPlanText.trim();
-        if (!sessionId || !effectiveDirectory || !transferText || !reviewTransferDirection) return undefined;
-        if (reviewTransferDirection === 'review-to-original') {
+        if (!sessionId || !effectiveDirectory || !transferText || !effectiveReviewTransferDirection) return undefined;
+        if (effectiveReviewTransferDirection === 'review-to-original') {
             return {
                 ariaLabel: t('chat.messageBody.actions.sendReviewFeedback'),
                 tooltip: t('chat.messageBody.actions.sendReviewFeedback'),
@@ -1164,7 +1154,7 @@ const AssistantMessageBody = React.memo(({
                 }
             },
         };
-    }, [assistantPlanText, effectiveDirectory, reviewTransferDirection, sessionId, t]);
+    }, [assistantPlanText, effectiveDirectory, effectiveReviewTransferDirection, sessionId, t]);
     const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState(false);
     const [isSavingPlan, setIsSavingPlan] = React.useState(false);
     const [isForkDialogOpen, setIsForkDialogOpen] = React.useState(false);
