@@ -14,7 +14,6 @@ import type {
 } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
-import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap";
 import { getRuntimeUrlResolver } from "@/lib/runtime-url";
 import { runtimeFetch } from "@/lib/runtime-fetch";
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
@@ -799,10 +798,6 @@ class OpencodeService {
     }
 
     const requestDirectory = this.normalizeCandidatePath(params.directory ?? null) ?? this.currentDirectory;
-
-    if (requestDirectory) {
-      await waitForWorktreeBootstrap(requestDirectory);
-    }
 
     if (params.format) {
       console.info('[git-generation][browser] send structured message', {
