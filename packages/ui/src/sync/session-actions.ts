@@ -503,6 +503,7 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
     ui.setCurrentSession(null)
   }
   try {
+    await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory)
     const archived = await opencodeClient.updateSession(sessionId, { time: { archived: archivedAt } }, sessionDirectory)
     if (!archived) {
       throw new Error("session.update failed: server did not return the archived session")
