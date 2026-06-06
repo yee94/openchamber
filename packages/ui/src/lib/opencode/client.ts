@@ -486,20 +486,22 @@ class OpencodeService {
     return Array.isArray(response.data) ? response.data : [];
   }
 
-  async createSession(params?: { parentID?: string; title?: string }, directory?: string | null): Promise<Session> {
+  async createSession(params?: { parentID?: string; title?: string; metadata?: Record<string, unknown> }, directory?: string | null): Promise<Session> {
     const requestDirectory = this.normalizeCandidatePath(directory) ?? this.currentDirectory;
     const response = await this.client.session.create({
       ...(requestDirectory ? { directory: requestDirectory } : {}),
       parentID: params?.parentID,
       title: params?.title,
+      metadata: params?.metadata,
     });
     return unwrapSdkData(response, 'session.create');
   }
 
-  async getSession(id: string): Promise<Session> {
+  async getSession(id: string, directory?: string | null): Promise<Session> {
+    const requestDirectory = this.normalizeCandidatePath(directory) ?? this.currentDirectory;
     const response = await this.client.session.get({
       sessionID: id,
-      ...(this.currentDirectory ? { directory: this.currentDirectory } : {})
+      ...(requestDirectory ? { directory: requestDirectory } : {})
     });
     return unwrapSdkData(response, 'session.get');
   }
@@ -515,12 +517,13 @@ class OpencodeService {
 
   async updateSession(
     id: string,
-    patch: { title?: string; time?: { archived?: number | null } },
+    patch: { title?: string; metadata?: Record<string, unknown>; time?: { archived?: number | null } },
     directory?: string | null,
   ): Promise<Session> {
     const requestDirectory = this.normalizeCandidatePath(directory) ?? this.currentDirectory;
     const sdkPatch = {
       ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.metadata !== undefined ? { metadata: patch.metadata } : {}),
       ...(patch.time?.archived !== undefined && patch.time.archived !== null ? { time: { archived: patch.time.archived } } : {}),
     };
     const response = await this.client.session.update({

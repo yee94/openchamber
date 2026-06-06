@@ -16,6 +16,13 @@ import { isSyntheticPart } from "@/lib/messages/synthetic"
 import { materializeSessionSnapshots } from "./materialization"
 import { stripMessageDiffSnapshots } from "./sanitize"
 import { sessionEvents } from "@/lib/sessionEvents"
+import {
+  getOriginalSessionID,
+  getSessionMetadata,
+  isReviewSession,
+  withoutReviewSessionLink,
+  type SessionMetadataRecord,
+} from "@/lib/sessionReviewMetadata"
 
 const MESSAGE_REFETCH_LIMIT = 200
 const MESSAGE_REFETCH_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
@@ -331,11 +338,13 @@ export async function createSession(
   title?: string,
   directoryOverride?: string | null,
   parentID?: string | null,
+  metadata?: Record<string, unknown>,
 ): Promise<Session | null> {
   try {
     const session = await opencodeClient.createSession({
       title,
       parentID: parentID ?? undefined,
+      metadata,
     }, directoryOverride ?? dir())
 
     const sessionDirectory = (session as { directory?: string | null }).directory ?? null
@@ -351,6 +360,42 @@ export async function createSession(
   } catch (error) {
     console.error("[session-actions] createSession failed", error)
     return null
+  }
+}
+
+export async function patchSessionMetadata(
+  sessionId: string,
+  directory: string | null | undefined,
+  updater: (metadata: SessionMetadataRecord) => SessionMetadataRecord,
+): Promise<Session> {
+  const targetDirectory = directory ?? getSessionDirectory(sessionId)
+  const current = await opencodeClient.getSession(sessionId, targetDirectory)
+  const nextMetadata = updater(getSessionMetadata(current))
+  const updated = await opencodeClient.updateSession(sessionId, { metadata: nextMetadata }, targetDirectory)
+  useGlobalSessionsStore.getState().upsertSession(updated)
+  const sessionDirectory = (updated as { directory?: string | null }).directory ?? targetDirectory
+  if (sessionDirectory) registerSessionDirectory(updated.id, sessionDirectory)
+  return updated
+}
+
+async function cleanupReviewMetadataBeforeDelete(sessionId: string, directory?: string | null): Promise<void> {
+  let session: Session
+  try {
+    session = await opencodeClient.getSession(sessionId, directory ?? getSessionDirectory(sessionId))
+  } catch {
+    return
+  }
+  if (!isReviewSession(session)) return
+  const originalSessionID = getOriginalSessionID(session)
+  if (!originalSessionID) return
+  try {
+    await patchSessionMetadata(originalSessionID, directory ?? getSessionDirectory(originalSessionID), (metadata) =>
+      withoutReviewSessionLink(metadata, sessionId),
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/not found/i.test(message)) return
+    console.warn("[session-actions] review metadata cleanup failed before delete", error)
   }
 }
 
@@ -408,6 +453,7 @@ export async function deleteSession(sessionId: string, _options?: Record<string,
     ui.setCurrentSession(null)
   }
   try {
+    await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory)
     const deleted = await opencodeClient.deleteSession(sessionId, sessionDirectory)
     if (deleted !== true) {
       throw new Error("session.delete failed: server did not confirm deletion")
@@ -431,6 +477,7 @@ export async function deleteSessionInDirectory(sessionId: string, directory: str
   const ui = useSessionUIStore.getState()
   if (ui.currentSessionId === sessionId) ui.setCurrentSession(null)
   try {
+    await cleanupReviewMetadataBeforeDelete(sessionId, directory)
     const deleted = await opencodeClient.deleteSession(sessionId, directory)
     if (deleted !== true) {
       throw new Error("session.delete failed: server did not confirm deletion")
@@ -544,6 +591,7 @@ export async function optimisticSend(input: {
   agent?: string
   directory?: string | null
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+  onOptimisticInsert?: () => void
   /** The actual API call — receives the optimistic messageID so the server can use the same ID */
   send: (messageID: string) => Promise<void>
 }): Promise<void> {
@@ -588,6 +636,7 @@ export async function optimisticSend(input: {
     message: optimisticMessage,
     parts: optimisticParts,
   })
+  input.onOptimisticInsert?.()
 
   // Set busy status
   const current = store.getState()
