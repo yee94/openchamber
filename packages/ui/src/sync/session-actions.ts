@@ -9,12 +9,12 @@ import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { opencodeClient } from "@/lib/opencode/client"
-import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { mergeSessionDirectoryMetadata, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
 import { isSyntheticPart } from "@/lib/messages/synthetic"
 import { materializeSessionSnapshots } from "./materialization"
-import { stripMessageDiffSnapshots } from "./sanitize"
+import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { sessionEvents } from "@/lib/sessionEvents"
 import {
   getOriginalSessionID,
@@ -125,6 +125,27 @@ function dirStoreForSession(sessionId: string): { store: DirectoryStoreApi; dire
     return { store: dirStoreForDirectory(directory), directory }
   }
   return { store: dirStore(), directory: dir() }
+}
+
+function updateLiveSession(session: Session, directory?: string): void {
+  const stores = _childStores
+  if (!stores) return
+
+  const candidates = directory
+    ? [[directory, stores.getChild(directory)] as const]
+    : stores.children
+
+  for (const [, store] of candidates) {
+    if (!store) continue
+    const current = store.getState().session
+    const index = current.findIndex((item) => item.id === session.id)
+    if (index === -1) continue
+
+    const next = [...current]
+    next[index] = mergeSessionDirectoryMetadata(session, current[index])
+    store.setState({ session: next })
+    return
+  }
 }
 
 function dir() {
@@ -527,16 +548,18 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
 export async function shareSession(sessionId: string): Promise<Session | null> {
   const sessionDirectory = getSessionDirectory(sessionId)
   const result = await sdk().session.share({ sessionID: sessionId, directory: sessionDirectory })
-  const session = assertSdkData(result, "session.share")
+  const session = stripSessionDiffSnapshots(assertSdkData(result, "session.share"))
   useGlobalSessionsStore.getState().upsertSession(session)
+  updateLiveSession(session, sessionDirectory)
   return session
 }
 
 export async function unshareSession(sessionId: string): Promise<Session | null> {
   const sessionDirectory = getSessionDirectory(sessionId)
   const result = await sdk().session.unshare({ sessionID: sessionId, directory: sessionDirectory })
-  const session = assertSdkData(result, "session.unshare")
+  const session = stripSessionDiffSnapshots(assertSdkData(result, "session.unshare"))
   useGlobalSessionsStore.getState().upsertSession(session)
+  updateLiveSession(session, sessionDirectory)
   return session
 }
 
