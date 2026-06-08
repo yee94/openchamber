@@ -679,6 +679,9 @@ export const registerFsRoutes = (app, dependencies) => {
           content = await fsPromises.readFile(canonicalPath, 'utf8');
           if (content.length > 0) break;
         }
+        if (content.length === 0) {
+          console.warn(`Read retry exhausted for ${canonicalPath}: stat reported ${stats.size} bytes but content is empty`);
+        }
       }
       return res.type('text/plain').send(content);
     } catch (error) {
@@ -790,23 +793,32 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(400).json({ error: resolved.error });
       }
 
-      const existing = await fsPromises.readFile(resolved.resolved, 'utf8').catch(() => null);
+      const writePath = await fsPromises.realpath(resolved.resolved).catch((error) => {
+        if (error && typeof error === 'object' && error.code === 'ENOENT') {
+          return resolved.resolved;
+        }
+        throw error;
+      });
+      const canonicalBase = await fsPromises.realpath(resolved.base).catch(() => path.resolve(resolved.base));
+      if (!isPathWithinRoot(writePath, canonicalBase, path, os)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const existing = await fsPromises.readFile(writePath, 'utf8').catch(() => null);
       if (existing === content) {
         return res.json({ success: true, path: resolved.resolved });
       }
 
-      await fsPromises.mkdir(path.dirname(resolved.resolved), { recursive: true });
+      await fsPromises.mkdir(path.dirname(writePath), { recursive: true });
 
       // Atomic write: write to temp then rename to avoid concurrent readers
       // seeing an empty file during the O_TRUNC window of direct writeFile.
-      const tmp = `${resolved.resolved}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      let tmpExists = false;
+      const tmp = `${writePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       try {
         await fsPromises.writeFile(tmp, content, 'utf8');
-        tmpExists = true;
-        await fsPromises.rename(tmp, resolved.resolved);
+        await fsPromises.rename(tmp, writePath);
       } catch (error) {
-        if (tmpExists) await fsPromises.unlink(tmp).catch(() => {});
+        await fsPromises.unlink(tmp).catch(() => {});
         throw error;
       }
       return res.json({ success: true, path: resolved.resolved });
