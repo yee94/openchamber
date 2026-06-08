@@ -630,6 +630,7 @@ async function performConfigRefresh(options: {
 
     if (refreshProviders) {
       useConfigStore.getState().invalidateModelMetadataCache();
+      useConfigStore.getState().invalidateProviderCache(mode === "active" ? currentDirectory : undefined);
     }
 
     const sdkRefreshTasks: Promise<void>[] = [];
