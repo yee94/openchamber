@@ -578,6 +578,7 @@ export const AgentsPage: React.FC = () => {
 
     try {
       const trimmedModel = model.trim();
+      const trimmedPrompt = prompt.trim();
       const permissionConfig = buildPermissionConfigWithGlobal(globalPermission, permissionRules);
       const config: AgentConfig = {
         name: agentName,
@@ -586,7 +587,7 @@ export const AgentsPage: React.FC = () => {
         model: trimmedModel === '' ? null : trimmedModel,
         temperature,
         top_p: topP,
-        prompt: prompt.trim() || undefined,
+        prompt: trimmedPrompt || (isNewAgent ? undefined : null),
         permission: permissionConfig,
         scope: isNewAgent ? draftScope : undefined,
       };

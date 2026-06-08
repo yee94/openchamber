@@ -1666,6 +1666,39 @@ export const updateAgent = (agentName: string, updates: Record<string, unknown>,
 
   for (const [field, value] of Object.entries(updates || {})) {
     if (field === 'prompt') {
+      if (value === null) {
+        if (mdExists || creatingNewMd) {
+          if (mdData) {
+            mdData.body = '';
+            mdModified = true;
+          }
+          continue;
+        }
+
+        if (isPromptFileReference(jsonSection?.prompt)) {
+          const promptFilePath = resolvePromptFilePath(jsonSection.prompt);
+          if (!promptFilePath) throw new Error(`Invalid prompt file reference for agent ${agentName}`);
+          writePromptFile(promptFilePath, '');
+          continue;
+        }
+
+        if (config.agent) {
+          const agentMap = config.agent as Record<string, unknown>;
+          const current = agentMap[agentName] as Record<string, unknown> | undefined;
+          if (current) {
+            delete current.prompt;
+            if (Object.keys(current).length === 0) {
+              delete agentMap[agentName];
+            }
+            if (Object.keys(agentMap).length === 0) {
+              delete config.agent;
+            }
+            jsonModified = true;
+          }
+        }
+        continue;
+      }
+
       const normalizedValue = typeof value === 'string' ? value : value == null ? '' : String(value);
 
       if (mdExists || creatingNewMd) {

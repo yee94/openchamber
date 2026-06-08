@@ -449,6 +449,39 @@ function updateAgent(agentName, updates, workingDirectory) {
 
   for (const [field, value] of Object.entries(updates)) {
     if (field === 'prompt') {
+      if (value === null) {
+        if (mdExists || creatingNewMd) {
+          if (mdData) {
+            mdData.body = '';
+            mdModified = true;
+          }
+          continue;
+        }
+
+        if (isPromptFileReference(jsonSection?.prompt)) {
+          const promptFilePath = resolvePromptFilePath(jsonSection.prompt);
+          if (!promptFilePath) {
+            throw new Error(`Invalid prompt file reference for agent ${agentName}`);
+          }
+          writePromptFile(promptFilePath, '');
+          continue;
+        }
+
+        if (config.agent?.[agentName]) {
+          delete config.agent[agentName].prompt;
+
+          if (Object.keys(config.agent[agentName]).length === 0) {
+            delete config.agent[agentName];
+          }
+          if (Object.keys(config.agent).length === 0) {
+            delete config.agent;
+          }
+
+          jsonModified = true;
+        }
+        continue;
+      }
+
       const normalizedValue = typeof value === 'string' ? value : (value == null ? '' : String(value));
 
       if (mdExists || creatingNewMd) {
