@@ -909,6 +909,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const pendingFileFocusPath = useUIStore((state) => state.pendingFileFocusPath);
   const setPendingFileFocusPath = useUIStore((state) => state.setPendingFileFocusPath);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+  const fileEditorKeymap = useUIStore((state) => state.fileEditorKeymap);
   const settingsDefaultFileViewerPreview = useConfigStore((state) => state.settingsDefaultFileViewerPreview);
 
   // Global mouseup to end drag selection
@@ -3558,6 +3559,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   value={draftContent}
                   onChange={setDraftContent}
                   readOnly={!canEdit}
+                  vimMode={fileEditorKeymap === 'vim'}
                   extensions={editorExtensions}
                   className="h-full"
                   blockWidgets={blockWidgets}
@@ -3855,6 +3857,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 value={draftContent}
                 onChange={setDraftContent}
                 readOnly={!canEdit}
+                vimMode={fileEditorKeymap === 'vim'}
                 extensions={editorExtensions}
                 className="h-full"
                 onViewReady={(view) => {
