@@ -14,6 +14,12 @@ import {
 } from '@/stores/useGlobalSessionsStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { QUOTA_PROVIDERS, formatWindowLabel, formatQuotaValueLabel } from '@/lib/quota';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useGitStore } from '@/stores/useGitStore';
+import { resolveProjectForSessionDirectory, normalizeProjectPath } from '@/lib/projectResolution';
+import type { ProjectEntry } from '@/lib/api/types';
+import type { WorktreeMetadata } from '@/types/worktree';
 import { toast } from '@/components/ui';
 import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
@@ -45,6 +51,8 @@ type TraySession = {
   unseen: number;
   hasError: boolean;
   directory: string;
+  // Secondary line for the menu row: "project · branch" (rendered as sublabel).
+  subtitle: string;
 };
 
 type TrayApproval = {
@@ -103,6 +111,48 @@ const questionLabel = (request: QuestionRequest): string => {
 
 const updatedAt = (session: Session): number =>
   session.time?.updated ?? session.time?.created ?? 0;
+
+const basenameOf = (p: string): string => {
+  const norm = p.replace(/\\/g, '/').replace(/\/+$/, '');
+  const idx = norm.lastIndexOf('/');
+  return idx >= 0 ? norm.slice(idx + 1) : norm;
+};
+
+// Resolve the "project · branch" metadata line for a session from its directory,
+// covering both project-root sessions and worktree sessions (which map back to
+// their parent project). Branch prefers the live VCS value; falls back to the
+// worktree's recorded branch when the directory isn't currently synced.
+const resolveSessionSubtitle = (
+  directory: string,
+  session: Session,
+  projects: ProjectEntry[],
+  worktreesByProject: Map<string, WorktreeMetadata[]>,
+  branchByDirectory: Map<string, string>,
+): string => {
+  if (!directory) return '';
+  const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);
+  const globalProjectName = (session as { project?: { name?: string } | null }).project?.name;
+  const projectName = project?.label?.trim() || globalProjectName?.trim() || basenameOf(directory);
+  const normDir = normalizeProjectPath(directory);
+
+  // Branch resolution, most-authoritative first: live VCS from the sync store,
+  // then the git store's cached status (covers project-root sessions whose
+  // directory isn't actively synced), then recorded worktree metadata.
+  let branch = (normDir && branchByDirectory.get(normDir)) || '';
+  if (!branch) {
+    for (const [dir, gitState] of useGitStore.getState().directories) {
+      if (normalizeProjectPath(dir) === normDir) { branch = gitState.status?.current ?? ''; break; }
+    }
+  }
+  if (!branch) {
+    for (const worktrees of worktreesByProject.values()) {
+      const match = worktrees.find((wt) => normalizeProjectPath(wt.path) === normDir);
+      if (match?.branch) { branch = match.branch; break; }
+    }
+  }
+
+  return branch ? `${projectName} · ${branch}` : projectName;
+};
 
 // Build the usage groups exactly like the header/mobile: only providers the
 // user enabled for the dropdown AND that report as configured. Window rows only
@@ -179,7 +229,9 @@ const collectLiveData = (): LiveData => {
 
   for (const [directory, store] of stores.children.entries()) {
     const state = store.getState();
-    if (state.vcs?.branch) branchByDirectory.set(directory, state.vcs.branch);
+    // Normalize the key so it matches the session directory regardless of
+    // trailing slashes / separators.
+    if (state.vcs?.branch) branchByDirectory.set(normalizeProjectPath(directory) ?? directory, state.vcs.branch);
 
     for (const session of state.session) {
       if (!session?.id) continue;
@@ -249,6 +301,9 @@ const buildSnapshot = (instanceName: string): TraySnapshot => {
     return 'idle';
   };
 
+  const projects = useProjectsStore.getState().projects;
+  const worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject;
+
   const sessions: TraySession[] = allSessions
     .filter((s) => s?.id && !s.parentID) // root rows; sub-session work rolls up
     .slice()
@@ -265,6 +320,7 @@ const buildSnapshot = (instanceName: string): TraySnapshot => {
         unseen: family.reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0),
         hasError: family.some((id) => notif.unseenHasError[id] ?? false),
         directory,
+        subtitle: resolveSessionSubtitle(directory, session, projects, worktreesByProject, live.branchByDirectory),
       };
     });
 
@@ -353,6 +409,11 @@ export const useTraySync = (): void => {
     // The global store drives the session list. It updates instantly via SSE
     // for the active directory; subscribe so those land in the tray at once.
     const unsubscribeGlobal = useGlobalSessionsStore.subscribe(() => scheduleFlush());
+    // Project labels and discovered worktrees feed the "project · branch"
+    // subtitle; refresh the tray when they change (deduped, so cheap).
+    const unsubscribeProjects = useProjectsStore.subscribe(() => scheduleFlush());
+    const unsubscribeWorktrees = useSessionUIStore.subscribe(() => scheduleFlush());
+    const unsubscribeGit = useGitStore.subscribe(() => scheduleFlush());
 
     // Make the tray self-sufficient: load the full cross-project list now
     // (independent of the sidebar) and refresh it periodically so sessions from
@@ -391,6 +452,9 @@ export const useTraySync = (): void => {
       window.clearInterval(usageRefreshTick);
       unsubscribeNotif();
       unsubscribeGlobal();
+      unsubscribeProjects();
+      unsubscribeWorktrees();
+      unsubscribeGit();
       unsubscribeQuota();
       unsubscribeRegistry?.();
       for (const unsub of storeUnsubs.values()) unsub();

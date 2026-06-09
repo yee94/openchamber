@@ -26,22 +26,20 @@ const truncate = (value, max) => {
   return `${text.slice(0, Math.max(0, max - 1))}…`;
 };
 
-// Glyph only for sessions that have an actual state; idle sessions get blank
-// indentation so the row reads cleanly without an empty circle.
-const statusGlyph = (session) => {
-  if (session.status === 'busy') return '●';
-  if (session.status === 'retry') return '⟳';
-  if (session.hasError) return '▲';
-  if (session.unseen > 0) return '✓';
-  return '';
+// Which status icon key a session maps to. 'blank' (a transparent image)
+// reserves the same left gutter for idle rows so every row aligns.
+const statusIconKey = (session) => {
+  if (session.status === 'busy') return 'busy';
+  if (session.status === 'retry') return 'retry';
+  if (session.hasError) return 'error';
+  if (session.unseen > 0) return 'unseen';
+  return 'blank';
 };
 
 const sessionLabel = (session) => {
-  const glyph = statusGlyph(session);
-  const parts = [glyph || '   ', truncate(session.title || 'Untitled session', 38)];
-  if (session.branch) parts.push(`⎇ ${truncate(session.branch, 18)}`);
-  if (session.unseen > 0) parts.push(`(${session.unseen})`);
-  return parts.join('  ');
+  // The status is a native left icon (the ✓ already signals unread), so the
+  // label is just the session title.
+  return truncate(session.title || 'Untitled session', 40);
 };
 
 const approvalLabel = (approval) => {
@@ -96,7 +94,7 @@ const toTemplateImage = (p) => {
 // idleIconPath: plain outline (calm state). unseenIconPath: statically filled
 // (a finished session left unread). breathIconPaths: eased outline→fill frames
 // the busy state ping-pongs through.
-export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconPaths, onAction }) => {
+export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconPaths, statusIconPaths, onAction }) => {
   let tray = null;
   let lastTitle = null;
 
@@ -104,6 +102,11 @@ export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconP
   const idleFrame = toTemplateImage(idleIconPath);
   const unseenFrame = toTemplateImage(unseenIconPath);
   const breathFrames = breathIconPaths.map(toTemplateImage);
+  // Per-row status icons (template images, tinted + vertically centred by macOS).
+  const statusIcons = {};
+  for (const [key, p] of Object.entries(statusIconPaths || {})) {
+    statusIcons[key] = toTemplateImage(p);
+  }
 
   let iconState = null;
   let animTimer = null;
@@ -201,6 +204,11 @@ export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconP
 
     const sessionItem = (session) => ({
       label: sessionLabel(session),
+      // Status icon on the left, centred across both lines; idle uses the blank
+      // placeholder so every row keeps the same gutter.
+      icon: statusIcons[statusIconKey(session)] || statusIcons.blank,
+      // Secondary smaller line (macOS): project · branch.
+      ...(session.subtitle ? { sublabel: truncate(session.subtitle, 48) } : {}),
       click: () => onAction({ type: 'focus-session', sessionId: session.id }),
     });
 

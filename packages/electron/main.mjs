@@ -4080,11 +4080,21 @@ const resolveTraySurface = () => {
 
 const trayIconAssets = () => {
   const dir = path.join(resourceRoot(), 'icons', 'tray');
+  const statusDir = path.join(dir, 'status');
   return {
     idleIconPath: path.join(dir, 'trayTemplate-idle.png'),
     unseenIconPath: path.join(dir, 'trayTemplate-unseen.png'),
     breathIconPaths: Array.from({ length: TRAY_BREATH_FRAME_COUNT }, (_, i) =>
       path.join(dir, `trayTemplate-breath-${String(i).padStart(2, '0')}.png`)),
+    // Per-session status icons shown in the menu rows (left, vertically centred
+    // across the title + sublabel). 'blank' reserves the gutter for idle rows.
+    statusIconPaths: {
+      busy: path.join(statusDir, 'busy.png'),
+      retry: path.join(statusDir, 'retry.png'),
+      error: path.join(statusDir, 'error.png'),
+      unseen: path.join(statusDir, 'unseen.png'),
+      blank: path.join(statusDir, 'blank.png'),
+    },
   };
 };
 
