@@ -387,9 +387,21 @@ export function setExternallyViewedSession(directory: string, sessionId: string,
   externallyViewedSessions.set(key, Date.now() + EXTERNAL_VIEW_TTL_MS)
 }
 
+// The window must actually be focused for the active session to count as
+// "seen": if the app is minimized or in the background, a turn finishing in the
+// currently-selected session should still raise an unseen marker (in the tray
+// and in-app), since the user isn't looking at it.
+function isWindowFocused(): boolean {
+  return typeof document !== "undefined" && document.hasFocus()
+}
+
 function isViewedInCurrentSession(directory: string, sessionId?: string): boolean {
   if (!sessionId) return false
-  if (_activeDirectory && _activeSession && directory === _activeDirectory && sessionId === _activeSession) return true
+  if (
+    _activeDirectory && _activeSession
+    && directory === _activeDirectory && sessionId === _activeSession
+    && isWindowFocused()
+  ) return true
   pruneExternallyViewedSessions()
   return externallyViewedSessions.has(viewedSessionKey(directory, sessionId))
 }
