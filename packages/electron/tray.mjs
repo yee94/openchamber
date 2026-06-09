@@ -180,13 +180,13 @@ export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconP
               { type: 'separator' },
               { label: 'Deny', click: () => onAction({ type: 'respond-permission', sessionId: approval.sessionId, id: approval.id, response: 'reject' }) },
               { type: 'separator' },
-              { label: 'Open in app', click: () => onAction({ type: 'focus-session', sessionId: approval.sessionId }) },
+              { label: 'Open in app', click: () => onAction({ type: 'focus-session', sessionId: approval.sessionId, directory: approval.directory || '' }) },
             ],
           };
         }
         return {
           label: approvalLabel(approval),
-          click: () => onAction({ type: 'focus-session', sessionId: approval.sessionId }),
+          click: () => onAction({ type: 'focus-session', sessionId: approval.sessionId, directory: approval.directory || '' }),
         };
       };
       for (const approval of approvals.slice(0, MAX_APPROVALS)) {
@@ -209,7 +209,7 @@ export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconP
       icon: statusIcons[statusIconKey(session)] || statusIcons.blank,
       // Secondary smaller line (macOS): project · branch.
       ...(session.subtitle ? { sublabel: truncate(session.subtitle, 48) } : {}),
-      click: () => onAction({ type: 'focus-session', sessionId: session.id }),
+      click: () => onAction({ type: 'focus-session', sessionId: session.id, directory: session.directory || '' }),
     });
 
     if (sessions.length > 0) {

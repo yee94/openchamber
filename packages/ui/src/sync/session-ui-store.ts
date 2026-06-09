@@ -442,6 +442,14 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     )
     const fallbackDir = opencodeClient.getDirectory() ?? directoryState.currentDirectory ?? null
     const resolvedDir = (directoryHint ? normalizePath(directoryHint) : null) ?? sessionDir ?? fallbackDir
+    const projectsState = useProjectsStore.getState()
+    const sessionProject = resolvedDir
+      ? resolveProjectForSessionDirectory(
+        projectsState.projects,
+        get().availableWorktreesByProject,
+        resolvedDir,
+      )
+      : null
 
     // Set the directory together with the session id so chat hooks read the
     // same child store that send/SSE events will update during startup races.
@@ -451,6 +459,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     try {
       if (resolvedDir && directoryState.currentDirectory !== resolvedDir) {
         directoryState.setDirectory(resolvedDir, { showOverlay: false })
+      }
+      if (sessionProject && projectsState.activeProjectId !== sessionProject.id) {
+        projectsState.setActiveProjectIdOnly(sessionProject.id)
       }
       opencodeClient.setDirectory(resolvedDir ?? undefined)
     } catch (e) {

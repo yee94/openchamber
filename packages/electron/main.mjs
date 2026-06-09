@@ -4004,6 +4004,7 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
   'desktop_get_app_version',
   'desktop_get_lan_address',
   'desktop_capture_page_rect',
+  'desktop_tray_update',
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
