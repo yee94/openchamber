@@ -1568,3 +1568,18 @@ input[aria-label="Terminal input"] {
 [data-settings-view="true"] .overlay-scrollbar {
   display: none;
 }
+
+/* Desktop app shell (Electron/native window): native apps use the arrow cursor
+   for clickable controls, not the web's hand/pointer. Neutralize pointer
+   cursors under the desktop runtime only — web in a browser keeps them.
+   Resize/grab/text cursors are untouched. */
+html.desktop-runtime
+  :where(button, [role="button"], a[href], summary, label[for]):not(:disabled):not([aria-disabled="true"]) {
+  cursor: default;
+}
+html.desktop-runtime [class*="cursor-pointer"] {
+  cursor: default !important;
+}
+html.desktop-runtime .markdown-content [data-openchamber-file-link="true"] {
+  cursor: default;
+}
