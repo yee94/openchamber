@@ -17,7 +17,7 @@
 
 import { Tray, Menu, nativeImage } from 'electron';
 
-const MAX_SESSIONS = 12;
+const MAX_SESSIONS = 8;
 const MAX_APPROVALS = 10;
 
 const truncate = (value, max) => {
@@ -218,6 +218,32 @@ export const createTrayController = ({ idleIconPath, unseenIconPath, breathIconP
       }
     } else {
       template.push({ label: 'No active sessions', enabled: false });
+    }
+
+    // Usage submenu — only when the user has enabled providers for the dropdown
+    // (same "configured to show" rule as the header/mobile); omitted otherwise.
+    const usage = snapshot.usage && typeof snapshot.usage === 'object' ? snapshot.usage : null;
+    const usageGroups = usage && Array.isArray(usage.groups) ? usage.groups : [];
+    if (usageGroups.length > 0) {
+      const modeLabel = usage.mode === 'remaining' ? 'Remaining' : 'Used';
+      const usageSubmenu = [];
+      usageGroups.forEach((group, index) => {
+        if (index > 0) usageSubmenu.push({ type: 'separator' });
+        // Read-only info rows. NSMenu only offers greyed-out for non-clickable
+        // items (no custom text contrast), so these render dimmed — at the mercy
+        // of macOS's menu contrast choices. Provider flush, rows indented.
+        usageSubmenu.push({ label: group.provider, enabled: false });
+        if (group.status) {
+          usageSubmenu.push({ label: `    ${truncate(group.status, 40)}`, enabled: false });
+        }
+        for (const row of (Array.isArray(group.rows) ? group.rows : [])) {
+          usageSubmenu.push({ label: `    ${row.label}  —  ${row.value}`, enabled: false });
+        }
+      });
+      template.push(
+        { type: 'separator' },
+        { label: `Usage (${modeLabel})`, submenu: usageSubmenu },
+      );
     }
 
     template.push(
