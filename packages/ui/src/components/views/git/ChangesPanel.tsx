@@ -357,7 +357,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       const isDirectoryReverting = isRevertingAll || directoryPaths.some((path) => revertingPaths.has(path));
       return (
         <div
-          className={cn('group flex items-center gap-2 py-1.5 hover:bg-sidebar/40', ROW_PADDING_CLASSNAME)}
+          className={cn('group flex items-center gap-2 py-1.5', ROW_PADDING_CLASSNAME)}
           style={{ paddingLeft: `${depth * TREE_INDENT_PX}px` }}
         >
           <button

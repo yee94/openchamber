@@ -2361,7 +2361,7 @@ export const GitView: React.FC = () => {
   }
 
   return (
-    <div className={cn('flex h-full flex-col overflow-hidden', 'bg-sidebar')}>
+    <div className={cn('flex h-full flex-col overflow-hidden')}>
           <GitHeader
         status={status}
         localBranches={localBranches}
@@ -2407,7 +2407,7 @@ export const GitView: React.FC = () => {
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
-          <div className={cn('min-w-0 min-h-0 h-full flex flex-col', 'bg-sidebar')}>
+          <div className={cn('min-w-0 min-h-0 h-full flex flex-col')}>
             <ScrollableOverlay
               as={ScrollShadow}
               ref={actionPanelScrollRef}
@@ -2429,6 +2429,7 @@ export const GitView: React.FC = () => {
                           onVisiblePathsChange={setVisibleChangePaths}
                           onRevertAll={handleRevertAll}
                           onRevertDirectory={handleRevertDirectory}
+                          headerBackgroundClassName="bg-background"
                         />
                       </div>
 
