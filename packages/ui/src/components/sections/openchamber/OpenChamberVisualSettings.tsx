@@ -20,7 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Icon } from "@/components/icon/Icon";
-import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { invokeDesktop, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { usePwaDetection } from '@/hooks/usePwaDetection';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -339,6 +339,16 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     } = useThemeSystem();
 
     const [themesReloading, setThemesReloading] = React.useState(false);
+
+    // macOS-desktop-only vibrancy toggle. Changing it needs a full relaunch
+    // (vibrancy is a window-creation option), so we persist + restart on save.
+    const macVibrancySupported = React.useMemo(
+        () => isDesktopShell() && typeof window !== 'undefined' && window.__OPENCHAMBER_ELECTRON__?.macVibrancySupported === true,
+        [],
+    );
+    const macVibrancyEnabled = typeof window !== 'undefined' && window.__OPENCHAMBER_ELECTRON__?.macVibrancy === true;
+    const [vibrancyChecked, setVibrancyChecked] = React.useState(macVibrancyEnabled);
+    const [vibrancyRestarting, setVibrancyRestarting] = React.useState(false);
     const [chatRenderPreviewTick, setChatRenderPreviewTick] = React.useState(0);
     const reportUsage = useUIStore(state => state.reportUsage);
     const setReportUsage = useUIStore(state => state.setReportUsage);
@@ -797,6 +807,56 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         </TooltipContent>
                                     </Tooltip>
                                 </div>
+
+                                {macVibrancySupported && (
+                                    <div className="flex flex-col gap-1.5 border-t border-border/40 pt-3">
+                                        <div
+                                            className="group flex cursor-pointer items-start gap-2 py-0.5"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={vibrancyChecked}
+                                            onClick={() => { if (!vibrancyRestarting) setVibrancyChecked(!vibrancyChecked); }}
+                                            onKeyDown={(event) => {
+                                                if (event.key === ' ' || event.key === 'Enter') {
+                                                    event.preventDefault();
+                                                    if (!vibrancyRestarting) setVibrancyChecked(!vibrancyChecked);
+                                                }
+                                            }}
+                                        >
+                                            <Checkbox
+                                                checked={vibrancyChecked}
+                                                onChange={setVibrancyChecked}
+                                                disabled={vibrancyRestarting}
+                                                ariaLabel={t('settings.openchamber.visual.field.macVibrancy')}
+                                            />
+                                            <div className="flex min-w-0 flex-col">
+                                                <span className="typography-ui-label text-foreground">
+                                                    {t('settings.openchamber.visual.field.macVibrancy')}
+                                                </span>
+                                                <span className="typography-meta text-muted-foreground">
+                                                    {t('settings.openchamber.visual.field.macVibrancyHint')}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {vibrancyChecked !== macVibrancyEnabled && (
+                                            <div className="pl-6">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={vibrancyRestarting}
+                                                    onClick={() => {
+                                                        setVibrancyRestarting(true);
+                                                        void invokeDesktop('desktop_set_vibrancy', { enabled: vibrancyChecked });
+                                                    }}
+                                                >
+                                                    {vibrancyRestarting
+                                                        ? t('settings.openchamber.visual.actions.restarting')
+                                                        : t('settings.openchamber.visual.actions.saveAndRestart')}
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </section>
                         )}
 
