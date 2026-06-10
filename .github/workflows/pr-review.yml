@@ -173,8 +173,7 @@ jobs:
           review_comment_count="$(gh api \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
             --paginate \
-            --slurp \
-            --jq "map(.[]) | [.[] | select(.created_at > \"${COMMAND_CREATED_AT}\" and .user.login == \"openchamber-bot[bot]\" and (.body | contains(\"<h3>Code Review Summary</h3>\")))] | length")"
+            | jq -s --arg created_at "$COMMAND_CREATED_AT" '[.[][] | select(.created_at > $created_at and .user.login == "openchamber-bot[bot]" and (.body | contains("<h3>Code Review Summary</h3>")))] | length')"
 
           if [ "$review_comment_count" -lt 1 ]; then
             echo "Manual /oc-review completed without creating a new OpenChamber Bot PR comment." >&2
