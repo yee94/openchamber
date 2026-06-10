@@ -144,6 +144,7 @@ export type DesktopSettings = {
   activityRenderMode?: 'collapsed' | 'summary';
   mermaidRenderingMode?: 'svg' | 'ascii';
   userMessageRenderingMode?: 'markdown' | 'plain';
+  collapsibleUserMessages?: boolean;
   stickyUserHeader?: boolean;
   wideChatLayoutEnabled?: boolean;
   showSplitAssistantMessageActions?: boolean;

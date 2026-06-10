@@ -161,6 +161,12 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['messages', 'header'],
   },
   {
+    id: 'chat.collapsible-user-messages',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.collapsibleUserMessages',
+    keywords: ['collapse', 'expand', 'clamp', 'long messages', 'user messages'],
+  },
+  {
     id: 'chat.wide-layout',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.wideChatLayout',
