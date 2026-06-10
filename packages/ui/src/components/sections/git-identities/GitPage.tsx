@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useGitIdentitiesStore, type GitIdentityProfile, type DiscoveredGitCredential } from '@/stores/useGitIdentitiesStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitSettings } from '@/components/sections/openchamber/GitSettings';
@@ -248,6 +249,7 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
   hasBorder,
 }) => {
   const { t } = useI18n();
+  const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
   const iconName = ICON_MAP[profile.icon || 'branch'] || 'git-branch';
   const iconColor = COLOR_MAP[profile.color || ''];
   const authType = profile.authType || 'ssh';
@@ -260,17 +262,43 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
     onEdit();
   };
 
-  return (
-    <div
-      className={cn(
-        'group flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--interactive-hover)]/30 cursor-pointer',
-        hasBorder && 'border-b border-[var(--surface-subtle)]'
+  const renderMenuItems = (Item: React.ElementType) => (
+    <>
+      <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onToggleDefault(); }}>
+        {isDefault ? t('settings.gitIdentities.page.actions.unsetDefault') : t('settings.gitIdentities.page.actions.setAsDefault')}
+      </Item>
+      {!isReadOnly && onDelete && (
+        <Item
+          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(); }}
+          className="text-destructive focus:text-destructive"
+        >
+          <Icon name="delete-bin" className="h-4 w-4 mr-px" />
+          {t('settings.common.actions.delete')}
+        </Item>
       )}
-      onClick={onEdit}
-      role="button"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-    >
+    </>
+  );
+
+  return (
+    <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+      <ContextMenuTrigger
+        render={
+          <div
+            className={cn(
+              'group flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--interactive-hover)]/30 cursor-pointer',
+              hasBorder && 'border-b border-[var(--surface-subtle)]'
+            )}
+            onClick={onEdit}
+            role="button"
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setContextMenuOpen(true);
+            }}
+          />
+        }
+      >
       <div className="flex items-center gap-3 min-w-0">
         <Icon name={iconName} className="w-4 h-4 shrink-0" style={{ color: iconColor }} />
         <div className="min-w-0">
@@ -308,21 +336,14 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-fit min-w-28">
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onToggleDefault(); }}>
-            {isDefault ? t('settings.gitIdentities.page.actions.unsetDefault') : t('settings.gitIdentities.page.actions.setAsDefault')}
-          </DropdownMenuItem>
-          {!isReadOnly && onDelete && (
-            <DropdownMenuItem
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="text-destructive focus:text-destructive"
-            >
-              <Icon name="delete-bin" className="h-4 w-4 mr-px" />
-              {t('settings.common.actions.delete')}
-            </DropdownMenuItem>
-          )}
+          {renderMenuItems(DropdownMenuItem)}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-fit min-w-28">
+        {renderMenuItems(ContextMenuItem)}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 };
 
