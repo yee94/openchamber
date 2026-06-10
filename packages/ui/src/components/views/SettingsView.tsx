@@ -962,7 +962,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                 let resultIndex = 0;
                 return groupedSettingsSearchResults.map((group) => (
                   <div key={group.page} className="space-y-0.5">
-                    <div className="px-2 pb-0.5 pt-2 typography-micro font-medium uppercase tracking-wide text-muted-foreground/70">
+                    <div className="px-2 pb-0.5 pt-2 typography-micro font-medium text-muted-foreground/70">
                       {group.pageTitle}
                     </div>
                     {group.results.map((result) => {

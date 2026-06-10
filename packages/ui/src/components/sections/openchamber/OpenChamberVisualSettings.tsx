@@ -806,7 +806,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </div>
 
                                 {macVibrancySupported && (
-                                    <div className="flex flex-col gap-1.5 border-t border-border/40 pt-3">
+                                    <div data-settings-item="appearance.window-transparency" className="flex flex-col gap-1.5 border-t border-border/40 pt-3">
                                         <div
                                             className="group flex cursor-pointer items-start gap-2 py-0.5"
                                             role="button"
