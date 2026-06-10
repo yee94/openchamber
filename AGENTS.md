@@ -451,7 +451,7 @@ A single store with N properties means every subscriber re-evaluates on every st
 
 ## Validation expectations
 
-- Run `bun run type-check` and `bun run lint` before finalizing (set longer timeouts since on slower machines it may take more time for tool to run this).
+- Run `bun run type-check` and `bun run lint` before finalizing source-code changes that can affect TypeScript, runtime behavior, builds, lint rules, package resolution, or generated assets. For docs-only or isolated config-only changes, run the narrowest relevant validation instead (for example JSON/schema validation) and do not run the full checks unless the change can affect code execution.
 - For hot-path changes, verify behavior under streaming or repeated events, not just static render.
 - For sync or startup changes, verify fresh load, retry/failure, and restart behavior.
 - For session changes, verify create, stream, abort, permission, archive/delete, and revisit flows when relevant.
