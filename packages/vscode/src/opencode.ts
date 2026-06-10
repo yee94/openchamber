@@ -9,6 +9,8 @@ import { spawn } from 'child_process';
 import { randomBytes } from 'crypto';
 import { normalizeWindowsDriveLetter } from './pathUtils';
 
+const t = vscode.l10n.t;
+
 const READY_CHECK_TIMEOUT_MS = 30000;
 const WINDOWS_EXECUTABLE_EXTENSIONS = (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
   .split(';')
@@ -931,17 +933,18 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
         if (!cliPath) {
           cliPath = resolveOpencodeCliPath();
         }
-        setStatus('error', 'OpenCode CLI not found. Install it and ensure it\'s in PATH.');
+        const moreInfoLabel = t('More Info');
+        setStatus('error', t('OpenCode CLI not found. Install it and ensure it\'s in PATH.'));
         vscode.window.showErrorMessage(
-          'OpenCode CLI not found. Please install it and ensure it\'s in PATH.',
-          'More Info'
+          t('OpenCode CLI not found. Please install it and ensure it\'s in PATH.'),
+          moreInfoLabel
         ).then(selection => {
-          if (selection === 'More Info') {
+          if (selection === moreInfoLabel) {
             vscode.env.openExternal(vscode.Uri.parse('https://github.com/anomalyco/opencode'));
           }
         });
       } else {
-        setStatus('error', `Failed to start OpenCode: ${message}`);
+        setStatus('error', t('Failed to start OpenCode: {0}', message));
       }
     }
   }
