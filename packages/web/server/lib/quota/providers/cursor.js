@@ -230,8 +230,12 @@ const buildWindows = (usage, plan) => {
 
   const planLimit = centsLabel(planUsage.limit);
   if (planLimit) {
+    const limit = toNumber(planUsage.limit);
+    const remaining = toNumber(planUsage.remaining);
     windows.plan_limit = toUsageWindow({
-      usedPercent: null,
+      usedPercent: limit && remaining !== null
+        ? Math.min(100, Math.max(0, ((limit - remaining) / limit) * 100))
+        : null,
       windowSeconds,
       resetAt,
       valueLabel: `${centsLabel(planUsage.remaining) ?? '$0.00'} remaining of ${planLimit}`
