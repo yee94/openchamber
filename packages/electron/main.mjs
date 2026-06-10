@@ -1089,7 +1089,12 @@ const spawnLocalServer = async () => {
   process.env.OPENCHAMBER_HOST = bindHost;
   process.env.OPENCHAMBER_DIST_DIR = resolveWebDistDir();
   process.env.OPENCHAMBER_RUNTIME = 'desktop';
+  process.env.OPENCHAMBER_OPENCODE_CWD = app.getPath('userData');
   process.env.OPENCHAMBER_DESKTOP_NOTIFY = 'true';
+  try {
+    fs.mkdirSync(process.env.OPENCHAMBER_OPENCODE_CWD, { recursive: true });
+  } catch {
+  }
   if (desktopUiPassword) {
     process.env.OPENCHAMBER_UI_PASSWORD = desktopUiPassword;
   } else {
