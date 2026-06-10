@@ -92,7 +92,7 @@ Pay extra attention to:
 
 Match the repository's existing PR-review style: concise summary first, then a confidence/merge signal, then concrete findings. Do not use a header like `## OpenCode PR review`.
 
-Leave exactly one top-level PR comment with `gh pr comment "$PR_NUMBER" --body "..."` or an equivalent `gh api` call. Do not create separate inline review comments unless the workflow explicitly asks for inline comments later.
+Leave exactly one top-level PR comment with `gh pr comment "$PR_NUMBER" --body "..."` or an equivalent `gh api` call. Do not create separate inline review comments unless the workflow explicitly asks for inline comments later. Printing the review to stdout is not enough: after posting, verify that the new comment exists on the PR (for example with `gh pr view "$PR_NUMBER" --json comments`) before finishing.
 
 Use this structure:
 

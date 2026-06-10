@@ -10,9 +10,10 @@ on:
 
 concurrency:
   # PR conversation comments arrive as `issue_comment` events, so their PR number
-  # is exposed as `github.event.issue.number`.
-  group: pr-review-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
+  # is exposed as `github.event.issue.number`. Keep comment-triggered runs in a
+  # separate group so skipped non-command comments do not cancel active reviews.
+  group: pr-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 jobs:
   review:
@@ -86,6 +87,30 @@ jobs:
 
           echo "safe=true" >> "$GITHUB_OUTPUT"
 
+      - name: Acknowledge manual review command
+        if: steps.pr.outputs.draft == 'false' && steps.safety.outputs.safe == 'true' && github.event_name != 'pull_request_target'
+        id: manual-reaction
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request_review_comment" ]; then
+            endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
+          else
+            endpoint="repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions"
+          fi
+
+          reaction_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$endpoint" \
+            -f content='eyes' \
+            --jq '.id')"
+
+          echo "endpoint=$endpoint" >> "$GITHUB_OUTPUT"
+          echo "reaction_id=$reaction_id" >> "$GITHUB_OUTPUT"
+
       - name: Skip unsafe review
         if: steps.pr.outputs.draft == 'false' && steps.safety.outputs.safe != 'true'
         env:
@@ -124,6 +149,8 @@ jobs:
         run: |
           opencode run --agent pr-review "A pull request in the OpenChamber repository needs code review.
 
+          This may be a repeated review request. Before writing a new review, inspect prior PR comments, bot comments, reviews, and inline comments via GitHub, then determine which previous findings are already addressed by the current diff.
+
           PR: $PR_URL
           Number: $PR_NUMBER
           Author: $PR_AUTHOR
@@ -133,3 +160,37 @@ jobs:
           Title: $PR_TITLE
 
           $PR_BODY"
+
+      - name: Verify manual review comment
+        if: steps.pr.outputs.draft == 'false' && steps.safety.outputs.safe == 'true' && github.event_name != 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          COMMAND_CREATED_AT: ${{ github.event.comment.created_at }}
+          REACTION_ENDPOINT: ${{ steps.manual-reaction.outputs.endpoint }}
+          EYES_REACTION_ID: ${{ steps.manual-reaction.outputs.reaction_id }}
+        run: |
+          review_comment_count="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --slurp \
+            --jq "map(.[]) | [.[] | select(.created_at > \"${COMMAND_CREATED_AT}\" and .user.login == \"openchamber-bot[bot]\" and (.body | contains(\"<h3>Code Review Summary</h3>\")))] | length")"
+
+          if [ "$review_comment_count" -lt 1 ]; then
+            echo "Manual /oc-review completed without creating a new OpenChamber Bot PR comment." >&2
+            exit 1
+          fi
+
+          if [ -n "$EYES_REACTION_ID" ]; then
+            gh api \
+              --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${REACTION_ENDPOINT}/${EYES_REACTION_ID}"
+          fi
+
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$REACTION_ENDPOINT" \
+            -f content='+1' >/dev/null
