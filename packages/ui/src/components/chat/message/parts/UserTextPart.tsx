@@ -8,6 +8,12 @@ import { useSkillsStore } from '@/stores/useSkillsStore';
 import { Icon } from "@/components/icon/Icon";
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { getDirectoryForFilePath } from '@/lib/path-utils';
+import {
+    buildAgentHref,
+    buildAgentMentionUrl,
+    buildSkillHref,
+    parseSkillHref,
+} from '@/lib/messages/inlineMessageLinks';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string };
 
@@ -18,24 +24,7 @@ type UserTextPartProps = {
     agentMention?: AgentMentionInfo;
 };
 
-const buildMentionUrl = (name: string): string => {
-    const encoded = encodeURIComponent(name);
-    return `https://opencode.ai/docs/agents/#${encoded}`;
-};
-
 const SKILL_TOKEN_PATTERN = /(^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
-const SKILL_LINK_PREFIX = '#openchamber-skill:';
-
-const buildSkillHref = (name: string): string => `${SKILL_LINK_PREFIX}${encodeURIComponent(name)}`;
-
-const parseSkillHref = (href: string | null | undefined): string | null => {
-    if (!href?.startsWith(SKILL_LINK_PREFIX)) return null;
-    try {
-        return decodeURIComponent(href.slice(SKILL_LINK_PREFIX.length));
-    } catch {
-        return null;
-    }
-};
 
 const escapeHtml = (text: string): string => {
     return text
@@ -150,10 +139,10 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         // Step 1: First escape HTML to protect against XSS and ensure HTML tags display as text
         content = escapeHtml(content);
 
-        // Step 2: Then insert agent mention links (after escaping, so <a> tags won't be escaped)
+        // Step 2: Insert agent mention links with an internal href so markdown renders them as mentions, not external links.
         if (agentMention?.token && content.includes(agentMention.token)) {
-            const mentionHtml = `<a href="${buildMentionUrl(agentMention.name)}" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">${agentMention.token}</a>`;
-            content = content.replace(agentMention.token, mentionHtml);
+            const mentionMarkdown = `[${agentMention.token}](${buildAgentHref(agentMention.name)})`;
+            content = content.replace(agentMention.token, mentionMarkdown);
         }
 
         content = content.replace(SKILL_TOKEN_PATTERN, (match, prefix: string, skillName: string) => {
@@ -214,7 +203,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
                 node.slice(0, idx),
                 <a
                     key={`agent-${index}`}
-                    href={buildMentionUrl(agentMention.name)}
+                    href={buildAgentMentionUrl(agentMention.name)}
                     className="text-primary hover:underline"
                     target="_blank"
                     rel="noopener noreferrer"

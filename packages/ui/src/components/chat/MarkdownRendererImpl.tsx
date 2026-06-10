@@ -19,6 +19,11 @@ import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 import { getExternalFaviconUrl, isExternalHttpUrl, isLoopbackHttpUrl, openExternalUrl } from '@/lib/url';
+import {
+  buildAgentMentionUrl,
+  parseAgentHref,
+  parseSkillHref,
+} from '@/lib/messages/inlineMessageLinks';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -1000,6 +1005,38 @@ const buildMarkdownComponents = ({
   },
   a({ href, children, ...props }) {
     const targetHref = href ?? '';
+    const agentName = parseAgentHref(targetHref);
+    if (agentName) {
+      return (
+        <a
+          {...props}
+          href={buildAgentMentionUrl(agentName)}
+          data-openchamber-agent-mention="true"
+          className={cn('text-primary hover:underline', props.className)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </a>
+      );
+    }
+
+    const skillName = parseSkillHref(targetHref);
+    if (skillName) {
+      return (
+        <a
+          {...props}
+          href={targetHref}
+          data-skill-name={skillName}
+          className={cn('text-primary hover:underline', props.className)}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </a>
+      );
+    }
+
     const isExternal = isExternalHttpUrl(targetHref);
     const isLoopback = onPreviewLoopback ? isLoopbackHttpUrl(targetHref) : false;
     return (

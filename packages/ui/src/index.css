@@ -1069,6 +1069,17 @@ html:not(.dark) .chat-scroll {
   color: var(--markdown-link-hover, var(--primary));
 }
 
+/* Agent/skill mentions use the primary accent, not the markdown link color */
+.markdown-content a[data-openchamber-agent-mention="true"],
+.markdown-content a[data-skill-name] {
+  color: var(--primary);
+}
+
+.markdown-content a[data-openchamber-agent-mention="true"]:hover,
+.markdown-content a[data-skill-name]:hover {
+  color: var(--primary);
+}
+
 /* Markdown blockquote - use theme colors */
 .markdown-content blockquote {
   color: var(--markdown-blockquote, var(--muted-foreground));
