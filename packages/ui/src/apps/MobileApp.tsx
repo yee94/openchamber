@@ -6,6 +6,7 @@ import { McpIcon } from '@/components/icons/McpIcon';
 import { McpDropdownContent } from '@/components/mcp/McpDropdown';
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
 import { OpenCodeUpdateToast } from '@/components/update/OpenCodeUpdateToast';
+import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ChatView } from '@/components/views/ChatView';
 import { SettingsView } from '@/components/views/SettingsView';
@@ -1152,6 +1153,7 @@ export function MobileApp({ apis }: MobileAppProps) {
               <OpenCodeUpdateToast />
               <MobileShell />
               <Toaster />
+              {isInitialized ? <ConfigUpdateOverlay /> : null}
             </div>
           </TooltipProvider>
         </RuntimeAPIProvider>
