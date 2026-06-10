@@ -33,7 +33,7 @@
         "@ibm/plex": "^6.4.1",
         "@lezer/highlight": "^1.2.3",
         "@octokit/rest": "^22.0.1",
-        "@opencode-ai/sdk": "^1.16.0",
+        "@opencode-ai/sdk": "^1.17.0",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -145,7 +145,7 @@
         "@fontsource/ibm-plex-sans": "^5.1.1",
         "@ibm/plex": "^6.4.1",
         "@lezer/highlight": "^1.2.3",
-        "@opencode-ai/sdk": "^1.16.0",
+        "@opencode-ai/sdk": "^1.17.0",
         "@pierre/diffs": "1.1.0-beta.13",
         "@replit/codemirror-vim": "^6.3.0",
         "@simplewebauthn/browser": "13.3.0",
@@ -219,7 +219,7 @@
       "version": "1.12.3",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
-        "@opencode-ai/sdk": "^1.16.0",
+        "@opencode-ai/sdk": "^1.17.0",
         "adm-zip": "^0.5.16",
         "jsonc-parser": "^3.3.1",
         "react": "^19.1.1",
@@ -246,7 +246,7 @@
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@octokit/rest": "^22.0.1",
-        "@opencode-ai/sdk": "^1.16.0",
+        "@opencode-ai/sdk": "^1.17.0",
         "@simplewebauthn/server": "13.3.0",
         "adm-zip": "^0.5.16",
         "better-sqlite3": "^11.7.0",
@@ -941,7 +941,7 @@
 
     "@openchamber/web": ["@openchamber/web@workspace:packages/web"],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.16.0", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-S4H2e9j4rdHs5BQOCjmVEdqdXmKwPFKjXPbPUaWiRJpAjBcZ/uIBpoZkmV+x9BLzc+vrE6WAffMZieQgukt4DA=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.17.1", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-YTMtG3qCWgF37M9suOL5KpQTKU2Ibkd0/eKLS4tEIXe1S2wvUQ+/Hi1QARw4SoD6cy6+KUINvyo6dkhFEo7WLw=="],
 
     "@paralleldrive/cuid2": ["@paralleldrive/cuid2@2.3.1", "", { "dependencies": { "@noble/hashes": "^1.1.5" } }, "sha512-XO7cAxhnTZl0Yggq6jOgjiOHhbgcO4NqFqwSmQpjK3b6TEE6Uj/jfSk6wzYyemh3+I0sHirKSetjQwn5cZktFw=="],
 
@@ -3382,8 +3382,6 @@
     "@npmcli/agent/lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
 
     "@npmcli/agent/socks-proxy-agent": ["socks-proxy-agent@8.0.5", "", { "dependencies": { "agent-base": "^7.1.2", "debug": "^4.3.4", "socks": "^2.8.3" } }, "sha512-HehCEsotFqbPW9sJ8WVYB6UbmIMv7kUUORIF2Nncq4VQvBfNBLibW9YZR5dlYCSUhwcD628pRllm7n+E+YTzJw=="],
-
-    "@openchamber/ui/@zumer/snapdom": ["@zumer/snapdom@2.12.0", "", {}, "sha512-TdLGu+1RkKI3JKfMFvn1gRPD/rl8hrAeN6aFjjd0w7S39nulbd94ChxSlfH7nSCm8kzuQkeWFxIsij4+Mk1RDg=="],
 
     "@openchamber/ui/ghostty-web": ["ghostty-web@0.4.0", "", {}, "sha512-0puDBik2qapbD/QQBW9o5ZHfXnZBqZWx/ctBiVtKZ6ZLds4NYb+wZuw1cRLXZk9zYovIQ908z3rvFhexAvc5Hg=="],
 
