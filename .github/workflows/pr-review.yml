@@ -149,7 +149,7 @@ jobs:
         run: |
           opencode run --agent pr-review "A pull request in the OpenChamber repository needs code review.
 
-          This may be a repeated review request. Before writing a new review, inspect prior PR comments, bot comments, reviews, and inline comments via GitHub, then determine which previous findings are already addressed by the current diff.
+          This may be a repeated review request. Before writing a new review, inspect prior PR comments, bot comments, reviews, inline comments, and the commit timeline via GitHub. Compare prior findings against commits pushed after those comments, then only repeat findings that still exist in the current diff/current file state.
 
           PR: $PR_URL
           Number: $PR_NUMBER
