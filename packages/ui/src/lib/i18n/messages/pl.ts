@@ -1322,6 +1322,7 @@ export const dict: Record<I18nKey, string> = {
   'contextSidebar.stats.user': 'Użytkownik',
   'contextSidebar.tokens.cacheRead': 'Odczyt cache',
   'contextSidebar.tokens.cacheWrite': 'Zapis cache',
+  'contextSidebar.tokens.cacheHit': 'Trafienie cache',
   'contextSidebar.tokens.input': 'Wejście',
   'contextSidebar.tokens.output': 'Wyjście',
   'contextSidebar.tokens.reasoning': 'Rozumowanie',
