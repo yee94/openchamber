@@ -12,6 +12,7 @@ import { promisify } from 'node:util';
 import updaterPkg from 'electron-updater';
 import { ElectronSshManager } from './ssh-manager.mjs';
 import { createTrayController } from './tray.mjs';
+import { resolveManagedOpenCodeCwd } from './opencode-cwd.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -1089,12 +1090,13 @@ const spawnLocalServer = async () => {
   process.env.OPENCHAMBER_HOST = bindHost;
   process.env.OPENCHAMBER_DIST_DIR = resolveWebDistDir();
   process.env.OPENCHAMBER_RUNTIME = 'desktop';
-  process.env.OPENCHAMBER_OPENCODE_CWD = app.getPath('userData');
+  // OpenCode uses process cwd as a fallback directory; app userData would make
+  // packaged desktop look like a separate empty workspace.
+  process.env.OPENCHAMBER_OPENCODE_CWD = resolveManagedOpenCodeCwd({
+    env: process.env,
+    homedir: () => os.homedir(),
+  });
   process.env.OPENCHAMBER_DESKTOP_NOTIFY = 'true';
-  try {
-    fs.mkdirSync(process.env.OPENCHAMBER_OPENCODE_CWD, { recursive: true });
-  } catch {
-  }
   if (desktopUiPassword) {
     process.env.OPENCHAMBER_UI_PASSWORD = desktopUiPassword;
   } else {
