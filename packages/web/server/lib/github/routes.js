@@ -84,12 +84,22 @@ export function registerGitHubRoutes(app) {
       const ghCliDisabled = isGhCliDisabled();
       const ghToken = getGhCliToken();
       const usingOwnToken = Boolean(auth?.accessToken);
+      let ghCliUser = null;
+
+      if (ghToken !== null && !ghCliDisabled && usingOwnToken) {
+        try {
+          const { Octokit } = await import('@octokit/rest');
+          ghCliUser = await getGitHubUserSummary(new Octokit({ auth: ghToken }));
+        } catch {
+          ghCliUser = null;
+        }
+      }
 
       const buildGhCli = (activeUser = null) => ({
         available: ghToken !== null,
         disabled: ghCliDisabled,
         active: !usingOwnToken && ghToken !== null && !ghCliDisabled,
-        ...(activeUser ? { user: activeUser } : {}),
+        ...(!ghCliDisabled && (activeUser || ghCliUser) ? { user: activeUser || ghCliUser } : {}),
       });
 
       const octokit = getOctokitOrNull();

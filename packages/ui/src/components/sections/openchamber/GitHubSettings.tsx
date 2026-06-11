@@ -269,7 +269,7 @@ export const GitHubSettings: React.FC = () => {
     <div className="mb-8">
       <div className="mb-3 px-1 flex items-start justify-between gap-4">
         <div className="flex items-center gap-2">
-          <h3 className="typography-ui-header font-semibold text-foreground">GitHub</h3>
+          <h3 className="typography-ui-header font-semibold text-foreground">{t('settings.github.page.oauth.title')}</h3>
           <Tooltip>
             <TooltipTrigger asChild>
               <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
@@ -457,10 +457,33 @@ export const GitHubSettings: React.FC = () => {
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden">
             <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>
               <div className={cn("flex min-w-0 items-center gap-4", isMobile ? "w-full" : undefined)}>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--interactive-border)] bg-[var(--surface-muted)]">
-                  <Icon name="terminal" className="h-4 w-4 text-muted-foreground" />
-                </div>
+                {ghCli.user?.avatarUrl ? (
+                  <img
+                    src={ghCli.user.avatarUrl}
+                    alt={ghCli.user.login ? t('settings.github.page.avatarAlt.withLogin', { login: ghCli.user.login }) : t('settings.github.page.avatarAlt.fallback')}
+                    className="h-10 w-10 shrink-0 rounded-full border border-[var(--interactive-border)] bg-[var(--surface-muted)] object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--interactive-border)] bg-[var(--surface-muted)]">
+                    <Icon name="github-fill" className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
+                  {!ghCli.disabled && ghCli.user && (
+                    <div className="typography-ui-label text-foreground truncate">
+                      {ghCli.user.name?.trim() || ghCli.user.login || 'GitHub'}
+                    </div>
+                  )}
+                  {!ghCli.disabled && ghCli.user?.login && (
+                    <div className={cn("flex items-center gap-2 typography-meta text-muted-foreground mt-0.5", isMobile ? "flex-wrap" : "truncate")}>
+                      <Icon name="github-fill" className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-mono">{ghCli.user.login}</span>
+                      {ghCli.user.email && <span className="opacity-50">•</span>}
+                      {ghCli.user.email && <span>{ghCli.user.email}</span>}
+                    </div>
+                  )}
                   <div className={cn("typography-meta text-muted-foreground", ghCli.disabled ? "opacity-60" : undefined)}>
                     {ghCli.disabled
                       ? t('settings.github.page.ghCli.disabledDescription')
