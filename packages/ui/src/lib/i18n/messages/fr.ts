@@ -1145,6 +1145,8 @@ export const dict = {
   'header.github.avatarWithLogin': 'Avatar {login}',
   'header.github.avatar': 'Avatar GitHub',
   'header.github.accountsTitle': 'Comptes GitHub',
+  'header.github.accountSource.oauth': 'OAuth',
+  'header.github.accountSource.cli': 'CLI',
   'header.services.openWithCurrent': 'Instance ouverte, utilisation et MCP (actuel : {current})',
   'header.services.open': 'Services ouverts, utilisation et MCP',
   'header.services.tooltip.currentInstanceWithShortcuts': 'Instance actuelle : {current} ({toggle} ; onglet suivant {nextTab})',

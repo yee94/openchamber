@@ -1239,6 +1239,8 @@ export const dict: Record<I18nKey, string> = {
   "header.github.avatarWithLogin": "Avatar de {login}",
   "header.github.avatar": "Avatar de GitHub",
   "header.github.accountsTitle": "Contas de GitHub",
+  "header.github.accountSource.oauth": "OAuth",
+  "header.github.accountSource.cli": "CLI",
   "header.services.openWithCurrent": "Abrir instância, uso e MCP (atual: {current})",
   "header.services.open": "Abrir serviços, uso e MCP",
   "header.services.tooltip.currentInstanceWithShortcuts": "Instância atual: {current} ({toggle}; próxima aba {nextTab})",

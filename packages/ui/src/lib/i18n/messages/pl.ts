@@ -1960,6 +1960,8 @@ export const dict: Record<I18nKey, string> = {
   'header.actions.toggleTerminalPanelAria': 'Przełącz panel terminala',
   'header.changes.availableAria': 'Dostępne zmiany',
   'header.github.accountsTitle': 'Konta GitHub',
+  'header.github.accountSource.oauth': 'OAuth',
+  'header.github.accountSource.cli': 'CLI',
   'header.github.avatar': 'Awatar GitHub',
   'header.github.avatarWithLogin': 'Awatar {login}',
   'header.github.connected': 'GitHub połączony',

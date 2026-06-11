@@ -1357,6 +1357,8 @@ export const settingsDict = {
   "settings.github.page.label.unknownUser": "desconocido",
   "settings.github.page.label.scopes": "Alcances: {value}",
   "settings.github.page.label.otherAccounts": "Cuentas adicionales",
+  "settings.github.page.accountSource.oauth": "OAuth",
+  "settings.github.page.accountSource.cli": "CLI",
   "settings.github.page.actions.disconnect": "Desconectar",
   "settings.github.page.actions.connect": "Conectar GitHub",
   "settings.github.page.actions.switchTo": "Cambiar a",

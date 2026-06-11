@@ -1239,6 +1239,8 @@ export const dict: Record<I18nKey, string> = {
   "header.github.avatarWithLogin": "Аватар {login}",
   "header.github.avatar": "Аватар GitHub",
   "header.github.accountsTitle": "Облікові записи GitHub",
+  "header.github.accountSource.oauth": "OAuth",
+  "header.github.accountSource.cli": "CLI",
   "header.services.openWithCurrent": "Відкрити інстанс, використання та MCP (поточний: {current})",
   "header.services.open": "Відкрити сервіси, використання та MCP",
   "header.services.tooltip.currentInstanceWithShortcuts": "Поточний інстанс: {current} ({toggle}; наступна вкладка {nextTab})",

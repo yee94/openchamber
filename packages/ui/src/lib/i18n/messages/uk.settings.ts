@@ -1357,6 +1357,8 @@ export const settingsDict = {
   "settings.github.page.label.unknownUser": "невідомий",
   "settings.github.page.label.scopes": "Області застосування: {value}",
   "settings.github.page.label.otherAccounts": "Інші облікові записи",
+  "settings.github.page.accountSource.oauth": "OAuth",
+  "settings.github.page.accountSource.cli": "CLI",
   "settings.github.page.actions.disconnect": "Відключити",
   "settings.github.page.actions.connect": "Підключити GitHub",
   "settings.github.page.actions.switchTo": "Перемкнутися на",

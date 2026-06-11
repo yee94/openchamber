@@ -1239,6 +1239,8 @@ export const dict: Record<I18nKey, string> = {
   'header.github.avatarWithLogin': '{login} 头像',
   'header.github.avatar': 'GitHub 头像',
   'header.github.accountsTitle': 'GitHub 账户',
+  'header.github.accountSource.oauth': 'OAuth',
+  'header.github.accountSource.cli': 'CLI',
   'header.services.openWithCurrent': '打开实例、用量和 MCP（当前：{current}）',
   'header.services.open': '打开服务、用量和 MCP',
   'header.services.tooltip.currentInstanceWithShortcuts': '当前实例：{current}（{toggle}；下一标签 {nextTab}）',

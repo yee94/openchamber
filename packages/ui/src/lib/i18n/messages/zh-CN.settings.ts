@@ -1357,6 +1357,8 @@ export const settingsDict = {
   'settings.github.page.label.unknownUser': '未知',
   'settings.github.page.label.scopes': '作用域：{value}',
   'settings.github.page.label.otherAccounts': '其他账号',
+  'settings.github.page.accountSource.oauth': 'OAuth',
+  'settings.github.page.accountSource.cli': 'CLI',
   'settings.github.page.actions.disconnect': '断开连接',
   'settings.github.page.actions.connect': '连接 GitHub',
   'settings.github.page.actions.switchTo': '切换到',

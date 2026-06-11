@@ -1276,6 +1276,8 @@ export const dict: Record<I18nKey, string> = {
   'header.github.avatarWithLogin': '{login} 아바타',
   'header.github.avatar': 'GitHub 아바타',
   'header.github.accountsTitle': 'GitHub 계정',
+  'header.github.accountSource.oauth': 'OAuth',
+  'header.github.accountSource.cli': 'CLI',
   'header.services.openWithCurrent': '인스턴스, 사용량, MCP 열기(현재: {current})',
   'header.services.open': '서비스, 사용량, MCP 열기',
   'header.services.tooltip.currentInstanceWithShortcuts': '현재 인스턴스: {current} ({toggle}; 다음 탭 {nextTab})',

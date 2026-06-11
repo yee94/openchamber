@@ -1052,6 +1052,7 @@ export type GitHubAuthAccount = {
   user: GitHubUserSummary;
   scope?: string;
   current?: boolean;
+  source?: 'oauth' | 'gh-cli';
 };
 
 export type GitHubDeviceFlowStart = {

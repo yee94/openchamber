@@ -187,11 +187,14 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
           {githubAccounts.map((account) => {
             const accountUser = account.user;
             const isCurrent = Boolean(account.current);
+            const sourceLabel = account.source === 'gh-cli'
+              ? t('header.github.accountSource.cli')
+              : t('header.github.accountSource.oauth');
             return (
               <DropdownMenuItem
                 key={account.id}
                 className="gap-2"
-                disabled={isCurrent || isSwitchingGitHubAccount}
+                disabled={isSwitchingGitHubAccount}
                 onSelect={() => {
                   if (!isCurrent) {
                     void handleGitHubAccountSwitch(account.id);
@@ -216,8 +219,10 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
                     {accountUser?.name?.trim() || accountUser?.login || 'GitHub'}
                   </span>
                   {accountUser?.login ? (
-                    <span className="truncate typography-micro font-mono text-muted-foreground">
-                      {accountUser.login}
+                    <span className="truncate typography-micro text-muted-foreground">
+                      <span className="font-mono">{accountUser.login}</span>
+                      <span className="mx-1 opacity-50">·</span>
+                      <span>{sourceLabel}</span>
                     </span>
                   ) : null}
                 </span>

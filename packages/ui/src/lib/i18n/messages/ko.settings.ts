@@ -1357,6 +1357,8 @@ export const settingsDict = {
   'settings.github.page.label.unknownUser': '알 수 없음',
   'settings.github.page.label.scopes': 'Scopes: {value}',
   'settings.github.page.label.otherAccounts': '다른 계정',
+  'settings.github.page.accountSource.oauth': 'OAuth',
+  'settings.github.page.accountSource.cli': 'CLI',
   'settings.github.page.actions.disconnect': '연결 해제',
   'settings.github.page.actions.connect': 'GitHub 연결',
   'settings.github.page.actions.switchTo': '전환',

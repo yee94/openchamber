@@ -235,6 +235,8 @@ export const settingsDict = {
   'settings.github.page.flow.title': 'Autoryzuj OpenChamber',
   'settings.github.page.flow.waiting': 'Oczekiwanie na zatwierdzenie... (automatyczne odświeżanie)',
   'settings.github.page.label.otherAccounts': 'Inne konta',
+  'settings.github.page.accountSource.oauth': 'OAuth',
+  'settings.github.page.accountSource.cli': 'CLI',
   'settings.github.page.label.scopes': 'Zakresy: {value}',
   'settings.github.page.label.unknownUser': 'nieznany',
   'settings.github.page.status.active': 'Aktywne',

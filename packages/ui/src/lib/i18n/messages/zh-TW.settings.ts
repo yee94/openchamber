@@ -1278,6 +1278,8 @@
   'settings.github.page.label.unknownUser': '未知',
   'settings.github.page.label.scopes': '作用域：{value}',
   'settings.github.page.label.otherAccounts': '其他帳號',
+  'settings.github.page.accountSource.oauth': 'OAuth',
+  'settings.github.page.accountSource.cli': 'CLI',
   'settings.github.page.actions.disconnect': '中斷連線',
   'settings.github.page.actions.connect': '連線 GitHub',
   'settings.github.page.actions.switchTo': '切換到',
