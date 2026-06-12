@@ -1372,7 +1372,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         scrollEl.scrollTop += prependedHeight;
     });
 
-    const [virtualVersion, bumpVirtualVersion] = React.useReducer((v: number) => v + 1, 0);
+    const [historyVirtualRows, setHistoryVirtualRows] = React.useState<VirtualItem[]>(EMPTY_VIRTUAL_ROWS);
 
     const historyVirtualizer = useVirtualizer({
         count: historyEntries.length,
@@ -1383,7 +1383,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         useAnimationFrameWithResizeObserver: true,
         overscan: MESSAGE_LIST_OVERSCAN,
         enabled: shouldVirtualizeHistory,
-        onChange: bumpVirtualVersion,
+        onChange: () => {
+            setHistoryVirtualRows(historyVirtualizer.getVirtualItems());
+        },
     });
 
     React.useLayoutEffect(() => {
@@ -1438,10 +1440,13 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         };
     }, []);
 
-    const historyVirtualRows = React.useMemo(
-        () => (shouldVirtualizeHistory ? historyVirtualizer.getVirtualItems() : EMPTY_VIRTUAL_ROWS),
-        [historyVirtualizer, shouldVirtualizeHistory, virtualVersion],
-    );
+    // Sync virtual rows on initial mount and when virtualization toggles.
+    // Ongoing updates are handled by the virtualizer's onChange callback.
+    React.useLayoutEffect(() => {
+        setHistoryVirtualRows(
+            shouldVirtualizeHistory ? historyVirtualizer.getVirtualItems() : EMPTY_VIRTUAL_ROWS,
+        );
+    }, [shouldVirtualizeHistory, historyVirtualizer]);
 
     const allEntries = React.useMemo(() => {
         return trailingStreamingEntry ? [...historyEntries, trailingStreamingEntry] : historyEntries;
