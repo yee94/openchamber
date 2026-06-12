@@ -1538,6 +1538,8 @@
   'settings.openchamber.visual.field.collapsibleUserMessages': '收合較長的使用者訊息',
   'settings.openchamber.visual.field.stickyUserHeaderAria': '固定使用者訊息標頭',
   'settings.openchamber.visual.field.stickyUserHeader': '固定使用者訊息標頭',
+  'settings.openchamber.visual.field.expandedEditorToolbarAria': 'Always show editor toolbar',
+  'settings.openchamber.visual.field.expandedEditorToolbar': 'Always show editor toolbar (docked under the file tabs)',
   'settings.openchamber.visual.field.wideChatLayoutAria': '寬聊天佈局',
   'settings.openchamber.visual.field.wideChatLayout': '寬聊天佈局',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsAria': '行內助理操作',
