@@ -992,6 +992,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const {
     drafts: filesFileDrafts,
     commentText,
+    setCommentText,
     editingDraftId,
     setSelection: setCommentSelection,
     saveComment,
@@ -1023,8 +1024,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       if (target.closest('.cm-gutterElement')) return;
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
 
-      setLineSelection(null);
-      cancel();
+      if (!commentText.trim()) {
+        setLineSelection(null);
+        cancel();
+      }
     };
 
     const timeoutId = setTimeout(() => {
@@ -1035,7 +1038,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [cancel, editingDraftId, lineSelection]);
+  }, [cancel, commentText, editingDraftId, lineSelection]);
 
   const handleSaveComment = React.useCallback((text: string, range?: { start: number; end: number }) => {
     const finalRange = range ?? lineSelection ?? undefined;
@@ -2966,6 +2969,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       drafts: filesFileDrafts,
       editingDraftId,
       commentText,
+      onTextChange: setCommentText,
       selection: lineSelection,
       isDragging,
       fileLabel: selectedFile?.path ?? '',
@@ -2982,7 +2986,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       },
       onDelete: deleteDraft,
     });
-  }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, startEdit]);
+  }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
 
   const renderShikiFileView = React.useCallback((file: FileNode, content: string) => {
     return (
@@ -3763,6 +3767,20 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                         event.preventDefault();
 
                         const lineNumber = view.state.doc.lineAt(line.from).number;
+
+                        if (
+                          lineSelection &&
+                          !event.shiftKey &&
+                          Math.min(lineSelection.start, lineSelection.end) === lineNumber &&
+                          Math.max(lineSelection.start, lineSelection.end) === lineNumber
+                        ) {
+                          setLineSelection(null);
+                          cancel();
+                          isSelectingRef.current = false;
+                          selectionStartRef.current = null;
+                          setIsDragging(false);
+                          return true;
+                        }
 
                         // Mobile: tap-to-extend selection
                           if (isMobile && lineSelection && !event.shiftKey) {
