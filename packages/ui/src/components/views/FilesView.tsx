@@ -42,7 +42,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, getRevealLabelKey, hasModifier } from '@/lib/utils';
-import { getLanguageFromExtension, getImageMimeType, isDrawioFile, isImageFile } from '@/lib/toolHelpers';
+import { getLanguageFromExtension, getImageMimeType, isDrawioFile, isImageFile, isPdfFile } from '@/lib/toolHelpers';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
@@ -826,6 +826,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [fileError, setFileError] = React.useState<string | null>(null);
   const [desktopImageSrc, setDesktopImageSrc] = React.useState<string>('');
   const [imageAssetAuthReadyKey, setImageAssetAuthReadyKey] = React.useState('');
+  const [pdfAssetAuthReadyKey, setPdfAssetAuthReadyKey] = React.useState('');
 
   const [loadedFilePath, setLoadedFilePath] = React.useState<string | null>(null);
 
@@ -1695,6 +1696,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     const selectedIsImage = isImageFile(node.path);
     const isSvg = node.path.toLowerCase().endsWith('.svg');
+    const selectedIsPdf = isPdfFile(node.path);
 
     if (isMobile) {
       setShowMobilePageContent(true);
@@ -1710,6 +1712,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     // Web: binary images should not be read as utf8.
     if (!runtime.isDesktop && selectedIsImage && !isSvg) {
+      setFileContent('');
+      setDraftContent('');
+      setLoadedFilePath(node.path);
+      setFileLoading(false);
+      return;
+    }
+
+    if (selectedIsPdf) {
       setFileContent('');
       setDraftContent('');
       setLoadedFilePath(node.path);
@@ -2191,6 +2201,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   const isSelectedImage = Boolean(selectedFile?.path && isImageFile(selectedFile.path));
   const isSelectedSvg = Boolean(selectedFile?.path && selectedFile.path.toLowerCase().endsWith('.svg'));
+  const isSelectedPdf = Boolean(selectedFile?.path && isPdfFile(selectedFile.path));
   const pendingNavigationTargetPath = React.useMemo(
     () => normalizePath(pendingFileNavigation?.path ?? ''),
     [pendingFileNavigation?.path],
@@ -2202,21 +2213,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       && selectedFilePath === pendingNavigationTargetPath
       && !fileLoading
       && !fileError
-      && !isSelectedImage,
+      && !isSelectedImage
+      && !isSelectedPdf,
   );
 
   const displaySelectedPath = React.useMemo(() => {
     return getDisplayPath(root, selectedFilePath);
   }, [selectedFilePath, root]);
 
-  const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && fileContent.length > 0);
+  const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && !isSelectedPdf && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
-  const canEdit = Boolean(selectedFile && !selectedFileIsOutsideWorkspace && !isSelectedImage && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
+  const canEdit = Boolean(selectedFile && !selectedFileIsOutsideWorkspace && !isSelectedImage && !isSelectedPdf && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
   const isMarkdown = Boolean(selectedFile?.path && isMarkdownFile(selectedFile.path));
   const isJson = Boolean(selectedFile?.path && isJsonFile(selectedFile.path));
   const isHtml = Boolean(selectedFile?.path && isHtmlFile(selectedFile.path));
   const isDrawio = Boolean(selectedFile?.path && isDrawioFile(selectedFile.path));
-  const isTextFile = Boolean(selectedFile && !isSelectedImage);
+  const isTextFile = Boolean(selectedFile && !isSelectedImage && !isSelectedPdf);
   const canUseShikiFileView = isTextFile && !isMarkdown && !isDrawio && !(isHtml && htmlViewMode === 'preview');
   const staticLanguageExtension = React.useMemo(
     () => (selectedFilePath ? languageByExtension(selectedFilePath) : null),
@@ -2554,7 +2566,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    if (fileError || isSelectedImage) {
+    if (fileError || isSelectedImage || isSelectedPdf) {
       setPendingFileNavigation(null);
       pendingNavigationCycleRef.current = { key: '', attempts: 0 };
       return;
@@ -2625,6 +2637,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     fileError,
     fileLoading,
     isSelectedImage,
+    isSelectedPdf,
     loadedFilePath,
     handleSelectFile,
     pendingFileNavigation,
@@ -2654,7 +2667,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    if (fileLoading || loadedFilePath !== targetPath || fileError || isSelectedImage) {
+    if (fileLoading || loadedFilePath !== targetPath || fileError || isSelectedImage || isSelectedPdf) {
       return;
     }
 
@@ -2674,6 +2687,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     fileLoading,
     handleSelectFile,
     isSelectedImage,
+    isSelectedPdf,
     loadedFilePath,
     pendingFileFocusPath,
     root,
@@ -2814,6 +2828,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}|${selectedFileReadOptions.outsideFileGrant ?? ''}`
     : '';
 
+  const pdfAssetAuthKey = selectedFile?.path && isSelectedPdf
+    ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}|${selectedFileReadOptions.outsideFileGrant ?? ''}`
+    : '';
+
   React.useEffect(() => {
     if (!imageAssetAuthKey) {
       setImageAssetAuthReadyKey('');
@@ -2835,6 +2853,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   const isImageAssetAuthLoading = Boolean(imageAssetAuthKey && imageAssetAuthReadyKey !== imageAssetAuthKey);
 
+  React.useEffect(() => {
+    if (!pdfAssetAuthKey) {
+      setPdfAssetAuthReadyKey('');
+      return;
+    }
+
+    let cancelled = false;
+    setPdfAssetAuthReadyKey('');
+    void refreshRuntimeUrlAuthToken(getRuntimeApiBaseUrl())
+      .then((token) => {
+        if (!cancelled && token) setPdfAssetAuthReadyKey(pdfAssetAuthKey);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setFileError(error instanceof Error ? error.message : t('filesView.error.readFileFailed'));
+          setPdfAssetAuthReadyKey(pdfAssetAuthKey);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfAssetAuthKey, t]);
+
+  const isPdfAssetAuthLoading = Boolean(pdfAssetAuthKey && pdfAssetAuthReadyKey !== pdfAssetAuthKey);
+
   const imageSrc = selectedFile?.path && isSelectedImage
     ? (runtime.isDesktop
       ? (isSelectedSvg
@@ -2848,6 +2892,24 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           outsideFileGrant: selectedFileReadOptions.outsideFileGrant,
         }) : ''))
     : '';
+
+  const pdfSrc = selectedFile?.path && isSelectedPdf && pdfAssetAuthReadyKey === pdfAssetAuthKey
+    ? getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
+      path: selectedFile.path,
+      allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
+      outsideFileGrant: selectedFileReadOptions.outsideFileGrant,
+    })
+    : '';
+
+  const renderPdfPreview = React.useCallback((file: FileNode) => (
+    <div className="h-full overflow-hidden bg-[var(--surface-background)]">
+      <iframe
+        src={pdfSrc}
+        className="h-full w-full border-0"
+        title={file.name}
+      />
+    </div>
+  ), [pdfSrc]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -3045,7 +3107,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {!isSelectedImage && (
+        {!isSelectedImage && !isSelectedPdf && (
           <>
             {withTooltip(wrapLines ? t('filesView.editor.disableLineWrap') : t('filesView.editor.enableLineWrap'),
               <Button
@@ -3537,7 +3599,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {!selectedFile ? (
             <div className="p-3 typography-ui text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
-          ) : (fileLoading || isImageAssetAuthLoading) ? (
+          ) : (fileLoading || isImageAssetAuthLoading || isPdfAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-3" />
               : (
@@ -3556,6 +3618,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 className="max-w-full max-h-[70vh] object-contain rounded-md border border-border/30 bg-primary/10"
               />
             </div>
+          ) : isSelectedPdf ? (
+            renderPdfPreview(selectedFile)
           ) : selectedFile && isDrawio && drawioViewMode === 'preview' ? (
             <div className="h-full overflow-hidden" style={{ minHeight: '400px' }}>
               <DiagramEditor
@@ -3881,7 +3945,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           {renderFloatingFileControls({ exitFullscreenOnly: true })}
         </div>
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
-          {(fileLoading || isImageAssetAuthLoading) ? (
+          {(fileLoading || isImageAssetAuthLoading || isPdfAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-4" />
               : (
@@ -3900,6 +3964,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 className="max-w-full max-h-full object-contain rounded-md border border-border/30 bg-primary/10"
               />
             </div>
+          ) : isSelectedPdf ? (
+            renderPdfPreview(selectedFile)
           ) : isMarkdown && getMdViewMode() === 'preview' ? (
             <div className="h-full overflow-auto p-4">
               {fileContent.length > 500 * 1024 && (
