@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Security: LAN and remote browser access now require a UI password before the server will start.
+- Desktop: if LAN access was enabled without a password, the app now starts locally and asks for a password before turning LAN access back on.
+- Git: worktree status and commit integration now use dedicated Git actions behind the scenes.
+
 ## [1.12.4] - 2026-06-11
 
 - Chat: added `/handoff-review` to open a linked review session for the current workspace changes, with actions to send review feedback and implementation replies between the sessions.
