@@ -3680,12 +3680,11 @@ export async function removeWorktree(directory, input = {}) {
   })();
 
   if (!matchedEntry?.worktree) {
-    if (targetCanonical === worktreeRootCanonical || !isInsideOrSameDirectory(worktreeRootCanonical, targetCanonical)) {
-      throw new Error('Cannot remove unmanaged worktree directory');
-    }
+    const isManagedOrphan = targetCanonical !== worktreeRootCanonical
+      && isInsideOrSameDirectory(worktreeRootCanonical, targetCanonical);
 
     const targetExists = await checkPathExists(targetDirectory);
-    if (targetExists) {
+    if (targetExists && isManagedOrphan) {
       await fsp.rm(targetDirectory, { recursive: true, force: true });
     }
 

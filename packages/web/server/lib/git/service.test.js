@@ -145,7 +145,7 @@ describe('getStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('removeWorktree', () => {
-  it('refuses orphan cleanup outside the managed worktree root', async () => {
+  it('forgets unmanaged orphan worktree entries without deleting files', async () => {
     if (!canRunGit()) return;
 
     const previousXdgDataHome = process.env.XDG_DATA_HOME;
@@ -168,7 +168,7 @@ describe('removeWorktree', () => {
       await expect(removeWorktree(repo, {
         directory: sentinel,
         deleteLocalBranch: false,
-      })).rejects.toThrow('Cannot remove unmanaged worktree directory');
+      })).resolves.toBe(true);
       expect(fs.existsSync(canary)).toBe(true);
     } finally {
       if (previousXdgDataHome === undefined) {
