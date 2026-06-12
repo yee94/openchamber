@@ -565,7 +565,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       className={cn(
         'pointer-events-none absolute inline-flex h-3.5 items-center justify-center gap-0.5 transition-opacity',
         isMinimalMode ? 'top-1/2 -translate-y-1/2' : 'top-[14.5px] -translate-y-1/2',
-        showStatusMarker && isPinnedSession ? 'left-[-18px] w-6' : 'left-[-10px] w-3.5',
+        showStatusMarker && isPinnedSession ? 'left-[-6px] w-6' : 'left-0.5 w-3.5',
         hasChildren && !alwaysShowActions ? 'opacity-100 group-hover:opacity-0 group-focus-within:opacity-0' : '',
       )}
     >
@@ -594,7 +594,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           ? 'absolute left-1.5 bottom-1'
           : inlineSubsessionChevron
           ? 'relative mr-0.5 shrink-0'
-          : cn('absolute left-[-10px]', isMinimalMode ? 'top-1/2 -translate-y-1/2' : 'top-[14.5px] -translate-y-1/2'),
+          : cn('absolute left-0.5', isMinimalMode ? 'top-1/2 -translate-y-1/2' : 'top-[14.5px] -translate-y-1/2'),
         !metadataSubsessionChevron && !inlineSubsessionChevron && isMinimalMode && showStatusMarker && !alwaysShowActions
           ? 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
           : '',
@@ -928,10 +928,18 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 data-session-scope={sessionDirectory ?? ''}
                 data-session-archived={archivedBucket ? '1' : '0'}
                 className={cn(
-                  'group relative my-0.5 flex items-center rounded-sm px-1.5 py-1',
+                  'group relative my-0.5 flex items-center rounded-md py-1 pr-1.5',
+                  // Pull the row box left into the container gutter so the
+                  // selection highlight covers the chevron/status markers
+                  // (which sit in that gutter), then re-pad so the title text
+                  // stays put.
+                  '-ml-3',
+                  depth > 0 ? 'pl-[32px]' : 'pl-[18px]',
                   isMissingDirectory ? 'opacity-75' : '',
-                  depth > 0 && 'pl-[20px]',
-                  isRowSelected && 'bg-primary/15',
+                  // Active (currently open) session gets a subtle primary tint;
+                  // multi-select highlight takes precedence when both apply.
+                  isActive && !isRowSelected && 'bg-primary/10',
+                  isRowSelected && 'bg-interactive-selection',
                 )}
               />
             }
@@ -955,7 +963,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       handleSessionDoubleClick(session.id, sessionTitle);
                     }}
                     className={cn(
-	                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+	                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
 	                      isTouchPressed && 'bg-interactive-hover/70',
                       alwaysShowActions
                         ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
@@ -1016,7 +1024,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                   handleSessionDoubleClick(session.id, sessionTitle);
                 }}
                 className={cn(
-	                  'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+	                  'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
 	                  isTouchPressed && 'bg-interactive-hover/70',
                   alwaysShowActions
                     ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
