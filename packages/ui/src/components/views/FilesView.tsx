@@ -478,7 +478,10 @@ const FileRow: React.FC<FileRowProps> = ({
       {!isDir && downloadFile && (
         <Item onClick={(e: React.MouseEvent) => {
           e.stopPropagation();
-          void downloadFile(node.path);
+          void downloadFile(node.path).catch((error) => {
+            console.error('Download failed:', error);
+            toast.error(t('sidebarFilesTree.toast.operationFailed'));
+          });
         }}>
           <Icon name="download" className="mr-2 size-4" /> {t('sidebarFilesTree.menu.save')}
         </Item>
@@ -770,9 +773,27 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   }, []);
 
   const openFiles = React.useMemo(() => openPaths.map(toFileNode), [openPaths, toFileNode]);
-  const effectiveSelectedPath = React.useMemo(() => selectedPath ?? openPaths[0] ?? null, [openPaths, selectedPath]);
+  const effectiveSelectedPath = React.useMemo(() => {
+    if (selectedPath) {
+      const comparableSelected = toComparablePath(selectedPath);
+      if (openPaths.some((path) => toComparablePath(path) === comparableSelected)) {
+        return selectedPath;
+      }
+    }
+    return openPaths[0] ?? null;
+  }, [openPaths, selectedPath]);
   const selectedFile = React.useMemo(() => (effectiveSelectedPath ? toFileNode(effectiveSelectedPath) : null), [effectiveSelectedPath, toFileNode]);
   const selectedFilePath = selectedFile?.path ?? '';
+
+  React.useEffect(() => {
+    if (!root || !selectedPath) return;
+    const comparableSelected = toComparablePath(selectedPath);
+    const selectedIsOpen = openPaths.some((path) => toComparablePath(path) === comparableSelected);
+    if (!selectedIsOpen) {
+      setSelectedPath(root, openPaths[0] ?? null);
+    }
+  }, [openPaths, root, selectedPath, setSelectedPath]);
+
   const selectedFileIsOutsideWorkspace = Boolean(root && selectedFilePath && !isPathWithinRoot(selectedFilePath, root));
   const selectedOutsideFileGrant = selectedFileIsOutsideWorkspace ? getOutsideFileGrant(selectedFilePath) : undefined;
   const selectedFileReadOptions = React.useMemo(
@@ -825,7 +846,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [fileLoading, setFileLoading] = React.useState(false);
   const [fileError, setFileError] = React.useState<string | null>(null);
   const [desktopImageSrc, setDesktopImageSrc] = React.useState<string>('');
+  const desktopImageBlobUrlRef = React.useRef<string>('');
   const [imageAssetAuthReadyKey, setImageAssetAuthReadyKey] = React.useState('');
+  const [htmlAssetAuthReadyKey, setHtmlAssetAuthReadyKey] = React.useState('');
   const [pdfAssetAuthReadyKey, setPdfAssetAuthReadyKey] = React.useState('');
 
   const [loadedFilePath, setLoadedFilePath] = React.useState<string | null>(null);
@@ -2836,6 +2859,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}|${selectedFileReadOptions.outsideFileGrant ?? ''}`
     : '';
 
+  const htmlAssetAuthKey = selectedFile?.path && isHtml && htmlViewMode === 'preview' && !runtime.isVSCode
+    ? selectedFile.path
+    : '';
+
   React.useEffect(() => {
     if (!imageAssetAuthKey) {
       setImageAssetAuthReadyKey('');
@@ -2856,6 +2883,33 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   }, [imageAssetAuthKey]);
 
   const isImageAssetAuthLoading = Boolean(imageAssetAuthKey && imageAssetAuthReadyKey !== imageAssetAuthKey);
+
+  React.useEffect(() => {
+    if (!htmlAssetAuthKey) {
+      setHtmlAssetAuthReadyKey('');
+      return;
+    }
+
+    let cancelled = false;
+    setHtmlAssetAuthReadyKey('');
+    void refreshRuntimeUrlAuthToken(getRuntimeApiBaseUrl())
+      .then((token) => {
+        if (!cancelled && token) {
+          setHtmlAssetAuthReadyKey(htmlAssetAuthKey);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setFileError(error instanceof Error ? error.message : t('filesView.error.readFileFailed'));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [htmlAssetAuthKey, t]);
+
+  const isHtmlAssetAuthLoading = Boolean(htmlAssetAuthKey && htmlAssetAuthReadyKey !== htmlAssetAuthKey);
 
   React.useEffect(() => {
     if (!pdfAssetAuthKey) {
@@ -2920,19 +2974,43 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     const resolveDesktopImage = async () => {
       if (!runtime.isDesktop || !selectedFile?.path || !isSelectedImage || isSelectedSvg) {
+        if (desktopImageBlobUrlRef.current) {
+          URL.revokeObjectURL(desktopImageBlobUrlRef.current);
+          desktopImageBlobUrlRef.current = '';
+        }
         setDesktopImageSrc('');
         return;
       }
 
       setFileError(null);
 
+      if (desktopImageBlobUrlRef.current) {
+        URL.revokeObjectURL(desktopImageBlobUrlRef.current);
+        desktopImageBlobUrlRef.current = '';
+      }
+
       const srcPromise = files.readFileBinary
         ? files.readFileBinary(selectedFile.path, selectedFileReadOptions).then((result) => result.dataUrl)
-        : Promise.resolve(getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
-          path: selectedFile.path,
-          allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
-          outsideFileGrant: selectedFileReadOptions.outsideFileGrant,
-        }));
+        : (async () => {
+          const response = await runtimeFetch('/api/fs/raw', {
+            query: {
+              path: selectedFile.path,
+              allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
+              outsideFileGrant: selectedFileReadOptions.outsideFileGrant,
+            },
+          });
+          if (!response.ok) {
+            throw new Error(t('filesView.error.readFileFailed'));
+          }
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return '';
+          }
+          desktopImageBlobUrlRef.current = url;
+          return url;
+        })();
 
       await srcPromise
         .then((src) => {
@@ -2942,6 +3020,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           }
         })
         .catch((error) => {
+          if (desktopImageBlobUrlRef.current) {
+            URL.revokeObjectURL(desktopImageBlobUrlRef.current);
+            desktopImageBlobUrlRef.current = '';
+          }
           if (!cancelled) {
             setDesktopImageSrc('');
             setFileError(error instanceof Error ? error.message : t('filesView.error.readFileFailed'));
@@ -2961,6 +3043,15 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       cancelled = true;
     };
   }, [files, isSelectedImage, isSelectedSvg, runtime.isDesktop, selectedFile?.path, selectedFileReadOptions, t]);
+
+  React.useEffect(() => {
+    return () => {
+      if (desktopImageBlobUrlRef.current) {
+        URL.revokeObjectURL(desktopImageBlobUrlRef.current);
+        desktopImageBlobUrlRef.current = '';
+      }
+    };
+  }, []);
 
   const handleCloseDialog = React.useCallback(() => setActiveDialog(null), []);
 
@@ -3353,7 +3444,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               size="sm"
               onClick={() => {
                 const fn = files.downloadFile;
-                if (fn) void fn(selectedFile.path);
+                if (fn) void fn(selectedFile.path).catch((error) => {
+                  console.error('Download failed:', error);
+                  toast.error(t('sidebarFilesTree.toast.operationFailed'));
+                });
               }}
               className="size-6 p-0 hover:bg-transparent focus-visible:bg-transparent active:bg-transparent"
               title={t('filesView.editor.saveFile')}
@@ -3703,20 +3797,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               </ErrorBoundary>
             </div>
           ) : selectedFile && isHtml && htmlViewMode === 'preview' ? (
+            isHtmlAssetAuthLoading ? (
+              <div className="flex h-full items-center justify-center text-muted-foreground typography-ui-label">
+                {t('common.loading')}
+              </div>
+            ) : (
             <div className="h-full overflow-hidden">
               <iframe
-                srcDoc={(() => {
-                  // Inject base tag for relative paths (CSS/JS/images) to work
+                src={!runtime.isVSCode && htmlAssetAuthReadyKey === htmlAssetAuthKey ? (() => {
+                  const encoded = selectedFile.path.split('/').map((segment) => encodeURIComponent(segment)).join('/');
+                  return getRuntimeUrlResolver().authenticatedAsset(`/api/fs/serve${encoded.startsWith('/') ? encoded : `/${encoded}`}`);
+                })() : undefined}
+                srcDoc={runtime.isVSCode ? (() => {
                   const basePath = selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/') + 1);
                   if (!basePath) return fileContent;
-                  const baseTag = `<base href="${runtime.isDesktop ? basePath : basePath}">`;
-                  return fileContent.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
-                })()}
+                  return fileContent.replace(/<head([^>]*)>/i, `<head$1><base href="${basePath}">`);
+                })() : undefined}
                 className="w-full h-full border-none"
                 sandbox="allow-scripts allow-same-origin allow-forms"
                 title={t('filesView.editor.htmlPreviewTitle')}
               />
             </div>
+            )
           ) : selectedFile && canUseShikiFileView && textViewMode === 'view' ? (
             renderShikiFileView(selectedFile, draftContent)
           ) : (
