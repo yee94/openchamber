@@ -776,6 +776,7 @@ export const settingsDict = {
   "settings.openchamber.desktopNetwork.field.allowLanAccess": "Дозволити іншим пристроям у локальній мережі відкривати цей застосунок",
   "settings.openchamber.desktopNetwork.field.allowLanAccessDescription": "Перезапускає застосунок, щоб телефони, планшети та інші комп’ютери в мережі Wi-Fi могли його відкрити.",
   "settings.openchamber.desktopNetwork.field.warning": "Попередження: якщо це ввімкнено, застосунок доступний усім у тій самій локальній мережі.",
+  "settings.openchamber.desktopNetwork.field.passwordRequiredWarning": "Для LAN-доступу потрібен пароль десктопного UI. Доки його не задано, десктопний застосунок запускається лише локально.",
   "settings.openchamber.desktopPassword.field.password": "Пароль для десктопного UI",
   "settings.openchamber.desktopPassword.field.passwordPlaceholder": "Пароль не потрібен",
   "settings.openchamber.desktopPassword.field.passwordDescription": "OpenChamber попросить пароль після перезапуску, а потім коли сесія логіну спливе: через 12 годин або через 7 днів із «Довіряти цьому пристрою». Залиште порожнім, щоб вимкнути логін.",

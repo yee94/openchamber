@@ -740,6 +740,15 @@ export const createSettingsHelpers = (dependencies) => {
       securityScopedBookmarks: bookmarks,
       pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
       typographySizes: sanitizeTypographySizesPartial(settings.typographySizes),
+      ...(process.env.OPENCHAMBER_RUNTIME === 'desktop'
+        ? {
+            desktopLanAccessActive: process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_ACTIVE === 'true',
+            desktopLanAccessBlockedReason:
+              process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'missing-password'
+                ? 'missing-password'
+                : null,
+          }
+        : {}),
       showReasoningTraces:
         typeof settings.showReasoningTraces === 'boolean'
           ? settings.showReasoningTraces

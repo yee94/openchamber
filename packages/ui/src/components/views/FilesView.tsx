@@ -46,6 +46,7 @@ import { getLanguageFromExtension, getImageMimeType, isDrawioFile, isImageFile }
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
+import { getOutsideFileGrant } from '@/lib/outsideFileGrants';
 import { DiagramEditor } from '@/components/diagram';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
@@ -773,9 +774,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const selectedFile = React.useMemo(() => (effectiveSelectedPath ? toFileNode(effectiveSelectedPath) : null), [effectiveSelectedPath, toFileNode]);
   const selectedFilePath = selectedFile?.path ?? '';
   const selectedFileIsOutsideWorkspace = Boolean(root && selectedFilePath && !isPathWithinRoot(selectedFilePath, root));
+  const selectedOutsideFileGrant = selectedFileIsOutsideWorkspace ? getOutsideFileGrant(selectedFilePath) : undefined;
   const selectedFileReadOptions = React.useMemo(
-    () => ({ allowOutsideWorkspace: mode === 'editor-only' && selectedFileIsOutsideWorkspace }),
-    [mode, selectedFileIsOutsideWorkspace],
+    () => ({
+      allowOutsideWorkspace: mode === 'editor-only' && selectedFileIsOutsideWorkspace,
+      outsideFileGrant: selectedOutsideFileGrant,
+    }),
+    [mode, selectedFileIsOutsideWorkspace, selectedOutsideFileGrant],
   );
 
   // Editor tabs horizontal scroll fades
@@ -1444,7 +1449,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     };
   }, [currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
-  const readFile = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean; optional?: boolean }): Promise<string> => {
+  const readFile = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean; outsideFileGrant?: string; optional?: boolean }): Promise<string> => {
     if (files.readFile) {
       const result = await files.readFile(path, options);
       return result.content ?? '';
@@ -1453,6 +1458,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     const params = new URLSearchParams({ path });
     if (options?.allowOutsideWorkspace) {
       params.set('allowOutsideWorkspace', 'true');
+    }
+    if (options?.outsideFileGrant) {
+      params.set('outsideFileGrant', options.outsideFileGrant);
     }
     if (options?.optional) {
       params.set('optional', 'true');
@@ -1468,7 +1476,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return response.text();
   }, [files, t]);
 
-  const readFileStat = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean }): Promise<FileStatSnapshot | null> => {
+  const readFileStat = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean; outsideFileGrant?: string }): Promise<FileStatSnapshot | null> => {
     if (files.statFile) {
       const result = await files.statFile(path, options);
       return {
@@ -1711,7 +1719,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     setFileLoading(true);
 
-    const readOptions = { allowOutsideWorkspace: mode === 'editor-only' && Boolean(root) && !isPathWithinRoot(node.path, root) };
+    const outsideFileGrant = getOutsideFileGrant(node.path);
+    const readOptions = {
+      allowOutsideWorkspace: mode === 'editor-only' && Boolean(root) && !isPathWithinRoot(node.path, root),
+      outsideFileGrant,
+    };
 
     await readFile(node.path, readOptions)
       .then((content) => {
@@ -2799,7 +2811,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   );
 
   const imageAssetAuthKey = selectedFile?.path && isSelectedImage && !runtime.isDesktop && !isSelectedSvg
-    ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}`
+    ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}|${selectedFileReadOptions.outsideFileGrant ?? ''}`
     : '';
 
   React.useEffect(() => {
@@ -2833,6 +2845,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         : imageAssetAuthReadyKey === imageAssetAuthKey ? getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
           path: selectedFile.path,
           allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
+          outsideFileGrant: selectedFileReadOptions.outsideFileGrant,
         }) : ''))
     : '';
 
@@ -2852,6 +2865,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         : Promise.resolve(getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
           path: selectedFile.path,
           allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
+          outsideFileGrant: selectedFileReadOptions.outsideFileGrant,
         }));
 
       await srcPromise

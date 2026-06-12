@@ -776,6 +776,7 @@ export const settingsDict = {
   "settings.openchamber.desktopNetwork.field.allowLanAccess": "Permitir que outros dispositivos na sua rede local abram este aplicativo",
   "settings.openchamber.desktopNetwork.field.allowLanAccessDescription": "Reinicia o aplicativo para que os telefones, tablets e outros computadores em seu Wi-Fi possam abri-lo.",
   "settings.openchamber.desktopNetwork.field.warning": "Aviso: enquanto estiver habilitado, o aplicativo ficará acessível a qualquer pessoa na mesma rede local.",
+  "settings.openchamber.desktopNetwork.field.passwordRequiredWarning": "O acesso LAN exige uma senha da UI do desktop. Até configurar uma, o app de desktop inicia apenas localmente.",
   "settings.openchamber.desktopPassword.field.password": "Senha da UI do desktop",
   "settings.openchamber.desktopPassword.field.passwordPlaceholder": "Nenhuma senha obrigatória",
   "settings.openchamber.desktopPassword.field.passwordDescription": "O OpenChamber pede após reiniciar e depois quando a sessão expira: em 12 horas, ou 7 dias com Confiar neste dispositivo. Deixe vazio para desativar o login.",

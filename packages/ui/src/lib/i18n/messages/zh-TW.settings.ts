@@ -770,6 +770,7 @@
   'settings.openchamber.desktopNetwork.field.allowLanAccess': '允許你本機網路中的其他裝置開啟此應用程式',
   'settings.openchamber.desktopNetwork.field.allowLanAccessDescription': '會重新啟動應用程式，以便手機、平板和同一 Wi‑Fi 下的其他電腦存取。',
   'settings.openchamber.desktopNetwork.field.warning': '警告：啟用後，同一區域網路中的任何人都可存取此應用程式。',
+  'settings.openchamber.desktopNetwork.field.passwordRequiredWarning': '區域網路存取需要桌面 UI 密碼。設定前，桌面應用程式只會以本機模式啟動。',
   'settings.openchamber.desktopNetwork.hint.openAfterRestart': '重新啟動後可在其他裝置開啟：',
   'settings.openchamber.desktopNetwork.hint.openNow': '可在其他裝置開啟：',
   'settings.openchamber.desktopNetwork.actions.saveAndRestart': '儲存並重新啟動',

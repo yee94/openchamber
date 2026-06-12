@@ -809,6 +809,7 @@ export const settingsDict = {
   'settings.openchamber.desktopNetwork.field.allowLanAccess': 'Let other devices on your local network open this app',
   'settings.openchamber.desktopNetwork.field.allowLanAccessDescription': 'Restarts the app so phones, tablets, and other computers on your Wi-Fi can open it.',
   'settings.openchamber.desktopNetwork.field.warning': 'Warning: while enabled, the app is reachable by anyone on the same local network.',
+  'settings.openchamber.desktopNetwork.field.passwordRequiredWarning': 'LAN access requires a Desktop UI Password. Until one is set, the desktop app starts local-only.',
   'settings.openchamber.desktopPassword.field.password': 'Desktop UI Password',
   'settings.openchamber.desktopPassword.field.passwordPlaceholder': 'No password required',
   'settings.openchamber.desktopPassword.field.passwordDescription': 'OpenChamber asks after restart, then when the login session expires: after 12 hours, or 7 days with Trust this device. Leave empty to disable login.',

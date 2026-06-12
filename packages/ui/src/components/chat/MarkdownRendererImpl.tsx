@@ -33,8 +33,9 @@ import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { EditorAPI } from '@/lib/api/types';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { getDirectoryForFilePath, isAbsoluteFilePath, normalizeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
+import { isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { ensureOutsideFileGrantForDesktop } from '@/lib/outsideFileGrants';
+import { getDirectoryForFilePath, isAbsoluteFilePath, isFilePathWithinDirectory, normalizeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
 
 const useCurrentMermaidTheme = () => {
   const themeSystem = useOptionalThemeSystem();
@@ -1371,7 +1372,7 @@ const fileReferenceExists = (resolvedPath: string): Promise<boolean> => {
 };
 
 const getContextDirectory = (effectiveDirectory: string, resolvedPath: string): string => {
-  return getDirectoryForFilePath(effectiveDirectory, resolvedPath);
+  return effectiveDirectory || getDirectoryForFilePath(effectiveDirectory, resolvedPath);
 };
 
 const useFileReferenceInteractions = ({
@@ -1441,7 +1442,14 @@ const useFileReferenceInteractions = ({
 
         linkedCount += 1;
 
-        void fileReferenceExists(resolved.resolvedPath).then((exists) => {
+        const canGrantOutsideFile = isDesktopShell()
+          && isDesktopLocalOriginActive()
+          && !isFilePathWithinDirectory(resolved.resolvedPath, effectiveDirectory);
+        const existsPromise = canGrantOutsideFile
+          ? Promise.resolve(true)
+          : fileReferenceExists(resolved.resolvedPath);
+
+        void existsPromise.then((exists) => {
           if (cancelled || !exists || !container.contains(candidate)) {
             return;
           }
@@ -1464,7 +1472,7 @@ const useFileReferenceInteractions = ({
       }
     };
 
-    const openFileReference = (sourceElement: HTMLElement) => {
+    const openFileReference = async (sourceElement: HTMLElement) => {
       const raw = sourceElement.getAttribute('data-openchamber-file-ref') || extractPathCandidateFromElement(sourceElement);
       const resolved = getResolvedReference(raw, effectiveDirectory);
       if (!resolved) {
@@ -1483,6 +1491,10 @@ const useFileReferenceInteractions = ({
             : undefined,
         );
         return;
+      }
+
+      if (!isFilePathWithinDirectory(resolved.resolvedPath, effectiveDirectory)) {
+        await ensureOutsideFileGrantForDesktop(resolved.resolvedPath, effectiveDirectory);
       }
 
       const uiStore = useUIStore.getState();
@@ -1514,7 +1526,7 @@ const useFileReferenceInteractions = ({
       event.preventDefault();
       event.stopPropagation();
 
-      openFileReference(fileRefElement);
+      void openFileReference(fileRefElement);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1530,7 +1542,7 @@ const useFileReferenceInteractions = ({
       event.preventDefault();
       event.stopPropagation();
 
-      openFileReference(target);
+      void openFileReference(target);
     };
 
     annotateFileLinks();

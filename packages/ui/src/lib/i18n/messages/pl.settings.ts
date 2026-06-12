@@ -685,6 +685,7 @@ export const settingsDict = {
   'settings.openchamber.desktopNetwork.field.launchAtLoginAria': 'Uruchamiaj OpenChamber przy logowaniu',
   'settings.openchamber.desktopNetwork.field.launchAtLoginDescription': 'Uruchamia aplikację w tle bez otwierania okna. Kliknij ikonę w Docku, aby ją otworzyć.',
   'settings.openchamber.desktopNetwork.field.warning': 'Ostrzeżenie: po włączeniu aplikacja jest dostępna dla każdego w tej samej sieci lokalnej.',
+  'settings.openchamber.desktopNetwork.field.passwordRequiredWarning': 'Dostęp LAN wymaga hasła UI pulpitu. Dopóki go nie ustawisz, aplikacja pulpitu uruchamia się tylko lokalnie.',
   'settings.openchamber.desktopPassword.field.password': 'Hasło UI pulpitu',
   'settings.openchamber.desktopPassword.field.passwordPlaceholder': 'Hasło nie jest wymagane',
   'settings.openchamber.desktopPassword.field.passwordDescription': 'OpenChamber pyta po restarcie, a potem po wygaśnięciu sesji logowania: po 12 godzinach albo po 7 dniach z opcją Zaufaj temu urządzeniu. Zostaw puste, aby wyłączyć logowanie.',
