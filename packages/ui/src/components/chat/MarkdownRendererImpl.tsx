@@ -1307,6 +1307,34 @@ const isLikelyFilePath = (value: string): boolean => {
   return isLikelyFilePathValue(parsed.path);
 };
 
+const findTextPosition = (textNodes: Text[], targetOffset: number): { node: Text; offset: number } | null => {
+  let currentOffset = 0;
+
+  for (const node of textNodes) {
+    const nextOffset = currentOffset + node.data.length;
+    if (targetOffset <= nextOffset) {
+      return { node, offset: Math.max(0, targetOffset - currentOffset) };
+    }
+    currentOffset = nextOffset;
+  }
+
+  const lastNode = textNodes.at(-1);
+  return lastNode ? { node: lastNode, offset: lastNode.data.length } : null;
+};
+
+const unwrapBlockCodePathTokens = (container: HTMLElement): void => {
+  const tokenSpans = container.querySelectorAll<HTMLElement>(BLOCK_PATH_TOKEN_SELECTOR);
+  for (const span of Array.from(tokenSpans)) {
+    span.replaceWith(container.ownerDocument.createTextNode(span.textContent ?? ''));
+  }
+
+  const scannedBlocks = container.querySelectorAll<HTMLElement>(`code[${CODE_BLOCK_PATH_SCANNED_ATTR}]`);
+  for (const codeBlock of Array.from(scannedBlocks)) {
+    codeBlock.removeAttribute(CODE_BLOCK_PATH_SCANNED_ATTR);
+    codeBlock.normalize();
+  }
+};
+
 const extractPathCandidateFromElement = (element: HTMLElement): string => {
   if (element.tagName.toLowerCase() === 'a') {
     const href = element.getAttribute('href')?.trim();
@@ -1359,49 +1387,40 @@ const wrapBlockCodePathTokens = (container: HTMLElement): void => {
       currentNode = walker.nextNode();
     }
 
-    for (const textNode of textNodes) {
-      // Skip nodes already inside one of our token spans.
-      if (textNode.parentElement?.closest(BLOCK_PATH_TOKEN_SELECTOR)) {
+    const fullText = codeBlock.textContent ?? '';
+    if (!fullText.includes('.')) {
+      codeBlock.setAttribute(CODE_BLOCK_PATH_SCANNED_ATTR, 'true');
+      continue;
+    }
+
+    BLOCK_PATH_TOKEN_RE.lastIndex = 0;
+    const matches: Array<{ start: number; end: number; raw: string }> = [];
+    let match: RegExpExecArray | null = BLOCK_PATH_TOKEN_RE.exec(fullText);
+    while (match) {
+      const raw = match[0];
+      if (raw && isLikelyFilePath(raw)) {
+        matches.push({ start: match.index, end: match.index + raw.length, raw });
+      }
+      match = BLOCK_PATH_TOKEN_RE.exec(fullText);
+    }
+
+    for (const { start, end, raw } of matches.reverse()) {
+      const startPosition = findTextPosition(textNodes, start);
+      const endPosition = findTextPosition(textNodes, end);
+      if (!startPosition || !endPosition) {
         continue;
       }
 
-      const text = textNode.data;
-      if (!text || !text.includes('.')) {
-        continue;
-      }
+      const range = doc.createRange();
+      range.setStart(startPosition.node, startPosition.offset);
+      range.setEnd(endPosition.node, endPosition.offset);
 
-      BLOCK_PATH_TOKEN_RE.lastIndex = 0;
-      const matches: Array<{ start: number; end: number; raw: string }> = [];
-      let match: RegExpExecArray | null = BLOCK_PATH_TOKEN_RE.exec(text);
-      while (match) {
-        const raw = match[0];
-        if (raw && isLikelyFilePath(raw)) {
-          matches.push({ start: match.index, end: match.index + raw.length, raw });
-        }
-        match = BLOCK_PATH_TOKEN_RE.exec(text);
-      }
+      const span = doc.createElement('span');
+      span.setAttribute(BLOCK_PATH_TOKEN_ATTR, 'true');
+      span.textContent = raw;
 
-      if (matches.length === 0) {
-        continue;
-      }
-
-      const fragment = doc.createDocumentFragment();
-      let cursor = 0;
-      for (const { start, end, raw } of matches) {
-        if (start > cursor) {
-          fragment.appendChild(doc.createTextNode(text.slice(cursor, start)));
-        }
-        const span = doc.createElement('span');
-        span.setAttribute(BLOCK_PATH_TOKEN_ATTR, 'true');
-        span.textContent = raw;
-        fragment.appendChild(span);
-        cursor = end;
-      }
-      if (cursor < text.length) {
-        fragment.appendChild(doc.createTextNode(text.slice(cursor)));
-      }
-
-      textNode.parentNode?.replaceChild(fragment, textNode);
+      range.deleteContents();
+      range.insertNode(span);
     }
 
     codeBlock.setAttribute(CODE_BLOCK_PATH_SCANNED_ATTR, 'true');
@@ -1520,6 +1539,7 @@ const useFileReferenceInteractions = ({
       for (const candidate of Array.from(annotated)) {
         clearFileLinkAttributes(candidate);
       }
+      unwrapBlockCodePathTokens(container);
     };
 
     if (!enabled) {
