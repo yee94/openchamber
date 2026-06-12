@@ -3663,6 +3663,7 @@ export async function removeWorktree(directory, input = {}) {
   if (targetCanonical === primaryCanonical) {
     throw new Error('Cannot remove the primary workspace');
   }
+  const worktreeRootCanonical = await canonicalPath(context.worktreeRoot);
 
   const entries = await listWorktreeEntries(context.primaryWorktree);
   const matchedEntry = await (async () => {
@@ -3679,6 +3680,10 @@ export async function removeWorktree(directory, input = {}) {
   })();
 
   if (!matchedEntry?.worktree) {
+    if (targetCanonical === worktreeRootCanonical || !isInsideOrSameDirectory(worktreeRootCanonical, targetCanonical)) {
+      throw new Error('Cannot remove unmanaged worktree directory');
+    }
+
     const targetExists = await checkPathExists(targetDirectory);
     if (targetExists) {
       await fsp.rm(targetDirectory, { recursive: true, force: true });
