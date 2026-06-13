@@ -10,6 +10,8 @@ import {
   cherryPick,
   getStatus,
   removeWorktree,
+  resolvePrimaryWorktreeRoot,
+  resolveWorktreeTopLevel,
   resetToCommit,
   resolveBaseRefForLog,
   revertCommit,
@@ -137,6 +139,40 @@ describe('getStatus', () => {
     runGit(repo, ['commit', '-m', 'Initial commit']);
 
     await expect(getStatus(repo)).resolves.toMatchObject({ current: 'main' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// worktree root resolution
+// ---------------------------------------------------------------------------
+
+describe('worktree root resolution', () => {
+  it('resolves the git toplevel for a repository subdirectory', async () => {
+    if (!canRunGit()) return;
+
+    const repo = createTempDir();
+    const subdirectory = path.join(repo, 'packages', 'app');
+    runGit(repo, ['init', '-b', 'main']);
+    fs.mkdirSync(subdirectory, { recursive: true });
+
+    await expect(resolveWorktreeTopLevel(subdirectory)).resolves.toEqual({ root: fs.realpathSync(repo) });
+  });
+
+  it('resolves the primary worktree root from a linked worktree', async () => {
+    if (!canRunGit()) return;
+
+    const repo = createTempDir();
+    const worktree = createTempDir();
+    runGit(repo, ['init', '-b', 'main']);
+    runGit(repo, ['config', 'user.email', 'test@example.com']);
+    runGit(repo, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
+    runGit(repo, ['add', 'README.md']);
+    runGit(repo, ['commit', '-m', 'Initial commit']);
+    fs.rmSync(worktree, { recursive: true, force: true });
+    runGit(repo, ['worktree', 'add', '-b', 'feature/test', worktree, 'HEAD']);
+
+    await expect(resolvePrimaryWorktreeRoot(worktree)).resolves.toEqual({ root: fs.realpathSync(repo) });
   });
 });
 

@@ -348,6 +348,14 @@ const normalizeDirectoryPath = (value) => {
   return trimmed;
 };
 
+const normalizePath = (value) => {
+  const normalized = normalizeDirectoryPath(value);
+  if (typeof normalized !== 'string') {
+    return normalized;
+  }
+  return normalized.replace(/\\/g, '/');
+};
+
 const getGitIndexMutationQueueKey = (directory) => {
   const normalized = normalizeDirectoryPath(directory);
   if (!normalized) {
