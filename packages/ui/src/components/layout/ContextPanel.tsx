@@ -2283,11 +2283,11 @@ export const ContextPanel: React.FC = () => {
         key={activeTab.id}
         hideStackedFileSidebar
         stackedDefaultCollapsedAll
-        hideFileSelector
         pinSelectedFileHeaderToTopOnNavigate
         showOpenInEditorAction
         diffScope={activeTab.stagedDiff ? 'staged' : 'working'}
         targetFilePath={activeTab.targetPath}
+        flushContent
       />
     )
     : activeTab?.mode === 'context'

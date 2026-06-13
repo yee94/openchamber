@@ -77,6 +77,10 @@ export const PIERRE_RUNTIME_BASE_CSS = `
 const WEBKIT_SCROLL_FIX_CSS = `
   ${PIERRE_RUNTIME_BASE_CSS}
 
+  :host {
+    --diffs-bg-separator-override: var(--surface-elevated);
+  }
+
   [data-diff-header],
   [data-diff] {
     [data-separator] {

@@ -672,7 +672,6 @@ export interface SettingsPayload {
   inputBarOffset?: number;
   shortcutOverrides?: Record<string, string>;
   diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
-  diffViewMode?: 'single' | 'stacked';
   gitChangesViewMode?: 'flat' | 'tree';
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
