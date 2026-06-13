@@ -191,6 +191,10 @@ const normalizeContextPanelTabDedupeKey = (
   targetPath: string | null,
   dedupeKey: string | null | undefined,
 ): string => {
+  if (mode === 'diff') {
+    return mode;
+  }
+
   if (typeof dedupeKey === 'string') {
     const trimmed = dedupeKey.trim();
     if (trimmed) {
@@ -1032,7 +1036,6 @@ export const useUIStore = create<UIStore>()(
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'diff',
             targetPath: normalizedFilePath,
-            dedupeKey: staged ? 'staged' : null,
             stagedDiff: staged,
           });
         },

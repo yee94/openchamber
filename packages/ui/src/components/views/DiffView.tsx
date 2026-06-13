@@ -176,12 +176,22 @@ const createTextDiffDataFromPatch = (filePath: string, patch: string): DiffData 
     };
 };
 
-const formatDiffTotals = (insertions?: number, deletions?: number) => {
+const formatDiffTotals = (
+    insertions?: number,
+    deletions?: number,
+    options?: { shrink?: boolean; className?: string },
+) => {
     const added = insertions ?? 0;
     const removed = deletions ?? 0;
     if (!added && !removed) return null;
     return (
-        <span className="typography-meta flex flex-shrink-0 items-center gap-1 text-xs whitespace-nowrap">
+        <span
+            className={cn(
+                'typography-meta flex items-center gap-1 text-xs whitespace-nowrap',
+                options?.shrink ? 'min-w-0 overflow-hidden' : 'flex-shrink-0',
+                options?.className,
+            )}
+        >
             {added ? <span style={{ color: 'var(--status-success)' }}>+{added}</span> : null}
             {removed ? <span style={{ color: 'var(--status-error)' }}>-{removed}</span> : null}
         </span>
@@ -232,6 +242,7 @@ interface FileSelectorProps {
     selectedFile: string | null;
     selectedFileEntry: FileEntry | null;
     onSelectFile: (path: string) => void;
+    className?: string;
 }
 
 const FileSelector = React.memo<FileSelectorProps>(({
@@ -239,6 +250,7 @@ const FileSelector = React.memo<FileSelectorProps>(({
     selectedFile,
     selectedFileEntry,
     onSelectFile,
+    className,
 }) => {
     const { t } = useI18n();
 
@@ -247,30 +259,91 @@ const FileSelector = React.memo<FileSelectorProps>(({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button className="flex h-7 min-w-0 max-w-[min(52rem,60vw)] items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <button className={cn(
+                    'diff-toolbar__file-trigger flex h-7 min-w-[3.75rem] max-w-full items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                    className,
+                )}>
                     {selectedFileEntry ? (
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="diff-toolbar__file-trigger-content flex min-w-0 flex-1 items-center gap-2">
                             <FileTypeIcon filePath={selectedFileEntry.path} className="h-3.5 w-3.5 flex-shrink-0" />
-                            <DiffFilePathLabel path={selectedFileEntry.path} className="flex-1" />
-                            {formatDiffTotals(selectedFileEntry.insertions, selectedFileEntry.deletions)}
+                            <DiffFilePathLabel path={selectedFileEntry.path} className="diff-toolbar__file-label min-w-0 flex-1" />
+                            {formatDiffTotals(selectedFileEntry.insertions, selectedFileEntry.deletions, { shrink: true, className: 'diff-toolbar__file-stats' })}
                         </div>
                     ) : (
-                        <span className="text-muted-foreground">{t('diffView.selector.selectFile')}</span>
+                        <span className="min-w-0 truncate text-muted-foreground">{t('diffView.selector.selectFile')}</span>
                     )}
-                    <Icon name="arrow-down-s" className="size-4 opacity-50" />
+                    <Icon name="arrow-down-s" className="size-4 flex-shrink-0 opacity-50" />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="max-h-[70vh] w-[max(var(--anchor-width),min(28rem,calc(100vw-2rem)))] max-w-[calc(100vw-2rem)] overflow-y-auto">
+            <DropdownMenuContent className="max-h-[70vh] w-[min(max(var(--anchor-width),18rem),36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-y-auto">
                 <DropdownMenuRadioGroup value={selectedFile ?? ''} onValueChange={onSelectFile}>
                     {changedFiles.map((file) => (
                         <DropdownMenuRadioItem key={file.path} value={file.path} className="min-w-0 items-center">
-                            <div className="flex w-full min-w-0 items-center gap-3">
+                            <div className="flex w-full min-w-0 items-center gap-2.5">
                                 <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0" />
                                 <DiffFilePathLabel path={file.path} className="flex-1" />
                                 {formatDiffTotals(file.insertions, file.deletions)}
                             </div>
                         </DropdownMenuRadioItem>
                     ))}
+                </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+});
+
+interface ChangeScopeSelectorProps {
+    scope: Extract<DiffScope, 'working' | 'staged'>;
+    workingCount: number;
+    stagedCount: number;
+    onScopeChange?: (scope: Extract<DiffScope, 'working' | 'staged'>) => void;
+}
+
+const ChangeScopeSelector = React.memo<ChangeScopeSelectorProps>(({
+    scope,
+    workingCount,
+    stagedCount,
+    onScopeChange,
+}) => {
+    const { t } = useI18n();
+    const currentCount = scope === 'staged' ? stagedCount : workingCount;
+    const currentLabel = scope === 'staged' ? t('diffView.scope.staged') : t('diffView.scope.changed');
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md px-2 typography-ui-label font-semibold text-foreground outline-none hover:bg-interactive-hover focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t('diffView.scope.selectorAria')}
+                >
+                    <span className="whitespace-nowrap">
+                        {currentLabel}<span className="diff-toolbar__scope-count">: {currentCount}</span>
+                    </span>
+                    <Icon name="arrow-down-s" className="size-4 flex-shrink-0 opacity-60" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+                <DropdownMenuRadioGroup
+                    value={scope}
+                    onValueChange={(value) => {
+                        if (value === 'working' || value === 'staged') {
+                            onScopeChange?.(value);
+                        }
+                    }}
+                >
+                    <DropdownMenuRadioItem value="working">
+                        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                            <span>{t('diffView.scope.changed')}</span>
+                            <span className="typography-meta text-muted-foreground">{workingCount}</span>
+                        </span>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="staged">
+                        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                            <span>{t('diffView.scope.staged')}</span>
+                            <span className="typography-meta text-muted-foreground">{stagedCount}</span>
+                        </span>
+                    </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -766,6 +839,7 @@ interface DiffViewProps {
     pinSelectedFileHeaderToTopOnNavigate?: boolean;
     showOpenInEditorAction?: boolean;
     diffScope?: DiffScope;
+    onDiffScopeChange?: (scope: Extract<DiffScope, 'working' | 'staged'>) => void;
     targetFilePath?: string | null;
     /** Render diff content flush with the container edges (no outer padding). */
     flushContent?: boolean;
@@ -778,6 +852,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     pinSelectedFileHeaderToTopOnNavigate = false,
     showOpenInEditorAction = false,
     diffScope = 'all',
+    onDiffScopeChange,
     targetFilePath = null,
     flushContent = false,
 }) => {
@@ -867,6 +942,16 @@ export const DiffView: React.FC<DiffViewProps> = ({
             }))
             .sort((a, b) => a.path.localeCompare(b.path));
     }, [diffScope, status]);
+
+    const workingFileCount = React.useMemo(() => {
+        if (!status?.files) return 0;
+        return status.files.filter(isWorkingStatusFile).length;
+    }, [status]);
+
+    const stagedFileCount = React.useMemo(() => {
+        if (!status?.files) return 0;
+        return status.files.filter(isStagedStatusFile).length;
+    }, [status]);
 
     const selectedFileEntry = React.useMemo(() => {
         if (!selectedFile) return null;
@@ -1391,18 +1476,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background">
-            <div className="flex items-center gap-3 px-3 py-2 bg-background">
+            <div className="@container/diff-toolbar flex min-w-0 items-center gap-2 px-3 py-2 bg-background">
                 {!isMobile && (
-                    <div className="flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground shrink-0">
-                        <Icon name="git-commit" className="h-4 w-4" />
-                        <span className="typography-ui-label font-semibold text-foreground">
-                            {isLoadingStatus && !status
-                                ? t('diffView.state.loadingChanges')
-                                : (changedFiles.length === 1
-                                    ? t('diffView.summary.changedFilesSingle', { count: changedFiles.length })
-                                    : t('diffView.summary.changedFilesPlural', { count: changedFiles.length }))}
-                        </span>
-                    </div>
+                    diffScope === 'working' || diffScope === 'staged' ? (
+                        <ChangeScopeSelector
+                            scope={diffScope}
+                            workingCount={workingFileCount}
+                            stagedCount={stagedFileCount}
+                            onScopeChange={onDiffScopeChange}
+                        />
+                    ) : (
+                        <div className="flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground shrink-0">
+                            <span className="typography-ui-label font-semibold text-foreground">
+                                {isLoadingStatus && !status
+                                    ? t('diffView.state.loadingChanges')
+                                    : (changedFiles.length === 1
+                                        ? t('diffView.summary.changedFilesSingle', { count: changedFiles.length })
+                                        : t('diffView.summary.changedFilesPlural', { count: changedFiles.length }))}
+                            </span>
+                        </div>
+                    )
                 )}
                 {showFileSelector && (
                     <FileSelector
@@ -1410,22 +1503,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         selectedFile={selectedFile}
                         selectedFileEntry={selectedFileEntry}
                         onSelectFile={handleSelectFileAndScroll}
+                        className="w-fit min-w-0"
                     />
                 )}
-                <div className="flex-1" />
+                {!showFileSelector ? <div className="min-w-0 flex-1" /> : null}
                 {changedFiles.length > 0 && (
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleExpandOrCollapseAll}
-                        className="h-7 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                        className={cn(
+                            'diff-toolbar__expand-button h-7 flex-shrink-0 gap-1 px-1.5 text-muted-foreground hover:text-foreground',
+                            showFileSelector && 'ml-auto',
+                        )}
                         title={expandedFiles.size > 0 ? t('diffView.actions.collapseAll') : t('diffView.actions.expandAll')}
                     >
                         <Icon
-                            name={expandedFiles.size > 0 ? 'arrow-up-s' : 'arrow-down-s'}
+                            name="expand-up-down"
                             className="size-4"
                         />
-                        <span className="typography-ui-label hidden sm:inline">
+                        <span className="diff-toolbar__expand-label typography-ui-label">
                             {expandedFiles.size > 0 ? t('diffView.actions.collapseAll') : t('diffView.actions.expandAll')}
                         </span>
                     </Button>

@@ -199,7 +199,7 @@ const getTabLabel = (
   }
 
   if (tab.mode === 'diff') {
-    return tab.stagedDiff ? t('contextPanel.mode.stagedDiff') : t('contextPanel.mode.workingDiff');
+    return t('contextPanel.mode.diff');
   }
 
   return getModeLabel(tab.mode, t);
@@ -1997,6 +1997,7 @@ export const ContextPanel: React.FC = () => {
   const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined));
   const closeContextPanel = useUIStore((state) => state.closeContextPanel);
   const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab);
+  const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
   const toggleContextPanelExpanded = useUIStore((state) => state.toggleContextPanelExpanded);
   const setContextPanelWidth = useUIStore((state) => state.setContextPanelWidth);
   const setActiveContextPanelTab = useUIStore((state) => state.setActiveContextPanelTab);
@@ -2178,6 +2179,18 @@ export const ContextPanel: React.FC = () => {
 
   const activeChatTabID = activeTab?.mode === 'chat' ? activeTab.id : null;
 
+  const handleDiffScopeChange = React.useCallback((nextScope: 'working' | 'staged') => {
+    if (!directoryKey || activeTab?.mode !== 'diff') {
+      return;
+    }
+
+    openContextPanelTab(directoryKey, {
+      mode: 'diff',
+      targetPath: activeTab.targetPath,
+      stagedDiff: nextScope === 'staged',
+    });
+  }, [activeTab, directoryKey, openContextPanelTab]);
+
   const postThemeSyncToEmbeddedChat = React.useCallback(() => {
     if (typeof window === 'undefined') {
       return;
@@ -2286,6 +2299,7 @@ export const ContextPanel: React.FC = () => {
         pinSelectedFileHeaderToTopOnNavigate
         showOpenInEditorAction
         diffScope={activeTab.stagedDiff ? 'staged' : 'working'}
+        onDiffScopeChange={handleDiffScopeChange}
         targetFilePath={activeTab.targetPath}
         flushContent
       />
