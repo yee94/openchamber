@@ -1,0 +1,124 @@
+import { parseDiffFromFile, parsePatchFiles, type FileDiffMetadata } from '@pierre/diffs';
+
+const PATCH_DIFF_CACHE_LIMIT = 64;
+const patchFileDiffCache = new Map<string, FileDiffMetadata>();
+
+export const fileDiffFromContent = (file: string, before: string, after: string): FileDiffMetadata => {
+  if (!before && !after) {
+    return emptyFileDiff(file);
+  }
+
+  return parseDiffFromFile(
+    { name: file, contents: before },
+    { name: file, contents: after },
+  );
+};
+
+export const fileDiffFromPatch = (file: string, patch: string): FileDiffMetadata => {
+  const key = `${file}\0${patch}`;
+  const cached = patchFileDiffCache.get(key);
+  if (cached) {
+    patchFileDiffCache.delete(key);
+    patchFileDiffCache.set(key, cached);
+    return cached;
+  }
+
+  const completeContents = completePatchContents(patch);
+  const value = completeContents
+    ? fileDiffFromContent(file, completeContents.before, completeContents.after)
+    : (parsePatchFiles(withPatchHeader(file, patch))[0]?.files[0] ?? emptyFileDiff(file));
+  patchFileDiffCache.set(key, value);
+
+  while (patchFileDiffCache.size > PATCH_DIFF_CACHE_LIMIT) {
+    const firstKey = patchFileDiffCache.keys().next().value;
+    if (!firstKey) break;
+    patchFileDiffCache.delete(firstKey);
+  }
+
+  return value;
+};
+
+const withPatchHeader = (file: string, patch: string): string => {
+  if (!patch.trim()) {
+    return patch;
+  }
+
+  if (patch.startsWith('diff --git ') || /^--- [^\n]*\r?\n\+\+\+ /m.test(patch)) {
+    return patch;
+  }
+
+  return `Index: ${file}\n===================================================================\n--- ${file}\t\n+++ ${file}\t\n${patch}`;
+};
+
+const completePatchContents = (patch: string): { before: string; after: string } | undefined => {
+  if (!patch.startsWith('diff --git ') && !/^--- [^\n]*\t?\r?\n\+\+\+ [^\n]*\t?(?:\r?\n|$)/m.test(patch)) {
+    return undefined;
+  }
+
+  const hunkMatches = [...patch.matchAll(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@[^\n]*(?:\r?\n|$)/gm)];
+  if (hunkMatches.length !== 1) {
+    return undefined;
+  }
+
+  const hunk = hunkMatches[0];
+  const oldStart = Number.parseInt(hunk[1] ?? '', 10);
+  const newStart = Number.parseInt(hunk[2] ?? '', 10);
+  if (oldStart > 1 || newStart > 1 || !Number.isFinite(oldStart) || !Number.isFinite(newStart)) {
+    return undefined;
+  }
+
+  const hunkStart = (hunk.index ?? 0) + hunk[0].length;
+  const body = patch.slice(hunkStart);
+  const before: Array<{ text: string; newline: boolean }> = [];
+  const after: Array<{ text: string; newline: boolean }> = [];
+  let previous: '-' | '+' | ' ' | undefined;
+
+  for (const rawLine of body.split(/\r?\n/)) {
+    if (rawLine.startsWith('diff --git ') || rawLine.startsWith('@@ ')) {
+      break;
+    }
+
+    if (rawLine.startsWith('\\')) {
+      if (previous === '-' || previous === ' ') {
+        const value = before.at(-1);
+        if (value) value.newline = false;
+      }
+      if (previous === '+' || previous === ' ') {
+        const value = after.at(-1);
+        if (value) value.newline = false;
+      }
+      continue;
+    }
+
+    if (rawLine.startsWith('-')) {
+      before.push({ text: rawLine.slice(1), newline: true });
+      previous = '-';
+      continue;
+    }
+
+    if (rawLine.startsWith('+')) {
+      after.push({ text: rawLine.slice(1), newline: true });
+      previous = '+';
+      continue;
+    }
+
+    if (!rawLine.startsWith(' ')) {
+      continue;
+    }
+
+    before.push({ text: rawLine.slice(1), newline: true });
+    after.push({ text: rawLine.slice(1), newline: true });
+    previous = ' ';
+  }
+
+  return {
+    before: joinPatchLines(before),
+    after: joinPatchLines(after),
+  };
+};
+
+const joinPatchLines = (lines: Array<{ text: string; newline: boolean }>): string =>
+  lines.map((line) => line.text + (line.newline ? '\n' : '')).join('');
+
+const emptyFileDiff = (file: string): FileDiffMetadata =>
+  parseDiffFromFile({ name: file, contents: '' }, { name: file, contents: '' });
