@@ -747,6 +747,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     maxLineDiffLength: isLargeContent ? 0 : 1000,
     maxLineLengthForHighlighting: isLargeContent ? 1 : 1000,
     tokenizeMaxLineLength: isLargeContent ? 1 : 1000,
+    collapsedContextThreshold: 0,
     expansionLineCount: 20,
     overflow: wrapLines ? ('wrap' as const) : ('scroll' as const),
     disableFileHeader: true,

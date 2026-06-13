@@ -12,6 +12,11 @@ import {
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 
@@ -38,6 +43,7 @@ const DIFF_REQUEST_TIMEOUT_MS = 15000;
 const LARGE_DIFF_CHANGED_LINES = 500;
 const STACKED_DIFF_MOUNT_MARGIN = 300;
 const FULL_CONTEXT_DIFF_LINES = 1_000_000;
+const DEFAULT_CONTEXT_DIFF_LINES = 3;
 
 // Perf: limit concurrent expanded diffs in stacked view.
 // Expanding many diffs mounts many Pierre instances + lots of DOM.
@@ -54,7 +60,15 @@ type FileEntry = GitStatus['files'][number] & {
     isNew: boolean;
 };
 
-type DiffData = { original: string; modified: string; isBinary?: boolean; patch?: string; fileDiff?: FileDiffMetadata };
+type DiffContextMode = 'patch' | 'full';
+type DiffData = {
+    original: string;
+    modified: string;
+    isBinary?: boolean;
+    patch?: string;
+    fileDiff?: FileDiffMetadata;
+    contextMode?: DiffContextMode;
+};
 type DiffScope = 'all' | 'staged' | 'working';
 
 const BinaryDiffPlaceholder = React.memo(() => {
@@ -163,9 +177,9 @@ const getFirstVisibleModifiedLineFromPatch = (patch: string): number | null => {
 const isBinaryPatch = (patch: string): boolean =>
     /^Binary files .+ differ$/m.test(patch) || /^GIT binary patch$/m.test(patch);
 
-const createTextDiffDataFromPatch = (filePath: string, patch: string): DiffData => {
+const createTextDiffDataFromPatch = (filePath: string, patch: string, contextMode: DiffContextMode): DiffData => {
     if (isBinaryPatch(patch)) {
-        return { original: '', modified: '', isBinary: true, patch };
+        return { original: '', modified: '', isBinary: true, patch, contextMode };
     }
 
     return {
@@ -173,6 +187,7 @@ const createTextDiffDataFromPatch = (filePath: string, patch: string): DiffData 
         modified: '',
         patch,
         fileDiff: fileDiffFromPatch(filePath, patch),
+        contextMode,
     };
 };
 
@@ -529,6 +544,7 @@ interface MultiFileDiffEntryProps {
     onOpenInEditor?: (filePath: string, diffData: DiffData | null) => void;
     staged?: boolean;
     stagedRevision?: number;
+    loadFullFiles?: boolean;
 }
 
 const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
@@ -547,6 +563,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     onOpenInEditor,
     staged = false,
     stagedRevision = 0,
+    loadFullFiles = false,
 }) => {
     const { t } = useI18n();
     const { git } = useRuntimeAPIs();
@@ -569,12 +586,16 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
     const descriptor = React.useMemo(() => describeChange(file), [file]);
     const renderSideBySide = layout === 'side-by-side';
+    const desiredContextMode: DiffContextMode = loadFullFiles ? 'full' : 'patch';
 
     const diffData = React.useMemo<DiffData | null>(() => {
         if (staged) return stagedDiffData;
-        if (!cachedDiff) return localDiffData;
-        return { original: cachedDiff.original, modified: cachedDiff.modified, isBinary: cachedDiff.isBinary };
+        if (localDiffData) return localDiffData;
+        if (!cachedDiff) return null;
+        return { original: cachedDiff.original, modified: cachedDiff.modified, isBinary: cachedDiff.isBinary, contextMode: 'full' };
     }, [cachedDiff, localDiffData, staged, stagedDiffData]);
+
+    const diffDataMatchesContextMode = diffData?.contextMode === desiredContextMode;
 
     const setSectionRef = React.useCallback((node: HTMLDivElement | null) => {
         sectionRef.current = node;
@@ -602,13 +623,13 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
     React.useEffect(() => {
         if (!isExpanded || !isMounted) return;
-        if (!directory || diffData) {
+        if (!directory || (diffData && diffDataMatchesContextMode)) {
             lastDiffRequestRef.current = null;
             setIsLoading(false);
             return;
         }
 
-        const requestKey = `${directory}::${file.path}::${staged ? `staged:${stagedRevision}` : 'unstaged'}::${diffRetryNonce}`;
+        const requestKey = `${directory}::${file.path}::${staged ? `staged:${stagedRevision}` : 'unstaged'}::${desiredContextMode}::${diffRetryNonce}`;
         if (lastDiffRequestRef.current === requestKey) {
             return;
         }
@@ -617,9 +638,10 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
         setIsLoading(true);
 
         let cancelled = false;
+        const contextLines = loadFullFiles ? FULL_CONTEXT_DIFF_LINES : DEFAULT_CONTEXT_DIFF_LINES;
         const fetchPromise = isImageFile(file.path)
             ? git.getGitFileDiff(directory, { path: file.path, staged })
-            : git.getGitDiff(directory, { path: file.path, staged, contextLines: FULL_CONTEXT_DIFF_LINES });
+            : git.getGitDiff(directory, { path: file.path, staged, contextLines });
         const timeoutMs = DIFF_REQUEST_TIMEOUT_MS;
         const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
@@ -630,7 +652,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                 if (cancelled) return;
 
                 if ('diff' in response) {
-                    const nextDiff = createTextDiffDataFromPatch(file.path, response.diff);
+                    const nextDiff = createTextDiffDataFromPatch(file.path, response.diff, desiredContextMode);
                     if (staged) {
                         setStagedDiffData(nextDiff);
                     } else {
@@ -641,6 +663,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                         original: response.original ?? '',
                         modified: response.modified ?? '',
                         isBinary: response.isBinary,
+                        contextMode: 'full' as const,
                     };
                     if (staged) {
                         setStagedDiffData(nextDiff);
@@ -663,7 +686,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                 lastDiffRequestRef.current = null;
             }
         };
-    }, [directory, diffData, diffRetryNonce, file.path, git, isExpanded, isMounted, setDiff, staged, stagedRevision]);
+    }, [desiredContextMode, diffData, diffDataMatchesContextMode, diffRetryNonce, directory, file.path, git, isExpanded, isMounted, loadFullFiles, setDiff, staged, stagedRevision]);
 
     const handleToggle = React.useCallback(() => {
         handleOpenChange(!isExpanded);
@@ -879,6 +902,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const [pinnedStackedTarget, setPinnedStackedTarget] = React.useState<string | null>(null);
     const [expandedFiles, setExpandedFiles] = React.useState<Set<string>>(() => new Set());
     const [mountedStackedFiles, setMountedStackedFiles] = React.useState<Set<string>>(() => new Set());
+    const [loadFullFiles, setLoadFullFiles] = React.useState(false);
 
     const pendingDiffFile = useUIStore((state) => state.pendingDiffFile);
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
@@ -1428,6 +1452,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                 }}
                                 staged={getFileStaged(file.path)}
                                 stagedRevision={indexRevision}
+                                loadFullFiles={loadFullFiles}
                             />
                         ))}
                     </div>
@@ -1526,6 +1551,28 @@ export const DiffView: React.FC<DiffViewProps> = ({
                             {expandedFiles.size > 0 ? t('diffView.actions.collapseAll') : t('diffView.actions.expandAll')}
                         </span>
                     </Button>
+                )}
+                {changedFiles.length > 0 && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLoadFullFiles((value) => !value)}
+                                aria-pressed={loadFullFiles}
+                                aria-label={loadFullFiles ? t('diffView.actions.disableFullFiles') : t('diffView.actions.loadFullFiles')}
+                                className={cn(
+                                    'h-7 w-7 flex-shrink-0 p-0 text-muted-foreground hover:text-foreground',
+                                    loadFullFiles && 'bg-interactive-selection text-interactive-selection-foreground',
+                                )}
+                            >
+                                <Icon name="file-download" className="size-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{loadFullFiles ? t('diffView.actions.disableFullFiles') : t('diffView.actions.loadFullFiles')}</p>
+                        </TooltipContent>
+                    </Tooltip>
                 )}
                 {selectedFileEntry && (
                     <Button

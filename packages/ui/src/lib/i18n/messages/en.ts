@@ -1209,6 +1209,8 @@ export const dict = {
   'diffView.actions.renderAnyway': 'Render anyway',
   'diffView.actions.expandAll': 'Expand all',
   'diffView.actions.collapseAll': 'Collapse all',
+  'diffView.actions.loadFullFiles': 'Load full files',
+  'diffView.actions.disableFullFiles': 'Unload full files',
   'diffView.actions.disableLineWrap': 'Disable line wrap',
   'diffView.actions.enableLineWrap': 'Enable line wrap',
   'diffView.actions.openFileInEditorAtChange': 'Open this file in editor at change',

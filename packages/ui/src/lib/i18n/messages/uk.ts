@@ -1175,6 +1175,8 @@ export const dict: Record<I18nKey, string> = {
   "diffView.actions.renderAnyway": "Все одно відрендерити",
   "diffView.actions.expandAll": "Розгорнути все",
   "diffView.actions.collapseAll": "Згорнути все",
+  "diffView.actions.loadFullFiles": "Завантажити повні файли",
+  "diffView.actions.disableFullFiles": "Не завантажувати повні файли",
   "diffView.actions.disableLineWrap": "Вимкнути перенос рядків",
   "diffView.actions.enableLineWrap": "Увімкнути перенос рядків",
   "diffView.actions.openFileInEditorAtChange": "Відкрити цей файл у редакторі на зміні",

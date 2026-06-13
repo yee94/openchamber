@@ -1082,6 +1082,8 @@ export const dict = {
   'diffView.actions.renderAnyway': 'Afficher quand même',
   'diffView.actions.expandAll': 'Tout développer',
   'diffView.actions.collapseAll': 'Tout réduire',
+  'diffView.actions.loadFullFiles': 'Charger les fichiers complets',
+  'diffView.actions.disableFullFiles': 'Ne plus charger les fichiers complets',
   'diffView.actions.disableLineWrap': 'Désactiver le retour à la ligne',
   'diffView.actions.enableLineWrap': 'Activer le retour à la ligne',
   'diffView.actions.openFileInEditorAtChange': 'Ouvrez ce fichier dans l\'éditeur lors du changement',

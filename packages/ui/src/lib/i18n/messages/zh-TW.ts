@@ -1185,6 +1185,8 @@ export const dict: Record<I18nKey, string> = {
   'diffView.actions.renderAnyway': '仍然渲染',
   'diffView.actions.expandAll': '全部展開',
   'diffView.actions.collapseAll': '全部折疊',
+  'diffView.actions.loadFullFiles': '載入完整檔案',
+  'diffView.actions.disableFullFiles': '停止載入完整檔案',
   'diffView.actions.disableLineWrap': '關閉自動換行',
   'diffView.actions.enableLineWrap': '開啟自動換行',
   'diffView.actions.openFileInEditorAtChange': '在編輯器中開啟此檔案並定位變更',

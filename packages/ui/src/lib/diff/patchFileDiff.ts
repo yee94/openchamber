@@ -1,9 +1,21 @@
-import { parseDiffFromFile, parsePatchFiles, type FileDiffMetadata } from '@pierre/diffs';
+import {
+  parseDiffFromFile,
+  parsePatchFiles,
+  processFile,
+  trimPatchContext,
+  type FileDiffMetadata,
+} from '@pierre/diffs';
 
 const PATCH_DIFF_CACHE_LIMIT = 64;
+const DEFAULT_PATCH_CONTEXT_LINES = 3;
 const patchFileDiffCache = new Map<string, FileDiffMetadata>();
 
-export const fileDiffFromContent = (file: string, before: string, after: string): FileDiffMetadata => {
+export const fileDiffFromContent = (
+  file: string,
+  before: string,
+  after: string,
+  contextLines = DEFAULT_PATCH_CONTEXT_LINES
+): FileDiffMetadata => {
   if (!before && !after) {
     return emptyFileDiff(file);
   }
@@ -11,11 +23,16 @@ export const fileDiffFromContent = (file: string, before: string, after: string)
   return parseDiffFromFile(
     { name: file, contents: before },
     { name: file, contents: after },
+    { context: contextLines },
   );
 };
 
-export const fileDiffFromPatch = (file: string, patch: string): FileDiffMetadata => {
-  const key = `${file}\0${patch}`;
+export const fileDiffFromPatch = (
+  file: string,
+  patch: string,
+  contextLines = DEFAULT_PATCH_CONTEXT_LINES
+): FileDiffMetadata => {
+  const key = `${file}\0${contextLines}\0${patch}`;
   const cached = patchFileDiffCache.get(key);
   if (cached) {
     patchFileDiffCache.delete(key);
@@ -25,7 +42,10 @@ export const fileDiffFromPatch = (file: string, patch: string): FileDiffMetadata
 
   const completeContents = completePatchContents(patch);
   const value = completeContents
-    ? fileDiffFromContent(file, completeContents.before, completeContents.after)
+    ? (processFile(trimPatchContext(patch, contextLines), {
+      oldFile: { name: file, contents: completeContents.before },
+      newFile: { name: file, contents: completeContents.after },
+    }) ?? emptyFileDiff(file))
     : (parsePatchFiles(withPatchHeader(file, patch))[0]?.files[0] ?? emptyFileDiff(file));
   patchFileDiffCache.set(key, value);
 

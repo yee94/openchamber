@@ -1212,6 +1212,8 @@ export const dict: Record<I18nKey, string> = {
   'diffView.actions.renderAnyway': '그래도 렌더링',
   'diffView.actions.expandAll': '모두 펼치기',
   'diffView.actions.collapseAll': '모두 접기',
+  'diffView.actions.loadFullFiles': '전체 파일 불러오기',
+  'diffView.actions.disableFullFiles': '전체 파일 불러오기 끄기',
   'diffView.actions.disableLineWrap': '줄 바꿈 끄기',
   'diffView.actions.enableLineWrap': '줄 바꿈 켜기',
   'diffView.actions.openFileInEditorAtChange': '변경 위치에서 이 파일을 에디터로 열기',
