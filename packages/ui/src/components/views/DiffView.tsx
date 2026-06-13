@@ -599,15 +599,15 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
     return (
         <div ref={setSectionRef} className="scroll-mt-9 border-b border-[var(--interactive-border)]/40 last:border-b-0">
-            <div className="sticky top-0 z-10 bg-[var(--surface-muted)]">
+            <div className="sticky top-0 z-10 border-b border-[var(--interactive-border)]/35 bg-[var(--surface-elevated)]/90 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--surface-elevated)]/80">
                 <button
                     type="button"
                     onClick={handleToggle}
                     className={cn(
-                        'group/header relative flex w-full items-center gap-2 px-3 py-1.5 overflow-hidden',
+                        'group/header relative flex min-h-9 w-full items-center gap-2 overflow-hidden px-3 py-2',
                         'bg-transparent',
                         'text-muted-foreground hover:text-foreground',
-                        isSelected ? 'bg-[var(--interactive-selection)]/40' : null
+                        isSelected ? 'bg-[var(--interactive-selection)]/35' : null
                     )}
                 >
                     <div className="absolute inset-0 pointer-events-none group-hover/header:bg-[var(--interactive-hover)]/50" />

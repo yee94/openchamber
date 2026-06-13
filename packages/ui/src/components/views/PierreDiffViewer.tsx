@@ -91,6 +91,104 @@ const WEBKIT_SCROLL_FIX_CSS = `
       height: 24px !important;
     }
   }
+
+  [data-separator="line-info-basic"] {
+    height: 24px !important;
+    background: var(--diffs-bg) !important;
+    position: relative;
+  }
+
+  [data-diff-type="single"] [data-gutter],
+  [data-diff-type="split"] [data-deletions] [data-gutter] {
+    [data-separator-wrapper] {
+      position: absolute;
+      left: 100%;
+      display: flex;
+      align-items: center;
+      gap: unset;
+      width: max-content;
+      background: transparent;
+      color: var(--diffs-fg-number);
+      font-family: var(--diffs-header-font-family, var(--font-sans));
+      font-size: 0.75rem;
+      line-height: 1;
+      margin-left: calc(-2ch - 2px);
+    }
+
+    [data-separator-wrapper][data-separator-multi-button] {
+      margin-left: calc(-3ch - 2px);
+    }
+
+    [data-expand-button],
+    [data-separator-content] {
+      display: block;
+      align-self: unset;
+      min-width: unset;
+      min-height: unset;
+      padding: 0;
+      flex-shrink: 0;
+      grid-column: unset;
+      border: none;
+      width: auto;
+      height: auto;
+      background-color: transparent;
+      color: inherit;
+      font: inherit;
+    }
+
+    [data-expand-button]:not([data-expand-all-button]) {
+      &[data-expand-down]::before {
+        content: '\\2191';
+      }
+
+      &[data-expand-up]::before {
+        content: '\\2193';
+      }
+
+      &[data-expand-both]::before {
+        content: '\\2195';
+      }
+
+      svg {
+        display: none;
+      }
+    }
+
+    [data-separator-content] {
+      background: transparent;
+      margin-left: calc(2px + 1ch);
+    }
+
+    [data-expand-all-button] {
+      position: relative;
+      margin-left: 14px;
+      text-transform: lowercase;
+    }
+
+    [data-expand-all-button]::before {
+      content: '';
+      display: block;
+      position: absolute;
+      top: 50%;
+      left: -8px;
+      margin-top: -1px;
+      width: 3px;
+      height: 3px;
+      border-radius: 2px;
+      background-color: var(--diffs-fg-number);
+      pointer-events: none;
+    }
+
+    [data-separator-content]:hover,
+    [data-expand-button]:hover,
+    [data-expand-all-button]:hover {
+      color: var(--diffs-fg);
+    }
+
+    [data-expand-all-button]:hover {
+      text-decoration: underline;
+    }
+  }
   `;
 
 // Fast cache key - use length + samples instead of full hash
@@ -267,7 +365,7 @@ const virtualizerCache = new WeakMap<Document | HTMLElement, VirtualizerEntry>()
 const VIRTUAL_METRICS: Partial<VirtualFileMetrics> = {
   lineHeight: 24,
   hunkSeparatorHeight: 24,
-  fileGap: 0,
+  spacing: 0,
 };
 
 function resolveVirtualizerTarget(container: HTMLElement): VirtualizerTarget {
@@ -324,7 +422,7 @@ function acquireSharedVirtualizer(container: HTMLElement): SharedVirtualizer | n
 }
 
 const wakeVirtualizer = (
-  instance: PierreFileDiff<unknown>,
+  instance: PierreFileDiff<PierreAnnotationData>,
   sharedVirtualizer: SharedVirtualizer | null,
   forceUpdate: () => void,
 ): (() => void) => {
@@ -545,11 +643,11 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   const diffRootRef = useRef<HTMLDivElement | null>(null);
   const diffContainerRef = useRef<HTMLDivElement | null>(null);
-  const diffInstanceRef = useRef<PierreFileDiff<unknown> | null>(null);
+  const diffInstanceRef = useRef<PierreFileDiff<PierreAnnotationData> | null>(null);
   const sharedVirtualizerRef = useRef<SharedVirtualizer | null>(null);
   const instanceVirtualizerRef = useRef<Virtualizer | null>(null);
   const instanceWorkerPoolRef = useRef<unknown>(null);
-  const instanceVirtualHunkSeparatorsRef = useRef<FileDiffOptions<unknown>['hunkSeparators'] | undefined>(undefined);
+  const instanceVirtualHunkSeparatorsRef = useRef<FileDiffOptions<PierreAnnotationData>['hunkSeparators'] | undefined>(undefined);
   const instanceFileDiffRef = useRef<FileDiffMetadata | undefined>(undefined);
   const instanceOldFileRef = useRef<FileContents | undefined>(undefined);
   const instanceNewFileRef = useRef<FileContents | undefined>(undefined);
@@ -755,17 +853,17 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       : false;
     if (!instance) {
       instance = sharedVirtualizer
-        ? new VirtualizedFileDiff(
-            options as unknown as FileDiffOptions<unknown>,
+        ? new VirtualizedFileDiff<PierreAnnotationData>(
+            options as FileDiffOptions<PierreAnnotationData>,
             sharedVirtualizer.virtualizer,
             VIRTUAL_METRICS,
             workerPool,
           )
-        : new PierreFileDiff(options as unknown as FileDiffOptions<unknown>, workerPool);
+        : new PierreFileDiff(options as FileDiffOptions<PierreAnnotationData>, workerPool);
       diffInstanceRef.current = instance;
       lastAppliedSelectionRef.current = null;
     } else {
-      instance.setOptions(options as unknown as FileDiffOptions<unknown>);
+      instance.setOptions(options as FileDiffOptions<PierreAnnotationData>);
     }
 
     instanceVirtualizerRef.current = virtualizer;
