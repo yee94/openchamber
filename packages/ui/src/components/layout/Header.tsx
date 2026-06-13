@@ -2015,30 +2015,31 @@ export const Header: React.FC<HeaderProps> = ({
     return <React.Fragment key={tab.id}>{tabButton}</React.Fragment>;
   };
 
+  const desktopChangesPanelAction = !isVSCode ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('header.actions.toggleChangesPanelAria')}
+          aria-pressed={isContextChangesActive}
+          onClick={handleOpenContextChanges}
+          className={desktopHeaderIconButtonClass}
+        >
+          <span className="relative h-5 w-5 overflow-hidden rounded-[2px]">
+            <span className="absolute left-[4px] top-[4px] h-3 w-[5px] bg-[var(--status-error)]/25" />
+            <span className="absolute right-[4px] top-[4px] h-3 w-[5px] bg-[var(--status-success)]/25" />
+            <Icon name="layout-column" className="absolute inset-0 h-5 w-5" />
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{t('header.actions.toggleChangesPanel')}</p>
+      </TooltipContent>
+    </Tooltip>
+  ) : null;
+
   const desktopSidebarActions = (
     <>
-      {!isVSCode ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={t('header.actions.toggleChangesPanelAria')}
-              aria-pressed={isContextChangesActive}
-              onClick={handleOpenContextChanges}
-              className={desktopHeaderIconButtonClass}
-            >
-              <span className="relative h-5 w-5 overflow-hidden rounded-[2px]">
-                <span className="absolute left-[4px] top-[4px] h-3 w-[5px] bg-[var(--status-error)]/25" />
-                <span className="absolute right-[4px] top-[4px] h-3 w-[5px] bg-[var(--status-success)]/25" />
-                <Icon name="layout-column" className="absolute inset-0 h-5 w-5" />
-              </span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('header.actions.toggleChangesPanel')}</p>
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
       {showPlanTab && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -2224,6 +2225,7 @@ export const Header: React.FC<HeaderProps> = ({
               percentIconClassName="h-5 w-5"
             />
           ) : null}
+          {desktopChangesPanelAction}
           <HeaderIconActionButton
             visible={showMiniChatHeaderAction}
             title={isNewSessionDraftOpen ? t('header.actions.newMiniChat') : t('header.actions.openSessionMiniChat')}
