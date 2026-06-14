@@ -420,7 +420,7 @@ function getViewedSessionMaterializationTarget(directory: string) {
   }
 }
 
-function toSessionStatus(status: Awaited<ReturnType<typeof opencodeClient.getSessionStatus>>[string]): SessionStatus | undefined {
+function toSessionStatus(status: Awaited<ReturnType<typeof opencodeClient.getSessionStatus>>[string] | undefined): SessionStatus | undefined {
   if (!status) return undefined
   if (status.type === "idle" || status.type === "busy") {
     return { type: status.type }
@@ -453,40 +453,64 @@ function getActiveSessionCandidateIds(directory: string, state: DirectoryStore):
   })
 }
 
-function buildRelevantSessionStatuses(
-  nextStatuses: Awaited<ReturnType<typeof opencodeClient.getSessionStatusForDirectory>>,
-  candidateSessionIds: string[],
-): Record<string, SessionStatus> | null {
-  if (nextStatuses === null) return null
-  const relevantStatuses: Record<string, SessionStatus> = {}
-  for (const sessionId of candidateSessionIds) {
-    relevantStatuses[sessionId] = toSessionStatus(nextStatuses[sessionId]) ?? { type: "idle" }
-  }
-  return relevantStatuses
-}
+type DirectorySessionStatusSnapshot = NonNullable<
+  Awaited<ReturnType<typeof opencodeClient.getSessionStatusForDirectory>>
+>
 
-function applySessionStatusSnapshot(
+// How a /session/status snapshot is reconciled into the store.
+//
+// The directory-scoped snapshot lists only active (busy/retry) sessions; an
+// absent candidate means "idle per this snapshot".
+//
+// - "monotonic": only confirm/raise active status. Never lowers a busy/retry
+//   session to idle. Used by the periodic watchdog poll — real idle arrives via
+//   SSE (session.status / session.idle) or via an authoritative resync that the
+//   watchdog escalates to when it detects a stale busy entry. This keeps the
+//   blind 5s poll from clobbering live state on a transient/misscoped snapshot.
+// - "authoritative": treat the snapshot as ground truth — absent/idle candidates
+//   are lowered to idle. Used by reconnect/escalated resyncs, a deliberate edge
+//   where the live server snapshot is the source of truth (mirrors the bootstrap
+//   snapshot). The snapshot wins over any derived message state here.
+type StatusSnapshotMode = "monotonic" | "authoritative"
+
+export function applySessionStatusSnapshot(
   store: StoreApi<DirectoryStore>,
-  relevantStatuses: Record<string, SessionStatus>,
+  snapshot: DirectorySessionStatusSnapshot,
+  candidateSessionIds: string[],
+  mode: StatusSnapshotMode,
 ): boolean {
-  if (Object.keys(relevantStatuses).length === 0) return false
+  if (candidateSessionIds.length === 0) return false
 
   let changed = false
   store.setState((state: DirectoryStore) => {
-    for (const [sessionId, nextStatus] of Object.entries(relevantStatuses)) {
-      if (!haveEquivalentSyncSnapshots(state.session_status?.[sessionId], nextStatus)) {
+    const current = state.session_status ?? {}
+    let next: Record<string, SessionStatus> | undefined
+    const draft = () => (next ??= { ...current })
+
+    for (const sessionId of candidateSessionIds) {
+      const incoming = toSessionStatus(snapshot[sessionId])
+
+      if (incoming && incoming.type !== "idle") {
+        // Confirm or raise active status (catches a busy event the SSE missed).
+        if (!haveEquivalentSyncSnapshots(current[sessionId], incoming)) {
+          draft()[sessionId] = incoming
+          changed = true
+        }
+        continue
+      }
+
+      // Snapshot reports this candidate idle (absent, or explicit idle).
+      // Monotonic never lowers; authoritative trusts the snapshot as truth.
+      if (mode === "monotonic") continue
+
+      const existing = current[sessionId]
+      if (existing && existing.type !== "idle") {
+        draft()[sessionId] = { type: "idle" }
         changed = true
-        break
       }
     }
 
-    if (!changed) {
-      return state
-    }
-
-    return {
-      session_status: { ...state.session_status, ...relevantStatuses },
-    }
+    return next ? { session_status: next } : state
   })
 
   return changed
@@ -496,30 +520,29 @@ async function resyncDirectorySessionStatuses(
   directory: string,
   store: StoreApi<DirectoryStore>,
   candidateSessionIds: string[],
-): Promise<Record<string, SessionStatus> | null> {
+  mode: StatusSnapshotMode,
+): Promise<DirectorySessionStatusSnapshot | null> {
   const nextStatuses = await opencodeClient.getSessionStatusForDirectory(directory)
-  // null = fetch failed; preserve existing state. {} or populated = authoritative
-  // snapshot of active sessions — candidates not listed are idle now.
-  const relevantStatuses = buildRelevantSessionStatuses(nextStatuses, candidateSessionIds)
-  if (relevantStatuses === null) return null
-  applySessionStatusSnapshot(store, relevantStatuses)
-  return relevantStatuses
+  // null = fetch failed; preserve existing state. {} or populated = a snapshot
+  // of active sessions — reconciled per `mode` (absence ≠ idle under monotonic).
+  if (nextStatuses === null) return null
+  applySessionStatusSnapshot(store, nextStatuses, candidateSessionIds, mode)
+  return nextStatuses
 }
 
-function needsSnapshotAfterStatusPoll(
+// After a monotonic poll, decide whether to escalate to a full authoritative
+// resync: the store believes the session is active but the snapshot reports it
+// idle/absent — a suspected missed idle that the monotonic poll deliberately
+// won't lower on its own. The authoritative resync is the recovery path.
+export function needsSnapshotAfterStatusPoll(
   state: DirectoryStore,
   sessionId: string,
-  nextStatus: SessionStatus | undefined,
+  snapshotEntry: DirectorySessionStatusSnapshot[string] | undefined,
 ): boolean {
-  if (nextStatus?.type !== "idle") return false
+  const incoming = toSessionStatus(snapshotEntry)
+  if (incoming && incoming.type !== "idle") return false
   const currentStatus = state.session_status?.[sessionId]
-  if (currentStatus && currentStatus.type !== "idle") return true
-
-  const messages = state.message[sessionId]
-  const lastMessage = messages?.[messages.length - 1]
-  return !!lastMessage
-    && lastMessage.role === "assistant"
-    && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
+  return Boolean(currentStatus && currentStatus.type !== "idle")
 }
 
 type EventRoutingIndex = {
@@ -1177,7 +1200,7 @@ async function resyncDirectoryAfterReconnect(
   const candidateSessionIds = getActiveSessionCandidateIds(directory, current)
   if (candidateSessionIds.length === 0) return
 
-  await resyncDirectorySessionStatuses(directory, store, candidateSessionIds)
+  await resyncDirectorySessionStatuses(directory, store, candidateSessionIds, "authoritative")
 
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
   await Promise.all(candidateSessionIds.map(async (sessionId) => {
@@ -1868,7 +1891,7 @@ export function SyncProvider(props: {
       polling.add(directory)
       try {
         const before = store.getState()
-        const statuses = await resyncDirectorySessionStatuses(directory, store, candidateSessionIds)
+        const statuses = await resyncDirectorySessionStatuses(directory, store, candidateSessionIds, "monotonic")
         if (!statuses) return
         const needsSnapshot = candidateSessionIds.some((sessionId) => (
           needsSnapshotAfterStatusPoll(before, sessionId, statuses[sessionId])
