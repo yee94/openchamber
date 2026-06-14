@@ -240,6 +240,25 @@ describe('applyHunk', () => {
       'patch target path does not match'
     );
   });
+
+  it('accepts hunk patches for files with spaces in their path', async () => {
+    if (!canRunGit()) return;
+    const { tmpDir, git } = await createTempRepo();
+    const filePath = 'file name.txt';
+    await writeFile(tmpDir, filePath, ORIGINAL_FILE);
+    await git.add(filePath);
+    await git.commit('Initial');
+
+    await writeFile(tmpDir, filePath, EDITED_FILE);
+    const diff = await getDiff(tmpDir, { path: filePath });
+    const hunks = splitHunks(diff);
+    expect(hunks.length).toBe(2);
+
+    await applyHunk(tmpDir, filePath, { patch: hunks[0], action: 'stage' });
+
+    const staged = (await git.raw(['show', `:${filePath}`])).replace(/\r\n/g, '\n');
+    expect(staged).toBe(makeFile('TOP', 'line20'));
+  });
 });
 
 // ---------------------------------------------------------------------------

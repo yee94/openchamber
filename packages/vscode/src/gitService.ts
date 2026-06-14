@@ -2327,6 +2327,67 @@ const HUNK_ACTION_ARGS: Record<'stage' | 'unstage' | 'discard', string[]> = {
   discard: ['--reverse'],
 };
 
+const parsePatchPathToken = (line: string): string | null => {
+  const value = String(line || '').replace(/^(?:-{3}|\+{3})\s+/, '');
+  if (!value || value === '/dev/null') {
+    return null;
+  }
+
+  if (value.startsWith('"')) {
+    let token = '"';
+    let escaped = false;
+    for (let index = 1; index < value.length; index += 1) {
+      const char = value[index];
+      token += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        break;
+      }
+    }
+
+    try {
+      return JSON.parse(token) as string;
+    } catch {
+      return token.slice(1, token.endsWith('"') ? -1 : undefined);
+    }
+  }
+
+  return value.split('\t', 1)[0] || null;
+};
+
+const normalizePatchTargetPath = (value: string | null): string | null => {
+  if (!value || value === '/dev/null') {
+    return null;
+  }
+  return value.replace(/^[ab]\//, '').replace(/\\/g, '/');
+};
+
+const extractPatchTargetPath = (patch: string): string | null => {
+  const matches = [...patch.matchAll(/^(?:-{3}|\+{3})\s+.+$/gm)];
+  const realTargets = matches
+    .map((match) => normalizePatchTargetPath(parsePatchPathToken(match[0] ?? '')))
+    .filter((value): value is string => Boolean(value));
+  return realTargets[0] || null;
+};
+
+const getRepoRelativePath = async (directory: string, filePath: string): Promise<string> => {
+  const normalizedFilePath = normalizePath(filePath).replace(/\\/g, '/');
+  if (!path.isAbsolute(normalizedFilePath)) {
+    return normalizedFilePath.replace(/^\.?\//, '');
+  }
+
+  const rootResult = await execGit(['rev-parse', '--show-toplevel'], directory);
+  if (rootResult.exitCode !== 0) {
+    throw new Error(rootResult.stderr || 'Failed to resolve repository root');
+  }
+
+  const repoRoot = normalizePath(rootResult.stdout.trim());
+  return path.relative(repoRoot, normalizedFilePath).replace(/\\/g, '/');
+};
+
 /**
  * Apply a single-hunk patch to stage, unstage, or discard it.
  * The patch is written to a temp file and applied with `git apply`.
@@ -2337,6 +2398,9 @@ export async function applyGitHunk(
   patch: string,
   action: 'stage' | 'unstage' | 'discard',
 ): Promise<void> {
+  if (!HUNK_ACTION_ARGS[action]) {
+    throw new Error('Invalid hunk action');
+  }
   if (!filePath) {
     throw new Error('path is required');
   }
@@ -2345,6 +2409,12 @@ export async function applyGitHunk(
   }
   if (!/^@@\s/m.test(patch)) {
     throw new Error('patch does not contain a hunk header');
+  }
+
+  const repoRelativePath = await getRepoRelativePath(directory, filePath);
+  const targetPath = extractPatchTargetPath(patch);
+  if (targetPath && targetPath !== repoRelativePath && targetPath !== filePath.replace(/\\/g, '/')) {
+    throw new Error('patch target path does not match the requested file');
   }
 
   const flags = HUNK_ACTION_ARGS[action];

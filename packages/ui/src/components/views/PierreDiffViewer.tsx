@@ -1099,9 +1099,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   return (
     <div className={cn("relative", "w-full")}>
       <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible relative">
-        <div ref={diffContainerRef} className="w-full" />
-      </div>
-      {commentOverlays}
+      <div ref={diffContainerRef} className="w-full" />
     </div>
+    {commentOverlays}
+  </div>
   );
 };

@@ -2561,11 +2561,49 @@ const HUNK_ACTION_FLAGS = {
   discard: ['--reverse'],
 };
 
+const parsePatchPathToken = (line) => {
+  const value = String(line || '').replace(/^(?:-{3}|\+{3})\s+/, '');
+  if (!value || value === '/dev/null') {
+    return null;
+  }
+
+  if (value.startsWith('"')) {
+    let token = '"';
+    let escaped = false;
+    for (let index = 1; index < value.length; index += 1) {
+      const char = value[index];
+      token += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        break;
+      }
+    }
+
+    try {
+      return JSON.parse(token);
+    } catch {
+      return token.slice(1, token.endsWith('"') ? -1 : undefined);
+    }
+  }
+
+  return value.split('\t', 1)[0] || null;
+};
+
+const normalizePatchTargetPath = (value) => {
+  if (!value || value === '/dev/null') {
+    return null;
+  }
+  return value.replace(/^[ab]\//, '');
+};
+
 const extractPatchTargetPath = (patch) => {
-  const matches = [...patch.matchAll(/^(?:-{3}|\+{3})\s+(?:[ab]\/)?([^\s\t]+)/gm)];
+  const matches = [...patch.matchAll(/^(?:-{3}|\+{3})\s+.+$/gm)];
   const realTargets = matches
-    .map((match) => match[1])
-    .filter((value) => value && value !== '/dev/null');
+    .map((match) => normalizePatchTargetPath(parsePatchPathToken(match[0])))
+    .filter(Boolean);
   return realTargets[0] || null;
 };
 
