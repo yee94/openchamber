@@ -26,6 +26,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { DiffViewToggle } from '@/components/chat/message/DiffViewToggle';
 import type { DiffViewMode } from '@/components/chat/message/types';
 import { PierreDiffViewer } from './PierreDiffViewer';
+import { DiffHunkActions } from './DiffHunkActions';
 import { useDeviceInfo } from '@/lib/device';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
@@ -481,51 +482,67 @@ const InlineImageDiffViewer = React.memo<InlineImageDiffViewerProps>(({
 });
 
 interface InlineDiffViewerProps {
-    filePath: string;
-    diff: DiffData;
-    renderSideBySide: boolean;
-    wrapLines: boolean;
+  filePath: string;
+  diff: DiffData;
+  renderSideBySide: boolean;
+  wrapLines: boolean;
+  directory: string;
+  staged: boolean;
+  onHunkApplied: (action: 'stage' | 'unstage' | 'discard') => void;
 }
 
-const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({ 
-    filePath,
-    diff,
-    renderSideBySide,
-    wrapLines,
+const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
+  filePath,
+  diff,
+  renderSideBySide,
+  wrapLines,
+  directory,
+  staged,
+  onHunkApplied,
 }) => {
-    const language = React.useMemo(
-        () => getLanguageFromExtension(filePath) || 'text',
-        [filePath]
-    );
+  const language = React.useMemo(
+    () => getLanguageFromExtension(filePath) || 'text',
+    [filePath]
+  );
 
-    if (diff.isBinary) {
-        return <BinaryDiffPlaceholder />;
-    }
+  if (diff.isBinary) {
+    return <BinaryDiffPlaceholder />;
+  }
 
-    if (isImageFile(filePath)) {
-        return (
+  if (isImageFile(filePath)) {
+    return (
             <InlineImageDiffViewer
                 filePath={filePath}
                 diff={diff}
                 renderSideBySide={renderSideBySide}
             />
-        );
-    }
-
-    return (
-        <div className="w-full" style={{ contain: 'layout' }}>
-            <PierreDiffViewer
-                original={diff.original}
-                modified={diff.modified}
-                fileDiff={diff.fileDiff}
-                language={language}
-                fileName={filePath}
-                renderSideBySide={renderSideBySide}
-                wrapLines={wrapLines}
-                layout="inline"
-            />
-        </div>
     );
+  }
+
+  return (
+    <div className="w-full" style={{ contain: 'layout' }}>
+      {diff.patch && diff.fileDiff ? (
+        <DiffHunkActions
+          patch={diff.patch}
+          fileDiff={diff.fileDiff}
+          directory={directory}
+          filePath={filePath}
+          staged={staged}
+          onApplied={onHunkApplied}
+        />
+      ) : null}
+      <PierreDiffViewer
+        original={diff.original}
+        modified={diff.modified}
+        fileDiff={diff.fileDiff}
+        language={language}
+        fileName={filePath}
+        renderSideBySide={renderSideBySide}
+        wrapLines={wrapLines}
+        layout="inline"
+      />
+    </div>
+  );
 });
 
 interface MultiFileDiffEntryProps {
@@ -573,6 +590,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
         }, [directory, file.path])
     );
     const setDiff = useGitStore((state) => state.setDiff);
+    const fetchStatus = useGitStore((state) => state.fetchStatus);
     const setDiffFileLayout = useUIStore((state) => state.setDiffFileLayout);
 
     const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
@@ -692,6 +710,13 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
         handleOpenChange(!isExpanded);
         handleSelect();
     }, [handleOpenChange, handleSelect, isExpanded]);
+
+    const handleHunkApplied = React.useCallback(() => {
+        setDiffRetryNonce((nonce) => nonce + 1);
+        if (directory) {
+            void fetchStatus(directory, git);
+        }
+    }, [directory, fetchStatus, git]);
 
     return (
         <div ref={setSectionRef} className="scroll-mt-9 border-b border-[var(--interactive-border)]/40 last:border-b-0">
@@ -847,6 +872,9 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                             diff={diffData}
                             renderSideBySide={renderSideBySide}
                             wrapLines={wrapLines}
+                            directory={directory}
+                            staged={staged}
+                            onHunkApplied={handleHunkApplied}
                         />
                     ) : null}
                 </div>

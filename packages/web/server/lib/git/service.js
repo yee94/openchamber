@@ -2555,6 +2555,75 @@ export async function revertFile(directory, filePath, options = {}) {
   });
 }
 
+const HUNK_ACTION_FLAGS = {
+  stage: ['--cached'],
+  unstage: ['--cached', '--reverse'],
+  discard: ['--reverse'],
+};
+
+const extractPatchTargetPath = (patch) => {
+  const matches = [...patch.matchAll(/^(?:-{3}|\+{3})\s+(?:[ab]\/)?([^\s\t]+)/gm)];
+  const realTargets = matches
+    .map((match) => match[1])
+    .filter((value) => value && value !== '/dev/null');
+  return realTargets[0] || null;
+};
+
+const writeTempPatchFile = async (patch) => {
+  const tmpDir = os.tmpdir();
+  const tmpPath = path.join(tmpDir, `openchamber-hunk-${Date.now()}-${Math.random().toString(36).slice(2)}.patch`);
+  await fsp.writeFile(tmpPath, patch, 'utf8');
+  return tmpPath;
+};
+
+export async function applyHunk(directory, filePath, options = {}) {
+  const action = options?.action;
+  if (!action || !HUNK_ACTION_FLAGS[action]) {
+    throw new Error('Invalid hunk action');
+  }
+  const patch = typeof options?.patch === 'string' ? options.patch : '';
+  if (!patch.trim()) {
+    throw new Error('patch is required to apply a hunk');
+  }
+  if (!/^@@\s/m.test(patch)) {
+    throw new Error('patch does not contain a hunk header');
+  }
+
+  return withGitIndexMutationQueue(directory, async () => {
+    const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+    const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+    validateRepositoryFilePaths(repoRoot, [fileContext.repoPath]);
+
+    const targetPath = extractPatchTargetPath(patch);
+    if (targetPath && targetPath !== fileContext.repoPath && targetPath !== filePath) {
+      throw new Error('patch target path does not match the requested file');
+    }
+
+    const flags = HUNK_ACTION_FLAGS[action];
+    let tmpPath = null;
+    try {
+      tmpPath = await writeTempPatchFile(patch);
+
+      try {
+        await git.raw(['apply', ...flags, '--check', tmpPath]);
+      } catch (checkError) {
+        const text = parseGitErrorText(checkError);
+        throw new Error(
+          text
+            ? `Hunk no longer applies — refresh and try again.\n${text}`
+            : 'Hunk no longer applies — refresh and try again.'
+        );
+      }
+
+      await git.raw(['apply', ...flags, tmpPath]);
+    } finally {
+      if (tmpPath) {
+        await fsp.rm(tmpPath, { force: true }).catch(() => {});
+      }
+    }
+  });
+}
+
 export async function collectDiffs(directory, files = []) {
   const results = [];
   for (const filePath of files) {

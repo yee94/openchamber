@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Sessions: selected rows now highlight across the full sidebar gutter.
 - Comments: inline file/diff comment drafts now stay in place when focus changes.
 - Git/Diff: redesigned the Changes diff view with faster multi-file rendering, expandable hunk separators, a full-file loading toggle, compact responsive controls, and a unified changed/staged context panel workflow.
+- Git/Diff: individual diff hunks can now be staged, unstaged, or discarded directly from the Changes view via `git apply`.
 - GitHub: GitHub settings can now use credentials from the `gh` CLI when available (thanks to @tomzx).
 - Settings/MCP: importing MCP snippets from OpenCode config works again (thanks to @youzini).
 - Usage: added Cursor plan as a usage-tracking provider..

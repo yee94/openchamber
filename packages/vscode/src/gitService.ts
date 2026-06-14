@@ -2321,6 +2321,58 @@ export async function unstageGitFiles(directory: string, filePaths: string[]): P
   }
 }
 
+const HUNK_ACTION_ARGS: Record<'stage' | 'unstage' | 'discard', string[]> = {
+  stage: ['--cached'],
+  unstage: ['--cached', '--reverse'],
+  discard: ['--reverse'],
+};
+
+/**
+ * Apply a single-hunk patch to stage, unstage, or discard it.
+ * The patch is written to a temp file and applied with `git apply`.
+ */
+export async function applyGitHunk(
+  directory: string,
+  filePath: string,
+  patch: string,
+  action: 'stage' | 'unstage' | 'discard',
+): Promise<void> {
+  if (!filePath) {
+    throw new Error('path is required');
+  }
+  if (typeof patch !== 'string' || !patch.trim()) {
+    throw new Error('patch is required');
+  }
+  if (!/^@@\s/m.test(patch)) {
+    throw new Error('patch does not contain a hunk header');
+  }
+
+  const flags = HUNK_ACTION_ARGS[action];
+  const tmpDir = os.tmpdir();
+  const tmpPath = path.join(tmpDir, `openchamber-hunk-${Date.now()}-${Math.random().toString(36).slice(2)}.patch`);
+
+  try {
+    await fs.promises.writeFile(tmpPath, patch, 'utf8');
+
+    const check = await execGit(['apply', ...flags, '--check', tmpPath], directory);
+    if (check.exitCode !== 0) {
+      const detail = (check.stderr || '').trim();
+      throw new Error(
+        detail
+          ? `Hunk no longer applies — refresh and try again.\n${detail}`
+          : 'Hunk no longer applies — refresh and try again.'
+      );
+    }
+
+    const apply = await execGit(['apply', ...flags, tmpPath], directory);
+    if (apply.exitCode !== 0) {
+      throw new Error(apply.stderr || 'Failed to apply git hunk');
+    }
+  } finally {
+    await fs.promises.rm(tmpPath, { force: true }).catch(() => {});
+  }
+}
+
 // ============== Commit Operations ==============
 
 export interface GitCommitResult {
