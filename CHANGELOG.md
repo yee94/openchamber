@@ -26,6 +26,9 @@ All notable changes to this project will be documented in this file.
 - Notifications: notification streams now stay connected more reliably behind proxies (thanks to @kostazol).
 - Mobile: the empty Changes view keeps a close control visible (thanks to @lilyzhaun).
 - Security: file previews and downloads now reject paths outside the allowed workspace unless access has been granted.
+- Sessions: fixed a bug where a running session would briefly flicker as idle (in the sidebar, the send/stop button, and the status row) when the app is protected by a password.
+- Desktop: you can now open developer tools from the Help menu.
+- Sessions: new draft sessions now start from the default model and agent instead of inheriting the previous session's selection, and fall back to OpenCode's own `default_agent` (and its model) when no OpenChamber default is set.
 
 ## [1.12.4] - 2026-06-11
 

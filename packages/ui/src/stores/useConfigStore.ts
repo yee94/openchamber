@@ -265,6 +265,128 @@ const resolveProviderModelSelection = ({
     return null;
 };
 
+type DefaultAgentModelSelection = {
+    agentName: string | undefined;
+    providerId?: string;
+    modelId?: string;
+    variant?: string;
+};
+
+// Shared default-selection cascade used both at startup (loadAgents) and when opening a
+// fresh draft (applyDefaultModelAgentSelection), so the two paths stay identical.
+//
+//   Agent: settings.defaultAgent → opencode default_agent → build → first primary → first
+//   Model: settings.defaultModel → resolved agent's pinned model+variant → opencode config.model
+//          → opencode/big-pickle → first
+//
+// The opencode default_agent / default model (config fields on the OpenCode server) are honored
+// only when our own settings have no valid default. OpenCode itself resolves a model the same way:
+// an agent's pinned model wins, otherwise the global `model` config applies — so we check the
+// agent's model before opencodeDefaultModel. When the agent supplies the model, its `variant` is
+// carried through too (if the model actually exposes that variant).
+const resolveDefaultAgentModelSelection = ({
+    agents,
+    providers,
+    settingsDefaultAgent,
+    settingsDefaultModel,
+    settingsDefaultVariant,
+    opencodeDefaultAgent,
+    opencodeDefaultModel,
+}: {
+    agents: Agent[];
+    providers: ProviderWithModelList[];
+    settingsDefaultAgent?: string;
+    settingsDefaultModel?: string;
+    settingsDefaultVariant?: string;
+    opencodeDefaultAgent?: string;
+    opencodeDefaultModel?: string;
+}): DefaultAgentModelSelection => {
+    if (agents.length === 0) {
+        return { agentName: undefined };
+    }
+
+    const resolveVariant = (providerId: string, modelId: string, variant?: string): string | undefined => {
+        if (!variant) {
+            return undefined;
+        }
+        const model = providers
+            .find((provider) => provider.id === providerId)
+            ?.models.find((entry) => entry.id === modelId) as { variants?: Record<string, unknown> } | undefined;
+        return model?.variants && Object.prototype.hasOwnProperty.call(model.variants, variant)
+            ? variant
+            : undefined;
+    };
+
+    // --- Agent cascade ---
+    const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
+
+    let resolvedAgent: Agent | undefined;
+    if (settingsDefaultAgent) {
+        resolvedAgent = agents.find((agent) => agent.name === settingsDefaultAgent);
+    }
+    if (!resolvedAgent && opencodeDefaultAgent) {
+        const candidate = agents.find((agent) => agent.name === opencodeDefaultAgent);
+        // OpenCode requires the default agent to be a visible primary agent.
+        if (candidate && isPrimaryMode(candidate.mode) && candidate.hidden !== true) {
+            resolvedAgent = candidate;
+        }
+    }
+    if (!resolvedAgent) {
+        resolvedAgent = primaryAgents.find((agent) => agent.name === "build") || primaryAgents[0] || agents[0];
+    }
+    if (!resolvedAgent) {
+        return { agentName: undefined };
+    }
+
+    // --- Model cascade ---
+    let providerId: string | undefined;
+    let modelId: string | undefined;
+    let variant: string | undefined;
+
+    if (settingsDefaultModel) {
+        const parsed = parseModelString(settingsDefaultModel);
+        if (parsed && hasProviderModel(providers, parsed.providerId, parsed.modelId)) {
+            providerId = parsed.providerId;
+            modelId = parsed.modelId;
+            variant = resolveVariant(providerId, modelId, settingsDefaultVariant);
+        }
+    }
+
+    if (!providerId
+        && resolvedAgent.model?.providerID
+        && resolvedAgent.model?.modelID
+        && hasProviderModel(providers, resolvedAgent.model.providerID, resolvedAgent.model.modelID)) {
+        providerId = resolvedAgent.model.providerID;
+        modelId = resolvedAgent.model.modelID;
+        variant = resolveVariant(providerId, modelId, resolvedAgent.variant);
+    }
+
+    // OpenCode's global default model — used when neither our settings nor the agent pin a model.
+    if (!providerId && opencodeDefaultModel) {
+        const parsed = parseModelString(opencodeDefaultModel);
+        if (parsed && hasProviderModel(providers, parsed.providerId, parsed.modelId)) {
+            providerId = parsed.providerId;
+            modelId = parsed.modelId;
+        }
+    }
+
+    if (!providerId) {
+        if (hasProviderModel(providers, FALLBACK_PROVIDER_ID, FALLBACK_MODEL_ID)) {
+            providerId = FALLBACK_PROVIDER_ID;
+            modelId = FALLBACK_MODEL_ID;
+        } else {
+            const firstProvider = providers[0];
+            const firstModel = firstProvider?.models[0];
+            if (firstProvider && firstModel) {
+                providerId = firstProvider.id;
+                modelId = firstModel.id;
+            }
+        }
+    }
+
+    return { agentName: resolvedAgent.name, providerId, modelId, variant };
+};
+
 const resolveGitGenerationModelSelection = ({
     providers,
     settingsZenModel,
@@ -652,6 +774,12 @@ interface ConfigStore {
     settingsDefaultModel: string | undefined; // format: "provider/model"
     settingsDefaultVariant: string | undefined;
     settingsDefaultAgent: string | undefined;
+    // OpenCode server's own `default_agent` config field (name of a primary agent), used as a
+    // fallback when our own settingsDefaultAgent is unset. Sourced from opencodeClient.getConfig().
+    opencodeDefaultAgent: string | undefined;
+    // OpenCode server's own global `model` config field ("provider/model"), used as a fallback
+    // when neither our settingsDefaultModel nor the resolved agent pins a model.
+    opencodeDefaultModel: string | undefined;
     settingsAutoCreateWorktree: boolean;
     settingsGitmojiEnabled: boolean;
     settingsDefaultFileViewerPreview: boolean;
@@ -730,6 +858,7 @@ interface ConfigStore {
     cycleCurrentVariant: () => void;
     getCurrentModelVariants: () => string[];
     setAgent: (agentName: string | undefined) => void;
+    applyDefaultModelAgentSelection: () => void;
     setSelectedProvider: (providerId: string) => void;
     setSettingsDefaultModel: (model: string | undefined) => void;
     setSettingsDefaultVariant: (variant: string | undefined) => void;
@@ -790,6 +919,8 @@ export const useConfigStore = create<ConfigStore>()(
                 settingsDefaultModel: undefined,
                 settingsDefaultVariant: undefined,
                 settingsDefaultAgent: undefined,
+                opencodeDefaultAgent: undefined,
+                opencodeDefaultModel: undefined,
                 settingsAutoCreateWorktree: false,
                 settingsGitmojiEnabled: false,
                 settingsDefaultFileViewerPreview: false,
@@ -1573,17 +1704,24 @@ export const useConfigStore = create<ConfigStore>()(
 
                     for (let attempt = 0; attempt < 3; attempt++) {
                         try {
-                            // Fetch agents and OpenChamber settings in parallel
-                            const [agents, openChamberDefaults] = await Promise.all([
+                            // Fetch agents, OpenChamber settings, and the OpenCode config in parallel.
+                            // The OpenCode config is best-effort: a failure should not block agent
+                            // loading, it just means we won't honor its default_agent this round.
+                            const [agents, openChamberDefaults, opencodeConfig] = await Promise.all([
                                 measureStartupTrace(
                                     'loadAgents:api',
                                     () => opencodeClient.withDirectory(fromDirectoryKey(directoryKey), () => opencodeClient.listAgents()),
                                     { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
                                 ),
                                 fetchOpenChamberDefaults(),
+                                opencodeClient
+                                    .withDirectory(fromDirectoryKey(directoryKey), () => opencodeClient.getConfig())
+                                    .catch(() => null),
                             ]);
 
                             const safeAgents = Array.isArray(agents) ? agents : [];
+                            const opencodeDefaultAgent = normalizeOptionalString(opencodeConfig?.default_agent);
+                            const opencodeDefaultModel = normalizeOptionalString(opencodeConfig?.model);
 
                             const providerLoad = _inFlightProviders.get(directoryKey);
                             if (providerLoad) {
@@ -1635,6 +1773,8 @@ export const useConfigStore = create<ConfigStore>()(
                                     settingsDefaultModel: openChamberDefaults.defaultModel,
                                     settingsDefaultVariant: openChamberDefaults.defaultVariant,
                                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
+                                    opencodeDefaultAgent,
+                                    opencodeDefaultModel,
                                     settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
                                     settingsGitmojiEnabled: openChamberDefaults.gitmojiEnabled ?? false,
                                     settingsDefaultFileViewerPreview: openChamberDefaults.defaultFileViewerPreview ?? false,
@@ -1727,81 +1867,44 @@ export const useConfigStore = create<ConfigStore>()(
                                 return provider.models.some((m) => m.id === modelId);
                             };
 
-                            // --- Agent Selection ---
-                            // Priority: settings.defaultAgent → build → first primary → first agent
-                            const primaryAgents = safeAgents.filter((agent) => isPrimaryMode(agent.mode));
-                            const buildAgent = primaryAgents.find((agent) => agent.name === "build");
-                            const fallbackAgent = buildAgent || primaryAgents[0] || safeAgents[0];
-
-                            let resolvedAgent: Agent = fallbackAgent;
-
-                            // Track invalid settings to clear
-                             const invalidSettings: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string } = {};
-
-                            // 1. Check OpenChamber settings for default agent
-                            if (openChamberDefaults.defaultAgent) {
-                                const settingsAgent = safeAgents.find((agent) => agent.name === openChamberDefaults.defaultAgent);
-                                if (settingsAgent) {
-                                    resolvedAgent = settingsAgent;
-                                } else {
-                                    // Agent no longer exists - mark for clearing
-                                    invalidSettings.defaultAgent = '';
-                                }
+                            // Detect invalid OpenChamber settings so we can clear them from storage.
+                            // This is independent of resolution: even though the cascade below falls
+                            // back gracefully, stale settings pointing at removed agents/models/variants
+                            // should be cleaned up.
+                            const invalidSettings: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string } = {};
+                            if (openChamberDefaults.defaultAgent && !safeAgents.some((agent) => agent.name === openChamberDefaults.defaultAgent)) {
+                                invalidSettings.defaultAgent = '';
                             }
-
-                             // --- Model Selection ---
-                             // Priority: settings.defaultModel → agent's preferred model → opencode/big-pickle
-                             let resolvedProviderId: string | undefined;
-                             let resolvedModelId: string | undefined;
-                             let resolvedVariant: string | undefined;
-
-                             // 1. Check OpenChamber settings for default model
-                             if (openChamberDefaults.defaultModel) {
-                                 const parsed = parseModelString(openChamberDefaults.defaultModel);
-                                 if (parsed && validateModel(parsed.providerId, parsed.modelId)) {
-                                     resolvedProviderId = parsed.providerId;
-                                     resolvedModelId = parsed.modelId;
-
-                                     if (openChamberDefaults.defaultVariant) {
-                                         const provider = providers.find((p) => p.id === parsed.providerId);
-                                         const model = provider?.models.find((m) => m.id === parsed.modelId) as { variants?: Record<string, unknown> } | undefined;
-                                         const variants = model?.variants;
-                                         if (variants && Object.prototype.hasOwnProperty.call(variants, openChamberDefaults.defaultVariant)) {
-                                             resolvedVariant = openChamberDefaults.defaultVariant;
-                                         } else {
-                                             invalidSettings.defaultVariant = '';
-                                         }
-                                     }
-                                 } else {
-                                     // Model no longer exists - mark for clearing
-                                     invalidSettings.defaultModel = '';
-                                 }
-                             }
-
-                            // 2. Fall back to agent's preferred model
-                            if (!resolvedProviderId && resolvedAgent?.model?.providerID && resolvedAgent?.model?.modelID) {
-                                const { providerID, modelID } = resolvedAgent.model;
-                                if (validateModel(providerID, modelID)) {
-                                    resolvedProviderId = providerID;
-                                    resolvedModelId = modelID;
-                                }
-                            }
-
-                            // 3. Fall back to opencode/big-pickle
-                            if (!resolvedProviderId) {
-                                if (validateModel(FALLBACK_PROVIDER_ID, FALLBACK_MODEL_ID)) {
-                                    resolvedProviderId = FALLBACK_PROVIDER_ID;
-                                    resolvedModelId = FALLBACK_MODEL_ID;
-                                } else {
-                                    // Last resort: first provider's first model
-                                    const firstProvider = providers[0];
-                                    const firstModel = firstProvider?.models[0];
-                                    if (firstProvider && firstModel) {
-                                        resolvedProviderId = firstProvider.id;
-                                        resolvedModelId = firstModel.id;
+                            if (openChamberDefaults.defaultModel) {
+                                const parsed = parseModelString(openChamberDefaults.defaultModel);
+                                if (!parsed || !validateModel(parsed.providerId, parsed.modelId)) {
+                                    invalidSettings.defaultModel = '';
+                                } else if (openChamberDefaults.defaultVariant) {
+                                    const provider = providers.find((p) => p.id === parsed.providerId);
+                                    const model = provider?.models.find((m) => m.id === parsed.modelId) as { variants?: Record<string, unknown> } | undefined;
+                                    const variants = model?.variants;
+                                    if (!(variants && Object.prototype.hasOwnProperty.call(variants, openChamberDefaults.defaultVariant))) {
+                                        invalidSettings.defaultVariant = '';
                                     }
                                 }
                             }
+
+                            // Resolve agent + model via the shared cascade:
+                            //   settings.defaultAgent → opencode default_agent → build → first primary → first
+                            //   settings.defaultModel → resolved agent's model+variant → opencode/big-pickle → first
+                            const resolvedDefault = resolveDefaultAgentModelSelection({
+                                agents: safeAgents,
+                                providers,
+                                settingsDefaultAgent: openChamberDefaults.defaultAgent,
+                                settingsDefaultModel: openChamberDefaults.defaultModel,
+                                settingsDefaultVariant: openChamberDefaults.defaultVariant,
+                                opencodeDefaultAgent,
+                                opencodeDefaultModel,
+                            });
+                            const resolvedAgentName = resolvedDefault.agentName ?? safeAgents[0].name;
+                            const resolvedProviderId = resolvedDefault.providerId;
+                            const resolvedModelId = resolvedDefault.modelId;
+                            const resolvedVariant = resolvedDefault.variant;
 
                             set((state) => {
                                 const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
@@ -1819,7 +1922,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     ...baseSnapshot,
                                     providers,
                                     agents: safeAgents,
-                                    currentAgentName: resolvedAgent.name,
+                                    currentAgentName: resolvedAgentName,
                                     currentProviderId: resolvedProviderId ?? baseSnapshot.currentProviderId,
                                     currentModelId: resolvedModelId ?? baseSnapshot.currentModelId,
                                     currentVariant: resolvedVariant,
@@ -1833,7 +1936,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 };
 
                                 if (state.activeDirectoryKey === directoryKey) {
-                                    nextState.currentAgentName = resolvedAgent.name;
+                                    nextState.currentAgentName = resolvedAgentName;
                                     if (resolvedProviderId && resolvedModelId) {
                                         nextState.currentProviderId = resolvedProviderId;
                                         nextState.currentModelId = resolvedModelId;
@@ -2088,6 +2191,91 @@ export const useConfigStore = create<ConfigStore>()(
 
                         // Otherwise keep the current valid model selection unchanged.
                     }
+                },
+
+                // Re-applies the same priority cascade used at app startup (see loadAgents):
+                //   agent: settings.defaultAgent → build → first primary → first agent
+                //   model: settings.defaultModel → agent's preferred model → opencode/big-pickle → first
+                // Used when entering a fresh draft session so model/agent reset to defaults
+                // instead of sticking to the previously open session's selection.
+                applyDefaultModelAgentSelection: () => {
+                    const {
+                        agents,
+                        providers,
+                        settingsDefaultModel,
+                        settingsDefaultVariant,
+                        settingsDefaultAgent,
+                        opencodeDefaultAgent,
+                        opencodeDefaultModel,
+                    } = get();
+
+                    if (agents.length === 0 || providers.length === 0) {
+                        return;
+                    }
+
+                    const {
+                        agentName: resolvedAgentName,
+                        providerId: resolvedProviderId,
+                        modelId: resolvedModelId,
+                        variant: resolvedVariant,
+                    } = resolveDefaultAgentModelSelection({
+                        agents,
+                        providers,
+                        settingsDefaultAgent,
+                        settingsDefaultModel,
+                        settingsDefaultVariant,
+                        opencodeDefaultAgent,
+                        opencodeDefaultModel,
+                    });
+
+                    if (!resolvedAgentName) {
+                        return;
+                    }
+
+                    set((state) => {
+                        const directoryKey = state.activeDirectoryKey;
+                        const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
+                            providers: state.providers,
+                            agents: state.agents,
+                            currentProviderId: state.currentProviderId,
+                            currentModelId: state.currentModelId,
+                            currentVariant: state.currentVariant,
+                            currentAgentName: state.currentAgentName,
+                            selectedProviderId: state.selectedProviderId,
+                            agentModelSelections: state.agentModelSelections,
+                            defaultProviders: state.defaultProviders,
+                        };
+
+                        const nextSnapshot: DirectoryScopedConfig = {
+                            ...baseSnapshot,
+                            currentAgentName: resolvedAgentName,
+                            ...(resolvedProviderId && resolvedModelId
+                                ? {
+                                    currentProviderId: resolvedProviderId,
+                                    currentModelId: resolvedModelId,
+                                    currentVariant: resolvedVariant,
+                                    selectedProviderId: resolvedProviderId,
+                                }
+                                : {}),
+                        };
+
+                        const nextState: Partial<ConfigStore> = {
+                            currentAgentName: resolvedAgentName,
+                            directoryScoped: {
+                                ...state.directoryScoped,
+                                [directoryKey]: nextSnapshot,
+                            },
+                        };
+
+                        if (resolvedProviderId && resolvedModelId) {
+                            nextState.currentProviderId = resolvedProviderId;
+                            nextState.currentModelId = resolvedModelId;
+                            nextState.currentVariant = resolvedVariant;
+                            nextState.selectedProviderId = resolvedProviderId;
+                        }
+
+                        return nextState;
+                    });
                 },
 
                  setSettingsDefaultModel: (model: string | undefined) => {
