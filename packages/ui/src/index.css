@@ -857,14 +857,8 @@ html:not(.dark) .chat-scroll {
   }
 }
 
-/* Diff toolbar: drop low-priority labels as the context panel narrows. */
-@container diff-toolbar (max-width: 34rem) {
-  .diff-toolbar__file-stats {
-    display: none;
-  }
-}
-
-@container diff-toolbar (max-width: 40rem) {
+/* Diff toolbar: drop low-priority labels only when the context panel is genuinely tight. */
+@container diff-toolbar (max-width: 28rem) {
   .diff-toolbar__scope-count,
   .diff-toolbar__expand-label {
     display: none;
@@ -872,23 +866,6 @@ html:not(.dark) .chat-scroll {
 
   .diff-toolbar__expand-button {
     padding-inline: 0.5rem;
-  }
-}
-
-@container diff-toolbar (max-width: 29rem) {
-  .diff-toolbar__file-label {
-    display: none;
-  }
-
-  .diff-toolbar__file-trigger {
-    flex: 0 0 auto;
-    gap: 0.375rem;
-    padding-inline: 0.625rem;
-  }
-
-  .diff-toolbar__file-trigger-content {
-    flex: 0 0 auto;
-    gap: 0;
   }
 }
 

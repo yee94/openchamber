@@ -213,100 +213,6 @@ const formatDiffTotals = (
     );
 };
 
-const DiffFilePathLabel = React.memo<{
-    path: string;
-    className?: string;
-}>(({ path, className }) => {
-    const lastSlash = path.lastIndexOf('/');
-    if (lastSlash === -1) {
-        return (
-            <span
-                className={cn('block min-w-0 truncate typography-ui-label text-foreground', className)}
-                title={path}
-                style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-            >
-                {path}
-            </span>
-        );
-    }
-
-    const dir = path.slice(0, lastSlash);
-    const name = path.slice(lastSlash + 1);
-
-    return (
-        <span
-            className={cn('flex min-w-0 items-baseline overflow-hidden typography-ui-label', className)}
-            title={path}
-        >
-            <span
-                className="min-w-0 truncate text-muted-foreground"
-                style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-            >
-                {dir}
-            </span>
-            <span className="flex-shrink-0">
-                <span className="text-muted-foreground">/</span>
-                <span className="text-foreground">{name}</span>
-            </span>
-        </span>
-    );
-});
-
-interface FileSelectorProps {
-    changedFiles: FileEntry[];
-    selectedFile: string | null;
-    selectedFileEntry: FileEntry | null;
-    onSelectFile: (path: string) => void;
-    className?: string;
-}
-
-const FileSelector = React.memo<FileSelectorProps>(({
-    changedFiles,
-    selectedFile,
-    selectedFileEntry,
-    onSelectFile,
-    className,
-}) => {
-    const { t } = useI18n();
-
-    if (changedFiles.length === 0) return null;
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button className={cn(
-                    'diff-toolbar__file-trigger flex h-7 min-w-[3.75rem] max-w-full items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                    className,
-                )}>
-                    {selectedFileEntry ? (
-                        <div className="diff-toolbar__file-trigger-content flex min-w-0 flex-1 items-center gap-2">
-                            <FileTypeIcon filePath={selectedFileEntry.path} className="h-3.5 w-3.5 flex-shrink-0" />
-                            <DiffFilePathLabel path={selectedFileEntry.path} className="diff-toolbar__file-label min-w-0 flex-1" />
-                            {formatDiffTotals(selectedFileEntry.insertions, selectedFileEntry.deletions, { shrink: true, className: 'diff-toolbar__file-stats' })}
-                        </div>
-                    ) : (
-                        <span className="min-w-0 truncate text-muted-foreground">{t('diffView.selector.selectFile')}</span>
-                    )}
-                    <Icon name="arrow-down-s" className="size-4 flex-shrink-0 opacity-50" />
-                </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="max-h-[70vh] w-[min(max(var(--anchor-width),18rem),36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-y-auto">
-                <DropdownMenuRadioGroup value={selectedFile ?? ''} onValueChange={onSelectFile}>
-                    {changedFiles.map((file) => (
-                        <DropdownMenuRadioItem key={file.path} value={file.path} className="min-w-0 items-center">
-                            <div className="flex w-full min-w-0 items-center gap-2.5">
-                                <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0" />
-                                <DiffFilePathLabel path={file.path} className="flex-1" />
-                                {formatDiffTotals(file.insertions, file.deletions)}
-                            </div>
-                        </DropdownMenuRadioItem>
-                    ))}
-                </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-});
-
 interface ChangeScopeSelectorProps {
     scope: Extract<DiffScope, 'working' | 'staged'>;
     workingCount: number;
@@ -321,11 +227,12 @@ const ChangeScopeSelector = React.memo<ChangeScopeSelectorProps>(({
     onScopeChange,
 }) => {
     const { t } = useI18n();
+    const [open, setOpen] = React.useState(false);
     const currentCount = scope === 'staged' ? stagedCount : workingCount;
     const currentLabel = scope === 'staged' ? t('diffView.scope.staged') : t('diffView.scope.changed');
 
     return (
-        <DropdownMenu>
+        <DropdownMenu open={open} onOpenChange={setOpen}>
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
@@ -344,6 +251,7 @@ const ChangeScopeSelector = React.memo<ChangeScopeSelectorProps>(({
                     onValueChange={(value) => {
                         if (value === 'working' || value === 'staged') {
                             onScopeChange?.(value);
+                            setOpen(false);
                         }
                     }}
                 >
@@ -858,7 +766,6 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 interface DiffViewProps {
     hideStackedFileSidebar?: boolean;
     stackedDefaultCollapsedAll?: boolean;
-    hideFileSelector?: boolean;
     pinSelectedFileHeaderToTopOnNavigate?: boolean;
     showOpenInEditorAction?: boolean;
     diffScope?: DiffScope;
@@ -871,7 +778,6 @@ interface DiffViewProps {
 export const DiffView: React.FC<DiffViewProps> = ({
     hideStackedFileSidebar = false,
     stackedDefaultCollapsedAll = false,
-    hideFileSelector = false,
     pinSelectedFileHeaderToTopOnNavigate = false,
     showOpenInEditorAction = false,
     diffScope = 'all',
@@ -896,13 +802,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return state.directories.get(effectiveDirectory)?.indexRevision ?? 0;
     }, [effectiveDirectory]));
 	 
-    const [selectedFile, setSelectedFile] = React.useState<string | null>(null);
-    const [selectedFileStaged, setSelectedFileStaged] = React.useState(false);
-    const [selectedStagedDiffData, setSelectedStagedDiffData] = React.useState<DiffData | null>(null);
+    const [displayFile, setDisplayFile] = React.useState<string | null>(null);
+    const [displayFileStaged, setDisplayFileStaged] = React.useState(false);
     const [pinnedStackedTarget, setPinnedStackedTarget] = React.useState<string | null>(null);
     const [expandedFiles, setExpandedFiles] = React.useState<Set<string>>(() => new Set());
     const [mountedStackedFiles, setMountedStackedFiles] = React.useState<Set<string>>(() => new Set());
     const [loadFullFiles, setLoadFullFiles] = React.useState(false);
+    const [scrollRequestNonce, setScrollRequestNonce] = React.useState(0);
 
     const pendingDiffFile = useUIStore((state) => state.pendingDiffFile);
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
@@ -915,7 +821,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
     const diffWrapLines = diffWrapLinesStore;
     const forcedStaged = diffScope === 'staged' ? true : diffScope === 'working' ? false : null;
-    const activeDiffStaged = forcedStaged ?? selectedFileStaged;
+    const activeDiffStaged = forcedStaged ?? displayFileStaged;
 
     const isMobileLayout = isMobile || screenWidth <= 768;
     const showFileSidebar = !hideStackedFileSidebar && !isMobileLayout && screenWidth >= 1024;
@@ -976,11 +882,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
         if (!status?.files) return 0;
         return status.files.filter(isStagedStatusFile).length;
     }, [status]);
-
-    const selectedFileEntry = React.useMemo(() => {
-        if (!selectedFile) return null;
-        return changedFiles.find((file) => file.path === selectedFile) ?? null;
-    }, [changedFiles, selectedFile]);
 
     const changedFilePathsKey = React.useMemo(
         () => changedFiles.map((file) => file.path).join('\0'),
@@ -1070,10 +971,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return 'side-by-side';
     }, [diffFileLayout, diffLayoutPreference, screenWidth]);
 
-    const currentLayoutForSelectedFile = React.useMemo<'inline' | 'side-by-side' | null>(() => {
-        if (!selectedFileEntry) return null;
-        return getLayoutForFile(selectedFileEntry);
-    }, [getLayoutForFile, selectedFileEntry]);
+    const currentLayoutForAllFiles = React.useMemo<'inline' | 'side-by-side' | null>(() => {
+        if (changedFiles.length === 0) return null;
+        return changedFiles.every((file) => getLayoutForFile(file) === 'side-by-side')
+            ? 'side-by-side'
+            : 'inline';
+    }, [changedFiles, getLayoutForFile]);
 
     // Ensure git status on mount
     React.useEffect(() => {
@@ -1103,13 +1006,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
 
         if (pendingDiffFile) {
-            setSelectedFile(pendingDiffFile);
-            setSelectedFileStaged(pendingDiffStaged);
-            setSelectedStagedDiffData(null);
+            setDisplayFile(pendingDiffFile);
+            setDisplayFileStaged(pendingDiffStaged);
             setPendingDiffFile(null);
             shouldPinAfterAlignRef.current = true;
             pendingScrollTargetRef.current = pendingDiffFile;
             expandStackedFile(pendingDiffFile);
+            setScrollRequestNonce((value) => value + 1);
         }
     }, [diffScope, expandStackedFile, pendingDiffFile, pendingDiffStaged, setPendingDiffFile]);
 
@@ -1123,39 +1026,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
             return;
         }
 
-        setSelectedFile(normalizedTarget);
-        setSelectedFileStaged(diffScope === 'staged');
-        setSelectedStagedDiffData(null);
+        setDisplayFile(normalizedTarget);
+        setDisplayFileStaged(diffScope === 'staged');
 
         shouldPinAfterAlignRef.current = true;
         pendingScrollTargetRef.current = normalizedTarget;
         expandStackedFile(normalizedTarget);
+        setScrollRequestNonce((value) => value + 1);
     }, [diffScope, expandStackedFile, targetFilePath]);
 
     React.useEffect(() => {
-        if (!activeDiffStaged) {
+        if (!displayFile) {
             return;
         }
 
-        setSelectedStagedDiffData(null);
-    }, [activeDiffStaged, indexRevision]);
-
-    // Auto-select first file (skip if we have a pending file to consume)
-    React.useEffect(() => {
-        if (!selectedFile && !pendingDiffFile && changedFiles.length > 0) {
-            setSelectedFile(changedFiles[0].path);
+        const stillExists = changedFiles.some((file) => file.path === displayFile);
+        if (!stillExists) {
+            setDisplayFile(null);
+            setDisplayFileStaged(false);
         }
-    }, [changedFiles, selectedFile, pendingDiffFile]);
-
-    // Clear selection if file no longer exists
-    React.useEffect(() => {
-        if (selectedFile && changedFiles.length > 0) {
-            const stillExists = changedFiles.some((f) => f.path === selectedFile);
-            if (!stillExists) {
-                setSelectedFile(changedFiles[0]?.path ?? null);
-            }
-        }
-    }, [changedFiles, selectedFile]);
+    }, [changedFiles, displayFile]);
 
     const registerSectionRef = React.useCallback((path: string, node: HTMLDivElement | null) => {
         const map = fileSectionRefs.current;
@@ -1281,24 +1171,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 pendingScrollFrameRef.current = null;
             }
         };
-    }, [pinSelectedFileHeaderToTopOnNavigate, scrollToFile, selectedFile]);
+    }, [pinSelectedFileHeaderToTopOnNavigate, scrollRequestNonce, scrollToFile]);
 
     const handleSelectFile = React.useCallback((value: string) => {
-        setSelectedFile(value);
-        setSelectedFileStaged(false);
-        setSelectedStagedDiffData(null);
+        void value;
     }, []);
 
     const handleSelectFileAndScroll = React.useCallback((value: string) => {
         cancelPendingScrollAlignment();
 
-        setSelectedFile(value);
-        setSelectedFileStaged(false);
-        setSelectedStagedDiffData(null);
-
+        setDisplayFile(value);
+        setDisplayFileStaged(false);
         shouldPinAfterAlignRef.current = true;
         pendingScrollTargetRef.current = value;
         expandStackedFile(value);
+        setScrollRequestNonce((nonce) => nonce + 1);
         scrollToFile(value);
     }, [cancelPendingScrollAlignment, expandStackedFile, scrollToFile]);
 
@@ -1310,19 +1197,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
             setDiffFileLayout(file.path, nextLayout);
         });
     }, [changedFiles, setDiffFileLayout]);
-
-    const showFileSelector = !hideFileSelector && !showFileSidebar;
-
-    const selectedCachedDiff = useGitStore(React.useCallback((state) => {
-        if (!effectiveDirectory || !selectedFile || activeDiffStaged) return null;
-        return state.directories.get(effectiveDirectory)?.diffCache.get(selectedFile) ?? null;
-    }, [activeDiffStaged, effectiveDirectory, selectedFile]));
-
-    const selectedDiffData = React.useMemo<DiffData | null>(() => {
-        if (activeDiffStaged) return selectedStagedDiffData;
-        if (!selectedCachedDiff) return null;
-        return { original: selectedCachedDiff.original, modified: selectedCachedDiff.modified, isBinary: selectedCachedDiff.isBinary };
-    }, [activeDiffStaged, selectedCachedDiff, selectedStagedDiffData]);
 
     const [openingEditorFilePath, setOpeningEditorFilePath] = React.useState<string | null>(null);
 
@@ -1387,16 +1261,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
     }, [activeDiffStaged, effectiveDirectory, files, git, openContextFileAtLine, setDiff]);
 
-    const openSelectedFileInEditorAtChange = React.useCallback(async () => {
-        if (!selectedFile) {
-            return;
-        }
-
-        await openFileInEditorAtChange(selectedFile, selectedDiffData);
-    }, [openFileInEditorAtChange, selectedDiffData, selectedFile]);
-
-    const isOpeningSelectedInEditor = Boolean(selectedFile && openingEditorFilePath === selectedFile);
-
     const renderStackedDiffView = () => {
         if (!effectiveDirectory) return null;
 
@@ -1404,7 +1268,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             if (forcedStaged !== null) {
                 return forcedStaged;
             }
-            return selectedFileStaged && path === selectedFile;
+            return displayFileStaged && path === displayFile;
         };
 
         return (
@@ -1417,7 +1281,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         </div>
                         <FileList
                             changedFiles={changedFiles}
-                            selectedFile={selectedFile}
+                            selectedFile={null}
                             onSelectFile={handleSelectFileAndScroll}
                         />
                     </section>
@@ -1439,9 +1303,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                 file={file}
                                 layout={getLayoutForFile(file)}
                                 wrapLines={diffWrapLines}
-                                isSelected={file.path === selectedFile}
+                                isSelected={false}
                                 isExpanded={expandedFiles.has(file.path)}
-                                isMounted={mountedStackedFiles.has(file.path) || file.path === selectedFile || file.path === pinnedStackedTarget}
+                                isMounted={mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget}
                                 onSelect={handleSelectFile}
                                 onExpandedChange={handleStackedEntryExpandedChange}
                                 registerSectionRef={registerSectionRef}
@@ -1522,16 +1386,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         </div>
                     )
                 )}
-                {showFileSelector && (
-                    <FileSelector
-                        changedFiles={changedFiles}
-                        selectedFile={selectedFile}
-                        selectedFileEntry={selectedFileEntry}
-                        onSelectFile={handleSelectFileAndScroll}
-                        className="w-fit min-w-0"
-                    />
-                )}
-                {!showFileSelector ? <div className="min-w-0 flex-1" /> : null}
                 {changedFiles.length > 0 && (
                     <Button
                         variant="ghost"
@@ -1539,7 +1393,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         onClick={handleExpandOrCollapseAll}
                         className={cn(
                             'diff-toolbar__expand-button h-7 flex-shrink-0 gap-1 px-1.5 text-muted-foreground hover:text-foreground',
-                            showFileSelector && 'ml-auto',
+                            'ml-auto',
                         )}
                         title={expandedFiles.size > 0 ? t('diffView.actions.collapseAll') : t('diffView.actions.expandAll')}
                     >
@@ -1574,7 +1428,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         </TooltipContent>
                     </Tooltip>
                 )}
-                {selectedFileEntry && (
+                {changedFiles.length > 0 && (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -1588,27 +1442,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         <Icon name="text-wrap" className="size-4" />
                     </Button>
                 )}
-                {showOpenInEditorAction && selectedFileEntry && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0 opacity-70 hover:opacity-100"
-                        onClick={() => {
-                            void openSelectedFileInEditorAtChange();
-                        }}
-                        disabled={isOpeningSelectedInEditor}
-                        title={t('diffView.actions.openFileAtFirstChangedLine')}
-                    >
-                        {isOpeningSelectedInEditor ? (
-                            <Icon name="loader-4" className="size-3.5 animate-spin" />
-                        ) : (
-                            <Icon name="edit" className="size-3.5" />
-                        )}
-                    </Button>
-                )}
-                {selectedFileEntry && currentLayoutForSelectedFile && (
+                {currentLayoutForAllFiles && (
                     <DiffViewToggle
-                        mode={currentLayoutForSelectedFile === 'side-by-side' ? 'side-by-side' : 'unified'}
+                        mode={currentLayoutForAllFiles === 'side-by-side' ? 'side-by-side' : 'unified'}
                         onModeChange={handleHeaderLayoutChange}
                     />
                 )}

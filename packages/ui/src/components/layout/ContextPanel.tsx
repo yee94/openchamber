@@ -2290,21 +2290,7 @@ export const ContextPanel: React.FC = () => {
     };
   }), [effectiveDirectory, t, tabs]);
 
-  const activeNonChatContent = activeTab?.mode === 'diff'
-    ? (
-      <DiffView
-        key={activeTab.id}
-        hideStackedFileSidebar
-        stackedDefaultCollapsedAll
-        pinSelectedFileHeaderToTopOnNavigate
-        showOpenInEditorAction
-        diffScope={activeTab.stagedDiff ? 'staged' : 'working'}
-        onDiffScopeChange={handleDiffScopeChange}
-        targetFilePath={activeTab.targetPath}
-        flushContent
-      />
-    )
-    : activeTab?.mode === 'context'
+  const activeNonChatContent = activeTab?.mode === 'context'
         ? <ContextPanelContent />
         : activeTab?.mode === 'plan'
             ? <PlanView targetPath={activeTab.targetPath} />
@@ -2324,6 +2310,10 @@ export const ContextPanel: React.FC = () => {
   );
   const browserTabs = React.useMemo(
     () => tabs.filter((tab) => tab.mode === 'browser'),
+    [tabs],
+  );
+  const diffTabs = React.useMemo(
+    () => tabs.filter((tab) => tab.mode === 'diff'),
     [tabs],
   );
   const BrowserPane = isElectronBrowserRuntime() ? DesktopBrowserPane : IframeBrowserPane;
@@ -2496,7 +2486,27 @@ export const ContextPanel: React.FC = () => {
             <BrowserPane initialUrl={tab.targetPath ?? ''} directory={directoryKey} tabID={tab.id} />
           </div>
         ))}
-        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' ? activeNonChatContent : null}
+        {diffTabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={cn(
+              'absolute inset-0',
+              activeTab?.id !== tab.id && 'hidden'
+            )}
+          >
+            <DiffView
+              hideStackedFileSidebar
+              stackedDefaultCollapsedAll
+              pinSelectedFileHeaderToTopOnNavigate
+              showOpenInEditorAction
+              diffScope={tab.stagedDiff ? 'staged' : 'working'}
+              onDiffScopeChange={handleDiffScopeChange}
+              targetFilePath={tab.targetPath}
+              flushContent
+            />
+          </div>
+        ))}
+        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' && activeTab?.mode !== 'diff' ? activeNonChatContent : null}
       </div>
     </aside>
   );
