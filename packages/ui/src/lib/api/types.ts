@@ -473,6 +473,9 @@ export interface GitAPI {
   stageGitFiles?(directory: string, filePaths: string[]): Promise<void>;
   unstageGitFile(directory: string, filePath: string): Promise<void>;
   unstageGitFiles?(directory: string, filePaths: string[]): Promise<void>;
+  stageGitHunk?(directory: string, filePath: string, patch: string): Promise<void>;
+  unstageGitHunk?(directory: string, filePath: string, patch: string): Promise<void>;
+  revertGitHunk?(directory: string, filePath: string, patch: string): Promise<void>;
   isLinkedWorktree(directory: string): Promise<boolean>;
   getGitBranches(directory: string): Promise<GitBranch>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
