@@ -25,6 +25,7 @@ import { getLanguageFromExtension, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { DiffViewToggle } from '@/components/chat/message/DiffViewToggle';
 import type { DiffViewMode } from '@/components/chat/message/types';
+import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
 import { PierreDiffViewer } from './PierreDiffViewer';
 import { useDeviceInfo } from '@/lib/device';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -35,6 +36,9 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n/store';
 import { fileDiffFromPatch } from '@/lib/diff/patchFileDiff';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { startReviewFlow } from '@/lib/reviewFlow';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { FileDiffMetadata } from '@pierre/diffs';
 
 // Minimum width for side-by-side diff view (px)
@@ -948,6 +952,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const [mountedStackedFiles, setMountedStackedFiles] = React.useState<Set<string>>(() => new Set());
     const [loadFullFiles, setLoadFullFiles] = React.useState(false);
     const [scrollRequestNonce, setScrollRequestNonce] = React.useState(0);
+    const [reviewDialogOpen, setReviewDialogOpen] = React.useState(false);
+    const [reviewFlowSubmitting, setReviewFlowSubmitting] = React.useState(false);
 
     const pendingDiffFile = useUIStore((state) => state.pendingDiffFile);
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
@@ -958,11 +964,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const diffWrapLinesStore = useUIStore((state) => state.diffWrapLines);
     const setDiffWrapLines = useUIStore((state) => state.setDiffWrapLines);
     const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
+    const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const diffWrapLines = diffWrapLinesStore;
     const forcedStaged = diffScope === 'staged' ? true : diffScope === 'working' ? false : null;
     const activeDiffStaged = forcedStaged ?? displayFileStaged;
 
     const isMobileLayout = isMobile || screenWidth <= 768;
+    const showReviewAction = Boolean(currentSessionId) && !isMobileLayout && !isVSCodeRuntime();
     const showFileSidebar = !hideStackedFileSidebar && !isMobileLayout && screenWidth >= 1024;
     const diffScrollRef = React.useRef<HTMLElement | null>(null);
     const fileSectionRefs = React.useRef(new Map<string, HTMLDivElement | null>());
@@ -1269,6 +1277,35 @@ export const DiffView: React.FC<DiffViewProps> = ({
         setMountedStackedFiles(new Set());
         queueVisibleStackedFilesSync();
     }, [cancelPendingScrollAlignment, changedFiles, queueVisibleStackedFilesSync]);
+
+    const handleStartReviewFlow = React.useCallback(async (execution: ReviewFlowExecution) => {
+        if (!currentSessionId) return;
+        const directory = useSessionUIStore.getState().getDirectoryForSession(currentSessionId) || effectiveDirectory || '';
+        if (!directory) {
+            toast.error(t('diffView.reviewDialog.toast.noSessionDirectory'));
+            return;
+        }
+
+        setReviewFlowSubmitting(true);
+        try {
+            await startReviewFlow({
+                originalSessionID: currentSessionId,
+                directory,
+                providerID: execution.providerID,
+                modelID: execution.modelID,
+                agent: execution.agent || undefined,
+                variant: execution.variant || undefined,
+                generateHandoff: execution.generateHandoff,
+                returnAfterHandoffRequest: execution.generateHandoff,
+            });
+            setReviewDialogOpen(false);
+        } catch (error) {
+            console.error('[review-flow] failed to start review flow', error);
+            toast.error(error instanceof Error ? error.message : t('diffView.reviewDialog.toast.startFailed'));
+        } finally {
+            setReviewFlowSubmitting(false);
+        }
+    }, [currentSessionId, effectiveDirectory, t]);
 
     const scrollToFile = React.useCallback((path: string): boolean => {
         const node = fileSectionRefs.current.get(path);
@@ -1582,6 +1619,25 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         </span>
                     </Button>
                 )}
+                {changedFiles.length > 0 && showReviewAction && (
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => setReviewDialogOpen(true)}
+                        disabled={reviewFlowSubmitting}
+                        className="diff-toolbar__review-button h-7 flex-shrink-0 gap-1.5 px-2"
+                        aria-label={t('diffView.actions.reviewAria')}
+                    >
+                        {reviewFlowSubmitting ? (
+                            <Icon name="loader-4" className="size-4 animate-spin" />
+                        ) : (
+                            <Icon name="search-eye" className="size-4" />
+                        )}
+                        <span className="diff-toolbar__review-label typography-ui-label">
+                            {t('diffView.actions.review')}
+                        </span>
+                    </Button>
+                )}
                 {changedFiles.length > 0 && (
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -1625,6 +1681,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     />
                 )}
             </div>
+
+            <ReviewFlowDialog
+                open={reviewDialogOpen}
+                onOpenChange={setReviewDialogOpen}
+                projectDirectory={effectiveDirectory ?? null}
+                submitting={reviewFlowSubmitting}
+                onConfirm={handleStartReviewFlow}
+            />
 
             {renderContent()}
         </div>
