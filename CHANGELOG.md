@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - Sessions: fixed a bug where a running session would briefly flicker as idle (in the sidebar, the send/stop button, and the status row) when the app is protected by a password.
 - Desktop: you can now open developer tools from the Help menu.
 - Sessions: new draft sessions now start from the default model and agent instead of inheriting the previous session's selection, and fall back to OpenCode's own `default_agent` (and its model) when no OpenChamber default is set.
+- Startup: the model and agent now appear faster on the initial draft — config loads under the project key up front (no reload when the draft opens) and the agent list is fetched once instead of per consumer.
 
 ## [1.12.4] - 2026-06-11
 

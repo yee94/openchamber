@@ -12,6 +12,8 @@ import { useSelectionStore } from "@/sync/selection-store";
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
 import { updateDesktopSettings } from "@/lib/persistence";
 import { useDirectoryStore } from "@/stores/useDirectoryStore";
+import { useProjectsStore } from "@/stores/useProjectsStore";
+import { resolveProjectForSessionDirectory } from "@/lib/projectResolution";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
 import { parseModelIdentifier } from "@/lib/modelIdentifier";
 import { runtimeFetch } from "@/lib/runtime-fetch";
@@ -1710,7 +1712,7 @@ export const useConfigStore = create<ConfigStore>()(
                             const [agents, openChamberDefaults, opencodeConfig] = await Promise.all([
                                 measureStartupTrace(
                                     'loadAgents:api',
-                                    () => opencodeClient.withDirectory(fromDirectoryKey(directoryKey), () => opencodeClient.listAgents()),
+                                    () => opencodeClient.listAgents(fromDirectoryKey(directoryKey)),
                                     { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
                                 ),
                                 fetchOpenChamberDefaults(),
@@ -2634,10 +2636,28 @@ export const useConfigStore = create<ConfigStore>()(
 
                             get().invalidateProviderCache();
 
+                            // Config (providers/agents/defaults) lives at the PROJECT level. If the
+                            // app starts on a worktree directory, load config under the owning
+                            // project's key so the initial draft — which activates the project — finds
+                            // a ready snapshot instead of triggering a second provider/agent load.
+                            const initialDirectory = opencodeClient.getDirectory()
+                                ?? useDirectoryStore.getState().currentDirectory
+                                ?? fromDirectoryKey(get().activeDirectoryKey);
+                            const resolvedProject = resolveProjectForSessionDirectory(
+                                useProjectsStore.getState().projects,
+                                useSessionUIStore.getState().availableWorktreesByProject,
+                                initialDirectory ?? null,
+                            );
+                            const configDirectory = resolvedProject?.path ?? initialDirectory ?? null;
+                            const configDirectoryKey = toDirectoryKey(configDirectory);
+                            if (get().activeDirectoryKey !== configDirectoryKey) {
+                                set({ activeDirectoryKey: configDirectoryKey });
+                            }
+
                             if (debug) console.log("Loading providers and agents...");
                             await Promise.all([
-                                get().loadProviders({ source: 'initializeApp' }),
-                                get().loadAgents({ source: 'initializeApp' }),
+                                get().loadProviders({ directory: configDirectory, source: 'initializeApp' }),
+                                get().loadAgents({ directory: configDirectory, source: 'initializeApp' }),
                             ]);
 
                             set({ isInitialized: true, isConnected: true, hasEverConnected: true, connectionPhase: "connected" });
