@@ -972,6 +972,7 @@ const MermaidPreviewDialog: React.FC<{
                                         allowMermaidWheelZoom
                                         className="markdown-mermaid-fullscreen h-full [&_[data-markdown='mermaid-block']_button]:hidden"
                                         mermaidControls={MERMAID_CONTROLS}
+                                        enableFileReferences={false}
                                     />
                                 </div>
                             )}
