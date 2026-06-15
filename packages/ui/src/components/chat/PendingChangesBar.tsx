@@ -1,9 +1,9 @@
 import React from 'react';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
 import {
@@ -20,7 +20,7 @@ export const PendingChangesBar: React.FC = React.memo(() => {
     const { t } = useI18n();
     const [isExpanded, setIsExpanded] = React.useState(false);
     const popoverRef = React.useRef<HTMLDivElement>(null);
-    const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
+    const currentDirectory = useEffectiveDirectory() ?? null;
     const runtime = React.useContext(RuntimeAPIContext);
     const isGitRepo = useIsGitRepo(currentDirectory);
     const gitStatus = useGitStore((s) =>
@@ -43,7 +43,7 @@ export const PendingChangesBar: React.FC = React.memo(() => {
     }, [isExpanded]);
 
     const gitChangedFiles = React.useMemo<GitChangedFile[]>(() => {
-        if (isGitRepo !== true || !gitStatus || gitStatus.isClean) return [];
+        if (!currentDirectory || isGitRepo !== true || !gitStatus || gitStatus.isClean) return [];
         return extractGitChangedFiles(gitStatus.files, gitStatus.diffStats, currentDirectory);
     }, [isGitRepo, gitStatus, currentDirectory]);
 
@@ -57,7 +57,7 @@ export const PendingChangesBar: React.FC = React.memo(() => {
         return { totalAdded: added, totalRemoved: removed };
     }, [gitChangedFiles]);
 
-    if (isGitRepo !== true) return null;
+    if (!currentDirectory || isGitRepo !== true) return null;
     if (gitChangedFiles.length === 0) return null;
 
     const handleOpenFile = (file: ChangedFileEntry) => {
