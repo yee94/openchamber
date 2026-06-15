@@ -6,8 +6,14 @@
 
 export type MarkdownWorkerRequest =
   | { type: 'init' }
-  | { type: 'highlight'; id: number; code: string; lang: string };
+  // Highlight a whole block to ready-to-splice Shiki `<pre>` HTML.
+  | { type: 'highlight'; id: number; code: string; lang: string }
+  // Highlight a whole block but return per-line inner HTML (one entry per line),
+  // so per-line layouts (diffs, gutters, virtualization) tokenize in ONE call
+  // instead of one worker round-trip per line.
+  | { type: 'highlightLines'; id: number; code: string; lang: string };
 
 export type MarkdownWorkerResponse =
   | { type: 'highlight'; id: number; html: string }
+  | { type: 'highlightLines'; id: number; lines: string[] }
   | { type: 'error'; id: number; message: string };

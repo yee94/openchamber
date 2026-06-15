@@ -7,7 +7,7 @@ import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata } from '@/lib/toolHelpers';
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk/v2';
 import { toolDisplayStyles } from '@/lib/typography';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -844,7 +844,7 @@ const ToolScrollableTextOutput: React.FC<{
     metadata: Record<string, unknown> | undefined;
     input: Record<string, unknown> | undefined;
     syntaxTheme: { [key: string]: React.CSSProperties };
-}> = ({ output, part, metadata, input, syntaxTheme }) => {
+}> = ({ output, part, metadata, input }) => {
     const { t } = useI18n();
     const renderedOutput = getToolOutputText(output, part, metadata);
     const outputLanguage = getToolOutputLanguage(output, part, metadata, input);
@@ -910,16 +910,13 @@ const ToolScrollableTextOutput: React.FC<{
                     />
                 ) : (
                     <div className="typography-code pr-12 text-muted-foreground/90">
-                        <SyntaxHighlighter
-                            style={syntaxTheme}
+                        <WorkerHighlightedCode
                             language="json"
-                            PreTag="div"
-                            customStyle={TOOL_COLLAPSED_CUSTOM_STYLE}
-                            codeTagProps={CODE_TAG_PROPS}
-                            wrapLongLines
-                        >
-                            {renderedOutput}
-                        </SyntaxHighlighter>
+                            code={renderedOutput}
+                            style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                            codeStyle={CODE_TAG_PROPS.style}
+                            wrap
+                        />
                     </div>
                 )}
             </div>
@@ -928,16 +925,13 @@ const ToolScrollableTextOutput: React.FC<{
 
     return (
         <div className={part.tool === 'bash' ? 'typography-code text-muted-foreground/90' : undefined}>
-            <SyntaxHighlighter
-                style={syntaxTheme}
+            <WorkerHighlightedCode
                 language={outputLanguage}
-                PreTag="div"
-                customStyle={TOOL_COLLAPSED_CUSTOM_STYLE}
-                codeTagProps={CODE_TAG_PROPS}
-                wrapLongLines
-            >
-                {renderedOutput}
-            </SyntaxHighlighter>
+                code={renderedOutput}
+                style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                codeStyle={CODE_TAG_PROPS.style}
+                wrap
+            />
         </div>
     );
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -550,9 +550,8 @@ DialogUnifiedDiff.displayName = 'DialogUnifiedDiff';
 
 const DialogReadContent: React.FC<{
     popup: ToolPopupContent;
-    syntaxTheme: Record<string, React.CSSProperties>;
     pierreThemeConfig: PierreThemeConfig;
-}> = React.memo(({ popup, syntaxTheme, pierreThemeConfig }) => {
+}> = React.memo(({ popup, pierreThemeConfig }) => {
     const parsedReadOutput = React.useMemo(() => parseReadToolOutput(popup.content), [popup.content]);
 
     const inputMeta = popup.metadata?.input;
@@ -627,7 +626,6 @@ const DialogReadContent: React.FC<{
         <VirtualizedCodeBlock
             lines={codeLines}
             language={detectedLanguage}
-            syntaxTheme={syntaxTheme}
             maxHeight="70vh"
         />
     );
@@ -1055,16 +1053,13 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     </div>
                                     {meta.tool === 'bash' && getInputValue('command') ? (
                                         <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
+                                            <WorkerHighlightedCode
                                                 language="bash"
-                                                PreTag="div"
-                                                customStyle={toolDisplayStyles.getPopupStyles()}
-                                                codeTagProps={DIALOG_CODE_TAG_PROPS}
-                                                wrapLongLines
-                                            >
-                                                {getInputValue('command')!}
-                                            </SyntaxHighlighter>
+                                                code={getInputValue('command')!}
+                                                style={toolDisplayStyles.getPopupStyles()}
+                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                                wrap
+                                            />
                                         </div>
                                     ) : meta.tool === 'task' && getInputValue('prompt') ? (
                                         <div
@@ -1124,16 +1119,13 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                             completed: t('chat.todo.completed'),
                                             cancelled: t('chat.todo.cancelled'),
                                         }) || (
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
+                                            <WorkerHighlightedCode
                                                 language="json"
-                                                PreTag="div"
-                                                wrapLongLines
-                                                customStyle={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeTagProps={DIALOG_CODE_TAG_PROPS}
-                                            >
-                                                {popup.content}
-                                            </SyntaxHighlighter>
+                                                code={popup.content}
+                                                style={toolDisplayStyles.getPopupContainerStyles()}
+                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                                wrap
+                                            />
                                         )
                                     );
                                 }
@@ -1179,22 +1171,19 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
                                     return (
                                         renderWebSearchOutput(popup.content, syntaxTheme) || (
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
+                                            <WorkerHighlightedCode
                                                 language="text"
-                                                PreTag="div"
-                                                wrapLongLines
-                                                customStyle={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeTagProps={DIALOG_CODE_TAG_PROPS}
-                                            >
-                                                {popup.content}
-                                            </SyntaxHighlighter>
+                                                code={popup.content}
+                                                style={toolDisplayStyles.getPopupContainerStyles()}
+                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                                wrap
+                                            />
                                         )
                                     );
                                 }
 
                                 if (tool === 'read') {
-                                    return <DialogReadContent popup={popup} syntaxTheme={syntaxTheme} pierreThemeConfig={pierreThemeConfig} />;
+                                    return <DialogReadContent popup={popup} pierreThemeConfig={pierreThemeConfig} />;
                                 }
 
                                 // JSON tree viewer for generic JSON outputs
@@ -1210,16 +1199,13 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 }
 
                                 return (
-                                    <SyntaxHighlighter
-                                        style={syntaxTheme}
+                                    <WorkerHighlightedCode
                                         language={popup.language || 'text'}
-                                        PreTag="div"
-                                        wrapLongLines
-                                        customStyle={toolDisplayStyles.getPopupContainerStyles()}
-                                        codeTagProps={DIALOG_CODE_TAG_PROPS}
-                                    >
-                                        {popup.content}
-                                    </SyntaxHighlighter>
+                                        code={popup.content}
+                                        style={toolDisplayStyles.getPopupContainerStyles()}
+                                        codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                        wrap
+                                    />
                                 );
                             })()}
                         </div>
