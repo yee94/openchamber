@@ -1696,6 +1696,7 @@ const AssistantMessageBody = React.memo(({
                             streamPhase={effectiveStreamPhase}
                             chatRenderMode={chatRenderMode}
                             onContentChange={onContentChange}
+                            onShowPopup={onShowPopup}
                         />
                     </div>
                 );
@@ -1730,6 +1731,7 @@ const AssistantMessageBody = React.memo(({
                                 streamPhase={effectiveStreamPhase}
                                 chatRenderMode={chatRenderMode}
                                 onContentChange={onContentChange}
+                                onShowPopup={onShowPopup}
                             />
                         );
                     } else if (groupReasoningBlocks) {
