@@ -3551,7 +3551,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const draftProjectLabel = selectedDraftProject ? getProjectDisplayLabel(selectedDraftProject) : null;
 
     const selectedDraftProjectBranches = useGitBranches(selectedDraftProjectPath);
+    const selectedDraftProjectBranchesFetchedAt = useGitStore(
+        (s) => (selectedDraftProjectPath ? s.directories.get(selectedDraftProjectPath)?.lastBranchesFetch ?? 0 : 0),
+    );
     const selectedDraftProjectIsGitRepo = useIsGitRepo(selectedDraftProjectPath);
+    const hasDraftBranchList = Boolean(selectedDraftProjectBranches?.all);
     const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const fetchBranches = useGitStore((state) => state.fetchBranches);
     const [isDiscoveringDraftBranches, setIsDiscoveringDraftBranches] = React.useState(false);
@@ -3570,13 +3574,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return;
         }
 
-        if (selectedDraftProjectBranches?.all) {
+        // Stale-while-revalidate: branches seeded from the persisted cache show
+        // instantly. Refresh based on staleness (not mere presence) so a cached
+        // list can't go stale, while only showing the discovering spinner when
+        // there is nothing to display yet.
+        const DRAFT_BRANCHES_SWR_TTL_MS = 30_000;
+        const isStale =
+            !selectedDraftProjectBranchesFetchedAt ||
+            Date.now() - selectedDraftProjectBranchesFetchedAt > DRAFT_BRANCHES_SWR_TTL_MS;
+
+        if (hasDraftBranchList && !isStale) {
             setIsDiscoveringDraftBranches(false);
             return;
         }
 
         let cancelled = false;
-        setIsDiscoveringDraftBranches(true);
+        setIsDiscoveringDraftBranches(!hasDraftBranchList);
 
         void fetchBranches(selectedDraftProjectPath, runtimeGit)
             .finally(() => {
@@ -3588,7 +3601,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return () => {
             cancelled = true;
         };
-    }, [fetchBranches, runtimeGit, selectedDraftProject, selectedDraftProjectBranches?.all, selectedDraftProjectIsGitRepo, selectedDraftProjectPath, showDraftTargetSelectors]);
+    }, [fetchBranches, runtimeGit, selectedDraftProject, selectedDraftProjectBranchesFetchedAt, hasDraftBranchList, selectedDraftProjectIsGitRepo, selectedDraftProjectPath, showDraftTargetSelectors]);
 
     const selectedDraftProjectCurrentBranch = selectedDraftProjectBranches?.current?.trim() ?? '';
 

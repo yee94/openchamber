@@ -699,7 +699,85 @@ const resolveInitialDirectoryKey = (): string => {
     }
 
     const directory = opencodeClient.getDirectory() ?? useDirectoryStore.getState().currentDirectory;
-    return toDirectoryKey(directory);
+    return toConfigDirectoryKey(directory);
+};
+
+// Persisted worktree→project mapping. The runtime worktree map
+// (availableWorktreesByProject) is populated by async git discovery and isn't
+// ready when initializeApp runs on startup — so without this, a worktree's first
+// config load can't resolve to its project and duplicates the project's load.
+// We cache resolved mappings to localStorage so subsequent launches resolve the
+// project synchronously at init time. worktree→project is effectively immutable,
+// so a cached entry is safe to trust.
+const WORKTREE_PROJECT_MAP_KEY = 'oc.worktreeProjectMap';
+let _worktreeProjectMap: Record<string, string> | null = null;
+const getWorktreeProjectMap = (): Record<string, string> => {
+    if (_worktreeProjectMap === null) {
+        try {
+            const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(WORKTREE_PROJECT_MAP_KEY) : null;
+            _worktreeProjectMap = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+        } catch {
+            _worktreeProjectMap = {};
+        }
+    }
+    return _worktreeProjectMap;
+};
+const rememberWorktreeProject = (worktree: string, project: string): void => {
+    if (!worktree || !project || worktree === project) return;
+    const map = getWorktreeProjectMap();
+    if (map[worktree] === project) return;
+    map[worktree] = project;
+    try {
+        localStorage.setItem(WORKTREE_PROJECT_MAP_KEY, JSON.stringify(map));
+    } catch {
+        // localStorage quota exceeded — ignore; live resolution still works.
+    }
+};
+
+/**
+ * Map a directory to its CONFIG scope. Providers/agents/defaults are defined at
+ * the PROJECT level (opencode.json), so a worktree must inherit its parent
+ * project's config instead of maintaining — and re-fetching — its own
+ * per-worktree snapshot. Returns the owning project's path when the directory is
+ * a known worktree, else the directory unchanged.
+ */
+const resolveConfigDirectory = (directory: string | null | undefined): string | null => {
+    const dir = typeof directory === 'string' && directory.trim().length > 0 ? directory : null;
+    if (!dir) return dir;
+    // 1. Persisted mapping — resolves synchronously at startup, before the async
+    //    git worktree discovery has populated the runtime map.
+    const cached = getWorktreeProjectMap()[dir];
+    if (cached) return cached;
+    // 2. Live resolution via projects + discovered worktree map; cache the hit.
+    try {
+        const project = resolveProjectForSessionDirectory(
+            useProjectsStore.getState().projects,
+            useSessionUIStore.getState().availableWorktreesByProject,
+            dir,
+        );
+        if (project?.path && project.path !== dir) {
+            rememberWorktreeProject(dir, project.path);
+            return project.path;
+        }
+    } catch {
+        return dir;
+    }
+    return dir;
+};
+
+const toConfigDirectoryKey = (directory: string | null | undefined): string =>
+    toDirectoryKey(resolveConfigDirectory(directory));
+
+// Runtime freshness tracking (NOT persisted) for the stale-while-revalidate
+// background refresh, keyed by config-directory key. Prevents re-fetching
+// project-scoped providers/agents we just loaded — e.g. initializeApp loading a
+// project, then activateDirectory firing for the same project moments later.
+const _providersLoadedAt = new Map<string, number>();
+const _agentsLoadedAt = new Map<string, number>();
+const CONFIG_REFRESH_TTL_MS = 30_000;
+const isConfigFresh = (loadedAt: Map<string, number>, key: string): boolean => {
+    const at = loadedAt.get(key);
+    return typeof at === 'number' && Date.now() - at < CONFIG_REFRESH_TTL_MS;
 };
 
 interface DirectoryScopedConfig {
@@ -715,41 +793,32 @@ interface DirectoryScopedConfig {
     defaultProviders: { [key: string]: string };
 }
 
-const clearProviderDataFromDirectoryScoped = (
-    directoryScoped: Record<string, DirectoryScopedConfig>,
-): Record<string, DirectoryScopedConfig> => {
-    const next: Record<string, DirectoryScopedConfig> = {};
+/**
+ * Lift the active directory's cached provider/agent snapshot into the top-level
+ * fields the pickers read (`providers`, `agents`, selections), so a cold start
+ * paints instantly from persisted data. Falls back to whatever top-level data
+ * was persisted; handles legacy persisted blobs that only stored directoryScoped.
+ */
+const hydrateActiveDirectorySnapshot = <T extends Partial<ConfigStore>>(merged: T): T => {
+    const directoryScoped = merged.directoryScoped;
+    const activeKey = merged.activeDirectoryKey;
+    if (!directoryScoped || !activeKey) return merged;
+    const snapshot = directoryScoped[activeKey];
+    if (!snapshot) return merged;
 
-    for (const [directoryKey, snapshot] of Object.entries(directoryScoped)) {
-        next[directoryKey] = {
-            ...snapshot,
-            providers: [],
-            defaultProviders: {},
-        };
+    const next: Partial<ConfigStore> = { ...merged };
+    if ((!merged.providers || merged.providers.length === 0) && snapshot.providers?.length) {
+        next.providers = snapshot.providers;
     }
-
-    return next;
-};
-
-const stripProviderCacheFromPersistedState = (persistedState: unknown): Partial<ConfigStore> => {
-    if (!persistedState || typeof persistedState !== 'object') {
-        return {};
+    if ((!merged.agents || merged.agents.length === 0) && snapshot.agents?.length) {
+        next.agents = snapshot.agents;
     }
-
-    const persisted = persistedState as Partial<ConfigStore>;
-    const sanitized: Partial<ConfigStore> = {
-        ...persisted,
-        providers: [],
-        defaultProviders: {},
-    };
-
-    if (persisted.directoryScoped) {
-        sanitized.directoryScoped = clearProviderDataFromDirectoryScoped(
-            persisted.directoryScoped as Record<string, DirectoryScopedConfig>,
-        );
+    if (!merged.defaultProviders || Object.keys(merged.defaultProviders).length === 0) {
+        if (snapshot.defaultProviders && Object.keys(snapshot.defaultProviders).length > 0) {
+            next.defaultProviders = snapshot.defaultProviders;
+        }
     }
-
-    return sanitized;
+    return next as T;
 };
 
 interface ConfigStore {
@@ -1164,7 +1233,11 @@ export const useConfigStore = create<ConfigStore>()(
                     return 500;
                 })(),
                 activateDirectory: async (directory) => {
-                    const directoryKey = toDirectoryKey(directory);
+                    // Resolve the worktree to its owning project up-front so the
+                    // active key + snapshot key always match and stay project-scoped.
+                    // Everything below operates on this key unchanged; the OpenCode
+                    // working directory (opencodeClient.getDirectory()) is separate.
+                    const directoryKey = toConfigDirectoryKey(directory);
                     let snapshotHadProviders = false;
                     let snapshotHadAgents = false;
 
@@ -1204,14 +1277,28 @@ export const useConfigStore = create<ConfigStore>()(
                         return;
                     }
 
+                    // Stale-while-revalidate: when a cached snapshot already
+                    // populated the pickers, refresh in the background so the UI
+                    // stays instant but never shows stale provider/agent data for
+                    // longer than one fetch. Only block when there is nothing to show.
                     if (snapshotHadProviders) {
-                        markStartupTrace('activateDirectory:skipProviders', { directoryKey });
+                        if (isConfigFresh(_providersLoadedAt, directoryKey)) {
+                            markStartupTrace('activateDirectory:providersFresh', { directoryKey });
+                        } else {
+                            markStartupTrace('activateDirectory:refreshProvidersBackground', { directoryKey });
+                            void get().loadProviders({ directory: fromDirectoryKey(directoryKey), source: 'activateDirectory:refresh' });
+                        }
                     } else {
                         await get().loadProviders({ directory: fromDirectoryKey(directoryKey), source: 'activateDirectory' });
                     }
 
                     if (snapshotHadAgents) {
-                        markStartupTrace('activateDirectory:skipAgents', { directoryKey });
+                        if (isConfigFresh(_agentsLoadedAt, directoryKey)) {
+                            markStartupTrace('activateDirectory:agentsFresh', { directoryKey });
+                        } else {
+                            markStartupTrace('activateDirectory:refreshAgentsBackground', { directoryKey });
+                            void get().loadAgents({ directory: fromDirectoryKey(directoryKey), source: 'activateDirectory:refresh' });
+                        }
                     } else {
                         await get().loadAgents({ directory: fromDirectoryKey(directoryKey), source: 'activateDirectory' });
                     }
@@ -1270,8 +1357,11 @@ export const useConfigStore = create<ConfigStore>()(
 
                 loadProviders: async (options) => {
                     const requestedDirectory = options?.directory ?? fromDirectoryKey(get().activeDirectoryKey);
-                    const effectiveDirectory = requestedDirectory ?? opencodeClient.getDirectory() ?? null;
-                    const directoryKey = toDirectoryKey(requestedDirectory);
+                    // Providers are project-scoped: resolve a worktree to its project
+                    // so it reuses one shared snapshot instead of its own.
+                    const configDirectory = resolveConfigDirectory(requestedDirectory);
+                    const effectiveDirectory = configDirectory ?? opencodeClient.getDirectory() ?? null;
+                    const directoryKey = toDirectoryKey(configDirectory);
                     const source = options?.source ?? 'unknown';
                     markStartupTrace('loadProviders:called', { directoryKey, source, requestedDirectory, effectiveDirectory });
 
@@ -1391,6 +1481,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 providers: processedProviders.length,
                                 models: processedProviders.reduce((count, provider) => count + provider.models.length, 0),
                             });
+                            _providersLoadedAt.set(directoryKey, Date.now());
                             return;
                         } catch (error) {
                             lastError = error;
@@ -1685,8 +1776,11 @@ export const useConfigStore = create<ConfigStore>()(
 
                 loadAgents: async (options) => {
                     const requestedDirectory = options?.directory ?? fromDirectoryKey(get().activeDirectoryKey);
-                    const effectiveDirectory = requestedDirectory ?? opencodeClient.getDirectory() ?? null;
-                    const directoryKey = toDirectoryKey(requestedDirectory);
+                    // Agents are project-scoped: resolve a worktree to its project
+                    // so it reuses one shared snapshot instead of its own.
+                    const configDirectory = resolveConfigDirectory(requestedDirectory);
+                    const effectiveDirectory = configDirectory ?? opencodeClient.getDirectory() ?? null;
+                    const directoryKey = toDirectoryKey(configDirectory);
                     const source = options?.source ?? 'unknown';
                     markStartupTrace('loadAgents:called', { directoryKey, source, requestedDirectory, effectiveDirectory });
 
@@ -1859,6 +1953,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     durationMs: Math.round(loaderEnded - loaderStarted),
                                     agents: safeAgents.length,
                                 });
+                                _agentsLoadedAt.set(directoryKey, Date.now());
                                 return true;
                             }
 
@@ -1971,6 +2066,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 durationMs: Math.round(loaderEnded - loaderStarted),
                                 agents: safeAgents.length,
                             });
+                            _agentsLoadedAt.set(directoryKey, Date.now());
                             return true;
                         } catch (error) {
                             lastError = error;
@@ -2634,7 +2730,11 @@ export const useConfigStore = create<ConfigStore>()(
                             if (debug) console.log("Initializing app...");
                             markStartupTrace('initApp:skipped', { reason: 'checkConnection already verified health' });
 
-                            get().invalidateProviderCache();
+                            // Stale-while-revalidate: do NOT invalidate the hydrated
+                            // provider snapshot here. The pickers keep showing the
+                            // last-known providers/agents while loadProviders/loadAgents
+                            // below fetch fresh data and overwrite on success. Clearing
+                            // first would blank the UI for the duration of the fetch.
 
                             // Config (providers/agents/defaults) lives at the PROJECT level. If the
                             // app starts on a worktree directory, load config under the owning
@@ -2736,20 +2836,30 @@ export const useConfigStore = create<ConfigStore>()(
             {
                 name: "config-store",
                 storage: createJSONStorage(() => getSafeStorage()),
-                merge: (persistedState, currentState) => ({
-                    ...currentState,
-                    ...stripProviderCacheFromPersistedState(persistedState),
-                }),
+                merge: (persistedState, currentState) =>
+                    hydrateActiveDirectorySnapshot({
+                        ...currentState,
+                        ...(persistedState && typeof persistedState === 'object'
+                            ? (persistedState as Partial<ConfigStore>)
+                            : {}),
+                    }),
+                // Stale-while-revalidate: persist the last-known provider/agent
+                // snapshots so the model/agent pickers paint instantly on cold
+                // start. Freshness is guaranteed by the background refresh in
+                // initializeApp() / activateDirectory() (which overwrite these on
+                // success) and by the provider/agent config-change subscriptions.
                 partialize: (state) => ({
                     activeDirectoryKey: state.activeDirectoryKey,
-                    directoryScoped: clearProviderDataFromDirectoryScoped(state.directoryScoped),
+                    directoryScoped: state.directoryScoped,
+                    providers: state.providers,
+                    agents: state.agents,
                     currentProviderId: state.currentProviderId,
                     currentModelId: state.currentModelId,
                     currentVariant: state.currentVariant,
                     currentAgentName: state.currentAgentName,
                     selectedProviderId: state.selectedProviderId,
                     agentModelSelections: state.agentModelSelections,
-                    defaultProviders: {},
+                    defaultProviders: state.defaultProviders,
                     settingsDefaultModel: state.settingsDefaultModel,
                     settingsDefaultVariant: state.settingsDefaultVariant,
                     settingsDefaultAgent: state.settingsDefaultAgent,
