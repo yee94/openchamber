@@ -99,7 +99,7 @@
     },
     "packages/electron": {
       "name": "@openchamber/electron",
-      "version": "1.12.4",
+      "version": "1.13.0",
       "dependencies": {
         "@openchamber/web": "workspace:*",
         "electron-context-menu": "^4.1.2",
@@ -114,7 +114,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.12.4",
+      "version": "1.13.0",
       "dependencies": {
         "@base-ui/react": "^1.4.0",
         "@codemirror/autocomplete": "^6.20.0",
@@ -178,6 +178,7 @@
         "rehype-katex": "^7.0.1",
         "remark-math": "^6.0.0",
         "remend": "^1.2.1",
+        "shiki": "^3.23.0",
         "simple-git": "^3.28.0",
         "sonner": "^2.0.7",
         "strip-json-comments": "^5.0.3",
@@ -216,7 +217,7 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.12.4",
+      "version": "1.13.0",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@opencode-ai/sdk": "^1.17.7",
@@ -239,7 +240,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.12.4",
+      "version": "1.13.0",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
