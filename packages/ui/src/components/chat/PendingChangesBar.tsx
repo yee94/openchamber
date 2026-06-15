@@ -4,8 +4,6 @@ import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
-import { sessionEvents } from '@/lib/sessionEvents';
-import { normalizePath } from '@/components/session/sidebar/utils';
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
 import {
@@ -28,8 +26,6 @@ export const PendingChangesBar: React.FC = React.memo(() => {
     const gitStatus = useGitStore((s) =>
         currentDirectory ? s.directories.get(currentDirectory)?.status ?? null : null,
     );
-    const ensureStatus = useGitStore((s) => s.ensureStatus);
-    const fetchStatus = useGitStore((s) => s.fetchStatus);
     const mobileActions = useMobileAppActions();
 
     // Close popover when clicking outside
@@ -45,26 +41,6 @@ export const PendingChangesBar: React.FC = React.memo(() => {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [isExpanded]);
-
-    // Seed git store for currentDirectory so the bar can render independently of
-    // DiffView/GitView/right-sidebar mounting. ensureStatus has a 5s staleness
-    // gate and inFlightStatusFetchesByDirectory dedupes against concurrent callers.
-    React.useEffect(() => {
-        if (!currentDirectory || !runtime?.git) return;
-        void ensureStatus(currentDirectory, runtime.git);
-    }, [currentDirectory, runtime?.git, ensureStatus]);
-
-    // Mirror the onGitRefreshHint listener that lives in DiffView/GitView so the
-    // bar refreshes after mutating tools (edit/write/apply_patch/bash/...) even
-    // when neither of those views is open — e.g. VS Code runtime.
-    React.useEffect(() => {
-        if (!currentDirectory || !runtime?.git) return;
-        const git = runtime.git;
-        return sessionEvents.onGitRefreshHint((hint) => {
-            if (normalizePath(hint.directory) !== normalizePath(currentDirectory)) return;
-            void fetchStatus(currentDirectory, git);
-        });
-    }, [currentDirectory, runtime?.git, fetchStatus]);
 
     const gitChangedFiles = React.useMemo<GitChangedFile[]>(() => {
         if (isGitRepo !== true || !gitStatus || gitStatus.isClean) return [];

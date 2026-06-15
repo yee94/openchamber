@@ -69,6 +69,7 @@ import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
+import { sessionEvents } from '@/lib/sessionEvents';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
@@ -1044,6 +1045,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const currentGitStatus = useGitStore((state) =>
         currentDirectory ? state.directories.get(currentDirectory)?.status ?? null : null,
     );
+    const ensureGitStatus = useGitStore((state) => state.ensureStatus);
+    const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const setSessionAutoAccept = usePermissionStore((state) => state.setSessionAutoAccept);
     const composerHighlightRef = React.useRef<HTMLDivElement | null>(null);
@@ -1064,6 +1067,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         setAttachmentPreview((prev) => ({ ...prev, open }));
         setImagePreviewOpen(open);
     }, [setImagePreviewOpen]);
+
+    React.useEffect(() => {
+        if (!currentDirectory || !runtimeGit) return;
+        void ensureGitStatus(currentDirectory, runtimeGit);
+    }, [currentDirectory, runtimeGit, ensureGitStatus]);
+
+    React.useEffect(() => {
+        if (!currentDirectory || !runtimeGit) return;
+        return sessionEvents.onGitRefreshHint((hint) => {
+            if (normalizePath(hint.directory) !== normalizePath(currentDirectory)) return;
+            void fetchGitStatus(currentDirectory, runtimeGit);
+        });
+    }, [currentDirectory, runtimeGit, fetchGitStatus]);
 
     const handleStartReviewFlow = React.useCallback(async (execution: ReviewFlowExecution) => {
         if (!currentSessionId) return;
@@ -3556,7 +3572,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     );
     const selectedDraftProjectIsGitRepo = useIsGitRepo(selectedDraftProjectPath);
     const hasDraftBranchList = Boolean(selectedDraftProjectBranches?.all);
-    const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const fetchBranches = useGitStore((state) => state.fetchBranches);
     const [isDiscoveringDraftBranches, setIsDiscoveringDraftBranches] = React.useState(false);
 
