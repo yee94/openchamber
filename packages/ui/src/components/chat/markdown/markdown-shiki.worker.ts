@@ -51,6 +51,10 @@ self.onmessage = (event: MessageEvent<MarkdownWorkerRequest>) => {
     queue = queue.then(() => highlight(request)).catch(() => {});
     return;
   }
+  if (request.type === 'highlightTokens') {
+    queue = queue.then(() => highlightTokens(request)).catch(() => {});
+    return;
+  }
   queue = queue.then(() => highlightLines(request)).catch(() => {});
 };
 
@@ -78,6 +82,27 @@ async function highlight(request: Extract<MarkdownWorkerRequest, { type: 'highli
       tabindex: false,
     });
     post({ type: 'highlight', id: request.id, html });
+  } catch (error) {
+    post({ type: 'error', id: request.id, message: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+async function highlightTokens(request: Extract<MarkdownWorkerRequest, { type: 'highlightTokens' }>): Promise<void> {
+  try {
+    const instance = await ensureHighlighter();
+    if (request.theme && !instance.getLoadedThemes().includes(request.themeName)) {
+      // Cast: a resolved TextMate theme object from the app theme registry.
+      await instance.loadTheme(request.theme as Parameters<typeof instance.loadTheme>[0]);
+    }
+    const lang = await resolveLanguage(instance, request.lang);
+    const { tokens } = instance.codeToTokens(request.code, {
+      lang: lang as BundledLanguage,
+      theme: request.themeName,
+    });
+    const lines = tokens.map((line) =>
+      line.map((token) => [token.content.length, token.color ?? '', token.fontStyle ?? 0] as [number, string, number]),
+    );
+    post({ type: 'highlightTokens', id: request.id, lines });
   } catch (error) {
     post({ type: 'error', id: request.id, message: error instanceof Error ? error.message : String(error) });
   }

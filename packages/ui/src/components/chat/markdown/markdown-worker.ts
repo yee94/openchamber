@@ -1,5 +1,5 @@
 import MarkdownShikiWorkerUrl from './markdown-shiki.worker.ts?worker&url';
-import type { MarkdownWorkerRequest, MarkdownWorkerResponse } from './markdown-worker-protocol';
+import type { MarkdownTokenRun, MarkdownWorkerRequest, MarkdownWorkerResponse } from './markdown-worker-protocol';
 
 // Main-thread client for the markdown Shiki worker. Moves syntax tokenization
 // off the UI thread: a closed code block is shipped to the worker, which returns
@@ -12,10 +12,14 @@ type PendingResolver = (response: MarkdownWorkerResponse | null) => void;
 let worker: Worker | undefined;
 let nextId = 0;
 const pending = new Map<number, PendingResolver>();
+// Theme names whose full definition we've already shipped to the live worker, so
+// repeat tokenization sends only the name (not the whole theme object) again.
+const sentThemes = new Set<string>();
 
 const failAll = (): void => {
   pending.forEach((resolve) => resolve(null));
   pending.clear();
+  sentThemes.clear();
   worker?.terminate();
   worker = undefined;
 };
@@ -67,4 +71,32 @@ export const highlightCodeInWorker = async (code: string, lang: string): Promise
 export const highlightLinesInWorker = async (code: string, lang: string): Promise<string[] | null> => {
   const response = await request((id) => ({ type: 'highlightLines', id, code, lang }));
   return response?.type === 'highlightLines' ? response.lines : null;
+};
+
+/**
+ * Tokenize `code` with the given resolved TextMate theme and return per-line
+ * styled runs with offsets — for building CodeMirror decorations that match the
+ * Shiki file view exactly. The full theme object is shipped only the first time
+ * a theme name is seen by the live worker. Resolves to `null` on failure.
+ */
+export const highlightTokensInWorker = async (
+  code: string,
+  lang: string,
+  themeName: string,
+  theme: unknown,
+): Promise<MarkdownTokenRun[][] | null> => {
+  const needsTheme = !sentThemes.has(themeName);
+  const response = await request((id) => ({
+    type: 'highlightTokens',
+    id,
+    code,
+    lang,
+    themeName,
+    ...(needsTheme ? { theme } : {}),
+  }));
+  if (response?.type === 'highlightTokens') {
+    sentThemes.add(themeName);
+    return response.lines;
+  }
+  return null;
 };
