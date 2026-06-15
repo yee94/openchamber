@@ -32,7 +32,6 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 interface ToolOutputDialogProps {
     popup: ToolPopupContent;
     onOpenChange: (open: boolean) => void;
-    syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
 }
 
@@ -984,7 +983,7 @@ const MermaidPreviewDialog: React.FC<{
     return createPortal(content, document.body);
 };
 
-const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange, syntaxTheme, isMobile }) => {
+const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange, isMobile }) => {
     const { t } = useI18n();
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const pierreThemeConfig = usePierreThemeConfig();
@@ -1170,7 +1169,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
 
                                 if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
                                     return (
-                                        renderWebSearchOutput(popup.content, syntaxTheme) || (
+                                        renderWebSearchOutput(popup.content) || (
                                             <WorkerHighlightedCode
                                                 language="text"
                                                 code={popup.content}

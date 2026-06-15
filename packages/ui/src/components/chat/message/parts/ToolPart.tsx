@@ -59,7 +59,6 @@ interface ToolPartProps {
     part: ToolPartType;
     isExpanded: boolean;
     onToggle: (toolId: string) => void;
-    syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
     alwaysShowActions?: boolean;
     onContentChange?: (reason?: ContentChangeReason) => void;
@@ -843,7 +842,6 @@ const ToolScrollableTextOutput: React.FC<{
     part: ToolPartType;
     metadata: Record<string, unknown> | undefined;
     input: Record<string, unknown> | undefined;
-    syntaxTheme: { [key: string]: React.CSSProperties };
 }> = ({ output, part, metadata, input }) => {
     const { t } = useI18n();
     const renderedOutput = getToolOutputText(output, part, metadata);
@@ -1594,7 +1592,6 @@ DiffPreview.displayName = 'DiffPreview';
 interface ToolExpandedContentProps {
     part: ToolPartType;
     state: ToolStateUnion;
-    syntaxTheme: { [key: string]: React.CSSProperties };
     currentDirectory: string;
     isExpanded: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
@@ -1603,7 +1600,6 @@ interface ToolExpandedContentProps {
 const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     part,
     state,
-    syntaxTheme,
     currentDirectory,
     isExpanded,
     onShowPopup,
@@ -1853,7 +1849,6 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                     part={part}
                     metadata={metadata}
                     input={input}
-                    syntaxTheme={syntaxTheme}
                 />,
                 {
                     className: part.tool === 'bash' ? 'p-1 rounded-none' : 'p-1',
@@ -1944,7 +1939,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     part,
     isExpanded,
     onToggle,
-    syntaxTheme,
     isMobile,
     onContentChange,
     onShowPopup,
@@ -2844,7 +2838,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                             <ToolExpandedContent
                                 part={part}
                                 state={state}
-                                syntaxTheme={syntaxTheme}
                                 currentDirectory={currentDirectory}
                                 isExpanded={isExpanded}
                                 onShowPopup={onShowPopup}
@@ -2926,7 +2919,6 @@ const ToolPart: React.FC<ToolPartProps> = (props) => {
 export default React.memo(ToolPart, (prev, next) => {
     return areRenderRelevantPartsEqual([prev.part], [next.part])
         && prev.isExpanded === next.isExpanded
-        && prev.syntaxTheme === next.syntaxTheme
         && prev.isMobile === next.isMobile
         && prev.alwaysShowActions === next.alwaysShowActions
         && prev.onContentChange === next.onContentChange

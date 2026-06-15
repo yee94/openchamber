@@ -18,7 +18,6 @@ import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentCont
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -164,7 +163,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
   const runtimeApis = useRuntimeAPIs();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
-  React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
 
   const session = React.useMemo(() => {
     if (!currentSessionId) return null;
