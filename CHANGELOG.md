@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-06-15
+
 - Security: LAN and remote browser access now require a UI password before the server will start.
 - Desktop: if LAN access was enabled without a password, the app now starts locally and asks for a password before turning LAN access back on.
 - Chat: file paths inside fenced code blocks are now clickable, including line and column targets (thanks to @robertoberto).
@@ -12,8 +14,10 @@ All notable changes to this project will be documented in this file.
 - Chat: custom-answer question textareas resize more steadily while typing (thanks to @bigcoder84).
 - Chat/Input: tab-completing a mention no longer changes the selected agent (thanks to @Quat3rnion).
 - Chat/Input: Arrow Up moves the cursor inside multi-line drafts again instead of always opening prompt history.
+- Chat/Mobile: collapsed tool cards now keep their tool icon visible, and reasoning/tool text no longer clips descenders.
 - Files: added dedicated PDF files previews mode.
 - Files: added an optional docked files editor toolbar (thanks to @robertoberto).
+- Files: file operations now use the active workspace directory more consistently (thanks to @tomzx).
 - Sessions: session menus now include a delete action (thanks to @ShogunPanda).
 - Sessions: deleting a parent session no longer brings deleted child sessions back into the sidebar (thanks to @panzeyu2013).
 - Sessions: switching sessions no longer leaves the chat area blank in some cases (thanks to @panzeyu2013).
@@ -32,6 +36,8 @@ All notable changes to this project will be documented in this file.
 - Sessions: new draft sessions now start from the default model and agent instead of inheriting the previous session's selection, and fall back to OpenCode's own `default_agent` (and its model) when no OpenChamber default is set.
 - Startup: cached settings and session state now appear earlier while the live API finishes connecting.
 - Startup: the model and agent now appear faster on the initial draft — config loads under the project key up front (no reload when the draft opens) and the agent list is fetched once instead of per consumer.
+- VSCode: the extension opens faster with cached sessions, models, providers, and projects, then refreshes in the background.
+- VSCode: sessions are now grouped under their workspace, with cleaner session rows and an archived-sessions toggle.
 
 ## [1.12.4] - 2026-06-11
 
