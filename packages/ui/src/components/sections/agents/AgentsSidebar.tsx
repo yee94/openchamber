@@ -181,7 +181,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     }
 
     setIsConfirmActionPending(true);
-    const success = await deleteAgent(confirmActionAgent.name);
+    const success = await deleteAgent(confirmActionAgent.name, (confirmActionAgent as Agent & { scope?: AgentScope }).scope);
 
     if (success) {
       if (confirmActionType === 'delete') {
@@ -276,7 +276,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
     if (success) {
       // Delete old agent
-      const deleteSuccess = await deleteAgent(renameDialogAgent.name);
+      const deleteSuccess = await deleteAgent(renameDialogAgent.name, renameExt.scope);
       if (deleteSuccess) {
         toast.success(`Agent renamed to "${sanitizedName}"`);
         setSelectedAgent(sanitizedName);
