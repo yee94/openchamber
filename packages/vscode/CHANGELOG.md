@@ -1,3 +1,10 @@
+## [Unreleased]
+
+- Chat: code-block highlighting now runs off the main thread, keeping the UI responsive during code-heavy responses.
+- Chat: the context usage indicator now shows as a circular progress ring.
+- Agents: deleting a built-in agent no longer creates a disable override — the agent stays as-is instead of being silently disabled.
+- Agents: deleting an agent now shows an error toast when the definition is missing.
+
 ## [1.13.0] - 2026-06-15
 
 - Startup: the extension opens faster — recent sessions, models, providers, and projects appear instantly from cache and refresh in the background, and the loading screen no longer lingers after the interface is ready.
