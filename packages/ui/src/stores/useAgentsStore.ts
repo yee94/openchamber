@@ -493,8 +493,9 @@ export const useAgentsStore = create<AgentsStore>()(
               set({ selectedAgentName: null });
             }
             return loaded;
-          } catch {
-            return false;
+          } catch (error) {
+            console.error('Failed to delete agent:', error);
+            throw error;
           } finally {
             if (!requiresReload) {
               finishConfigUpdate();
