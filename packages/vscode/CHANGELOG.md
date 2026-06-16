@@ -2,6 +2,7 @@
 
 - Startup: providers and agents now load faster at startup.
 - Chat: pinned welcome starters now appear immediately when a new draft session opens.
+- Chat: inline math delimiters no longer incorrectly treat currency amounts like `$50` as LaTeX math expressions.
 - Chat: code-block highlighting now runs off the main thread, keeping the UI responsive during code-heavy responses.
 - Chat: the context usage indicator now shows as a circular progress ring.
 - Agents: deleting a built-in agent no longer creates a disable override — the agent stays as-is instead of being silently disabled.

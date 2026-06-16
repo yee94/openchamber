@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Chat: inline math delimiters no longer incorrectly treat currency amounts like `$50` as LaTeX math expressions — only `$$...$$` display math and `\(...\)` inline math are recognized.
 - Chat: pinned welcome starters now appear immediately when a new draft session opens, without needing to open the add dialog.
 - Chat: clicking a Mermaid diagram in a chat message now opens a fullscreen pan/zoom preview.
 - Chat: code-block highlighting now runs off the main thread, preventing UI freezes when rendering code-heavy responses.
@@ -18,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - Right Sidebar: switching between sidebar tabs is less likely to re-render unrelated content (thanks to @bashrusakh).
 - Sessions: the app no longer crashes on startup when there are many sessions in folders.
 - Notifications: desktop notifications no longer show duplicate alerts, and reasoning text is excluded from notification bodies.
+- Security: self-hosted instances now include noindex headers and a robots.txt to block search engine crawlers.
+- CLI/Installer: the installer now requires Node.js 22 and handles version detection failures with clearer guidance.
 - Reliability: session list loading handles Windows paths and concurrent requests more steadily, and duplicate health-check URLs are removed from diagnostics.
 
 ## [1.13.0] - 2026-06-15
