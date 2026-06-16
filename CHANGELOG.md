@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-06-17
+
 - Chat: inline math delimiters no longer incorrectly treat currency amounts like `$50` as LaTeX math expressions — only `$$...$$` display math and `\(...\)` inline math are recognized.
 - Chat: pinned welcome starters now appear immediately when a new draft session opens, without needing to open the add dialog.
 - Chat: clicking a Mermaid diagram in a chat message now opens a fullscreen pan/zoom preview.

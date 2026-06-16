@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.13.1] - 2026-06-17
 
 - Startup: providers and agents now load faster at startup.
 - Chat: pinned welcome starters now appear immediately when a new draft session opens.
