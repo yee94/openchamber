@@ -106,6 +106,18 @@ mock.module('@/stores/utils/safeStorage', () => ({
   getSafeStorage: () => makeStorage(),
 }));
 
+mock.module('@/stores/useProjectsStore', () => ({
+  useProjectsStore: {
+    getState: () => ({
+      activeProjectId: 'project',
+      projects: [
+        { id: 'project', path: DIRECTORY, label: 'Project' },
+        { id: 'other', path: OTHER_DIRECTORY, label: 'Other' },
+      ],
+    }),
+  },
+}));
+
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: {
     setDirectory: mock(() => undefined),
@@ -124,6 +136,11 @@ mock.module('@/lib/opencode/client', () => ({
     getProviders: mock(async () => {
       getProvidersCalls += 1;
       const id = liveProviderIdsByDirectory.get(currentFetchDirectory ?? '') ?? liveProviderId;
+      return { providers: [providerResponse(id, `${id}-model`, liveProviderVariants)], default: { default: id } };
+    }),
+    getProvidersForConfig: mock(async (directory?: string | null) => {
+      getProvidersCalls += 1;
+      const id = liveProviderIdsByDirectory.get(directory ?? '') ?? liveProviderId;
       return { providers: [providerResponse(id, `${id}-model`, liveProviderVariants)], default: { default: id } };
     }),
     listAgents: mock(async () => []),
@@ -286,7 +303,6 @@ describe('useConfigStore provider persistence', () => {
 
     const state = useConfigStore.getState();
     expect(getProvidersCalls).toBe(2);
-    expect(new Set(withDirectoryCalls)).toEqual(new Set([DIRECTORY, OTHER_DIRECTORY]));
     expect(state.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['active-live']);
     expect(state.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['inactive-live']);
     expect(state.directoryScoped[OTHER_DIRECTORY]?.defaultProviders).toEqual({ default: 'inactive-live' });

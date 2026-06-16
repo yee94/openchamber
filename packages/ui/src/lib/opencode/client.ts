@@ -229,6 +229,7 @@ class OpencodeService {
   private currentDirectory: string | undefined = undefined;
   private directoryContextQueue: Promise<void> = Promise.resolve();
   private listDirectoryInFlight: Map<string, Promise<FilesystemEntry[]>> = new Map();
+  private configProvidersInFlight: Map<string, Promise<{ providers: Provider[]; default: { [key: string]: string } }>> = new Map();
   private listAgentsInFlight: Map<string, Promise<Agent[]>> = new Map();
   private listDirectoryCache: Map<string, { entries: FilesystemEntry[]; expiresAt: number }> = new Map();
 
@@ -253,6 +254,8 @@ class OpencodeService {
     this.client = createRuntimeOpencodeClient({ baseUrl: this.baseUrl });
     this.scopedClients.clear();
     this.listDirectoryInFlight.clear();
+    this.configProvidersInFlight.clear();
+    this.listAgentsInFlight.clear();
     this.listDirectoryCache.clear();
   }
 
@@ -1263,11 +1266,34 @@ class OpencodeService {
     providers: Provider[];
     default: { [key: string]: string };
   }> {
-    const response = await this.client.config.providers(
-      this.currentDirectory ? { directory: this.currentDirectory } : undefined
-    );
-    if (!response.data) throw new Error('Failed to get providers');
-    return response.data;
+    return this.getProvidersForConfig(this.currentDirectory);
+  }
+
+  async getProvidersForConfig(directory?: string | null): Promise<{
+    providers: Provider[];
+    default: { [key: string]: string };
+  }> {
+    const effectiveDirectory = this.normalizeCandidatePath(directory) ?? directory ?? this.currentDirectory ?? undefined;
+    const key = effectiveDirectory ?? '';
+
+    const existing = this.configProvidersInFlight.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const request = (async () => {
+      const response = await this.client.config.providers(
+        effectiveDirectory ? { directory: effectiveDirectory } : undefined,
+      );
+      return unwrapSdkData(response, 'config.providers');
+    })();
+
+    this.configProvidersInFlight.set(key, request);
+    try {
+      return await request;
+    } finally {
+      this.configProvidersInFlight.delete(key);
+    }
   }
 
   // App Management - using config endpoint since /app doesn't exist in this version
@@ -1308,13 +1334,29 @@ class OpencodeService {
     }
 
     const request = (async () => {
-      const response = await this.client.app.agents(
-        effectiveDirectory ? { directory: effectiveDirectory } : undefined
-      );
-      if (response.error) {
-        throw new Error(`app.agents failed: ${formatSdkError(response.error)}`);
+      const params = effectiveDirectory ? { directory: effectiveDirectory } : undefined;
+      const response = await this.client.app.agents(params);
+      if (!response.error && Array.isArray(response.data) && response.data.length > 0) {
+        return response.data;
       }
-      return response.data || [];
+
+      // SDK gap / endpoint drift: current OpenCode exposes the authoritative
+      // agent list at /agent, while app.agents can be empty on some runtimes.
+      const fallbackResponse = await runtimeFetch('/api/agent', {
+        ...(effectiveDirectory ? { query: { directory: effectiveDirectory } } : {}),
+      });
+      if (!fallbackResponse.ok) {
+        if (response.error) {
+          throw new Error(`app.agents failed${response.response?.status ? ` (${response.response.status})` : ''}: ${formatSdkError(response.error)}`);
+        }
+        throw new Error(`agent.list failed (${fallbackResponse.status})`);
+      }
+
+      const fallbackData = await fallbackResponse.json().catch(() => null) as unknown;
+      if (!Array.isArray(fallbackData)) {
+        throw new Error('agent.list failed: invalid response');
+      }
+      return fallbackData as Agent[];
     })();
 
     this.listAgentsInFlight.set(key, request);

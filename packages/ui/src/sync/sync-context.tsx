@@ -1660,7 +1660,6 @@ export function SyncProvider(props: {
             global: {
               config: globalState.config,
               projects: globalState.projects,
-              providers: globalState.providers,
             },
             loadSessions: (dir) => retry(async () => {
               const rootSessions = (await listGlobalSessionPages(props.sdk, {

@@ -734,6 +734,34 @@ const rememberWorktreeProject = (worktree: string, project: string): void => {
     }
 };
 
+const normalizeConfigPath = (value: string | null | undefined): string | null => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (!trimmed) return null;
+    return trimmed.replace(/\\/g, '/').replace(/\/+$/, '') || '/';
+};
+
+const getKnownProjectDirectories = (): string[] => {
+    try {
+        return useProjectsStore.getState().projects
+            .map((project) => normalizeConfigPath(project.path))
+            .filter((path): path is string => Boolean(path));
+    } catch {
+        return [];
+    }
+};
+
+const getFallbackProjectDirectory = (): string | null => {
+    try {
+        const { projects, activeProjectId } = useProjectsStore.getState();
+        const active = activeProjectId
+            ? projects.find((project) => project.id === activeProjectId)
+            : null;
+        return normalizeConfigPath(active?.path ?? projects[0]?.path ?? null);
+    } catch {
+        return null;
+    }
+};
+
 /**
  * Map a directory to its CONFIG scope. Providers/agents/defaults are defined at
  * the PROJECT level (opencode.json), so a worktree must inherit its parent
@@ -742,11 +770,14 @@ const rememberWorktreeProject = (worktree: string, project: string): void => {
  * a known worktree, else the directory unchanged.
  */
 const resolveConfigDirectory = (directory: string | null | undefined): string | null => {
-    const dir = typeof directory === 'string' && directory.trim().length > 0 ? directory : null;
-    if (!dir) return dir;
-    // 1. Persisted mapping — resolves synchronously at startup, before the async
-    //    git worktree discovery has populated the runtime map.
-    const cached = getWorktreeProjectMap()[dir];
+    const dir = normalizeConfigPath(directory);
+    const projects = getKnownProjectDirectories();
+    if (!dir) return null;
+    if (projects.includes(dir)) return dir;
+
+    // 1. Persisted mapping — resolves synchronously when the async worktree
+    //    discovery has not populated the runtime map yet.
+    const cached = normalizeConfigPath(getWorktreeProjectMap()[dir]);
     if (cached) return cached;
     // 2. Live resolution via projects + discovered worktree map; cache the hit.
     try {
@@ -755,14 +786,15 @@ const resolveConfigDirectory = (directory: string | null | undefined): string | 
             useSessionUIStore.getState().availableWorktreesByProject,
             dir,
         );
-        if (project?.path && project.path !== dir) {
-            rememberWorktreeProject(dir, project.path);
-            return project.path;
+        const projectPath = normalizeConfigPath(project?.path ?? null);
+        if (projectPath && projectPath !== dir) {
+            rememberWorktreeProject(dir, projectPath);
+            return projectPath;
         }
     } catch {
-        return dir;
+        return null;
     }
-    return dir;
+    return null;
 };
 
 const toConfigDirectoryKey = (directory: string | null | undefined): string =>
@@ -775,6 +807,7 @@ const toConfigDirectoryKey = (directory: string | null | undefined): string =>
 const _providersLoadedAt = new Map<string, number>();
 const _agentsLoadedAt = new Map<string, number>();
 const CONFIG_REFRESH_TTL_MS = 30_000;
+const PROJECT_CONFIG_PREWARM_DELAY_MS = 1_000;
 const isConfigFresh = (loadedAt: Map<string, number>, key: string): boolean => {
     const at = loadedAt.get(key);
     return typeof at === 'number' && Date.now() - at < CONFIG_REFRESH_TTL_MS;
@@ -945,6 +978,7 @@ interface ConfigStore {
     probeConnection: (options?: { timeoutMs?: number }) => Promise<boolean>;
     checkConnection: () => Promise<boolean>;
     initializeApp: () => Promise<void>;
+    prewarmProjectConfigs: (initialDirectory?: string | null) => Promise<void>;
     getCurrentProvider: () => ProviderWithModelList | undefined;
     getCurrentModel: () => ProviderModel | undefined;
     getCurrentAgent: () => Agent | undefined;
@@ -1237,7 +1271,12 @@ export const useConfigStore = create<ConfigStore>()(
                     // active key + snapshot key always match and stay project-scoped.
                     // Everything below operates on this key unchanged; the OpenCode
                     // working directory (opencodeClient.getDirectory()) is separate.
-                    const directoryKey = toConfigDirectoryKey(directory);
+                    const configDirectory = resolveConfigDirectory(directory);
+                    if (!configDirectory) {
+                        markStartupTrace('activateDirectory:skippedUnknownDirectory', { directory });
+                        return;
+                    }
+                    const directoryKey = toDirectoryKey(configDirectory);
                     let snapshotHadProviders = false;
                     let snapshotHadAgents = false;
 
@@ -1360,6 +1399,10 @@ export const useConfigStore = create<ConfigStore>()(
                     // Providers are project-scoped: resolve a worktree to its project
                     // so it reuses one shared snapshot instead of its own.
                     const configDirectory = resolveConfigDirectory(requestedDirectory);
+                    if (!configDirectory) {
+                        markStartupTrace('loadProviders:skippedUnknownDirectory', { requestedDirectory, source: options?.source ?? 'unknown' });
+                        return;
+                    }
                     const effectiveDirectory = configDirectory ?? opencodeClient.getDirectory() ?? null;
                     const directoryKey = toDirectoryKey(configDirectory);
                     const source = options?.source ?? 'unknown';
@@ -1388,10 +1431,7 @@ export const useConfigStore = create<ConfigStore>()(
                             );
                             const apiResult = await measureStartupTrace(
                                 'loadProviders:api',
-                                () => opencodeClient.withDirectory(
-                                    fromDirectoryKey(directoryKey),
-                                    () => opencodeClient.getProviders()
-                                ),
+                                () => opencodeClient.getProvidersForConfig(fromDirectoryKey(directoryKey)),
                                 { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
                             );
                             const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : [];
@@ -1779,6 +1819,10 @@ export const useConfigStore = create<ConfigStore>()(
                     // Agents are project-scoped: resolve a worktree to its project
                     // so it reuses one shared snapshot instead of its own.
                     const configDirectory = resolveConfigDirectory(requestedDirectory);
+                    if (!configDirectory) {
+                        markStartupTrace('loadAgents:skippedUnknownDirectory', { requestedDirectory, source: options?.source ?? 'unknown' });
+                        return false;
+                    }
                     const effectiveDirectory = configDirectory ?? opencodeClient.getDirectory() ?? null;
                     const directoryKey = toDirectoryKey(configDirectory);
                     const source = options?.source ?? 'unknown';
@@ -2748,7 +2792,21 @@ export const useConfigStore = create<ConfigStore>()(
                                 useSessionUIStore.getState().availableWorktreesByProject,
                                 initialDirectory ?? null,
                             );
-                            const configDirectory = resolvedProject?.path ?? initialDirectory ?? null;
+                            const resolvedInitialDirectory = resolveConfigDirectory(resolvedProject?.path ?? initialDirectory ?? null);
+                            const configDirectory = resolvedInitialDirectory ?? getFallbackProjectDirectory();
+                            if (!configDirectory) {
+                                markStartupTrace('initializeApp:noProjectConfigDirectory');
+                                set({ isInitialized: true, isConnected: true, hasEverConnected: true, connectionPhase: "connected" });
+                                return;
+                            }
+                            if (!resolvedInitialDirectory && initialDirectory !== configDirectory) {
+                                markStartupTrace('initializeApp:normalizedUnknownDirectoryToProject', {
+                                    initialDirectory,
+                                    configDirectory,
+                                });
+                                opencodeClient.setDirectory(configDirectory);
+                                useDirectoryStore.getState().setDirectory(configDirectory, { showOverlay: false });
+                            }
                             const configDirectoryKey = toDirectoryKey(configDirectory);
                             if (get().activeDirectoryKey !== configDirectoryKey) {
                                 set({ activeDirectoryKey: configDirectoryKey });
@@ -2761,6 +2819,7 @@ export const useConfigStore = create<ConfigStore>()(
                             ]);
 
                             set({ isInitialized: true, isConnected: true, hasEverConnected: true, connectionPhase: "connected" });
+                            void get().prewarmProjectConfigs(configDirectory);
                             const initEnded = typeof performance !== 'undefined' ? performance.now() : Date.now();
                             markStartupTrace('initializeApp:end', {
                                 durationMs: Math.round(initEnded - initStarted),
@@ -2784,6 +2843,55 @@ export const useConfigStore = create<ConfigStore>()(
 
                     _initializeAppInFlight = run;
                     return run;
+                },
+
+                prewarmProjectConfigs: async (initialDirectory?: string | null) => {
+                    if (!get().isConnected) {
+                        return;
+                    }
+
+                    const initialKey = toConfigDirectoryKey(initialDirectory ?? fromDirectoryKey(get().activeDirectoryKey));
+                    const projectDirectories = useProjectsStore.getState().projects
+                        .map((project) => project.path)
+                        .filter((path): path is string => typeof path === 'string' && path.trim().length > 0);
+                    const seen = new Set<string>([initialKey]);
+                    const queuedDirectories: string[] = [];
+
+                    for (const directory of projectDirectories) {
+                        const directoryKey = toConfigDirectoryKey(directory);
+                        if (seen.has(directoryKey)) {
+                            continue;
+                        }
+                        seen.add(directoryKey);
+
+                        const snapshot = get().directoryScoped[directoryKey];
+                        if (snapshot?.providers.length && snapshot.agents.length) {
+                            continue;
+                        }
+                        const scopedDirectory = fromDirectoryKey(directoryKey);
+                        if (scopedDirectory) {
+                            queuedDirectories.push(scopedDirectory);
+                        }
+                    }
+
+                    for (const directory of queuedDirectories) {
+                        await sleep(PROJECT_CONFIG_PREWARM_DELAY_MS);
+                        if (!get().isConnected) {
+                            return;
+                        }
+                        const directoryKey = toConfigDirectoryKey(directory);
+                        const snapshot = get().directoryScoped[directoryKey];
+                        const tasks: Promise<unknown>[] = [];
+                        if (!snapshot?.providers.length) {
+                            tasks.push(get().loadProviders({ directory, source: 'projectConfigPrewarm' }));
+                        }
+                        if (!snapshot?.agents.length) {
+                            tasks.push(get().loadAgents({ directory, source: 'projectConfigPrewarm' }));
+                        }
+                        if (tasks.length > 0) {
+                            await Promise.allSettled(tasks);
+                        }
+                    }
                 },
 
                 getCurrentProvider: () => {
