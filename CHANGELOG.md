@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Files: HTML, image, and PDF previews no longer cycle to "authentication required" every ~50 seconds. The short-lived URL auth token is now refreshed proactively before it expires (centrally, only while a preview is open), and previews remount only when the token actually changes.
 - Chat: adjacent paragraphs in assistant messages now render with a visible gap instead of collapsing into a single visual line. Reasoning and tool-card markdown stay compact, and messages don't gain trailing space at the bottom.
 
 ## [1.13.1] - 2026-06-17
