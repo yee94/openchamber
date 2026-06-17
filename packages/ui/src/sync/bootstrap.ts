@@ -2,6 +2,7 @@ import type { OpencodeClient, PermissionRequest, Project, QuestionRequest } from
 import { retry } from "./retry"
 import type { GlobalState, State } from "./types"
 import { runtimeFetch } from "../lib/runtime-fetch"
+import { emitSyncConfigChanged } from "./sync-refs"
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
@@ -135,7 +136,9 @@ export async function bootstrapDirectory(input: {
   const seededProject = projectID(directory, g.projects)
   if (seededProject) set({ project: seededProject })
   if (Object.keys(state.config ?? {}).length === 0 && Object.keys(g.config ?? {}).length > 0) {
-    set({ config: g.config as State["config"] })
+    const seededConfig = g.config as State["config"]
+    set({ config: seededConfig })
+    emitSyncConfigChanged(directory, seededConfig)
   }
   if (loading) set({ status: "partial" })
 
@@ -147,7 +150,11 @@ export async function bootstrapDirectory(input: {
     seededProject
       ? Promise.resolve()
       : retry(() => sdk.project.current().then((x) => set({ project: unwrap(x, "project.current").id }))),
-    retry(() => sdk.config.get().then((x) => set({ config: unwrap(x, "config.get") }))),
+    retry(() => sdk.config.get().then((x) => {
+      const config = unwrap(x, "config.get")
+      set({ config })
+      emitSyncConfigChanged(directory, config)
+    })),
     retry(() =>
       sdk.path.get().then((x) => {
         const data = unwrap(x, "path.get")
