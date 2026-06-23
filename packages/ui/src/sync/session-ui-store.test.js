@@ -246,13 +246,13 @@ describe('openNewSessionDraft project binding', () => {
     useDirectoryStore.getState().setDirectory(projectB.path, { showOverlay: false });
   });
 
-  test('binds draft to active project when current directory differs', () => {
+  test('keeps implicit draft on current directory when active project differs', () => {
     useSessionUIStore.getState().openNewSessionDraft();
     const draft = useSessionUIStore.getState().newSessionDraft;
 
     expect(draft.open).toBe(true);
-    expect(draft.selectedProjectId).toBe(projectA.id);
-    expect(draft.directoryOverride).toBe(projectA.path);
+    expect(draft.selectedProjectId).toBe(projectB.id);
+    expect(draft.directoryOverride).toBe(projectB.path);
   });
 
   test('respects explicit directoryOverride over active project', () => {
