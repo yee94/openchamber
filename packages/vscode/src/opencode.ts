@@ -73,7 +73,7 @@ function generateSecureOpenCodePassword(): string {
 }
 
 function buildOpenCodeAuthHeader(password: string): string {
-  const username = process.env.OPENCODE_SERVER_USERNAME || 'opencode';
+  const username = process.env.OPENCODE_SERVER_USERNAME?.trim() || 'opencode';
   return `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`;
 }
 
