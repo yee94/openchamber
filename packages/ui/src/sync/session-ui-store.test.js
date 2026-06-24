@@ -255,6 +255,17 @@ describe('openNewSessionDraft project binding', () => {
     expect(draft.directoryOverride).toBe(projectB.path);
   });
 
+  test('does not attach active project when current directory is unmatched', () => {
+    useDirectoryStore.getState().setDirectory('/external/worktree', { showOverlay: false });
+
+    useSessionUIStore.getState().openNewSessionDraft();
+    const draft = useSessionUIStore.getState().newSessionDraft;
+
+    expect(draft.open).toBe(true);
+    expect(draft.selectedProjectId).toBeNull();
+    expect(draft.directoryOverride).toBe('/external/worktree');
+  });
+
   test('respects explicit directoryOverride over active project', () => {
     useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/projects/beta/src' });
     const draft = useSessionUIStore.getState().newSessionDraft;
