@@ -504,8 +504,8 @@ export const AgentsPage: React.FC = () => {
       const modeValue = agentDraft.mode || 'subagent';
       const modelValue = agentDraft.model || '';
       const variantValue = agentDraft.variant || '';
-      const temperatureValue = agentDraft.temperature;
-      const topPValue = agentDraft.top_p;
+      const temperatureValue = agentDraft.temperature ?? undefined;
+      const topPValue = agentDraft.top_p ?? undefined;
       const promptValue = agentDraft.prompt || '';
 
       setDraftName(draftNameValue);
@@ -628,8 +628,8 @@ export const AgentsPage: React.FC = () => {
         mode,
         model: trimmedModel === '' ? null : trimmedModel,
         variant: trimmedVariant === '' ? null : trimmedVariant || undefined,
-        temperature,
-        top_p: topP,
+        temperature: temperature ?? null,
+        top_p: topP ?? null,
         prompt: trimmedPrompt || (isNewAgent ? undefined : null),
         permission: permissionConfig,
         scope: isNewAgent ? draftScope : undefined,
