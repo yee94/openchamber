@@ -1126,19 +1126,19 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
   const resolvedDir = directory ?? dir()
   if (!resolvedDir) return
 
-  const s = sdk()
-  const store = directory
-    ? dirStoreForDirectory(directory)
-    : dirStore()
-
-  if (getSessionMaterializationStatus(store.getState(), sessionID).renderable) return
-
   const loadingKey = `${resolvedDir}:${sessionID}`
   if (FETCH_MESSAGES_LOADING.has(loadingKey)) return
 
   FETCH_MESSAGES_LOADING.add(loadingKey)
 
   try {
+    const s = sdk()
+    const store = directory
+      ? dirStoreForDirectory(directory)
+      : dirStore()
+
+    if (getSessionMaterializationStatus(store.getState(), sessionID).renderable) return
+
     const result = await retry(async () => {
       const response = await s.session.messages({
         sessionID,
