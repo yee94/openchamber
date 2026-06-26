@@ -1091,6 +1091,8 @@ export const settingsDict = {
   'settings.openchamber.worktrees.setup.commandPlaceholder': '例如：bun install',
   'settings.openchamber.worktrees.setup.removeCommandAria': '移除命令',
   'settings.openchamber.worktrees.setup.addCommand': '添加命令',
+  'settings.openchamber.worktrees.setup.waitForCommands': '创建或发送会话前等待初始化命令完成',
+  'settings.openchamber.worktrees.setup.waitForCommandsAria': '创建或发送会话前等待 Worktree 初始化命令完成',
   'settings.openchamber.worktrees.list.title': '现有工作树',
   'settings.openchamber.worktrees.list.tooltip': '工作树位于仓库外部（由 OpenCode 管理）。删除工作树也会删除关联会话。',
   'settings.openchamber.worktrees.list.loading': '正在加载工作树...',

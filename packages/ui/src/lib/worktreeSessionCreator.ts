@@ -14,7 +14,7 @@ import { checkIsGitRepository, previewGitWorktree } from '@/lib/gitApi';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
-import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import { getWorktreeSetupCommands, getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
 import {
   removeProjectWorktree,
   type ProjectRef,
@@ -25,8 +25,15 @@ import {
   rejectPendingDraftWorktreeRequest,
   resolvePendingDraftWorktreeRequest,
 } from '@/lib/worktrees/pendingDraftWorktree';
+import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
 
 const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '') || value;
+
+const waitForWorktreeBootstrapIfEnabled = async (project: ProjectRef, directory: string): Promise<void> => {
+  if (await getWorktreeSetupWaitEnabled(project)) {
+    await waitForWorktreeBootstrap(directory);
+  }
+};
 
 const resolveProjectRef = (directory: string): ProjectRef | null => {
   const normalized = normalizePath(directory);
@@ -417,6 +424,8 @@ export async function createWorktreeSessionForBranch(
       kind,
     };
 
+    await waitForWorktreeBootstrapIfEnabled(projectRef, metadata.path);
+
     // Create the session
     const sessionStore = useSessionUIStore.getState();
     const session = await sessionStore.createSession(undefined, metadata.path);
@@ -519,6 +528,8 @@ export async function createWorktreeSessionForNewBranch(
         createdFromBranch: options?.createdFromBranch || rootBranch || start,
         kind,
       };
+
+      await waitForWorktreeBootstrapIfEnabled(projectRef, metadata.path);
 
       const sessionStore = useSessionUIStore.getState();
       const session = await sessionStore.createSession(undefined, metadata.path);

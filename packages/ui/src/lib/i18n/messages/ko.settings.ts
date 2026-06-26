@@ -1091,6 +1091,8 @@ export const settingsDict = {
   'settings.openchamber.worktrees.setup.commandPlaceholder': '예: bun install',
   'settings.openchamber.worktrees.setup.removeCommandAria': '명령어 제거',
   'settings.openchamber.worktrees.setup.addCommand': '명령어 추가',
+  'settings.openchamber.worktrees.setup.waitForCommands': '세션을 만들거나 보내기 전에 설정 명령이 끝날 때까지 기다리기',
+  'settings.openchamber.worktrees.setup.waitForCommandsAria': '세션을 만들거나 보내기 전에 Worktree 설정 명령이 끝날 때까지 기다리기',
   'settings.openchamber.worktrees.list.title': '기존 worktree',
   'settings.openchamber.worktrees.list.tooltip': 'Worktree는 repo 외부에 있습니다(OpenCode 관리). worktree를 삭제하면 연결된 세션도 제거됩니다.',
   'settings.openchamber.worktrees.list.loading': 'worktree 로딩 중...',

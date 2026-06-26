@@ -374,6 +374,12 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['worktree', 'branch', 'repository'],
   },
   {
+    id: 'projects.worktree.setup.wait',
+    page: 'projects',
+    titleKey: 'settings.openchamber.worktrees.setup.waitForCommands',
+    keywords: ['worktree', 'setup commands', 'bootstrap', 'wait'],
+  },
+  {
     id: 'remote-instances.client-auth',
     page: 'remote-instances',
     titleKey: 'settings.remoteInstances.clientAuth.title',

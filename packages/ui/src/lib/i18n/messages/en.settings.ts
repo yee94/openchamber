@@ -1124,6 +1124,8 @@ export const settingsDict = {
   'settings.openchamber.worktrees.setup.commandPlaceholder': 'e.g., bun install',
   'settings.openchamber.worktrees.setup.removeCommandAria': 'Remove command',
   'settings.openchamber.worktrees.setup.addCommand': 'Add command',
+  'settings.openchamber.worktrees.setup.waitForCommands': 'Wait for setup commands before creating or sending a session',
+  'settings.openchamber.worktrees.setup.waitForCommandsAria': 'Wait for Worktree setup commands before creating or sending a session',
   'settings.openchamber.worktrees.list.title': 'Existing worktrees',
   'settings.openchamber.worktrees.list.tooltip': 'Worktrees live outside the repo (OpenCode-managed). Deleting a worktree also removes linked sessions.',
   'settings.openchamber.worktrees.list.loading': 'Loading worktrees...',

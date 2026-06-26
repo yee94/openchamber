@@ -31,6 +31,7 @@ import { flattenAssistantTextParts } from "@/lib/messages/messageText"
 import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
+import { getWorktreeSetupWaitEnabled } from "@/lib/openchamberConfig"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
 import {
   getSyncSessions,
@@ -416,6 +417,24 @@ type MaterializedDraftSession = {
   syntheticParts?: SyntheticContextPart[]
 }
 
+const resolveProjectRefForWorktreeDirectory = (directory: string | null, projectId?: string | null): { id: string; path: string } | null => {
+  const projectsState = useProjectsStore.getState()
+  if (projectId) {
+    const project = projectsState.projects.find((entry) => entry.id === projectId)
+    if (project?.path) return { id: project.id, path: project.path }
+  }
+  const resolved = resolveProjectForSessionDirectory(projectsState.projects, useSessionUIStore.getState().availableWorktreesByProject, directory)
+  return resolved?.path ? { id: resolved.id, path: resolved.path } : null
+}
+
+const waitForWorktreeBootstrapIfConfigured = async (directory: string | null, projectId?: string | null): Promise<void> => {
+  if (!directory) return
+  const project = resolveProjectRefForWorktreeDirectory(directory, projectId)
+  if (project && await getWorktreeSetupWaitEnabled(project)) {
+    await waitForWorktreeBootstrap(directory)
+  }
+}
+
 export async function materializeOpenDraftSession(selection: {
   providerID: string
   modelID: string
@@ -437,9 +456,7 @@ export async function materializeOpenDraftSession(selection: {
     store.resolvePendingDraftWorktreeTarget(draft.pendingWorktreeRequestId, draftDirectoryOverride)
   }
 
-  if (draftDirectoryOverride) {
-    await waitForWorktreeBootstrap(draftDirectoryOverride)
-  }
+  await waitForWorktreeBootstrapIfConfigured(draftDirectoryOverride, draftProjectId)
 
   const created = await store.createSession(draft.title, draftDirectoryOverride, draft.parentID ?? null)
   if (!created?.id) throw new Error("Failed to create session")
@@ -1371,6 +1388,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         returnAfterDirectoryCreated: true,
       })
       sessionDirectory = normalizePath(createdWorktree.path)
+      if (!sessionDirectory) {
+        throw new Error("Worktree create missing name/path")
+      }
+      if (await configModule.getWorktreeSetupWaitEnabled(createdWorktreeProject)) {
+        await waitForWorktreeBootstrap(sessionDirectory)
+      }
     }
 
     const session = await get().createSession(undefined, sessionDirectory || null, null)
