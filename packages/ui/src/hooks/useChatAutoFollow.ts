@@ -204,6 +204,21 @@ export const useChatAutoFollow = ({
         const current = container.scrollTop;
         const delta = target - current;
 
+        // A delta larger than a full viewport is a DISCRETE jump (late history
+        // measurement, session entry, a big block rendering in one commit) — not
+        // incremental streaming growth. Easing it produces a visible smooth scroll
+        // from a mid position to the bottom, which felt inconsistent when entering
+        // historical sessions. Snap such jumps; only ease small, streaming-sized
+        // deltas below.
+        if (Math.abs(delta) > container.clientHeight) {
+            markProgrammaticWrite();
+            container.scrollTop = target;
+            lastScrollTopRef.current = target;
+            settledFramesRef.current = 0;
+            followRafRef.current = window.requestAnimationFrame(tickFollow);
+            return;
+        }
+
         if (Math.abs(delta) <= SETTLE_EPSILON) {
             if (current !== target) {
                 markProgrammaticWrite();
@@ -230,17 +245,20 @@ export const useChatAutoFollow = ({
     const startFollowLoop = React.useCallback(() => {
         if (typeof window === 'undefined') return;
         if (stateRef.current !== 'following') return;
-        // Single-writer invariant: never let the easing follow loop run alongside
-        // the instant settle burst. They both write scrollTop every frame but aim
-        // at different positions (the burst snaps to the exact bottom, this loop
-        // eases toward it), so concurrently they fight frame-to-frame and produce
-        // the visible up/down jiggle during pinned content growth and sends.
-        stopSettleBurst();
+        // Single-writer invariant, asymmetric on purpose: the settle burst is the
+        // AUTHORITATIVE instant pin (session restore / goToBottom 'instant'). While
+        // it is snapping to the bottom, YIELD — never preempt it with the easing
+        // follow loop. Preempting it let a content-measurement ResizeObserver tick
+        // downgrade an instant restore into a visible smooth scroll from a mid
+        // position when entering a historical session. When the burst ends, the
+        // next content kick starts the follow loop. (startSettleBurst still stops
+        // this loop, so the two never write scrollTop in the same frame.)
+        if (settleBurstRafRef.current !== null) return;
         if (followRafRef.current !== null) return;
         settledFramesRef.current = 0;
         setIsFollowingProgrammatically(true);
         followRafRef.current = window.requestAnimationFrame(tickFollow);
-    }, [stopSettleBurst, tickFollow]);
+    }, [tickFollow]);
 
     const writeScrollTopInstant = React.useCallback((target: number) => {
         const container = scrollRef.current;
@@ -405,11 +423,14 @@ export const useChatAutoFollow = ({
         setStateValue('following');
         lastUserReleaseAtRef.current = 0;
         const target = Math.max(0, container.scrollHeight - container.clientHeight);
+        // Mirror goToBottom('instant'): jump to the bottom now, then hold it with the
+        // settle burst while late history content measures in. Do NOT also start the
+        // easing follow loop here — that is what produced the smooth scroll-from-mid
+        // position on session entry.
         writeScrollTopInstant(target);
-        startFollowLoop();
         startSettleBurst();
         return false;
-    }, [setStateValue, startFollowLoop, startSettleBurst, writeScrollTopInstant]);
+    }, [setStateValue, startSettleBurst, writeScrollTopInstant]);
 
     React.useEffect(() => {
         if (!currentSessionId || currentSessionId === lastSessionIdRef.current) {
