@@ -22,14 +22,6 @@ export interface ModelSelectionWithId {
   instanceId: string;
 }
 
-/** Model selection without instanceId (for external use) */
-export interface ModelSelection {
-  providerID: string;
-  modelID: string;
-  displayName?: string;
-  variant?: string;
-}
-
 // eslint-disable-next-line react-refresh/only-export-components -- Utility is tightly coupled with ModelMultiSelect
 export const generateInstanceId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -39,7 +31,7 @@ export const generateInstanceId = (): string => {
  * Model selection chip with remove button.
  * Shows instance index (e.g., "(2)") when same model is selected multiple times.
  */
-export const ModelChip: React.FC<{
+const ModelChip: React.FC<{
   model: ModelSelectionWithId;
   instanceIndex: number;
   totalSameModel: number;

@@ -2,7 +2,7 @@ import type { I18nKey } from '@/lib/i18n/store';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 
-export interface SettingsSearchItem {
+interface SettingsSearchItem {
   id: string;
   page: SettingsPageSlug;
   titleKey: I18nKey;
@@ -17,12 +17,12 @@ export interface SettingsSearchResult extends SettingsSearchItem {
   pageTitle: string;
 }
 
-export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
+interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
   isMobile: boolean;
   isDesktopLocalOrigin: boolean;
 }
 
-export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
+const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
     id: 'appearance.language',
     page: 'appearance',

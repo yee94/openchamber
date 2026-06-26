@@ -20,7 +20,7 @@ import { getModelDisplayName as getSharedModelDisplayName } from '@/lib/modelDis
 import { cn } from '@/lib/utils';
 import type { ModelMetadata } from '@/types';
 
-export type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
+type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
 
 export type ModelPickerProvider = {
   id: string;
@@ -34,7 +34,7 @@ export type ModelPickerEntry = {
   modelID: string;
 };
 
-export type ModelPickerFavoriteEntry = ModelPickerEntry;
+type ModelPickerFavoriteEntry = ModelPickerEntry;
 
 type HiddenModel = { providerID: string; modelID: string };
 

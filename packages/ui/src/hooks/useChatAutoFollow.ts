@@ -4,7 +4,7 @@ import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { createScrollSpy } from '@/components/chat/lib/scroll/scrollSpy';
 import { useViewportStore } from '@/sync/viewport-store';
 
-export type AutoFollowState = 'following' | 'released';
+type AutoFollowState = 'following' | 'released';
 
 export type ContentChangeReason = 'text' | 'structural' | 'permission';
 
