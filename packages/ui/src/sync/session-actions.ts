@@ -629,6 +629,8 @@ export async function optimisticSend(input: {
   directory?: string | null
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
   onOptimisticInsert?: () => void
+  onMessageID?: (messageID: string) => void
+  beforeOptimisticInsert?: () => void
   /** The actual API call — receives the optimistic messageID so the server can use the same ID */
   send: (messageID: string) => Promise<void>
 }): Promise<void> {
@@ -637,10 +639,12 @@ export async function optimisticSend(input: {
   }
 
   await waitForConnectionOrThrow()
+  input.beforeOptimisticInsert?.()
 
   const targetDirectory = input.directory ?? dir()
   const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
   const messageID = ascendingId("msg")
+  input.onMessageID?.(messageID)
   const textPartId = ascendingId("prt")
 
   const optimisticParts: Part[] = [

@@ -1297,6 +1297,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 variant: execution.variant || undefined,
                 generateHandoff: execution.generateHandoff,
                 returnAfterHandoffRequest: execution.generateHandoff,
+                autoReview: execution.autoReview,
             });
             setReviewDialogOpen(false);
         } catch (error) {
