@@ -102,16 +102,10 @@ function getRunDir() {
 
 export {
   getDataDir,
-  getLogsDir,
-  getSettingsFilePath,
   readDesktopLocalPortFromSettings,
   ensureLogsDir,
   getLogFilePath,
   getTunnelProfilesFilePath,
   getLegacyCloudflareManagedRemoteFilePath,
-  getTunnelCliStateFilePath,
-  readTunnelCliState,
-  readLastManagedLocalConfigPath,
-  writeLastManagedLocalConfigPath,
   getRunDir,
 };

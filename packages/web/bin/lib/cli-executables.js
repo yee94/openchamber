@@ -51,4 +51,4 @@ function searchPathFor(command) {
   return null;
 }
 
-export { isExecutable, resolveExplicitBinary, searchPathFor };
+export { resolveExplicitBinary, searchPathFor };

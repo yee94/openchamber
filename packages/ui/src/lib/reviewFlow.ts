@@ -162,7 +162,7 @@ export const isExpectedAutoReviewAssistantParent = (message: Message, expectedPa
   return getMessageParentID(message) === expectedParentID;
 };
 
-export const getAutoReviewForwardKey = (run: AutoReviewRun, messageID: string): string => [
+const getAutoReviewForwardKey = (run: AutoReviewRun, messageID: string): string => [
   run.runtimeKey,
   run.originalSessionID,
   run.phase,

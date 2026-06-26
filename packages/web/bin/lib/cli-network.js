@@ -141,14 +141,12 @@ function assertAuthenticatedNetworkExposure({ host, uiPassword }) {
 
 
 export {
-  isUnsafeBrowserPort,
   resolveConfiguredBindHost,
   resolveServeHost,
   resolveApiHost,
   formatHostForUrl,
   buildLocalUrl,
   detectLanIPv4Address,
-  formatUnsafePortWarning,
   assertSafeBrowserPort,
   hasUiPasswordConfigured,
   assertAuthenticatedNetworkExposure,

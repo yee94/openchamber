@@ -283,12 +283,10 @@ export {
   writeInstanceOptions,
   removeInstanceFile,
   isProcessRunning,
-  readProcessCmdline,
   isOpenchamberCmdline,
   isOpenchamberProcessRunning,
   getOpenchamberProcessState,
   hasOpenchamberRuntimeInfo,
-  waitForProcessExit,
   terminateProcessTree,
   stopInstanceProcess,
 };

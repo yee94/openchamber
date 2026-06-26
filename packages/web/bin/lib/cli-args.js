@@ -716,7 +716,6 @@ complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_
 
 export {
   DEFAULT_PORT,
-  DEFAULT_TAIL_LINES,
   parseArgs,
   showHelp,
   showStartupHelp,

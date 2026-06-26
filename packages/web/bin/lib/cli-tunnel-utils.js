@@ -294,10 +294,6 @@ async function resolveTunnelTtlOverrides(options) {
 
 
 export {
-  parseHumanDurationToMs,
-  parseTtlMsOrThrow,
-  formatDurationForCli,
-  shellQuote,
   buildTunnelStartReplayCommand,
   buildTunnelProfileAddCommand,
   resolveTunnelTtlOverrides,

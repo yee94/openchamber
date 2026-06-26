@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 
-export type AutoReviewPhase = 'waiting_for_reviewer' | 'waiting_for_implementer';
-export type AutoReviewStatus = 'running' | 'completed' | 'stopped' | 'error';
+type AutoReviewPhase = 'waiting_for_reviewer' | 'waiting_for_implementer';
+type AutoReviewStatus = 'running' | 'completed' | 'stopped' | 'error';
 
 export type AutoReviewRun = {
   originalSessionID: string;

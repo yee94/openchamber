@@ -210,7 +210,6 @@ export {
   requestServerShutdown,
   requestJson,
   isServerHealthReady,
-  waitForServerHealth,
   fetchTunnelProvidersFromPort,
   fetchSystemInfoFromPort,
 };
