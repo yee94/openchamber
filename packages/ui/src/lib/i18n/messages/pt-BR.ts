@@ -1693,6 +1693,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.queuedMessage.edit": "edit",
   "chat.queuedMessage.send": "send",
   "chat.queuedMessage.removeAria": "Excluir da fila",
+  "chat.queuedMessage.reorderAria": "Arraste para reordenar",
   "chat.container.returnToParent.aria": "Voltar para a sessão principal",
   "chat.container.returnToParent.titleNamed": "Voltar para: {title}",
   "chat.container.returnToParent.title": "Voltar para a sessão principal",

@@ -1572,6 +1572,7 @@ export const dict = {
   'chat.queuedMessage.edit': 'modifier',
   'chat.queuedMessage.send': 'envoyer',
   'chat.queuedMessage.removeAria': 'Supprimer de la file d\'attente',
+  'chat.queuedMessage.reorderAria': 'Glisser pour réorganiser',
   'chat.container.returnToParent.aria': 'Retour à la session parents',
   'chat.container.returnToParent.titleNamed': 'Retourner à : {title}',
   'chat.container.returnToParent.title': 'Retour à la session parents',

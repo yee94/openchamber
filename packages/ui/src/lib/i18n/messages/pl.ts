@@ -663,6 +663,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.queuedMessage.edit': 'edit',
   'chat.queuedMessage.send': 'send',
   'chat.queuedMessage.removeAria': 'Usuń z kolejki',
+  'chat.queuedMessage.reorderAria': 'Przeciągnij, aby zmienić kolejność',
   'chat.container.returnToParent.aria': 'Powrót do sesji nadrzędnej',
   'chat.container.returnToParent.titleNamed': 'Powrót do: {title}',
   'chat.container.returnToParent.title': 'Powrót do sesji nadrzędnej',
