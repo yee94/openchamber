@@ -1965,6 +1965,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.noProvidersOrModelsFound': '没有提供商或模型匹配你的搜索。',
   'chat.modelControls.reorderFavoriteAria': '重新排序收藏',
   'chat.modelControls.reorderFavoriteTitle': '拖动以重新排序收藏',
+  'chat.modelControls.reorderProviderTitle': '拖动以重新排序提供商',
   'chat.modelControls.permissionLabel.custom': '自定义',
   'chat.modelControls.permissionLabel.allow': '允许',
   'chat.modelControls.permissionLabel.deny': '拒绝',

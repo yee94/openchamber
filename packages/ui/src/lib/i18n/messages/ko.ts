@@ -1999,6 +1999,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.noProvidersOrModelsFound': '검색과 일치하는 프로바이더 또는 모델이 없습니다.',
   'chat.modelControls.reorderFavoriteAria': '즐겨찾기 순서 변경',
   'chat.modelControls.reorderFavoriteTitle': '드래그하여 즐겨찾기 순서 변경',
+  'chat.modelControls.reorderProviderTitle': '드래그하여 공급자 순서 변경',
   'chat.modelControls.permissionLabel.custom': '사용자 지정',
   'chat.modelControls.permissionLabel.allow': '허용',
   'chat.modelControls.permissionLabel.deny': '거부',

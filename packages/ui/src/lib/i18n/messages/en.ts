@@ -1999,6 +1999,7 @@ export const dict = {
   'chat.modelControls.noProvidersOrModelsFound': 'No providers or models match your search.',
   'chat.modelControls.reorderFavoriteAria': 'Reorder favorite',
   'chat.modelControls.reorderFavoriteTitle': 'Drag to reorder favorite',
+  'chat.modelControls.reorderProviderTitle': 'Drag to reorder provider',
   'chat.modelControls.permissionLabel.custom': 'Custom',
   'chat.modelControls.permissionLabel.allow': 'Allow',
   'chat.modelControls.permissionLabel.deny': 'Deny',

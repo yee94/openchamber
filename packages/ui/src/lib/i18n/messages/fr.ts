@@ -1820,6 +1820,7 @@ export const dict = {
   'chat.modelControls.noProvidersOrModelsFound': 'Aucun fournisseur ou modèle ne correspond à votre recherche.',
   'chat.modelControls.reorderFavoriteAria': 'Réorganiser les favoris',
   'chat.modelControls.reorderFavoriteTitle': 'Faites glisser pour réorganiser les favoris',
+  'chat.modelControls.reorderProviderTitle': 'Faites glisser pour réorganiser le fournisseur',
   'chat.modelControls.permissionLabel.custom': 'Personnalisé',
   'chat.modelControls.permissionLabel.allow': 'Permettre',
   'chat.modelControls.permissionLabel.deny': 'Refuser',

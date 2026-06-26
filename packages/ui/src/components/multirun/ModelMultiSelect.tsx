@@ -107,6 +107,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
   const { favoriteModelsList, recentModelsList } = useModelLists();
   const hiddenModels = useUIStore((state) => state.hiddenModels);
+  const providerOrder = useUIStore((state) => state.providerOrder);
   const [isOpen, setIsOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [availableHeight, setAvailableHeight] = React.useState<number | null>(null);
@@ -260,6 +261,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
             >
               <ModelPickerList
                 providers={providers}
+                providerOrder={providerOrder}
                 favoriteModels={favoriteModelsList}
                 recentModels={recentModelsList}
                 modelsMetadata={modelsMetadata}

@@ -1169,6 +1169,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.removeFromFavorites': 'Usuń z ulubionych',
   'chat.modelControls.reorderFavoriteAria': 'Zmień kolejność ulubionych',
   'chat.modelControls.reorderFavoriteTitle': 'Przeciągnij, aby zmienić kolejność ulubionych',
+  'chat.modelControls.reorderProviderTitle': 'Przeciągnij, aby zmienić kolejność dostawcy',
   'chat.modelControls.resetToDefault': 'Przywróć domyślne',
   'chat.modelControls.searchAgents': 'Szukaj agentów',
   'chat.modelControls.searchModels': 'Szukaj modeli...',

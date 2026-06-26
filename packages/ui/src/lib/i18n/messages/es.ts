@@ -1965,6 +1965,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.noProvidersOrModelsFound": "Ningún proveedor o modelo coincide con tu búsqueda.",
   "chat.modelControls.reorderFavoriteAria": "Reordenar favorito",
   "chat.modelControls.reorderFavoriteTitle": "Arrastrar para reordenar favorito",
+  "chat.modelControls.reorderProviderTitle": "Arrastrar para reordenar proveedor",
   "chat.modelControls.permissionLabel.custom": "Personalizado",
   "chat.modelControls.permissionLabel.allow": "Permitir",
   "chat.modelControls.permissionLabel.deny": "Denegar",
