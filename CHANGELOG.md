@@ -4,8 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.13.6] - 2026-06-28
+
+- Chat: scrolling in conversations now stays steady while sending, queueing, streaming, switching sessions, and loading older messages.
 - Chat: selecting a user-installed skill from the slash command menu now invokes the skill and injects its content, instead of inserting the skill name as plain text.
-- UI: typography classes (ui-header, ui-label, meta, micro) now actually shrink on mobile viewports — they previously rendered at the same size as desktop despite the mobile clamp rules.
+- Context Panel: chat tabs now use the session title and mark the open chat as seen while you are viewing it.
+- Desktop/macOS: the Dock icon can now show a badge count for chats with unseen activity, with a new Appearance setting to turn it off.
+- Context Panel: Browser and Preview tabs no longer accumulate duplicate auth tokens in their URLs after reloads or navigation.
+- UI: typography classes (ui-header, ui-label, meta, micro) now actually shrink on mobile viewports — they previously rendered at the same size as desktop despite the mobile clamp rules (thanks to @foundryseven).
+
 ## [1.13.5] - 2026-06-27
 
 - CLI: global web installs no longer crash on startup when tunnel commands load ngrok capabilities.
