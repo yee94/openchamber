@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.13.5] - 2026-06-27
+
+- CLI: global web installs no longer crash on startup when tunnel commands load ngrok capabilities.
+- CLI: `openchamber update` works again, and tunnel start paths no longer fail when using managed-local config prompts, multi-instance port selection, or auto-started servers.
+- GitHub/Usage: fork upstream detection and Google quota checks no longer fail because of missing server helpers.
+
 ## [1.13.4] - 2026-06-27
 
 - UI/Localization: added Japanese interface translations and Japanese documentation (thanks to @yuchi0531).

@@ -1,3 +1,7 @@
+## [1.13.5] - 2026-06-27
+
+- No notable changes.
+
 ## [1.13.4] - 2026-06-27
 
 - UI/Localization: added Japanese interface translations (thanks to @yuchi0531).
