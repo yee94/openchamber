@@ -107,5 +107,7 @@ export {
   getLogFilePath,
   getTunnelProfilesFilePath,
   getLegacyCloudflareManagedRemoteFilePath,
+  readLastManagedLocalConfigPath,
+  writeLastManagedLocalConfigPath,
   getRunDir,
 };

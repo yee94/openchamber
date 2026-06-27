@@ -145,6 +145,7 @@ export {
   resolveServeHost,
   resolveApiHost,
   formatHostForUrl,
+  isUnsafeBrowserPort,
   buildLocalUrl,
   detectLanIPv4Address,
   assertSafeBrowserPort,

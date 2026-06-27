@@ -621,7 +621,7 @@ export function getUpdateCommand(pm = detectPackageManager()) {
 /**
  * Get current installed version from package.json
  */
-function getCurrentVersion() {
+export function getCurrentVersion() {
   try {
     const pkgPath = path.resolve(__dirname, '..', '..', 'package.json');
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));

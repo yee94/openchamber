@@ -4,7 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { EXIT_CODE, TunnelCliError } from './cli-errors.js';
 import { DEFAULT_PORT, findClosestMatch, generateCompletionScript, showTunnelHelp } from './cli-args.js';
-import { requestJson, fetchSystemInfoFromPort } from './cli-http.js';
+import { requestJson, fetchSystemInfoFromPort, waitForServerHealth } from './cli-http.js';
 import {
   discoverRunningInstances,
   getLatestInstance,
@@ -34,7 +34,11 @@ import {
   resolveTunnelTtlOverrides,
 } from './cli-tunnel-utils.js';
 import { DEFAULT_TUNNEL_PROVIDER_CAPABILITIES } from './cli-tunnel-capabilities.js';
-import { assertSafeBrowserPort, buildLocalUrl } from './cli-network.js';
+import { assertSafeBrowserPort, buildLocalUrl, isUnsafeBrowserPort } from './cli-network.js';
+import {
+  readLastManagedLocalConfigPath,
+  writeLastManagedLocalConfigPath,
+} from './cli-paths.js';
 import {
   intro as clackIntro,
   outro as clackOutro,
