@@ -15,6 +15,8 @@ import {
   select,
   text,
   password,
+  spinner,
+  progress,
   cancel,
   isCancel,
 } from '@clack/prompts';

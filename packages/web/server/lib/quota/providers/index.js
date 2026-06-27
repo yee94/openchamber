@@ -43,9 +43,9 @@ const registry = {
     fetchQuota: cursor.fetchQuota
   },
   google: {
-    providerId: 'google',
-    providerName: 'Google',
-    isConfigured: () => google.resolveGoogleAuthSources().length > 0,
+    providerId: google.providerId,
+    providerName: google.providerName,
+    isConfigured: google.isConfigured,
     fetchQuota: google.fetchGoogleQuota
   },
   'zai-coding-plan': {

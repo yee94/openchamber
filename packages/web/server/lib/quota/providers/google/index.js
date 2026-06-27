@@ -11,12 +11,20 @@ import {
   fetchGoogleModels
 } from './api.js';
 
+export { resolveGoogleAuthSources } from './auth.js';
+
+export const providerId = 'google';
+export const providerName = 'Google';
+export const aliases = ['google', 'google.oauth'];
+
+export const isConfigured = () => resolveGoogleAuthSources().length > 0;
+
 export const fetchGoogleQuota = async () => {
   const authSources = resolveGoogleAuthSources();
   if (!authSources.length) {
     return buildResult({
-      providerId: 'google',
-      providerName: 'Google',
+      providerId,
+      providerName,
       ok: false,
       configured: false,
       error: 'Not configured'
@@ -76,8 +84,8 @@ export const fetchGoogleQuota = async () => {
 
   if (!Object.keys(models).length) {
     return buildResult({
-      providerId: 'google',
-      providerName: 'Google',
+      providerId,
+      providerName,
       ok: false,
       configured: true,
       error: sourceErrors[0] ?? 'Failed to fetch models'
@@ -85,8 +93,8 @@ export const fetchGoogleQuota = async () => {
   }
 
   return buildResult({
-    providerId: 'google',
-    providerName: 'Google',
+    providerId,
+    providerName,
     ok: true,
     configured: true,
     usage: {

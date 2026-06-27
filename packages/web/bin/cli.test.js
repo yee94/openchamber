@@ -10,6 +10,11 @@ import { pathToFileURL } from 'url';
 import { isModuleCliExecution, normalizeCliEntryPath } from './cli-entry.js';
 import { requestJson } from './lib/cli-http.js';
 import { inspectTunnelAttachability } from './lib/cli-lifecycle.js';
+import { DEFAULT_TUNNEL_PROVIDER_CAPABILITIES } from './lib/cli-tunnel-capabilities.js';
+import {
+  TUNNEL_PROVIDER_CLOUDFLARE,
+  TUNNEL_PROVIDER_NGROK,
+} from '../server/lib/tunnels/types.js';
 import {
   assertAuthenticatedNetworkExposure,
   commands,
@@ -173,6 +178,13 @@ function spawnOpenChamberLikeHungServer(port) {
 }
 
 describe('cli args', () => {
+  it('loads fallback tunnel provider capabilities for CLI startup', () => {
+    expect(DEFAULT_TUNNEL_PROVIDER_CAPABILITIES.map((provider) => provider.provider)).toEqual([
+      TUNNEL_PROVIDER_CLOUDFLARE,
+      TUNNEL_PROVIDER_NGROK,
+    ]);
+  });
+
   it('accepts legacy daemon flags as no-ops', () => {
     expect(parseArgs(['serve', '--daemon']).removedFlagErrors).toEqual([]);
     expect(parseArgs(['serve', '-d']).removedFlagErrors).toEqual([]);
