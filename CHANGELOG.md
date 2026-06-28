@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.13.7] - 2026-06-28
+
+- Chat: with tool calls (such as Bash and Edit) shown expanded by default, scrolling no longer twitches, and slow scrolling no longer jumps past several messages.
+- Mobile: in long conversations, older messages now load before you reach the very top, and fast scrolling no longer leaves blank gaps where messages briefly disappear until you scroll back.
+- Mobile: the model and agent buttons in the composer are now borderless and cleaner, show the provider logo next to the model name, and shorten long names with an ellipsis; in the model picker the thinking-variant control is plain text with a chevron and each row's controls line up.
+- Mobile: interface labels (the model and agent selectors and other small labels) are back to their previous size after 1.13.6 shrank them too much.
+- Providers: the Add provider form stays open while provider data refreshes or a model is picked in the background, instead of snapping back to an existing provider.
+- CLI: `openchamber update` works again after a missing helper broke the command.
+
 ## [1.13.6] - 2026-06-28
 
 - Chat: scrolling in conversations now stays steady while sending, queueing, streaming, switching sessions, and loading older messages.
