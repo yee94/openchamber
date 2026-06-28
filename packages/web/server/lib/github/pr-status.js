@@ -225,21 +225,26 @@ const getRepoMetadata = async (octokit, repo) => {
 };
 
 const resolveRemoteCandidates = async (directory, rankedRemoteNames) => {
+  // Resolve every ranked remote concurrently — they're independent git lookups.
+  // Dedup afterwards in rank order so the result is identical to the previous
+  // sequential pass, just without paying each lookup's latency back-to-back.
+  const resolvedRemotes = await Promise.all(
+    rankedRemoteNames.map((remoteName) =>
+      resolveGitHubRepoFromDirectory(directory, remoteName)
+        .then((resolved) => ({ remoteName, repo: resolved?.repo || null }))
+        .catch(() => ({ remoteName, repo: null })),
+    ),
+  );
+
   const results = [];
   const seenRepoKeys = new Set();
-
-  for (const remoteName of rankedRemoteNames) {
-    const resolved = await resolveGitHubRepoFromDirectory(directory, remoteName).catch(() => ({ repo: null }));
-    const repo = resolved?.repo || null;
+  for (const { remoteName, repo } of resolvedRemotes) {
     const repoKey = normalizeRepoKey(repo?.owner, repo?.repo);
     if (!repo || !repoKey || seenRepoKeys.has(repoKey)) {
       continue;
     }
     seenRepoKeys.add(repoKey);
-    results.push({
-      remoteName,
-      repo,
-    });
+    results.push({ remoteName, repo });
   }
 
   return results;
@@ -258,8 +263,16 @@ const expandRepoNetwork = async (octokit, candidates) => {
     expanded.push({ repo, remoteName, priority });
   };
 
-  for (const candidate of candidates) {
-    const metadata = await getRepoMetadata(octokit, candidate.repo);
+  // Fetch repo metadata for all candidates concurrently (independent GET
+  // /repos calls), then fold them in candidate order so dedup/priority is
+  // unchanged from the sequential version.
+  const metadatas = await Promise.all(
+    candidates.map((candidate) =>
+      getRepoMetadata(octokit, candidate.repo).then((metadata) => ({ candidate, metadata })),
+    ),
+  );
+
+  for (const { candidate, metadata } of metadatas) {
     if (!metadata) {
       continue;
     }
