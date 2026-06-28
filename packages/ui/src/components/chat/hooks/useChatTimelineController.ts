@@ -60,6 +60,24 @@ export interface UseChatTimelineControllerResult {
 
 const TURN_MODEL_CACHE_MAX = 30
 const HISTORY_SCROLL_THRESHOLD = 200
+// On touch surfaces the user can drag continuously toward the top, and
+// loadEarlier is an async (network) fetch. A 200px lead is enough on desktop
+// (wheel + fast render) but the finger can outrun an in-flight fetch on mobile
+// and hit the very top before history lands. Give touch a much larger,
+// viewport-relative head start so the fetch completes before the top is
+// reached, regardless of how fast the user drags.
+const MOBILE_HISTORY_SCROLL_THRESHOLD_MIN = 1200
+const MOBILE_HISTORY_SCROLL_VIEWPORT_FACTOR = 2
+
+const resolveHistoryScrollThreshold = (clientHeight: number): number => {
+    if (!isMobileSurfaceRuntime()) {
+        return HISTORY_SCROLL_THRESHOLD
+    }
+    return Math.max(
+        MOBILE_HISTORY_SCROLL_THRESHOLD_MIN,
+        clientHeight * MOBILE_HISTORY_SCROLL_VIEWPORT_FACTOR,
+    )
+}
 const VSCODE_TURN_MODEL_CACHE_MAX = 4
 const VSCODE_TURN_MODEL_CACHE_MAX_MESSAGES = 30
 const MOBILE_TURN_MODEL_CACHE_MAX = 4
@@ -521,7 +539,7 @@ export const useChatTimelineController = ({
         const container = scrollRef.current;
         if (!container) return;
         if (isPinnedRef.current) return;
-        if (container.scrollTop >= HISTORY_SCROLL_THRESHOLD) return;
+        if (container.scrollTop >= resolveHistoryScrollThreshold(container.clientHeight)) return;
         if (!historySignalsRef.current.canLoadEarlier) return;
         if (isLoadingOlderRef.current || pendingRevealWorkRef.current) return;
 
