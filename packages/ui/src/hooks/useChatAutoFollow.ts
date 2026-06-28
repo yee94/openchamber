@@ -43,10 +43,15 @@ export interface UseChatAutoFollowResult {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// This is a direct port of opencode's `createAutoScroll` (SolidJS) to a React
-// hook. The model is deliberately simple, which is what makes it flicker-free:
+// Chat auto-follow. The model is deliberately simple, which is what makes it
+// flicker-free:
 //
-//   • Auto-follow is ALWAYS on unless the user scrolled up (`released`).
+//   • Auto-follow is on unless the user scrolled up (`released`), AND passive
+//     following only acts while the session is active (working, plus a short
+//     settle window). When idle, content-size changes are layout churn
+//     (virtualizer re-measurement, async tool/code rendering) rather than live
+//     growth, so the hook leaves scroll alone — re-pinning then would fight the
+//     virtualizer and twitch the viewport.
 //   • Following the bottom is INSTANT — `scrollTop = scrollHeight` inside the
 //     content ResizeObserver, which fires after layout and before paint. There
 //     is NO easing loop and NO settle burst, so there are never two writers
@@ -68,9 +73,12 @@ const TOUCH_FINGER_DOWN_THRESHOLD = 2;
 // How long an "auto" (programmatic) scroll position stays trusted. Browsers can
 // dispatch the `scroll` event for our write asynchronously, after newer content
 // has already changed the geometry; the window keeps us from reading that lag as
-// a user scroll. Mirrors opencode's 1500ms.
+// a user scroll.
 const AUTO_MARK_TTL_MS = 1500;
 const AUTO_MATCH_TOLERANCE_PX = 2;
+// After streaming stops, keep following the bottom for a short window so the
+// final content can settle into place.
+const SETTLE_MS = 300;
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -141,11 +149,17 @@ export const useChatAutoFollow = ({
     const [isFollowingProgrammatically, setIsFollowingProgrammatically] = React.useState(false);
 
     // `stateRef` is the single source of truth for follow vs released; the React
-    // state above is a mirror for rendering. `released === userScrolled` in
-    // opencode terms.
+    // state above is a mirror for rendering. `released` means the user scrolled
+    // up and away from the bottom.
     const stateRef = React.useRef<AutoFollowState>('following');
     const isMobileRef = React.useRef(isMobile);
     isMobileRef.current = isMobile;
+    const sessionIsWorkingRef = React.useRef(sessionIsWorking);
+    sessionIsWorkingRef.current = sessionIsWorking;
+    // `settling` keeps passive follow alive for a short window after work stops
+    // so the final content can land at the bottom.
+    const settlingRef = React.useRef(false);
+    const settleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionMessageCountRef = React.useRef(sessionMessageCount);
     sessionMessageCountRef.current = sessionMessageCount;
     const currentSessionIdRef = React.useRef(currentSessionId);
@@ -153,7 +167,7 @@ export const useChatAutoFollow = ({
 
     const lastSessionIdRef = React.useRef<string | null>(null);
 
-    // Programmatic-scroll marker (opencode's `auto`): the bottom position we last
+    // Programmatic-scroll marker: the bottom position we last
     // wrote and when. A scroll event whose scrollTop matches `top` within a few
     // px while still inside the TTL is OUR write, not the user's.
     const autoRef = React.useRef<{ top: number; time: number } | null>(null);
@@ -179,6 +193,17 @@ export const useChatAutoFollow = ({
             setContainerEl(scrollRef.current);
         }
     });
+
+    // `active` is `working || settling`. Passive auto-follow
+    // (the ResizeObserver re-pin and any non-forced scrollToBottom) only runs
+    // while active. When the session is idle, content-size changes are layout
+    // churn — virtualizer re-measurement, async tool/code rendering — NOT live
+    // growth, so we must NOT yank the user to the bottom. Forcing this gate is
+    // what stops the twitch when tall items (expanded tools) re-measure as the
+    // user scrolls.
+    const isActive = React.useCallback((): boolean => {
+        return sessionIsWorkingRef.current || settlingRef.current;
+    }, []);
 
     const setStateValue = React.useCallback((next: AutoFollowState) => {
         if (stateRef.current === next) return;
@@ -227,7 +252,7 @@ export const useChatAutoFollow = ({
         setShowScrollButton(showButton);
     }, []);
 
-    // ── core scroll primitives (ported from opencode) ────────────────────────
+    // ── core scroll primitives ───────────────────────────────────────────────
     const scrollToBottomNow = React.useCallback((behavior: ScrollBehavior) => {
         const el = scrollRef.current;
         if (!el) return;
@@ -246,6 +271,10 @@ export const useChatAutoFollow = ({
     const scrollToBottom = React.useCallback((force: boolean, behavior: ScrollBehavior = 'auto') => {
         const el = scrollRef.current;
 
+        // Passive follow only while active (working/settling). Forced jumps
+        // (send, go-to-bottom, session restore) always proceed.
+        if (!force && !isActive()) return;
+
         if (force && stateRef.current !== 'following') {
             setStateValue('following');
         }
@@ -260,7 +289,7 @@ export const useChatAutoFollow = ({
             return;
         }
         scrollToBottomNow(force ? behavior : 'auto');
-    }, [markAuto, scrollToBottomNow, setStateValue]);
+    }, [isActive, markAuto, scrollToBottomNow, setStateValue]);
 
     // User left the bottom — release auto-follow.
     const stop = React.useCallback(() => {
@@ -355,8 +384,8 @@ export const useChatAutoFollow = ({
         }
         pendingInitialRestoreRef.current = null;
 
-        // Always return to the bottom on session switch (opencode resumes on the
-        // same edge). The content ResizeObserver re-pins instantly as late
+        // Always return to the bottom on session switch. The content
+        // ResizeObserver re-pins instantly as late
         // history measures in, so there is no smooth scroll-from-mid artifact.
         setStateValue('following');
         scrollToBottom(true);
@@ -379,12 +408,29 @@ export const useChatAutoFollow = ({
         }
     }, [currentSessionId, flushSave]);
 
-    // When work begins (a reply starts streaming) and we are still following,
-    // make sure we are pinned to the bottom. Mirrors opencode's `working` effect.
+    // When work begins and we are still
+    // following, pin to the bottom. When work stops, keep following alive for a
+    // short settle window so the final content lands at the bottom, then go
+    // idle (after which passive follow is disabled — see `isActive`).
     React.useEffect(() => {
-        if (sessionIsWorking && stateRef.current === 'following') {
-            scrollToBottom(false);
+        settlingRef.current = false;
+        if (settleTimerRef.current) {
+            clearTimeout(settleTimerRef.current);
+            settleTimerRef.current = null;
         }
+
+        if (sessionIsWorking) {
+            if (stateRef.current === 'following') {
+                scrollToBottom(true);
+            }
+            return;
+        }
+
+        settlingRef.current = true;
+        settleTimerRef.current = setTimeout(() => {
+            settlingRef.current = false;
+            settleTimerRef.current = null;
+        }, SETTLE_MS);
     }, [sessionIsWorking, scrollToBottom]);
 
     // Suppress the overlay scrollbar thumb only while we are actively following a
@@ -405,7 +451,7 @@ export const useChatAutoFollow = ({
         }
     }, [containerEl, currentSessionId, restoreSnapshot]);
 
-    // ── scroll event handling (ported from opencode handleScroll) ────────────
+    // ── scroll event handling ────────────────────────────────────────────────
     const handleScrollEvent = React.useCallback(() => {
         const el = scrollRef.current;
         if (!el) return;
@@ -524,6 +570,11 @@ export const useChatAutoFollow = ({
                 return;
             }
             updateOverflowAndButton();
+            // Idle resize = layout churn (virtualizer re-measurement, async
+            // tool/code rendering), NOT live growth. Never re-pin when idle, or
+            // tall items re-measuring as the user scrolls cause an endless
+            // scroll-to-bottom/re-measure twitch.
+            if (!isActive()) return;
             if (stateRef.current !== 'following') return;
             scrollToBottom(false);
         });
@@ -533,7 +584,7 @@ export const useChatAutoFollow = ({
             observer.observe(inner);
         }
         return () => observer.disconnect();
-    }, [containerEl, scrollToBottom, setStateValue, updateOverflowAndButton]);
+    }, [containerEl, isActive, scrollToBottom, setStateValue, updateOverflowAndButton]);
 
     React.useEffect(() => {
         updateOverflowAndButton();
@@ -579,6 +630,10 @@ export const useChatAutoFollow = ({
             if (autoTimerRef.current) {
                 clearTimeout(autoTimerRef.current);
                 autoTimerRef.current = null;
+            }
+            if (settleTimerRef.current) {
+                clearTimeout(settleTimerRef.current);
+                settleTimerRef.current = null;
             }
             flushSave();
             if (saveTimerRef.current !== null) {
