@@ -1800,4 +1800,10 @@ export const settingsDict = {
   'settings.magicPrompts.page.toast.resetFailed': 'プロンプトのリセットに失敗しました',
   'settings.magicPrompts.page.toast.resetAllSuccess': 'すべてのプロンプト上書きをリセットしました',
   'settings.magicPrompts.page.toast.resetAllFailed': 'すべてのプロンプトのリセットに失敗しました',
+  'settings.openchamber.visual.section.followUpBehavior': 'フォローアップの動作',
+  'settings.openchamber.visual.section.followUpBehaviorAria': 'フォローアップの動作',
+  'settings.openchamber.visual.field.followUpBehaviorAria': 'フォローアップの動作: {option}',
+  'settings.openchamber.visual.field.followUpBehaviorDescription': 'エージェントが応答している間にフォローアップメッセージで Enter を押したときの動作を選択します。',
+  'settings.openchamber.visual.option.followUpBehavior.steer.label': 'ステア（実行中のターンに挿入）',
+  'settings.openchamber.visual.option.followUpBehavior.queue.label': 'キュー（現在のターンの後に送信）',
 } as const;

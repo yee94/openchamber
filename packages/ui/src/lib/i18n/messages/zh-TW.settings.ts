@@ -1800,4 +1800,10 @@
   'settings.usage.sidebar.field.showPredictions': '顯示預測',
   'settings.view.home.cards.plugins.description': '管理 opencode 外掛',
   'settings.view.home.cards.plugins.title': '外掛',
+  'settings.openchamber.visual.section.followUpBehavior': 'Follow-up behavior',
+  'settings.openchamber.visual.section.followUpBehaviorAria': 'Follow-up behavior',
+  'settings.openchamber.visual.field.followUpBehaviorAria': 'Follow-up behavior: {option}',
+  'settings.openchamber.visual.field.followUpBehaviorDescription': 'Choose what happens when you press Enter on a follow-up message while the agent is still responding.',
+  'settings.openchamber.visual.option.followUpBehavior.steer.label': 'Steer (insert into the running turn)',
+  'settings.openchamber.visual.option.followUpBehavior.queue.label': 'Queue (deliver after the current turn)',
 } as const;

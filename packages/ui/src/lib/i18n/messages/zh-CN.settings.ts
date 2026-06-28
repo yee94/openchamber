@@ -1800,4 +1800,10 @@ export const settingsDict = {
   'settings.promptTemplates.page.toast.created': '模板已创建',
   'settings.promptTemplates.page.toast.createFailed': '创建模板失败',
   'settings.promptTemplates.page.toast.saveUnexpectedError': '保存时发生意外错误',
+  'settings.openchamber.visual.section.followUpBehavior': 'Follow-up behavior',
+  'settings.openchamber.visual.section.followUpBehaviorAria': 'Follow-up behavior',
+  'settings.openchamber.visual.field.followUpBehaviorAria': 'Follow-up behavior: {option}',
+  'settings.openchamber.visual.field.followUpBehaviorDescription': 'Choose what happens when you press Enter on a follow-up message while the agent is still responding.',
+  'settings.openchamber.visual.option.followUpBehavior.steer.label': 'Steer (insert into the running turn)',
+  'settings.openchamber.visual.option.followUpBehavior.queue.label': 'Queue (deliver after the current turn)',
 } as const;
