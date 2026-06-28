@@ -11,7 +11,6 @@ All notable changes to this project will be documented in this file.
 - Context Panel: chat tabs now use the session title and mark the open chat as seen while you are viewing it.
 - Desktop/macOS: the Dock icon can now show a badge count for chats with unseen activity, with a new Appearance setting to turn it off.
 - Context Panel: Browser and Preview tabs no longer accumulate duplicate auth tokens in their URLs after reloads or navigation.
-- UI: typography classes (ui-header, ui-label, meta, micro) now actually shrink on mobile viewports — they previously rendered at the same size as desktop despite the mobile clamp rules (thanks to @foundryseven).
 
 ## [1.13.5] - 2026-06-27
 
