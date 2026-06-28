@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- No notable changes.
+
 ## [1.13.7] - 2026-06-28
 
 - Chat: with tool calls (such as Bash and Edit) shown expanded by default, scrolling no longer twitches, and slow scrolling no longer jumps past several messages.
