@@ -1,6 +1,17 @@
+import { stat } from 'node:fs/promises';
 import { getRemotes, getStatus } from '../git/index.js';
 import { resolveGitHubRepoFromDirectory } from './repo/index.js';
 import { noteIfGitHubRateLimit } from './rate-limit.js';
+
+const directoryExists = async (dir) => {
+  if (!dir) return false;
+  try {
+    await stat(dir);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const REPO_DEFAULT_BRANCH_TTL_MS = 5 * 60_000;
 const defaultBranchCache = new Map();
@@ -453,6 +464,14 @@ const findFirstMatchingPr = async ({ octokit, target, branch, sourceCandidates }
 };
 
 export async function resolveGitHubPrStatus({ octokit, directory, branch, remoteName }) {
+  // A deleted worktree can still have a session in the sidebar that keeps
+  // requesting its PR status. Bail before touching git or GitHub for a
+  // directory that no longer exists — otherwise every poll spends a git call
+  // (and the remote/repo resolution that follows) on a path that's gone.
+  if (!(await directoryExists(directory))) {
+    return { repo: null, pr: null, defaultBranch: null, resolvedRemoteName: null };
+  }
+
   const normalizedBranch = normalizeText(branch);
   const normalizedRemoteName = normalizeText(remoteName) || 'origin';
 
