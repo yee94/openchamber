@@ -419,6 +419,17 @@ export function registerGitHubRoutes(app) {
         return res.json(cached.data);
       }
 
+      // If GitHub recently rate-limited us, don't pile on more calls that will
+      // also fail. Serve whatever we last cached (even if stale); otherwise
+      // report a transient failure so the client keeps its last-known status.
+      const { isGitHubRateLimited } = await import('./rate-limit.js');
+      if (isGitHubRateLimited()) {
+        if (cached) {
+          return res.json(cached.data);
+        }
+        return res.status(503).json({ error: 'GitHub rate limited' });
+      }
+
       // Intercept res.json to cache successful responses before sending
       // Only caches responses with connected:true — error/edge-case responses are not cached
       const originalJson = res.json.bind(res);
@@ -576,6 +587,24 @@ export function registerGitHubRoutes(app) {
         const { clearGitHubAuth } = await getGitHubLibraries();
         clearGitHubAuth();
         return res.json({ connected: false });
+      }
+      // Transient failures — a rate limit, or the overall resolve timeout
+      // firing — are expected under heavy load and should not be logged as hard
+      // errors. Record a rate-limit cooldown when applicable, then serve the
+      // last cached status (even if stale) or a 503 so the client keeps its
+      // last-known value instead of clearing the badge.
+      const { noteIfGitHubRateLimit } = await import('./rate-limit.js');
+      const wasRateLimited = noteIfGitHubRateLimit(error);
+      const wasTimeout = error?.code === 'ETIMEDOUT';
+      if (wasRateLimited || wasTimeout) {
+        const dir = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+        const br = typeof req.query?.branch === 'string' ? req.query.branch.trim() : '';
+        const rem = typeof req.query?.remote === 'string' ? req.query.remote.trim() : 'origin';
+        const cached = prStatusCache.get(`${dir}::${br}::${rem}`);
+        if (cached) {
+          return res.json(cached.data);
+        }
+        return res.status(503).json({ error: wasRateLimited ? 'GitHub rate limited' : 'GitHub request timed out' });
       }
       if (isGitHubResourceUnavailable(error)) {
         return res.json({

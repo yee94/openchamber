@@ -1,5 +1,6 @@
 import { getRemotes, getStatus } from '../git/index.js';
 import { resolveGitHubRepoFromDirectory } from './repo/index.js';
+import { noteIfGitHubRateLimit } from './rate-limit.js';
 
 const REPO_DEFAULT_BRANCH_TTL_MS = 5 * 60_000;
 const defaultBranchCache = new Map();
@@ -182,7 +183,8 @@ const getRepoDefaultBranch = async (octokit, repo) => {
       fetchedAt: Date.now(),
     });
     return defaultBranch;
-  } catch {
+  } catch (error) {
+    noteIfGitHubRateLimit(error);
     return null;
   }
 };
@@ -210,6 +212,7 @@ const getRepoMetadata = async (octokit, repo) => {
     });
     return data;
   } catch (error) {
+    noteIfGitHubRateLimit(error);
     if (error?.status === 403 || error?.status === 404) {
       repoMetadataCache.set(repoKey, {
         data: null,
@@ -290,6 +293,7 @@ const safeListPulls = async (octokit, options) => {
     const response = await octokit.rest.pulls.list(options);
     return Array.isArray(response?.data) ? response.data : [];
   } catch (error) {
+    noteIfGitHubRateLimit(error);
     if (error?.status === 404 || error?.status === 403) {
       return [];
     }
@@ -345,6 +349,7 @@ const searchFallbackPr = async ({ octokit, branch, repoNames }) => {
       // If we get here, search API works for this repo — clear the disabled flag
       _searchApiDisabledRepos.delete(repoKey);
     } catch (error) {
+      noteIfGitHubRateLimit(error);
       if (error?.status === 403) {
         _searchApiDisabledRepos.set(repoKey, Date.now());
         return null;
