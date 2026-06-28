@@ -1804,6 +1804,6 @@ export const settingsDict = {
   'settings.openchamber.visual.section.followUpBehaviorAria': 'フォローアップの動作',
   'settings.openchamber.visual.field.followUpBehaviorAria': 'フォローアップの動作: {option}',
   'settings.openchamber.visual.field.followUpBehaviorDescription': 'エージェントが応答している間にフォローアップメッセージで Enter を押したときの動作を選択します。',
-  'settings.openchamber.visual.option.followUpBehavior.steer.label': 'ステア（実行中のターンに挿入）',
-  'settings.openchamber.visual.option.followUpBehavior.queue.label': 'キュー（現在のターンの後に送信）',
+  'settings.openchamber.visual.option.followUpBehavior.steer.label': 'ステア',
+  'settings.openchamber.visual.option.followUpBehavior.queue.label': 'キュー',
 } as const;
