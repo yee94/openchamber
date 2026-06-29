@@ -79,6 +79,17 @@ const AUTO_MATCH_TOLERANCE_PX = 2;
 // After streaming stops, keep following the bottom for a short window so the
 // final content can settle into place.
 const SETTLE_MS = 300;
+// Entry-stick window. On the FIRST open of a session, late async data (most
+// visibly a task/subagent tool whose nested rows are fetched from the child
+// session after entry — see useEnsureSessionMessages in ToolPart.tsx) grows the
+// timeline a beat or two AFTER we have already pinned to the bottom, leaving the
+// viewport stranded mid-history. The steady-state idle gate deliberately ignores
+// that growth (it can't tell entry from a user reading idle history). So instead
+// of weakening the gate, we open a short, gesture-cancellable window on entry
+// during which we FORCE the bottom on every growth. It ends QUIESCENCE_MS after
+// growth stops (capped by MAX_MS), or instantly on any real user scroll gesture.
+const ENTRY_STICK_QUIESCENCE_MS = 600;
+const ENTRY_STICK_MAX_MS = 8000;
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -173,6 +184,12 @@ export const useChatAutoFollow = ({
     const autoRef = React.useRef<{ top: number; time: number } | null>(null);
     const autoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Entry-stick window state (see ENTRY_STICK_* above).
+    const entryStickRef = React.useRef(false);
+    const entryStickQuietTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const entryStickCapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const entryStickLastHeightRef = React.useRef(0);
+
     const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingSaveRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
     // When restoreSnapshot is invoked while ChatViewport is still hydrating
@@ -233,6 +250,48 @@ export const useChatAutoFollow = ({
         }
         return Math.abs(el.scrollTop - a.top) < AUTO_MATCH_TOLERANCE_PX;
     }, []);
+
+    // ── entry-stick window ───────────────────────────────────────────────────
+    const endEntryStick = React.useCallback(() => {
+        entryStickRef.current = false;
+        if (entryStickQuietTimerRef.current) {
+            clearTimeout(entryStickQuietTimerRef.current);
+            entryStickQuietTimerRef.current = null;
+        }
+        if (entryStickCapTimerRef.current) {
+            clearTimeout(entryStickCapTimerRef.current);
+            entryStickCapTimerRef.current = null;
+        }
+    }, []);
+
+    // (Re)arm the quiescence timer: the window closes this long after the last
+    // growth. Called once on begin and again on every growth-driven re-pin.
+    const armEntryStickQuiet = React.useCallback(() => {
+        if (entryStickQuietTimerRef.current) {
+            clearTimeout(entryStickQuietTimerRef.current);
+        }
+        entryStickQuietTimerRef.current = setTimeout(() => {
+            entryStickQuietTimerRef.current = null;
+            endEntryStick();
+        }, ENTRY_STICK_QUIESCENCE_MS);
+    }, [endEntryStick]);
+
+    const beginEntryStick = React.useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        entryStickRef.current = true;
+        entryStickLastHeightRef.current = el.scrollHeight;
+        armEntryStickQuiet();
+        // Reset the absolute cap fresh on every entry (e.g. session switch) so a
+        // stale cap from a previous open can't cut this window short.
+        if (entryStickCapTimerRef.current) {
+            clearTimeout(entryStickCapTimerRef.current);
+        }
+        entryStickCapTimerRef.current = setTimeout(() => {
+            entryStickCapTimerRef.current = null;
+            endEntryStick();
+        }, ENTRY_STICK_MAX_MS);
+    }, [armEntryStickQuiet, endEntryStick]);
 
     // ── overflow / scroll-to-bottom button ──────────────────────────────────
     const updateOverflowAndButton = React.useCallback(() => {
@@ -322,8 +381,11 @@ export const useChatAutoFollow = ({
     }, [setStateValue, updateOverflowAndButton]);
 
     const releaseFromUserIntent = React.useCallback(() => {
+        // A genuine user gesture (wheel/touch/key/scrollbar) cancels the entry
+        // window immediately so we never fight the user's read position.
+        endEntryStick();
         stop();
-    }, [stop]);
+    }, [endEntryStick, stop]);
 
     // ── per-session snapshot persistence (kept; restore still goes to bottom) ─
     const flushSave = React.useCallback(() => {
@@ -389,9 +451,13 @@ export const useChatAutoFollow = ({
         // history measures in, so there is no smooth scroll-from-mid artifact.
         setStateValue('following');
         scrollToBottom(true);
+        // Hold the bottom across late async growth (e.g. task/subagent child
+        // session data landing a beat after entry) until content quiesces or the
+        // user scrolls.
+        beginEntryStick();
         updateOverflowAndButton();
         return false;
-    }, [scrollToBottom, setStateValue, updateOverflowAndButton]);
+    }, [beginEntryStick, scrollToBottom, setStateValue, updateOverflowAndButton]);
 
     // ── session change ───────────────────────────────────────────────────────
     React.useEffect(() => {
@@ -570,6 +636,18 @@ export const useChatAutoFollow = ({
                 return;
             }
             updateOverflowAndButton();
+            // Entry-stick window: on first session open, FORCE the bottom on
+            // every growth so late async data (task/subagent child rows, code
+            // highlight, mermaid) can't strand the viewport mid-history. Force
+            // overrides any false `released` from the growth itself; only a real
+            // user gesture clears the window (releaseFromUserIntent).
+            if (entryStickRef.current && el) {
+                const grew = el.scrollHeight > entryStickLastHeightRef.current + 1;
+                entryStickLastHeightRef.current = el.scrollHeight;
+                scrollToBottom(true);
+                if (grew) armEntryStickQuiet();
+                return;
+            }
             // Idle resize = layout churn (virtualizer re-measurement, async
             // tool/code rendering), NOT live growth. Never re-pin when idle, or
             // tall items re-measuring as the user scrolls cause an endless
@@ -584,7 +662,7 @@ export const useChatAutoFollow = ({
             observer.observe(inner);
         }
         return () => observer.disconnect();
-    }, [containerEl, isActive, scrollToBottom, setStateValue, updateOverflowAndButton]);
+    }, [armEntryStickQuiet, containerEl, isActive, scrollToBottom, setStateValue, updateOverflowAndButton]);
 
     React.useEffect(() => {
         updateOverflowAndButton();
@@ -593,10 +671,19 @@ export const useChatAutoFollow = ({
     const notifyContentChange = React.useCallback((_reason?: ContentChangeReason) => {
         void _reason;
         updateOverflowAndButton();
+        // Entry-stick window: late structural growth (notably the task/subagent
+        // summary landing from the child session — ToolPart emits 'structural'
+        // here) must keep us pinned and refresh the quiescence timer, even though
+        // the session is idle.
+        if (entryStickRef.current) {
+            scrollToBottom(true);
+            armEntryStickQuiet();
+            return;
+        }
         if (stateRef.current === 'following') {
             scrollToBottom(false);
         }
-    }, [scrollToBottom, updateOverflowAndButton]);
+    }, [armEntryStickQuiet, scrollToBottom, updateOverflowAndButton]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
 
@@ -635,13 +722,14 @@ export const useChatAutoFollow = ({
                 clearTimeout(settleTimerRef.current);
                 settleTimerRef.current = null;
             }
+            endEntryStick();
             flushSave();
             if (saveTimerRef.current !== null) {
                 clearTimeout(saveTimerRef.current);
                 saveTimerRef.current = null;
             }
         };
-    }, [flushSave]);
+    }, [endEntryStick, flushSave]);
 
     React.useEffect(() => {
         if (!onActiveTurnChange) return;
