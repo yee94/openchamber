@@ -29,6 +29,12 @@ const sanitizeRuntimeExtraHeaders = (headers: Record<string, string> | null | un
   return next;
 };
 
+const runtimeExtraHeadersEqual = (left: Record<string, string>, right: Record<string, string>): boolean => {
+  const leftEntries = Object.entries(left);
+  if (leftEntries.length !== Object.keys(right).length) return false;
+  return leftEntries.every(([key, value]) => right[key] === value);
+};
+
 const normalizeBearerToken = (token: string | null | undefined): string => {
   if (typeof token !== 'string') return '';
   return token.trim();
@@ -95,7 +101,9 @@ export const setRuntimeBearerToken = (token: string | null | undefined): void =>
 export const setRuntimeExtraHeaders = (headers: Record<string, string> | null | undefined): void => {
   // These headers are for runtime HTTP fetches and URL-token minting. Browser-owned
   // realtime transports (EventSource/WebSocket) cannot attach arbitrary headers.
-  runtimeExtraHeaders = sanitizeRuntimeExtraHeaders(headers);
+  const next = sanitizeRuntimeExtraHeaders(headers);
+  if (runtimeExtraHeadersEqual(runtimeExtraHeaders, next)) return;
+  runtimeExtraHeaders = next;
   resetRuntimeAuthGeneration();
 };
 

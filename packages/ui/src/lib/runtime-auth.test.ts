@@ -115,4 +115,34 @@ describe('runtime auth headers', () => {
       clearRuntimeAuthCredentialProvider();
     }
   });
+
+  test('does not remint URL auth token when setting equivalent empty runtime headers', async () => {
+    const previousFetch = globalThis.fetch;
+    let fetchCount = 0;
+    try {
+      clearRuntimeUrlAuthToken();
+      setRuntimeBearerToken('runtime-token');
+      setRuntimeExtraHeaders(null);
+      globalThis.fetch = (async () => {
+        fetchCount += 1;
+        return new Response(JSON.stringify({ token: `url-token-${fetchCount}`, expiresAt: Date.now() + 60_000 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const firstToken = await refreshRuntimeUrlAuthToken('https://runtime.example');
+      setRuntimeExtraHeaders({});
+      const secondToken = await refreshRuntimeUrlAuthToken('https://runtime.example');
+
+      expect(firstToken).toBe('url-token-1');
+      expect(secondToken).toBe('url-token-1');
+      expect(fetchCount).toBe(1);
+    } finally {
+      globalThis.fetch = previousFetch;
+      clearRuntimeUrlAuthToken();
+      setRuntimeExtraHeaders(null);
+      clearRuntimeAuthCredentialProvider();
+    }
+  });
 });

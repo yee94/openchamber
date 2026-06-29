@@ -1517,9 +1517,10 @@ const extractCookieHeader = (response) => {
     .join('; ');
 };
 
-const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice }) => {
+const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice, requestHeaders }) => {
   const baseUrl = normalizeHostUrl(String(url || ''));
   const candidatePassword = typeof password === 'string' ? password : '';
+  const safeRequestHeaders = sanitizeRuntimeRequestHeaders(requestHeaders || {});
   if (!baseUrl) throw new Error('Invalid URL');
   if (!candidatePassword) throw new Error('Password is required');
 
@@ -1527,6 +1528,7 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice }) =>
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
     headers: {
+      ...safeRequestHeaders,
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
@@ -1559,6 +1561,7 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice }) =>
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
     headers: {
+      ...safeRequestHeaders,
       Accept: 'application/json',
       'Content-Type': 'application/json',
       Cookie: cookie,
@@ -3506,6 +3509,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         url: args.url,
         password: args.password,
         trustDevice: args.trustDevice === true,
+        requestHeaders: args.requestHeaders || {},
       });
 
     case 'desktop_set_window_theme': {

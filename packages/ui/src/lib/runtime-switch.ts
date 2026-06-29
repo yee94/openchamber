@@ -13,6 +13,23 @@ const RUNTIME_ENDPOINT_CHANGED_EVENT = 'openchamber:runtime-endpoint-changed';
 let activeApiBaseUrl = '';
 let activeRuntimeKey = '';
 
+const setWindowRuntimeValue = <K extends '__OPENCHAMBER_API_BASE_URL__' | '__OPENCHAMBER_CLIENT_TOKEN__' | '__OPENCHAMBER_RUNTIME_HEADERS__'>(
+  runtimeWindow: typeof window & {
+    __OPENCHAMBER_API_BASE_URL__?: string;
+    __OPENCHAMBER_CLIENT_TOKEN__?: string;
+    __OPENCHAMBER_RUNTIME_HEADERS__?: Record<string, string>;
+  },
+  key: K,
+  value: (typeof runtimeWindow)[K],
+): void => {
+  try {
+    runtimeWindow[key] = value;
+  } catch {
+    // Electron preload exposes some initial globals through contextBridge, which
+    // makes them read-only. Runtime switching must still update in-memory state.
+  }
+};
+
 const normalizeRuntimeUrlKey = (value: string): string => {
   try {
     const url = new URL(value);
@@ -81,9 +98,9 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
       __OPENCHAMBER_CLIENT_TOKEN__?: string;
       __OPENCHAMBER_RUNTIME_HEADERS__?: Record<string, string>;
     };
-    runtimeWindow.__OPENCHAMBER_API_BASE_URL__ = apiBaseUrl;
-    runtimeWindow.__OPENCHAMBER_CLIENT_TOKEN__ = options.clientToken || undefined;
-    runtimeWindow.__OPENCHAMBER_RUNTIME_HEADERS__ = options.requestHeaders || undefined;
+    setWindowRuntimeValue(runtimeWindow, '__OPENCHAMBER_API_BASE_URL__', apiBaseUrl);
+    setWindowRuntimeValue(runtimeWindow, '__OPENCHAMBER_CLIENT_TOKEN__', options.clientToken || undefined);
+    setWindowRuntimeValue(runtimeWindow, '__OPENCHAMBER_RUNTIME_HEADERS__', options.requestHeaders || undefined);
   }
   configureRuntimeUrlResolver({ apiBaseUrl, realtimeBaseUrl: apiBaseUrl });
   setRuntimeExtraHeaders(options.requestHeaders || null);
