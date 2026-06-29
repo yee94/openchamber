@@ -177,6 +177,8 @@ const SLOW_HEALTH_POLL_BASE_MS = 800;
 const SLOW_HEALTH_POLL_INCREMENT_MS = 200;
 const SLOW_HEALTH_POLL_MAX_MS = 2000;
 
+const hasValue = <T>(value: T | null | undefined): value is T => value !== null && value !== undefined;
+
 export interface AgentDraft {
   name: string;
   scope: AgentScope;
@@ -345,8 +347,8 @@ export const useAgentsStore = create<AgentsStore>()(
             if (config.description) agentConfig.description = config.description;
             if (config.model) agentConfig.model = config.model;
             if (config.variant) agentConfig.variant = config.variant;
-            if (config.temperature !== undefined) agentConfig.temperature = config.temperature ?? null;
-            if (config.top_p !== undefined) agentConfig.top_p = config.top_p ?? null;
+            if (hasValue(config.temperature)) agentConfig.temperature = config.temperature;
+            if (hasValue(config.top_p)) agentConfig.top_p = config.top_p;
             if (config.prompt) agentConfig.prompt = config.prompt;
             if (config.permission) agentConfig.permission = config.permission;
             if (config.disable !== undefined) agentConfig.disable = config.disable;
