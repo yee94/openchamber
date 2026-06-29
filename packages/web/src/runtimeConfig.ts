@@ -1,4 +1,4 @@
-import { refreshRuntimeUrlAuthToken, setRuntimeBearerToken, setRuntimeExtraHeaders } from '@openchamber/ui/lib/runtime-auth';
+import { refreshLocalRuntimeUrlAuthToken, refreshRuntimeUrlAuthToken, setRuntimeBearerToken, setRuntimeExtraHeaders } from '@openchamber/ui/lib/runtime-auth';
 import { installRuntimeFetchBridge } from '@openchamber/ui/lib/runtime-fetch';
 import { initializeRuntimeEndpoint } from '@openchamber/ui/lib/runtime-switch';
 import { configureRuntimeUrlResolver } from '@openchamber/ui/lib/runtime-url';
@@ -44,6 +44,9 @@ export const createConfiguredWebAPIs = () => {
   setRuntimeBearerToken(clientToken || null);
   setRuntimeExtraHeaders(window.__OPENCHAMBER_RUNTIME_HEADERS__ || null);
   void refreshRuntimeUrlAuthToken(apiBaseUrl || undefined).catch(() => {});
+  if (localOrigin && !sameOrigin(apiBaseUrl, localOrigin)) {
+    void refreshLocalRuntimeUrlAuthToken(localOrigin).catch(() => {});
+  }
   installRuntimeFetchBridge();
   return createWebAPIs({ urls });
 };

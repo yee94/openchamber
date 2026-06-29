@@ -10,6 +10,9 @@ let runtimeExtraHeaders: Record<string, string> = {};
 let runtimeUrlAuthToken = '';
 let runtimeUrlAuthTokenExpiresAt = 0;
 let runtimeUrlAuthRefreshPromise: Promise<string> | null = null;
+let localRuntimeUrlAuthToken = '';
+let localRuntimeUrlAuthTokenExpiresAt = 0;
+let localRuntimeUrlAuthRefreshPromise: Promise<string> | null = null;
 let runtimeAuthGeneration = 0;
 
 const URL_AUTH_REFRESH_SKEW_MS = 10_000;
@@ -58,6 +61,8 @@ const buildAuthUrl = (apiBaseUrl: string | null | undefined, path: string): stri
 export const clearRuntimeUrlAuthToken = (): void => {
   runtimeUrlAuthToken = '';
   runtimeUrlAuthTokenExpiresAt = 0;
+  localRuntimeUrlAuthToken = '';
+  localRuntimeUrlAuthTokenExpiresAt = 0;
 };
 
 const resetRuntimeAuthGeneration = (): void => {
@@ -120,6 +125,17 @@ export const setRuntimeUrlAuthToken = (token: string | null | undefined, expires
   }
 };
 
+export const setLocalRuntimeUrlAuthToken = (token: string | null | undefined, expiresAt: number | null | undefined): void => {
+  const normalized = normalizeBearerToken(token);
+  if (!normalized || typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+    localRuntimeUrlAuthToken = '';
+    localRuntimeUrlAuthTokenExpiresAt = 0;
+    return;
+  }
+  localRuntimeUrlAuthToken = normalized;
+  localRuntimeUrlAuthTokenExpiresAt = expiresAt;
+};
+
 const readValidRuntimeUrlAuthTokenSync = (): string => {
   if (!runtimeUrlAuthToken || runtimeUrlAuthTokenExpiresAt <= Date.now() + URL_AUTH_REFRESH_SKEW_MS) {
     clearRuntimeUrlAuthToken();
@@ -128,10 +144,27 @@ const readValidRuntimeUrlAuthTokenSync = (): string => {
   return runtimeUrlAuthToken;
 };
 
+const readValidLocalRuntimeUrlAuthTokenSync = (): string => {
+  if (!localRuntimeUrlAuthToken || localRuntimeUrlAuthTokenExpiresAt <= Date.now() + URL_AUTH_REFRESH_SKEW_MS) {
+    localRuntimeUrlAuthToken = '';
+    localRuntimeUrlAuthTokenExpiresAt = 0;
+    return '';
+  }
+  return localRuntimeUrlAuthToken;
+};
+
 export const getRuntimeUrlAuthTokenSync = (): string => {
   const token = readValidRuntimeUrlAuthTokenSync();
   if (!token && (getRuntimeBearerTokenSync() || typeof window !== 'undefined')) {
     void refreshRuntimeUrlAuthToken().catch(() => {});
+  }
+  return token;
+};
+
+export const getLocalRuntimeUrlAuthTokenSync = (localOrigin?: string | null): string => {
+  const token = readValidLocalRuntimeUrlAuthTokenSync();
+  if (!token && localOrigin && typeof window !== 'undefined') {
+    void refreshLocalRuntimeUrlAuthToken(localOrigin).catch(() => {});
   }
   return token;
 };
@@ -193,12 +226,49 @@ const mintRuntimeUrlAuthToken = (apiBaseUrl?: string | null): Promise<string> =>
   return runtimeUrlAuthRefreshPromise;
 };
 
+const mintLocalRuntimeUrlAuthToken = (localOrigin: string): Promise<string> => {
+  if (localRuntimeUrlAuthRefreshPromise) return localRuntimeUrlAuthRefreshPromise;
+  const refreshPromise = (async () => {
+    const response = await fetch(buildAuthUrl(localOrigin, '/auth/url-token'), {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      localRuntimeUrlAuthToken = '';
+      localRuntimeUrlAuthTokenExpiresAt = 0;
+      throw new Error(`Failed to mint local runtime URL auth token (${response.status})`);
+    }
+    const payload = await response.json().catch(() => null) as { token?: unknown; expiresAt?: unknown } | null;
+    const token = typeof payload?.token === 'string' ? payload.token.trim() : '';
+    const expiresAt = typeof payload?.expiresAt === 'number' ? payload.expiresAt : 0;
+    if (!token || !Number.isFinite(expiresAt)) {
+      throw new Error('Local runtime URL auth token response was invalid');
+    }
+    localRuntimeUrlAuthToken = token;
+    localRuntimeUrlAuthTokenExpiresAt = expiresAt;
+    return token;
+  })();
+  const trackedPromise = refreshPromise.finally(() => {
+    if (localRuntimeUrlAuthRefreshPromise === trackedPromise) {
+      localRuntimeUrlAuthRefreshPromise = null;
+    }
+  });
+  localRuntimeUrlAuthRefreshPromise = trackedPromise;
+  return localRuntimeUrlAuthRefreshPromise;
+};
+
 // Returns a valid token without a network call, minting only when the current
 // token is missing or already inside the skew window.
 export const refreshRuntimeUrlAuthToken = async (apiBaseUrl?: string | null): Promise<string> => {
   const existing = readValidRuntimeUrlAuthTokenSync();
   if (existing) return existing;
   return mintRuntimeUrlAuthToken(apiBaseUrl);
+};
+
+export const refreshLocalRuntimeUrlAuthToken = async (localOrigin: string): Promise<string> => {
+  const existing = readValidLocalRuntimeUrlAuthTokenSync();
+  if (existing) return existing;
+  return mintLocalRuntimeUrlAuthToken(localOrigin);
 };
 
 // ── Proactive URL auth token refresh ──────────────────────────────────────

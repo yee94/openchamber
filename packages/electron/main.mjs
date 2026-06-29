@@ -1204,6 +1204,10 @@ const spawnLocalServer = async () => {
     apiOnly: false,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
     getIsWindowFocused: isAnyWindowFocused,
+    getDesktopRuntimeConfig: () => ({
+      apiBaseUrl: state.apiBaseUrl || '',
+      requestHeaders: sanitizeRuntimeRequestHeaders(state.requestHeaders || {}),
+    }),
   });
 
   const port = handle.getPort();
