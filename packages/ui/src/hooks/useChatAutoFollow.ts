@@ -6,7 +6,7 @@ import { useViewportStore } from '@/sync/viewport-store';
 
 type AutoFollowState = 'following' | 'released';
 
-export type ContentChangeReason = 'text' | 'structural' | 'permission';
+export type ContentChangeReason = 'text' | 'structural' | 'permission' | 'animation';
 
 export interface AnimationHandlers {
     onChunk: () => void;
@@ -76,6 +76,17 @@ const TOUCH_FINGER_DOWN_THRESHOLD = 2;
 // a user scroll.
 const AUTO_MARK_TTL_MS = 1500;
 const AUTO_MATCH_TOLERANCE_PX = 2;
+// While a tracked height animation runs (e.g. a Thinking block auto-collapsing
+// mid-stream), the timeline shrinks/grows over a couple hundred ms and the
+// virtualizer re-measures, producing transient geometry. Browsers dispatch the
+// resulting `scroll` events asynchronously, so a stale event can land after we
+// have already re-pinned — its position matching neither the bottom zone nor the
+// freshly-moved auto marker — and be misread as a user scroll-away. During this
+// guard window we treat any `following`-state scroll event as our own and never
+// release via the heuristic. GENUINE user gestures still release instantly
+// through releaseFromUserIntent, so this is not glue. Sized to the reasoning
+// animation (200ms) plus headroom for trailing async scroll events.
+const ANIMATION_GUARD_MS = 350;
 // After streaming stops, keep following the bottom for a short window so the
 // final content can settle into place.
 const SETTLE_MS = 300;
@@ -184,6 +195,15 @@ export const useChatAutoFollow = ({
     const autoRef = React.useRef<{ top: number; time: number } | null>(null);
     const autoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Timestamp until which a tracked height animation is in flight (see
+    // ANIMATION_GUARD_MS). 0 = no animation guard active.
+    const animationGuardUntilRef = React.useRef(0);
+
+    // Last observed scrollTop, used to derive scroll DIRECTION in the scroll
+    // handler so the bottom-zone re-engage only fires when arriving at the bottom
+    // by scrolling down — never when a user scrolling UP merely lands in the zone.
+    const lastScrollTopRef = React.useRef(0);
+
     // Entry-stick window state (see ENTRY_STICK_* above).
     const entryStickRef = React.useRef(false);
     const entryStickQuietTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -249,6 +269,10 @@ export const useChatAutoFollow = ({
             return false;
         }
         return Math.abs(el.scrollTop - a.top) < AUTO_MATCH_TOLERANCE_PX;
+    }, []);
+
+    const isAnimationGuardActive = React.useCallback((): boolean => {
+        return now() < animationGuardUntilRef.current;
     }, []);
 
     // ── entry-stick window ───────────────────────────────────────────────────
@@ -522,6 +546,10 @@ export const useChatAutoFollow = ({
         const el = scrollRef.current;
         if (!el) return;
 
+        const previousTop = lastScrollTopRef.current;
+        lastScrollTopRef.current = el.scrollTop;
+        const scrollingDown = el.scrollTop > previousTop + 0.5;
+
         updateOverflowAndButton();
 
         if (!canScroll(el)) {
@@ -530,16 +558,25 @@ export const useChatAutoFollow = ({
         }
 
         // Within the bottom zone → (re-)pin to following. This is how scrolling
-        // back down to the bottom resumes auto-follow.
+        // back DOWN to the bottom resumes auto-follow. Crucially, re-engage only
+        // when the user arrives by scrolling down (or is already following, or is
+        // essentially at the true bottom). A user scrolling UP that merely lands
+        // in the bottom spacer zone must NOT be yanked back into follow — that is
+        // the dead-zone fight that made small upward scrolls impossible while
+        // content streams.
         if (isNearBottom(el, isMobileRef.current)) {
-            setStateValue('following');
+            const atTrueBottom = distanceFromBottom(el) <= AUTO_MATCH_TOLERANCE_PX;
+            if (scrollingDown || stateRef.current === 'following' || atTrueBottom) {
+                setStateValue('following');
+            }
             queueSave();
             return;
         }
 
-        // Our own programmatic write that landed at the bottom but where content
-        // grew between the write and this event — keep following, don't release.
-        if (stateRef.current === 'following' && isAuto(el)) {
+        // Our own geometry change (a programmatic write that landed at the bottom
+        // but where content grew between the write and this event, OR a tracked
+        // height animation in flight) — keep following, don't release.
+        if (stateRef.current === 'following' && (isAuto(el) || isAnimationGuardActive())) {
             scrollToBottom(false);
             queueSave();
             return;
@@ -548,11 +585,13 @@ export const useChatAutoFollow = ({
         // Genuine user scroll away from the bottom.
         stop();
         queueSave();
-    }, [isAuto, queueSave, scrollToBottom, setStateValue, stop, updateOverflowAndButton]);
+    }, [isAnimationGuardActive, isAuto, queueSave, scrollToBottom, setStateValue, stop, updateOverflowAndButton]);
 
     React.useEffect(() => {
         const container = containerEl;
         if (!container) return;
+
+        lastScrollTopRef.current = container.scrollTop;
 
         const handleWheel = (event: WheelEvent) => {
             if (event.deltaY >= 0) return;
@@ -668,8 +707,14 @@ export const useChatAutoFollow = ({
         updateOverflowAndButton();
     }, [sessionMessageCount, updateOverflowAndButton]);
 
-    const notifyContentChange = React.useCallback((_reason?: ContentChangeReason) => {
-        void _reason;
+    const notifyContentChange = React.useCallback((reason?: ContentChangeReason) => {
+        // A tracked height animation (e.g. Thinking auto-collapse) opens a guard
+        // window so its transient geometry / async scroll events are not misread
+        // as a user scroll-away. Real gestures still release through
+        // releaseFromUserIntent, so the user can always scroll up freely.
+        if (reason === 'animation') {
+            animationGuardUntilRef.current = now() + ANIMATION_GUARD_MS;
+        }
         updateOverflowAndButton();
         // Entry-stick window: late structural growth (notably the task/subagent
         // summary landing from the child session — ToolPart emits 'structural'
