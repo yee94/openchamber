@@ -1387,21 +1387,24 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
 
   return (
     <>
-      <button
-        ref={metadataTriggerRef}
-        type="button"
-        className="flex min-w-0 flex-1 items-center rounded-full px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        aria-label={t('mobile.header.openMetadataAria')}
-        aria-expanded={open}
-        onClick={() => onOpenChange((currentOpen) => !currentOpen)}
-        style={{ touchAction: 'manipulation' }}
-      >
+      <div className="flex min-w-0 flex-1 items-center px-2 py-1.5 text-left">
         <span className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="block truncate typography-ui-label text-foreground">{primaryLabel}</span>
           {secondaryLabel ? (
             <span className="block truncate typography-micro text-muted-foreground">{secondaryLabel}</span>
           ) : null}
         </span>
+      </div>
+      <button
+        ref={metadataTriggerRef}
+        type="button"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={t('mobile.header.openMetadataAria')}
+        aria-expanded={open}
+        onClick={() => onOpenChange((currentOpen) => !currentOpen)}
+        style={{ touchAction: 'manipulation' }}
+      >
+        <Icon name="apps-2-ai" className="size-5" />
       </button>
       <SessionMetadataOverlay
         open={open}
@@ -1481,7 +1484,7 @@ const MobileHeader: React.FC<{
             onClick={handleOpenSessions}
             style={{ touchAction: 'manipulation' }}
           >
-            <Icon name="menu" className="size-5" />
+            <Icon name="folders" className="size-5" />
           </button>
 
           <MobileSessionMetadataButton
@@ -2210,7 +2213,7 @@ export function MobileApp({ apis }: MobileAppProps) {
                 switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: 'mobile-disconnected' });
                 setConnectionEpoch((value) => value + 1);
               }} />
-              <Toaster />
+              <Toaster position="top-center" offset="calc(var(--oc-safe-area-top, 0px) + 16px)" />
               {isInitialized ? <ConfigUpdateOverlay /> : null}
             </div>
           </TooltipProvider>
