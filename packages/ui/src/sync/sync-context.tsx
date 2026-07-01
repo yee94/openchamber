@@ -248,6 +248,7 @@ async function materializeSessionFromServer(
   store: StoreApi<DirectoryStore>,
   options?: SessionMaterializationRequest & { isStale?: () => boolean },
 ) {
+  const statusBeforeMaterialization = store.getState().session_status?.[sessionID]
   syncDebug.recovery.materializing({
     reason: options?.reason ?? "ensure-session-messages",
     directory,
@@ -286,6 +287,10 @@ async function materializeSessionFromServer(
     )
     return { message: materialized.message, part: materialized.part }
   })
+
+  if (statusBeforeMaterialization && statusBeforeMaterialization.type !== "idle" && !options?.isStale?.()) {
+    await resyncDirectorySessionStatuses(directory, store, [sessionID], "authoritative")
+  }
 }
 
 // Module-level refs for notification viewed check.
