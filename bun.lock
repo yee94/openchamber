@@ -68,6 +68,7 @@
         "zustand": "^5.0.8",
       },
       "devDependencies": {
+        "@clack/prompts": "^1.1.0",
         "@eslint/js": "^9.33.0",
         "@remixicon/react": "^4.7.0",
         "@tailwindcss/postcss": "^4.0.0",
