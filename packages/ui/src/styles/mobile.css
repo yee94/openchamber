@@ -248,6 +248,10 @@
   :root.mobile-pointer:not(.desktop-runtime) .header-safe-area {
     padding-top: var(--oc-safe-area-top);
   }
+
+  :root.oc-capacitor-app [data-sonner-toaster][data-y-position='top'] {
+    top: calc(env(safe-area-inset-top, 0px) + 16px) !important;
+  }
 }
 
 /* Phase 1: iOS PWA safe area handling - Enhanced positioning approach */
