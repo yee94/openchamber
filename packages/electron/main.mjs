@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net as electronNet, Notification, powerMonitor, protocol, screen, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, screen, session, shell, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
 import dgram from 'node:dgram';
@@ -193,6 +193,32 @@ const state = {
   sshLogs: new Map(),
   trayController: null,
   lastFocusedWindowId: null,
+  keepAwakeBlockerId: null,
+};
+
+const setDesktopKeepAwakeActive = (enabled) => {
+  const currentId = state.keepAwakeBlockerId;
+  const isActive = Number.isInteger(currentId) && powerSaveBlocker.isStarted(currentId);
+
+  if (enabled) {
+    if (!isActive) {
+      state.keepAwakeBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    }
+    return Number.isInteger(state.keepAwakeBlockerId) && powerSaveBlocker.isStarted(state.keepAwakeBlockerId);
+  }
+
+  if (isActive) {
+    powerSaveBlocker.stop(currentId);
+  }
+  state.keepAwakeBlockerId = null;
+  return false;
+};
+
+const readDesktopKeepAwakeStatus = () => {
+  const enabled = readSettingsRoot().desktopKeepAwakeEnabled === true;
+  const currentId = state.keepAwakeBlockerId;
+  const active = Number.isInteger(currentId) && powerSaveBlocker.isStarted(currentId);
+  return { supported: true, enabled, active };
 };
 
 const quitRisk = {
@@ -228,6 +254,7 @@ const quitConfirmationMessage = () => {
 const shutdownBackgroundServices = () => {
   if (state.backgroundShutdownComplete) return;
   state.backgroundShutdownComplete = true;
+  setDesktopKeepAwakeActive(false);
   if (state.installingUpdate) return;
   killSidecar();
   setImmediate(() => {
@@ -270,6 +297,8 @@ const prepareForQuit = ({ installingUpdate = false } = {}) => {
     } catch {
     }
   }
+
+  setDesktopKeepAwakeActive(false);
 
   if (installingUpdate) {
     state.backgroundShutdownComplete = true;
@@ -1141,6 +1170,7 @@ const spawnLocalServer = async () => {
   // so phones/tablets on the same Wi-Fi can reach the app. UI shows a clear
   // warning and persists the flag via /api/config/settings.
   const lanAccessEnabled = settings.desktopLanAccessEnabled === true;
+  setDesktopKeepAwakeActive(settings.desktopKeepAwakeEnabled === true);
   const desktopUiPassword = typeof settings.desktopUiPassword === 'string' ? settings.desktopUiPassword.trim() : '';
   const lanAccessBlockedByMissingPassword = lanAccessEnabled && !desktopUiPassword;
   const effectiveLanAccessEnabled = lanAccessEnabled && !lanAccessBlockedByMissingPassword;
@@ -3164,6 +3194,19 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       });
       const settings = app.getLoginItemSettings();
       return { supported: true, enabled: settings.openAtLogin === true };
+    }
+
+    case 'desktop_get_keep_awake': {
+      return readDesktopKeepAwakeStatus();
+    }
+
+    case 'desktop_set_keep_awake': {
+      const enabled = args.enabled === true;
+      await mutateSettingsRoot((root) => {
+        root.desktopKeepAwakeEnabled = enabled;
+      });
+      const active = setDesktopKeepAwakeActive(enabled);
+      return { supported: true, enabled, active };
     }
 
     case 'desktop_browser_capture_page': {

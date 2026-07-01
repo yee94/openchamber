@@ -178,6 +178,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
       result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
     }
+    if (typeof candidate.desktopKeepAwakeEnabled === 'boolean') {
+      result.desktopKeepAwakeEnabled = candidate.desktopKeepAwakeEnabled;
+    }
     if (typeof candidate.desktopUiPassword === 'string') {
       result.desktopUiPassword = candidate.desktopUiPassword.trim();
     }
