@@ -8,6 +8,7 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { createEventPipeline } from "./event-pipeline"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
+import { isCapacitorApp } from "@/lib/platform"
 import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent } from "./event-reducer"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { ChildStoreManager, type DirectoryStore } from "./child-store"
@@ -1584,7 +1585,12 @@ export function SyncProvider(props: {
   directory: string
   children: React.ReactNode
 }) {
-  const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport)
+  const storedMessageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport)
+  // Capacitor apps are locked to SSE: native WebSocket streaming is unreliable there (on
+  // Android events only arrive once the run finishes), while SSE streams correctly. The Chat
+  // settings UI disables the other options on mobile, but force it here too so the effective
+  // transport can't drift. Remove this override (and the UI lock) to re-enable WS on mobile.
+  const messageStreamTransport: 'auto' | 'ws' | 'sse' = isCapacitorApp() ? 'sse' : storedMessageStreamTransport
   const childStoresRef = useRef<ChildStoreManager | null>(null)
   if (!childStoresRef.current) childStoresRef.current = new ChildStoreManager()
   const childStores = childStoresRef.current

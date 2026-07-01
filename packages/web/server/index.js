@@ -9,6 +9,7 @@ import net from 'net';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
+import http2 from 'node:http2';
 import { createUiAuth } from './lib/ui-auth/ui-auth.js';
 import { createTunnelAuth } from './lib/opencode/tunnel-auth.js';
 import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.js';
@@ -79,6 +80,7 @@ import { registerNotificationRoutes } from './lib/notifications/routes.js';
 import { createNotificationEmitterRuntime } from './lib/notifications/emitter-runtime.js';
 import { createNotificationTriggerRuntime } from './lib/notifications/runtime.js';
 import { createPushRuntime } from './lib/notifications/push-runtime.js';
+import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
 import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
@@ -275,6 +277,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
+const APNS_TOKENS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'apns-tokens.json');
 const REMOTE_CLIENTS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'remote-clients.json');
 const CLOUDFLARE_MANAGED_REMOTE_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-managed-remote-tunnels.json');
 const CLOUDFLARE_LEGACY_NAMED_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-named-tunnels.json');
@@ -377,11 +380,33 @@ const getOrCreateVapidKeys = (...args) => pushRuntime.getOrCreateVapidKeys(...ar
 const addOrUpdatePushSubscription = (...args) => pushRuntime.addOrUpdatePushSubscription(...args);
 const removePushSubscription = (...args) => pushRuntime.removePushSubscription(...args);
 const sendPushToAllUiSessions = (...args) => pushRuntime.sendPushToAllUiSessions(...args);
-const updateUiVisibility = (...args) => pushRuntime.updateUiVisibility(...args);
+// Set once the notification trigger runtime exists (declared later). When a UI
+// client reports it became visible, reset the native push badge set — the same
+// moment the device zeroes its icon badge on becomeActive, keeping them in sync.
+let clearPendingPushBadge = () => {};
+const updateUiVisibility = (token, visible, platform) => {
+  if (visible === true) clearPendingPushBadge();
+  return pushRuntime.updateUiVisibility(token, visible, platform);
+};
 const isAnyUiVisible = (...args) => pushRuntime.isAnyUiVisible(...args);
+const isAnyInteractiveClientVisible = (...args) => pushRuntime.isAnyInteractiveClientVisible(...args);
 const isUiVisible = (...args) => pushRuntime.isUiVisible(...args);
 const ensurePushInitialized = (...args) => pushRuntime.ensurePushInitialized(...args);
 const setPushInitialized = (...args) => pushRuntime.setPushInitialized(...args);
+
+const apnsRuntime = createApnsRuntime({
+  fsPromises,
+  path,
+  crypto,
+  http2,
+  APNS_TOKENS_FILE_PATH,
+  readSettingsFromDiskMigrated,
+  writeSettingsToDisk,
+});
+
+const addOrUpdateApnsToken = (...args) => apnsRuntime.addOrUpdateApnsToken(...args);
+const removeApnsToken = (...args) => apnsRuntime.removeApnsToken(...args);
+const sendApnsToAllUiSessions = (...args) => apnsRuntime.sendApnsToAllUiSessions(...args);
 
 const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
 const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
@@ -676,12 +701,15 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
   emitDesktopNotification,
   broadcastUiNotification,
   sendPushToAllUiSessions,
+  sendApnsToAllUiSessions,
+  isAnyInteractiveClientVisible,
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
 });
 
 const maybeSendPushForTrigger = (...args) => notificationTriggerRuntime.maybeSendPushForTrigger(...args);
 const setAutoAcceptSession = (...args) => notificationTriggerRuntime.setAutoAcceptSession(...args);
+clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
 
 const globalMessageStreamHub = createGlobalMessageStreamHub({
   buildOpenCodeUrl,
@@ -1103,7 +1131,13 @@ async function main(options = {}) {
 
   const app = express();
   const serverStartedAt = new Date().toISOString();
-  const packagedClientOrigins = new Set(['openchamber-ui://app']);
+  const packagedClientOrigins = new Set([
+    'openchamber-ui://app',
+    'capacitor://localhost',
+    'http://localhost',
+    'https://localhost',
+  ]);
+  const isLocalDevClientOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
   app.set('trust proxy', true);
   // Keep self-hosted instances out of search engines. The app shell is served
   // publicly (it loads before prompting for the UI password), so without this
@@ -1118,7 +1152,7 @@ async function main(options = {}) {
   });
   app.use((req, res, next) => {
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
-    if (packagedClientOrigins.has(origin)) {
+    if (packagedClientOrigins.has(origin) || isLocalDevClientOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -1193,7 +1227,10 @@ async function main(options = {}) {
     writeSettingsToDisk,
     addOrUpdatePushSubscription,
     removePushSubscription,
+    addOrUpdateApnsToken,
+    removeApnsToken,
     updateUiVisibility,
+    clearPendingPushBadge: () => clearPendingPushBadge(),
     isUiVisible,
     getUiNotificationClients: () => uiNotificationClients,
     writeSseEvent,

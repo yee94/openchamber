@@ -7,6 +7,7 @@ import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore, type FollowUpBehavior } from '@/stores/messageQueueStore';
 import { cn } from '@/lib/utils';
+import { isCapacitorApp } from '@/lib/platform';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NumberInput } from '@/components/ui/number-input';
@@ -321,6 +322,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setShowSplitAssistantMessageActions = useUIStore(state => state.setShowSplitAssistantMessageActions);
     const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
     const setMessageStreamTransport = useConfigStore((state) => state.setSettingsMessageStreamTransport);
+    // Capacitor apps are locked to SSE (native WebSocket streaming is unreliable on mobile);
+    // sync-context forces it too. Show SSE selected and disable the other options here.
+    const isCapacitorAppRuntime = React.useMemo(() => isCapacitorApp(), []);
+    const effectiveMessageStreamTransport = isCapacitorAppRuntime ? 'sse' : messageStreamTransport;
     const settingsDefaultFileViewerPreview = useConfigStore((state) => state.settingsDefaultFileViewerPreview);
     const setSettingsDefaultFileViewerPreview = useConfigStore((state) => state.setSettingsDefaultFileViewerPreview);
     const isSettingsDialogOpen = useUIStore(state => state.isSettingsDialogOpen);
@@ -1525,7 +1530,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                             key={option.id}
                                                             variant="chip"
                                                             size="xs"
-                                                            aria-pressed={messageStreamTransport === option.id}
+                                                            aria-pressed={effectiveMessageStreamTransport === option.id}
+                                                            disabled={isCapacitorAppRuntime && option.id !== 'sse'}
                                                             className="!font-normal"
                                                             onClick={() => handleMessageStreamTransportChange(option.id)}
                                                         >
@@ -1535,7 +1541,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 </div>
                                                 <span className="typography-meta text-muted-foreground">
                                                     {(() => {
-                                                        const option = MESSAGE_STREAM_TRANSPORT_OPTIONS.find((item) => item.id === messageStreamTransport);
+                                                        const option = MESSAGE_STREAM_TRANSPORT_OPTIONS.find((item) => item.id === effectiveMessageStreamTransport);
                                                         return option?.descriptionKey ? tUnsafe(option.descriptionKey) : '';
                                                     })()}
                                                 </span>
