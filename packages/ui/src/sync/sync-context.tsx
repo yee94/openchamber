@@ -884,6 +884,11 @@ const childStoreHasMessagePartState = (
   return Object.prototype.hasOwnProperty.call(store.getState().part, messageID)
 }
 
+const getActiveDirectoryFallback = (childStores: ChildStoreManager): string | null => {
+  if (!_activeDirectory || !_activeSession) return null
+  return childStores.getChild(_activeDirectory) ? _activeDirectory : null
+}
+
 const resolveDirectoryFromRoutingIndex = (
   routingIndex: EventRoutingIndex,
   rawDirectory: string,
@@ -932,6 +937,15 @@ const resolveDirectoryFromRoutingIndex = (
         return dir
       }
     }
+
+    // Some reconnect/idle gaps can deliver part events before the matching
+    // message.updated event and without a sessionID. If the user is actively
+    // viewing a session, route the orphaned part event there so the reducer can
+    // trigger HTTP materialization instead of dropping it as a global event.
+    const activeDirectory = getActiveDirectoryFallback(childStores)
+    if (activeDirectory) {
+      return activeDirectory
+    }
   }
 
   // Single-store fallback: if there's only one directory, use it
@@ -947,6 +961,23 @@ const resolveDirectoryFromRoutingIndex = (
   }
 
   return normalizedDirectory
+}
+
+const resolveMaterializationSessionID = (
+  materializationSessionID: string | undefined,
+  messageID: string | undefined,
+  resolvedDirectory: string,
+  routingIndex: EventRoutingIndex,
+): string | undefined => {
+  if (materializationSessionID) return materializationSessionID
+  if (messageID) {
+    const indexedSessionID = routingIndex.messageSessionById.get(messageID)
+    if (indexedSessionID) return indexedSessionID
+  }
+  if (resolvedDirectory && resolvedDirectory === _activeDirectory && _activeSession) {
+    return _activeSession
+  }
+  return undefined
 }
 
 const updateRoutingIndexFromEvent = (
@@ -1562,7 +1593,12 @@ function handleEvent(
   // Snapshot materialization is driven by typed reducer outcomes, not by
   // inferring meaning from a generic false/no-change result.
   if (materializationResult) {
-    const materializationSessionID = materializationResult.sessionID ?? getSessionIdFromPayload(payload) ?? undefined
+    const materializationSessionID = resolveMaterializationSessionID(
+      materializationResult.sessionID ?? getSessionIdFromPayload(payload) ?? undefined,
+      materializationResult.messageID ?? getMessageIdFromPayload(payload) ?? undefined,
+      resolvedDirectory,
+      routingIndex,
+    )
     if (materializationSessionID) {
       enqueueSessionMaterialization(resolvedDirectory, materializationSessionID, childStores)
     }
