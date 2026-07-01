@@ -7,6 +7,7 @@ import { createOpenCodeEnvRuntime } from './env-runtime.js';
 const originalOpencodeBinary = process.env.OPENCODE_BINARY;
 const originalComSpec = process.env.ComSpec;
 const originalPath = process.env.PATH;
+const originalLocalAppData = process.env.LOCALAPPDATA;
 const originalSystemRoot = process.env.SystemRoot;
 const originalWslBinary = process.env.WSL_BINARY;
 const originalOpenChamberWslBinary = process.env.OPENCHAMBER_WSL_BINARY;
@@ -57,6 +58,12 @@ afterEach(() => {
     process.env.SystemRoot = originalSystemRoot;
   } else {
     delete process.env.SystemRoot;
+  }
+
+  if (typeof originalLocalAppData === 'string') {
+    process.env.LOCALAPPDATA = originalLocalAppData;
+  } else {
+    delete process.env.LOCALAPPDATA;
   }
 
   if (typeof originalWslBinary === 'string') {
@@ -136,6 +143,58 @@ describe('OpenCode env runtime', () => {
       code: 'OPENCODE_BINARY_INVALID',
       message: expect.stringContaining('macOS desktop app bundle'),
     });
+  });
+
+  it('rejects known Windows OpenCode desktop app install paths', async () => {
+    setPlatform('win32');
+    const localAppData = createTempDir('openchamber-localappdata-');
+    const desktopBinary = path.join(localAppData, 'Programs', 'OpenCode', 'OpenCode.exe');
+    fs.mkdirSync(path.dirname(desktopBinary), { recursive: true });
+    fs.writeFileSync(desktopBinary, '');
+    process.env.LOCALAPPDATA = localAppData;
+    const { runtime } = createRuntime({ opencodeBinary: desktopBinary });
+
+    await expect(runtime.applyOpencodeBinaryFromSettings({ strict: true })).rejects.toMatchObject({
+      code: 'OPENCODE_BINARY_INVALID',
+      message: expect.stringContaining('Windows desktop app install'),
+    });
+  });
+
+  it('does not auto-detect the Windows OpenCode desktop app as a CLI', () => {
+    setPlatform('win32');
+    const localAppData = createTempDir('openchamber-localappdata-');
+    const desktopBinary = path.join(localAppData, 'Programs', 'OpenCode', 'OpenCode.exe');
+    fs.mkdirSync(path.dirname(desktopBinary), { recursive: true });
+    fs.writeFileSync(desktopBinary, '');
+    process.env.LOCALAPPDATA = localAppData;
+    process.env.PATH = createTempDir('openchamber-empty-path-');
+    process.env.SystemRoot = createTempDir('openchamber-empty-systemroot-');
+    delete process.env.OPENCODE_BINARY;
+    const { runtime } = createRuntime({}, {
+      spawnSync: () => ({ status: 1, stdout: '', stderr: '' }),
+    });
+
+    expect(runtime.resolveOpencodeCliPath()).toBeNull();
+  });
+
+  it('skips Windows OpenCode desktop app entries returned by where.exe', () => {
+    setPlatform('win32');
+    const localAppData = createTempDir('openchamber-localappdata-');
+    const desktopBinary = path.join(localAppData, 'Programs', 'OpenCode', 'OpenCode.exe');
+    const cliBinary = path.join(createTempDir('openchamber-cli-'), 'opencode.exe');
+    fs.mkdirSync(path.dirname(desktopBinary), { recursive: true });
+    fs.writeFileSync(desktopBinary, '');
+    fs.writeFileSync(cliBinary, '');
+    process.env.LOCALAPPDATA = localAppData;
+    process.env.PATH = createTempDir('openchamber-empty-path-');
+    process.env.SystemRoot = createTempDir('openchamber-empty-systemroot-');
+    delete process.env.OPENCODE_BINARY;
+    const { runtime, state } = createRuntime({}, {
+      spawnSync: () => ({ status: 0, stdout: `${desktopBinary}\r\n${cliBinary}\r\n`, stderr: '' }),
+    });
+
+    expect(runtime.resolveOpencodeCliPath()).toBe(cliBinary);
+    expect(state.resolvedOpencodeBinarySource).toBe('where');
   });
 
   it('rejects WSL settings in strict mode', async () => {
