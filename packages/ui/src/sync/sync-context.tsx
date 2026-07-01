@@ -9,7 +9,7 @@ import { createEventPipeline } from "./event-pipeline"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { isCapacitorApp } from "@/lib/platform"
-import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent } from "./event-reducer"
+import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent, type SessionMaterializationReason } from "./event-reducer"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { ChildStoreManager, type DirectoryStore } from "./child-store"
 import {
@@ -198,6 +198,13 @@ type PendingSessionMaterialization = {
   sessionID: string
   directory: string
   enqueuedAt: number
+  request: SessionMaterializationRequest
+}
+
+type SessionMaterializationRequest = {
+  reason: SessionMaterializationReason
+  messageID?: string
+  partID?: string
 }
 
 const SESSION_MATERIALIZATION_COOLDOWN_MS = 5_000
@@ -205,13 +212,18 @@ const pendingSessionMaterializations = new Map<string, PendingSessionMaterializa
 
 const materializationKey = (directory: string, sessionID: string) => `${directory}:${sessionID}`
 
-function enqueueSessionMaterialization(directory: string, sessionID: string, childStores: ChildStoreManager) {
+function enqueueSessionMaterialization(
+  directory: string,
+  sessionID: string,
+  childStores: ChildStoreManager,
+  request: SessionMaterializationRequest,
+) {
   if (!directory || directory === "global" || !sessionID) return
   const k = materializationKey(directory, sessionID)
   const existing = pendingSessionMaterializations.get(k)
   if (existing && Date.now() - existing.enqueuedAt < SESSION_MATERIALIZATION_COOLDOWN_MS) return
 
-  pendingSessionMaterializations.set(k, { sessionID, directory, enqueuedAt: Date.now() })
+  pendingSessionMaterializations.set(k, { sessionID, directory, enqueuedAt: Date.now(), request })
 
   // Defer to next microtask so we don't hold up the current event batch
   void Promise.resolve().then(async () => {
@@ -221,7 +233,7 @@ function enqueueSessionMaterialization(directory: string, sessionID: string, chi
       return
     }
     try {
-      await materializeSessionFromServer(directory, sessionID, store)
+      await materializeSessionFromServer(directory, sessionID, store, request)
     } catch {
       // Transient failure — next SSE event or reconnect will catch up.
     } finally {
@@ -234,8 +246,15 @@ async function materializeSessionFromServer(
   directory: string,
   sessionID: string,
   store: StoreApi<DirectoryStore>,
-  options?: { isStale?: () => boolean },
+  options?: SessionMaterializationRequest & { isStale?: () => boolean },
 ) {
+  syncDebug.recovery.materializing({
+    reason: options?.reason ?? "ensure-session-messages",
+    directory,
+    sessionID,
+    messageID: options?.messageID,
+    partID: options?.partID,
+  })
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
   const result = await retry(async () => {
     const response = await scopedClient.session.messages({ sessionID, limit: SESSION_MATERIALIZATION_MESSAGE_LIMIT })
@@ -1220,6 +1239,7 @@ async function resyncDirectoryAfterReconnect(
   directory: string,
   store: StoreApi<DirectoryStore>,
   routingIndex: EventRoutingIndex,
+  reason: SessionMaterializationReason,
 ) {
   const current = store.getState()
   const candidateSessionIds = getActiveSessionCandidateIds(directory, current)
@@ -1229,6 +1249,7 @@ async function resyncDirectoryAfterReconnect(
 
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
   await Promise.all(candidateSessionIds.map(async (sessionId) => {
+    syncDebug.recovery.materializing({ reason, directory, sessionID: sessionId })
     const [sessionResponse, messageResponse] = await Promise.all([
       retry(async () => {
         const response = await scopedClient.session.get({ sessionID: sessionId })
@@ -1498,7 +1519,7 @@ function handleEvent(
         ? (idleSession as Session & { parentID?: string | null }).parentID
         : null
       if (parentID) {
-        enqueueSessionMaterialization(resolvedDirectory, parentID, childStores)
+        enqueueSessionMaterialization(resolvedDirectory, parentID, childStores, { reason: "child-session-idle" })
       }
     }
   }
@@ -1580,7 +1601,10 @@ function handleEvent(
       const after = store.getState()
       const info = (payload.properties as { info: Message }).info
       if (info.role === "assistant" && (!after.part[messageID] || after.part[messageID].length === 0)) {
-        enqueueSessionMaterialization(resolvedDirectory, sessionID, childStores)
+        enqueueSessionMaterialization(resolvedDirectory, sessionID, childStores, {
+          reason: "empty-assistant-message",
+          messageID,
+        })
       }
     }
   } else {
@@ -1600,7 +1624,11 @@ function handleEvent(
       routingIndex,
     )
     if (materializationSessionID) {
-      enqueueSessionMaterialization(resolvedDirectory, materializationSessionID, childStores)
+      enqueueSessionMaterialization(resolvedDirectory, materializationSessionID, childStores, {
+        reason: materializationResult.reason,
+        messageID: materializationResult.messageID,
+        partID: materializationResult.partID,
+      })
     }
   }
 
@@ -1650,7 +1678,7 @@ export function SyncProvider(props: {
     [childStores, props.sdk, props.directory],
   )
 
-  const triggerDirectoryResync = useCallback((directory: string) => {
+  const triggerDirectoryResync = useCallback((directory: string, reason: SessionMaterializationReason) => {
     const store = childStores.children.get(directory)
     if (!store) return
     const resyncing = resyncingDirectoriesRef.current
@@ -1658,7 +1686,7 @@ export function SyncProvider(props: {
 
     lastFullResyncAtByDirectoryRef.current.set(directory, Date.now())
     resyncing.add(directory)
-    void resyncDirectoryAfterReconnect(directory, store, routingIndex)
+    void resyncDirectoryAfterReconnect(directory, store, routingIndex, reason)
       .catch(() => {
         // Transient failure — the watchdog, next SSE event, or reconnect will catch up.
       })
@@ -1845,7 +1873,7 @@ export function SyncProvider(props: {
           return
         }
         for (const dir of childStores.children.keys()) {
-          triggerDirectoryResync(dir)
+          triggerDirectoryResync(dir, "stream-reconnect")
         }
       },
       onDisconnect: (reason) => {
@@ -1865,7 +1893,7 @@ export function SyncProvider(props: {
           connectionPhase: "connected",
         })
         for (const dir of childStores.children.keys()) {
-          triggerDirectoryResync(dir)
+          triggerDirectoryResync(dir, "transport-switch")
         }
       },
     })
@@ -1922,7 +1950,7 @@ export function SyncProvider(props: {
         // Trigger parent session materialization so the task tool part
         // state (metadata, sessionId, output) is refreshed.
         for (const pid of parentIdsForMaterialization) {
-          enqueueSessionMaterialization(directory, pid, childStores)
+          enqueueSessionMaterialization(directory, pid, childStores, { reason: "child-session-discovered" })
         }
       } catch {
         // Best-effort — next tick will retry.
@@ -1945,7 +1973,7 @@ export function SyncProvider(props: {
           needsSnapshotAfterStatusPoll(before, sessionId, statuses[sessionId])
         ))
         if (needsSnapshot) {
-          triggerDirectoryResync(directory)
+          triggerDirectoryResync(directory, "stale-status-resync")
         }
       } finally {
         polling.delete(directory)
@@ -1977,7 +2005,7 @@ export function SyncProvider(props: {
             const lastFullResyncAt = lastFullResyncAtByDirectoryRef.current.get(directory) ?? 0
             if (shouldTriggerStaleResync(lastStreamActivityAtRef.current, lastFullResyncAt, now)) {
               pipelineReconnectRef.current?.("active_stream_stale")
-              triggerDirectoryResync(directory)
+              triggerDirectoryResync(directory, "stale-status-resync")
             }
 
             // Discover child sessions created by other OpenCode instances
@@ -2676,7 +2704,7 @@ export function useEnsureSessionMessages(sessionID: string, directory?: string) 
 
     void (async () => {
       try {
-        await materializeSessionFromServer(resolvedDirectory, sessionID, store, { isStale })
+        await materializeSessionFromServer(resolvedDirectory, sessionID, store, { reason: "ensure-session-messages", isStale })
       } catch {
         // Transient failure — next navigation or reconnect will retry
       } finally {

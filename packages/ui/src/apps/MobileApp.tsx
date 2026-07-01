@@ -282,6 +282,8 @@ const mobileInputKeyboardProps = {
   spellCheck: false,
 } as const;
 
+const NATIVE_RESUME_SYNC_EVENT_THROTTLE_MS = 1_000;
+
 const getProjectLabel = (path: string): string => {
   const normalized = normalizePath(path);
   if (!normalized) return '';
@@ -1946,9 +1948,15 @@ export function MobileApp({ apis }: MobileAppProps) {
   // exhausted the attempt (then the connect screen shows).
   const [autoConnectPhase, setAutoConnectPhase] = React.useState<'pending' | 'attempting' | 'done'>('pending');
   const isNativeMobileApp = React.useMemo(() => isCapacitorMobileApp(), []);
+  const lastNativeResumeSyncEventAtRef = React.useRef(0);
 
   const handleNativeResume = React.useCallback(() => {
     if (!getRuntimeApiBaseUrl()) return;
+    const now = Date.now();
+    if (now - lastNativeResumeSyncEventAtRef.current >= NATIVE_RESUME_SYNC_EVENT_THROTTLE_MS) {
+      lastNativeResumeSyncEventAtRef.current = now;
+      window.dispatchEvent(new Event('openchamber:system-resume'));
+    }
     void initializeApp();
     void refreshGitHubAuthStatus(apis.github, { force: true });
     if (providersCount === 0) void loadProviders({ source: 'mobileApp:nativeResume' });
