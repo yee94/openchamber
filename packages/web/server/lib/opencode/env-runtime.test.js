@@ -9,6 +9,8 @@ const originalComSpec = process.env.ComSpec;
 const originalPath = process.env.PATH;
 const originalLocalAppData = process.env.LOCALAPPDATA;
 const originalSystemRoot = process.env.SystemRoot;
+const originalBundledOpencodeCliDir = process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR;
+const originalResourcesPath = process.resourcesPath;
 const originalWslBinary = process.env.WSL_BINARY;
 const originalOpenChamberWslBinary = process.env.OPENCHAMBER_WSL_BINARY;
 const originalPlatform = process.platform;
@@ -65,6 +67,17 @@ afterEach(() => {
   } else {
     delete process.env.LOCALAPPDATA;
   }
+
+  if (typeof originalBundledOpencodeCliDir === 'string') {
+    process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR = originalBundledOpencodeCliDir;
+  } else {
+    delete process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR;
+  }
+
+  Object.defineProperty(process, 'resourcesPath', {
+    configurable: true,
+    value: originalResourcesPath,
+  });
 
   if (typeof originalWslBinary === 'string') {
     process.env.WSL_BINARY = originalWslBinary;
@@ -134,6 +147,67 @@ describe('OpenCode env runtime', () => {
     expect(process.env.OPENCODE_BINARY).toBe(binary);
     expect(state.resolvedOpencodeBinary).toBe(binary);
     expect(state.resolvedOpencodeBinarySource).toBe('settings');
+  });
+
+  it('resolves bundled OpenCode CLI before PATH lookup', () => {
+    const bundledDir = createTempDir('openchamber-bundled-opencode-');
+    const bundledBinary = path.join(bundledDir, process.platform === 'win32' ? 'opencode.exe' : 'opencode');
+    const pathDir = createTempDir('openchamber-path-opencode-');
+    const pathBinary = path.join(pathDir, process.platform === 'win32' ? 'opencode.exe' : 'opencode');
+    fs.writeFileSync(bundledBinary, '#!/bin/sh\nexit 0\n');
+    fs.writeFileSync(pathBinary, '#!/bin/sh\nexit 0\n');
+    if (process.platform !== 'win32') {
+      fs.chmodSync(bundledBinary, 0o755);
+      fs.chmodSync(pathBinary, 0o755);
+    }
+    process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR = bundledDir;
+    process.env.PATH = pathDir;
+    delete process.env.OPENCODE_BINARY;
+    const { runtime, state } = createRuntime({});
+
+    expect(runtime.resolveOpencodeCliPath()).toBe(bundledBinary);
+    expect(state.resolvedOpencodeBinarySource).toBe('bundled');
+  });
+
+  it('keeps explicit OpenCode binary ahead of bundled CLI', () => {
+    const bundledDir = createTempDir('openchamber-bundled-opencode-');
+    const bundledBinary = path.join(bundledDir, process.platform === 'win32' ? 'opencode.exe' : 'opencode');
+    const explicitDir = createTempDir('openchamber-explicit-opencode-');
+    const explicitBinary = path.join(explicitDir, process.platform === 'win32' ? 'opencode.exe' : 'opencode');
+    fs.writeFileSync(bundledBinary, '#!/bin/sh\nexit 0\n');
+    fs.writeFileSync(explicitBinary, '#!/bin/sh\nexit 0\n');
+    if (process.platform !== 'win32') {
+      fs.chmodSync(bundledBinary, 0o755);
+      fs.chmodSync(explicitBinary, 0o755);
+    }
+    process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR = bundledDir;
+    process.env.OPENCODE_BINARY = explicitBinary;
+    const { runtime, state } = createRuntime({});
+
+    expect(runtime.resolveOpencodeCliPath()).toBe(explicitBinary);
+    expect(state.resolvedOpencodeBinarySource).toBe('env');
+  });
+
+  it('resolves bundled OpenCode CLI from Electron resourcesPath', () => {
+    const resourcesPath = createTempDir('openchamber-resources-');
+    const bundledDir = path.join(resourcesPath, 'opencode-cli');
+    const bundledBinary = path.join(bundledDir, process.platform === 'win32' ? 'opencode.exe' : 'opencode');
+    fs.mkdirSync(bundledDir, { recursive: true });
+    fs.writeFileSync(bundledBinary, '#!/bin/sh\nexit 0\n');
+    if (process.platform !== 'win32') {
+      fs.chmodSync(bundledBinary, 0o755);
+    }
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: resourcesPath,
+    });
+    process.env.PATH = createTempDir('openchamber-empty-path-');
+    delete process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR;
+    delete process.env.OPENCODE_BINARY;
+    const { runtime, state } = createRuntime({});
+
+    expect(runtime.resolveOpencodeCliPath()).toBe(bundledBinary);
+    expect(state.resolvedOpencodeBinarySource).toBe('bundled');
   });
 
   itIf(process.platform === 'darwin')('rejects known macOS OpenCode app bundle executable paths', async () => {

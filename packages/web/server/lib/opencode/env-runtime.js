@@ -274,6 +274,33 @@ export const createOpenCodeEnvRuntime = (deps) => {
     return normalized.endsWith(`${path.sep}programs${path.sep}opencode${path.sep}opencode.exe`);
   };
 
+  const bundledOpenCodeCliCandidates = () => {
+    const names = process.platform === 'win32' ? ['opencode.exe'] : ['opencode'];
+    const roots = [
+      process.env.OPENCHAMBER_BUNDLED_OPENCODE_CLI_DIR,
+      typeof process.resourcesPath === 'string' ? path.join(process.resourcesPath, 'opencode-cli') : null,
+    ]
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean);
+
+    const candidates = [];
+    for (const root of roots) {
+      for (const name of names) {
+        candidates.push(path.join(root, name));
+      }
+    }
+    return candidates;
+  };
+
+  const resolveBundledOpenCodeCliPath = () => {
+    for (const candidate of bundledOpenCodeCliCandidates()) {
+      if (isExecutable(candidate) && !isWindowsOpenCodeDesktopAppPath(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  };
+
   const clearWslOpencodeResolution = () => {
     state.useWslForOpencode = false;
     state.resolvedWslBinary = null;
@@ -297,6 +324,13 @@ export const createOpenCodeEnvRuntime = (deps) => {
         state.resolvedOpencodeBinarySource = 'env';
         return candidate;
       }
+    }
+
+    const bundled = resolveBundledOpenCodeCliPath();
+    if (bundled) {
+      clearWslOpencodeResolution();
+      state.resolvedOpencodeBinarySource = 'bundled';
+      return bundled;
     }
 
     const resolvedFromPath = searchPathFor('opencode');

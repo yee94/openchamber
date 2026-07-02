@@ -50,6 +50,7 @@ import { listGlobalSessionPages } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests } from "./scoped-blocking-requests"
 import { EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, buildUserMessageHistorySnapshot, type UserMessageHistorySnapshot } from "./user-message-history"
+import { runtimeFetch } from "@/lib/runtime-fetch"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -1649,6 +1650,40 @@ const dispatchOpenCodeUpdateAvailable = (payload: { version: string }) => {
   window.dispatchEvent(new CustomEvent("openchamber:opencode-update-available", { detail: payload }))
 }
 
+let bundledOpenCodeRuntimeCache: { runtimeKey: string; promise: Promise<boolean> } | null = null
+
+const isBundledOpenCodeRuntime = async () => {
+  const runtimeKey = getRuntimeKey()
+  if (!bundledOpenCodeRuntimeCache || bundledOpenCodeRuntimeCache.runtimeKey !== runtimeKey) {
+    bundledOpenCodeRuntimeCache = {
+      runtimeKey,
+      promise: runtimeFetch("/api/config/opencode-resolution", { signal: AbortSignal.timeout(4000) })
+        .then(async (response) => {
+          if (response.ok) {
+            const resolution = await response.json() as { source?: unknown; detectedSourceNow?: unknown }
+            return resolution.source === "bundled" || resolution.detectedSourceNow === "bundled"
+          }
+
+          const healthResponse = await runtimeFetch("/health", { signal: AbortSignal.timeout(4000) })
+          if (!healthResponse.ok) return false
+          const health = await healthResponse.json() as { opencodeBinarySource?: unknown }
+          return health.opencodeBinarySource === "bundled"
+        })
+        .catch(() => false),
+    }
+  }
+  return bundledOpenCodeRuntimeCache.promise
+}
+
+const dispatchOpenCodeUpdateAvailableUnlessBundled = (payload: { version: string }) => {
+  if (typeof window === "undefined") return
+  void isBundledOpenCodeRuntime().then((isBundled) => {
+    if (!isBundled) {
+      dispatchOpenCodeUpdateAvailable(payload)
+    }
+  })
+}
+
 export function SyncProvider(props: {
   sdk: OpencodeClient
   directory: string
@@ -1863,7 +1898,7 @@ export function SyncProvider(props: {
             ? (payload.properties as { version: string }).version
             : ""
           if (version) {
-            dispatchOpenCodeUpdateAvailable({ version })
+            dispatchOpenCodeUpdateAvailableUnlessBundled({ version })
           }
         }
         handleEvent(directory, payload, childStores, routingIndex)
