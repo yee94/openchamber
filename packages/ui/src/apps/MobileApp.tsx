@@ -202,19 +202,30 @@ const useNativeMobileChrome = (): void => {
 };
 
 const useNativeMobileLifecycle = (onResume: () => void): void => {
+  const wasInactiveRef = React.useRef(false);
+
   React.useEffect(() => {
     if (!isCapacitorMobileApp()) return;
 
     let disposed = false;
     const cleanup: Array<() => void> = [];
+    const resumeAfterInactive = () => {
+      if (!wasInactiveRef.current) return;
+      wasInactiveRef.current = false;
+      onResume();
+    };
 
     void import('@capacitor/app').then(async ({ App }) => {
       if (disposed) return;
       const state = await App.addListener('appStateChange', ({ isActive }) => {
         document.documentElement.classList.toggle('oc-native-app-active', isActive);
-        if (isActive) onResume();
+        if (!isActive) {
+          wasInactiveRef.current = true;
+          return;
+        }
+        resumeAfterInactive();
       });
-      const resume = await App.addListener('resume', onResume);
+      const resume = await App.addListener('resume', resumeAfterInactive);
       if (disposed) {
         void state.remove();
         void resume.remove();

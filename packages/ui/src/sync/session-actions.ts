@@ -1169,6 +1169,10 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
     // can't repopulate (and un-evict) a session already navigated away from.
     if (useSessionUIStore.getState().currentSessionId !== sessionID) return
 
+    const latestState = store.getState()
+    const latestStatus = getSessionMaterializationStatus(latestState, sessionID)
+    if (latestStatus.renderable && (latestState.message[sessionID]?.length ?? 0) >= records.length) return
+
     store.setState((state) => {
       const materialized = materializeSessionSnapshots(
         state,
@@ -1179,6 +1183,7 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
         })),
         { skipPartTypes: MESSAGE_REFETCH_SKIP_PARTS },
       )
+      if (!materialized.messagesChanged && !materialized.partsChanged) return state
       return { message: materialized.message, part: materialized.part }
     })
   } catch {

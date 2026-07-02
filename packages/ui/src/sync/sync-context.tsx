@@ -286,6 +286,9 @@ async function materializeSessionFromServer(
       })),
       { skipPartTypes: RECONNECT_SKIP_PARTS },
     )
+    if (!materialized.messagesChanged && !materialized.partsChanged) {
+      return state
+    }
     return { message: materialized.message, part: materialized.part }
   })
 
@@ -1708,6 +1711,8 @@ export function SyncProvider(props: {
   const resyncingDirectoriesRef = useRef(new Set<string>())
   const statusPollingDirectoriesRef = useRef(new Set<string>())
   const pipelineReconnectRef = useRef<((reason?: string) => void) | null>(null)
+  const pipelineHasConnectedRef = useRef(false)
+  const pipelineDisconnectedBeforeFirstConnectRef = useRef(false)
 
   const system = useMemo<SyncSystem>(
     () => ({
@@ -1909,6 +1914,11 @@ export function SyncProvider(props: {
           hasEverConnected: true,
           connectionPhase: "connected",
         })
+        const isFirstConnect = !pipelineHasConnectedRef.current
+        pipelineHasConnectedRef.current = true
+        if (isFirstConnect && !pipelineDisconnectedBeforeFirstConnectRef.current) {
+          return
+        }
         if (isRecentBoot()) {
           return
         }
@@ -1917,6 +1927,9 @@ export function SyncProvider(props: {
         }
       },
       onDisconnect: (reason) => {
+        if (!pipelineHasConnectedRef.current) {
+          pipelineDisconnectedBeforeFirstConnectRef.current = true
+        }
         const { hasEverConnected } = useConfigStore.getState()
         useConfigStore.setState({
           isConnected: false,
