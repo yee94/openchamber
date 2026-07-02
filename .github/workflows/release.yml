@@ -148,6 +148,7 @@ jobs:
 
       - name: Get bundled OpenCode CLI version
         id: opencode_cli_version
+        shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').dependencies['@opencode-ai/sdk']")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -294,6 +295,7 @@ jobs:
 
       - name: Get bundled OpenCode CLI version
         id: opencode_cli_version
+        shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').dependencies['@opencode-ai/sdk']")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
