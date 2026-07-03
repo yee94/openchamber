@@ -178,14 +178,12 @@ export type DesktopSettings = {
   responseStyleEnabled?: boolean;
   responseStylePreset?: 'concise' | 'detailed' | 'mentor' | 'pushback' | 'noFiller' | 'matchEnergy' | 'warmPeer' | 'custom';
   responseStyleCustomInstructions?: string;
-  sttProvider?: 'browser' | 'server' | 'wasm';
+  dictationEnabled?: boolean;
+  sttProvider?: 'local' | 'openai-compatible';
   sttServerUrl?: string;
   sttModel?: string;
-  wasmSttModel?: string;
+  sttLocalModel?: string;
   sttLanguage?: string;
-  sttSilenceThresholdDb?: number;
-  sttSilenceHoldMs?: number;
-  sttTranscribeOnStop?: boolean;
   // Global draft welcome starters (pinned commands/skills), persisted to settings.json
   draftStarters?: DraftStarterRef[];
 };
