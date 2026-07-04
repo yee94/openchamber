@@ -199,6 +199,12 @@ export const useChatAutoFollow = ({
     // ANIMATION_GUARD_MS). 0 = no animation guard active.
     const animationGuardUntilRef = React.useRef(0);
 
+    // True while the native (Capacitor iOS) keyboard slide choreography is in
+    // flight (between 'oc:keyboard-anim' and 'oc:keyboard-settled' from
+    // useNativeMobileChrome). During that window the pinned content is moved by a
+    // transform on the inner wrapper, so the ResizeObserver chase must stand down.
+    const keyboardAnimRef = React.useRef(false);
+
     // Last observed scrollTop, used to derive scroll DIRECTION in the scroll
     // handler so the bottom-zone re-engage only fires when arriving at the bottom
     // by scrolling down — never when a user scrolling UP merely lands in the zone.
@@ -668,6 +674,13 @@ export const useChatAutoFollow = ({
         if (!container || typeof ResizeObserver === 'undefined') return;
 
         const observer = new ResizeObserver(() => {
+            // Keyboard slide in flight: the container/composer resizes it reports
+            // are part of the transform choreography — the settle handler does the
+            // single deterministic re-pin, so chasing here would just fight it.
+            if (keyboardAnimRef.current) {
+                updateOverflowAndButton();
+                return;
+            }
             const el = scrollRef.current;
             if (el && !canScroll(el)) {
                 setStateValue('following');
@@ -702,6 +715,93 @@ export const useChatAutoFollow = ({
         }
         return () => observer.disconnect();
     }, [armEntryStickQuiet, containerEl, isActive, scrollToBottom, setStateValue, updateOverflowAndButton]);
+
+    // ── native keyboard slide (Capacitor iOS choreography) ──────────────────
+    // useNativeMobileChrome (MobileApp) drives the keyboard open/close as a
+    // transform-only slide: during the animation the shell layout does NOT change
+    // (show) or changes exactly once up-front (hide). Our job here:
+    //   show: if pinned, slide the inner content up in sync with the composer.
+    //   hide: the shell snaps back to full height first, which makes the browser
+    //         clamp scrollTop — measure that clamp and FLIP the inner content so
+    //         the frame looks unchanged, then let it slide down with the keyboard.
+    //   settled: drop the transforms and do ONE instant re-pin in the same frame
+    //            (invisible — this runs before the post-reflow paint).
+    // These events never fire outside the Capacitor iOS app, so the listeners are
+    // inert everywhere else.
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const innerOf = (el: HTMLElement): HTMLElement | null =>
+            el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
+
+        const handleKeyboardAnim = (event: Event) => {
+            const detail = (event as CustomEvent<{ phase: 'show' | 'hide'; slide: number; durationMs: number; easing: string }>).detail;
+            if (!detail) return;
+            keyboardAnimRef.current = true;
+            // The clamp/resize during the choreography can dispatch scroll events
+            // that land away from the auto marker — never read those as a user
+            // scroll-away.
+            animationGuardUntilRef.current = now() + detail.durationMs + ANIMATION_GUARD_MS;
+            const el = scrollRef.current;
+            if (!el) return;
+            const inner = innerOf(el);
+            if (!inner) return;
+            const transition = `transform ${detail.durationMs}ms ${detail.easing}`;
+
+            if (detail.phase === 'show') {
+                // Only pinned content rides the keyboard; a user reading history
+                // stays put (the composer slides over the bottom, like native apps).
+                if (stateRef.current !== 'following' || !canScroll(el)) return;
+                inner.style.transition = transition;
+                inner.style.transform = `translateY(${-detail.slide}px)`;
+                return;
+            }
+
+            // hide: the layout var was restored just before this event — force the
+            // reflow now and measure how far the scrollTop clamp moved the content,
+            // then FLIP it back and slide to 0.
+            const before = el.scrollTop;
+            void el.clientHeight;
+            const clamped = before - el.scrollTop;
+            if (clamped > 0.5) {
+                inner.style.transition = 'none';
+                inner.style.transform = `translateY(${-clamped}px)`;
+                void inner.offsetHeight;
+            }
+            inner.style.transition = transition;
+            inner.style.transform = 'translateY(0px)';
+        };
+
+        const handleKeyboardSettled = () => {
+            keyboardAnimRef.current = false;
+            const el = scrollRef.current;
+            if (!el) {
+                updateOverflowAndButton();
+                return;
+            }
+            const inner = innerOf(el);
+            if (inner) {
+                inner.style.transition = '';
+                inner.style.transform = '';
+            }
+            // Single deterministic re-pin, same task as the layout swap → lands
+            // before paint. (scrollToBottomNow, not scrollToBottom: this must not
+            // be gated on working/settling — the keyboard resize is a viewport
+            // change, not content growth.)
+            if (stateRef.current === 'following' && canScroll(el)) {
+                scrollToBottomNow('auto');
+            }
+            updateOverflowAndButton();
+        };
+
+        window.addEventListener('oc:keyboard-anim', handleKeyboardAnim);
+        window.addEventListener('oc:keyboard-settled', handleKeyboardSettled);
+        return () => {
+            window.removeEventListener('oc:keyboard-anim', handleKeyboardAnim);
+            window.removeEventListener('oc:keyboard-settled', handleKeyboardSettled);
+            keyboardAnimRef.current = false;
+        };
+    }, [scrollToBottomNow, updateOverflowAndButton]);
 
     React.useEffect(() => {
         updateOverflowAndButton();

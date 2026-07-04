@@ -105,9 +105,8 @@ const useNativeMobileChrome = (): void => {
     // Marks the Capacitor shell so keyboard-inset CSS only applies here, not in
     // the browser-hosted PWA (which handles the keyboard via dvh / interactive-widget).
     root.classList.add('oc-capacitor-app');
-    // Platform marker: Android resizes the window for the keyboard (no manual inset), so the
-    // shell's height transition (meant for iOS's animated --oc-keyboard-inset) must be off there
-    // — otherwise the height animates against the instant native resize and the header bounces.
+    // Platform marker: Android resizes the window for the keyboard natively (no manual
+    // inset/choreography — the keyboard listeners below skip Android entirely).
     const capacitorPlatform = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.();
     if (capacitorPlatform === 'android') {
       root.classList.add('oc-platform-android');
@@ -168,35 +167,151 @@ const useNativeMobileChrome = (): void => {
       // counts and floats the composer a keyboard-height above the keyboard — skip it there.
       const platform = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.();
       if (platform === 'android') return;
-      await Keyboard.setAccessoryBarVisible({ isVisible: true }).catch(() => undefined);
+      // No WebKit form accessory bar (prev/next arrows + Done) above the keyboard —
+      // there's a single input, so it only eats vertical space.
+      await Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => undefined);
 
-      // `keyboardWillShow` fires at the START of the iOS keyboard animation and
-      // carries the final height, so we set the inset once here and let the CSS
-      // transition (tuned to mimic the iOS keyboard curve/duration) carry the rise.
-      // visualViewport tracking was tried but doesn't shrink under WKWebView's
-      // `resize: 'none'`, so it never reported the keyboard — this event is the
-      // reliable signal.
+      // Keyboard slide choreography (see the "Native (Capacitor) keyboard handling"
+      // block in mobile.css for the full picture). `keyboardWillShow` fires at the
+      // START of the iOS keyboard animation and carries the final height; the
+      // visible motion is transform-only (--oc-kb-shift), and the shell's layout
+      // height (--oc-kb-layout) snaps exactly once per open/close at the moment the
+      // resize is invisible. visualViewport tracking was tried but doesn't shrink
+      // under WKWebView's `resize: 'none'`, so these events are the reliable signal.
+      const KB_ANIM_MS = 250;
+      // Dismissal reads faster than the rise — run the hide leg shorter (kept in
+      // sync with the .oc-kb-hide transition-duration override in mobile.css).
+      const KB_HIDE_MS = 200;
+      const KB_ANIM_EASING = 'cubic-bezier(0.38, 0.7, 0.125, 1)';
+      let settleTimer: number | null = null;
+      let keyboardHeight = 0;
+      let layoutApplied = false;
+      let safeBottomPx = 0;
+      let keyboardOpen = false;
+
+      const setVar = (name: string, px: number) => {
+        root.style.setProperty(name, `${Math.max(0, Math.round(px))}px`);
+      };
+      const clearSettle = () => {
+        if (settleTimer !== null) {
+          window.clearTimeout(settleTimer);
+          settleTimer = null;
+        }
+      };
+      const dispatchKb = (type: 'oc:keyboard-anim' | 'oc:keyboard-settled', detail: Record<string, unknown>) => {
+        window.dispatchEvent(new CustomEvent(type, { detail }));
+      };
+
       const showHandle = await Keyboard.addListener('keyboardWillShow', (info) => {
-        root.classList.add('oc-keyboard-open');
-        setInset(info.keyboardHeight);
+        clearSettle();
+        keyboardOpen = true;
+        keyboardHeight = info.keyboardHeight;
+        if (!layoutApplied) {
+          // The shell's resolved padding-bottom while the keyboard is down IS the
+          // bottom safe padding it gives up when open — measure it so the slide
+          // distance lands the composer exactly where the final layout puts it.
+          const shell = document.querySelector('.oc-mobile-app-shell');
+          safeBottomPx = shell ? parseFloat(getComputedStyle(shell).paddingBottom) || 0 : 0;
+        }
+        const slide = Math.max(0, keyboardHeight - safeBottomPx);
+        root.classList.remove('oc-kb-hide');
+        root.classList.add('oc-keyboard-open', 'oc-kb-animating');
+        setInset(keyboardHeight);
+        setVar('--oc-kb-shift', slide);
+        dispatchKb('oc:keyboard-anim', { phase: 'show', slide, durationMs: KB_ANIM_MS, easing: KB_ANIM_EASING });
+        settleTimer = window.setTimeout(() => {
+          settleTimer = null;
+          // Invisible swap: transition off, layout takes the keyboard height (one
+          // reflow), shift returns to 0 in the same frame.
+          root.classList.remove('oc-kb-animating');
+          setVar('--oc-kb-layout', keyboardHeight);
+          layoutApplied = true;
+          setVar('--oc-kb-shift', 0);
+          dispatchKb('oc:keyboard-settled', { open: true });
+        }, KB_ANIM_MS + 20);
       });
-      const hideHandle = await Keyboard.addListener('keyboardWillHide', () => {
+
+      // Shared hide choreography. The bridge's `keyboardWillHide` can arrive a
+      // beat AFTER the native dismiss animation has already started (WKWebView +
+      // resize: 'none'), which made the composer begin its down-slide only once
+      // the keyboard was gone. The earliest reliable signal for the common
+      // dismissal path (tap outside the input) is the textarea's focusout — so
+      // both trigger this, and `keyboardOpen` makes the second call a no-op.
+      const runHide = () => {
+        if (!keyboardOpen) return;
+        keyboardOpen = false;
+        clearSettle();
+        const slide = Math.max(0, keyboardHeight - safeBottomPx);
         root.classList.remove('oc-keyboard-open');
         setInset(0);
-      });
+        if (layoutApplied) {
+          // Settled-open → restore the full-height layout NOW (still hidden behind
+          // the keyboard) and FLIP the composer to its raised position without
+          // transitioning, so the next frame looks unchanged.
+          root.classList.remove('oc-kb-animating');
+          setVar('--oc-kb-layout', 0);
+          layoutApplied = false;
+          setVar('--oc-kb-shift', slide);
+          // Force the style/layout flush so the transition below starts from the
+          // FLIP position instead of coalescing both writes into one frame.
+          void (document.querySelector('.oc-mobile-app-shell') as HTMLElement | null)?.offsetHeight;
+        }
+        // If the hide interrupted a show mid-animation (layout not applied yet),
+        // the shift transitions back down from wherever it currently is.
+        dispatchKb('oc:keyboard-anim', { phase: 'hide', slide, durationMs: KB_HIDE_MS, easing: KB_ANIM_EASING });
+        root.classList.add('oc-kb-animating', 'oc-kb-hide');
+        setVar('--oc-kb-shift', 0);
+        settleTimer = window.setTimeout(() => {
+          settleTimer = null;
+          root.classList.remove('oc-kb-animating', 'oc-kb-hide');
+          dispatchKb('oc:keyboard-settled', { open: false });
+        }, KB_HIDE_MS + 20);
+      };
+
+      const hideHandle = await Keyboard.addListener('keyboardWillHide', runHide);
+
+      // Early hide trigger: blurring the focused text field is what starts the
+      // native dismiss animation, and it happens in-page — no bridge latency.
+      // Deferred a task so a synchronous refocus (focus moving to another text
+      // input, or a control that restores focus) doesn't false-trigger; in that
+      // case the keyboard never hides and `keyboardWillHide` never fires either.
+      const isTextInput = (node: unknown): boolean =>
+        node instanceof HTMLElement
+        && (node.tagName === 'TEXTAREA' || node.tagName === 'INPUT' || node.isContentEditable);
+      const handleFocusOut = (event: FocusEvent) => {
+        if (!keyboardOpen) return;
+        if (!isTextInput(event.target)) return;
+        if (isTextInput(event.relatedTarget)) return;
+        window.setTimeout(() => {
+          if (!keyboardOpen) return;
+          if (isTextInput(document.activeElement)) return;
+          runHide();
+        }, 0);
+      };
+      document.addEventListener('focusout', handleFocusOut, true);
+
       if (disposed) {
+        clearSettle();
+        document.removeEventListener('focusout', handleFocusOut, true);
         void showHandle.remove();
         void hideHandle.remove();
         return;
       }
-      cleanup.push(() => void showHandle.remove(), () => void hideHandle.remove());
+      cleanup.push(
+        clearSettle,
+        () => document.removeEventListener('focusout', handleFocusOut, true),
+        () => void showHandle.remove(),
+        () => void hideHandle.remove(),
+      );
     }).catch(() => undefined);
 
     return () => {
       disposed = true;
       cleanup.forEach((remove) => remove());
-      root.classList.remove('oc-capacitor-app', 'oc-keyboard-open', 'oc-platform-android');
+      root.classList.remove('oc-capacitor-app', 'oc-keyboard-open', 'oc-kb-animating', 'oc-kb-hide', 'oc-platform-android');
       root.style.removeProperty('--oc-keyboard-inset');
+      root.style.removeProperty('--oc-kb-shift');
+      root.style.removeProperty('--oc-kb-layout');
     };
   }, []);
 };
