@@ -1749,6 +1749,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         queuedOnly?: boolean;
         queuedMessageId?: string;
         delivery?: 'steer';
+        /** Submit this text instead of the composer input. Used by preset
+            starter chips: on mobile the collapsed pill has no mounted textarea,
+            so the DOM-first input snapshot would read empty content. */
+        presetText?: string;
     };
     const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
 
@@ -1822,7 +1826,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const queuedOnly = options?.queuedOnly ?? false;
         const queuedMessageId = options?.queuedMessageId;
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
-        const inputSnapshot = getCurrentInputSnapshot();
+        const inputSnapshot = options?.presetText != null
+            ? {
+                message: options.presetText,
+                hasContent: options.presetText.trim().length > 0 || sendableAttachedFiles.length > 0 || hasDrafts,
+            }
+            : getCurrentInputSnapshot();
         const queuedMessagesToSend = queuedMessageId
             ? queuedMessages.filter((message) => message.id === queuedMessageId)
             : queuedMessages;
@@ -2360,12 +2369,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // getCurrentInputSnapshot reads textareaRef.current.value first, so setting it
     // synchronously lets handleSubmit pick up the preset text in the same tick.
     const submitPresetPrompt = React.useCallback((text: string) => {
-        const textarea = textareaRef.current;
-        if (textarea) {
-            textarea.value = text;
-        }
-        setMessage(text);
-        void handleSubmitRef.current();
+        // The text goes straight into the submit (see SubmitOptions.presetText)
+        // instead of through the composer input — the collapsed mobile pill has
+        // no mounted textarea to stage it in.
+        void handleSubmitRef.current({ presetText: text });
     }, []);
 
     // Dictation: insert the transcript inline; optionally submit immediately.
