@@ -716,23 +716,21 @@ export const useChatAutoFollow = ({
         return () => observer.disconnect();
     }, [armEntryStickQuiet, containerEl, isActive, scrollToBottom, setStateValue, updateOverflowAndButton]);
 
-    // ── native keyboard slide (Capacitor iOS choreography) ──────────────────
-    // useNativeMobileChrome (MobileApp) drives the keyboard open/close as a
-    // transform-only slide: during the animation the shell layout does NOT change
-    // (show) or changes exactly once up-front (hide). Our job here:
-    //   show: if pinned, slide the inner content up in sync with the composer.
-    //   hide: the shell snaps back to full height first, which makes the browser
-    //         clamp scrollTop — measure that clamp and FLIP the inner content so
-    //         the frame looks unchanged, then let it slide down with the keyboard.
-    //   settled: drop the transforms and do ONE instant re-pin in the same frame
-    //            (invisible — this runs before the post-reflow paint).
-    // These events never fire outside the Capacitor iOS app, so the listeners are
-    // inert everywhere else.
+    // ── native keyboard transitions (Capacitor choreography) ────────────────
+    // The chat scroller gets NO transforms during the keyboard transition:
+    // transforming the scroll container (or its content) forces WebKit to
+    // rebuild the composited scrolling layers, which stalls for seconds on
+    // long chats. Instead the chat repositions with instant snaps that hide
+    // behind the keyboard itself:
+    //   show: content stays put while the keyboard/composer slide over it; the
+    //         settled event (shell layout snap) does ONE instant re-pin.
+    //   hide: the shell layout is restored up-front — the scrollTop clamp
+    //         happens while the keyboard still covers that region — and the
+    //         settled event re-pins once at the end.
+    // During the window we only guard the scroll heuristics and the observer
+    // chase. These events never fire outside the Capacitor app.
     React.useEffect(() => {
         if (typeof window === 'undefined') return;
-
-        const innerOf = (el: HTMLElement): HTMLElement | null =>
-            el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
 
         const handleKeyboardAnim = (event: Event) => {
             const detail = (event as CustomEvent<{ phase: 'show' | 'hide'; slide: number; durationMs: number; easing: string }>).detail;
@@ -742,39 +740,6 @@ export const useChatAutoFollow = ({
             // that land away from the auto marker — never read those as a user
             // scroll-away.
             animationGuardUntilRef.current = now() + detail.durationMs + ANIMATION_GUARD_MS;
-            const el = scrollRef.current;
-            if (!el) return;
-            const inner = innerOf(el);
-            if (!inner) return;
-            const transition = `transform ${detail.durationMs}ms ${detail.easing}`;
-
-            if (detail.phase === 'show') {
-                // Only pinned content rides the keyboard; a user reading history
-                // stays put (the composer slides over the bottom, like native apps).
-                if (stateRef.current !== 'following' || !canScroll(el)) return;
-                // Fold any pending re-pin distance into the same slide. The pill
-                // composer swaps to the full composer right before focusing, which
-                // shrinks the viewport without moving scrollTop — compensating it
-                // here makes keyboard + composer growth one motion instead of two.
-                const pending = Math.max(0, el.scrollHeight - el.scrollTop - el.clientHeight);
-                inner.style.transition = transition;
-                inner.style.transform = `translateY(${-(detail.slide + pending)}px)`;
-                return;
-            }
-
-            // hide: the layout var was restored just before this event — force the
-            // reflow now and measure how far the scrollTop clamp moved the content,
-            // then FLIP it back and slide to 0.
-            const before = el.scrollTop;
-            void el.clientHeight;
-            const clamped = before - el.scrollTop;
-            if (clamped > 0.5) {
-                inner.style.transition = 'none';
-                inner.style.transform = `translateY(${-clamped}px)`;
-                void inner.offsetHeight;
-            }
-            inner.style.transition = transition;
-            inner.style.transform = 'translateY(0px)';
         };
 
         const handleKeyboardSettled = () => {
@@ -783,11 +748,6 @@ export const useChatAutoFollow = ({
             if (!el) {
                 updateOverflowAndButton();
                 return;
-            }
-            const inner = innerOf(el);
-            if (inner) {
-                inner.style.transition = '';
-                inner.style.transform = '';
             }
             // Single deterministic re-pin, same task as the layout swap → lands
             // before paint. (scrollToBottomNow, not scrollToBottom: this must not

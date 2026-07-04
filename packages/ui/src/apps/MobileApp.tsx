@@ -210,7 +210,7 @@ const useNativeMobileChrome = (): void => {
       // Keyboard slide choreography (see the "Native (Capacitor) keyboard handling"
       // block in mobile.css for the full picture). `keyboardWillShow` fires at the
       // START of the iOS keyboard animation and carries the final height; the
-      // visible motion is transform-only (--oc-kb-shift), and the shell's layout
+      // visible motion is transform-only (inline styles on the kb-movers), and the shell's layout
       // height (--oc-kb-layout) snaps exactly once per open/close at the moment the
       // resize is invisible. visualViewport tracking was tried but doesn't shrink
       // under WKWebView's `resize: 'none'`, so these events are the reliable signal.
@@ -238,6 +238,26 @@ const useNativeMobileChrome = (): void => {
       const dispatchKb = (type: 'oc:keyboard-intent' | 'oc:keyboard-anim' | 'oc:keyboard-settled', detail: Record<string, unknown>) => {
         window.dispatchEvent(new CustomEvent(type, { detail }));
       };
+      // Elements that ride the keyboard slide, with their travel factor. Driven
+      // by INLINE styles from here: WebKit does not reliably start a transition
+      // when the transform's value changes via a CSS custom property, which
+      // left the composer parked until the keyboard finished.
+      const getKbMovers = (): Array<{ el: HTMLElement; factor: number }> => {
+        const movers: Array<{ el: HTMLElement; factor: number }> = [];
+        const composer = document.querySelector<HTMLElement>('.oc-mobile-composer');
+        if (composer) movers.push({ el: composer, factor: 1 });
+        // The centered draft title moves half the shift — exactly where the
+        // center lands after the shell snap (see mobile.css notes).
+        const draftCenter = document.querySelector<HTMLElement>('.oc-draft-center');
+        if (draftCenter) movers.push({ el: draftCenter, factor: 0.5 });
+        return movers;
+      };
+      const clearKbMovers = () => {
+        for (const { el } of getKbMovers()) {
+          el.style.transition = '';
+          el.style.transform = '';
+        }
+      };
 
       const showHandle = await Keyboard.addListener('keyboardWillShow', (info) => {
         clearSettle();
@@ -262,7 +282,18 @@ const useNativeMobileChrome = (): void => {
         }
         root.classList.add('oc-keyboard-open', 'oc-kb-animating', 'oc-kb-caret-hold');
         setInset(keyboardHeight);
-        setVar('--oc-kb-shift', slide);
+        for (const { el, factor } of getKbMovers()) {
+            el.style.transition = `transform ${KB_ANIM_MS}ms ${KB_ANIM_EASING}`;
+            el.style.transform = `translateY(${-slide * factor}px)`;
+        }
+        // Reserve the keyboard strip inside the chat scroller NOW and re-pin
+        // immediately (settled = one cheap scrollTop write over already-mounted
+        // rows), so the chat bottom moves as the keyboard STARTS rising instead
+        // of waiting for it to finish. `slide` (keyboard minus the safe inset
+        // the shell gives up) is exactly the strip the scroller loses at
+        // settle, so pin position and settle stay geometry-neutral.
+        setVar('--oc-kb-scroll-inset', slide);
+        dispatchKb('oc:keyboard-settled', { open: true });
         dispatchKb('oc:keyboard-anim', { phase: 'show', slide, durationMs: KB_ANIM_MS, easing: KB_ANIM_EASING });
         settleTimer = window.setTimeout(() => {
           settleTimer = null;
@@ -271,7 +302,7 @@ const useNativeMobileChrome = (): void => {
           root.classList.remove('oc-kb-animating');
           setVar('--oc-kb-layout', keyboardHeight);
           layoutApplied = true;
-          setVar('--oc-kb-shift', 0);
+          clearKbMovers();
           dispatchKb('oc:keyboard-settled', { open: true });
           // Reveal the caret only after UIKit's own caret reposition window.
           caretTimer = window.setTimeout(() => {
@@ -304,26 +335,34 @@ const useNativeMobileChrome = (): void => {
         const slide = Math.max(0, keyboardHeight - safeBottomPx);
         root.classList.remove('oc-keyboard-open');
         setInset(0);
+        setVar('--oc-kb-scroll-inset', 0);
         if (layoutApplied) {
           // Settled-open → restore the full-height layout NOW (still hidden behind
-          // the keyboard) and FLIP the composer to its raised position without
+          // the keyboard) and FLIP the movers to their raised position without
           // transitioning, so the next frame looks unchanged.
           root.classList.remove('oc-kb-animating');
           setVar('--oc-kb-layout', 0);
           layoutApplied = false;
-          setVar('--oc-kb-shift', slide);
+          for (const { el, factor } of getKbMovers()) {
+            el.style.transition = 'none';
+            el.style.transform = `translateY(${-slide * factor}px)`;
+          }
           // Force the style/layout flush so the transition below starts from the
           // FLIP position instead of coalescing both writes into one frame.
           void (document.querySelector('.oc-mobile-app-shell') as HTMLElement | null)?.offsetHeight;
         }
         // If the hide interrupted a show mid-animation (layout not applied yet),
-        // the shift transitions back down from wherever it currently is.
+        // the movers transition back down from wherever they currently are.
         dispatchKb('oc:keyboard-anim', { phase: 'hide', slide, durationMs: KB_HIDE_MS, easing: KB_ANIM_EASING });
         root.classList.add('oc-kb-animating', 'oc-kb-hide');
-        setVar('--oc-kb-shift', 0);
+        for (const { el } of getKbMovers()) {
+            el.style.transition = `transform ${KB_HIDE_MS}ms ${KB_ANIM_EASING}`;
+            el.style.transform = 'translateY(0px)';
+        }
         settleTimer = window.setTimeout(() => {
           settleTimer = null;
           root.classList.remove('oc-kb-animating', 'oc-kb-hide');
+          clearKbMovers();
           dispatchKb('oc:keyboard-settled', { open: false });
         }, KB_HIDE_MS + 20);
       };
@@ -378,6 +417,7 @@ const useNativeMobileChrome = (): void => {
       root.style.removeProperty('--oc-keyboard-inset');
       root.style.removeProperty('--oc-kb-shift');
       root.style.removeProperty('--oc-kb-layout');
+      root.style.removeProperty('--oc-kb-scroll-inset');
     };
   }, []);
 };
