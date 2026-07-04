@@ -624,3 +624,21 @@
 :root.oc-capacitor-app.oc-keyboard-open .oc-mobile-composer {
   padding-bottom: 12px;
 }
+
+/* Content cross-fade for the pill ↔ full composer morph. The wrapper animates
+   its height (FLIP in ChatInput); the freshly mounted state fades in on top. */
+@keyframes oc-composer-morph-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.oc-composer-morph-fade {
+  animation: oc-composer-morph-fade 0.24s ease-out both;
+}
+
+/* Voice overlay variant: the overlay BACKGROUND appears immediately (it rides
+   the morphing shape), but its content stays hidden until the shape has mostly
+   finished growing, then fades in — no clipped controls mid-morph. Timings
+   follow the 340ms wrapper morph in ChatInput. */
+.oc-composer-morph-content-fade > * {
+  animation: oc-composer-morph-fade 0.18s ease-out 0.26s both;
+}

@@ -752,8 +752,13 @@ export const useChatAutoFollow = ({
                 // Only pinned content rides the keyboard; a user reading history
                 // stays put (the composer slides over the bottom, like native apps).
                 if (stateRef.current !== 'following' || !canScroll(el)) return;
+                // Fold any pending re-pin distance into the same slide. The pill
+                // composer swaps to the full composer right before focusing, which
+                // shrinks the viewport without moving scrollTop — compensating it
+                // here makes keyboard + composer growth one motion instead of two.
+                const pending = Math.max(0, el.scrollHeight - el.scrollTop - el.clientHeight);
                 inner.style.transition = transition;
-                inner.style.transform = `translateY(${-detail.slide}px)`;
+                inner.style.transform = `translateY(${-(detail.slide + pending)}px)`;
                 return;
             }
 

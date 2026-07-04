@@ -31,6 +31,14 @@ interface ComposerDictationProps {
     disabled?: boolean;
     onInsert: (text: string) => void;
     onInsertAndSend: (text: string) => void;
+    /** Reports whether dictation is active (recording/transcribing/failed overlay shown). */
+    onActiveChange?: (active: boolean) => void;
+    /** Render the mic trigger button (default). Pass false when the host renders
+        its own trigger and only needs the overlay + recording engine. */
+    renderTrigger?: boolean;
+    /** Rendered at the very top of the active overlay (e.g. the mobile composer
+        drag handle, so swipe-expand keeps working in Listening mode). */
+    topAccessory?: React.ReactNode;
 }
 
 const formatDuration = (seconds: number): string => {
@@ -114,6 +122,9 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
     disabled,
     onInsert,
     onInsertAndSend,
+    onActiveChange,
+    renderTrigger = true,
+    topAccessory,
 }) => {
     const { t } = useI18n();
     const { currentTheme } = useThemeSystem();
@@ -166,6 +177,14 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
     React.useEffect(() => {
         statusRef.current = status;
     }, [status]);
+
+    // Layout effect on purpose: the host may expand/collapse the composer in
+    // response, and that state change must land in the same paint as the
+    // overlay (a plain effect painted one clipped frame of overlay content
+    // inside the still-collapsed pill before the morph started).
+    React.useLayoutEffect(() => {
+        onActiveChange?.(status !== 'idle');
+    }, [status, onActiveChange]);
 
     // Keyboard shortcut (toggle_dictation): idle -> start recording,
     // recording -> confirm and insert. Dispatched by useKeyboardShortcuts.
@@ -259,27 +278,49 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
         return t('chat.dictation.listening');
     })();
 
+    // Dictation must not dismiss the soft keyboard: block the focus transfer
+    // iOS performs on tap for the mic and every overlay control (same pattern
+    // as PermissionAutoAcceptButton).
+    const keepKeyboardFocusProps = {
+        onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
+        onPointerDownCapture: (event: React.PointerEvent) => {
+            if (event.pointerType === 'touch') {
+                event.preventDefault();
+            }
+        },
+    } as const;
+
     return (
         <>
-            <button
-                type="button"
-                className={footerIconButtonClass}
-                onClick={() => {
-                    void startDictation();
-                }}
-                disabled={disabled || isActive}
-                title={dictationShortcut ? `${t('chat.dictation.start')} (${dictationShortcut})` : t('chat.dictation.start')}
-                aria-label={t('chat.dictation.start')}
-            >
-                <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
-            </button>
+            {renderTrigger ? (
+                <button
+                    type="button"
+                    {...keepKeyboardFocusProps}
+                    className={footerIconButtonClass}
+                    onClick={() => {
+                        void startDictation();
+                    }}
+                    disabled={disabled || isActive}
+                    title={dictationShortcut ? `${t('chat.dictation.start')} (${dictationShortcut})` : t('chat.dictation.start')}
+                    aria-label={t('chat.dictation.start')}
+                >
+                    <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
+                </button>
+            ) : null}
             {isActive ? (
                 <div
                     ref={overlayRef}
                     // overflow-x/y split on purpose: mobile.css rewrites the
                     // shorthand `.overflow-hidden` to overflow-y:auto on touch
                     // devices, which painted a phantom scrollbar on Android.
-                    className="absolute inset-0 z-50 flex flex-col overflow-x-hidden overflow-y-hidden"
+                    className={cn(
+                        'absolute inset-0 z-50 flex flex-col overflow-x-hidden overflow-y-hidden',
+                        // Mobile: the overlay surface shows instantly (riding the
+                        // pill → voice morph), its content fades in only after the
+                        // shape has grown — otherwise the controls paint clipped
+                        // inside the still-small pill.
+                        isMobile && 'oc-composer-morph-content-fade',
+                    )}
                     style={{
                         borderRadius: radius,
                         // Must match the composer box background exactly so the
@@ -289,6 +330,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                     role="dialog"
                     aria-label={t('chat.dictation.overlayAria')}
                 >
+                    {topAccessory}
                     <div
                         className={cn(
                             // Text paddings match the composer textarea, plus the
@@ -354,6 +396,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                                 <>
                                     <button
                                         type="button"
+                                        {...keepKeyboardFocusProps}
                                         className={cn(footerIconButtonClass, 'text-muted-foreground hover:text-foreground')}
                                         onClick={() => {
                                             void cancelDictation();
@@ -365,6 +408,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                                     </button>
                                     <button
                                         type="button"
+                                        {...keepKeyboardFocusProps}
                                         className={footerIconButtonClass}
                                         onClick={() => confirmWith('insert')}
                                         title={t('chat.dictation.insert')}
@@ -374,6 +418,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                                     </button>
                                     <button
                                         type="button"
+                                        {...keepKeyboardFocusProps}
                                         className={cn(footerIconButtonClass, 'text-primary hover:text-primary')}
                                         onClick={() => confirmWith('send')}
                                         title={t('chat.dictation.insertAndSend')}
@@ -385,6 +430,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                             ) : status === 'uploading' ? (
                                 <button
                                     type="button"
+                                    {...keepKeyboardFocusProps}
                                     className={cn(footerIconButtonClass, 'text-muted-foreground hover:text-foreground')}
                                     onClick={() => {
                                         void cancelDictation();
@@ -398,6 +444,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                                 <>
                                     <button
                                         type="button"
+                                        {...keepKeyboardFocusProps}
                                         className={cn(footerIconButtonClass, 'text-muted-foreground hover:text-foreground')}
                                         onClick={discardFailedDictation}
                                         title={t('chat.dictation.discard')}
@@ -407,6 +454,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                                     </button>
                                     <button
                                         type="button"
+                                        {...keepKeyboardFocusProps}
                                         className={footerIconButtonClass}
                                         onClick={retry}
                                         title={t('chat.dictation.retry')}
@@ -417,6 +465,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
                                     {partialTranscript.trim() ? (
                                         <button
                                             type="button"
+                                            {...keepKeyboardFocusProps}
                                             className={footerIconButtonClass}
                                             onClick={() => {
                                                 pendingActionRef.current = 'insert';
