@@ -2365,9 +2365,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
     }, [inputMode, getCurrentInputSnapshot, currentSessionId, sessionPhase, autoReviewRunning, followUpBehavior, handleQueueMessage]);
 
-    // Draft welcome presets: populate the composer and submit immediately.
-    // getCurrentInputSnapshot reads textareaRef.current.value first, so setting it
-    // synchronously lets handleSubmit pick up the preset text in the same tick.
+    // Draft welcome presets: submit immediately.
     const submitPresetPrompt = React.useCallback((text: string) => {
         // The text goes straight into the submit (see SubmitOptions.presetText)
         // instead of through the composer input — the collapsed mobile pill has
@@ -2393,13 +2391,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, []);
 
     const handleDictationInsertAndSend = React.useCallback((text: string) => {
-        const textarea = textareaRef.current;
-        const next = appendInlineText(textarea?.value ?? messageRef.current, text);
-        if (textarea) {
-            textarea.value = next;
-        }
-        setMessage(next);
-        void handleSubmitRef.current();
+        // Same as preset chips: the composed text goes into the submit as an
+        // explicit override instead of being staged in the textarea, which may
+        // not be mounted (collapsed mobile pill).
+        const next = appendInlineText(textareaRef.current?.value ?? messageRef.current, text);
+        void handleSubmitRef.current({ presetText: next });
     }, []);
 
     // Preset chips rendered outside this component (e.g. under the welcome
