@@ -1,5 +1,6 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
+import { isCapacitorApp } from '@/lib/platform';
 import { Textarea } from '@/components/ui/textarea';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
@@ -4035,14 +4036,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // ── Mobile pill composer state machine ─────────────────────────────────
     const expandMobileComposer = React.useCallback((intent: 'focus') => {
         mobileExpandIntentRef.current = intent;
-        setMobileComposerExpanded(true);
-        // Wait a frame so the full composer's textarea mounts.
-        // No re-pin here: the keyboard choreography measures the pending
-        // bottom distance (which includes the pill→full height change) and
-        // folds it into the single keyboard slide.
-        requestAnimationFrame(() => {
-            textareaRef.current?.focus({ preventScroll: true });
+        // flushSync so the textarea exists NOW and focus() still runs inside
+        // the user gesture's call stack: mobile browsers only open the soft
+        // keyboard for focus calls made synchronously from the tap (an rAF
+        // here worked in the Capacitor WebView but not in Safari/Chrome).
+        flushSync(() => {
+            setMobileComposerExpanded(true);
         });
+        // Capacitor: our keyboard choreography positions everything, so the
+        // browser's own scroll-into-view must stay off. Mobile BROWSERS have no
+        // choreography — the native reveal (viewport pan that lifts the focused
+        // field above the keyboard) is the only thing that moves the composer.
+        textareaRef.current?.focus({ preventScroll: isCapacitorApp() });
     }, []);
 
     const handleMobileNewSession = React.useCallback(() => {
@@ -4128,7 +4133,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         // overlay appears.
         const timer = window.setTimeout(() => {
             restoreKeyboardAfterOverlayRef.current = false;
-            textareaRef.current?.focus({ preventScroll: true });
+            // Browsers need their native scroll-into-view (see expandMobileComposer).
+            textareaRef.current?.focus({ preventScroll: isCapacitorApp() });
         }, 180);
         return () => window.clearTimeout(timer);
     }, [isMobile, mobileOverlayOpen, mobileTextareaFocused]);

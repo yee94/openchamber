@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Voice: voice input was rebuilt around live streaming transcription — the composer mic shows a live transcript with a volume meter and timer while you speak, and a recording can be cancelled, inserted, or inserted and sent; failed transcriptions keep their audio so you can retry or accept the partial text.
+- Voice: local speech-to-text works out of the box — models (Parakeet for English and 25 European languages, Whisper for a lighter multilingual option) download on demand from a new picker in Settings → Voice, or any OpenAI-compatible Whisper endpoint can be used instead; a configurable shortcut (mod+alt+v by default) toggles dictation.
+- Voice: read-aloud can now use a local Kokoro voice (11 English voices), and long replies start speaking after roughly a sentence instead of waiting for the whole message.
+- Voice: the Voice settings page was simplified — a single read-aloud toggle owns the playback options, and a new "Enable voice input" toggle hides the composer mic entirely.
+- Mobile: the composer collapses into a compact input bar while the keyboard is closed, with a round new-session button beside it (hidden on the new-session screen); tapping the bar expands it and opens the keyboard, and the mic starts voice input straight from the compact bar.
+- Mobile: the model and agent selectors moved into a row above the message text, the attachment menu and the new-session project/branch pickers open as bottom sheets with search, and a drag handle above the composer swipes it into a fullscreen editor — swiping down shrinks it back or dismisses the keyboard.
+- Mobile: keyboard transitions were rebuilt — the chat and the composer now move in one motion instead of stepped jumps, opening the keyboard in long conversations no longer freezes the app for seconds, bottom sheets no longer enter skewed while the keyboard dismisses, and the text cursor no longer flies across the screen after the keyboard opens.
+- Mobile: on the new-session screen the starter suggestions get out of the way while the keyboard is open, keeping the title visible.
+- Mobile: the branch/worktree picker lists all worktrees right after a cold start, the GitHub connection status is recognized without re-running the connect flow, and switching instances no longer leaves the previous instance's sessions in the sessions list.
+- Mobile: opening the web app in a phone browser against a password-protected instance shows the password unlock page again (regressed in 1.13.9), and tapping the compact input bar in a browser now opens the keyboard.
+- Mobile: returning to the app no longer briefly flickers the session list.
+- Chat: the "load older messages" button now disappears once the whole history has been loaded.
+- Chat: loading older messages keeps your scroll position steady on mobile and desktop, and lists across the app scroll more consistently after moving them to one virtualization engine.
+
 ## [1.13.9] - 2026-07-02
 
 - Mobile: added the native iOS and Android app projects ahead of the mobile app release, with continued polish for saved connections, password unlock, QR-code connection scanning, push notifications, iOS widgets, app resume, and native layout details.

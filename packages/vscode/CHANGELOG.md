@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Chat: loading older messages keeps your scroll position steady.
+
 ## [1.13.9] - 2026-07-02
 
 - Agents: clearing optional agent fields now removes them from agent config instead of saving `null` values.
