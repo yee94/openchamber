@@ -10,13 +10,12 @@ All notable changes to this project will be documented in this file.
 - Voice: the Voice settings page was simplified — a single read-aloud toggle owns the playback options, and a new "Enable voice input" toggle hides the composer mic entirely.
 - Mobile: the composer collapses into a compact input bar while the keyboard is closed, with a round new-session button beside it (hidden on the new-session screen); tapping the bar expands it and opens the keyboard, and the mic starts voice input straight from the compact bar.
 - Mobile: the model and agent selectors moved into a row above the message text, the attachment menu and the new-session project/branch pickers open as bottom sheets with search, and a drag handle above the composer swipes it into a fullscreen editor — swiping down shrinks it back or dismisses the keyboard.
-- Mobile: keyboard transitions were rebuilt — the chat and the composer now move in one motion instead of stepped jumps, opening the keyboard in long conversations no longer freezes the app for seconds, bottom sheets no longer enter skewed while the keyboard dismisses, and the text cursor no longer flies across the screen after the keyboard opens.
-- Mobile: on the new-session screen the starter suggestions get out of the way while the keyboard is open, keeping the title visible.
-- Mobile: the branch/worktree picker lists all worktrees right after a cold start, the GitHub connection status is recognized without re-running the connect flow, and switching instances no longer leaves the previous instance's sessions in the sessions list.
-- Mobile: opening the web app in a phone browser against a password-protected instance shows the password unlock page again (regressed in 1.13.9), and tapping the compact input bar in a browser now opens the keyboard.
+- Mobile: long conversations now load older history with a button at the top of the chat, which disappears once everything is loaded; loading older messages keeps your scroll position steady on all platforms.
+- Mobile: the branch/worktree picker on the new-session screen lists all worktrees right after a cold start, and the GitHub connection status is recognized without re-running the connect flow.
+- Mobile: opening the web app in a phone browser against a password-protected instance shows the password unlock page again (regressed in 1.13.9).
 - Mobile: returning to the app no longer briefly flickers the session list.
-- Chat: the "load older messages" button now disappears once the whole history has been loaded.
-- Chat: loading older messages keeps your scroll position steady on mobile and desktop, and lists across the app scroll more consistently after moving them to one virtualization engine.
+- Mobile: continued polish ahead of the native app release — the chat and composer ride the keyboard in one smooth motion (including in long conversations), bottom sheets enter cleanly while the keyboard dismisses, the text cursor stays in place when the keyboard opens, starter suggestions on the new-session screen step aside while the keyboard is up, and switching instances no longer leaves the previous instance's sessions in the sessions list.
+- UI: lists across the app were moved to one virtualization engine, so long lists scroll more consistently.
 
 ## [1.13.9] - 2026-07-02
 
