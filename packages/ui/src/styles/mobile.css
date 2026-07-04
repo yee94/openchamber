@@ -583,6 +583,12 @@
   bottom: var(--oc-keyboard-inset, 0px);
   transition: bottom 0.25s cubic-bezier(0.38, 0.7, 0.125, 1), opacity 0.2s ease-out;
 }
+/* While a panel is playing its enter animation, its bottom anchor snaps
+   instead of transitioning — opening an overlay typically dismisses the
+   keyboard in the same moment, and animating both made the entrance jerky. */
+:root.oc-capacitor-app .oc-keyboard-inset-surface.oc-keyboard-inset-snap {
+  transition: opacity 0.2s ease-out;
+}
 
 /* Full-screen scroll views (e.g. the connect/login screen) live outside the app
    shell, so shrink them by the keyboard height the same way the shell does. Capping
