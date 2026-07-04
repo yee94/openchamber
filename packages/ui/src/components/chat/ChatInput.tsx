@@ -1,4 +1,5 @@
 import React from 'react';
+import { flushSync } from 'react-dom';
 import { Textarea } from '@/components/ui/textarea';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
@@ -1008,7 +1009,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const [mobileControlsPanel, setMobileControlsPanel] = React.useState<MobileControlsPanel>(null);
     // Mobile pill composer: when the keyboard is closed the composer collapses
     // into a narrow pill (+ / placeholder / mic) with a round new-session button
-    // beside it. Any interaction expands back into the full composer.
+    // beside it. Any interaction expands back into the full composer. The swap
+    // is deliberately INSTANT and synchronized with the keyboard choreography,
+    // so the chat compensates keyboard + composer height in a single motion.
     const [mobileComposerExpanded, setMobileComposerExpanded] = React.useState(false);
     const [mobileTextareaFocused, setMobileTextareaFocused] = React.useState(false);
     const [mobileDictationActive, setMobileDictationActive] = React.useState(false);
@@ -4152,10 +4155,40 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return () => window.clearTimeout(timer);
     }, [isMobile, mobileComposerExpanded, mobileComposerBusy, setExpandedInput]);
 
+    const mobileComposerBusyRef = React.useRef(false);
+    mobileComposerBusyRef.current = mobileComposerBusy;
+
+    // Capacitor: collapse in the SAME frame the keyboard starts hiding. The
+    // hide choreography dispatches oc:keyboard-intent BEFORE restoring the
+    // shell layout and measuring the chat compensation; flushSync commits the
+    // pill swap first, so keyboard land + composer shrink are measured (and
+    // compensated) as ONE motion instead of a two-step staircase. The delayed
+    // effect above stays as the fallback for non-Capacitor and for overlays
+    // closing without a keyboard transition.
+    React.useEffect(() => {
+        if (!isMobile || typeof window === 'undefined') return;
+        const handleIntent = (event: Event) => {
+            const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+            if (!detail || detail.open !== false) return;
+            if (!mobileComposerExpandedRef.current) return;
+            // Something still holds the composer open (dictation, an overlay
+            // that closed the keyboard, drag) — the fallback path handles it.
+            if (mobileComposerBusyRef.current) return;
+            mobileExpandIntentRef.current = null;
+            flushSync(() => {
+                setMobileComposerExpanded(false);
+                setExpandedInput(false);
+            });
+        };
+        window.addEventListener('oc:keyboard-intent', handleIntent);
+        return () => window.removeEventListener('oc:keyboard-intent', handleIntent);
+    }, [isMobile, setExpandedInput]);
+
     // Reset the picker search whenever a draft picker sheet opens/closes.
     React.useEffect(() => {
         setMobileDraftPickerQuery('');
     }, [mobileDraftPicker]);
+
 
     // ── Composer drag handle (mobile): swipe up = fullscreen, swipe down =
     // leave fullscreen or dismiss the keyboard. ────────────────────────────
@@ -4588,7 +4621,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     )}
                 >
                 {isMobile && !mobileComposerExpanded ? (
-                    <div className="oc-composer-morph-fade flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <div
                             className="flex h-11 min-w-0 flex-1 items-center gap-x-0.5 rounded-full border border-border/80 pl-2 pr-1"
                             style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
@@ -4666,7 +4699,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 <div
                     className={cn(
                         "flex flex-col relative overflow-visible",
-                        isMobile && 'oc-composer-morph-fade',
                         isComposerExpanded && 'flex-1 min-h-0',
                         "border border-border/80",
                         "focus-within:ring-1",

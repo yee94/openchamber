@@ -45,7 +45,6 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import type { QuotaProviderId, UsageWindow } from '@/types';
-import type { WorktreeMetadata } from '@/types/worktree';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -163,10 +162,47 @@ const useNativeMobileChrome = (): void => {
       if (disposed) return;
       // iOS (WKWebView, resize: 'none') keeps 100dvh at full height with the keyboard
       // overlaying, so we lift the UI manually via --oc-keyboard-inset. Android resizes the
-      // window for the keyboard (dvh already shrinks), so applying the inset on top double-
-      // counts and floats the composer a keyboard-height above the keyboard — skip it there.
+      // window for the keyboard (dvh already shrinks), so applying the inset on top would
+      // double-count — Android gets only the class/event signals below.
       const platform = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.();
-      if (platform === 'android') return;
+      if (platform === 'android') {
+        // Android resizes the WebView natively, so no inset/transform
+        // choreography — but the UI still needs the open/closed signal:
+        // oc-keyboard-open drives CSS (draft starters, composer padding), and
+        // the settled event gives the chat its one deterministic re-pin after
+        // the native resize (the auto-follow idle gate ignores it otherwise).
+        const willShowHandle = await Keyboard.addListener('keyboardWillShow', () => {
+          root.classList.add('oc-keyboard-open');
+          // The composer already expanded on tap — re-pin the chat to it now,
+          // so the native resize that follows is the only remaining movement.
+          window.dispatchEvent(new CustomEvent('oc:keyboard-settled', { detail: { open: true } }));
+        });
+        const didShowHandle = await Keyboard.addListener('keyboardDidShow', () => {
+          window.dispatchEvent(new CustomEvent('oc:keyboard-settled', { detail: { open: true } }));
+        });
+        const willHideHandle = await Keyboard.addListener('keyboardWillHide', () => {
+          // Same single-motion trick as iOS: collapse the composer into the
+          // pill synchronously (flushSync in ChatInput) so the native window
+          // growth and the composer shrink land together, not as two steps.
+          window.dispatchEvent(new CustomEvent('oc:keyboard-intent', { detail: { open: false } }));
+          root.classList.remove('oc-keyboard-open');
+        });
+        const didHideHandle = await Keyboard.addListener('keyboardDidHide', () => {
+          window.dispatchEvent(new CustomEvent('oc:keyboard-settled', { detail: { open: false } }));
+        });
+        const removeAll = () => {
+          void willShowHandle.remove();
+          void didShowHandle.remove();
+          void willHideHandle.remove();
+          void didHideHandle.remove();
+        };
+        if (disposed) {
+          removeAll();
+          return;
+        }
+        cleanup.push(removeAll);
+        return;
+      }
       // No WebKit form accessory bar (prev/next arrows + Done) above the keyboard —
       // there's a single input, so it only eats vertical space.
       await Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => undefined);
@@ -184,6 +220,7 @@ const useNativeMobileChrome = (): void => {
       const KB_HIDE_MS = 200;
       const KB_ANIM_EASING = 'cubic-bezier(0.38, 0.7, 0.125, 1)';
       let settleTimer: number | null = null;
+      let caretTimer: number | null = null;
       let keyboardHeight = 0;
       let layoutApplied = false;
       let safeBottomPx = 0;
@@ -198,7 +235,7 @@ const useNativeMobileChrome = (): void => {
           settleTimer = null;
         }
       };
-      const dispatchKb = (type: 'oc:keyboard-anim' | 'oc:keyboard-settled', detail: Record<string, unknown>) => {
+      const dispatchKb = (type: 'oc:keyboard-intent' | 'oc:keyboard-anim' | 'oc:keyboard-settled', detail: Record<string, unknown>) => {
         window.dispatchEvent(new CustomEvent(type, { detail }));
       };
 
@@ -215,7 +252,15 @@ const useNativeMobileChrome = (): void => {
         }
         const slide = Math.max(0, keyboardHeight - safeBottomPx);
         root.classList.remove('oc-kb-hide');
-        root.classList.add('oc-keyboard-open', 'oc-kb-animating');
+        // WKWebView renders the caret as a native layer that doesn't ride CSS
+        // transforms — after the rise it visibly "flies" from the pre-keyboard
+        // position to the final one. Hide it for the transition (plus the lag
+        // window where UIKit animates it into place) and pop it back in.
+        if (caretTimer !== null) {
+          window.clearTimeout(caretTimer);
+          caretTimer = null;
+        }
+        root.classList.add('oc-keyboard-open', 'oc-kb-animating', 'oc-kb-caret-hold');
         setInset(keyboardHeight);
         setVar('--oc-kb-shift', slide);
         dispatchKb('oc:keyboard-anim', { phase: 'show', slide, durationMs: KB_ANIM_MS, easing: KB_ANIM_EASING });
@@ -228,6 +273,11 @@ const useNativeMobileChrome = (): void => {
           layoutApplied = true;
           setVar('--oc-kb-shift', 0);
           dispatchKb('oc:keyboard-settled', { open: true });
+          // Reveal the caret only after UIKit's own caret reposition window.
+          caretTimer = window.setTimeout(() => {
+            caretTimer = null;
+            root.classList.remove('oc-kb-caret-hold');
+          }, 250);
         }, KB_ANIM_MS + 20);
       });
 
@@ -241,6 +291,16 @@ const useNativeMobileChrome = (): void => {
         if (!keyboardOpen) return;
         keyboardOpen = false;
         clearSettle();
+        // Fired BEFORE any layout change: lets the composer collapse into its
+        // pill synchronously (flushSync in ChatInput), so the keyboard hide
+        // compensation below measures keyboard + composer shrink as ONE delta
+        // instead of two staggered steps.
+        dispatchKb('oc:keyboard-intent', { open: false });
+        if (caretTimer !== null) {
+          window.clearTimeout(caretTimer);
+          caretTimer = null;
+        }
+        root.classList.remove('oc-kb-caret-hold');
         const slide = Math.max(0, keyboardHeight - safeBottomPx);
         root.classList.remove('oc-keyboard-open');
         setInset(0);
@@ -299,6 +359,12 @@ const useNativeMobileChrome = (): void => {
       }
       cleanup.push(
         clearSettle,
+        () => {
+          if (caretTimer !== null) {
+            window.clearTimeout(caretTimer);
+            caretTimer = null;
+          }
+        },
         () => document.removeEventListener('focusout', handleFocusOut, true),
         () => void showHandle.remove(),
         () => void hideHandle.remove(),
@@ -308,7 +374,7 @@ const useNativeMobileChrome = (): void => {
     return () => {
       disposed = true;
       cleanup.forEach((remove) => remove());
-      root.classList.remove('oc-capacitor-app', 'oc-keyboard-open', 'oc-kb-animating', 'oc-kb-hide', 'oc-platform-android');
+      root.classList.remove('oc-capacitor-app', 'oc-keyboard-open', 'oc-kb-animating', 'oc-kb-hide', 'oc-kb-caret-hold', 'oc-platform-android');
       root.style.removeProperty('--oc-keyboard-inset');
       root.style.removeProperty('--oc-kb-shift');
       root.style.removeProperty('--oc-kb-layout');
@@ -2156,20 +2222,27 @@ export function MobileApp({ apis }: MobileAppProps) {
     opencodeClient.setDirectory(currentDirectory);
   }, [currentDirectory, isConnected]);
 
+  // Gated on isConnected (and re-run on reconnect/instance switch): probing the
+  // GitHub auth status before the runtime is reachable cached a "not connected"
+  // answer that stuck until something else forced a re-check.
   React.useEffect(() => {
+    if (!isConnected) return;
     void refreshGitHubAuthStatus(apis.github, { force: true });
-  }, [apis.github, refreshGitHubAuthStatus]);
+  }, [apis.github, isConnected, refreshGitHubAuthStatus]);
 
   // Discover all worktrees for every known project so the draft session's
   // worktree/branch dropdown can list every available branch — not only the
   // current one. Mirrors ElectronMiniChatApp + desktop SessionSidebar.
+  // Gated on isConnected: running before the runtime is reachable made every
+  // per-project probe fail silently, leaving the map empty until some later
+  // projects-store update happened to re-run this effect (the "switch projects
+  // back and forth to see worktrees" bug).
   React.useEffect(() => {
-    if (projects.length === 0) return;
+    if (!isConnected || projects.length === 0) return;
     let cancelled = false;
 
     const run = async () => {
-      const worktreesByProject = new Map<string, WorktreeMetadata[]>();
-      const allWorktrees: WorktreeMetadata[] = [];
+      const worktreesByProject = new Map(useSessionUIStore.getState().availableWorktreesByProject);
 
       await Promise.all(
         projects.map(async (project) => {
@@ -2181,16 +2254,18 @@ export function MobileApp({ apis }: MobileAppProps) {
               cachedIsGitRepo ?? (await import('@/lib/gitApi').then((m) => m.checkIsGitRepository(projectPath)));
             if (!isGitRepo) return;
             const worktrees = await listProjectWorktrees({ id: project.id, path: projectPath });
-            if (cancelled || worktrees.length === 0) return;
+            if (cancelled) return;
             worktreesByProject.set(projectPath, worktrees);
-            allWorktrees.push(...worktrees);
           } catch {
-            // Worktree discovery is best-effort; draft selector falls back to the project root.
+            // Worktree discovery is best-effort per project: a failed probe keeps
+            // that project's previously known (persisted) worktrees instead of
+            // wiping the whole map.
           }
         }),
       );
 
       if (cancelled) return;
+      const allWorktrees = Array.from(worktreesByProject.values()).flat();
       useSessionUIStore.setState({
         availableWorktrees: allWorktrees,
         availableWorktreesByProject: worktreesByProject,
@@ -2202,7 +2277,7 @@ export function MobileApp({ apis }: MobileAppProps) {
     return () => {
       cancelled = true;
     };
-  }, [projects]);
+  }, [isConnected, projects]);
 
   React.useEffect(() => {
     let cancelled = false;

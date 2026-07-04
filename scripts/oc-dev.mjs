@@ -67,12 +67,13 @@ Options:
   --web-mode <hmr|hmr-lan|full>
   --mobile-mode <ios-sim-local|ios-sim-lan|android-local|android-lan>
   --mobile-task <task>
+  --adb-address <host:port>        Wireless ADB address for android-connect
   --vsix-cleanup <delete|keep>
   --version <semver>
   -h, --help
 
 Mobile tasks:
-  build, sync, android-devices, android-deploy-usb, android-run, android-logcat,
+  build, sync, android-devices, android-connect, android-deploy-usb, android-run, android-logcat,
   ios-sim-build, ios-sim-run, ios-sim-serve, ios-sim-kill, ios-device-sync-debug
 `);
 }
@@ -114,6 +115,9 @@ function parseArgs(argv) {
         break;
       case '--mobile-task':
         options.mobileTask = readValue();
+        break;
+      case '--adb-address':
+        options.adbAddress = readValue();
         break;
       case '--vsix-cleanup':
         options.vsixCleanup = readValue();
@@ -204,6 +208,29 @@ async function chooseValue(current, choices, message) {
     process.exit(130);
   }
   return value;
+}
+
+async function chooseText(current, message, placeholder) {
+  if (current) return current;
+  ensurePromptable();
+  const value = await text({ message, placeholder });
+  if (isCancel(value)) {
+    cancel('Operation cancelled.');
+    process.exit(130);
+  }
+  return value;
+}
+
+function validateAdbAddress(address) {
+  const normalized = String(address || '').trim();
+  if (!/^[^\s:]+:\d{1,5}$/.test(normalized)) {
+    throw new Error('Invalid wireless ADB address. Use host:port, e.g. 192.168.1.139:38181');
+  }
+  const port = Number(normalized.split(':').at(-1));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('Invalid wireless ADB port. Use a port between 1 and 65535.');
+  }
+  return normalized;
 }
 
 function detectLanIp() {
@@ -432,6 +459,7 @@ async function mobileTools(options, config) {
     { value: 'build', label: 'Build mobile web assets' },
     { value: 'sync', label: 'Sync native projects' },
     { value: 'android-devices', label: 'Android: list USB devices' },
+    { value: 'android-connect', label: 'Android: connect wireless ADB device' },
     { value: 'android-deploy-usb', label: 'Android: rebuild + deploy to USB device' },
     { value: 'android-run', label: 'Android: install + launch existing APK' },
     { value: 'android-logcat', label: 'Android: logcat' },
@@ -453,6 +481,11 @@ async function mobileTools(options, config) {
     case 'build': return mobileRun('Building mobile web assets', 'build');
     case 'sync': return mobileRun('Syncing native projects', 'sync');
     case 'android-devices': return mobileRun('Listing Android USB devices', 'android:devices');
+    case 'android-connect': {
+      const address = validateAdbAddress(await chooseText(options.adbAddress, 'Enter wireless ADB address', '192.168.1.139:38181'));
+      step(`Connecting wireless ADB device at ${address}`, () => run('node', ['scripts/with-mobile-env.mjs', `adb connect ${quote(address)}`], { cwd: mobileCwd }));
+      return mobileRun('Listing Android devices', 'android:devices');
+    }
     case 'android-deploy-usb':
       mobileRun('Building Android debug APK', 'build:android:debug');
       return mobileRun('Installing and launching Android app on USB device', 'android:run');

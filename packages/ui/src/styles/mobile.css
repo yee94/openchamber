@@ -616,6 +616,15 @@
   transition-duration: 0.2s;
 }
 
+/* WKWebView draws the text caret as a native layer that ignores CSS transforms:
+   after the keyboard rise it visibly flies from the pre-keyboard position to
+   the final one. Hide it during the transition (+ UIKit's reposition lag,
+   see oc-kb-caret-hold timing in useNativeMobileChrome) and pop it back in. */
+:root.oc-capacitor-app.oc-kb-caret-hold textarea,
+:root.oc-capacitor-app.oc-kb-caret-hold input {
+  caret-color: transparent;
+}
+
 /* The composer keeps its 1rem bottom padding while the keyboard is down (breathing
    room above the home indicator), but that gap looks artificial sitting right above
    the keyboard — so tighten it while the keyboard is open. Snaps at the start of the
@@ -625,14 +634,36 @@
   padding-bottom: 12px;
 }
 
-/* Content cross-fade for the pill ↔ full composer morph. The wrapper animates
-   its height (FLIP in ChatInput); the freshly mounted state fades in on top. */
+/* Draft starter chips leave the moment the keyboard starts rising
+   (oc-keyboard-open lands at keyboardWillShow) and return when it's gone —
+   with the keyboard up there is only room for the draft title. Instant
+   show/hide (no squish animation); the title's own keyboard compensation
+   (.oc-draft-center below) carries the smooth motion. */
+:root.oc-capacitor-app.oc-keyboard-open .oc-draft-starters {
+  display: none;
+}
+
+/* The draft title is vertically centered, so it has no scroll-pinning to
+   compensate the keyboard like the chat does: during the slide the shell keeps
+   its full height and only snaps shorter at settle, which made the centered
+   title glide down (starters collapsing) and then JUMP up (shell snap). Ride
+   the same choreography as the composer: translate the centered block up by
+   half the keyboard shift (exactly how far the center moves after the snap),
+   with the transition gated on .oc-kb-animating so the settle swap — shift
+   back to 0 in the same frame the layout shrinks — is invisible. */
+:root.oc-capacitor-app .oc-draft-center {
+  transform: translateY(calc(-0.5 * var(--oc-kb-shift, 0px)));
+}
+:root.oc-capacitor-app.oc-kb-animating .oc-draft-center {
+  transition: transform 0.25s cubic-bezier(0.38, 0.7, 0.125, 1);
+}
+:root.oc-capacitor-app.oc-kb-animating.oc-kb-hide .oc-draft-center {
+  transition-duration: 0.2s;
+}
+
 @keyframes oc-composer-morph-fade {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-.oc-composer-morph-fade {
-  animation: oc-composer-morph-fade 0.24s ease-out both;
 }
 
 /* Voice overlay variant: the overlay BACKGROUND appears immediately (it rides

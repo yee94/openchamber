@@ -126,7 +126,16 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             </div>
           );
         })()}
-        <ScrollableOverlay useScrollShadow disableHorizontal outerClassName={cn('min-h-0 flex-1', contentMaxHeight)} className="px-2 py-2 pwa-overlay-scroll">
+        <ScrollableOverlay
+          useScrollShadow
+          disableHorizontal
+          // Contain the scroll inside the panel: without this, iOS chains the
+          // rubber-band overscroll to the page behind the sheet, which reads
+          // as a weird content bounce while scrolling the overlay.
+          preventOverscroll
+          outerClassName={cn('min-h-0 flex-1', contentMaxHeight)}
+          className="px-2 py-2 pwa-overlay-scroll"
+        >
           {children}
         </ScrollableOverlay>
         {footer ? (
