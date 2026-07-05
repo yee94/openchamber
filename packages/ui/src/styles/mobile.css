@@ -661,7 +661,8 @@
    with the keyboard up there is only room for the draft title. Instant
    show/hide (no squish animation); the title's own keyboard compensation
    (.oc-draft-center below) carries the smooth motion. */
-:root.oc-capacitor-app.oc-keyboard-open .oc-draft-starters {
+:root.oc-capacitor-app.oc-keyboard-open .oc-draft-starters,
+:root.oc-browser-keyboard-open .oc-draft-starters {
   display: none;
 }
 
@@ -671,6 +672,13 @@
    (exactly how far the center moves after the shell snap) — see the kb-movers
    list in useNativeMobileChrome. No CSS rules needed here; the class only
    marks the element for the mover query. */
+
+/* Mobile-browser fullscreen composer (visual-viewport pinned form in
+   ChatInput): the header would otherwise paint above it — the form can't
+   out-stack it from inside the composer wrapper's z-10 context. */
+:root.oc-browser-kb-fullscreen .oc-mobile-header {
+  visibility: hidden;
+}
 
 @keyframes oc-composer-morph-fade {
   from { opacity: 0; }

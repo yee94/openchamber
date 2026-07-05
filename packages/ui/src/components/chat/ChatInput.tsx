@@ -4167,6 +4167,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const mobileComposerBusyRef = React.useRef(false);
     mobileComposerBusyRef.current = mobileComposerBusy;
 
+    // Browser counterpart of Capacitor's oc-keyboard-open root class (which is
+    // driven by native keyboard events): the focused composer textarea is the
+    // best keyboard proxy a browser has. CSS keyed on it hides the draft
+    // starters while typing, mirroring the native app.
+    React.useEffect(() => {
+        if (!isMobile || isCapacitorApp() || typeof document === 'undefined') return;
+        const root = document.documentElement;
+        if (mobileTextareaFocused) {
+            root.classList.add('oc-browser-keyboard-open');
+        } else {
+            root.classList.remove('oc-browser-keyboard-open');
+        }
+        return () => root.classList.remove('oc-browser-keyboard-open');
+    }, [isMobile, mobileTextareaFocused]);
+
     // Capacitor: collapse in the SAME frame the keyboard starts hiding. The
     // hide choreography dispatches oc:keyboard-intent BEFORE restoring the
     // shell layout and measuring the chat compensation; flushSync commits the
@@ -4226,6 +4241,104 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const handleComposerHandleTouchEnd = React.useCallback(() => {
         composerHandleTouchRef.current = null;
     }, []);
+
+    // Fullscreen composer in a mobile BROWSER: the page layout doesn't shrink
+    // for the keyboard there — Safari pans/scrolls instead, so any flow-based
+    // sizing ends up partly off-screen or under the keyboard (the chat page is
+    // usually already panned when fullscreen is entered). Pin the form to the
+    // VISUAL viewport directly: fixed at its offset with its height, updated
+    // as the browser pans. Capacitor is excluded — its shell already resizes
+    // via the keyboard choreography.
+    const composerFormRef = React.useRef<HTMLFormElement | null>(null);
+    React.useLayoutEffect(() => {
+        if (!isMobile || !isMobileExpanded || isCapacitorApp()) return;
+        const vv = window.visualViewport;
+        const form = composerFormRef.current;
+        if (!vv || !form) return;
+        // The form is trapped inside lower stacking contexts (the composer
+        // wrapper's z-10), so it cannot out-stack the app header with z-index
+        // alone — hide the header for the duration via a root class instead.
+        document.documentElement.classList.add('oc-browser-kb-fullscreen');
+        const apply = () => {
+            form.style.position = 'fixed';
+            form.style.left = '0';
+            form.style.right = '0';
+            form.style.top = `${Math.max(0, Math.floor(vv.offsetTop))}px`;
+            form.style.height = `${Math.floor(vv.height)}px`;
+            form.style.zIndex = '40';
+            form.style.background = 'var(--background)';
+        };
+        apply();
+        vv.addEventListener('resize', apply);
+        vv.addEventListener('scroll', apply);
+        window.addEventListener('scroll', apply, true);
+        return () => {
+            vv.removeEventListener('resize', apply);
+            vv.removeEventListener('scroll', apply);
+            window.removeEventListener('scroll', apply, true);
+            document.documentElement.classList.remove('oc-browser-kb-fullscreen');
+            form.style.position = '';
+            form.style.left = '';
+            form.style.right = '';
+            form.style.top = '';
+            form.style.height = '';
+            form.style.zIndex = '';
+            form.style.background = '';
+            // Back in flow: the browser panned/scrolled for the fullscreen
+            // session and won't re-reveal the (still focused) field on its own,
+            // which left the composer parked behind the keyboard.
+            requestAnimationFrame(() => {
+                const textarea = textareaRef.current;
+                if (textarea && document.activeElement === textarea) {
+                    textarea.scrollIntoView({ block: 'nearest' });
+                }
+            });
+        };
+    }, [isMobile, isMobileExpanded]);
+
+    // Draft screen in a mobile BROWSER with the keyboard open: Safari's own
+    // focused-field reveal is unreliable there (leaving the composer behind
+    // the keyboard, e.g. after collapsing from fullscreen), so the NORMAL
+    // composer is pinned to the visual viewport too — anchored to its visible
+    // bottom at its natural height. The chat screen doesn't need this (its
+    // reveal works) and Capacitor has the keyboard choreography.
+    React.useLayoutEffect(() => {
+        if (!isMobile || isCapacitorApp()) return;
+        if (!newSessionDraftOpen || isMobileExpanded || !mobileTextareaFocused) return;
+        const vv = window.visualViewport;
+        const form = composerFormRef.current;
+        if (!vv || !form) return;
+        // Keep the in-flow horizontal geometry (page paddings) while fixed.
+        const rect = form.getBoundingClientRect();
+        form.style.position = 'fixed';
+        form.style.left = `${Math.floor(rect.left)}px`;
+        form.style.width = `${Math.floor(rect.width)}px`;
+        form.style.zIndex = '40';
+        form.style.background = 'var(--background)';
+        // Safari's visualViewport events are unreliable mid keyboard pan (they
+        // can simply not fire), so track the pan with a rAF loop instead —
+        // cheap math per frame, a style write only when the value changes.
+        let lastTop = Number.NaN;
+        let frame = 0;
+        const track = () => {
+            const top = Math.max(0, Math.floor(vv.offsetTop + vv.height - form.offsetHeight));
+            if (top !== lastTop) {
+                lastTop = top;
+                form.style.top = `${top}px`;
+            }
+            frame = requestAnimationFrame(track);
+        };
+        track();
+        return () => {
+            cancelAnimationFrame(frame);
+            form.style.position = '';
+            form.style.left = '';
+            form.style.width = '';
+            form.style.top = '';
+            form.style.zIndex = '';
+            form.style.background = '';
+        };
+    }, [isMobile, isMobileExpanded, newSessionDraftOpen, mobileTextareaFocused]);
 
     // Shared drag handle: rendered at the top of the full composer AND inside
     // the dictation overlay, so swipe-expand/collapse works in Listening mode.
@@ -4311,6 +4424,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     return (
         <>
         <form
+            ref={composerFormRef}
             onSubmit={(e) => { e.preventDefault(); handlePrimaryAction(); }}
             className={cn(
                 "relative w-full pt-0 pb-4",
