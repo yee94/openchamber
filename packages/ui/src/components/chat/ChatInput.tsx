@@ -98,6 +98,7 @@ import {
     findAttachmentCitationRanges,
 } from './attachmentCitations';
 import { getFileMentionAutocompleteQuery, type FileMentionAutocompleteInputSource } from './fileMentionAutocompleteState';
+import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import type { Part } from '@opencode-ai/sdk/v2/client';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
@@ -4053,6 +4054,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         textareaRef.current?.focus({ preventScroll: isCapacitorApp() });
     }, []);
 
+    const applyAssistSuggestion = React.useCallback((text: string) => {
+        setMessage(text);
+        if (isMobile && !mobileComposerExpanded) {
+            expandMobileComposer('focus');
+        } else {
+            requestAnimationFrame(() => textareaRef.current?.focus());
+        }
+    }, [expandMobileComposer, isMobile, mobileComposerExpanded]);
+
+
     const handleMobileNewSession = React.useCallback(() => {
         if (newSessionDraftOpen) return;
         openNewSessionDraft(currentDirectory ? { directoryOverride: currentDirectory } : undefined);
@@ -4744,6 +4755,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     )}
                 >
                 {isMobile && !mobileComposerExpanded ? (
+                    <div className="flex flex-col">
+                    <SessionSuggestionChip
+                        sessionId={currentSessionId}
+                        hidden={hasContent || newSessionDraftOpen}
+                        onApply={applyAssistSuggestion}
+                        className="mb-1.5"
+                    />
                     <div className="flex items-center gap-2">
                         <div
                             className="flex h-11 min-w-0 flex-1 items-center gap-x-0.5 rounded-full border border-border/80 pl-2 pr-1"
@@ -4818,7 +4836,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             </button>
                         </div>
                     </div>
+                    </div>
                 ) : (
+                <>
+                <SessionSuggestionChip
+                    sessionId={currentSessionId}
+                    hidden={hasContent || newSessionDraftOpen}
+                    onApply={applyAssistSuggestion}
+                    className="mb-1.5"
+                />
                 <div
                     className={cn(
                         "flex flex-col relative overflow-visible",
@@ -5202,6 +5228,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     </div>
 
                 </div>
+                </>
                 )}
                 {/* Wrapper-level dictation engine + overlay: stays mounted across
                     the pill ↔ composer swap so a recording started from the pill

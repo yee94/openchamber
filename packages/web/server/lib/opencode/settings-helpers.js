@@ -245,6 +245,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.showReasoningTraces === 'boolean') {
       result.showReasoningTraces = candidate.showReasoningTraces;
     }
+    if (typeof candidate.sessionAssistEnabled === 'boolean') {
+      result.sessionAssistEnabled = candidate.sessionAssistEnabled;
+    }
     if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
       result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;
     }
@@ -373,6 +376,13 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.defaultAgent === 'string') {
       const trimmed = candidate.defaultAgent.trim();
       result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (typeof candidate.smallModelUseDefault === 'boolean') {
+      result.smallModelUseDefault = candidate.smallModelUseDefault;
+    }
+    if (typeof candidate.smallModelOverride === 'string') {
+      const trimmed = candidate.smallModelOverride.trim();
+      result.smallModelOverride = trimmed.length > 0 ? trimmed : undefined;
     }
     if (typeof candidate.defaultGitIdentityId === 'string') {
       const trimmed = candidate.defaultGitIdentityId.trim();
