@@ -286,6 +286,11 @@ function installedWebCli(directory) {
   return existsSync(cliPath) ? cliPath : '';
 }
 
+function installedGlobalWebCli() {
+  const bunInstall = process.env.BUN_INSTALL || path.join(os.homedir(), '.bun');
+  return installedWebCli(path.join(bunInstall, 'install', 'global'));
+}
+
 function stopInstalledInstance(directory, port) {
   const cliPath = installedWebCli(directory);
   if (!cliPath) return;
@@ -370,7 +375,11 @@ async function deployWeb(options, config) {
     run('bun', ['remove', '-g', 'openchamber'], { allowFail: true, label: 'remove openchamber' });
   });
   step('Installing package globally', () => run('bun', ['add', '-g', packageFile]));
-  step(`Starting global instance on ${GLOBAL_PORT}`, () => run('openchamber', ['--port', GLOBAL_PORT], { env: { OPENCHAMBER_UI_PASSWORD: process.env.OPENCHAMBER_PASSWORD || '', OPENCHAMBER_HOST: '0.0.0.0' } }));
+  step(`Starting global instance on ${GLOBAL_PORT}`, () => {
+    const cliPath = installedGlobalWebCli();
+    if (!cliPath) throw new Error('Global OpenChamber CLI was not installed by bun add -g');
+    run('node', [cliPath, '--port', GLOBAL_PORT], { env: { OPENCHAMBER_UI_PASSWORD: process.env.OPENCHAMBER_PASSWORD || '', OPENCHAMBER_HOST: '0.0.0.0' } });
+  });
 }
 
 async function deployRemoteWeb(options, config) {
