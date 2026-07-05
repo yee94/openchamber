@@ -544,7 +544,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     } finally {
       setIsAddingToNotes(false);
     }
-  }, [currentProjectRef, hideMenu, selectedText, selectedTextMarkdown, t]);
+  }, [currentProjectRef, currentSessionId, hideMenu, selectedText, selectedTextMarkdown, t]);
 
   if (!position.show) return null;
 

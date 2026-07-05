@@ -4265,6 +4265,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!isMobile || !isMobileExpanded || isCapacitorApp()) return;
         const vv = window.visualViewport;
         const form = composerFormRef.current;
+        const textarea = textareaRef.current;
         if (!vv || !form) return;
         // The form is trapped inside lower stacking contexts (the composer
         // wrapper's z-10), so it cannot out-stack the app header with z-index
@@ -4299,7 +4300,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             // session and won't re-reveal the (still focused) field on its own,
             // which left the composer parked behind the keyboard.
             requestAnimationFrame(() => {
-                const textarea = textareaRef.current;
                 if (textarea && document.activeElement === textarea) {
                     textarea.scrollIntoView({ block: 'nearest' });
                 }
