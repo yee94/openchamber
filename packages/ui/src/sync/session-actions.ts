@@ -721,8 +721,14 @@ export async function optimisticSend(input: {
 // ---------------------------------------------------------------------------
 
 export async function abortCurrentOperation(sessionId: string): Promise<void> {
+  // The abort must carry the SESSION'S directory, not the active UI directory:
+  // OpenCode routes the request to the per-directory instance, and an abort
+  // sent to the wrong instance cancels nothing while still returning 200 true
+  // (the "stop button does nothing" report — sessions in another project/
+  // worktree than the UI's current directory could never be aborted).
+  const { directory } = dirStoreForSession(sessionId)
   try {
-    await sdk().session.abort({ sessionID: sessionId, directory: dir() })
+    await sdk().session.abort({ sessionID: sessionId, directory })
   } catch (error) {
     console.error("[session-actions] abort failed", error)
   }
