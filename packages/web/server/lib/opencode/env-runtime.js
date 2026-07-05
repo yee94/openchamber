@@ -11,6 +11,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     readSettingsFromDiskMigrated,
   } = deps;
   const runSpawnSync = typeof deps.spawnSync === 'function' ? deps.spawnSync : spawnSync;
+  const resolveHomeDir = typeof deps.homedir === 'function' ? deps.homedir : () => os.homedir();
 
   const parseNullSeparatedEnvSnapshot = (raw) => {
     if (typeof raw !== 'string' || raw.length === 0) {
@@ -301,6 +302,14 @@ export const createOpenCodeEnvRuntime = (deps) => {
     return null;
   };
 
+  const bundledOpenCodeCliFallback = () => {
+    const bundled = resolveBundledOpenCodeCliPath();
+    if (!bundled) return null;
+    clearWslOpencodeResolution();
+    state.resolvedOpencodeBinarySource = 'bundled';
+    return bundled;
+  };
+
   const clearWslOpencodeResolution = () => {
     state.useWslForOpencode = false;
     state.resolvedWslBinary = null;
@@ -326,13 +335,9 @@ export const createOpenCodeEnvRuntime = (deps) => {
       }
     }
 
-    const bundled = resolveBundledOpenCodeCliPath();
-    if (bundled) {
-      clearWslOpencodeResolution();
-      state.resolvedOpencodeBinarySource = 'bundled';
-      return bundled;
-    }
-
+    // The bundled CLI is the LAST resort (see bundledOpenCodeCliFallback at the
+    // exit points below): a user's own OpenCode install — PATH, known install
+    // locations, or shell-resolved — must win over the pinned bundled copy.
     const resolvedFromPath = searchPathFor('opencode');
     if (resolvedFromPath) {
       clearWslOpencodeResolution();
@@ -340,7 +345,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       return resolvedFromPath;
     }
 
-    const home = os.homedir();
+    const home = resolveHomeDir();
     const unixFallbacks = [
       path.join(home, '.opencode', 'bin', 'opencode'),
       path.join(home, '.bun', 'bin', 'opencode'),
@@ -403,7 +408,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       // Do not auto-detect OpenCode from WSL. OpenCode sessions are keyed by
       // server-visible directories, and mixing Windows paths with WSL paths
       // creates duplicate/missing project state in the desktop app.
-      return null;
+      return bundledOpenCodeCliFallback();
     }
 
     const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
@@ -427,7 +432,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       }
     }
 
-    return null;
+    return bundledOpenCodeCliFallback();
   };
 
   const resolveNodeCliPath = () => {
