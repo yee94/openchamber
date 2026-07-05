@@ -317,6 +317,19 @@ export const createOpenCodeEnvRuntime = (deps) => {
     state.resolvedWslDistro = null;
   };
 
+  // Strip a single wrapping quote pair (Windows "Copy as path" and quoted
+  // shell snippets) — literal quotes are never part of a real path and break
+  // every executable check.
+  const stripWrappingQuotes = (value) => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (trimmed.length >= 2
+      && ((trimmed.startsWith('"') && trimmed.endsWith('"'))
+        || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
+      return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+  };
+
   const resolveOpencodeCliPath = () => {
     const explicit = [
       process.env.OPENCODE_BINARY,
@@ -324,7 +337,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       process.env.OPENCHAMBER_OPENCODE_PATH,
       process.env.OPENCHAMBER_OPENCODE_BIN,
     ]
-      .map((v) => (typeof v === 'string' ? v.trim() : ''))
+      .map(stripWrappingQuotes)
       .filter(Boolean);
 
     for (const candidate of explicit) {
@@ -353,6 +366,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
       path.join(home, 'bin', 'opencode'),
       '/opt/homebrew/bin/opencode',
       '/usr/local/bin/opencode',
+      '/home/linuxbrew/.linuxbrew/bin/opencode',
       '/usr/bin/opencode',
       '/bin/opencode',
     ];
@@ -363,10 +377,16 @@ export const createOpenCodeEnvRuntime = (deps) => {
       const localAppData = process.env.LOCALAPPDATA || '';
       const programData = process.env.ProgramData || 'C:\\ProgramData';
 
+      const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+
       return [
         path.join(userProfile, '.opencode', 'bin', 'opencode.exe'),
         path.join(userProfile, '.opencode', 'bin', 'opencode.cmd'),
         path.join(appData, 'npm', 'opencode.cmd'),
+        // System-wide Node installer keeps the global npm prefix here
+        // (npm i -g opencode-ai → opencode.cmd shim).
+        path.join(programFiles, 'nodejs', 'opencode.cmd'),
+        path.join(userProfile, 'scoop', 'shims', 'opencode.exe'),
         path.join(userProfile, 'scoop', 'shims', 'opencode.cmd'),
         path.join(programData, 'chocolatey', 'bin', 'opencode.exe'),
         path.join(programData, 'chocolatey', 'bin', 'opencode.cmd'),
@@ -818,6 +838,16 @@ export const createOpenCodeEnvRuntime = (deps) => {
       }
     }
 
+    // Final fallback: never hand a raw .cmd/.bat to spawn(shell:false) — cmd
+    // shims need cmd.exe, and unquoted space-containing paths break there.
+    if (WINDOWS_BATCH_EXTENSIONS.has(ext)) {
+      return {
+        binary: process.env.ComSpec || 'cmd.exe',
+        args: ['/d', '/s', '/c', 'call', fallbackBinary],
+        wrapperType: 'cmd-wrapper',
+      };
+    }
+
     return { binary: fallbackBinary, args: [], wrapperType: null };
   };
 
@@ -873,7 +903,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     if (process.platform !== 'darwin' || typeof candidate !== 'string') {
       return false;
     }
-    return /\/OpenCode\.app\/Contents\/MacOS\/(?:OpenCode|opencode-cli)$/i.test(candidate);
+    return /\/OpenCode(?: Dev| Beta)?\.app\/Contents\/MacOS\/(?:OpenCode(?: Dev| Beta)?|opencode-cli)$/i.test(candidate);
   };
 
   const isKnownOpenCodeDesktopAppPath = (candidate) => isMacOpenCodeAppBundlePath(candidate)
