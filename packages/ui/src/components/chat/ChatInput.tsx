@@ -4758,6 +4758,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     <div className="flex flex-col">
                     <SessionSuggestionChip
                         sessionId={currentSessionId}
+                        directory={currentSessionDirectoryForSync ?? currentDirectory}
                         hidden={hasContent || newSessionDraftOpen}
                         onApply={applyAssistSuggestion}
                         className="mb-1.5"
@@ -4841,6 +4842,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 <>
                 <SessionSuggestionChip
                     sessionId={currentSessionId}
+                    directory={currentSessionDirectoryForSync ?? currentDirectory}
                     hidden={hasContent || newSessionDraftOpen}
                     onApply={applyAssistSuggestion}
                     className="mb-1.5"

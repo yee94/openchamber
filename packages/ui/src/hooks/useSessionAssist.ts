@@ -13,8 +13,8 @@ interface LastMessageSnapshot {
 }
 
 /** Narrow subscription to the last message of a session (id/role/time only). */
-function useLastMessageSnapshot(sessionId: string): LastMessageSnapshot | null {
-  const store = useDirectoryStore();
+function useLastMessageSnapshot(sessionId: string, directory?: string): LastMessageSnapshot | null {
+  const store = useDirectoryStore(directory);
   const cacheRef = React.useRef<LastMessageSnapshot | null>(null);
 
   const getSnapshot = React.useCallback((): LastMessageSnapshot | null => {
@@ -56,10 +56,10 @@ export interface SessionAssistState {
   suggestion: string | null;
 }
 
-export function useSessionAssistState(sessionId: string): SessionAssistState {
-  const session = useSession(sessionId);
-  const status = useSessionStatus(sessionId);
-  const lastMessage = useLastMessageSnapshot(sessionId);
+export function useSessionAssistState(sessionId: string, directory?: string): SessionAssistState {
+  const session = useSession(sessionId, directory);
+  const status = useSessionStatus(sessionId, directory);
+  const lastMessage = useLastMessageSnapshot(sessionId, directory);
 
   const isIdle = !status || status.type === 'idle';
   const payload = getSessionAssist(session);
