@@ -13,7 +13,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
-import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
+import { useUIStore, type ContextPanelMode, type PendingDiffScope } from '@/stores/useUIStore';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useInputStore } from '@/sync/input-store';
@@ -2298,7 +2298,7 @@ export const ContextPanel: React.FC = () => {
     }
   }, [tabs]);
 
-  const handleDiffScopeChange = React.useCallback((nextScope: 'working' | 'staged') => {
+  const handleDiffScopeChange = React.useCallback((nextScope: PendingDiffScope) => {
     if (!directoryKey || activeTab?.mode !== 'diff') {
       return;
     }
@@ -2307,6 +2307,7 @@ export const ContextPanel: React.FC = () => {
       mode: 'diff',
       targetPath: activeTab.targetPath,
       stagedDiff: nextScope === 'staged',
+      diffScope: nextScope,
     });
   }, [activeTab, directoryKey, openContextPanelTab]);
 
@@ -2649,7 +2650,7 @@ export const ContextPanel: React.FC = () => {
               stackedDefaultCollapsedAll
               pinSelectedFileHeaderToTopOnNavigate
               showOpenInEditorAction
-              diffScope={tab.stagedDiff ? 'staged' : 'working'}
+              diffScope={tab.diffScope ?? (tab.stagedDiff ? 'staged' : 'working')}
               onDiffScopeChange={handleDiffScopeChange}
               targetFilePath={tab.targetPath}
               flushContent
