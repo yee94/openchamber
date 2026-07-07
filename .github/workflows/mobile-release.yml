@@ -219,7 +219,7 @@ jobs:
 
           const projectPath = 'App.xcodeproj/project.pbxproj';
           let project = readFileSync(projectPath, 'utf8');
-          const releaseBlockPattern = /\n\t\t[^\n]+ \/\* Release \*\/ = \{\n\t\t\tisa = XCBuildConfiguration;\n\t\t\t(?:baseConfigurationReference = [^\n]+\n)?\t\t\tbuildSettings = \{[\s\S]*?\n\t\t\t\};\n\t\t\tname = Release;\n\t\t\};/g;
+          const releaseBlockPattern = /\n\t\t[^\n]+ \/\* Release \*\/ = \{\n\t\t\tisa = XCBuildConfiguration;[\s\S]*?\n\t\t\tname = Release;\n\t\t\};/g;
           const replacements = [
             {
               bundle: 'com.openchamber.app',
