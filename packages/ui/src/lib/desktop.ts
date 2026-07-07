@@ -17,6 +17,8 @@ export type UpdateInfo = {
   currentVersion: string;
   body?: string;
   date?: string;
+  releaseUrl?: string;
+  downloadUrl?: string;
   nextSuggestedCheckInSec?: number;
   // Web-specific fields
   packageManager?: string;

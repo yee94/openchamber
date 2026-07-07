@@ -2594,6 +2594,7 @@ export const dict = {
   'updateDialog.status.downloading': 'Downloading...',
   'updateDialog.actions.restartToUpdate': 'Restart to Update',
   'updateDialog.actions.updateNow': 'Update Now',
+  'updateDialog.actions.openMobileUpdate': 'Open update',
   'updateDialog.status.updating': 'Updating...',
   'updateDialog.error.updateFailed': 'Update failed',
   'updateDialog.error.takingLonger': 'Update is taking longer than expected. Wait a bit and refresh, or run: openchamber update',

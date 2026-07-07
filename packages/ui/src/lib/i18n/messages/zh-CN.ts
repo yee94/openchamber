@@ -2560,6 +2560,7 @@ export const dict: Record<I18nKey, string> = {
   'updateDialog.status.downloading': '下载中...',
   'updateDialog.actions.restartToUpdate': '重启以更新',
   'updateDialog.actions.updateNow': '立即更新',
+  'updateDialog.actions.openMobileUpdate': '打开更新',
   'updateDialog.status.updating': '更新中...',
   'updateDialog.error.updateFailed': '更新失败',
   'updateDialog.error.takingLonger': '更新耗时超出预期。请稍等后刷新，或运行：openchamber update',

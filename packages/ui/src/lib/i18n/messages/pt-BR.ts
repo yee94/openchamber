@@ -2560,6 +2560,7 @@ export const dict: Record<I18nKey, string> = {
   "updateDialog.status.downloading": "Baixando...",
   "updateDialog.actions.restartToUpdate": "Reiniciar para atualizar",
   "updateDialog.actions.updateNow": "Atualizar agora",
+  "updateDialog.actions.openMobileUpdate": "Abrir atualização",
   "updateDialog.status.updating": "Atualizando...",
   "updateDialog.error.updateFailed": "Não foi possível atualizar",
   "updateDialog.error.takingLonger": "A atualização está demorando mais do que o esperado. Aguarde um pouco e atualize, ou execute: openchamber update",

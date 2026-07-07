@@ -2590,6 +2590,7 @@ export const dict: Record<I18nKey, string> = {
   'updateDialog.status.downloading': 'ダウンロード中...',
   'updateDialog.actions.restartToUpdate': '再起動して更新',
   'updateDialog.actions.updateNow': '今すぐ更新',
+  'updateDialog.actions.openMobileUpdate': '更新を開く',
   'updateDialog.status.updating': '更新中...',
   'updateDialog.error.updateFailed': '更新に失敗しました',
   'updateDialog.error.takingLonger': '更新に予想以上に時間がかかっています。しばらく待ってから更新するか、次を実行: openchamber update',
