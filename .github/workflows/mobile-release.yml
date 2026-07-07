@@ -168,12 +168,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          VERSION_NAME: ${{ needs.resolve-version.outputs.version_name }}
+          BUILD_NUMBER: ${{ needs.resolve-version.outputs.build_number }}
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p release-assets
+          cp app/build/outputs/bundle/release/*.aab "release-assets/OpenChamber-${VERSION_NAME}-${BUILD_NUMBER}-android.aab"
+          cp app/build/outputs/apk/release/*.apk "release-assets/OpenChamber-${VERSION_NAME}-${BUILD_NUMBER}-android.apk"
           files=(
             app/build/outputs/bundle/release/*.aab
             app/build/outputs/apk/release/*.apk
+            release-assets/*
           )
           gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
         working-directory: ${{ env.ANDROID_PROJECT_DIR }}
