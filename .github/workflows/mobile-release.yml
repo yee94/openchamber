@@ -11,6 +11,10 @@ on:
         description: Build number. Leave empty to use GitHub run number.
         required: false
         type: string
+      release_tag:
+        description: Existing GitHub Release tag for Android artifact upload, for example v1.14.1.
+        required: false
+        type: string
       upload_github_release:
         description: Upload Android artifacts to GitHub Release. Requires release_tag when called by the release workflow.
         required: false
