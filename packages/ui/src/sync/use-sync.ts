@@ -611,6 +611,13 @@ export function useSync() {
     [clearOptimistic, getOptimisticStore],
   )
 
+  const optimisticConfirm = useCallback(
+    (input: { sessionID: string; directory?: string | null; messageID: string }) => {
+      clearOptimistic(input.sessionID, input.messageID, input.directory)
+    },
+    [clearOptimistic],
+  )
+
   return useMemo(
     () => ({
       ensureSessionRenderable: syncSession,
@@ -622,8 +629,9 @@ export function useSync() {
       optimistic: {
         add: optimisticAdd,
         remove: optimisticRemove,
+        confirm: optimisticConfirm,
       },
     }),
-    [syncSession, loadMore, hasMore, isLoading, isComplete, optimisticAdd, optimisticRemove],
+    [syncSession, loadMore, hasMore, isLoading, isComplete, optimisticAdd, optimisticRemove, optimisticConfirm],
   )
 }

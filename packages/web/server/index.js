@@ -602,6 +602,7 @@ Object.defineProperties(openCodeNetworkState, {
 const openCodeNetworkRuntime = createOpenCodeNetworkRuntime({
   state: openCodeNetworkState,
   getOpenCodeAuthHeaders,
+  configuredOpenCodeHostname: ENV_CONFIGURED_OPENCODE_HOSTNAME,
 });
 
 const waitForReady = (...args) => openCodeNetworkRuntime.waitForReady(...args);
