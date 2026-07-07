@@ -132,7 +132,7 @@ jobs:
 
   ios-testflight:
     name: iOS TestFlight upload
-    runs-on: macos-15
+    runs-on: macos-26
     needs: resolve-version
     steps:
       - uses: actions/checkout@v4
