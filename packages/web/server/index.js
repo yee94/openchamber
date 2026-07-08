@@ -89,6 +89,7 @@ import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createPreviewProxyRuntime } from './lib/preview/proxy-runtime.js';
 import { attachRealtimeProxy } from './lib/realtime-proxy.js';
+import { createRelayService } from './lib/relay/service.js';
 import { createProxyMiddleware, responseInterceptor } from 'http-proxy-middleware';
 import webPush from 'web-push';
 
@@ -1286,6 +1287,19 @@ async function main(options = {}) {
   const tunnelRuntimeContext = tunnelWiringRuntime.initialize(app, port);
   const { tunnelService, startTunnelWithNormalizedRequest } = tunnelRuntimeContext;
 
+  // Private relay host service: config + management routes + host client
+  // lifecycle. Loopback port comes from the same source the tunnel uses so
+  // relay-tunneled requests hit the local Express app on 127.0.0.1.
+  const relayService = createRelayService({
+    crypto,
+    os,
+    readSettingsFromDiskMigrated,
+    writeSettingsToDisk,
+    remoteClientAuthRuntime,
+    getLocalPort: () => tunnelRuntimeContext.getActivePort(),
+  });
+  relayService.registerRoutes(app);
+
   await featureRoutesRuntime.registerRoutes(app, {
     crypto,
     fs,
@@ -1395,6 +1409,9 @@ async function main(options = {}) {
     console.warn('[ScheduledTasks] Failed to start runtime:', error?.message || error);
   }
 
+  // Only opens a relay control socket when the user opted in (config enabled).
+  void relayService.startIfEnabled();
+
   return {
     expressApp: app,
     httpServer: server,
@@ -1425,6 +1442,11 @@ async function main(options = {}) {
     },
     stop: (shutdownOptions = {}) => {
       realtimeProxyRuntime.stop();
+      try {
+        relayService.stop();
+      } catch {
+        // best-effort teardown of the relay host client
+      }
       try {
         dictationRuntime?.stop?.();
       } catch {

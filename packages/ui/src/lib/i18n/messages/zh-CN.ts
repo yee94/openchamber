@@ -59,6 +59,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.scan.unsupported': '二维码扫描仅在已安装的移动应用中可用。',
   'mobile.connect.saved.title': '已保存的连接',
   'mobile.connect.saved.empty': '暂无已保存的连接。',
+  'mobile.connect.relay.badge': '通过 OpenChamber Relay 连接',
   'mobile.connect.error.urlRequired': '请输入服务器 URL。',
   'mobile.connect.error.invalidUrl': '该服务器 URL 无效。',
   'mobile.connect.error.unreachable': '无法连接到该 OpenChamber 服务器。',

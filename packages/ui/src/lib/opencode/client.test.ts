@@ -126,6 +126,27 @@ describe('opencodeClient prompt retry behavior', () => {
     expect(error instanceof Error ? error.message : String(error)).toContain('Failed to fetch');
   });
 
+  test('does not fabricate an HTTP 500 when the SDK swallows a transport failure into result.error', async () => {
+    // The SDK catches thrown fetch errors and returns { error, response: undefined }.
+    // That is a transport failure, not a server 500 — it must surface as a
+    // descriptive transport error, never as "Failed to send message (500): {}".
+    promptAsyncResults.push({ error: new TypeError('relay tunnel reset: plaintext frame on established channel'), response: undefined });
+
+    let error: unknown = null;
+    try {
+      await sendPrompt('anthropic-transport');
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(promptAsyncCalls.length).toBe(1);
+    const message = error instanceof Error ? error.message : String(error);
+    expect(message).not.toContain('Failed to send message (500)');
+    expect(message).toContain('transport failure');
+    expect(message).toContain('relay tunnel reset');
+    expect((error as Error & { status?: number }).status).toBe(undefined);
+  });
+
   test('does not retry 503 prompt responses because proxy errors can be ambiguous too', async () => {
     promptAsyncResults.push({ response: new Response('starting', { status: 503 }) });
 

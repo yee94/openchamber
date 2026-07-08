@@ -58,6 +58,7 @@ export const dict = {
   'mobile.connect.scan.unsupported': 'QR scanning is only available in the installed mobile app.',
   'mobile.connect.saved.title': 'Saved connections',
   'mobile.connect.saved.empty': 'No saved connections yet.',
+  'mobile.connect.relay.badge': 'via OpenChamber Relay',
   'mobile.connect.error.urlRequired': 'Enter a server URL.',
   'mobile.connect.error.invalidUrl': 'That server URL is not valid.',
   'mobile.connect.error.unreachable': 'Could not reach that OpenChamber server.',

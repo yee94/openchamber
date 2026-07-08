@@ -59,6 +59,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.scan.unsupported': 'QR code 掃描僅在已安裝的行動應用程式中可用。',
   'mobile.connect.saved.title': '已儲存的連線',
   'mobile.connect.saved.empty': '尚未儲存任何連線。',
+  'mobile.connect.relay.badge': '透過 OpenChamber Relay 連線',
   'mobile.connect.error.urlRequired': '請輸入伺服器網址。',
   'mobile.connect.error.invalidUrl': '該伺服器網址無效。',
   'mobile.connect.error.unreachable': '無法連線至該 OpenChamber 伺服器。',

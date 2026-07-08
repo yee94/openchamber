@@ -860,7 +860,14 @@ class OpencodeService {
       if (result.response instanceof Response) {
         response = result.response;
       } else if (result.error) {
-        const status = (result as SdkResult<unknown>).response?.status || 500;
+        const status = (result as SdkResult<unknown>).response?.status;
+        if (!status) {
+          // The SDK caught a thrown fetch error (network/tunnel transport
+          // failure) — there is no HTTP response to report. Never fabricate a
+          // status: surface it as a transport error so callers treat it like
+          // any other network failure instead of a server 500.
+          throw new Error(`Message send transport failure: ${formatSdkError(result.error)}`);
+        }
         response = new Response(JSON.stringify(result.error), { status });
       } else {
         response = new Response(JSON.stringify(result.data ?? true), { status: 200 });

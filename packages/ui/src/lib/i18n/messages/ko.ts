@@ -59,6 +59,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.scan.unsupported': 'QR 스캔은 설치된 모바일 앱에서만 사용할 수 있습니다.',
   'mobile.connect.saved.title': '저장된 연결',
   'mobile.connect.saved.empty': '아직 저장된 연결이 없습니다.',
+  'mobile.connect.relay.badge': 'OpenChamber Relay 경유',
   'mobile.connect.error.urlRequired': '서버 URL을 입력하세요.',
   'mobile.connect.error.invalidUrl': '유효하지 않은 서버 URL입니다.',
   'mobile.connect.error.unreachable': '해당 OpenChamber 서버에 연결할 수 없습니다.',

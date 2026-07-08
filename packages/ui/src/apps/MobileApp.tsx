@@ -32,7 +32,7 @@ import { resolveProjectForDirectory, resolveProjectForSessionDirectory } from '@
 import { clampPercent, formatQuotaResetLabel, formatQuotaValueLabel, formatWindowLabel, QUOTA_PROVIDERS, resolveUsageTone } from '@/lib/quota';
 import { getDisplayModelName } from '@/lib/quota/model-families';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -58,7 +58,7 @@ import { MobileFilesSurface } from './MobileFilesSurface';
 import { MobileSessionsSheet } from './MobileSessionsSheet';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
 import { DedicatedMobileAppProvider, type MobileAppActions } from './mobileAppContext';
-import { autoConnectLastInstance, isSameConnectionUrl, useMobileConnection, validateMobileConnectionSession } from './mobileConnections';
+import { autoConnectLastInstance, isSameConnectionUrl, relayConnectionRuntimeKey, useMobileConnection, validateActiveRuntimeSession } from './mobileConnections';
 import { isQrScanSupported, parseConnectionPayload, scanConnectionQr } from './mobileQrScan';
 import { resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
 import { useAppFontEffects } from './useAppFontEffects';
@@ -644,7 +644,9 @@ const MobileConnectionWelcome: React.FC<{ onConnected: () => void }> = ({ onConn
               </span>
               <div className="min-w-0 text-left">
                 <p className="truncate typography-ui-label text-foreground">{pendingConnection.label}</p>
-                <p className="truncate typography-small text-muted-foreground">{pendingConnection.url}</p>
+                <p className="truncate typography-small text-muted-foreground">
+                  {pendingConnection.relay ? t('mobile.connect.relay.badge') : pendingConnection.url}
+                </p>
               </div>
             </div>
             <input
@@ -768,14 +770,16 @@ const MobileConnectionWelcome: React.FC<{ onConnected: () => void }> = ({ onConn
                   key={connection.id}
                   type="button"
                   className="flex min-h-14 w-full items-center gap-3 border-b border-border/60 px-3.5 py-2.5 text-left last:border-b-0 hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-                  onClick={() => void conn.connect({ url: connection.url, clientToken: connection.clientToken, label: connection.label })}
+                  onClick={() => void conn.connect({ url: connection.url, clientToken: connection.clientToken, label: connection.label, relay: connection.relay })}
                 >
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-[12px] bg-interactive-hover text-foreground">
                     <Icon name="server" className="size-[18px]" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate typography-ui-label text-foreground">{connection.label}</span>
-                    <span className="block truncate typography-small text-muted-foreground">{connection.url}</span>
+                    <span className="block truncate typography-small text-muted-foreground">
+                      {connection.mode === 'relay' ? t('mobile.connect.relay.badge') : connection.url}
+                    </span>
                   </span>
                   <Icon name="arrow-right-s" className="size-5 text-muted-foreground" />
                 </button>
@@ -882,7 +886,12 @@ const MobileInstancesSurface: React.FC<{
     setConfirmingDeleteId(null);
     if (editingId === id) resetForm();
     void removeConnection(id).then((removed) => {
-      if (removed && isSameConnectionUrl(removed.url, getRuntimeApiBaseUrl())) {
+      if (!removed) return;
+      // Relay entries have no reachable URL — the runtime key is their identity.
+      const isActive = removed.relay
+        ? getRuntimeKey() === relayConnectionRuntimeKey(removed.relay)
+        : isSameConnectionUrl(removed.url, getRuntimeApiBaseUrl());
+      if (isActive) {
         onActiveConnectionDeleted();
       }
     });
@@ -901,7 +910,9 @@ const MobileInstancesSurface: React.FC<{
               </span>
               <div className="min-w-0">
                 <p className="truncate typography-ui-label text-foreground">{pendingConnection.label}</p>
-                <p className="truncate typography-small text-muted-foreground">{pendingConnection.url}</p>
+                <p className="truncate typography-small text-muted-foreground">
+                  {pendingConnection.relay ? t('mobile.connect.relay.badge') : pendingConnection.url}
+                </p>
               </div>
             </div>
             <input
@@ -946,7 +957,7 @@ const MobileInstancesSurface: React.FC<{
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-3 px-3.5 py-3 text-left transition-colors active:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:opacity-60"
-                      onClick={() => void connect({ url: connection.url, clientToken: connection.clientToken, label: connection.label })}
+                      onClick={() => void connect({ url: connection.url, clientToken: connection.clientToken, label: connection.label, relay: connection.relay })}
                       disabled={isBusy || confirming}
                     >
                       <span className="flex size-9 shrink-0 items-center justify-center rounded-[12px] bg-interactive-hover text-foreground">
@@ -954,7 +965,9 @@ const MobileInstancesSurface: React.FC<{
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate typography-ui-label text-foreground">{connection.label}</span>
-                        <span className="block truncate typography-small text-muted-foreground">{connection.url}</span>
+                        <span className="block truncate typography-small text-muted-foreground">
+                          {connection.mode === 'relay' ? t('mobile.connect.relay.badge') : connection.url}
+                        </span>
                       </span>
                     </button>
                     <div className="flex items-center gap-0.5 pr-2">
@@ -969,7 +982,7 @@ const MobileInstancesSurface: React.FC<{
                           <Icon name="delete-bin" className="size-[18px]" />
                           <span className="typography-ui-label">{t('mobile.instances.delete')}</span>
                         </button>
-                      ) : (
+                      ) : connection.mode === 'relay' ? null : (
                         <button
                           type="button"
                           aria-label={t('mobile.instances.edit')}
@@ -2199,7 +2212,7 @@ export function MobileApp({ apis }: MobileAppProps) {
     const validationSeq = nativeResumeValidationSeqRef.current + 1;
     nativeResumeValidationSeqRef.current = validationSeq;
 
-    void validateMobileConnectionSession({ url: apiBaseUrl, clientToken: getRuntimeClientToken() }).then((isValid) => {
+    void validateActiveRuntimeSession({ url: apiBaseUrl, clientToken: getRuntimeClientToken() }).then((isValid) => {
       if (nativeResumeValidationSeqRef.current !== validationSeq) return;
       if (!isValid) {
         switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: 'mobile-disconnected' });

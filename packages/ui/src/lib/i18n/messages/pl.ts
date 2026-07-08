@@ -60,6 +60,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.scan.unsupported': 'Skanowanie QR jest dostępne tylko w zainstalowanej aplikacji mobilnej.',
   'mobile.connect.saved.title': 'Zapisane połączenia',
   'mobile.connect.saved.empty': 'Brak zapisanych połączeń.',
+  'mobile.connect.relay.badge': 'przez OpenChamber Relay',
   'mobile.connect.error.urlRequired': 'Podaj adres URL serwera.',
   'mobile.connect.error.invalidUrl': 'Ten adres URL serwera jest nieprawidłowy.',
   'mobile.connect.error.unreachable': 'Nie udało się połączyć z tym serwerem OpenChamber.',
