@@ -2666,6 +2666,8 @@ export const dict: Record<I18nKey, string> = {
   'sortableTabsStrip.aria.tabs': 'タブ',
   'openChamberLogo.aria.logo': 'OpenChamberロゴ',
   'markdownRenderer.table.actions.copyTitle': 'テーブルをコピー',
+  'markdownRenderer.code.actions.enableWrapTitle': '行折り返しを有効にする',
+  'markdownRenderer.code.actions.disableWrapTitle': '行折り返しを無効にする',
   'markdownRenderer.table.actions.downloadTitle': 'テーブルをダウンロード',
   'markdownRenderer.table.toast.downloadedAsFormat': 'テーブルを{format}としてダウンロードしました',
   'markdownRenderer.mermaid.actions.copyTitle': 'コピー',

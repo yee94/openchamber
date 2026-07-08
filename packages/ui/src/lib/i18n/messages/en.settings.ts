@@ -1737,6 +1737,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.expandedEditorToolbar': 'Always show editor toolbar (docked under the file tabs)',
   'settings.openchamber.visual.field.wideChatLayoutAria': 'Wide chat layout',
   'settings.openchamber.visual.field.wideChatLayout': 'Wide Chat Layout',
+  'settings.openchamber.visual.field.codeBlockLineWrapAria': 'Wrap code block lines',
+  'settings.openchamber.visual.field.codeBlockLineWrap': 'Wrap Code Block Lines',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsAria': 'Inline assistant actions',
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Inline Assistant Actions',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Show Copy Answer, Save as image, and Read aloud on assistant text blocks that appear before later tool calls in the same response.',

@@ -23,6 +23,7 @@ import { renderMarkdownBlocks, renderMarkdownSync } from './markdown/markdownCor
 import { ensureMarkdownShikiTheme, getMarkdownSyntaxVars } from './markdown/markdownTheme';
 import {
   attachMarkdownInteractions,
+  applyMarkdownCodeBlockWrapState,
   decorateMarkdown,
   type DecorateContext,
   type DecorateLabels,
@@ -863,6 +864,8 @@ const useDecorateContext = (
   const labels: DecorateLabels = React.useMemo(() => ({
     copy: 'Copy code',
     copied: 'Copied',
+    enableCodeWrap: t('markdownRenderer.code.actions.enableWrapTitle'),
+    disableCodeWrap: t('markdownRenderer.code.actions.disableWrapTitle'),
     copyTable: t('markdownRenderer.table.actions.copyTitle'),
     downloadTable: t('markdownRenderer.table.actions.downloadTitle'),
     copyDiagram: t('markdownRenderer.mermaid.actions.copySourceTitle'),
@@ -870,6 +873,12 @@ const useDecorateContext = (
     previewLabel: t('terminalView.preview.open'),
     previewTitle: t('terminalView.preview.openTitle'),
   }), [t]);
+
+  const codeBlockLineWrap = useUIStore((state) => state.codeBlockLineWrap);
+  const setCodeBlockLineWrap = useUIStore((state) => state.setCodeBlockLineWrap);
+  const toggleCodeBlockLineWrap = React.useCallback(() => {
+    setCodeBlockLineWrap(!useUIStore.getState().codeBlockLineWrap);
+  }, [setCodeBlockLineWrap]);
 
   return React.useMemo<DecorateContext>(() => {
     const colors = mermaidColorsFromTheme(currentTheme);
@@ -884,8 +893,8 @@ const useDecorateContext = (
           return {};
         }
       });
-    return { labels, renderMermaid, onPreviewLoopback };
-  }, [currentTheme, labels, onPreviewLoopback]);
+    return { labels, codeBlockLineWrap, onToggleCodeBlockLineWrap: toggleCodeBlockLineWrap, renderMermaid, onPreviewLoopback };
+  }, [currentTheme, labels, codeBlockLineWrap, toggleCodeBlockLineWrap, onPreviewLoopback]);
 };
 
 // Runs the async render pipeline into the container and keeps a stable
@@ -994,6 +1003,13 @@ const useMorphdomMarkdown = ({
       target.style.setProperty(key, value);
     }
   }, [containerRef, syntaxVars]);
+
+  React.useEffect(() => {
+    const container = containerRef.current;
+    const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
+    if (!target) return;
+    applyMarkdownCodeBlockWrapState(target, ctx.codeBlockLineWrap, ctx.labels);
+  }, [containerRef, ctx.codeBlockLineWrap, ctx.labels]);
 };
 
 const markdownContentClassName = (variant: MarkdownVariant): string =>

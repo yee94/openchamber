@@ -1708,6 +1708,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': '内联助手操作',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': '在同一条回复中，如果助手文本块后面还有工具调用，则显示“复制回答”“保存为图片”和“朗读”操作。',
   'settings.openchamber.visual.field.showToolFileIconsAria': '显示工具文件图标',
+  'settings.openchamber.visual.field.codeBlockLineWrapAria': '代码块自动换行',
+  'settings.openchamber.visual.field.codeBlockLineWrap': '代码块自动换行',
   'settings.openchamber.visual.field.showToolFileIcons': '显示工具文件图标',
   'settings.openchamber.visual.field.showTurnChangedFilesAria': '显示已完成回合的更改文件',
   'settings.openchamber.visual.field.showTurnChangedFiles': '显示已完成回合的更改文件',

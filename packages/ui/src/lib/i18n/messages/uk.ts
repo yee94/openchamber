@@ -2636,6 +2636,8 @@ export const dict: Record<I18nKey, string> = {
   "sortableTabsStrip.aria.tabs": "Вкладки",
   "openChamberLogo.aria.logo": "Логотип OpenChamber",
   "markdownRenderer.table.actions.copyTitle": "Скопіювати таблицю",
+  "markdownRenderer.code.actions.enableWrapTitle": "Увімкнути перенесення рядків",
+  "markdownRenderer.code.actions.disableWrapTitle": "Вимкнути перенесення рядків",
   "markdownRenderer.table.actions.downloadTitle": "Завантажити таблицю",
   "markdownRenderer.table.toast.downloadedAsFormat": "Таблицю завантажено як {format}",
   "markdownRenderer.mermaid.actions.copyTitle": "Копіювати",

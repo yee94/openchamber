@@ -1708,6 +1708,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActions": "Ações inline do assistente",
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Mostra Copiar resposta, Salvar como imagem e Ler em voz alta em blocos de texto do assistente que aparecem antes de chamadas de ferramenta posteriores na mesma resposta.",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Mostrar ícones de arquivos de ferramentas",
+  "settings.openchamber.visual.field.codeBlockLineWrapAria": "Quebrar linhas de blocos de código",
+  "settings.openchamber.visual.field.codeBlockLineWrap": "Quebrar linhas de blocos de código",
   "settings.openchamber.visual.field.showToolFileIcons": "Mostrar ícones de arquivos de ferramentas",
   "settings.openchamber.visual.field.showTurnChangedFilesAria": "Mostrar arquivos alterados em turnos concluídos",
   "settings.openchamber.visual.field.showTurnChangedFiles": "Mostrar arquivos alterados em turnos concluídos",

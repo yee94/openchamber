@@ -2636,6 +2636,8 @@ export const dict: Record<I18nKey, string> = {
   "sortableTabsStrip.aria.tabs": "Abas",
   "openChamberLogo.aria.logo": "Logo do OpenChamber",
   "markdownRenderer.table.actions.copyTitle": "Copiar tabela",
+  "markdownRenderer.code.actions.enableWrapTitle": "Ativar quebra de linha",
+  "markdownRenderer.code.actions.disableWrapTitle": "Desativar quebra de linha",
   "markdownRenderer.table.actions.downloadTitle": "Baixar tabela",
   "markdownRenderer.table.toast.downloadedAsFormat": "Tabela baixada como {format}",
   "markdownRenderer.mermaid.actions.copyTitle": "Copiar",

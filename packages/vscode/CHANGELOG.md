@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Chat: if sending a message times out or loses the connection after OpenCode accepted it, the extension now keeps the sent message instead of rolling it back as failed.
+
 ## [1.14.1] - 2026-07-07
 
 - Chat: the timeline dialog can now load older messages when the current session history has not all been fetched yet.

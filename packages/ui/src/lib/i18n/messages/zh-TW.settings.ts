@@ -1624,6 +1624,8 @@
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': '行內助理操作',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': '在同一則回覆中，如果助理文字區塊後方還有工具呼叫，則顯示「複製回答」「儲存為圖片」和「朗讀」操作。',
   'settings.openchamber.visual.field.showToolFileIconsAria': '顯示工具檔案圖示',
+  'settings.openchamber.visual.field.codeBlockLineWrapAria': '程式碼區塊自動換行',
+  'settings.openchamber.visual.field.codeBlockLineWrap': '程式碼區塊自動換行',
   'settings.openchamber.visual.field.showToolFileIcons': '顯示工具檔案圖示',
   'settings.openchamber.visual.field.showTurnChangedFilesAria': '顯示已完成回合的變更檔案',
   'settings.openchamber.visual.field.showTurnChangedFiles': '顯示已完成回合的變更檔案',

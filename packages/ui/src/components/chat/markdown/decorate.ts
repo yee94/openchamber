@@ -11,6 +11,8 @@ export type MermaidRender = { svg?: string; ascii?: string };
 export type DecorateLabels = {
   copy: string;
   copied: string;
+  enableCodeWrap: string;
+  disableCodeWrap: string;
   copyTable: string;
   downloadTable: string;
   copyDiagram: string;
@@ -21,6 +23,8 @@ export type DecorateLabels = {
 
 export type DecorateContext = {
   labels: DecorateLabels;
+  codeBlockLineWrap: boolean;
+  onToggleCodeBlockLineWrap?: () => void;
   // Renders a mermaid block source to svg/ascii using current theme colors.
   renderMermaid: (source: string) => MermaidRender;
   onPreviewLoopback?: (url: string) => void;
@@ -36,6 +40,7 @@ const ICONS = {
   copy: spriteIcon('file-copy'),
   check: spriteIcon('check'),
   download: spriteIcon('download'),
+  textWrap: spriteIcon('text-wrap'),
 } as const;
 
 const ICON_BTN_CLASS =
@@ -54,6 +59,37 @@ const makeIconButton = (icon: keyof typeof ICONS, title: string, slot: string): 
   button.setAttribute('aria-label', title);
   setHtml(button, ICONS[icon]);
   return button;
+};
+
+const applyCodeBlockWrapState = (wrapper: HTMLElement, enabled: boolean, labels: DecorateLabels): void => {
+  const body = wrapper.querySelector<HTMLElement>('[data-md-code-body]');
+  const pre = wrapper.querySelector<HTMLElement>('pre');
+  const code = wrapper.querySelector<HTMLElement>('pre code');
+  const wrapButton = wrapper.querySelector<HTMLButtonElement>('[data-md-action="toggle-code-wrap"]');
+  wrapper.setAttribute('data-code-wrap', enabled ? 'true' : 'false');
+  body?.classList.toggle('overflow-x-auto', !enabled);
+  body?.classList.toggle('overflow-x-hidden', enabled);
+  pre?.classList.toggle('whitespace-pre-wrap', enabled);
+  pre?.classList.toggle('break-words', enabled);
+  code?.classList.toggle('whitespace-pre-wrap', enabled);
+  code?.classList.toggle('break-words', enabled);
+  if (wrapButton) {
+    const title = enabled ? labels.disableCodeWrap : labels.enableCodeWrap;
+    wrapButton.setAttribute('title', title);
+    wrapButton.setAttribute('aria-label', title);
+    wrapButton.classList.toggle('text-foreground', enabled);
+    wrapButton.classList.toggle('opacity-100', enabled);
+    wrapButton.classList.toggle('text-muted-foreground', !enabled);
+    wrapButton.classList.toggle('opacity-65', !enabled);
+    wrapButton.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  }
+};
+
+export const applyMarkdownCodeBlockWrapState = (root: HTMLElement, enabled: boolean, labels: DecorateLabels): void => {
+  const wrappers = root.querySelectorAll<HTMLElement>('[data-component="markdown-code"]');
+  for (const wrapper of Array.from(wrappers)) {
+    applyCodeBlockWrapState(wrapper, enabled, labels);
+  }
 };
 
 const flashCopied = (button: HTMLButtonElement, copiedTitle: string, restore: keyof typeof ICONS, restoreTitle: string): void => {
@@ -78,7 +114,7 @@ const decorateInlineCode = (root: HTMLElement): void => {
   }
 };
 
-const decorateCodeBlocks = (root: HTMLElement, labels: DecorateLabels): void => {
+const decorateCodeBlocks = (root: HTMLElement, ctx: DecorateContext): void => {
   const blocks = root.querySelectorAll<HTMLPreElement>('pre');
   for (const pre of Array.from(blocks)) {
     // Skip mermaid placeholders (handled separately).
@@ -104,11 +140,17 @@ const decorateCodeBlocks = (root: HTMLElement, labels: DecorateLabels): void => 
     const langLabel = document.createElement('span');
     langLabel.className = 'font-mono text-[13px] text-muted-foreground';
     langLabel.textContent = language;
-    const copyBtn = makeIconButton('copy', labels.copy, 'copy-code');
+    const copyBtn = makeIconButton('copy', ctx.labels.copy, 'copy-code');
+    const wrapBtn = makeIconButton('textWrap', ctx.codeBlockLineWrap ? ctx.labels.disableCodeWrap : ctx.labels.enableCodeWrap, 'toggle-code-wrap');
     header.appendChild(langLabel);
-    header.appendChild(copyBtn);
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center gap-1';
+    actions.appendChild(wrapBtn);
+    actions.appendChild(copyBtn);
+    header.appendChild(actions);
 
     const body = document.createElement('div');
+    body.setAttribute('data-md-code-body', '');
     body.className = 'px-3 py-2.5 overflow-x-auto';
 
     parent.replaceChild(wrapper, pre);
@@ -117,6 +159,7 @@ const decorateCodeBlocks = (root: HTMLElement, labels: DecorateLabels): void => 
     body.appendChild(pre);
     wrapper.appendChild(header);
     wrapper.appendChild(body);
+    applyCodeBlockWrapState(wrapper, ctx.codeBlockLineWrap, ctx.labels);
   }
 };
 
@@ -332,7 +375,7 @@ const decorateLinks = (root: HTMLElement, ctx: DecorateContext): void => {
 export const decorateMarkdown = (root: HTMLElement, ctx: DecorateContext): void => {
   decorateInlineCode(root);
   decorateMermaid(root, ctx);
-  decorateCodeBlocks(root, ctx.labels);
+  decorateCodeBlocks(root, ctx);
   decorateTables(root, ctx.labels);
   decorateLinks(root, ctx);
 };
@@ -384,6 +427,12 @@ export const attachMarkdownInteractions = (
       const code = actionEl.closest('[data-component="markdown-code"]')?.querySelector('code');
       const text = code?.textContent ?? '';
       if (text) void copyTextToClipboard(text).then(() => flashCopied(actionEl as HTMLButtonElement, ctx.labels.copied, 'copy', ctx.labels.copy));
+      return;
+    }
+
+    if (action === 'toggle-code-wrap') {
+      event.preventDefault();
+      ctx.onToggleCodeBlockLineWrap?.();
       return;
     }
 

@@ -2633,6 +2633,8 @@ export const dict: Record<I18nKey, string> = {
   'sortableTabsStrip.aria.tabs': '分頁',
   'openChamberLogo.aria.logo': 'OpenChamber 標誌',
   'markdownRenderer.table.actions.copyTitle': '複製表格',
+  'markdownRenderer.code.actions.enableWrapTitle': '啟用自動換行',
+  'markdownRenderer.code.actions.disableWrapTitle': '停用自動換行',
   'markdownRenderer.table.actions.downloadTitle': '下載表格',
   'markdownRenderer.table.toast.downloadedAsFormat': '表格已下載為 {format}',
   'markdownRenderer.mermaid.actions.copyTitle': '複製',

@@ -1741,6 +1741,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'インラインアシスタントアクション',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': '同じ応答内の後のツール呼び出しの前に表示されるアシスタントテキストブロックに、回答コピー、画像保存、読み上げを表示します。',
   'settings.openchamber.visual.field.showToolFileIconsAria': 'ツールファイルアイコンを表示',
+  'settings.openchamber.visual.field.codeBlockLineWrapAria': 'コードブロックの行を折り返す',
+  'settings.openchamber.visual.field.codeBlockLineWrap': 'コードブロックの行を折り返す',
   'settings.openchamber.visual.field.showToolFileIcons': 'ツールファイルアイコンを表示',
   'settings.openchamber.visual.field.showTurnChangedFilesAria': '完了したターンの変更ファイルを表示',
   'settings.openchamber.visual.field.showTurnChangedFiles': '完了したターンの変更ファイルを表示',

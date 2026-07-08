@@ -1644,6 +1644,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Actions intégrées de l\'assistant',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Afficher Copier la réponse, Enregistrer en image et Lire à haute voix sur les blocs de texte de l\'assistant qui apparaissent avant les appels d\'outil suivants dans la même réponse.',
   'settings.openchamber.visual.field.showToolFileIconsAria': 'Afficher les icônes des fichiers d\'outils',
+  'settings.openchamber.visual.field.codeBlockLineWrapAria': 'Renvoyer à la ligne les blocs de code',
+  'settings.openchamber.visual.field.codeBlockLineWrap': 'Renvoyer à la ligne les blocs de code',
   'settings.openchamber.visual.field.showToolFileIcons': 'Afficher les icônes des fichiers d\'outils',
   'settings.openchamber.visual.field.showDotfilesAria': 'Afficher les fichiers de points',
   'settings.openchamber.visual.field.showDotfiles': 'Afficher les fichiers cachés',

@@ -2670,6 +2670,8 @@ export const dict: Record<I18nKey, string> = {
   'sortableTabsStrip.aria.tabs': '탭',
   'openChamberLogo.aria.logo': 'OpenChamber 로고',
   'markdownRenderer.table.actions.copyTitle': '표 복사',
+  'markdownRenderer.code.actions.enableWrapTitle': '줄 바꿈 켜기',
+  'markdownRenderer.code.actions.disableWrapTitle': '줄 바꿈 끄기',
   'markdownRenderer.table.actions.downloadTitle': '표 다운로드',
   'markdownRenderer.table.toast.downloadedAsFormat': '{format} 형식으로 다운로드됨',
   'markdownRenderer.mermaid.actions.copyTitle': '복사',

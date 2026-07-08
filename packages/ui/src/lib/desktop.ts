@@ -136,6 +136,7 @@ export type DesktopSettings = {
   showOpenCodeUpdateNotifications?: boolean;
   openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;
+  codeBlockLineWrap?: boolean;
   showTurnChangedFiles?: boolean;
   showExpandedBashTools?: boolean;
   showExpandedEditTools?: boolean;

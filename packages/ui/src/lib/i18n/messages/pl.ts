@@ -2161,6 +2161,8 @@ export const dict: Record<I18nKey, string> = {
   'markdownRenderer.mermaid.actions.downloadSvgTitle': 'Pobierz SVG',
   'markdownRenderer.mermaid.toast.downloadFailed': 'Nie udało się pobrać diagramu',
   'markdownRenderer.table.actions.copyTitle': 'Kopiuj tabelę',
+  'markdownRenderer.code.actions.enableWrapTitle': 'Włącz zawijanie wierszy',
+  'markdownRenderer.code.actions.disableWrapTitle': 'Wyłącz zawijanie wierszy',
   'markdownRenderer.table.actions.downloadTitle': 'Pobierz tabelę',
   'markdownRenderer.table.toast.downloadedAsFormat': 'Tabela została pobrana jako {format}',
   'mcpDropdown.actions.openAria': 'Serwery MCP',

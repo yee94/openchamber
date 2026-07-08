@@ -2636,6 +2636,8 @@ export const dict: Record<I18nKey, string> = {
   'sortableTabsStrip.aria.tabs': '标签页',
   'openChamberLogo.aria.logo': 'OpenChamber 标志',
   'markdownRenderer.table.actions.copyTitle': '复制表格',
+  'markdownRenderer.code.actions.enableWrapTitle': '启用自动换行',
+  'markdownRenderer.code.actions.disableWrapTitle': '禁用自动换行',
   'markdownRenderer.table.actions.downloadTitle': '下载表格',
   'markdownRenderer.table.toast.downloadedAsFormat': '表格已下载为 {format}',
   'markdownRenderer.mermaid.actions.copyTitle': '复制',

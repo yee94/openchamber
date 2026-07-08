@@ -1708,6 +1708,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActions": "Вбудовані дії асистента",
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Показує «Скопіювати відповідь», «Зберегти як зображення» та озвучення для текстових блоків асистента, які з’являються перед пізнішими викликами інструментів у тій самій відповіді.",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Показати значки файлів інструментів",
+  "settings.openchamber.visual.field.codeBlockLineWrapAria": "Переносити рядки блоків коду",
+  "settings.openchamber.visual.field.codeBlockLineWrap": "Переносити рядки блоків коду",
   "settings.openchamber.visual.field.showToolFileIcons": "Показати значки файлів інструментів",
   "settings.openchamber.visual.field.showTurnChangedFilesAria": "Показати змінені файли для завершених ходів",
   "settings.openchamber.visual.field.showTurnChangedFiles": "Показати змінені файли для завершених ходів",

@@ -204,6 +204,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['layout', 'wide', 'messages'],
   },
   {
+    id: 'chat.code-block-line-wrap',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.codeBlockLineWrap',
+    keywords: ['code', 'wrap', 'line wrap', 'markdown'],
+  },
+  {
     id: 'chat.inline-assistant-actions',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showSplitAssistantMessageActions',
