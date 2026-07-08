@@ -860,6 +860,7 @@ const mermaidColorsFromTheme = (theme: Theme) => ({
 
 const useDecorateContext = (
   currentTheme: Theme,
+  deferCodeLineNumberSync: boolean,
   onPreviewLoopback?: (url: string) => void,
 ): DecorateContext => {
   const { t } = useI18n();
@@ -895,8 +896,8 @@ const useDecorateContext = (
           return {};
         }
       });
-    return { labels, codeBlockLineWrap, onToggleCodeBlockLineWrap: toggleCodeBlockLineWrap, renderMermaid, onPreviewLoopback };
-  }, [currentTheme, labels, codeBlockLineWrap, toggleCodeBlockLineWrap, onPreviewLoopback]);
+    return { labels, codeBlockLineWrap, deferCodeLineNumberSync, onToggleCodeBlockLineWrap: toggleCodeBlockLineWrap, renderMermaid, onPreviewLoopback };
+  }, [currentTheme, labels, codeBlockLineWrap, deferCodeLineNumberSync, toggleCodeBlockLineWrap, onPreviewLoopback]);
 };
 
 // Runs the async render pipeline into the container and keeps a stable
@@ -984,7 +985,9 @@ const useMorphdomMarkdown = ({
         existing[i]?.remove();
       }
 
-      scheduleMarkdownCodeLineNumberSync(target);
+      if (!ctx.deferCodeLineNumberSync) {
+        scheduleMarkdownCodeLineNumberSync(target);
+      }
     });
 
     return () => {
@@ -1012,8 +1015,9 @@ const useMorphdomMarkdown = ({
     const container = containerRef.current;
     const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
     if (!target) return;
+    if (ctx.deferCodeLineNumberSync) return;
     applyMarkdownCodeBlockWrapState(target, ctx.codeBlockLineWrap, ctx.labels);
-  }, [containerRef, ctx.codeBlockLineWrap, ctx.labels]);
+  }, [containerRef, ctx.codeBlockLineWrap, ctx.deferCodeLineNumberSync, ctx.labels]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -1081,7 +1085,7 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   useExternalLinkInteractions({ containerRef });
 
   const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(currentTheme), [currentTheme]);
-  const ctx = useDecorateContext(currentTheme, effectiveDirectory ? handlePreviewLoopback : undefined);
+  const ctx = useDecorateContext(currentTheme, live, effectiveDirectory ? handlePreviewLoopback : undefined);
   const cacheKey = `markdown-${part?.id ? `part-${part.id}` : `message-${messageId}`}`;
 
   useMorphdomMarkdown({ containerRef, text: pacedText, streaming: live, cacheKey, syntaxVars, ctx });
@@ -1164,7 +1168,7 @@ const SimpleMarkdownRendererImpl: React.FC<{
   useExternalLinkInteractions({ containerRef, enabled: !disableLinkSafety });
 
   const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(currentTheme), [currentTheme]);
-  const ctx = useDecorateContext(currentTheme);
+  const ctx = useDecorateContext(currentTheme, false);
 
   useMorphdomMarkdown({
     containerRef,
