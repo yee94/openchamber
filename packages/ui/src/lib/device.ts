@@ -1,5 +1,6 @@
 import React from 'react';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { isCapacitorApp } from '@/lib/platform';
 
 type DeviceType = 'desktop' | 'mobile' | 'tablet';
 
@@ -122,6 +123,15 @@ export function getDeviceInfo(): DeviceInfo {
     isTablet = false;
     isDesktop = true;
     deviceType = 'desktop';
+  } else if (isCapacitorApp()) {
+    // The Capacitor shell IS the phone UI: every surface in that bundle is
+    // built mobile-first, so wide devices (iPad, Android tablets) must not
+    // fall into tablet/desktop branches scattered across shared components.
+    // iPad-specific layout upgrades gate on isIPadApp()/orientation instead.
+    isMobile = true;
+    isTablet = false;
+    isDesktop = false;
+    deviceType = 'mobile';
   } else if (isMobile) {
     deviceType = 'mobile';
   } else if (isTablet) {
@@ -346,6 +356,27 @@ export function useTabletStandalonePwaRuntime(): boolean {
   }, []);
 
   return value;
+}
+
+export type Orientation = 'portrait' | 'landscape';
+
+const getOrientation = (): Orientation => {
+  if (typeof window === 'undefined') return 'portrait';
+  return window.matchMedia?.('(orientation: landscape)')?.matches ? 'landscape' : 'portrait';
+};
+
+export function useOrientation(): Orientation {
+  const [orientation, setOrientation] = React.useState<Orientation>(getOrientation);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(orientation: landscape)');
+    const update = () => setOrientation(query.matches ? 'landscape' : 'portrait');
+    update();
+    return attachMediaQueryListener(query, update);
+  }, []);
+
+  return orientation;
 }
 
 export function useDeviceInfo(): DeviceInfo {

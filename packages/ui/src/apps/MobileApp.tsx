@@ -27,7 +27,9 @@ import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { opencodeClient } from '@/lib/opencode/client';
 import type { ProjectEntry, RuntimeAPIs } from '@/lib/api/types';
+import { useOrientation } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
+import { isIPadApp } from '@/lib/platform';
 import { resolveProjectForDirectory, resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { clampPercent, formatQuotaResetLabel, formatQuotaValueLabel, formatWindowLabel, QUOTA_PROVIDERS, resolveUsageTone } from '@/lib/quota';
 import { getDisplayModelName } from '@/lib/quota/model-families';
@@ -85,6 +87,120 @@ const MOBILE_SETTINGS_PAGES = [
 type MobileAppProps = {
   apis: RuntimeAPIs;
 };
+
+const IPAD_LEFT_SIDEBAR_WIDTH = 320;
+const IPAD_RIGHT_SIDEBAR_WIDTH = 380;
+const IPAD_SIDEBAR_MIN_WIDTH = 280;
+const IPAD_SIDEBAR_MAX_WIDTH = 560;
+const IPAD_METADATA_POPOVER_WIDTH = 380;
+
+/** Drag-resize for the iPad sidebars: same live-width mechanics as the desktop
+    Sidebar (imperative styles during the drag, committed to state at the end),
+    but with a finger-sized grab strip instead of a 3px hover handle. */
+function useIpadSidebarResize(side: 'left' | 'right', storageKey: string, defaultWidth: number) {
+  const asideRef = React.useRef<HTMLElement | null>(null);
+  const [width, setWidth] = React.useState(() => {
+    if (typeof window === 'undefined') return defaultWidth;
+    const stored = Number.parseInt(window.localStorage.getItem(storageKey) ?? '', 10);
+    if (!Number.isFinite(stored)) return defaultWidth;
+    return Math.min(IPAD_SIDEBAR_MAX_WIDTH, Math.max(IPAD_SIDEBAR_MIN_WIDTH, stored));
+  });
+  const [isResizing, setIsResizing] = React.useState(false);
+  const startXRef = React.useRef(0);
+  const startWidthRef = React.useRef(width);
+  const liveWidthRef = React.useRef<number | null>(null);
+  const pointerIdRef = React.useRef<number | null>(null);
+
+  const clampWidth = React.useCallback((value: number) => (
+    Math.min(IPAD_SIDEBAR_MAX_WIDTH, Math.max(IPAD_SIDEBAR_MIN_WIDTH, Math.round(value)))
+  ), []);
+
+  const applyLiveWidth = React.useCallback((nextWidth: number) => {
+    const aside = asideRef.current;
+    if (!aside) return;
+    aside.style.width = `${nextWidth}px`;
+    aside.style.minWidth = `${nextWidth}px`;
+    aside.style.maxWidth = `${nextWidth}px`;
+    aside.style.setProperty('--oc-ipad-sidebar-width', `${nextWidth}px`);
+  }, []);
+
+  const handlePointerDown = React.useCallback((event: React.PointerEvent) => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+    pointerIdRef.current = event.pointerId;
+    startXRef.current = event.clientX;
+    startWidthRef.current = width;
+    liveWidthRef.current = width;
+    setIsResizing(true);
+    event.preventDefault();
+  }, [width]);
+
+  const handlePointerMove = React.useCallback((event: React.PointerEvent) => {
+    if (pointerIdRef.current !== event.pointerId) return;
+    const delta = event.clientX - startXRef.current;
+    const next = clampWidth(startWidthRef.current + (side === 'left' ? delta : -delta));
+    if (liveWidthRef.current === next) return;
+    liveWidthRef.current = next;
+    applyLiveWidth(next);
+  }, [applyLiveWidth, clampWidth, side]);
+
+  const handlePointerEnd = React.useCallback((event: React.PointerEvent) => {
+    if (pointerIdRef.current !== event.pointerId) return;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+    const finalWidth = clampWidth(liveWidthRef.current ?? startWidthRef.current);
+    pointerIdRef.current = null;
+    liveWidthRef.current = null;
+    setIsResizing(false);
+    setWidth(finalWidth);
+    try {
+      window.localStorage.setItem(storageKey, String(finalWidth));
+    } catch {
+      // ignore
+    }
+  }, [clampWidth, storageKey]);
+
+  const handleProps = React.useMemo(() => ({
+    onPointerDown: handlePointerDown,
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerEnd,
+    onPointerCancel: handlePointerEnd,
+  }), [handlePointerDown, handlePointerEnd, handlePointerMove]);
+
+  return { asideRef, width, isResizing, handleProps };
+}
+
+const IpadSidebarResizeHandle: React.FC<{
+  side: 'left' | 'right';
+  isResizing: boolean;
+  ariaLabel: string;
+  handleProps: React.HTMLAttributes<HTMLDivElement>;
+}> = ({ side, isResizing, ariaLabel, handleProps }) => (
+  <div
+    className={cn(
+      'absolute inset-y-0 z-30 w-6 cursor-col-resize touch-none',
+      side === 'left' ? 'right-0' : 'left-0',
+    )}
+    role="separator"
+    aria-orientation="vertical"
+    aria-label={ariaLabel}
+    {...handleProps}
+  >
+    <div
+      className={cn(
+        'absolute inset-y-0 w-[3px] transition-colors',
+        side === 'left' ? 'right-0' : 'left-0',
+        isResizing && 'bg-[var(--interactive-border)]',
+      )}
+    />
+  </div>
+);
 
 const isCapacitorMobileApp = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -1197,6 +1313,43 @@ const SessionMetadataOverlay: React.FC<{
   const panelRef = React.useRef<HTMLDivElement>(null);
   const [shouldRender, setShouldRender] = React.useState(open);
   const [isExiting, setIsExiting] = React.useState(false);
+  // iPad: a phone-width sheet stretched across the whole chat column looks
+  // broken — render a popover anchored to the metadata button instead.
+  const isIPad = React.useMemo(() => isIPadApp(), []);
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const [ipadAnchorLeft, setIpadAnchorLeft] = React.useState<number | null>(null);
+
+  // The shell has transformed ancestors, so the fixed wrapper's containing
+  // block is the chat column, NOT the viewport. Anchor the popover in the
+  // wrapper's own coordinate space — viewport-based lefts would double-count
+  // the sidebar offset.
+  React.useLayoutEffect(() => {
+    if (!open || !isIPad || !shouldRender) return;
+    const compute = () => {
+      const anchorRect = anchorRef.current?.getBoundingClientRect();
+      const wrapperRect = wrapperRef.current?.getBoundingClientRect();
+      if (!anchorRect || !wrapperRect) {
+        setIpadAnchorLeft(null);
+        return;
+      }
+      const relativeLeft = anchorRect.left - wrapperRect.left;
+      const left = Math.min(
+        Math.max(relativeLeft, 8),
+        Math.max(8, wrapperRect.width - IPAD_METADATA_POPOVER_WIDTH - 8),
+      );
+      setIpadAnchorLeft(left);
+    };
+    compute();
+    // Re-anchor if the chat column shifts while the popover is open (sidebar
+    // toggle/resize, orientation change) — the header buttons move with it.
+    const wrapper = wrapperRef.current;
+    if (typeof ResizeObserver === 'undefined' || !wrapper) return;
+    const observer = new ResizeObserver(compute);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, [anchorRef, isIPad, open, shouldRender]);
+
+  const ipadPopover = isIPad && ipadAnchorLeft !== null;
 
   React.useEffect(() => {
     if (open) {
@@ -1247,18 +1400,26 @@ const SessionMetadataOverlay: React.FC<{
   if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-[calc(var(--oc-safe-area-top,0px)+var(--oc-header-height,56px))] z-20 pointer-events-none">
+    <div ref={wrapperRef} className="fixed inset-x-0 bottom-0 top-[calc(var(--oc-safe-area-top,0px)+var(--oc-header-height,56px))] z-20 pointer-events-none">
       <div
         ref={panelRef}
         role="dialog"
         aria-label={t('mobile.header.openMetadataAria')}
         className={cn(
-          'mx-3 mt-2 overflow-y-auto overscroll-contain rounded-[20px] border border-border/40 bg-[var(--surface-elevated)] p-2 shadow-[0_12px_32px_rgb(0_0_0_/_0.2)] will-change-transform',
+          'overflow-y-auto overscroll-contain rounded-[20px] border border-border/40 bg-[var(--surface-elevated)] p-2 shadow-[0_12px_32px_rgb(0_0_0_/_0.2)] will-change-transform',
+          ipadPopover ? 'absolute origin-top-left' : 'mx-3 mt-2',
           isExiting ? 'pointer-events-none' : 'pointer-events-auto',
         )}
         style={{
           animation: `${isExiting ? 'session-metadata-out' : 'session-metadata-in'} ${isExiting ? 140 : 170}ms cubic-bezier(0.32, 0.72, 0, 1) forwards`,
           maxHeight: 'min(72dvh, calc(100dvh - var(--oc-safe-area-top, 0px) - var(--oc-header-height, 56px) - 1rem))',
+          ...(ipadPopover
+            ? {
+                top: 8,
+                left: ipadAnchorLeft ?? 8,
+                width: `min(${IPAD_METADATA_POPOVER_WIDTH}px, calc(100% - 16px))`,
+              }
+            : null),
         }}
       >
         <div className="space-y-1">
@@ -1380,7 +1541,10 @@ const MobileOverflowMenu: React.FC<{
   open: boolean;
   onClose: () => void;
   items: OverflowItem[];
-}> = ({ open, onClose, items }) => {
+  /** Extra viewport-right inset so the dropdown stays anchored to the
+      three-dots button when the iPad right sidebar shifts the header. */
+  rightOffset?: number;
+}> = ({ open, onClose, items, rightOffset = 0 }) => {
   const { t } = useI18n();
   React.useEffect(() => {
     if (!open) return;
@@ -1402,9 +1566,12 @@ const MobileOverflowMenu: React.FC<{
         onClick={onClose}
       />
       <div
-        className="absolute right-2 top-[calc(var(--oc-safe-area-top,0px)+56px+4px)] w-[min(220px,calc(100vw-1rem))] origin-top-right overflow-hidden rounded-2xl border border-border/40 bg-background shadow-[0_18px_60px_rgb(0_0_0_/_0.35)]"
+        className="absolute top-[calc(var(--oc-safe-area-top,0px)+56px+4px)] w-[min(220px,calc(100vw-1rem))] origin-top-right overflow-hidden rounded-2xl border border-border/40 bg-background shadow-[0_18px_60px_rgb(0_0_0_/_0.35)]"
         role="menu"
-        style={{ animation: 'mobile-menu-in 160ms cubic-bezier(0.32, 0.72, 0, 1)' }}
+        style={{
+          right: `${8 + rightOffset}px`,
+          animation: 'mobile-menu-in 160ms cubic-bezier(0.32, 0.72, 0, 1)',
+        }}
       >
         {items.map((item, index) => (
           <button
@@ -1673,10 +1840,19 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
   );
 });
 
+type MobileHeaderSurfaceShortcuts = {
+  activePanel: 'files' | 'changes' | null;
+  changesDirty: boolean;
+  onToggleFiles: () => void;
+  onToggleChanges: () => void;
+};
+
 const MobileHeader: React.FC<{
   onOpenSessions: () => void;
   onOpenMenu: () => void;
-}> = ({ onOpenSessions, onOpenMenu }) => {
+  /** iPad only: Files/Changes header shortcuts that toggle the right sidebar. */
+  surfaceShortcuts?: MobileHeaderSurfaceShortcuts;
+}> = ({ onOpenSessions, onOpenMenu, surfaceShortcuts }) => {
   const { t } = useI18n();
   const [metadataOpen, setMetadataOpen] = React.useState(false);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -1750,6 +1926,44 @@ const MobileHeader: React.FC<{
             secondaryLabel={secondaryLabel}
           />
 
+          {surfaceShortcuts ? (
+            <>
+              <button
+                type="button"
+                className={cn(
+                  'flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  surfaceShortcuts.activePanel === 'files'
+                    ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selectionForeground)]'
+                    : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
+                )}
+                aria-label={t('mobile.menu.files')}
+                aria-pressed={surfaceShortcuts.activePanel === 'files'}
+                onClick={surfaceShortcuts.onToggleFiles}
+                style={{ touchAction: 'manipulation' }}
+              >
+                <Icon name="file-text" className="size-5" />
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'relative flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  surfaceShortcuts.activePanel === 'changes'
+                    ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selectionForeground)]'
+                    : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
+                )}
+                aria-label={t('mobile.menu.changes')}
+                aria-pressed={surfaceShortcuts.activePanel === 'changes'}
+                onClick={surfaceShortcuts.onToggleChanges}
+                style={{ touchAction: 'manipulation' }}
+              >
+                <Icon name="git-branch" className="size-5" />
+                {surfaceShortcuts.changesDirty ? (
+                  <span className="absolute right-2 top-2 inline-flex size-2 rounded-full bg-primary" aria-hidden />
+                ) : null}
+              </button>
+            </>
+          ) : null}
+
           <button
             type="button"
             className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1792,19 +2006,87 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const gitStatus = useGitStatus(normalizePath(currentDirectory) || null);
   const dirtyChangeCount = gitStatus?.files?.length ?? 0;
 
+  // iPad (Capacitor): sessions live in a persistent full-height left sidebar
+  // and Changes/Files in a right sidebar, instead of phone sheets/surfaces.
+  const isIPad = React.useMemo(() => isIPadApp(), []);
+  const orientation = useOrientation();
+  const isPortrait = orientation === 'portrait';
+  const [ipadSidebarOpen, setIpadSidebarOpen] = React.useState(isIPad && !isPortrait);
+  const [ipadRightPanel, setIpadRightPanel] = React.useState<'files' | 'changes' | null>(null);
+
+  const toggleIpadSidebar = React.useCallback(() => {
+    const willOpen = !ipadSidebarOpen;
+    // Portrait doesn't fit both side panels next to a usable chat column:
+    // opening one closes the other (iPadOS behaves the same way).
+    if (willOpen && isPortrait) setIpadRightPanel(null);
+    setIpadSidebarOpen(willOpen);
+  }, [ipadSidebarOpen, isPortrait]);
+
+  const openFilesSurface = React.useCallback(() => {
+    if (isIPad) {
+      setPendingChangesDiff(null);
+      setIpadRightPanel('files');
+      if (isPortrait) setIpadSidebarOpen(false);
+      return;
+    }
+    setFilesOpen(true);
+  }, [isIPad, isPortrait]);
+
+  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean } | null = null) => {
+    setPendingChangesDiff(diff);
+    if (isIPad) {
+      setIpadRightPanel('changes');
+      if (isPortrait) setIpadSidebarOpen(false);
+      return;
+    }
+    setChangesOpen(true);
+  }, [isIPad, isPortrait]);
+
+  const closeIpadRightPanel = React.useCallback(() => {
+    setIpadRightPanel(null);
+    setPendingChangesDiff(null);
+  }, []);
+
+  const toggleIpadRightPanel = React.useCallback((panel: 'files' | 'changes') => {
+    if (ipadRightPanel === panel) {
+      closeIpadRightPanel();
+      return;
+    }
+    if (panel === 'files') openFilesSurface();
+    else openChangesSurface();
+  }, [closeIpadRightPanel, ipadRightPanel, openChangesSurface, openFilesSurface]);
+
+  // Keep the right panel's content mounted through the width-collapse
+  // animation; drop it once the panel is fully closed.
+  const lastIpadRightPanelRef = React.useRef<'files' | 'changes'>('changes');
+  if (ipadRightPanel) lastIpadRightPanelRef.current = ipadRightPanel;
+  const [ipadRightContentMounted, setIpadRightContentMounted] = React.useState(false);
+  React.useEffect(() => {
+    if (!isIPad) return;
+    if (ipadRightPanel) {
+      setIpadRightContentMounted(true);
+      return;
+    }
+    const id = window.setTimeout(() => setIpadRightContentMounted(false), 240);
+    return () => window.clearTimeout(id);
+  }, [ipadRightPanel, isIPad]);
+  const renderedIpadRightPanel = ipadRightPanel ?? lastIpadRightPanelRef.current;
+
+  const leftResize = useIpadSidebarResize('left', 'openchamber.ipad.leftSidebarWidth', IPAD_LEFT_SIDEBAR_WIDTH);
+  const rightResize = useIpadSidebarResize('right', 'openchamber.ipad.rightSidebarWidth', IPAD_RIGHT_SIDEBAR_WIDTH);
+
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
       openChanges: ({ diffPath, staged } = {}) => {
-        setPendingChangesDiff(diffPath ? { path: diffPath, staged: staged === true } : null);
-        setChangesOpen(true);
+        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true } : null);
       },
-      openFiles: () => setFilesOpen(true),
+      openFiles: () => openFilesSurface(),
       openSettings: () => {
         setSettingsInitialMobileStage('nav');
         setSettingsOpen(true);
       },
     }),
-    [],
+    [openChangesSurface, openFilesSurface],
   );
 
   const closeChanges = React.useCallback(() => {
@@ -1817,16 +2099,18 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // new-session intents resolve directly against the store, so they aren't wired here.
   const deepLinkHandlers = React.useMemo(
     () => ({
-      openSessions: () => setSessionsSheetOpen(true),
+      openSessions: () => {
+        if (isIPad) setIpadSidebarOpen(true);
+        else setSessionsSheetOpen(true);
+      },
       openView: (target: 'files' | 'mcp' | 'instances' | 'update') => {
-        if (target === 'files') setFilesOpen(true);
+        if (target === 'files') openFilesSurface();
         else if (target === 'mcp') setMcpOpen(true);
         else if (target === 'instances') setInstancesOpen(true);
         else if (target === 'update') setUpdateOpen(true);
       },
       openChanges: ({ path, staged }: { path?: string; staged?: boolean } = {}) => {
-        setPendingChangesDiff(path ? { path, staged: staged === true } : null);
-        setChangesOpen(true);
+        openChangesSurface(path ? { path, staged: staged === true } : null);
       },
       openSettings: (section?: string) => {
         if (section) setSettingsPage(section as Parameters<typeof setSettingsPage>[0]);
@@ -1834,7 +2118,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         setSettingsOpen(true);
       },
     }),
-    [setSettingsPage],
+    [isIPad, openChangesSurface, openFilesSurface, setSettingsPage],
   );
   useDeepLinkHandlers(deepLinkHandlers);
 
@@ -1957,27 +2241,31 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   const overflowItems: OverflowItem[] = React.useMemo(
     () => {
-      const items: OverflowItem[] = [
-      {
-        key: 'files',
-        icon: 'file-text',
-        label: t('mobile.menu.files'),
-        onSelect: () => setFilesOpen(true),
-      },
-      {
-        key: 'changes',
-        icon: 'git-branch',
-        label: t('mobile.menu.changes'),
-        badge: dirtyChangeCount,
-        onSelect: () => setChangesOpen(true),
-      },
-      {
+      const items: OverflowItem[] = [];
+      // iPad exposes Files/Changes as header shortcuts instead of menu items.
+      if (!isIPad) {
+        items.push(
+          {
+            key: 'files',
+            icon: 'file-text',
+            label: t('mobile.menu.files'),
+            onSelect: () => openFilesSurface(),
+          },
+          {
+            key: 'changes',
+            icon: 'git-branch',
+            label: t('mobile.menu.changes'),
+            badge: dirtyChangeCount,
+            onSelect: () => openChangesSurface(),
+          },
+        );
+      }
+      items.push({
         key: 'mcp',
         iconNode: <McpIcon className="size-5 shrink-0 text-muted-foreground" />,
         label: t('mobile.menu.mcp'),
         onSelect: () => setMcpOpen(true),
-      },
-      ];
+      });
       if (showCapacitorOnlyFeatures) {
         items.push({
           key: 'instances',
@@ -2005,31 +2293,153 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       });
       return items;
     },
-    [dirtyChangeCount, showCapacitorOnlyFeatures, showUpdateItem, t],
+    [dirtyChangeCount, isIPad, openChangesSurface, openFilesSurface, showCapacitorOnlyFeatures, showUpdateItem, t],
   );
 
   return (
     <DedicatedMobileAppProvider actions={mobileActions}>
       <div
-        className="oc-mobile-app-shell main-content-safe-area flex h-[100dvh] flex-col bg-background text-foreground"
+        className="oc-mobile-app-shell main-content-safe-area flex h-[100dvh] flex-row bg-background text-foreground"
         data-page-scroll-lock="true"
       >
-        <MobileHeader
-          onOpenSessions={() => setSessionsSheetOpen(true)}
-          onOpenMenu={() => setOverflowOpen(true)}
-        />
-        <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
-          <div ref={chatAnimRef} className="h-full w-full">
-            <ErrorBoundary>
-              <ChatView />
-            </ErrorBoundary>
-          </div>
-        </main>
+        {/* iPad: persistent full-height sessions sidebar; the chat column and
+            its header butt against it (iPadOS-style split layout). Always
+            mounted so open/close animates width, same as the desktop Sidebar. */}
+        {isIPad ? (
+          <aside
+            ref={leftResize.asideRef}
+            className={cn(
+              'relative flex h-full shrink-0 flex-col overflow-hidden border-r border-border/50 bg-sidebar will-change-[width] motion-reduce:transition-none',
+              !ipadSidebarOpen && 'border-r-0',
+            )}
+            style={{
+              width: ipadSidebarOpen ? leftResize.width : 0,
+              minWidth: ipadSidebarOpen ? leftResize.width : 0,
+              maxWidth: ipadSidebarOpen ? leftResize.width : 0,
+              ['--oc-ipad-sidebar-width' as string]: `${leftResize.width}px`,
+              overflowX: 'clip',
+              paddingTop: 'var(--oc-safe-area-top, 0px)',
+              transitionProperty: leftResize.isResizing ? 'none' : 'width, min-width, max-width',
+              transitionDuration: '200ms',
+              transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+            aria-hidden={!ipadSidebarOpen}
+            data-page-scroll-lock="true"
+          >
+            {ipadSidebarOpen ? (
+              <IpadSidebarResizeHandle
+                side="left"
+                isResizing={leftResize.isResizing}
+                ariaLabel={t('sidebar.resize.leftPanelAria')}
+                handleProps={leftResize.handleProps}
+              />
+            ) : null}
+            <div
+              className={cn(
+                'flex h-full shrink-0 flex-col transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                leftResize.isResizing && 'pointer-events-none',
+                !ipadSidebarOpen && 'pointer-events-none select-none opacity-0',
+              )}
+              style={{ width: 'var(--oc-ipad-sidebar-width)', overflowX: 'hidden' }}
+            >
+              <ErrorBoundary>
+                <MobileSessionsSheet
+                  open
+                  variant="sidebar"
+                  // The surface asks to close after picking a session/project or
+                  // creating a worktree; the persistent landscape sidebar stays
+                  // put, portrait gives the space back to the chat.
+                  onOpenChange={(value) => {
+                    if (!value && isPortrait) setIpadSidebarOpen(false);
+                  }}
+                />
+              </ErrorBoundary>
+            </div>
+          </aside>
+        ) : null}
+
+        <div className="flex h-full min-w-0 flex-1 flex-col" data-page-scroll-lock="true">
+          <MobileHeader
+            onOpenSessions={() => (isIPad ? toggleIpadSidebar() : setSessionsSheetOpen(true))}
+            onOpenMenu={() => setOverflowOpen(true)}
+            surfaceShortcuts={isIPad ? {
+              activePanel: ipadRightPanel,
+              changesDirty: dirtyChangeCount > 0,
+              onToggleFiles: () => toggleIpadRightPanel('files'),
+              onToggleChanges: () => toggleIpadRightPanel('changes'),
+            } : undefined}
+          />
+          <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
+            <div ref={chatAnimRef} className="h-full w-full">
+              <ErrorBoundary>
+                <ChatView />
+              </ErrorBoundary>
+            </div>
+          </main>
+        </div>
+
+        {/* iPad: Changes/Files live in a full-height right sidebar instead of
+            the phone's fullscreen surfaces. Width animates like the desktop
+            RightSidebar; content stays mounted through the collapse. */}
+        {isIPad ? (
+          <aside
+            ref={rightResize.asideRef}
+            className={cn(
+              'relative flex h-full shrink-0 flex-col overflow-hidden border-l border-border/50 bg-background will-change-[width] motion-reduce:transition-none',
+              !ipadRightPanel && 'border-l-0',
+            )}
+            style={{
+              width: ipadRightPanel ? rightResize.width : 0,
+              minWidth: ipadRightPanel ? rightResize.width : 0,
+              maxWidth: ipadRightPanel ? rightResize.width : 0,
+              ['--oc-ipad-sidebar-width' as string]: `${rightResize.width}px`,
+              overflowX: 'clip',
+              paddingTop: 'var(--oc-safe-area-top, 0px)',
+              transitionProperty: rightResize.isResizing ? 'none' : 'width, min-width, max-width',
+              transitionDuration: '200ms',
+              transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+            aria-hidden={!ipadRightPanel}
+            data-page-scroll-lock="true"
+          >
+            {ipadRightPanel ? (
+              <IpadSidebarResizeHandle
+                side="right"
+                isResizing={rightResize.isResizing}
+                ariaLabel={t('sidebar.resize.rightPanelAria')}
+                handleProps={rightResize.handleProps}
+              />
+            ) : null}
+            <div
+              className={cn(
+                'flex h-full shrink-0 flex-col transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                rightResize.isResizing && 'pointer-events-none',
+                !ipadRightPanel && 'pointer-events-none select-none opacity-0',
+              )}
+              style={{ width: 'var(--oc-ipad-sidebar-width)', overflowX: 'hidden' }}
+            >
+              {ipadRightContentMounted ? (
+                <ErrorBoundary>
+                  {renderedIpadRightPanel === 'files' ? (
+                    <MobileFilesSurface onClose={closeIpadRightPanel} />
+                  ) : (
+                    <MobileChangesSurface
+                      onClose={closeIpadRightPanel}
+                      initialDiffPath={pendingChangesDiff?.path ?? null}
+                      initialDiffStaged={pendingChangesDiff?.staged === true}
+                    />
+                  )}
+                </ErrorBoundary>
+              ) : null}
+            </div>
+          </aside>
+        ) : null}
 
         <MobileOverflowMenu
           open={overflowOpen}
           onClose={() => setOverflowOpen(false)}
           items={overflowItems}
+          rightOffset={isIPad && ipadRightPanel ? rightResize.width : 0}
         />
 
         {sessionsSheetOpen ? (
