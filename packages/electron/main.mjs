@@ -154,6 +154,10 @@ const MAX_CAPTURE_PAGE_RECT_AREA = 4_000_000;
 const LOCAL_HOST_ID = 'local';
 const LOCAL_DESKTOP_CLIENT_KIND = 'desktop-local';
 const LOCAL_DESKTOP_CLIENT_DEDUPE_KEY = 'desktop-local';
+// Remote hosts get a regular 'desktop' client (NOT 'desktop-local' — that kind
+// grants whole-server device management and must never be issued to a desktop
+// connecting to someone else's server).
+const REMOTE_DESKTOP_CLIENT_KIND = 'desktop';
 const ENV_OVERRIDE_HOST_ID = '__env';
 const CHANGELOG_URL = 'https://raw.githubusercontent.com/openchamber/openchamber/main/CHANGELOG.md';
 const GITHUB_BUG_REPORT_URL = 'https://github.com/openchamber/openchamber/issues/new?template=bug_report.yml';
@@ -486,6 +490,41 @@ const mutateSettingsRoot = (mutator) => {
 
 const writeSettingsRoot = async (root) => writeJsonFile(settingsFilePath(), root);
 
+// Stable per-install identifier for this desktop, persisted in settings. Used as
+// the client dedupe key on remote hosts so re-authenticating (e.g. after a login
+// session expires) reuses the same "OpenChamber Desktop" record instead of
+// piling up a new one each time. Different desktops get different ids.
+// Display-only device metadata shown in a server's device list ("macOS",
+// app version). Never used for auth decisions.
+const desktopDeviceMetadata = () => {
+  const platformMap = { darwin: 'macos', win32: 'windows', linux: 'linux' };
+  const devicePlatform = platformMap[process.platform];
+  let appVersion;
+  try {
+    appVersion = app.getVersion();
+  } catch {
+    appVersion = undefined;
+  }
+  return {
+    ...(devicePlatform ? { devicePlatform } : {}),
+    ...(appVersion ? { appVersion } : {}),
+  };
+};
+
+const getOrCreateDesktopInstallId = async () => {
+  const existing = readSettingsRoot().desktopInstallId;
+  if (typeof existing === 'string' && existing.trim()) return existing.trim();
+  const generated = globalThis.crypto.randomUUID();
+  await mutateSettingsRoot((root) => {
+    // Race guard: keep an id another writer may have already persisted.
+    if (typeof root.desktopInstallId === 'string' && root.desktopInstallId.trim()) return root;
+    root.desktopInstallId = generated;
+    return root;
+  });
+  const after = readSettingsRoot().desktopInstallId;
+  return typeof after === 'string' && after.trim() ? after.trim() : generated;
+};
+
 const normalizeHostUrl = (raw) => {
   const trimmed = typeof raw === 'string' ? raw.trim() : '';
   if (!trimmed) return null;
@@ -570,20 +609,56 @@ const isLocalRuntimeUrl = (targetUrl) => {
   }
 };
 
+// A relay host is reached over the E2EE tunnel: it has no http(s) apiUrl, only a
+// { relayUrl (ws/wss), serverId, hostEncPubJwk } descriptor. The relay grant is a
+// one-time pairing artifact and is never persisted.
+const sanitizeHostRelayForStorage = (value) => {
+  if (!value || typeof value !== 'object') return null;
+  const relayUrl = typeof value.relayUrl === 'string' ? value.relayUrl.trim() : '';
+  const serverId = typeof value.serverId === 'string' ? value.serverId.trim() : '';
+  const jwk = value.hostEncPubJwk;
+  if (!relayUrl || !serverId || !jwk || typeof jwk !== 'object' || Array.isArray(jwk)) return null;
+  // Minimal EC public JWK shape check so a malformed descriptor is rejected at
+  // storage time instead of surfacing later as a tunnel handshake failure.
+  if (typeof jwk.kty !== 'string' || typeof jwk.crv !== 'string' || typeof jwk.x !== 'string') return null;
+  try {
+    const parsed = new URL(relayUrl);
+    if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') return null;
+  } catch {
+    return null;
+  }
+  return { relayUrl, serverId, hostEncPubJwk: jwk };
+};
+
+// Shared storage shape for a persisted host (direct or relay). Returns null for
+// entries that can't be stored (missing id, reserved 'local', or no usable
+// transport).
+const buildStoredHostEntry = (entry) => {
+  const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
+  if (!id || id === LOCAL_HOST_ID) return null;
+  const clientToken = sanitizeClientTokenForStorage(entry?.clientToken);
+  const requestHeaders = sanitizeRuntimeRequestHeaders(entry?.requestHeaders);
+  const headerFields = Object.keys(requestHeaders).length > 0 ? { requestHeaders } : {};
+  const tokenField = clientToken ? { clientToken } : {};
+  const labelRaw = typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : '';
+
+  const relay = sanitizeHostRelayForStorage(entry?.relay);
+  if (relay) {
+    const url = `relay://${relay.serverId}`;
+    return { id, label: labelRaw || url, url, ...tokenField, ...headerFields, relay };
+  }
+
+  const url = sanitizeHostUrlForStorage(entry?.url);
+  if (!url) return null;
+  const apiUrl = sanitizeHostUrlForStorage(entry?.apiUrl) || url;
+  return { id, label: labelRaw || url, url, apiUrl, ...tokenField, ...headerFields };
+};
+
 const readDesktopHostsConfig = () => {
   const root = readSettingsRoot();
   const hostsRaw = Array.isArray(root.desktopHosts) ? root.desktopHosts : [];
   const hosts = hostsRaw
-    .map((entry) => {
-      const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
-      const url = sanitizeHostUrlForStorage(entry?.url);
-      if (!id || id === LOCAL_HOST_ID || !url) return null;
-      const apiUrl = sanitizeHostUrlForStorage(entry?.apiUrl) || url;
-      const clientToken = sanitizeClientTokenForStorage(entry?.clientToken);
-      const requestHeaders = sanitizeRuntimeRequestHeaders(entry?.requestHeaders);
-      const label = typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : url;
-      return { id, label, url, apiUrl, ...(clientToken ? { clientToken } : {}), ...(Object.keys(requestHeaders).length > 0 ? { requestHeaders } : {}) };
-    })
+    .map(buildStoredHostEntry)
     .filter(Boolean);
 
   return {
@@ -599,22 +674,7 @@ const writeDesktopHostsConfig = async (config) => {
   await mutateSettingsRoot((root) => {
     root.desktopHosts = Array.isArray(config?.hosts)
       ? config.hosts
-          .map((entry) => {
-            const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
-            const url = sanitizeHostUrlForStorage(entry?.url);
-            if (!id || id === LOCAL_HOST_ID || !url) return null;
-            const apiUrl = sanitizeHostUrlForStorage(entry?.apiUrl) || url;
-            const clientToken = sanitizeClientTokenForStorage(entry?.clientToken);
-            const requestHeaders = sanitizeRuntimeRequestHeaders(entry?.requestHeaders);
-            return {
-              id,
-              label: typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : url,
-              url,
-              apiUrl,
-              ...(clientToken ? { clientToken } : {}),
-              ...(Object.keys(requestHeaders).length > 0 ? { requestHeaders } : {}),
-            };
-          })
+          .map(buildStoredHostEntry)
           .filter(Boolean)
       : [];
     root.desktopDefaultHostId = typeof config?.defaultHostId === 'string' && config.defaultHostId.trim()
@@ -1582,6 +1642,13 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice, requ
   if (!baseUrl) throw new Error('Invalid URL');
   if (!candidatePassword) throw new Error('Password is required');
 
+  // Stable client identity so re-login reuses the same device record. Local
+  // uses the fixed desktop-local identity; remote uses this install's id with a
+  // regular 'desktop' kind.
+  const clientIdentity = isLocalRuntimeUrl(baseUrl)
+    ? { clientKind: LOCAL_DESKTOP_CLIENT_KIND, dedupeKey: LOCAL_DESKTOP_CLIENT_DEDUPE_KEY, ...desktopDeviceMetadata() }
+    : { clientKind: REMOTE_DESKTOP_CLIENT_KIND, dedupeKey: `desktop:${await getOrCreateDesktopInstallId()}`, ...desktopDeviceMetadata() };
+
   const loginResponse = await fetch(new URL('/auth/session', `${baseUrl}/`).toString(), {
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
@@ -1595,10 +1662,7 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice, requ
       trustDevice: trustDevice === true,
       issueClientToken: true,
       clientLabel: 'OpenChamber Desktop',
-      ...(isLocalRuntimeUrl(baseUrl) ? {
-        clientKind: LOCAL_DESKTOP_CLIENT_KIND,
-        dedupeKey: LOCAL_DESKTOP_CLIENT_DEDUPE_KEY,
-      } : {}),
+      ...clientIdentity,
     }),
   });
   if (!loginResponse.ok) {
@@ -1626,10 +1690,7 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice, requ
     },
     body: JSON.stringify({
       label: 'OpenChamber Desktop',
-      ...(isLocalRuntimeUrl(baseUrl) ? {
-        clientKind: LOCAL_DESKTOP_CLIENT_KIND,
-        dedupeKey: LOCAL_DESKTOP_CLIENT_DEDUPE_KEY,
-      } : {}),
+      ...clientIdentity,
     }),
   });
   if (!tokenResponse.ok) {
@@ -1711,19 +1772,53 @@ const parseDeepLink = (raw) => {
   }
 };
 
-const parseConnectDeepLinkPayload = (raw) => {
+const decodeBase64UrlJson = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const json = Buffer.from(value.trim(), 'base64url').toString('utf8');
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+const parseConnectPairingDeepLinkPayload = (raw) => {
   if (typeof raw !== 'string') return null;
   try {
     const url = new URL(raw.trim());
     if (url.protocol !== `${DEEP_LINK_PROTOCOL}:` || url.hostname !== 'connect') return null;
-    const version = url.searchParams.get('v');
-    const serverUrl = normalizeHostUrl(url.searchParams.get('server') || '');
-    const token = sanitizeClientTokenForStorage(url.searchParams.get('token') || '');
-    const label = typeof url.searchParams.get('label') === 'string'
-      ? url.searchParams.get('label').trim()
-      : '';
-    if (version !== '1' || !serverUrl || !token) return null;
-    return { serverUrl, token, label: label || serverUrl };
+    if (url.searchParams.get('v') !== '2') return null;
+    const payload = decodeBase64UrlJson(url.searchParams.get('p') || '');
+    if (!payload || payload.v !== 2 || typeof payload !== 'object') return null;
+    const pairingId = typeof payload.pairingId === 'string' ? payload.pairingId.trim() : '';
+    const secret = typeof payload.secret === 'string' ? payload.secret.trim() : '';
+    if (!pairingId || !secret) return null;
+    const candidates = Array.isArray(payload.candidates)
+      ? payload.candidates.flatMap((candidate) => {
+        if (!candidate || typeof candidate !== 'object') return [];
+        const type = candidate.type === 'lan' || candidate.type === 'tunnel' || candidate.type === 'relay'
+          ? candidate.type
+          : null;
+        const candidateUrl = normalizeHostUrl(candidate.url || '');
+        if (!type || !candidateUrl) return [];
+        const priority = Number.isFinite(candidate.priority) ? candidate.priority : 100;
+        return [{ type, url: candidateUrl, priority }];
+      })
+      : [];
+    if (candidates.length === 0) return null;
+    const expiresAt = typeof payload.expiresAt === 'string' ? payload.expiresAt.trim() : '';
+    if (expiresAt) {
+      const expiresTime = Date.parse(expiresAt);
+      if (!Number.isFinite(expiresTime) || expiresTime <= Date.now()) return null;
+    }
+    return {
+      pairingId,
+      secret,
+      label: typeof payload.label === 'string' && payload.label.trim() ? payload.label.trim() : 'OpenChamber',
+      fingerprint: typeof payload.fingerprint === 'string' && payload.fingerprint.trim() ? payload.fingerprint.trim() : '',
+      expiresAt: expiresAt || null,
+      candidates: candidates.sort((left, right) => left.priority - right.priority),
+    };
   } catch {
     return null;
   }
@@ -1731,20 +1826,22 @@ const parseConnectDeepLinkPayload = (raw) => {
 
 const importConnectDeepLink = async (payload) => {
   if (!payload?.serverUrl || !payload?.token) return null;
+  const serverUrl = normalizeHostUrl(payload.serverUrl);
+  if (!serverUrl) return null;
   const config = readDesktopHostsConfig();
   const existing = config.hosts.find((host) => {
     const hostUrl = normalizeHostUrl(host?.url || '');
     const apiUrl = normalizeHostUrl(host?.apiUrl || host?.url || '');
-    return payload.serverUrl === hostUrl || payload.serverUrl === apiUrl;
+    return serverUrl === hostUrl || serverUrl === apiUrl;
   });
 
   const id = existing?.id || `host-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const importedHost = {
     ...(existing || {}),
     id,
-    label: payload.label || existing?.label || payload.serverUrl,
-    url: payload.serverUrl,
-    apiUrl: payload.serverUrl,
+    label: payload.label || existing?.label || serverUrl,
+    url: serverUrl,
+    apiUrl: serverUrl,
     clientToken: payload.token,
   };
   const hosts = existing
@@ -1757,6 +1854,51 @@ const importConnectDeepLink = async (payload) => {
     initialHostChoiceCompleted: true,
   });
   return id;
+};
+
+const requestJsonWithTimeout = async (url, init = {}, timeoutMs = 8000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const data = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const selectPairingCandidateUrl = async (payload) => {
+  for (const candidate of payload.candidates || []) {
+    try {
+      const health = await requestJsonWithTimeout(`${candidate.url.replace(/\/+$/g, '')}/health`, { method: 'GET' }, 3500);
+      if (health.ok) return candidate.url.replace(/\/+$/g, '');
+    } catch {
+    }
+  }
+  return null;
+};
+
+const redeemConnectPairingDeepLink = async (payload, serverUrl) => {
+  const response = await requestJsonWithTimeout(`${serverUrl.replace(/\/+$/g, '')}/api/client-auth/pairing/redeem`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      pairingId: payload.pairingId,
+      secret: payload.secret,
+      clientLabel: 'OpenChamber Desktop',
+      clientKind: 'desktop',
+      deviceName: 'OpenChamber Desktop',
+      ...desktopDeviceMetadata(),
+      dedupeKey: `desktop:${await getOrCreateDesktopInstallId()}`,
+    }),
+  });
+  if (!response.ok || !response.data || typeof response.data.clientToken !== 'string') return null;
+  return {
+    serverUrl,
+    token: sanitizeClientTokenForStorage(response.data.clientToken),
+    label: payload.label || response.data?.server?.label || serverUrl,
+  };
 };
 
 const switchToHostById = async (rawId) => {
@@ -1830,20 +1972,37 @@ const dispatchDeepLink = (link) => {
   if (!link) return;
   log.info('[electron] dispatching deep-link', { type: link.type, valueLen: link.value?.length || 0 });
   if (link.type === 'connect') {
-    const payload = parseConnectDeepLinkPayload(link.raw);
-    if (!payload) {
-      log.warn('[electron] invalid connect deep-link payload');
-      return;
-    }
-    void confirmConnectDeepLink(payload).then((confirmed) => {
-      if (!confirmed) {
-        log.info('[electron] connect deep-link declined by user');
-        return;
-      }
-      return importConnectDeepLink(payload).then((id) => {
+    const pairingPayload = parseConnectPairingDeepLinkPayload(link.raw);
+    if (pairingPayload) {
+      const previewUrl = pairingPayload.candidates[0]?.url || pairingPayload.label;
+      void confirmConnectDeepLink({
+        serverUrl: previewUrl,
+        token: 'pairing-v2',
+        label: pairingPayload.fingerprint ? `${pairingPayload.label} (${pairingPayload.fingerprint})` : pairingPayload.label,
+      }).then(async (confirmed) => {
+        if (!confirmed) {
+          log.info('[electron] connect pairing deep-link declined by user');
+          return;
+        }
+        const serverUrl = await selectPairingCandidateUrl(pairingPayload);
+        if (!serverUrl) {
+          log.warn('[electron] connect pairing deep-link has no reachable candidate');
+          return;
+        }
+        const importedPayload = await redeemConnectPairingDeepLink(pairingPayload, serverUrl).catch((error) => {
+          log.warn('[electron] connect pairing redeem failed:', error);
+          return null;
+        });
+        if (!importedPayload?.token) {
+          log.warn('[electron] connect pairing redeem returned no client token');
+          return;
+        }
+        const id = await importConnectDeepLink(importedPayload);
         if (id) void switchToHostById(id);
       });
-    });
+      return;
+    }
+    log.warn('[electron] invalid connect deep-link payload');
     return;
   }
   if (link.type === 'session' && link.value) {
@@ -2278,6 +2437,20 @@ const openMainWindow = async () => {
   const host = config.defaultHostId && config.defaultHostId !== LOCAL_HOST_ID
     ? config.hosts.find((entry) => entry.id === config.defaultHostId)
     : null;
+  const relayHost = host && host.relay && typeof host.relay === 'object' ? host : null;
+  if (relayHost) {
+    // Relay hosts have no reachable HTTP base. Boot the LOCAL UI with the local
+    // runtime; the renderer re-opens the E2EE tunnel on startup by reading the
+    // relay descriptor + token from desktopHosts and calling
+    // switchRuntimeEndpoint({ relay }).
+    const localApiBaseUrl = state.sidecarUrl || state.apiBaseUrl || state.localOrigin || '';
+    const localToken = resolveStoredClientTokenForUrl(localApiBaseUrl, config) || state.clientToken || '';
+    return activateMainWindow(localUiUrl, state.localOrigin, state.bootOutcome, {
+      apiBaseUrl: localApiBaseUrl,
+      clientToken: localToken,
+      requestHeaders: {},
+    });
+  }
   const apiBaseUrl = host?.apiUrl || host?.url || state.sidecarUrl || state.apiBaseUrl || '';
   const clientToken = host?.clientToken || resolveStoredClientTokenForUrl(apiBaseUrl, config) || state.clientToken || '';
   const requestHeaders = sanitizeRuntimeRequestHeaders(host?.requestHeaders || {});
@@ -3571,6 +3744,9 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 
     case 'desktop_local_client_token_get':
       return readDesktopLocalClientToken();
+
+    case 'desktop_install_id_get':
+      return getOrCreateDesktopInstallId();
 
     case 'desktop_host_probe':
       return probeHostWithTimeout(String(args.url || ''), 2_000, String(args.clientToken || ''), args.requestHeaders || {});

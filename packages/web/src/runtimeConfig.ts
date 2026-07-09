@@ -1,6 +1,7 @@
 import { getRuntimeExtraHeadersSync, refreshLocalRuntimeUrlAuthToken, refreshRuntimeUrlAuthToken, setRuntimeBearerToken, setRuntimeExtraHeaders } from '@openchamber/ui/lib/runtime-auth';
 import { installRuntimeFetchBridge } from '@openchamber/ui/lib/runtime-fetch';
 import { initializeRuntimeEndpoint } from '@openchamber/ui/lib/runtime-switch';
+import { restoreDesktopRelayRuntime } from '@openchamber/ui/lib/desktopRelayRestore';
 import { configureRuntimeUrlResolver } from '@openchamber/ui/lib/runtime-url';
 import { createWebAPIs } from './api';
 
@@ -48,5 +49,8 @@ export const createConfiguredWebAPIs = () => {
     void refreshLocalRuntimeUrlAuthToken(localOrigin).catch(() => {});
   }
   installRuntimeFetchBridge();
+  // Desktop only: if the default host is a relay host, re-open its tunnel now
+  // that the fetch bridge is installed. No-op elsewhere.
+  void restoreDesktopRelayRuntime().catch(() => {});
   return createWebAPIs({ urls });
 };

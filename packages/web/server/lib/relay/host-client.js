@@ -12,6 +12,14 @@ import { createTunnelHost } from './tunnel-host.js';
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_CAP_MS = 30000;
 const DATA_SOCKET_OPEN_TIMEOUT_MS = 15000;
+// Clients send a tunnel Ping at least every ~30s when idle, so a data socket
+// with no inbound traffic for 3 ping intervals belongs to a client that died
+// without a WebSocket close (network loss, battery kill). The relay worker may
+// not notice the dead client leg for a long time, so the host must reap these
+// itself — both to free resources and to keep the "N devices connected" status
+// honest instead of counting ghosts.
+const DATA_SOCKET_IDLE_TIMEOUT_MS = 90_000;
+const DATA_SOCKET_IDLE_SWEEP_INTERVAL_MS = 30_000;
 const DEFAULT_BATCH_WINDOW_MS = 150;
 
 // Resolve the frame-batching flush window: explicit option wins, then env, then
@@ -103,7 +111,7 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
       return;
     }
 
-    const entry = { socket, tunnel: null, openTimer: null, batcher: null };
+    const entry = { socket, tunnel: null, openTimer: null, batcher: null, lastActivityAt: Date.now() };
     dataSockets.set(connectionId, entry);
     entry.openTimer = setTimeout(() => {
       logger.warn('[Relay] host-data socket open timeout');
@@ -141,6 +149,9 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
     const handleMessage = async (data, isBinary) => {
       const current = dataSockets.get(connectionId);
       if (current !== entry) return;
+      // Any inbound message (including the client's keepalive Ping) proves the
+      // client is alive; the idle sweeper reaps sockets this stops updating.
+      entry.lastActivityAt = Date.now();
 
       if (!isBinary) {
         const action = await handshake.handleText(data.toString('utf8'));
@@ -298,9 +309,22 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
     });
   };
 
+  // Reap data sockets whose client went silent (no frames, no keepalive pings)
+  // — a dead phone leg the relay worker hasn't noticed yet.
+  const idleSweepTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [connectionId, entry] of [...dataSockets.entries()]) {
+      if (now - entry.lastActivityAt <= DATA_SOCKET_IDLE_TIMEOUT_MS) continue;
+      logger.info(`[Relay] reaping idle data socket connectionId=${connectionId}`);
+      teardownDataSocket(connectionId, 1001, 'client idle timeout');
+    }
+  }, DATA_SOCKET_IDLE_SWEEP_INTERVAL_MS);
+  if (typeof idleSweepTimer.unref === 'function') idleSweepTimer.unref();
+
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    clearInterval(idleSweepTimer);
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;

@@ -27,9 +27,11 @@ import {
   redactSensitiveUrl,
   resolveDesktopHostUrl,
   type DesktopHost,
+  type DesktopHostRelay,
   type HostProbeResult,
 } from '@/lib/desktopHosts';
-import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
+import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import {
   desktopSshConnect,
   desktopSshDisconnect,
@@ -45,6 +47,26 @@ const SSH_CONNECT_CANCELLED_ERROR = 'SSH connection cancelled';
 const runtimeKeyForHost = (host: DesktopHost): string => {
   if (host.id === LOCAL_HOST_ID) return 'local';
   return `host:${host.id}`;
+};
+
+// Quick reachability check for a relay host: open a throwaway E2EE tunnel and
+// hit /health. Confirms the relay routes to the (still-online) host before we
+// commit the runtime switch, so an offline host surfaces as an error instead of
+// a broken runtime. The steady-state tunnel is opened by switchRuntimeEndpoint.
+const probeRelayHost = async (relay: DesktopHostRelay): Promise<boolean> => {
+  const tunnel = createRelayTunnelClient({
+    relayUrl: relay.relayUrl,
+    serverId: relay.serverId,
+    hostEncPubJwk: relay.hostEncPubJwk,
+  });
+  try {
+    const response = await tunnel.fetch('/health');
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    tunnel.close();
+  }
 };
 
 type HostStatus = {
@@ -239,6 +261,15 @@ const resolveCurrentHost = (hosts: DesktopHost[]) => {
   const runtimeApiBaseUrl = getRuntimeApiBaseUrl();
   const normalizedLocal = normalizeHostUrl(localOrigin) || localOrigin;
   const normalizedCurrent = normalizeHostUrl(currentHref) || currentHref;
+
+  // Relay hosts share the window origin as their (virtual) API base, so URL
+  // matching can't distinguish them — identify the active relay host by its
+  // stable runtime key instead.
+  const activeRuntimeKey = getRuntimeKey();
+  const relayMatch = hosts.find((h) => h.relay && runtimeKeyForHost(h) === activeRuntimeKey);
+  if (relayMatch) {
+    return { id: relayMatch.id, label: relayMatch.label, url: relayMatch.url };
+  }
 
   if (runtimeApiBaseUrl && locationMatchesHost(runtimeApiBaseUrl, localOrigin)) {
     return { id: LOCAL_HOST_ID, label: 'Local', url: normalizedLocal };
@@ -484,6 +515,32 @@ export function DesktopHostSwitcherDialog({
   }, [open]);
 
   const handleSwitch = React.useCallback(async (host: DesktopHost) => {
+    // Relay hosts have no reachable HTTP origin — they ride the E2EE tunnel.
+    // Activate it in-renderer via switchRuntimeEndpoint({ relay }); the runtime
+    // fetch/socket layers route through the tunnel from the singleton registry.
+    if (host.relay) {
+      setSwitchingHostId(host.id);
+      const reachable = await probeRelayHost(host.relay).catch(() => false);
+      setStatusById((prev) => ({
+        ...prev,
+        [host.id]: { status: reachable ? 'ok' : 'unreachable', latencyMs: 0 },
+      }));
+      if (!reachable) {
+        toast.error(t('desktopHostSwitcher.toast.instanceUnreachable', { host: redactSensitiveUrl(host.label) }));
+        setSwitchingHostId(null);
+        return;
+      }
+      switchRuntimeEndpoint({
+        apiBaseUrl: typeof window !== 'undefined' ? window.location.origin : '',
+        clientToken: host.clientToken || null,
+        runtimeKey: runtimeKeyForHost(host),
+        relay: host.relay,
+      });
+      onHostSwitched?.();
+      setSwitchingHostId(null);
+      return;
+    }
+
     const origin = host.id === LOCAL_HOST_ID ? localOrigin : (normalizeHostUrl(host.url) || '');
     const apiOrigin = host.id === LOCAL_HOST_ID ? localOrigin : (normalizeHostUrl(getDesktopHostApiUrl(host)) || '');
     if (!origin) return;

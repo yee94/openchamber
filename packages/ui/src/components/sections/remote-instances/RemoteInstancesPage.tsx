@@ -21,18 +21,19 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { RelaySection } from '@/components/sections/remote-instances/RelaySection';
-import { RELAY_UI_ENABLED } from '@/lib/relay/gate';
 import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from '@/components/ui';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Radio } from '@/components/ui/radio';
 import { Icon } from "@/components/icon/Icon";
+import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { openExternalUrl } from '@/lib/url';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import type { RemoteClientRecord } from '@/lib/api/types';
-import { buildClientConnectionPayload, encodeClientConnectionPayload, parseClientConnectionPayload } from '@/lib/connectionPayload';
+import type { PendingPairingRecord, RemoteClientRecord } from '@/lib/api/types';
+import { buildPairingConnectionPayload, encodePairingConnectionPayload, parsePairingConnectionPayload, type PairingEndpointCandidate } from '@/lib/connectionPayload';
 import {
   desktopSshLogsClear,
   desktopSshLogs,
@@ -43,11 +44,15 @@ import {
 import {
   desktopHostsGet,
   desktopHostsSet,
+  desktopInstallIdGet,
   normalizeHostUrl,
   redactSensitiveUrl,
   resolveDesktopHostUrl,
+  relayHostDisplayUrl,
   type DesktopHost,
+  type DesktopHostRelay,
 } from '@/lib/desktopHosts';
+import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { getDesktopLanAddress, isDesktopLocalOriginActive, isDesktopShell } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -59,6 +64,31 @@ const randomPort = (): number => {
 const isPortInUseError = (error: unknown): boolean => {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return message.includes('address already in use') || message.includes('eaddrinuse') || message.includes('port already in use');
+};
+
+// Platform this desktop reports about itself when redeeming a pairing link —
+// display-only metadata for the issuing server's device list.
+const desktopPlatformName = (): string | undefined => {
+  if (typeof navigator === 'undefined') return undefined;
+  const ua = (navigator.userAgent || '').toLowerCase();
+  if (ua.includes('mac')) return 'macos';
+  if (ua.includes('win')) return 'windows';
+  if (ua.includes('linux')) return 'linux';
+  return undefined;
+};
+
+// Friendly label for a device's self-reported platform in the device list.
+const devicePlatformLabel = (platform?: string | null): string | null => {
+  switch ((platform || '').toLowerCase()) {
+    case 'ios': return 'iOS';
+    case 'android': return 'Android';
+    case 'macos':
+    case 'darwin': return 'macOS';
+    case 'windows':
+    case 'win32': return 'Windows';
+    case 'linux': return 'Linux';
+    default: return null;
+  }
 };
 
 const phaseLabelKey = (phase?: string): I18nKey => {
@@ -248,6 +278,15 @@ const getRuntimePort = (): number | null => {
   }
 };
 
+const isLoopbackUrl = (value: string): boolean => {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+};
+
 const resolvePairingServerUrl = async (): Promise<string> => {
   const fallback = normalizeHostUrl(getRuntimeApiBaseUrl()) || window.location.origin;
   if (!isDesktopShell() || !isDesktopLocalOriginActive()) {
@@ -394,12 +433,21 @@ export const RemoteInstancesPage: React.FC = () => {
   const [directEditToken, setDirectEditToken] = React.useState('');
   const [directEditHeaders, setDirectEditHeaders] = React.useState<HeaderDraft[]>([]);
   const [remoteClients, setRemoteClients] = React.useState<RemoteClientRecord[]>([]);
+  const [pendingPairings, setPendingPairings] = React.useState<PendingPairingRecord[]>([]);
   const [remoteClientsLoading, setRemoteClientsLoading] = React.useState(false);
   const [remoteClientLabel, setRemoteClientLabel] = React.useState('');
-  const [createdRemoteClientToken, setCreatedRemoteClientToken] = React.useState<string | null>(null);
   const [remoteClientError, setRemoteClientError] = React.useState<string | null>(null);
   const [pairingUrl, setPairingUrl] = React.useState<string | null>(null);
   const [pairingQrDataUrl, setPairingQrDataUrl] = React.useState<string | null>(null);
+  const [pairingCopied, setPairingCopied] = React.useState(false);
+  // "Add a device" dialog: a configure phase (name + transport + fallback) then a
+  // result phase (QR + link). The QR only ever shows inside this dialog.
+  const [addDeviceOpen, setAddDeviceOpen] = React.useState(false);
+  const [addDevicePhase, setAddDevicePhase] = React.useState<'configure' | 'result'>('configure');
+  const [addDeviceCreating, setAddDeviceCreating] = React.useState(false);
+  const [addDeviceTransport, setAddDeviceTransport] = React.useState<'local' | 'lan' | 'relay'>('relay');
+  const [addDeviceFallback, setAddDeviceFallback] = React.useState(true);
+  const [transportOptions, setTransportOptions] = React.useState<{ localUrl: string | null; lanUrl: string | null; relayAvailable: boolean } | null>(null);
   const revokedClientCount = React.useMemo(() => remoteClients.filter((client) => Boolean(client.revokedAt)).length, [remoteClients]);
   const [sshAddDialogOpen, setSshAddDialogOpen] = React.useState(false);
   const [sshCommandDraft, setSshCommandDraft] = React.useState('ssh user@example.com');
@@ -472,27 +520,128 @@ export const RemoteInstancesPage: React.FC = () => {
   }, [directDefaultHostId, directHeaders, directHosts, directLabel, directToken, directUrl, persistDirectHosts, t]);
 
   const importDirectConnectLink = React.useCallback(async () => {
-    const payload = parseClientConnectionPayload(directConnectLink);
+    const payload = parsePairingConnectionPayload(directConnectLink);
     if (!payload) {
       setDirectError(t('settings.remoteInstances.direct.error.invalidConnectLink'));
       return;
     }
-    const url = normalizeHostUrl(payload.serverUrl);
-    if (!url) {
+    // The redeem body is identical across every transport (the desktop is the
+    // same device however it reaches the server). The install-id dedupe key
+    // collapses re-pairing / re-auth of this desktop into one device record.
+    const installId = await desktopInstallIdGet().catch(() => '');
+    const redeemBody = JSON.stringify({
+      pairingId: payload.pairingId,
+      secret: payload.secret,
+      clientLabel: payload.label || 'OpenChamber Desktop',
+      clientKind: 'desktop',
+      deviceName: 'OpenChamber Desktop',
+      devicePlatform: desktopPlatformName(),
+      ...(installId ? { dedupeKey: `desktop:${installId}` } : {}),
+    });
+    const redeemInit: RequestInit = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: redeemBody,
+    };
+    const tokenFromResponse = async (response: Response): Promise<string | null> => {
+      if (!response.ok) return null;
+      const body = (await response.json().catch(() => null)) as { clientToken?: unknown } | null;
+      const token = typeof body?.clientToken === 'string' ? body.clientToken.trim() : '';
+      return token || null;
+    };
+
+    // Try direct (LAN/tunnel) candidates first — they're cheaper and don't need
+    // relay infrastructure — then fall back to relay. Ordered by payload priority.
+    const ordered = [...payload.candidates].sort(
+      (a, b) => (a.type === 'relay' ? 1 : 0) - (b.type === 'relay' ? 1 : 0),
+    );
+
+    let redeemed:
+      | { kind: 'direct'; url: string; token: string }
+      | { kind: 'relay'; relay: DesktopHostRelay; token: string }
+      | null = null;
+
+    for (const candidate of ordered) {
+      if (candidate.type === 'relay') {
+        // Open a throwaway E2EE tunnel just to redeem the one-time secret; the
+        // grant (if any) authorizes admission to the relay for this serverId.
+        const tunnel = createRelayTunnelClient({
+          relayUrl: candidate.relayUrl,
+          serverId: candidate.serverId,
+          hostEncPubJwk: candidate.hostEncPubJwk,
+          ...(candidate.grant ? { grant: candidate.grant } : {}),
+        });
+        try {
+          const response = await tunnel.fetch('/api/client-auth/pairing/redeem', redeemInit);
+          const token = await tokenFromResponse(response);
+          if (token) {
+            redeemed = {
+              kind: 'relay',
+              // grant is intentionally not persisted (one-time pairing artifact).
+              relay: { relayUrl: candidate.relayUrl, serverId: candidate.serverId, hostEncPubJwk: candidate.hostEncPubJwk },
+              token,
+            };
+            break;
+          }
+        } catch {
+          // Relay unreachable / handshake failed — try the next candidate.
+        } finally {
+          tunnel.close();
+        }
+        continue;
+      }
+      // Direct: the remote instance is a user-provided URL, so a plain
+      // cross-origin fetch is correct here (not the active runtime).
+      const candidateUrl = normalizeHostUrl(candidate.url);
+      if (!candidateUrl) continue;
+      try {
+        const response = await fetch(`${candidateUrl}/api/client-auth/pairing/redeem`, redeemInit);
+        const token = await tokenFromResponse(response);
+        if (token) {
+          redeemed = { kind: 'direct', url: candidateUrl, token };
+          break;
+        }
+      } catch {
+        // Unreachable candidate — try the next one.
+      }
+    }
+
+    if (!redeemed) {
       setDirectError(t('desktopHostSwitcher.error.invalidUrl'));
       return;
     }
-    const existing = directHosts.find((host) => normalizeHostUrl(host.apiUrl || host.url) === url);
-    if (existing) {
-      const nextHosts = directHosts.map((host) => host.id === existing.id
-        ? { ...host, label: payload.label || host.label, url, apiUrl: url, clientToken: payload.token }
-        : host);
-      await persistDirectHosts(nextHosts, directDefaultHostId);
+
+    const makeId = (): string => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `host-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+    if (redeemed.kind === 'relay') {
+      const { relay, token } = redeemed;
+      // Relay hosts are keyed by serverId (one host per server, regardless of
+      // which relay routes it), so re-importing updates the existing record.
+      const existing = directHosts.find((host) => host.relay?.serverId === relay.serverId);
+      const displayUrl = relayHostDisplayUrl(relay.serverId);
+      if (existing) {
+        const nextHosts = directHosts.map((host) => host.id === existing.id
+          ? { ...host, label: payload.label || host.label, url: displayUrl, apiUrl: undefined, clientToken: token, relay }
+          : host);
+        await persistDirectHosts(nextHosts, directDefaultHostId);
+      } else {
+        // payload.label is normally the issuing server's hostname; the pseudo-URL
+        // is only a last-resort display name.
+        await persistDirectHosts([{ id: makeId(), label: payload.label || displayUrl, url: displayUrl, clientToken: token, relay }, ...directHosts], directDefaultHostId);
+      }
     } else {
-      const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `host-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      await persistDirectHosts([{ id, label: payload.label || redactSensitiveUrl(url), url, apiUrl: url, clientToken: payload.token }, ...directHosts], directDefaultHostId);
+      const { url, token } = redeemed;
+      const existing = directHosts.find((host) => !host.relay && normalizeHostUrl(host.apiUrl || host.url) === url);
+      if (existing) {
+        const nextHosts = directHosts.map((host) => host.id === existing.id
+          ? { ...host, label: payload.label || host.label, url, apiUrl: url, clientToken: token }
+          : host);
+        await persistDirectHosts(nextHosts, directDefaultHostId);
+      } else {
+        await persistDirectHosts([{ id: makeId(), label: payload.label || redactSensitiveUrl(url), url, apiUrl: url, clientToken: token }, ...directHosts], directDefaultHostId);
+      }
     }
     setDirectConnectLink('');
     setDirectError(null);
@@ -567,53 +716,155 @@ export const RemoteInstancesPage: React.FC = () => {
     await persistDirectHosts(directHosts, id);
   }, [directHosts, persistDirectHosts]);
 
-  const loadRemoteClients = React.useCallback(async () => {
+  const loadRemoteClients = React.useCallback(async (options?: { silent?: boolean }) => {
     if (!clientAuth) return;
-    setRemoteClientsLoading(true);
-    setRemoteClientError(null);
+    if (!options?.silent) setRemoteClientsLoading(true);
+    if (!options?.silent) setRemoteClientError(null);
     try {
-      setRemoteClients(await clientAuth.listClients());
+      const [clients, pending] = await Promise.all([
+        clientAuth.listClients(),
+        clientAuth.listPendingPairings().catch(() => [] as PendingPairingRecord[]),
+      ]);
+      setRemoteClients(clients);
+      setPendingPairings(pending);
     } catch (err) {
-      setRemoteClientError(err instanceof Error ? err.message : String(err));
+      // A silent poll must not surface a transient error over the live list.
+      if (!options?.silent) setRemoteClientError(err instanceof Error ? err.message : String(err));
     } finally {
-      setRemoteClientsLoading(false);
+      if (!options?.silent) setRemoteClientsLoading(false);
     }
   }, [clientAuth]);
 
-  React.useEffect(() => {
-    void loadRemoteClients();
-  }, [loadRemoteClients]);
-
-  const createRemoteClient = React.useCallback(async () => {
+  const cancelPendingPairing = React.useCallback(async (id: string) => {
     if (!clientAuth) return;
-    setRemoteClientError(null);
     try {
-      const result = await clientAuth.createClient({ label: remoteClientLabel.trim() || undefined });
-      setCreatedRemoteClientToken(result.token);
-      setRemoteClientLabel('');
-      await loadRemoteClients();
+      await clientAuth.cancelPairing(id);
+      setPendingPairings((prev) => prev.filter((entry) => entry.id !== id));
+      await loadRemoteClients({ silent: true });
     } catch (err) {
       setRemoteClientError(err instanceof Error ? err.message : String(err));
     }
-  }, [clientAuth, loadRemoteClients, remoteClientLabel]);
+  }, [clientAuth, loadRemoteClients]);
+
+  // Load on mount, then poll while the page is visible so a device that redeems
+  // a pairing link shows up in the list without reopening settings.
+  React.useEffect(() => {
+    if (!clientAuth) return;
+    void loadRemoteClients();
+    const interval = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      void loadRemoteClients({ silent: true });
+    }, 5_000);
+    return () => window.clearInterval(interval);
+  }, [clientAuth, loadRemoteClients]);
+
+  // Available direct transports for the create dialog. The server is authoritative
+  // for LAN reachability (derived from its bind, not the UI origin), so "Local
+  // network" works even when the UI is opened on localhost. Falls back to the
+  // client-side guess if the endpoint is unavailable.
+  const resolveTransportOptions = React.useCallback(async (): Promise<{ localUrl: string | null; lanUrl: string | null; relayAvailable: boolean }> => {
+    if (clientAuth?.getPairingTransports) {
+      try {
+        const transports = await clientAuth.getPairingTransports();
+        return { localUrl: transports.local, lanUrl: transports.lan, relayAvailable: transports.relayAvailable };
+      } catch {
+        // fall through to the client-side guess
+      }
+    }
+    const port = getRuntimePort();
+    const localUrl = port ? `http://127.0.0.1:${port}` : (isLoopbackUrl(window.location.origin) ? window.location.origin : null);
+    let lanUrl: string | null = null;
+    try {
+      const resolved = normalizeHostUrl(await resolvePairingServerUrl());
+      lanUrl = resolved && !isLoopbackUrl(resolved) ? resolved : null;
+    } catch {
+      // keep null
+    }
+    return { localUrl, lanUrl, relayAvailable: true };
+  }, [clientAuth]);
+
+  const openAddDevice = React.useCallback(async () => {
+    setRemoteClientError(null);
+    setPairingUrl(null);
+    setPairingQrDataUrl(null);
+    setPairingCopied(false);
+    setAddDevicePhase('configure');
+    setAddDeviceFallback(true);
+    setAddDeviceOpen(true);
+    const opts = await resolveTransportOptions();
+    setTransportOptions(opts);
+    // "Anywhere" (relay, with home-network preference) is the right default for
+    // most people; fall back to narrower options only when relay is unavailable.
+    setAddDeviceTransport(opts.relayAvailable ? 'relay' : opts.lanUrl ? 'lan' : 'local');
+  }, [resolveTransportOptions]);
 
   const createPairingLink = React.useCallback(async () => {
-    if (!clientAuth) return;
+    if (!clientAuth?.createPairingSession || !transportOptions) return;
     setRemoteClientError(null);
+    setAddDeviceCreating(true);
     try {
-      const serverUrl = await resolvePairingServerUrl();
-      const result = await clientAuth.createClient({ label: remoteClientLabel.trim() || 'Paired client' });
-      const payload = buildClientConnectionPayload({ serverUrl, token: result.token, label: remoteClientLabel || 'OpenChamber' });
-      const encoded = encodeClientConnectionPayload(payload);
-      setCreatedRemoteClientToken(result.token);
+      const label = remoteClientLabel.trim() || undefined;
+      // Map the chosen transport (+ fallback) to the per-link candidate request.
+      let serverUrl: string | undefined;
+      let includeRelay: boolean;
+      let includeDirect = true;
+      if (addDeviceTransport === 'local') {
+        serverUrl = transportOptions.localUrl ?? undefined;
+        includeRelay = false;
+      } else if (addDeviceTransport === 'lan') {
+        serverUrl = transportOptions.lanUrl ?? undefined;
+        includeRelay = addDeviceFallback;
+      } else if (addDeviceFallback && transportOptions.lanUrl) {
+        // Relay, but prefer the local network when available: carry both.
+        serverUrl = transportOptions.lanUrl;
+        includeRelay = true;
+      } else {
+        // Relay only.
+        includeDirect = false;
+        includeRelay = true;
+      }
+      const { pairing, server } = await clientAuth.createPairingSession({
+        label,
+        allowedClientKinds: ['mobile', 'desktop'],
+        serverUrl,
+        includeRelay,
+        includeDirect,
+      });
+      const payload = buildPairingConnectionPayload({
+        pairingId: pairing.id,
+        secret: pairing.secret,
+        // The typed name (`label`) is the per-device label shown in THIS server's
+        // device list; it already went to createPairingSession above. The payload
+        // label is what the paired device names its connection by, which must be
+        // the issuing server's name (hostname), not the device's own name.
+        label: server.label,
+        fingerprint: pairing.fingerprint ?? undefined,
+        expiresAt: pairing.expiresAt,
+        candidates: server.candidates as unknown as PairingEndpointCandidate[],
+      });
+      const encoded = encodePairingConnectionPayload(payload);
       setPairingUrl(encoded);
-      setPairingQrDataUrl(await QRCode.toDataURL(encoded, { width: 192, margin: 1 }));
-      setRemoteClientLabel('');
-      await loadRemoteClients();
+      // Pairing payloads are dense (multiple transport candidates + the relay
+      // E2EE key), so render at high resolution with low error-correction.
+      setPairingQrDataUrl(await QRCode.toDataURL(encoded, { width: 1024, margin: 2, errorCorrectionLevel: 'L' }));
+      setPairingCopied(false);
+      setAddDevicePhase('result');
+      await loadRemoteClients({ silent: true });
     } catch (err) {
       setRemoteClientError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAddDeviceCreating(false);
     }
-  }, [clientAuth, loadRemoteClients, remoteClientLabel]);
+  }, [clientAuth, transportOptions, addDeviceTransport, addDeviceFallback, remoteClientLabel, loadRemoteClients]);
+
+  const handleCopyPairing = React.useCallback(() => {
+    if (!pairingUrl) return;
+    void copyTextToClipboard(pairingUrl).then((result) => {
+      if (!result.ok) return;
+      setPairingCopied(true);
+      window.setTimeout(() => setPairingCopied(false), 2000);
+    });
+  }, [pairingUrl]);
 
   const revokeRemoteClient = React.useCallback(async (client: RemoteClientRecord) => {
     if (!clientAuth) return;
@@ -1050,34 +1301,12 @@ export const RemoteInstancesPage: React.FC = () => {
               <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.description')}</p>
             </div>
             <section className="px-2 pb-2 pt-0 space-y-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input className="h-8" value={remoteClientLabel} onChange={(event) => setRemoteClientLabel(event.target.value)} placeholder={t('settings.remoteInstances.clientAuth.field.labelPlaceholder')} />
-                <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => void createRemoteClient()}>
-                  {t('settings.remoteInstances.clientAuth.actions.create')}
-                </Button>
-                <Button type="button" size="xs" className="!font-normal" onClick={() => void createPairingLink()}>
-                  {t('settings.remoteInstances.clientAuth.actions.pair')}
+              <div>
+                <Button type="button" size="xs" className="!font-normal" onClick={() => void openAddDevice()}>
+                  <Icon name="add" className="h-3.5 w-3.5" />
+                  {t('settings.remoteInstances.clientAuth.actions.addDevice')}
                 </Button>
               </div>
-              {pairingUrl ? (
-                <div className="flex flex-col gap-3 rounded-md border border-[var(--interactive-border)] p-2 sm:flex-row">
-                  {pairingQrDataUrl ? <img src={pairingQrDataUrl} alt={t('settings.remoteInstances.clientAuth.qrAlt')} className="size-48 self-start" /> : null}
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.pairingUrl')}</p>
-                    <code className="block select-all break-all typography-code text-foreground">{pairingUrl}</code>
-                    <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => void copyTextToClipboard(pairingUrl)}>
-                      <Icon name="file-copy" className="h-3.5 w-3.5" />
-                      {t('settings.common.actions.copyAll')}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-              {createdRemoteClientToken ? (
-                <div className="space-y-1 rounded-md border border-[var(--interactive-border)] p-2">
-                  <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.createdToken')}</p>
-                  <code className="block select-all break-all typography-code text-foreground">{createdRemoteClientToken}</code>
-                </div>
-              ) : null}
               <div className="space-y-1">
                 {revokedClientCount > 0 ? (
                   <div className="flex justify-end">
@@ -1086,38 +1315,82 @@ export const RemoteInstancesPage: React.FC = () => {
                     </Button>
                   </div>
                 ) : null}
-                {remoteClientsLoading ? (
+                {remoteClientsLoading && remoteClients.length === 0 && pendingPairings.length === 0 ? (
                   <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.state.loading')}</p>
-                ) : remoteClients.length === 0 ? (
+                ) : remoteClients.length === 0 && pendingPairings.length === 0 ? (
                   <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.state.empty')}</p>
-                ) : remoteClients.map((client) => {
-                  const isLocalDesktopClient = client.clientKind === 'desktop-local';
-                  return (
-                    <div key={client.id} className="flex items-center justify-between gap-3 py-1.5">
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <p className="typography-ui-label text-foreground truncate">{client.label}</p>
-                          {isLocalDesktopClient ? (
-                            <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                              {t('settings.remoteInstances.clientAuth.state.thisDevice')}
-                            </span>
-                          ) : null}
+                ) : (
+                  <>
+                    {pendingPairings.map((pending) => (
+                      <div key={`pending-${pending.id}`} className="flex items-center justify-between gap-3 py-1.5">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--status-warning)] animate-pulse" />
+                            <p className="typography-ui-label text-foreground truncate">{pending.label || t('settings.remoteInstances.clientAuth.field.labelPlaceholder')}</p>
+                            {pending.usesRelay ? (
+                              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded shrink-0 leading-none pb-px border border-border/50">{t('settings.remoteInstances.clientAuth.state.viaRelay')}</span>
+                            ) : null}
+                          </div>
+                          <p className="typography-micro text-muted-foreground truncate">{t('settings.remoteInstances.clientAuth.state.pending')}</p>
                         </div>
-                        <p className="typography-micro text-muted-foreground truncate">{client.revokedAt ? t('settings.remoteInstances.clientAuth.state.revoked') : client.lastUsedAt ? t('settings.remoteInstances.clientAuth.lastUsed', { date: client.lastUsedAt }) : t('settings.remoteInstances.clientAuth.neverUsed')}</p>
+                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void cancelPendingPairing(pending.id)}>
+                          {t('settings.common.actions.cancel')}
+                        </Button>
                       </div>
-                      <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void revokeRemoteClient(client)} disabled={Boolean(client.revokedAt)}>
-                        {t('settings.remoteInstances.clientAuth.actions.revoke')}
-                      </Button>
-                    </div>
-                  );
-                })}
+                    ))}
+                    {remoteClients.map((client) => {
+                      const isLocalDesktopClient = client.clientKind === 'desktop-local';
+                      // Live presence: the server refreshes lastUsedAt on every
+                      // authenticated request (writes throttled to 60s), so a
+                      // device with activity in the last 90s is connected NOW.
+                      // The list polls every 5s, keeping this fresh.
+                      const lastUsedMs = client.lastUsedAt ? Date.parse(client.lastUsedAt) : Number.NaN;
+                      const isOnline = !client.revokedAt
+                        && (isLocalDesktopClient || (Number.isFinite(lastUsedMs) && Date.now() - lastUsedMs < 90_000));
+                      const statusText = client.revokedAt
+                        ? t('settings.remoteInstances.clientAuth.state.revoked')
+                        : isOnline
+                          ? (client.lastTransport === 'relay' && !isLocalDesktopClient
+                            ? t('settings.remoteInstances.clientAuth.state.connectedRelay')
+                            : t('settings.remoteInstances.clientAuth.state.connectedDirect'))
+                          : client.lastUsedAt
+                            ? t('settings.remoteInstances.clientAuth.lastUsed', { date: client.lastUsedAt })
+                            : t('settings.remoteInstances.clientAuth.neverUsed');
+                      return (
+                        <div key={client.id} className="flex items-center justify-between gap-3 py-1.5">
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className={cn(
+                                'h-2 w-2 shrink-0 rounded-full',
+                                client.revokedAt ? 'bg-muted-foreground/20' : isOnline ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/30',
+                              )} />
+                              <p className="typography-ui-label text-foreground truncate">{client.label}</p>
+                              {devicePlatformLabel(client.devicePlatform) ? (
+                                <span className="typography-micro text-muted-foreground bg-muted px-1 rounded shrink-0 leading-none pb-px border border-border/50">
+                                  {devicePlatformLabel(client.devicePlatform)}
+                                </span>
+                              ) : null}
+                              {isLocalDesktopClient ? (
+                                <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+                                  {t('settings.remoteInstances.clientAuth.state.thisDevice')}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className={cn('typography-micro truncate', isOnline && !client.revokedAt ? 'text-[var(--status-success)]' : 'text-muted-foreground')}>{statusText}</p>
+                          </div>
+                          <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void revokeRemoteClient(client)} disabled={Boolean(client.revokedAt)}>
+                            {t('settings.remoteInstances.clientAuth.actions.revoke')}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
               {remoteClientError ? <p className="typography-meta text-[var(--status-error)]">{remoteClientError}</p> : null}
             </section>
           </div>
         ) : null}
-
-        {clientAuth && RELAY_UI_ENABLED ? <RelaySection /> : null}
 
         {showInstanceManagement ? <div data-settings-item="remote-instances.direct-hosts" className="mb-8 border-t border-[var(--surface-subtle)] pt-8">
           <div className="mb-1 px-1 space-y-0.5">
@@ -1264,6 +1537,100 @@ export const RemoteInstancesPage: React.FC = () => {
             </form>
           </DialogContent>
         </Dialog> : null}
+
+        <Dialog open={addDeviceOpen} onOpenChange={setAddDeviceOpen}>
+          <DialogContent className={addDevicePhase === 'result' ? 'sm:max-w-lg' : 'sm:max-w-md'}>
+            <DialogHeader>
+              <DialogTitle>{addDevicePhase === 'result' ? t('settings.remoteInstances.clientAuth.qrDialogTitle') : t('settings.remoteInstances.clientAuth.actions.addDevice')}</DialogTitle>
+              {/* Configure phase: what this dialog will produce. Result phase: what
+                  to do with the QR code that is now on screen. */}
+              <DialogDescription>{addDevicePhase === 'result' ? t('settings.remoteInstances.clientAuth.qrScanHint') : t('settings.remoteInstances.clientAuth.addDevice.subtitle')}</DialogDescription>
+            </DialogHeader>
+            {addDevicePhase === 'configure' ? (
+              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void createPairingLink(); }}>
+                <Input
+                  className="h-8"
+                  value={remoteClientLabel}
+                  onChange={(event) => setRemoteClientLabel(event.target.value)}
+                  placeholder={t('settings.remoteInstances.clientAuth.field.labelPlaceholder')}
+                  autoFocus
+                />
+                <div className="space-y-1.5">
+                  <p className="typography-ui-label text-foreground">{t('settings.remoteInstances.clientAuth.addDevice.transportLabel')}</p>
+                  {/* Ordered by how likely a first-time user is to want each option;
+                      "Anywhere" is the default. Every option explains its outcome in
+                      plain words — "relay" appears only inside the description. */}
+                  <div role="radiogroup" aria-label={t('settings.remoteInstances.clientAuth.addDevice.transportLabel')} className="space-y-1.5">
+                    {([
+                      { key: 'relay' as const, label: t('settings.remoteInstances.clientAuth.addDevice.transport.relay'), hint: t('settings.remoteInstances.clientAuth.addDevice.transport.relayHint'), available: Boolean(transportOptions?.relayAvailable) },
+                      { key: 'lan' as const, label: t('settings.remoteInstances.clientAuth.addDevice.transport.lan'), hint: t('settings.remoteInstances.clientAuth.addDevice.transport.lanHint'), available: Boolean(transportOptions?.lanUrl) },
+                      { key: 'local' as const, label: t('settings.remoteInstances.clientAuth.addDevice.transport.local'), hint: t('settings.remoteInstances.clientAuth.addDevice.transport.localHint'), available: Boolean(transportOptions?.localUrl) },
+                    ]).map((option) => {
+                      const selected = addDeviceTransport === option.key;
+                      return (
+                        <div
+                          key={option.key}
+                          className={cn('flex items-start gap-2 py-0.5', option.available ? 'cursor-pointer' : 'opacity-45')}
+                          onClick={() => { if (option.available) setAddDeviceTransport(option.key); }}
+                          role="presentation"
+                        >
+                          <Radio
+                            checked={selected}
+                            disabled={!option.available}
+                            onChange={() => setAddDeviceTransport(option.key)}
+                            ariaLabel={option.label}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0">
+                            <p className={cn('typography-ui-label font-normal', selected ? 'text-foreground' : 'text-foreground/70')}>{option.label}</p>
+                            <p className="typography-meta text-muted-foreground">{option.hint}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {addDeviceTransport === 'lan' ? (
+                    <label className="flex w-fit cursor-pointer items-center gap-2 pt-1">
+                      <Checkbox checked={addDeviceFallback} onChange={setAddDeviceFallback} ariaLabel={t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')} />
+                      <span className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')}</span>
+                    </label>
+                  ) : null}
+                  {addDeviceTransport === 'relay' && transportOptions?.lanUrl ? (
+                    <label className="flex w-fit cursor-pointer items-center gap-2 pt-1">
+                      <Checkbox checked={addDeviceFallback} onChange={setAddDeviceFallback} ariaLabel={t('settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal')} />
+                      <span className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal')}</span>
+                    </label>
+                  ) : null}
+                </div>
+                {remoteClientError ? <p className="typography-meta text-[var(--status-error)]">{remoteClientError}</p> : null}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => setAddDeviceOpen(false)} disabled={addDeviceCreating}>{t('settings.common.actions.cancel')}</Button>
+                  <Button type="submit" size="xs" className="!font-normal" disabled={addDeviceCreating || !transportOptions}>{t('settings.remoteInstances.clientAuth.addDevice.create')}</Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3">
+                {pairingQrDataUrl ? (
+                  <div className="flex justify-center">
+                    <img src={pairingQrDataUrl} alt={t('settings.remoteInstances.clientAuth.qrAlt')} className="w-full max-w-[420px] rounded-md bg-white p-4" />
+                  </div>
+                ) : null}
+                {pairingUrl ? (
+                  <div className="flex items-center gap-2 rounded-md border border-[var(--interactive-border)] p-2">
+                    <code className="min-w-0 flex-1 truncate typography-code text-muted-foreground">{pairingUrl}</code>
+                    <Button type="button" variant="outline" size="xs" className="!font-normal shrink-0" onClick={handleCopyPairing}>
+                      <Icon name={pairingCopied ? 'check' : 'file-copy'} className={cn('h-3.5 w-3.5', pairingCopied && 'text-[var(--status-success)]')} />
+                      {pairingCopied ? t('settings.remoteInstances.clientAuth.actions.copied') : t('settings.common.actions.copyAll')}
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="flex justify-end">
+                  <Button type="button" size="xs" className="!font-normal" onClick={() => setAddDeviceOpen(false)}>{t('settings.remoteInstances.clientAuth.addDevice.done')}</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {showInstanceManagement ? <div className="mb-8 border-t border-[var(--surface-subtle)] pt-8">
           <div className="mb-1 px-1 space-y-0.5">

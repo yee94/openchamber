@@ -1108,6 +1108,21 @@ export interface RemoteClientRecord {
   revokedAt: string | null;
   expiresAt?: string | null;
   clientKind?: string | null;
+  authMethod?: string | null;
+  deviceName?: string | null;
+  devicePlatform?: string | null;
+  usesRelay?: boolean;
+  /** Transport that carried the device's most recent authenticated request. */
+  lastTransport?: 'relay' | 'direct' | null;
+}
+
+// A pairing link that has been created but not yet redeemed by a device.
+export interface PendingPairingRecord {
+  id: string;
+  label?: string;
+  fingerprint?: string | null;
+  expiresAt?: string;
+  usesRelay?: boolean;
 }
 
 export interface RemoteClientCreateResult {
@@ -1124,11 +1139,49 @@ export interface RemoteClientPurgeRevokedResult {
   purged: number;
 }
 
+export interface PairingSessionCreateResult {
+  pairing: {
+    id: string;
+    label?: string;
+    fingerprint?: string | null;
+    expiresAt?: string;
+    secret: string;
+  };
+  server: {
+    label: string;
+    // Transport candidates for the pairing-v2 payload. Shape matches
+    // PairingEndpointCandidate in `@/lib/connectionPayload` (direct lan/tunnel or
+    // relay); left as a structural type here so this contract file stays leaf.
+    candidates: Array<Record<string, unknown>>;
+  };
+}
+
 export interface ClientAuthAPI {
   listClients(): Promise<RemoteClientRecord[]>;
   createClient(input?: { label?: string }): Promise<RemoteClientCreateResult>;
+  // Creates a one-time pairing session (pairing v2). `serverUrl` is the
+  // externally reachable URL to advertise as the direct candidate (the desktop
+  // UI talks to its server over loopback, so it must supply the LAN URL); the
+  // server folds in a relay candidate when its relay host is enabled.
+  createPairingSession(input?: {
+    label?: string;
+    allowedClientKinds?: Array<'mobile' | 'desktop'>;
+    serverUrl?: string;
+    // Per-link transport choice. `includeRelay: true` adds the relay candidate
+    // and enables the relay host on demand; `false` omits it; omitted keeps the
+    // legacy "relay only if already enabled" behavior. `includeDirect: false`
+    // produces a relay-only link (no direct candidate).
+    includeRelay?: boolean;
+    includeDirect?: boolean;
+  }): Promise<PairingSessionCreateResult>;
   purgeRevokedClients(): Promise<RemoteClientPurgeRevokedResult>;
   revokeClient(id: string): Promise<RemoteClientRevokeResult>;
+  // Pairing links created but not yet redeemed (the "pending devices" list).
+  listPendingPairings(): Promise<PendingPairingRecord[]>;
+  cancelPairing(id: string): Promise<{ cancelled: boolean }>;
+  // Direct transports the server can be reached on, for the create-device dialog.
+  // LAN reflects the server's actual bind, independent of the UI origin.
+  getPairingTransports(): Promise<{ local: string | null; lan: string | null; relayAvailable: boolean }>;
 }
 
 export interface RuntimeAPIs {

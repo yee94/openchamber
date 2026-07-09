@@ -21,17 +21,44 @@ const sanitizeRequestHeaders = (headers: unknown): Record<string, string> | unde
   return Object.keys(next).length > 0 ? next : undefined;
 };
 
+/**
+ * Private-relay reachability for a host. When present, the host is reached over
+ * the E2EE relay tunnel (no direct `apiUrl`); `hostEncPubJwk` is the trust anchor
+ * that pins the tunnel to the real server. The relay admission `grant` is a
+ * one-time pairing artifact and is intentionally NOT persisted — steady-state
+ * relay connections route by `serverId` alone (mirrors the mobile app).
+ */
+export type DesktopHostRelay = {
+  relayUrl: string;
+  serverId: string;
+  hostEncPubJwk: JsonWebKey;
+};
+
 export type DesktopHost = {
   id: string;
   label: string;
-  /** Legacy/UI URL. During migration this may equal apiUrl. */
+  /** Legacy/UI URL. During migration this may equal apiUrl. For relay hosts this is a display-only `relay://<serverId>` pseudo-URL. */
   url: string;
-  /** API endpoint used by packaged Electron UI for this instance. */
+  /** API endpoint used by packaged Electron UI for this instance. Absent for relay-only hosts. */
   apiUrl?: string;
   /** Remote client bearer token for packaged-client API access. */
   clientToken?: string;
   /** Extra headers for desktop runtime API requests. */
   requestHeaders?: Record<string, string>;
+  /** When set, this host is reached over the private relay tunnel. */
+  relay?: DesktopHostRelay;
+};
+
+/** Display-only pseudo-URL for a relay host (never fetched). */
+export const relayHostDisplayUrl = (serverId: string): string => `relay://${serverId}`;
+
+const parseHostRelay = (value: unknown): DesktopHostRelay | null => {
+  if (!isRecord(value)) return null;
+  const relayUrl = readString(value, 'relayUrl') || readString(value, 'relay_url');
+  const serverId = readString(value, 'serverId') || readString(value, 'server_id');
+  const jwk = value.hostEncPubJwk ?? value.host_enc_pub_jwk;
+  if (!relayUrl || !serverId || !isRecord(jwk)) return null;
+  return { relayUrl, serverId, hostEncPubJwk: jwk as JsonWebKey };
 };
 
 export type DesktopHostsConfig = {
@@ -174,6 +201,7 @@ const parseHost = (value: unknown): DesktopHost | null => {
   const apiUrl = readString(value, 'apiUrl') || readString(value, 'api_url');
   const clientToken = readString(value, 'clientToken') || readString(value, 'client_token');
   const requestHeaders = sanitizeRequestHeaders(value.requestHeaders);
+  const relay = parseHostRelay(value.relay);
   if (!id || !label || !url) return null;
   return {
     id,
@@ -182,6 +210,7 @@ const parseHost = (value: unknown): DesktopHost | null => {
     ...(apiUrl ? { apiUrl } : {}),
     ...(clientToken ? { clientToken } : {}),
     ...(requestHeaders ? { requestHeaders } : {}),
+    ...(relay ? { relay } : {}),
   };
 };
 
@@ -242,6 +271,19 @@ export const desktopLocalClientTokenGet = async (): Promise<string> => {
   const invoke = getInvoke();
   if (!invoke) return '';
   const raw = await invoke('desktop_local_client_token_get').catch(() => null);
+  return typeof raw === 'string' ? raw.trim() : '';
+};
+
+/**
+ * Stable per-install identifier for this desktop. Used as the client dedupe key
+ * so re-pairing or re-authenticating this desktop reuses its single device
+ * record on a server instead of piling up duplicates. Empty string when not in
+ * the desktop shell.
+ */
+export const desktopInstallIdGet = async (): Promise<string> => {
+  const invoke = getInvoke();
+  if (!invoke) return '';
+  const raw = await invoke('desktop_install_id_get').catch(() => null);
   return typeof raw === 'string' ? raw.trim() : '';
 };
 
