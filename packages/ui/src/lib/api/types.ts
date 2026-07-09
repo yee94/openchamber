@@ -1109,6 +1109,8 @@ export interface RemoteClientRecord {
   expiresAt?: string | null;
   clientKind?: string | null;
   authMethod?: string | null;
+  /** Pairing session this client was created from, when authMethod is 'pairing'. */
+  pairingId?: string | null;
   deviceName?: string | null;
   devicePlatform?: string | null;
   usesRelay?: boolean;

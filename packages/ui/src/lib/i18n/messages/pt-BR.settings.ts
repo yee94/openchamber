@@ -263,6 +263,7 @@ export const settingsDict = {
   "settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal": "Preferir a conexão doméstica direta quando disponível",
   "settings.remoteInstances.clientAuth.addDevice.create": "Criar código QR",
   "settings.remoteInstances.clientAuth.addDevice.done": "Concluído",
+  "settings.remoteInstances.clientAuth.addDevice.connectedToast": "Dispositivo conectado.",
   "settings.remoteInstances.clientAuth.pairingUrl": "Link de conexão",
   "settings.remoteInstances.clientAuth.createdToken": "Copie este token agora. Por segurança, ele não será mostrado novamente.",
   "settings.remoteInstances.clientAuth.state.loading": "Carregando tokens...",

@@ -263,6 +263,7 @@ export const settingsDict = {
   'settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal': '가능하면 집에서는 직접 연결 우선',
   'settings.remoteInstances.clientAuth.addDevice.create': 'QR 코드 만들기',
   'settings.remoteInstances.clientAuth.addDevice.done': '완료',
+  'settings.remoteInstances.clientAuth.addDevice.connectedToast': '기기가 연결되었습니다.',
   'settings.remoteInstances.clientAuth.pairingUrl': '연결 링크',
   'settings.remoteInstances.clientAuth.createdToken': '지금 이 토큰을 복사하세요. 보안을 위해 다시 표시되지 않습니다.',
   'settings.remoteInstances.clientAuth.state.loading': '토큰을 불러오는 중...',

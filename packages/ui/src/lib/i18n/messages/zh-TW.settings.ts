@@ -269,6 +269,7 @@
   'settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal': '在家時優先使用直接連線',
   'settings.remoteInstances.clientAuth.addDevice.create': '建立 QR 代碼',
   'settings.remoteInstances.clientAuth.addDevice.done': '完成',
+  'settings.remoteInstances.clientAuth.addDevice.connectedToast': '裝置已連線。',
   'settings.remoteInstances.clientAuth.pairingUrl': '配對 URL',
   'settings.remoteInstances.clientAuth.createdToken': '已建立 token',
   'settings.remoteInstances.clientAuth.state.loading': '正在載入用戶端 token...',

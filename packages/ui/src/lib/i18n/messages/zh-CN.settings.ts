@@ -263,6 +263,7 @@ export const settingsDict = {
   'settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal': '在家时优先使用直接连接',
   'settings.remoteInstances.clientAuth.addDevice.create': '创建二维码',
   'settings.remoteInstances.clientAuth.addDevice.done': '完成',
+  'settings.remoteInstances.clientAuth.addDevice.connectedToast': '设备已连接。',
   'settings.remoteInstances.clientAuth.pairingUrl': '连接链接',
   'settings.remoteInstances.clientAuth.createdToken': '请立即复制此令牌。出于安全考虑，它不会再次显示。',
   'settings.remoteInstances.clientAuth.state.loading': '正在加载令牌...',

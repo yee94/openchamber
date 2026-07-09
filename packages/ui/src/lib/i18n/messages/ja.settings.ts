@@ -296,6 +296,7 @@ export const settingsDict = {
   'settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal': '可能なときは自宅の直接接続を優先',
   'settings.remoteInstances.clientAuth.addDevice.create': 'QRコードを作成',
   'settings.remoteInstances.clientAuth.addDevice.done': '完了',
+  'settings.remoteInstances.clientAuth.addDevice.connectedToast': 'デバイスを接続しました。',
   'settings.remoteInstances.clientAuth.pairingUrl': '接続リンク',
   'settings.remoteInstances.clientAuth.createdToken': 'この Token を今すぐコピーしてください。セキュリティのため、再表示されません。',
   'settings.remoteInstances.clientAuth.state.loading': 'Token を読み込み中...',

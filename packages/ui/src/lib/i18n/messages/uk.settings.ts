@@ -263,6 +263,7 @@ export const settingsDict = {
   "settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal": "Віддавати перевагу прямому домашньому підключенню, коли доступне",
   "settings.remoteInstances.clientAuth.addDevice.create": "Створити QR-код",
   "settings.remoteInstances.clientAuth.addDevice.done": "Готово",
+  "settings.remoteInstances.clientAuth.addDevice.connectedToast": "Пристрій підключено.",
   "settings.remoteInstances.clientAuth.pairingUrl": "Посилання для підключення",
   "settings.remoteInstances.clientAuth.createdToken": "Скопіюйте цей токен зараз. З міркувань безпеки він більше не показуватиметься.",
   "settings.remoteInstances.clientAuth.state.loading": "Завантаження токенів...",

@@ -438,6 +438,9 @@ export const RemoteInstancesPage: React.FC = () => {
   const [remoteClientLabel, setRemoteClientLabel] = React.useState('');
   const [remoteClientError, setRemoteClientError] = React.useState<string | null>(null);
   const [pairingUrl, setPairingUrl] = React.useState<string | null>(null);
+  // The pairing session shown in the QR dialog; used to auto-close the dialog
+  // once the device redeems it (the pairing leaves the pending list).
+  const [createdPairingId, setCreatedPairingId] = React.useState<string | null>(null);
   const [pairingQrDataUrl, setPairingQrDataUrl] = React.useState<string | null>(null);
   const [pairingCopied, setPairingCopied] = React.useState(false);
   // "Add a device" dialog: a configure phase (name + transport + fallback) then a
@@ -721,12 +724,15 @@ export const RemoteInstancesPage: React.FC = () => {
     if (!options?.silent) setRemoteClientsLoading(true);
     if (!options?.silent) setRemoteClientError(null);
     try {
+      // Pending fetch failure returns null (NOT []) so a transient blip neither
+      // blanks the pending list nor fakes a "pairing redeemed" signal for the
+      // QR dialog's auto-close below.
       const [clients, pending] = await Promise.all([
         clientAuth.listClients(),
-        clientAuth.listPendingPairings().catch(() => [] as PendingPairingRecord[]),
+        clientAuth.listPendingPairings().catch(() => null),
       ]);
       setRemoteClients(clients);
-      setPendingPairings(pending);
+      if (pending) setPendingPairings(pending);
     } catch (err) {
       // A silent poll must not surface a transient error over the live list.
       if (!options?.silent) setRemoteClientError(err instanceof Error ? err.message : String(err));
@@ -734,6 +740,30 @@ export const RemoteInstancesPage: React.FC = () => {
       if (!options?.silent) setRemoteClientsLoading(false);
     }
   }, [clientAuth]);
+
+  // Auto-close the QR/link dialog once the device connects: the pairing session
+  // is single-use, so it leaving the pending list means it was redeemed (or
+  // expired/cancelled — the dialog is stale either way). Armed only after the
+  // pairing has been SEEN in the pending list — the result phase renders before
+  // the refreshed list arrives, and closing on that stale "absent" would blink
+  // the dialog shut immediately. Successful-fetch-only updates keep transient
+  // poll failures from faking the disappearance.
+  const pairingSeenPendingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!addDeviceOpen || addDevicePhase !== 'result' || !createdPairingId) return;
+    if (pendingPairings.some((pending) => pending.id === createdPairingId)) {
+      pairingSeenPendingRef.current = true;
+      return;
+    }
+    if (!pairingSeenPendingRef.current) return;
+    setCreatedPairingId(null);
+    setAddDeviceOpen(false);
+    // Celebrate only an actual redeem (a client minted from this pairing exists);
+    // an expired or cancelled session closes the stale dialog silently.
+    if (remoteClients.some((client) => client.pairingId === createdPairingId)) {
+      toast.success(t('settings.remoteInstances.clientAuth.addDevice.connectedToast'));
+    }
+  }, [addDeviceOpen, addDevicePhase, createdPairingId, pendingPairings, remoteClients, t]);
 
   const cancelPendingPairing = React.useCallback(async (id: string) => {
     if (!clientAuth) return;
@@ -788,6 +818,7 @@ export const RemoteInstancesPage: React.FC = () => {
     setPairingUrl(null);
     setPairingQrDataUrl(null);
     setPairingCopied(false);
+    setCreatedPairingId(null);
     setAddDevicePhase('configure');
     setAddDeviceFallback(true);
     setAddDeviceOpen(true);
@@ -848,7 +879,11 @@ export const RemoteInstancesPage: React.FC = () => {
       // E2EE key), so render at high resolution with low error-correction.
       setPairingQrDataUrl(await QRCode.toDataURL(encoded, { width: 1024, margin: 2, errorCorrectionLevel: 'L' }));
       setPairingCopied(false);
+      pairingSeenPendingRef.current = false;
+      setCreatedPairingId(pairing.id);
       setAddDevicePhase('result');
+      // Loads the pending list including this pairing BEFORE the result phase
+      // polls it, so the auto-close effect sees "present -> gone" transitions.
       await loadRemoteClients({ silent: true });
     } catch (err) {
       setRemoteClientError(err instanceof Error ? err.message : String(err));

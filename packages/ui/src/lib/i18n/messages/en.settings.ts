@@ -296,6 +296,7 @@ export const settingsDict = {
   'settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal': 'Prefer the direct home connection when available',
   'settings.remoteInstances.clientAuth.addDevice.create': 'Create QR code',
   'settings.remoteInstances.clientAuth.addDevice.done': 'Done',
+  'settings.remoteInstances.clientAuth.addDevice.connectedToast': 'Device connected.',
   'settings.remoteInstances.clientAuth.pairingUrl': 'Connection link',
   'settings.remoteInstances.clientAuth.createdToken': 'Copy this token now. For security, it will not be shown again.',
   'settings.remoteInstances.clientAuth.state.loading': 'Loading tokens...',
