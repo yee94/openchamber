@@ -430,6 +430,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.project.actions.projectMenu": "Меню проєкту",
   "sessions.sidebar.project.actions.newSession": "Нова сесія",
   "sessions.sidebar.project.actions.closeProject": "Закрити проєкт",
+  "sessions.sidebar.project.actions.edit": "Редагувати",
   "sessions.sidebar.project.actions.newDraftSession": "Нова чернетка сесії",
   "sessions.sidebar.session.menu.rename": "Перейменувати",
   "sessions.sidebar.session.rename.save": "Зберегти назву сесії",

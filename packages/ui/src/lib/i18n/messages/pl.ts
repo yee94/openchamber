@@ -239,6 +239,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.projectMenu': 'Menu projektu',
   'sessions.sidebar.project.actions.newSession': 'Nowa sesja',
   'sessions.sidebar.project.actions.closeProject': 'Zamknij projekt',
+  'sessions.sidebar.project.actions.edit': 'Edytuj',
   'sessions.sidebar.project.actions.newDraftSession': 'Nowa sesja robocza',
   'sessions.sidebar.session.menu.rename': 'Zmień nazwę',
   'sessions.sidebar.session.rename.save': 'Zapisz nazwę sesji',

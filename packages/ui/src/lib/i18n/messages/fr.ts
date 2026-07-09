@@ -278,6 +278,7 @@ export const dict = {
   'sessions.sidebar.project.actions.projectMenu': 'Menu Projet',
   'sessions.sidebar.project.actions.newSession': 'Nouvelle session',
   'sessions.sidebar.project.actions.closeProject': 'Fermer le projet',
+  'sessions.sidebar.project.actions.edit': 'Modifier',
   'sessions.sidebar.project.actions.newDraftSession': 'Nouveau brouillon de session',
   'sessions.sidebar.session.menu.rename': 'Rebaptiser',
   'sessions.sidebar.session.rename.save': 'Enregistrer le nom de la session',

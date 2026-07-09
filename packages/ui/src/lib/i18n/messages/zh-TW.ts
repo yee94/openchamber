@@ -443,6 +443,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.projectMenu': '專案選單',
   'sessions.sidebar.project.actions.newSession': '新增會話',
   'sessions.sidebar.project.actions.closeProject': '關閉專案',
+  'sessions.sidebar.project.actions.edit': '編輯',
   'sessions.sidebar.project.actions.newDraftSession': '新增草稿會話',
   'sessions.sidebar.session.menu.rename': '重新命名',
   'sessions.sidebar.session.rename.save': '儲存會話名稱',
