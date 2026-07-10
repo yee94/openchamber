@@ -20,6 +20,9 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionParts } from '@/sync/sync-context';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import type { ReviewTransferDirection } from '@/lib/reviewFlow';
+import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
+import { getInitialHistoryOverscan, getNextHistoryOverscan } from './lib/historyOverscan';
+import { DeferredToolHydrationProvider } from './message/parts/DeferredToolHydrationProvider';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5;
 const EMPTY_STATIC_ENTRY_MESSAGES: ChatMessageEntry[] = [];
@@ -1077,6 +1080,16 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
 
     const entriesRef = React.useRef(renderEntries);
     entriesRef.current = renderEntries;
+    const targetOverscan = resolveTanstackOverscan();
+    const [historyOverscan, setHistoryOverscan] = React.useState(() => getInitialHistoryOverscan(targetOverscan));
+    React.useEffect(() => {
+        if (!isTanstack || historyOverscan >= targetOverscan) {
+            return;
+        }
+        return scheduleAfterPaintTask(() => {
+            setHistoryOverscan((current) => getNextHistoryOverscan(current, targetOverscan));
+        });
+    }, [historyOverscan, isTanstack, targetOverscan]);
     // Initial-only read: measurement cache restore is a mount-time concern;
     // afterwards the live virtualizer owns measurements.
     const [initialMeasurements] = React.useState(() => (
@@ -1097,7 +1110,7 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
         enabled: isTanstack,
         getScrollElement: () => scrollRef?.current ?? null,
         estimateSize: () => estimatedEntrySizeRef.current,
-        overscan: resolveTanstackOverscan(),
+        overscan: historyOverscan,
         scrollToFn: (offset, options, instance) => {
             // Expose the new total height before core writes an anchor
             // correction so the browser does not clamp the offset to the old
@@ -1828,26 +1841,28 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             blinking. History content is never "new", so fade-in
                             is disabled there — the streaming tail keeps it. */}
                         <FadeInDisabledProvider disabled={shouldVirtualizeHistory}>
-                            <StaticHistoryList
-                                key={sessionKey}
-                                entries={historyEntries}
-                                engine={historyEngine}
-                                contentRef={historyContentRef}
-                                scrollRef={scrollRef}
-                                registerTanstackVirtualizer={registerTanstackVirtualizer}
-                                virtualizerKey={sessionKey}
-                                onMessageContentChange={stableHistoryContentChange}
-                                getAnimationHandlers={stableGetAnimationHandlers}
-                                scrollToBottom={stableScrollToBottom}
-                                stickyUserHeader={stickyUserHeader}
-                                defaultActivityExpanded={defaultActivityExpanded}
-                                turnUiStates={turnUiStates}
-                                onToggleTurnGroup={toggleTurnGroup}
-                                chatRenderMode={chatRenderMode}
-                                shouldAnimateUserMessage={shouldAnimateUserMessage}
-                                onUserAnimationConsumed={onUserAnimationConsumed}
-                                reviewTransferDirection={reviewTransferDirection}
-                            />
+                            <DeferredToolHydrationProvider enabled={true}>
+                                <StaticHistoryList
+                                    key={sessionKey}
+                                    entries={historyEntries}
+                                    engine={historyEngine}
+                                    contentRef={historyContentRef}
+                                    scrollRef={scrollRef}
+                                    registerTanstackVirtualizer={registerTanstackVirtualizer}
+                                    virtualizerKey={sessionKey}
+                                    onMessageContentChange={stableHistoryContentChange}
+                                    getAnimationHandlers={stableGetAnimationHandlers}
+                                    scrollToBottom={stableScrollToBottom}
+                                    stickyUserHeader={stickyUserHeader}
+                                    defaultActivityExpanded={defaultActivityExpanded}
+                                    turnUiStates={turnUiStates}
+                                    onToggleTurnGroup={toggleTurnGroup}
+                                    chatRenderMode={chatRenderMode}
+                                    shouldAnimateUserMessage={shouldAnimateUserMessage}
+                                    onUserAnimationConsumed={onUserAnimationConsumed}
+                                    reviewTransferDirection={reviewTransferDirection}
+                                />
+                            </DeferredToolHydrationProvider>
                         </FadeInDisabledProvider>
                         {trailingStreamingEntry ? (
                             <StreamingTailContent

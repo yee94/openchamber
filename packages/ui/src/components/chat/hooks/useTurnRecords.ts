@@ -1,7 +1,7 @@
 import React from 'react';
 import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
 import type { ChatMessageEntry, TurnProjectionResult, TurnRecord } from '../lib/turns/types';
-import { buildProjectionCacheKey, getCachedProjection, setCachedProjection } from '../lib/turns/turnProjectionCache';
+import { buildProjectionCacheKey, getCachedProjectionByKey, setCachedProjection } from '../lib/turns/turnProjectionCache';
 import { streamPerfMeasure } from '@/stores/utils/streamDebug';
 
 interface UseTurnRecordsOptions {
@@ -66,12 +66,13 @@ export const useTurnRecords = (
 
     const projection = React.useMemo(() => {
         const sessionKey = options.sessionKey ?? '';
-        const cached = getCachedProjection(
+        const cacheKey = buildProjectionCacheKey(
             sessionKey,
             messages,
             options.showTextJustificationActivity,
             options.showTurnChangedFiles,
         );
+        const cached = getCachedProjectionByKey(cacheKey);
         if (cached) {
             previousProjectionRef.current = cached;
             return cached;
@@ -85,12 +86,6 @@ export const useTurnRecords = (
             });
             previousProjectionRef.current = nextProjection;
 
-            const cacheKey = buildProjectionCacheKey(
-                sessionKey,
-                messages,
-                options.showTextJustificationActivity,
-                options.showTurnChangedFiles,
-            );
             setCachedProjection(cacheKey, nextProjection);
 
             return nextProjection;

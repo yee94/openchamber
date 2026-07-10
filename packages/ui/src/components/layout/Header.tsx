@@ -19,13 +19,10 @@ import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type ContextPanelMode, type MainTab } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
-import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
 import { useAllLiveSessions, useSession, useSessionMessagesResolved } from '@/sync/sync-context';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
-import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
@@ -67,6 +64,7 @@ import { forceKillTerminal } from '@/lib/terminalApi';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag, type UpdateInfo } from '@/lib/desktop';
 import { desktopHostsGet, getDesktopHostApiUrl, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 import { Icon } from "@/components/icon/Icon";
@@ -288,6 +286,8 @@ type DesktopServicesMenuProps = {
   onOpenRemoteUpdate: () => void;
   showPredValues: boolean;
   timeFormatPreference: TimeFormatPreference;
+  /** Hide the visible trigger; open via controlled state (e.g. from the session ··· menu). */
+  hideTrigger?: boolean;
 };
 
 const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
@@ -324,6 +324,7 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   onOpenRemoteUpdate,
   showPredValues,
   timeFormatPreference,
+  hideTrigger = false,
 }: DesktopServicesMenuProps) {
   const { t } = useI18n();
   return (
@@ -339,41 +340,53 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
         }
       }}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={isDesktopApp
-                ? t('header.services.openWithCurrent', { current: currentInstanceLabel })
-                : t('header.services.open')}
-              className={cn(
-                DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                isDesktopApp ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
-              )}
-            >
-              <Icon name="stack" className="h-[18px] w-[18px]" />
-              {isDesktopApp ? (
-                <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>
-              ) : null}
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>
-            {isDesktopApp
-              ? t('header.services.tooltip.currentInstanceWithShortcuts', {
-                  current: currentInstanceLabel,
-                  toggle: shortcutLabel('toggle_services_menu'),
-                  nextTab: shortcutLabel('cycle_services_tab'),
-                })
-              : t('header.services.tooltip.servicesWithShortcuts', {
-                  toggle: shortcutLabel('toggle_services_menu'),
-                  nextTab: shortcutLabel('cycle_services_tab'),
-                })}
-          </p>
-        </TooltipContent>
-      </Tooltip>
+      {hideTrigger ? (
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            // Anchor only — do not cover the ··· trigger (inset-0 stole hits / focus).
+            className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
+          />
+        </DropdownMenuTrigger>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={isDesktopApp
+                  ? t('header.services.openWithCurrent', { current: currentInstanceLabel })
+                  : t('header.services.open')}
+                className={cn(
+                  DESKTOP_HEADER_ICON_BUTTON_CLASS,
+                  isDesktopApp ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
+                )}
+              >
+                <Icon name="stack" className="h-[18px] w-[18px]" />
+                {isDesktopApp ? (
+                  <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>
+                ) : null}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              {isDesktopApp
+                ? t('header.services.tooltip.currentInstanceWithShortcuts', {
+                    current: currentInstanceLabel,
+                    toggle: shortcutLabel('toggle_services_menu'),
+                    nextTab: shortcutLabel('cycle_services_tab'),
+                  })
+                : t('header.services.tooltip.servicesWithShortcuts', {
+                    toggle: shortcutLabel('toggle_services_menu'),
+                    nextTab: shortcutLabel('cycle_services_tab'),
+                  })}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      )}
       <DropdownMenuContent
         align="end"
         className="w-[min(27rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto bg-[var(--surface-elevated)] p-0"
@@ -659,8 +672,22 @@ const formatTime = (timestamp: number | null, timeFormatPreference: 'auto' | '12
 
 const normalize = (value: string): string => {
   if (!value) return '';
-  const replaced = value.replace(/\\/g, '/');
-  return replaced === '/' ? '/' : replaced.replace(/\/+$/, '');
+
+  // Keep in sync with useUIStore.normalizeDirectoryPath / ContextPanel keys.
+  const raw = value.replace(/\\/g, '/');
+  const hadUncPrefix = raw.startsWith('//');
+  let normalized = raw.replace(/\/+$/g, '');
+  normalized = normalized.replace(/\/+/g, '/');
+
+  if (hadUncPrefix && !normalized.startsWith('//')) {
+    normalized = `/${normalized}`;
+  }
+
+  if (normalized === '') {
+    return raw.startsWith('/') ? '/' : '';
+  }
+
+  return normalized;
 };
 
 const getActiveContextMode = (panelState: {
@@ -1215,33 +1242,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (!currentSessionId) return '';
     return state.worktreeMetadata.get(currentSessionId)?.path ?? '';
   });
-  const currentSessionWorktreeBranch = useSessionUIStore((state) => {
-    if (!currentSessionId) return null;
-    return state.worktreeMetadata.get(currentSessionId)?.branch?.trim() ?? null;
-  });
 
-  // Authoritative session↔worktree attachment from session-worktree-store
-  const worktreeAttachment = useSessionWorktreeStore((state) =>
-    currentSessionId ? state.getAttachment(currentSessionId) : undefined
-  );
-
-  const worktreeBadge = React.useMemo(() => {
-    if (!worktreeAttachment) return null;
-    return formatSessionWorktreeBadge(worktreeAttachment, {
-      pending: t('gitView.empty.worktreeSetupInProgress'),
-    });
-  }, [t, worktreeAttachment]);
-
-  const worktreeBadgeKind = React.useMemo(() => {
-    if (!worktreeAttachment) return null;
-    if (worktreeAttachment.legacy) return 'legacy';
-    if (worktreeAttachment.degraded) return 'degraded';
-    if (worktreeAttachment.worktreeStatus === 'pending') return 'pending';
-    if (worktreeAttachment.worktreeStatus === 'missing') return 'missing';
-    if (worktreeAttachment.worktreeStatus === 'invalid') return 'invalid';
-    if (worktreeAttachment.attentionReason) return 'attention';
-    return null;
-  }, [worktreeAttachment]);
   const worktreeDirectory = React.useMemo(() => {
     return normalize(worktreePath || '');
   }, [worktreePath]);
@@ -1262,25 +1263,12 @@ export const Header: React.FC<HeaderProps> = ({
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
 
-  const catalogWorktreeBranch = useSessionUIStore((state) => {
-    const candidateDirectory = normalize(worktreeDirectory || sessionDirectory || '');
-    if (!candidateDirectory) {
-      return null;
-    }
+  // Same directory ContextPanel reads — keeps open/close keyed to the visible panel.
+  const effectiveDirectory = useEffectiveDirectory();
 
-    for (const worktrees of state.availableWorktreesByProject.values()) {
-      const match = worktrees.find((worktree) => normalize(worktree.path) === candidateDirectory);
-      const branch = match?.branch?.trim();
-      if (branch) {
-        return branch;
-      }
-    }
-
-    return null;
-  });
-
-  const gitBranchForDirectory = useGitBranchLabel(openDirectory || null);
-  const currentBranchLabel = gitBranchForDirectory || currentSessionWorktreeBranch || catalogWorktreeBranch;
+  const contextActionDirectory = React.useMemo(() => {
+    return normalize(effectiveDirectory || openDirectory || activeProject?.path || '');
+  }, [activeProject?.path, effectiveDirectory, openDirectory]);
 
   const currentSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
@@ -1289,7 +1277,6 @@ export const Header: React.FC<HeaderProps> = ({
     const trimmedTitle = currentSession?.title?.trim();
     return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : 'Untitled Session';
   }, [activeProjectLabel, currentSession?.title, currentSessionId]);
-
 
   const actionDirectory = React.useMemo(() => {
     return normalize(openDirectory || activeProject?.path || '');
@@ -1449,7 +1436,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, [activeProject?.path, currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, openDirectory]);
 
   const handleOpenContextPanel = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return;
     }
@@ -1461,19 +1448,19 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     openContextOverview(directory);
-  }, [closeContextPanel, contextPanelByDirectory, openContextOverview, openDirectory]);
+  }, [closeContextPanel, contextActionDirectory, contextPanelByDirectory, openContextOverview]);
 
   const isContextPanelActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return false;
     }
     const panelState = contextPanelByDirectory[directory];
     return getActiveContextMode(panelState) === 'context';
-  }, [contextPanelByDirectory, openDirectory]);
+  }, [contextActionDirectory, contextPanelByDirectory]);
 
   const handleOpenContextPlan = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return;
     }
@@ -1485,10 +1472,10 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     openContextPlan(directory);
-  }, [closeContextPanel, contextPanelByDirectory, openContextPlan, openDirectory]);
+  }, [closeContextPanel, contextActionDirectory, contextPanelByDirectory, openContextPlan]);
 
   const handleOpenContextChanges = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return;
     }
@@ -1500,10 +1487,10 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     openContextPanelTab(directory, { mode: 'diff', stagedDiff: false });
-  }, [closeContextPanel, contextPanelByDirectory, openContextPanelTab, openDirectory]);
+  }, [closeContextPanel, contextActionDirectory, contextPanelByDirectory, openContextPanelTab]);
 
   const handleOpenContextBrowser = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return;
     }
@@ -1515,34 +1502,25 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     openContextBrowser(directory);
-  }, [closeContextPanel, contextPanelByDirectory, openContextBrowser, openDirectory]);
+  }, [closeContextPanel, contextActionDirectory, contextPanelByDirectory, openContextBrowser]);
 
   const isContextPlanActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return false;
     }
     const panelState = contextPanelByDirectory[directory];
     return getActiveContextMode(panelState) === 'plan';
-  }, [contextPanelByDirectory, openDirectory]);
-
-  const isContextChangesActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
-    if (!directory) {
-      return false;
-    }
-    const panelState = contextPanelByDirectory[directory];
-    return getActiveContextMode(panelState) === 'diff';
-  }, [contextPanelByDirectory, openDirectory]);
+  }, [contextActionDirectory, contextPanelByDirectory]);
 
   const isContextBrowserActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = contextActionDirectory;
     if (!directory) {
       return false;
     }
     const panelState = contextPanelByDirectory[directory];
     return getActiveContextMode(panelState) === 'browser';
-  }, [contextPanelByDirectory, openDirectory]);
+  }, [contextActionDirectory, contextPanelByDirectory]);
 
   const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS;
   const mobileHeaderIconButtonClass = MOBILE_HEADER_ICON_BUTTON_CLASS;
@@ -2006,50 +1984,96 @@ export const Header: React.FC<HeaderProps> = ({
     return <React.Fragment key={tab.id}>{tabButton}</React.Fragment>;
   };
 
-  const desktopChangesPanelAction = !isVSCode ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label={t('header.actions.toggleChangesPanelAria')}
-          aria-pressed={isContextChangesActive}
-          onClick={handleOpenContextChanges}
-          className={desktopHeaderIconButtonClass}
-        >
-          <span className="relative h-5 w-5 overflow-hidden rounded-[2px]">
-            <span className="absolute left-[4px] top-[4px] h-3 w-[5px] bg-[var(--status-error)]/25" />
-            <span className="absolute right-[4px] top-[4px] h-3 w-[5px] bg-[var(--status-success)]/25" />
-            <Icon name="layout-column" className="absolute inset-0 h-5 w-5" />
-          </span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{t('header.actions.toggleChangesPanel')}</p>
-      </TooltipContent>
-    </Tooltip>
-  ) : null;
+  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
 
-  const desktopSidebarActions = (
-    <>
-      {showPlanTab && (
+  const openDesktopServicesFromMenu = React.useCallback(() => {
+    setIsDesktopServicesOpen(true);
+    void refreshCurrentInstanceLabel();
+    if (desktopServicesTab === 'usage' && quotaResults.length === 0) {
+      void fetchAllQuotas();
+    }
+  }, [desktopServicesTab, fetchAllQuotas, quotaResults.length, refreshCurrentInstanceLabel]);
+
+  // Run after the overflow menu closes so panel/dock updates aren't lost mid-dismiss.
+  const runSessionMenuAction = React.useCallback((action: () => void) => {
+    window.setTimeout(action, 0);
+  }, []);
+
+  const sessionOverflowMenu = (
+    <div className="relative flex shrink-0 items-center">
+      <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label={t('header.actions.openPlanAria')}
-                onClick={handleOpenContextPlan}
-                className={cn(desktopHeaderIconButtonClass, isContextPlanActive && 'bg-[var(--interactive-hover)]')}
+                aria-label={t('header.actions.sessionMenuAria')}
+                className={cn(desktopHeaderIconButtonClass, 'text-muted-foreground')}
               >
-              <Icon name="file-text" className="h-[18px] w-[18px]" />
-            </button>
+                <Icon name="more-2" className="h-[18px] w-[18px]" />
+              </button>
+            </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{t('header.actions.planWithShortcut', { shortcut: shortcutLabel('toggle_context_plan') })}</p>
+            <p>{t('header.actions.sessionMenu')}</p>
           </TooltipContent>
-          </Tooltip>
-      )}
-      <OpenInAppButton directory={actionDirectory} className="mr-1" />
+        </Tooltip>
+        <DropdownMenuContent align="start" className="min-w-[14rem]">
+          {!isVSCode ? (
+            <DropdownMenuItem
+              className="flex items-center gap-2"
+              onClick={() => runSessionMenuAction(handleOpenContextChanges)}
+            >
+              <Icon name="layout-column" className="h-3.5 w-3.5" />
+              <span className="flex-1">{t('header.actions.toggleChangesPanel')}</span>
+            </DropdownMenuItem>
+          ) : null}
+          {showMiniChatHeaderAction ? (
+            <DropdownMenuItem
+              className="flex items-center gap-2"
+              onClick={() => runSessionMenuAction(handleOpenCurrentMiniChat)}
+            >
+              <Icon name="picture-in-picture-2" className="h-3.5 w-3.5" />
+              <span className="flex-1">
+                {isNewSessionDraftOpen ? t('header.actions.newMiniChat') : t('header.actions.openSessionMiniChat')}
+              </span>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            className="flex items-center gap-2"
+            onClick={() => runSessionMenuAction(openDesktopServicesFromMenu)}
+          >
+            <Icon name="stack" className="h-3.5 w-3.5" />
+            <span className="flex-1 truncate">
+              {isDesktopApp
+                ? t('header.actions.sessionMenu.servicesWithInstance', { current: currentInstanceLabel })
+                : t('header.services.title')}
+            </span>
+            <span className="typography-micro text-muted-foreground">{shortcutLabel('toggle_services_menu')}</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="flex items-center gap-2"
+            onClick={() => runSessionMenuAction(toggleBottomTerminal)}
+          >
+            <Icon name="terminal-box" className="h-3.5 w-3.5" />
+            <span className="flex-1">{t('header.actions.toggleTerminalPanel')}</span>
+            <span className="typography-micro text-muted-foreground">{shortcutLabel('toggle_terminal')}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="flex items-center gap-2"
+            onClick={() => runSessionMenuAction(handleOpenContextBrowser)}
+          >
+            <Icon name="global" className="h-3.5 w-3.5" />
+            <span className="flex-1">{t('contextPanel.browser.open')}</span>
+            {isContextBrowserActive ? (
+              <Icon name="check" className="h-3.5 w-3.5 text-foreground" />
+            ) : null}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <DesktopServicesMenu
+        hideTrigger
         isDesktopApp={isDesktopApp}
         currentInstanceLabel={currentInstanceLabel}
         compactCurrentInstanceLabel={compactCurrentInstanceLabel}
@@ -2084,21 +2108,29 @@ export const Header: React.FC<HeaderProps> = ({
         onOpenRemoteUpdate={openRemoteInstanceUpdate}
         timeFormatPreference={timeFormatPreference}
       />
-      <HeaderIconActionButton
-        title={t('header.actions.terminalPanelWithShortcut', { shortcut: shortcutLabel('toggle_terminal') })}
-        ariaLabel={t('header.actions.toggleTerminalPanelAria')}
-        onClick={toggleBottomTerminal}
-        Icon={'terminal-box'}
-      />
-      {!isMobile ? (
-        <HeaderIconActionButton
-          title={t('contextPanel.browser.open')}
-          ariaLabel={t('contextPanel.browser.open')}
-          onClick={handleOpenContextBrowser}
-          pressed={isContextBrowserActive}
-          Icon={'global'}
-        />
-      ) : null}
+    </div>
+  );
+
+  const desktopSidebarActions = (
+    <>
+      {showPlanTab && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('header.actions.openPlanAria')}
+                onClick={handleOpenContextPlan}
+                className={cn(desktopHeaderIconButtonClass, isContextPlanActive && 'bg-[var(--interactive-hover)]')}
+              >
+              <Icon name="file-text" className="h-[18px] w-[18px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t('header.actions.planWithShortcut', { shortcut: shortcutLabel('toggle_context_plan') })}</p>
+          </TooltipContent>
+          </Tooltip>
+      )}
+      <OpenInAppButton directory={actionDirectory} className="mr-1" />
       <HeaderIconActionButton
         title={t('header.actions.rightSidebarWithShortcut', { shortcut: shortcutLabel('toggle_right_sidebar') })}
         ariaLabel={t('header.actions.toggleRightSidebarAria')}
@@ -2116,8 +2148,6 @@ export const Header: React.FC<HeaderProps> = ({
       />
     </>
   );
-
-  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
 
   const renderDesktop = () => (
     <div
@@ -2149,37 +2179,21 @@ export const Header: React.FC<HeaderProps> = ({
           TitlebarLeftControls overlay; the header reserves matching left space
           via padding (see headerStyle) when the sidebar is collapsed. */}
       <div className="flex min-w-0 flex-1 items-center">
-        <SessionSwitcherDropdown>
-          <button
-            type="button"
-            aria-label={t('sessions.switcher.openAria')}
-            className="app-region-no-drag mr-3 flex min-w-0 flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
-          >
-            <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
-              {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
-            </span>
-            {(activeProjectLabel || currentBranchLabel || (!isNewSessionDraftOpen && worktreeBadgeKind)) ? (
-              <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
-                {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
-                {currentBranchLabel ? (
-                  <span className="inline-flex min-w-0 items-center gap-0.5">
-                    <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
-                    <span className="truncate">{currentBranchLabel}</span>
-                  </span>
-                ) : null}
-                {!isNewSessionDraftOpen && worktreeBadgeKind ? (
-                  <span className={cn(
-                    "inline-flex min-w-0 items-center gap-0.5",
-                    worktreeBadgeKind === 'attention' || worktreeBadgeKind === 'invalid' || worktreeBadgeKind === 'missing' ? 'text-status-warning' : 'text-muted-foreground/60'
-                  )}>
-                    <Icon name="alert" className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">{worktreeBadge}</span>
-                  </span>
-                ) : null}
+        <div className="app-region-no-drag mr-3 flex min-w-0 items-center gap-0.5">
+          <SessionSwitcherDropdown>
+            <button
+              type="button"
+              aria-label={t('sessions.switcher.openAria')}
+              // Match ··· icon button hit area (h-8) so title hover padding isn't stingier.
+              className="inline-flex h-8 min-w-0 max-w-full items-center rounded-md px-2.5 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:bg-interactive-hover focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground">
+                {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
               </span>
-            ) : null}
-          </button>
-        </SessionSwitcherDropdown>
+            </button>
+          </SessionSwitcherDropdown>
+          {sessionOverflowMenu}
+        </div>
 
         {tabs.length > 0 && (
           <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-muted)]/50 p-1">
@@ -2198,24 +2212,12 @@ export const Header: React.FC<HeaderProps> = ({
               contextLimit={stableDesktopContextUsage.contextLimit}
               outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
               size="compact"
-              hideIcon
-              showPercentIcon
+              appearance="subtle"
               onClick={handleOpenContextPanel}
               pressed={isContextPanelActive}
-              className={!showMiniChatHeaderAction ? 'mr-3.5' : ''}
-              valueClassName="typography-ui-label font-medium leading-none text-foreground"
-              percentIconClassName="h-4.5 w-4.5"
+              className="mr-2"
             />
           ) : null}
-          {desktopChangesPanelAction}
-          <HeaderIconActionButton
-            visible={showMiniChatHeaderAction}
-            title={isNewSessionDraftOpen ? t('header.actions.newMiniChat') : t('header.actions.openSessionMiniChat')}
-            ariaLabel={isNewSessionDraftOpen ? t('header.actions.newMiniChatAria') : t('header.actions.openSessionMiniChatAria')}
-            onClick={handleOpenCurrentMiniChat}
-            className={cn(desktopHeaderIconButtonClass, 'mr-1')}
-            Icon={'picture-in-picture-2'}
-          />
           {desktopSidebarActions}
           <WindowsWindowControls visible={isWindowsElectronDesktop} />
         </div>

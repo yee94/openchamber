@@ -34,6 +34,7 @@ import {
 } from './markdown/decorate';
 import { createMermaidViewerRegistry, MERMAID_BLOCK_SELECTOR, shouldRefreshMermaidViewers } from './markdown/mermaidViewer';
 import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
+import { DualLimitLru } from '@/lib/dualLimitLru';
 import {
   BLOCK_PATH_TOKEN_RE,
   isAbsoluteReferencePath,
@@ -821,22 +822,21 @@ const usePacedText = (content: string, streaming: boolean): string => {
 // Mermaid layout is expensive; `decorate` would otherwise re-render every
 // diagram on every paced-stream step (~40/sec). Memoize by theme+mode+source
 // so a stable diagram is laid out once and served from cache thereafter.
-const MERMAID_RENDER_CACHE = new Map<string, MermaidRender>();
 const MERMAID_RENDER_CACHE_MAX = 100;
+const MERMAID_RENDER_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const MERMAID_RENDER_CACHE = new DualLimitLru<string, MermaidRender>({
+  maxEntries: MERMAID_RENDER_CACHE_MAX,
+  maxBytes: MERMAID_RENDER_CACHE_MAX_BYTES,
+});
 
 const cachedMermaidRender = (key: string, compute: () => MermaidRender): MermaidRender => {
   const existing = MERMAID_RENDER_CACHE.get(key);
   if (existing) {
-    MERMAID_RENDER_CACHE.delete(key);
-    MERMAID_RENDER_CACHE.set(key, existing);
     return existing;
   }
   const value = compute();
-  MERMAID_RENDER_CACHE.set(key, value);
-  if (MERMAID_RENDER_CACHE.size > MERMAID_RENDER_CACHE_MAX) {
-    const oldest = MERMAID_RENDER_CACHE.keys().next().value;
-    if (oldest) MERMAID_RENDER_CACHE.delete(oldest);
-  }
+  const payloadBytes = ((value.svg?.length ?? 0) + (value.ascii?.length ?? 0)) * 2;
+  MERMAID_RENDER_CACHE.set(key, value, key.length * 2 + payloadBytes);
   return value;
 };
 
@@ -975,6 +975,7 @@ const useMorphdomMarkdown = ({
     if (!container) return;
     const target = container.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
     let active = true;
+    const renderAbortController = new AbortController();
     let cancelQueuedRender = () => {};
     let cancelQueuedCommit = () => {};
 
@@ -1032,7 +1033,7 @@ const useMorphdomMarkdown = ({
     };
 
     const renderBlocks = () => {
-      void renderMarkdownBlocks(text, streaming, cacheKey).then((blocks) => {
+      void renderMarkdownBlocks(text, streaming, cacheKey, renderAbortController.signal).then((blocks) => {
         if (!active) {
           return;
         }
@@ -1052,6 +1053,7 @@ const useMorphdomMarkdown = ({
 
     return () => {
       active = false;
+      renderAbortController.abort();
       cancelQueuedRender();
       cancelQueuedCommit();
     };

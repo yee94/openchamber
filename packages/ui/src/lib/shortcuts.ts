@@ -58,6 +58,11 @@ const KEY_LABEL_MAP: Record<string, string> = {
   'pagedown': 'Page Down',
   'backtick': '`',
   'grave': '`',
+  '=': '=',
+  'equal': '=',
+  'plus': '+',
+  'minus': '-',
+  '-': '-',
 };
 
 const MODIFIER_PRIORITY: ShortcutModifier[] = ['mod', 'ctrl', 'shift', 'alt'];
@@ -308,6 +313,27 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     defaultCombo: 'mod+/',
     label: 'Cycle theme',
     description: 'Cycle between light, dark, and system theme',
+    customizable: true,
+  },
+  {
+    id: 'zoom_in',
+    defaultCombo: 'mod+=',
+    label: 'Zoom in',
+    description: 'Increase the webview zoom level',
+    customizable: true,
+  },
+  {
+    id: 'zoom_out',
+    defaultCombo: 'mod+-',
+    label: 'Zoom out',
+    description: 'Decrease the webview zoom level',
+    customizable: true,
+  },
+  {
+    id: 'zoom_reset',
+    defaultCombo: 'mod+0',
+    label: 'Reset zoom',
+    description: 'Reset the webview zoom level to 100%',
     customizable: true,
   },
   {
@@ -629,4 +655,46 @@ export function eventMatchesShortcut(
 
 export function getModifierLabel(): string {
   return isMacOS() && isDesktopShell() ? '⌘' : 'Ctrl';
+}
+
+/**
+ * Zoom shortcuts accept both the unshifted and shifted key variants
+ * (Mod+= / Mod++, Mod+- / Mod+_), matching browser/Codex conventions.
+ */
+export function eventMatchesZoomShortcut(
+  event: KeyboardEvent | React.KeyboardEvent,
+  direction: 'in' | 'out',
+  effectiveCombo: ShortcutCombo,
+): boolean {
+  if (eventMatchesShortcut(event, effectiveCombo)) {
+    return true;
+  }
+
+  const normalized = normalizeCombo(effectiveCombo);
+  const isDesktopMac = isMacOS() && isDesktopShell();
+  const isMac = isMacOS();
+  const modMatches = isDesktopMac
+    ? event.metaKey
+    : isMac
+      ? (event.metaKey || event.ctrlKey)
+      : event.ctrlKey;
+
+  if (!modMatches || event.altKey) {
+    return false;
+  }
+
+  // Reject plain Ctrl on desktop Mac when the binding is Mod-only.
+  if (isDesktopMac && event.ctrlKey && !event.metaKey) {
+    return false;
+  }
+
+  if (direction === 'in' && normalized === 'mod+=') {
+    return event.key === '+' || event.code === 'NumpadAdd';
+  }
+
+  if (direction === 'out' && (normalized === 'mod+-' || normalized === 'mod+minus')) {
+    return event.key === '_' || event.code === 'NumpadSubtract';
+  }
+
+  return false;
 }

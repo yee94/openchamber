@@ -11,7 +11,7 @@ type AfterPaintTaskQueueOptions = {
     frameBudgetMs: number;
 };
 
-export type AfterPaintTaskQueue = {
+type AfterPaintTaskQueue = {
     enqueue: (task: () => void) => () => void;
     clear: () => void;
 };
@@ -113,6 +113,7 @@ const getBrowserQueue = (): AfterPaintTaskQueue | null => {
 export const scheduleAfterPaintTask = (task: () => void): (() => void) => {
     const queue = getBrowserQueue();
     if (!queue) {
+        task();
         return () => {};
     }
     return queue.enqueue(task);

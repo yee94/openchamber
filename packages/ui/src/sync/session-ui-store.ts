@@ -64,6 +64,7 @@ import { getAttachedSessionDirectory } from "./session-worktree-contract"
 import { setSessionOpener } from "./session-opener"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
+import { beginSessionSwitchMeasure } from "@/lib/sessionSwitchPerf"
 
 export type { AttachedFile }
 
@@ -564,6 +565,10 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // setCurrentSession
   // ---------------------------------------------------------------------------
   setCurrentSession: (id, directoryHint?: string | null) => {
+    const previousSessionId = get().currentSessionId
+    if (previousSessionId !== id) {
+      beginSessionSwitchMeasure()
+    }
     if (id) {
       get().closeNewSessionDraft()
     }
@@ -571,7 +576,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const key = runtimeMemoryKey()
     activeSessionByRuntime.set(key, id)
 
-    const previousSessionId = get().currentSessionId
     const directoryState = useDirectoryStore.getState()
 
     const sessionDir = resolveSessionDirectory(

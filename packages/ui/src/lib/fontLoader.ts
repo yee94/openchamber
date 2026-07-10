@@ -57,3 +57,14 @@ const loadSource = (source: FontFaceSource | undefined) => {
 export const loadUiFont = (font: UiFontOption) => loadSource(UI_FONT_OPTION_MAP[font]?.source);
 
 export const loadMonoFont = (font: MonoFontOption) => loadSource(CODE_FONT_OPTION_MAP[font]?.source);
+
+/** Geometric display face used by the left-sidebar "YEE CODE" wordmark. */
+const BRAND_DISPLAY_FONT: FontFaceSource = {
+  family: 'Syne',
+  packageName: '@fontsource/syne',
+  filePrefix: 'syne',
+  weights: [700],
+};
+
+/** Load the sidebar brand display font (Syne 700). Safe to call repeatedly. */
+export const loadBrandDisplayFont = () => loadSource(BRAND_DISPLAY_FONT);

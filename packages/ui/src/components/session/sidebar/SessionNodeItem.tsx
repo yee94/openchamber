@@ -40,6 +40,7 @@ import { parseMultiRunSessionTitle } from '@/lib/multirun/title';
 import { MultiRunFusionDialog } from '@/components/multirun/MultiRunFusionDialog';
 import { FusionIcon } from '@/components/icons/FusionIcon';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
+import { notifySidebarVisualSelectionCommitted, useSidebarVisualSelectionStore } from './sidebarVisualSelection';
 
 type Folder = { id: string; name: string; sessionIds: string[] };
 
@@ -210,7 +211,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     groupDirectory,
     projectId,
     archivedBucket = false,
-    currentSessionId,
     pinnedSessionIds,
     expandedParents,
     hasSessionSearchQuery,
@@ -353,7 +353,12 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   );
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
-  const isActive = currentSessionId === session.id;
+  const isActive = useSidebarVisualSelectionStore((state) => state.sessionId === session.id);
+  React.useLayoutEffect(() => {
+    if (isActive) {
+      notifySidebarVisualSelectionCommitted(session.id);
+    }
+  }, [isActive, session.id]);
   const sessionTitle = resolvedSession.title || t('sessions.sidebar.session.untitled');
   const hasChildren = node.children.length > 0;
   const isPinnedSession = pinnedSessionIds.has(session.id);
