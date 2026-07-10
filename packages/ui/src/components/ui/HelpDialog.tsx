@@ -197,6 +197,24 @@ export const HelpDialog: React.FC = () => {
           keys: '',
         },
         {
+          id: 'zoom_in',
+          descriptionKey: 'helpDialog.item.zoomIn',
+          icon: "add",
+          keys: '',
+        },
+        {
+          id: 'zoom_out',
+          descriptionKey: 'helpDialog.item.zoomOut',
+          icon: "subtract",
+          keys: '',
+        },
+        {
+          id: 'zoom_reset',
+          descriptionKey: 'helpDialog.item.zoomReset',
+          icon: "restart",
+          keys: '',
+        },
+        {
           keys: [`${mod} + 1...9`],
           descriptionKey: "helpDialog.item.switchProject",
           icon: "layout-left",

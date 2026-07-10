@@ -8,6 +8,7 @@ import { setOptimisticRefs } from '@/sync/session-actions';
 import { markSessionViewed } from '@/sync/notification-store';
 import { setExternallyViewedSession } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { restoreWebviewZoomFactor } from '@/lib/webviewZoom';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -77,6 +78,10 @@ export function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
   usePwaManifestSync();
   useWindowControlsOverlayLayout();
   useKeyboardShortcuts();
+
+  React.useEffect(() => {
+    restoreWebviewZoomFactor();
+  }, []);
 
   return (
     <>

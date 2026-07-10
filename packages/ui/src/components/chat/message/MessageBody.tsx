@@ -1875,24 +1875,30 @@ const AssistantMessageBody = React.memo(({
                     {showErrorMessage && (
                         <FadeInOnReveal key="assistant-error">
                             <div className={cn(
-                                'group/assistant-text relative mt-3 p-3 rounded-lg border break-words max-w-full',
+                                'group/assistant-text relative break-words max-w-full',
+                                // Info: quiet single-line chip. Error: keep a clearer callout.
                                 errorVariant === 'info'
-                                    ? 'bg-[var(--status-info-background)] border-[var(--status-info-border)]'
-                                    : 'bg-[var(--status-error-background)] border-[var(--status-error-border)]',
+                                    ? 'mt-2 inline-flex w-fit max-w-full items-center gap-1.5 rounded-md border border-[var(--status-info-border)]/45 bg-[var(--status-info-background)]/40 px-2.5 py-1.5'
+                                    : 'mt-3 flex items-center gap-2 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] p-3',
                             )}>
-                                <div className="flex items-center gap-2">
-                                    <Icon name={errorIconName} className={cn(
-                                        'h-4 w-4 shrink-0',
-                                        errorVariant === 'info' ? 'text-[var(--status-info)]' : 'text-[var(--status-error)]',
-                                    )} />
-                                    <div className="min-w-0 flex-1 break-words">
-                                        <SimpleMarkdownRenderer
-                                            content={errorMessage ?? ''}
-                                            onShowPopup={onShowPopup}
-                                            className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
-                                            enableFileReferences={false}
-                                        />
-                                    </div>
+                                <Icon name={errorIconName} className={cn(
+                                    'shrink-0',
+                                    errorVariant === 'info'
+                                        ? 'h-3.5 w-3.5 text-[var(--status-info)]/75'
+                                        : 'h-4 w-4 text-[var(--status-error)]',
+                                )} />
+                                <div className={cn(
+                                    'min-w-0 break-words',
+                                    errorVariant === 'info'
+                                        ? 'typography-ui-label text-[13px] leading-5 text-muted-foreground [&_.markdown-content]:leading-5 [&_.markdown-content]:text-muted-foreground [&_p]:m-0'
+                                        : 'flex-1',
+                                )}>
+                                    <SimpleMarkdownRenderer
+                                        content={errorMessage ?? ''}
+                                        onShowPopup={onShowPopup}
+                                        className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
+                                        enableFileReferences={false}
+                                    />
                                 </div>
                             </div>
                         </FadeInOnReveal>

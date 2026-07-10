@@ -59,7 +59,7 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
                 'flex items-center gap-1.5 text-left'
               )}
             >
-              <Icon name="folder" className="h-4 w-4 opacity-70" />
+              <Icon name="folder" className="h-4 w-4 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate typography-ui-label font-medium">{label}</span>
               <Icon name="arrow-down-s" className="size-4 opacity-50" />
             </button>

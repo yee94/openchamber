@@ -6,9 +6,22 @@
  *
  * `fill: true` marks solid variants (bake fill="currentColor" onto paths).
  * Brand marks without Lucide equivalents use `brand` fallback SVG markup.
+ * `custom` is raw inner SVG (used for Codex-style folder glyphs that read
+ * clearly at sidebar sizes — Lucide's redesigned folder looks too boxy at 14px).
  */
 
-/** @typedef {{ lucide: string, fill?: boolean } | { brand: string }} IconMapEntry */
+/** @typedef {{ lucide: string, fill?: boolean } | { brand: string } | { custom: string }} IconMapEntry */
+
+/**
+ * Lucide / Codex `folder-open` — open flap reads clearly as a folder at sidebar
+ * sizes (closed Lucide folder collapses into a boxy rectangle at ~14–16px).
+ */
+export const CODEX_FOLDER_SVG =
+  `<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />`
+
+/** Open folder with a plus (new project / new folder). */
+export const CODEX_FOLDER_PLUS_SVG =
+  `${CODEX_FOLDER_SVG}<path d="M12 11v6" /><path d="M9 14h6" />`
 
 /** @type {Record<string, IconMapEntry>} */
 export const ICON_NAME_MAP = {
@@ -115,15 +128,15 @@ export const ICON_NAME_MAP = {
   "file-video": { lucide: "file-video", fill: false },
   "flashlight": { lucide: "flashlight", fill: false },
   "flask": { lucide: "flask-conical", fill: false },
-  "folder": { lucide: "folder", fill: false },
-  "folder-3": { lucide: "folder", fill: false },
-  "folder-3-fill": { lucide: "folder", fill: false },
-  "folder-6": { lucide: "folder", fill: false },
-  "folder-add": { lucide: "folder-plus", fill: false },
-  "folder-open": { lucide: "folder", fill: false },
-  "folder-open-fill": { lucide: "folder", fill: false },
+  "folder": { custom: CODEX_FOLDER_SVG },
+  "folder-3": { custom: CODEX_FOLDER_SVG },
+  "folder-3-fill": { custom: CODEX_FOLDER_SVG },
+  "folder-6": { custom: CODEX_FOLDER_SVG },
+  "folder-add": { custom: CODEX_FOLDER_PLUS_SVG },
+  "folder-open": { custom: CODEX_FOLDER_SVG },
+  "folder-open-fill": { custom: CODEX_FOLDER_SVG },
   "folder-received": { lucide: "folder-input", fill: false },
-  "folders": { lucide: "folders", fill: false },
+  "folders": { custom: CODEX_FOLDER_SVG },
   "fullscreen": { lucide: "maximize", fill: false },
   "fullscreen-exit": { lucide: "minimize", fill: false },
   "gamepad": { lucide: "gamepad-2", fill: false },

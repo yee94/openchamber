@@ -11,7 +11,7 @@ describe('DualLimitLru', () => {
 
         cache.set('c', 'C', 10);
 
-        expect(cache.get('b')).toBeUndefined();
+        expect(cache.get('b')).toBe(undefined);
         expect(cache.get('a')).toBe('A');
         expect(cache.get('c')).toBe('C');
     });
@@ -21,7 +21,7 @@ describe('DualLimitLru', () => {
         cache.set('a', 'A', 12);
         cache.set('b', 'B', 12);
 
-        expect(cache.get('a')).toBeUndefined();
+        expect(cache.get('a')).toBe(undefined);
         expect(cache.get('b')).toBe('B');
         expect(cache.byteSize).toBe(12);
     });
@@ -31,7 +31,7 @@ describe('DualLimitLru', () => {
 
         cache.set('oversized', 'value', 21);
 
-        expect(cache.get('oversized')).toBeUndefined();
+        expect(cache.get('oversized')).toBe(undefined);
         expect(cache.size).toBe(0);
         expect(cache.byteSize).toBe(0);
     });

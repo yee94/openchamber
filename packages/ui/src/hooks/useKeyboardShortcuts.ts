@@ -9,12 +9,13 @@ import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { canUseElectronDesktopIPC, invokeDesktop, isVSCodeRuntime } from '@/lib/desktop';
 import { showOpenCodeStatus } from '@/lib/openCodeStatus';
-import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
+import { eventMatchesShortcut, eventMatchesZoomShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import { readEmbeddedThemeSearchParams } from '@/contexts/theme-embedded-bootstrap';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { getCycledPrimaryAgentName } from '@/components/chat/mobileControlsUtils';
 import { resolveAdjacentRootSession, resolveAdjacentRootSessionDirectory } from '@/sync/session-navigation';
+import { resetWebviewZoom, zoomWebviewIn, zoomWebviewOut } from '@/lib/webviewZoom';
 
 export const useKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
@@ -217,6 +218,25 @@ export const useKeyboardShortcuts = () => {
             activeElement.focus({ preventScroll: true });
           }
         });
+        return;
+      }
+
+      // Chromium/webview page zoom (not Settings fontSize).
+      if (eventMatchesZoomShortcut(e, 'in', combo('zoom_in'))) {
+        e.preventDefault();
+        void zoomWebviewIn();
+        return;
+      }
+
+      if (eventMatchesZoomShortcut(e, 'out', combo('zoom_out'))) {
+        e.preventDefault();
+        void zoomWebviewOut();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('zoom_reset'))) {
+        e.preventDefault();
+        void resetWebviewZoom();
         return;
       }
 

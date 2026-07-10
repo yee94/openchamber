@@ -144,7 +144,7 @@ const SessionFolderItemBase = <TSessionNode,>({
     };
   }, [isRenaming]);
 
-  const folderIconName = 'folder';
+  const folderIconName = 'folder-open';
 
   return (
     <div className={cn('oc-folder')}>
@@ -180,7 +180,7 @@ const SessionFolderItemBase = <TSessionNode,>({
             : '',
         )}>
           {/* Codex-style: always closed outline folder (image-2), never filled/open */}
-          <Icon name={folderIconName} className={cn('h-3.5 w-3.5 flex-shrink-0', isDropTarget ? 'text-primary' : 'text-muted-foreground')} />
+          <Icon name={folderIconName} className={cn('h-4 w-4 flex-shrink-0', isDropTarget ? 'text-primary' : 'text-muted-foreground')} />
 
           {renaming ? (
             <form

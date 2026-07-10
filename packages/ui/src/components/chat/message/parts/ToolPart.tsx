@@ -46,10 +46,17 @@ import { readTaskTagSessionIdFromOutput } from './taskSessionIdParser';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import { getDiffPatchEntries, getPatchText, type DiffPatchEntry } from './toolDiffUtils';
+import { useDeferredToolHydration } from './deferredToolHydrationContext';
+import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
+import { DualLimitLru } from '@/lib/dualLimitLru';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
 const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
+const hydratedHistoricalToolIds = new DualLimitLru<string, true>({
+    maxEntries: 2000,
+    maxBytes: 256 * 1024,
+});
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
 
@@ -2771,8 +2778,34 @@ class ToolPartErrorBoundary extends React.Component<{
 
 const ToolPart: React.FC<ToolPartProps> = (props) => {
     const { t } = useI18n();
+    const deferHydration = useDeferredToolHydration();
     const toolName = normalizeToolName(props.part.tool) || 'tool';
     const displayName = getToolMetadata(toolName).displayName;
+    const [isHydrated, setIsHydrated] = React.useState(() => (
+        !deferHydration || hydratedHistoricalToolIds.get(props.part.id) === true
+    ));
+
+    React.useEffect(() => {
+        if (!deferHydration || isHydrated) {
+            return;
+        }
+        return scheduleAfterPaintTask(() => {
+            hydratedHistoricalToolIds.set(props.part.id, true, props.part.id.length * 2 + 8);
+            setIsHydrated(true);
+        });
+    }, [deferHydration, isHydrated, props.part.id]);
+
+    if (!isHydrated) {
+        return (
+            <div className="flex min-w-0 items-center gap-2 py-1.5 pl-px pr-2">
+                <span className="h-3.5 w-3.5 shrink-0 rounded bg-muted/50" aria-hidden="true" />
+                <span className={cn(TOOL_ROW_TITLE_CLASS, 'shrink-0 text-muted-foreground')}>
+                    {displayName}
+                </span>
+                <span className="h-3 w-24 min-w-0 rounded bg-muted/40" aria-hidden="true" />
+            </div>
+        );
+    }
 
     return (
         <ToolPartErrorBoundary

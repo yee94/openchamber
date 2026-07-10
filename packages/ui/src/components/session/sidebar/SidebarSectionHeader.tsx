@@ -48,7 +48,8 @@ export function SidebarSectionHeader({
         <span className={cn('min-w-0 flex-1', titleClassName)}>{title}</span>
       )}
       {accessory ? (
-        <div className="ml-auto flex shrink-0 items-center">
+        // -mr-2：equalizer 图标在 24px 命中区内居中，负 margin 把字形右缘拉齐下方 "1h"/"3h"
+        <div className="ml-auto -mr-2 flex shrink-0 items-center">
           {accessory}
         </div>
       ) : null}

@@ -209,6 +209,43 @@ const state = {
   trayController: null,
   lastFocusedWindowId: null,
   keepAwakeBlockerId: null,
+  // Shared Chromium zoom factor across windows for this app session.
+  webviewZoomFactor: 1,
+};
+
+const WEBVIEW_ZOOM_MIN = 0.5;
+const WEBVIEW_ZOOM_MAX = 3;
+const WEBVIEW_ZOOM_STEP = 0.1;
+const WEBVIEW_ZOOM_DEFAULT = 1;
+
+const clampWebviewZoomFactor = (factor) => {
+  if (!Number.isFinite(factor)) return WEBVIEW_ZOOM_DEFAULT;
+  return Math.min(WEBVIEW_ZOOM_MAX, Math.max(WEBVIEW_ZOOM_MIN, Math.round(factor * 100) / 100));
+};
+
+const applyWebviewZoomFactor = (webContentsTarget, factor) => {
+  if (!webContentsTarget || webContentsTarget.isDestroyed?.()) {
+    return state.webviewZoomFactor;
+  }
+  const next = clampWebviewZoomFactor(factor);
+  state.webviewZoomFactor = next;
+  try {
+    webContentsTarget.setZoomFactor(next);
+  } catch {
+    // ignore zoom API failures on destroyed contents
+  }
+  return next;
+};
+
+const adjustWebviewZoomFactor = (webContentsTarget, delta) => {
+  const current = (() => {
+    try {
+      return webContentsTarget?.getZoomFactor?.() ?? state.webviewZoomFactor;
+    } catch {
+      return state.webviewZoomFactor;
+    }
+  })();
+  return applyWebviewZoomFactor(webContentsTarget, current + delta);
 };
 
 const setDesktopKeepAwakeActive = (enabled) => {
@@ -2430,9 +2467,21 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
     void shell.openExternal(url).catch(() => {});
   });
 
-  browserWindow.webContents.setZoomFactor(1);
+  // Restore session zoom; allow Mod+=/-/0 and pinch-to-zoom.
+  applyWebviewZoomFactor(browserWindow.webContents, state.webviewZoomFactor);
+  try {
+    // Zoom level 0 = 100%. Same min/max disables pinch; open a useful range.
+    browserWindow.webContents.setVisualZoomLevelLimits(-3, 5);
+  } catch {
+    // Older Electron builds may not expose visual zoom limits.
+  }
   browserWindow.webContents.on('zoom-changed', () => {
-    browserWindow.webContents.setZoomFactor(1);
+    // Pinch/trackpad zoom is applied by Chromium — just remember the factor.
+    try {
+      state.webviewZoomFactor = clampWebviewZoomFactor(browserWindow.webContents.getZoomFactor());
+    } catch {
+      // ignore destroyed contents
+    }
   });
 
   browserWindow.webContents.on('dom-ready', () => {
@@ -2443,7 +2492,8 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   });
 
   browserWindow.webContents.on('did-finish-load', () => {
-    browserWindow.webContents.setZoomFactor(1);
+    // Navigation/reload resets Chromium zoom — re-apply the session factor.
+    applyWebviewZoomFactor(browserWindow.webContents, state.webviewZoomFactor);
     if (state.mainWindow && browserWindow.id === state.mainWindow.id && pendingDeepLinks.length > 0) {
       const timer = setTimeout(flushPendingDeepLinks, 400);
       if (typeof timer?.unref === 'function') timer.unref();
@@ -4178,6 +4228,15 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     case 'desktop_get_current_window_state':
       return { maximized: Boolean(browserWindow && !browserWindow.isDestroyed() && browserWindow.isMaximized()) };
 
+    case 'desktop_zoom_in':
+      return adjustWebviewZoomFactor(browserWindow?.webContents, WEBVIEW_ZOOM_STEP);
+
+    case 'desktop_zoom_out':
+      return adjustWebviewZoomFactor(browserWindow?.webContents, -WEBVIEW_ZOOM_STEP);
+
+    case 'desktop_zoom_reset':
+      return applyWebviewZoomFactor(browserWindow?.webContents, WEBVIEW_ZOOM_DEFAULT);
+
     case 'desktop_show_app_menu': {
       if (!browserWindow || browserWindow.isDestroyed()) {
         return null;
@@ -4307,6 +4366,11 @@ const buildMacMenu = () => {
         { label: 'Toggle Session Sidebar', accelerator: 'Cmd+B', registerAccelerator: false, click: () => dispatchAction('toggle-sidebar') },
         { label: 'Toggle Memory Debug', accelerator: 'Cmd+Shift+D', click: () => dispatchAction('toggle-memory-debug') },
         { type: 'separator' },
+        // Chromium/webview zoom — renderer owns the (customizable) binding.
+        { label: 'Zoom In', accelerator: 'Cmd+=', registerAccelerator: false, click: () => dispatchAction('zoom-in') },
+        { label: 'Zoom Out', accelerator: 'Cmd+-', registerAccelerator: false, click: () => dispatchAction('zoom-out') },
+        { label: 'Actual Size', accelerator: 'Cmd+0', registerAccelerator: false, click: () => dispatchAction('zoom-reset') },
+        { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
     },
@@ -4417,6 +4481,11 @@ const buildAutoHiddenMenu = () => {
         { type: 'separator' },
         { label: 'Toggle Session Sidebar', accelerator: 'Ctrl+B', registerAccelerator: false, click: () => dispatchAction('toggle-sidebar') },
         { label: 'Toggle Memory Debug', accelerator: 'Ctrl+Shift+D', click: () => dispatchAction('toggle-memory-debug') },
+        { type: 'separator' },
+        // Chromium/webview zoom — renderer owns the (customizable) binding.
+        { label: 'Zoom In', accelerator: 'Ctrl+=', registerAccelerator: false, click: () => dispatchAction('zoom-in') },
+        { label: 'Zoom Out', accelerator: 'Ctrl+-', registerAccelerator: false, click: () => dispatchAction('zoom-out') },
+        { label: 'Actual Size', accelerator: 'Ctrl+0', registerAccelerator: false, click: () => dispatchAction('zoom-reset') },
         { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
@@ -4547,6 +4616,9 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
   'desktop_get_lan_address',
   'desktop_capture_page_rect',
   'desktop_tray_update',
+  'desktop_zoom_in',
+  'desktop_zoom_out',
+  'desktop_zoom_reset',
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {

@@ -16,6 +16,11 @@ interface ContextUsageDisplayProps {
   isMobile?: boolean;
   hideIcon?: boolean;
   showPercentIcon?: boolean;
+  /**
+   * Subtle chrome: muted ring at rest; reveal percent + used/limit on hover
+   * or while the context panel is open (`pressed`). Click still opens the panel.
+   */
+  appearance?: 'default' | 'subtle';
   className?: string;
   valueClassName?: string;
   percentIconClassName?: string;
@@ -33,6 +38,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   isMobile = false,
   hideIcon = false,
   showPercentIcon = false,
+  appearance = 'default',
   className,
   valueClassName,
   percentIconClassName,
@@ -43,12 +49,15 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
   const colorPct = typeof colorPercentage === 'number' ? colorPercentage : percentage;
   const progressPct = clampPercent(percentage) ?? 0;
+  const isSubtle = appearance === 'subtle';
   const progressTone = resolveUsageTone(colorPct);
-  const progressColor = progressTone === 'critical'
-    ? 'var(--status-error)'
-    : progressTone === 'warn'
-      ? 'var(--status-warning)'
-      : 'var(--status-success)';
+  const progressColor = isSubtle
+    ? 'var(--surface-muted-foreground)'
+    : progressTone === 'critical'
+      ? 'var(--status-error)'
+      : progressTone === 'warn'
+        ? 'var(--status-warning)'
+        : 'var(--status-success)';
 
   const formatTokens = (tokens: number) => {
     if (tokens >= 1_000_000) {
@@ -66,57 +75,94 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     return 'text-status-success';
   };
 
-  const circularProgressSize = 20;
-  const circularProgressStroke = 3;
+  const circularProgressSize = isSubtle ? 18 : 20;
+  const circularProgressStroke = isSubtle ? 2 : 3;
   const circularProgressRadius = (circularProgressSize - circularProgressStroke) / 2;
   const circularProgressCircumference = 2 * Math.PI * circularProgressRadius;
   const circularProgressOffset = circularProgressCircumference * (1 - progressPct / 100);
 
   const safeOutputLimit = typeof outputLimit === 'number' ? Math.max(outputLimit, 0) : 0;
+  const usagePercentLabel = `${Math.min(percentage, 999).toFixed(1)}%`;
+  const usedTokensLabel = formatTokens(totalTokens);
+  const contextLimitLabel = formatTokens(contextLimit);
   const tooltipLines = [
-    t('contextUsage.tooltip.usedTokens', { tokens: formatTokens(totalTokens) }),
-    t('contextUsage.tooltip.contextLimit', { tokens: formatTokens(contextLimit) }),
+    t('contextUsage.tooltip.usage', { percent: usagePercentLabel }),
+    t('contextUsage.tooltip.usedOfLimit', {
+      used: usedTokensLabel,
+      limit: contextLimitLabel,
+    }),
     t('contextUsage.tooltip.outputLimit', { tokens: formatTokens(safeOutputLimit) }),
   ];
 
   const isInteractive = !isMobile && typeof onClick === 'function';
 
-  const contextContent = (
+  const progressRing = (
+    <svg
+      viewBox={`0 0 ${circularProgressSize} ${circularProgressSize}`}
+      className={cn(
+        isSubtle ? 'h-4 w-4 shrink-0 -rotate-90 text-muted-foreground/70' : 'h-3.5 w-3.5 -rotate-90',
+        percentIconClassName,
+      )}
+      role="progressbar"
+      aria-valuenow={Math.round(progressPct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <circle
+        cx={circularProgressSize / 2}
+        cy={circularProgressSize / 2}
+        r={circularProgressRadius}
+        fill="none"
+        stroke="var(--interactive-border)"
+        strokeWidth={circularProgressStroke}
+      />
+      <circle
+        cx={circularProgressSize / 2}
+        cy={circularProgressSize / 2}
+        r={circularProgressRadius}
+        fill="none"
+        stroke={progressColor}
+        strokeWidth={circularProgressStroke}
+        strokeLinecap="round"
+        strokeDasharray={circularProgressCircumference}
+        strokeDashoffset={circularProgressOffset}
+        className="transition-[stroke-dashoffset,stroke] duration-300"
+      />
+    </svg>
+  );
+
+  // Subtle: ring only at rest; reveal % + used/limit on hover or while the panel is open.
+  const subtleDetails = (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 overflow-hidden whitespace-nowrap typography-micro font-medium text-foreground transition-[max-width,opacity,margin] duration-200',
+        pressed
+          ? 'ml-1 max-w-[14rem] opacity-100'
+          : 'ml-0 max-w-0 opacity-0 group-hover:ml-1 group-hover:max-w-[14rem] group-hover:opacity-100 group-focus-visible:ml-1 group-focus-visible:max-w-[14rem] group-focus-visible:opacity-100',
+      )}
+    >
+      <span>{usagePercentLabel}</span>
+      <span className="text-muted-foreground">
+        {usedTokensLabel}
+        <span className="mx-0.5 text-muted-foreground/60">/</span>
+        {contextLimitLabel}
+      </span>
+    </span>
+  );
+
+  const contextContent = isSubtle ? (
+    <>
+      {progressRing}
+      {subtleDetails}
+    </>
+  ) : (
     <>
       {!isMobile && !hideIcon && <Icon name="donut-chart" className="h-4 w-4 flex-shrink-0" />}
       <span className={cn('font-medium inline-flex items-center gap-1.5', valueClassName)}>
         {showPercentIcon ? (
           <>
-            <svg
-              viewBox={`0 0 ${circularProgressSize} ${circularProgressSize}`}
-              className={cn('h-3.5 w-3.5 -rotate-90', percentIconClassName)}
-              role="progressbar"
-              aria-valuenow={Math.round(progressPct)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <circle
-                cx={circularProgressSize / 2}
-                cy={circularProgressSize / 2}
-                r={circularProgressRadius}
-                fill="none"
-                stroke="var(--interactive-border)"
-                strokeWidth={circularProgressStroke}
-              />
-              <circle
-                cx={circularProgressSize / 2}
-                cy={circularProgressSize / 2}
-                r={circularProgressRadius}
-                fill="none"
-                stroke={progressColor}
-                strokeWidth={circularProgressStroke}
-                strokeLinecap="round"
-                strokeDasharray={circularProgressCircumference}
-                strokeDashoffset={circularProgressOffset}
-                className="transition-[stroke-dashoffset,stroke] duration-300"
-              />
-            </svg>
-            <span className="text-foreground">{Math.min(percentage, 999).toFixed(1)}%</span>
+            {progressRing}
+            <span className="text-foreground">{usagePercentLabel}</span>
           </>
         ) : (
           <>
@@ -132,8 +178,13 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     size === 'compact' ? 'typography-micro' : 'typography-meta',
     isInteractive
       ? cn(
-        'rounded-md px-2 py-1.5 text-foreground transition-colors',
-        'hover:bg-interactive-hover',
+        'group rounded-md text-foreground transition-colors',
+        isSubtle
+          ? cn(
+            'p-1.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50',
+            pressed && 'bg-interactive-hover/50 text-foreground',
+          )
+          : 'px-2 py-1.5 hover:bg-interactive-hover',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
       )
       : 'text-muted-foreground/60',
@@ -173,11 +224,11 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
             <div className="rounded-xl border border-border/40 bg-sidebar/30 px-3 py-2 space-y-1">
               <div className="flex justify-between items-center">
                 <span className="typography-meta text-muted-foreground">{t('contextUsage.mobile.usedTokens')}</span>
-                <span className="typography-meta text-foreground font-medium">{formatTokens(totalTokens)}</span>
+                <span className="typography-meta text-foreground font-medium">{usedTokensLabel}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="typography-meta text-muted-foreground">{t('contextUsage.mobile.contextLimit')}</span>
-                <span className="typography-meta text-foreground font-medium">{formatTokens(contextLimit)}</span>
+                <span className="typography-meta text-foreground font-medium">{contextLimitLabel}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="typography-meta text-muted-foreground">{t('contextUsage.mobile.outputLimit')}</span>
@@ -194,6 +245,12 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
         </MobileOverlayPanel>
       </>
     );
+  }
+
+  // Subtle already reveals % + used/limit inline on hover / while open — skip the
+  // floating tooltip so it does not cover those values.
+  if (isSubtle) {
+    return contextElement;
   }
 
   return (

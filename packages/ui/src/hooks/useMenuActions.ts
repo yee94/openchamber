@@ -10,6 +10,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { resetWebviewZoom, zoomWebviewIn, zoomWebviewOut } from '@/lib/webviewZoom';
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === 'undefined') {
@@ -89,8 +90,10 @@ type MenuAction =
   | 'previous-project'
   | 'next-project'
   | 'help-dialog'
-  | 'download-logs';
-
+  | 'download-logs'
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'zoom-reset';
 export const useMenuActions = (
   onToggleMemoryDebug?: () => void
 ) => {
@@ -255,6 +258,18 @@ export const useMenuActions = (
 
         case 'toggle-memory-debug':
           onToggleMemoryDebug?.();
+          break;
+
+        case 'zoom-in':
+          void zoomWebviewIn();
+          break;
+
+        case 'zoom-out':
+          void zoomWebviewOut();
+          break;
+
+        case 'zoom-reset':
+          void resetWebviewZoom();
           break;
 
         case 'go-back':

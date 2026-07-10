@@ -378,6 +378,12 @@ for (const kebab of [...usedKebab].sort()) {
     continue
   }
 
+  // Codex-style custom glyphs (e.g. classic tabbed folder — readable at 14–16px).
+  if (entry?.custom) {
+    iconEntries.push({ name: kebab, content: entry.custom, kind: "custom" })
+    continue
+  }
+
   if (entry?.lucide) {
     let inner = readLucideInner(entry.lucide)
     if (!inner) {

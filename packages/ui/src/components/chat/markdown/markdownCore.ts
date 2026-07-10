@@ -3,6 +3,7 @@ import remend from 'remend';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
 import { DualLimitLru } from '@/lib/dualLimitLru';
+import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { buildAgentMentionUrl, parseAgentHref, parseSkillHref } from '@/lib/messages/inlineMessageLinks';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { highlightCodeInWorker } from './markdown-worker';
@@ -398,22 +399,63 @@ export const renderMarkdownBlocks = async (
   text: string,
   streaming: boolean,
   cacheKey: string,
+  signal?: AbortSignal,
 ): Promise<RenderedBlock[]> => {
   if (!text) return [];
 
   const blocks = streamBlocks(text, streaming);
-  return Promise.all(
-    blocks.map(async (block, index) => {
-      const contentHash = hash(block.raw);
-      const id = `${contentHash}:${block.mode}:${block.highlight ? 1 : 0}`;
-      const key = `${cacheKey}:${index}:${block.mode}`;
-      const cached = htmlCache.get(key);
-      if (cached && cached.hash === contentHash) {
-        return { id, html: cached.html };
-      }
-      const html = await parseBlock(block);
-      cacheRenderedBlock(key, { hash: contentHash, html });
-      return { id, html };
-    }),
-  );
+  const renderBlock = async (block: MarkdownBlock, index: number): Promise<RenderedBlock> => {
+    const contentHash = hash(block.raw);
+    const id = `${contentHash}:${block.mode}:${block.highlight ? 1 : 0}`;
+    const key = `${cacheKey}:${index}:${block.mode}`;
+    const cached = htmlCache.get(key);
+    if (cached && cached.hash === contentHash) {
+      return { id, html: cached.html };
+    }
+    const html = await parseBlock(block);
+    cacheRenderedBlock(key, { hash: contentHash, html });
+    return { id, html };
+  };
+
+  if (streaming) {
+    return Promise.all(blocks.map(renderBlock));
+  }
+
+  const rendered: RenderedBlock[] = [];
+  for (let index = 0; index < blocks.length; index += 1) {
+    if (signal?.aborted) {
+      break;
+    }
+    const block = blocks[index];
+    if (!block) {
+      continue;
+    }
+    const result = await new Promise<RenderedBlock | null>((resolve) => {
+      let settled = false;
+      const finish = (value: RenderedBlock | null) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        signal?.removeEventListener('abort', handleAbort);
+        resolve(value);
+      };
+      const cancel = scheduleAfterPaintTask(() => {
+        if (signal?.aborted) {
+          finish(null);
+          return;
+        }
+        void renderBlock(block, index).then((value) => finish(value));
+      });
+      const handleAbort = () => {
+        cancel();
+        finish(null);
+      };
+      signal?.addEventListener('abort', handleAbort, { once: true });
+    });
+    if (result) {
+      rendered.push(result);
+    }
+  }
+  return rendered;
 };

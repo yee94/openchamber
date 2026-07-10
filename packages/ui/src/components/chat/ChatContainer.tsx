@@ -49,11 +49,34 @@ import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { useI18n } from '@/lib/i18n';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { useShallow } from 'zustand/react/shallow';
+import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
+import { markSessionSwitchContentCommitted } from '@/lib/sessionSwitchPerf';
+import {
+    createSessionViewKey,
+    reconcileSessionViewCache,
+    updateSessionViewEstimate,
+    type SessionViewCacheLimits,
+    type SessionViewSelection,
+} from './sessionViewCache';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DEFAULT_RETRY_MESSAGE = 'Quota limit reached. Retrying automatically.';
+const MEBIBYTE = 1024 * 1024;
+const DEFAULT_SESSION_VIEW_ESTIMATED_BYTES = MEBIBYTE;
+const SESSION_VIEW_MESSAGE_BUCKET_SIZE = 20;
+const SESSION_VIEW_MESSAGE_BUCKET_BYTES = MEBIBYTE;
+const MAX_SINGLE_SESSION_VIEW_ESTIMATED_BYTES = 16 * MEBIBYTE;
+const DESKTOP_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
+    maxEntries: 4,
+    maxEstimatedBytes: 48 * MEBIBYTE,
+};
+const CONSTRAINED_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
+    maxEntries: 2,
+    maxEstimatedBytes: 20 * MEBIBYTE,
+};
 const CHAT_SCROLL_STYLE = {
     overflowAnchor: 'none',
     overscrollBehavior: 'contain',
@@ -376,11 +399,34 @@ type ChatContainerProps = {
     readOnly?: boolean;
 };
 
-export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = true, readOnly = false }) => {
+type ChatContainerContentProps = ChatContainerProps & {
+    sessionId: string | null;
+    sessionDirectory: string | null;
+    sessionViewKey?: string;
+    onSessionViewEstimateChange?: (key: string, estimatedBytes: number) => void;
+};
+
+const estimateSessionViewBytes = (messageCount: number): number => {
+    const messageBuckets = Math.ceil(Math.max(0, messageCount) / SESSION_VIEW_MESSAGE_BUCKET_SIZE);
+    return Math.min(
+        MAX_SINGLE_SESSION_VIEW_ESTIMATED_BYTES,
+        DEFAULT_SESSION_VIEW_ESTIMATED_BYTES + messageBuckets * SESSION_VIEW_MESSAGE_BUCKET_BYTES,
+    );
+};
+
+const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
+    autoOpenDraft = true,
+    readOnly = false,
+    sessionId: currentSessionId,
+    sessionDirectory: currentSessionDirectory,
+    sessionViewKey,
+    onSessionViewEstimateChange,
+}) => {
     const { t } = useI18n();
+    React.useLayoutEffect(() => {
+        markSessionSwitchContentCommitted();
+    }, []);
     // Session UI state
-    const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
-    const currentSessionDirectory = useSessionUIStore((s) => s.currentSessionDirectory);
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
@@ -424,6 +470,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
         ),
     );
     const sessionMessageCount = useSessionMessageCount(currentSessionId ?? '', effectiveSessionDirectory);
+    const sessionViewEstimatedBytes = estimateSessionViewBytes(sessionMessageCount);
+    React.useEffect(() => {
+        if (!sessionViewKey || !onSessionViewEstimateChange) {
+            return;
+        }
+        onSessionViewEstimateChange(sessionViewKey, sessionViewEstimatedBytes);
+    }, [onSessionViewEstimateChange, sessionViewEstimatedBytes, sessionViewKey]);
     const hasRenderableSessionSnapshot = useDirectorySync(
         React.useCallback(
             (state) => (currentSessionId ? getSessionMaterializationStatus(state, currentSessionId).renderable : false),
@@ -997,6 +1050,96 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
                 isLoadingEarlier={timelineController.isLoadingOlder}
                 onLoadEarlier={handleLoadOlderClick}
             />
+        </div>
+	);
+};
+
+export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
+    const selectedSession = useSessionUIStore(
+        useShallow((state) => ({
+            sessionId: state.currentSessionId,
+            directory: state.currentSessionDirectory,
+        })),
+    );
+    const selectedSessionView = React.useMemo<SessionViewSelection | null>(() => {
+        if (!selectedSession.sessionId) {
+            return null;
+        }
+        return {
+            sessionId: selectedSession.sessionId,
+            directory: selectedSession.directory,
+        };
+    }, [selectedSession.directory, selectedSession.sessionId]);
+    const selectionKey = selectedSessionView ? createSessionViewKey(selectedSessionView) : null;
+    const cacheLimits = isMobileSurfaceRuntime() || isVSCodeRuntime()
+        ? CONSTRAINED_SESSION_VIEW_CACHE_LIMITS
+        : DESKTOP_SESSION_VIEW_CACHE_LIMITS;
+    const [renderedSelection, setRenderedSelection] = React.useState<SessionViewSelection | null>(selectedSessionView);
+    const renderedSelectionKey = renderedSelection ? createSessionViewKey(renderedSelection) : null;
+    const [cachedSessionViews, setCachedSessionViews] = React.useState(() => selectedSessionView
+        ? reconcileSessionViewCache(
+            [],
+            selectedSessionView,
+            cacheLimits,
+            DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
+        )
+        : []);
+    const isSwitchingSession = renderedSelectionKey !== selectionKey;
+    const activeSessionViewKey = isSwitchingSession ? null : renderedSelectionKey;
+
+    React.useEffect(() => {
+        if (!isSwitchingSession) {
+            return;
+        }
+        return scheduleAfterPaintTask(() => {
+            React.startTransition(() => {
+                setRenderedSelection(selectedSessionView);
+                if (selectedSessionView) {
+                    setCachedSessionViews((current) => reconcileSessionViewCache(
+                        current,
+                        selectedSessionView,
+                        cacheLimits,
+                        DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
+                    ));
+                }
+            });
+        });
+    }, [cacheLimits, isSwitchingSession, selectedSessionView, selectionKey]);
+
+    const handleSessionViewEstimateChange = React.useCallback((key: string, estimatedBytes: number) => {
+        setCachedSessionViews((current) => updateSessionViewEstimate(
+            current,
+            key,
+            estimatedBytes,
+            activeSessionViewKey ?? key,
+            cacheLimits,
+        ));
+    }, [activeSessionViewKey, cacheLimits]);
+
+    return (
+        <div className="h-full bg-background" aria-busy={isSwitchingSession || undefined}>
+            {cachedSessionViews.map((view) => (
+                <React.Activity
+                    key={view.key}
+                    name={`chat-session-${view.sessionId}`}
+                    mode={activeSessionViewKey === view.key ? 'visible' : 'hidden'}
+                >
+                    <ChatContainerContent
+                        {...props}
+                        sessionId={view.sessionId}
+                        sessionDirectory={view.directory}
+                        sessionViewKey={view.key}
+                        onSessionViewEstimateChange={handleSessionViewEstimateChange}
+                    />
+                </React.Activity>
+            ))}
+            {!isSwitchingSession && !renderedSelection ? (
+                <ChatContainerContent
+                    {...props}
+                    sessionId={null}
+                    sessionDirectory={selectedSession.directory}
+                />
+            ) : null}
         </div>
     );
 };

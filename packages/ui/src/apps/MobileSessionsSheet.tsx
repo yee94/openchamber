@@ -161,7 +161,7 @@ const MobileProjectIcon: React.FC<{
         containerClasses,
       )}
     >
-      <Icon name="folder" className={innerClasses} />
+      <Icon name="folder-open" className={innerClasses} />
     </span>
   );
 };

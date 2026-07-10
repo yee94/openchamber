@@ -186,18 +186,18 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                           : (alwaysShowActions ? 'pr-14' : 'pr-7 group-hover/project:pr-14 group-focus-within/project:pr-14'),
                       )}
                     >
-                    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center text-muted-foreground">
+                    <span className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-muted-foreground">
                       <span className={cn(
-                        'h-3.5 w-3.5 items-center justify-center',
+                        'h-4 w-4 items-center justify-center',
                         alwaysShowActions ? 'inline-flex' : 'hidden group-hover/project:inline-flex group-focus-within/project:inline-flex',
                       )}>
                         {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
                       </span>
-                      {/* Codex-style: opaque muted folder — no per-project color, no SVG opacity */}
+                      {/* Codex-style open folder (folder-open), not the closed boxy glyph */}
                       <Icon
-                        name="folder"
+                        name="folder-open"
                         className={cn(
-                          'h-3.5 w-3.5',
+                          'h-4 w-4',
                           alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden',
                         )}
                       />

@@ -40,6 +40,7 @@ import { SidebarActivitySections } from './sidebar/SidebarActivitySections';
 import { SidebarDisplayModeMenu } from './sidebar/SidebarDisplayModeMenu';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
+import { SidebarBrandMark } from '@/components/layout/SidebarBrandMark';
 import { SessionNodeItem } from './sidebar/SessionNodeItem';
 import type { SessionNodeRenderExtras } from './sidebar/sessionNodeItemUtils';
 import { useUpdateStore } from '@/stores/useUpdateStore';
@@ -79,6 +80,11 @@ import {
   resolveGlobalSessionDirectory,
   useGlobalSessionsStore,
 } from '@/stores/useGlobalSessionsStore';
+import {
+  cancelPendingSidebarVisualSelection,
+  requestSidebarVisualSelection,
+  syncSidebarVisualSelection,
+} from './sidebar/sidebarVisualSelection';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
@@ -676,7 +682,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const {
     copiedSessionId,
-    handleSessionSelect,
+    handleSessionSelect: commitSessionSelect,
     handleSessionDoubleClick,
     handleSaveEdit,
     handleCancelEdit,
@@ -717,6 +723,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     editingId,
     editTitle,
   });
+
+  const handleSessionSelect = React.useCallback((
+    sessionId: string,
+    sessionDirectory: string | null,
+    projectId?: string | null,
+  ) => {
+    if (sessionId === currentSessionId) {
+      syncSidebarVisualSelection(sessionId);
+      commitSessionSelect(sessionId, sessionDirectory, projectId);
+      return;
+    }
+
+    requestSidebarVisualSelection(
+      sessionId,
+      () => commitSessionSelect(sessionId, sessionDirectory, projectId),
+    );
+  }, [commitSessionSelect, currentSessionId]);
+
+  React.useLayoutEffect(() => {
+    syncSidebarVisualSelection(currentSessionId);
+  }, [currentSessionId]);
+
+  React.useEffect(() => () => {
+    cancelPendingSidebarVisualSelection();
+  }, []);
 
   const confirmDeleteFolder = React.useCallback(() => {
     if (!deleteFolderConfirm) return;
@@ -1047,7 +1078,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     activeSessionByProject,
     setActiveSessionByProject,
     currentSessionId,
-    handleSessionSelect,
+    handleSessionSelect: commitSessionSelect,
     newSessionDraftOpen,
     mobileVariant,
     openNewSessionDraft,
@@ -1519,22 +1550,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       expandAllProjects={expandAllProjects}
     />
   ) : null;
+  // Brand mark sits above Recent (Codex-style top-left wordmark). Kept outside
+  // the Recent toggle so it still shows when the Recent section is hidden.
   const topContent = (!isVSCode && !hasSessionSearchQuery) ? (
-    showRecentSection ? (
-      <SidebarActivitySections
-        sections={activitySections}
-        renderSessionNode={renderSessionNode}
-        currentSessionId={currentSessionId}
-        editingId={editingId}
-        openSidebarMenuKey={openSidebarMenuKey}
-        variant="section"
-        headerAccessory={displayModeMenu}
-      />
-    ) : displayModeMenu ? (
-      <div className="flex justify-end px-0.5 pb-2 pt-1">
-        {displayModeMenu}
-      </div>
-    ) : null
+    <>
+      <SidebarBrandMark />
+      {showRecentSection ? (
+        <SidebarActivitySections
+          sections={activitySections}
+          renderSessionNode={renderSessionNode}
+          currentSessionId={currentSessionId}
+          editingId={editingId}
+          openSidebarMenuKey={openSidebarMenuKey}
+          variant="section"
+          headerAccessory={displayModeMenu}
+        />
+      ) : displayModeMenu ? (
+        <div className="flex justify-end px-0.5 pb-2 pt-1">
+          {displayModeMenu}
+        </div>
+      ) : null}
+    </>
   ) : null;
   const isInlineEditing = Boolean(renamingFolderId || editingId || editingProjectDialogId);
 
