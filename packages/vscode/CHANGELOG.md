@@ -7,6 +7,7 @@
 - Chat: code blocks can show line numbers that stay aligned while streaming, and a new Wrap Code Block Lines setting controls long-line wrapping.
 - Chat: with Sticky User Header enabled, user messages no longer float over earlier messages in long conversations.
 - Chat: if sending a message times out or loses the connection after OpenCode accepted it, the extension now keeps the sent message instead of rolling it back as failed.
+- Editor Integration: the "Add to Context" command and active-editor pin-selection now use workspace-relative filenames so the model reads the correct file when names collide (thanks to @Catan).
 
 ## [1.14.1] - 2026-07-07
 
