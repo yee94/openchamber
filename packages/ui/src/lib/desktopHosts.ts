@@ -23,11 +23,13 @@ const sanitizeRequestHeaders = (headers: unknown): Record<string, string> | unde
 };
 
 /**
- * Private-relay reachability for a host. When present, the host is reached over
- * the E2EE relay tunnel (no direct `apiUrl`); `hostEncPubJwk` is the trust anchor
- * that pins the tunnel to the real server. The relay admission `grant` is a
- * one-time pairing artifact and is intentionally NOT persisted — steady-state
- * relay connections route by `serverId` alone (mirrors the mobile app).
+ * Private-relay reachability for a host. A host may carry this ALONGSIDE a
+ * direct `apiUrl` (multi-transport: direct on the home network, E2EE tunnel
+ * away — mirrors the mobile connection model) or as its only transport.
+ * `hostEncPubJwk` is the trust anchor that pins the tunnel to the real server.
+ * The relay admission `grant` is a one-time pairing artifact and is
+ * intentionally NOT persisted — steady-state relay connections route by
+ * `serverId` alone.
  */
 export type DesktopHostRelay = {
   relayUrl: string;
@@ -288,9 +290,14 @@ export const desktopInstallIdGet = async (): Promise<string> => {
   return typeof raw === 'string' ? raw.trim() : '';
 };
 
+const RELAY_PROBE_TIMEOUT_MS = 8_000;
+
 /**
  * Reachability check for a relay host: open a throwaway E2EE tunnel and hit
- * /health. Relay hosts have no HTTP address for `desktopHostProbe`.
+ * /health. Relay hosts have no HTTP address for `desktopHostProbe`. Hard
+ * timeout: a ghost relay registration (relay lost the host, host doesn't know)
+ * leaves the tunnel in `connecting` forever — the probe must report
+ * unreachable instead of hanging every status/switch flow with it.
  */
 export const probeRelayDesktopHost = async (relay: DesktopHostRelay): Promise<HostProbeResult> => {
   const tunnel = createRelayTunnelClient({
@@ -300,7 +307,16 @@ export const probeRelayDesktopHost = async (relay: DesktopHostRelay): Promise<Ho
   });
   const startedAt = Date.now();
   try {
-    const response = await tunnel.fetch('/health');
+    const response = await Promise.race([
+      tunnel.fetch('/health'),
+      new Promise<null>((resolve) => {
+        const timer = window.setTimeout(() => resolve(null), RELAY_PROBE_TIMEOUT_MS);
+        if (typeof timer !== 'number' && typeof (timer as { unref?: () => void }).unref === 'function') {
+          (timer as unknown as { unref: () => void }).unref();
+        }
+      }),
+    ]);
+    if (!response) return { status: 'unreachable', latencyMs: 0 };
     return { status: response.ok ? 'ok' : 'unreachable', latencyMs: Math.max(0, Date.now() - startedAt) };
   } catch {
     return { status: 'unreachable', latencyMs: 0 };
@@ -334,4 +350,15 @@ export const desktopOpenNewWindowAtUrl = async (url: string, options?: { clientT
   const invoke = getInvoke();
   if (!invoke) return;
   await invoke('desktop_new_window_at_url', { url, clientToken: options?.clientToken || undefined, requestHeaders: options?.requestHeaders || undefined });
+};
+
+/**
+ * Open a saved host in a new window by id. Required for relay-capable hosts —
+ * the new window boots the local UI and picks the transport itself (direct
+ * first, E2EE tunnel fallback), which a fixed URL cannot express.
+ */
+export const desktopOpenNewWindowForHost = async (hostId: string): Promise<void> => {
+  const invoke = getInvoke();
+  if (!invoke) return;
+  await invoke('desktop_new_window_for_host', { hostId });
 };

@@ -566,10 +566,13 @@ const buildRendererRuntimeConfig = (uiUrl, runtimeConfig = {}) => {
   const apiBaseUrl = typeof runtimeConfig.apiBaseUrl === 'string' ? runtimeConfig.apiBaseUrl : (state.apiBaseUrl || '');
   const clientToken = typeof runtimeConfig.clientToken === 'string' ? runtimeConfig.clientToken : (state.clientToken || '');
   const requestHeaders = sanitizeRuntimeRequestHeaders(runtimeConfig.requestHeaders || state.requestHeaders || {});
+  // Relay-capable hosts have no injectable HTTP base: the renderer reads this
+  // host id, probes the direct leg, and falls back to the E2EE tunnel itself.
+  const relayHostId = typeof runtimeConfig.relayHostId === 'string' ? runtimeConfig.relayHostId : '';
   if (shouldUseSameOriginDevProxy(uiUrl, apiBaseUrl)) {
-    return { apiBaseUrl: '', clientToken: '', requestHeaders: {} };
+    return { apiBaseUrl: '', clientToken: '', requestHeaders: {}, relayHostId };
   }
-  return { apiBaseUrl, clientToken, requestHeaders };
+  return { apiBaseUrl, clientToken, requestHeaders, relayHostId };
 };
 
 const readDesktopLocalClientToken = () => {
@@ -630,9 +633,11 @@ const sanitizeHostRelayForStorage = (value) => {
   return { relayUrl, serverId, hostEncPubJwk: jwk };
 };
 
-// Shared storage shape for a persisted host (direct or relay). Returns null for
-// entries that can't be stored (missing id, reserved 'local', or no usable
-// transport).
+// Shared storage shape for a persisted host. A host may carry a direct HTTP
+// transport, a relay transport, or BOTH (a multi-transport device: direct on
+// the home network, relay away — mirrors the mobile connection model). Returns
+// null for entries that can't be stored (missing id, reserved 'local', or no
+// usable transport at all).
 const buildStoredHostEntry = (entry) => {
   const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
   if (!id || id === LOCAL_HOST_ID) return null;
@@ -643,15 +648,18 @@ const buildStoredHostEntry = (entry) => {
   const labelRaw = typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : '';
 
   const relay = sanitizeHostRelayForStorage(entry?.relay);
+  const relayField = relay ? { relay } : {};
+  const directUrl = sanitizeHostUrlForStorage(entry?.url);
+  const apiUrl = directUrl ? (sanitizeHostUrlForStorage(entry?.apiUrl) || directUrl) : null;
+
+  if (directUrl) {
+    return { id, label: labelRaw || directUrl, url: directUrl, apiUrl, ...tokenField, ...headerFields, ...relayField };
+  }
   if (relay) {
     const url = `relay://${relay.serverId}`;
     return { id, label: labelRaw || url, url, ...tokenField, ...headerFields, relay };
   }
-
-  const url = sanitizeHostUrlForStorage(entry?.url);
-  if (!url) return null;
-  const apiUrl = sanitizeHostUrlForStorage(entry?.apiUrl) || url;
-  return { id, label: labelRaw || url, url, apiUrl, ...tokenField, ...headerFields };
+  return null;
 };
 
 const readDesktopHostsConfig = () => {
@@ -2189,6 +2197,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
         `--openchamber-macos-major=${desktopMacosMajor}`,
         `--openchamber-mac-vibrancy=${useVibrancy ? '1' : '0'}`,
         `--openchamber-boot-outcome=${JSON.stringify(state.bootOutcome || null)}`,
+        `--openchamber-relay-host-id=${rendererRuntimeConfig.relayHostId || ''}`,
       ],
       preload: isDev ? path.join(__dirname, 'preload.mjs') : path.join(app.getAppPath(), 'preload.mjs'),
       backgroundThrottling: false,
@@ -3958,6 +3967,36 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return null;
     }
 
+    case 'desktop_new_window_for_host': {
+      // Open a saved host in a new window. Hosts with a relay leg boot the
+      // LOCAL UI and let the renderer pick the transport (direct first, E2EE
+      // tunnel fallback) via the injected relay host id — a fixed apiBaseUrl
+      // would strand the window when the direct leg is unreachable.
+      const hostId = typeof args.hostId === 'string' ? args.hostId.trim() : '';
+      const config = readDesktopHostsConfig();
+      const host = config.hosts.find((entry) => entry.id === hostId);
+      if (!host) throw new Error('Host not found');
+      if (host.relay) {
+        const windowUrl = shouldUsePackagedUi() ? buildPackagedUiUrl('/index.html') : (state.sidecarUrl || state.localOrigin);
+        await createAdditionalWindow(windowUrl, {
+          apiBaseUrl: '',
+          clientToken: host.clientToken || '',
+          requestHeaders: sanitizeRuntimeRequestHeaders(host.requestHeaders || {}),
+          relayHostId: host.id,
+        });
+        return null;
+      }
+      const targetUrl = normalizeHostUrl(host.apiUrl || host.url);
+      if (!targetUrl) throw new Error('Invalid URL');
+      const windowUrl = shouldUsePackagedUi() ? buildPackagedUiUrl('/index.html') : targetUrl;
+      await createAdditionalWindow(windowUrl, {
+        apiBaseUrl: targetUrl,
+        clientToken: host.clientToken || '',
+        requestHeaders: sanitizeRuntimeRequestHeaders(host.requestHeaders || {}),
+      });
+      return null;
+    }
+
     case 'desktop_new_window_at_url': {
       const targetUrl = normalizeHostUrl(String(args.url || ''));
       if (!targetUrl) {
@@ -4394,6 +4433,7 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
   'desktop_host_probe',
   'desktop_new_window',
   'desktop_new_window_at_url',
+  'desktop_new_window_for_host',
   'desktop_set_window_title',
   'desktop_set_window_theme',
   'desktop_is_window_fullscreen',
