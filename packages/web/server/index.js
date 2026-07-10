@@ -1117,17 +1117,35 @@ async function main(options = {}) {
   // a specific non-loopback host → that host), NOT from how the UI was opened — so
   // "Local network" works even when the UI is opened on localhost, and is absent
   // when the server is only bound to loopback (a LAN link would not connect).
-  const resolvePairingTransports = () => {
+  // The IPv4 the requesting client actually reached this server on (if any).
+  // Strips the IPv6-mapped prefix; loopback means "not a LAN path".
+  const requestReachedLanAddress = (req) => {
+    const raw = typeof req?.socket?.localAddress === 'string' ? req.socket.localAddress : '';
+    const address = raw.startsWith('::ffff:') ? raw.slice(7) : raw;
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(address)) return null;
+    if (address.startsWith('127.')) return null;
+    return address;
+  };
+  const resolvePairingTransports = (req) => {
     const activePort = tunnelRuntimeContext.getActivePort() || port;
     const local = `http://127.0.0.1:${activePort}`;
     let lanHost = null;
     if (isNetworkExposedBindHost(effectiveBindHost)) {
+      // Prefer the address the client is ALREADY talking to us on — it is the
+      // one interface guaranteed to be routable from that client's network.
+      // Interface scanning is only a fallback: on servers with virtual bridges
+      // (docker0 etc.) the first non-internal IPv4 can be an address no other
+      // machine can reach, which produced pairing links whose LAN candidate
+      // silently failed and forced devices onto the relay.
+      lanHost = requestReachedLanAddress(req);
       try {
-        for (const list of Object.values(os.networkInterfaces())) {
-          for (const entry of (list || [])) {
-            if (entry.family === 'IPv4' && !entry.internal) { lanHost = entry.address; break; }
+        if (!lanHost) {
+          for (const list of Object.values(os.networkInterfaces())) {
+            for (const entry of (list || [])) {
+              if (entry.family === 'IPv4' && !entry.internal) { lanHost = entry.address; break; }
+            }
+            if (lanHost) break;
           }
-          if (lanHost) break;
         }
       } catch {
         lanHost = null;

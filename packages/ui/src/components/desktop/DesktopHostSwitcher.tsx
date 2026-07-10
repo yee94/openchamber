@@ -450,6 +450,13 @@ export function DesktopHostSwitcherDialog({
       const localClientToken = await getLocalClientToken();
       const results = await Promise.all(
         hosts.map(async (h) => {
+          // Relay hosts have no HTTP address to probe — check reachability
+          // through a throwaway E2EE tunnel instead.
+          if (h.relay) {
+            const startedAt = performance.now();
+            const ok = await probeRelayHost(h.relay).catch(() => false);
+            return [h.id, { status: ok ? ('ok' as const) : ('unreachable' as const), latencyMs: Math.round(performance.now() - startedAt) } satisfies HostStatus] as const;
+          }
           const url = normalizeHostUrl(isElectronShell() ? getDesktopHostApiUrl(h) : h.url);
           if (!url) {
             return [h.id, { status: 'unreachable' as const, latencyMs: 0 } satisfies HostStatus] as const;
@@ -898,7 +905,9 @@ export function DesktopHostSwitcherDialog({
                 const displayLabel = host.id === LOCAL_HOST_ID
                   ? t('desktopHostSwitcher.instance.local')
                   : redactSensitiveUrl(host.label);
-                const displayUrl = redactSensitiveUrl(effectiveUrl);
+                // Relay hosts have a relay:// pseudo-URL that means nothing to a
+                // person — say how the connection works instead.
+                const displayUrl = host.relay ? t('mobile.connect.relay.badge') : redactSensitiveUrl(effectiveUrl);
 
                 return (
                   <div

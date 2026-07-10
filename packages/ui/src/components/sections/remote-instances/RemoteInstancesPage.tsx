@@ -1459,16 +1459,23 @@ export const RemoteInstancesPage: React.FC = () => {
                           <p className="typography-ui-label text-foreground truncate">{redactSensitiveUrl(host.label)}</p>
                           {directDefaultHostId === host.id ? <span className="typography-micro text-muted-foreground">{t('desktopHostSwitcher.header.default')}</span> : null}
                         </div>
-                        <p className="typography-micro text-muted-foreground font-mono truncate">{redactSensitiveUrl(host.apiUrl || host.url)}</p>
+                        <p className={cn('typography-micro text-muted-foreground truncate', !host.relay && 'font-mono')}>
+                          {host.relay ? t('mobile.connect.relay.badge') : redactSensitiveUrl(host.apiUrl || host.url)}
+                        </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void setDefaultDirectHost(host.id)} disabled={directSaving || directDefaultHostId === host.id} aria-label={t('desktopHostSwitcher.actions.setAsDefaultAria')}>
                           {directDefaultHostId === host.id ? <Icon name="star-fill" className="h-3.5 w-3.5" /> : <Icon name="star" className="h-3.5 w-3.5" />}
                         </Button>
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => beginEditDirectHost(host)} disabled={directSaving}>
-                          <Icon name="pencil" className="h-3.5 w-3.5" />
-                          {t('desktopHostSwitcher.actions.edit')}
-                        </Button>
+                        {/* The edit form is URL/token-centric; saving it would drop a
+                            relay host's tunnel descriptor. Relay hosts are re-imported
+                            via a fresh pairing link instead. */}
+                        {host.relay ? null : (
+                          <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => beginEditDirectHost(host)} disabled={directSaving}>
+                            <Icon name="pencil" className="h-3.5 w-3.5" />
+                            {t('desktopHostSwitcher.actions.edit')}
+                          </Button>
+                        )}
                         <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void handleRemoveDirectHost(host.id)} disabled={directSaving}>
                           <Icon name="delete-bin" className="h-3.5 w-3.5" />
                           {t('settings.common.actions.delete')}
