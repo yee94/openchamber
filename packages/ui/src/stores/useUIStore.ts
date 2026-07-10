@@ -575,7 +575,6 @@ interface UIStore {
   sessionRecapEnabled: boolean;
   sessionSuggestionEnabled: boolean;
   collapsibleThinkingBlocks: boolean;
-  groupReasoningBlocks: boolean;
   chatRenderMode: ChatRenderMode;
   activityRenderMode: ActivityRenderMode;
   showDeletionDialog: boolean;
@@ -873,7 +872,6 @@ export const useUIStore = create<UIStore>()(
         sessionRecapEnabled: true,
         sessionSuggestionEnabled: true,
         collapsibleThinkingBlocks: true,
-        groupReasoningBlocks: true,
         chatRenderMode: 'live',
         activityRenderMode: 'summary',
         showDeletionDialog: true,
