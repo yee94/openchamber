@@ -42,15 +42,19 @@ import {
   type DesktopSshPortForwardType,
 } from '@/lib/desktopSsh';
 import {
+  desktopHostProbe,
   desktopHostsGet,
   desktopHostsSet,
   desktopInstallIdGet,
+  getDesktopHostApiUrl,
   normalizeHostUrl,
+  probeRelayDesktopHost,
   redactSensitiveUrl,
   resolveDesktopHostUrl,
   relayHostDisplayUrl,
   type DesktopHost,
   type DesktopHostRelay,
+  type HostProbeResult,
 } from '@/lib/desktopHosts';
 import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { getDesktopLanAddress, isDesktopLocalOriginActive, isDesktopShell } from '@/lib/desktop';
@@ -416,6 +420,9 @@ export const RemoteInstancesPage: React.FC = () => {
   const [isRetryPending, setIsRetryPending] = React.useState(false);
   const [clockMs, setClockMs] = React.useState(() => Date.now());
   const [directHosts, setDirectHosts] = React.useState<DesktopHost[]>([]);
+  // Live reachability per saved host (undefined = probe in flight), mirroring
+  // the host switcher's status line so this list is not just dead text.
+  const [directHostStatus, setDirectHostStatus] = React.useState<Record<string, HostProbeResult>>({});
   const [directDefaultHostId, setDirectDefaultHostId] = React.useState<string | null>('local');
   const [directLoading, setDirectLoading] = React.useState(false);
   const [directSaving, setDirectSaving] = React.useState(false);
@@ -718,6 +725,31 @@ export const RemoteInstancesPage: React.FC = () => {
   const setDefaultDirectHost = React.useCallback(async (id: string) => {
     await persistDirectHosts(directHosts, id);
   }, [directHosts, persistDirectHosts]);
+
+  // Probe saved hosts whenever the list changes so each row shows a live
+  // Connected/Unreachable status like the host switcher does. One pass per
+  // list identity — no polling; the row set changes rarely.
+  React.useEffect(() => {
+    if (!showInstanceManagement || directHosts.length === 0) return;
+    let cancelled = false;
+    void Promise.all(directHosts.map(async (host) => {
+      const result = host.relay
+        ? await probeRelayDesktopHost(host.relay).catch((): HostProbeResult => ({ status: 'unreachable', latencyMs: 0 }))
+        : await (async () => {
+          const url = normalizeHostUrl(getDesktopHostApiUrl(host));
+          if (!url) return { status: 'unreachable', latencyMs: 0 } as HostProbeResult;
+          return desktopHostProbe(url, { clientToken: host.clientToken || null, requestHeaders: host.requestHeaders || null })
+            .catch((): HostProbeResult => ({ status: 'unreachable', latencyMs: 0 }));
+        })();
+      return [host.id, result] as const;
+    })).then((entries) => {
+      if (cancelled) return;
+      setDirectHostStatus(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [directHosts, showInstanceManagement]);
 
   const loadRemoteClients = React.useCallback(async (options?: { silent?: boolean }) => {
     if (!clientAuth) return;
@@ -1428,36 +1460,63 @@ export const RemoteInstancesPage: React.FC = () => {
         ) : null}
 
         {showInstanceManagement ? <div data-settings-item="remote-instances.direct-hosts" className="mb-8 border-t border-[var(--surface-subtle)] pt-8">
-          <div className="mb-1 px-1 space-y-0.5">
-            <h3 className="typography-ui-header font-medium text-foreground">{t('settings.remoteInstances.direct.title')}</h3>
-            <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.direct.description')}</p>
+          <div className="mb-1 flex items-start justify-between gap-3 px-1">
+            <div className="min-w-0 space-y-0.5">
+              <h3 className="typography-ui-header font-medium text-foreground">{t('settings.remoteInstances.direct.title')}</h3>
+              <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.direct.description')}</p>
+            </div>
+            {/* Importing a pairing link is the flagship path; add-by-address is
+                the manual fallback. The token-storage note lives in the add
+                dialog next to the token field it describes. */}
+            <div className="flex shrink-0 items-center gap-2 pt-0.5">
+              <Button type="button" size="xs" className="!font-normal" onClick={() => setDirectImportDialogOpen(true)} disabled={directSaving}>
+                {t('settings.remoteInstances.direct.import.action')}
+              </Button>
+              <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => setDirectAddDialogOpen(true)} disabled={directSaving}>
+                <Icon name="add" className="h-3.5 w-3.5" />
+                {t('settings.remoteInstances.direct.actions.add')}
+              </Button>
+            </div>
           </div>
           <section className="px-2 pb-2 pt-0 space-y-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="typography-meta text-muted-foreground/70">{t('settings.remoteInstances.direct.note')}</p>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => setDirectImportDialogOpen(true)} disabled={directSaving}>
-                  {t('settings.remoteInstances.direct.import.action')}
-                </Button>
-                <Button type="button" size="xs" className="!font-normal" onClick={() => setDirectAddDialogOpen(true)} disabled={directSaving}>
-                  <Icon name="add" className="h-3.5 w-3.5" />
-                  {t('settings.remoteInstances.direct.actions.add')}
-                </Button>
-              </div>
-            </div>
-
             <div className="space-y-1">
               {directLoading ? (
                 <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.direct.state.loading')}</p>
               ) : directHosts.length === 0 ? (
                 <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.direct.state.empty')}</p>
-              ) : directHosts.map((host) => (
+              ) : directHosts.map((host) => {
+                const probe = directHostStatus[host.id];
+                const statusKey: I18nKey = !probe
+                  ? 'desktopHostSwitcher.status.checking'
+                  : probe.status === 'ok'
+                    ? 'desktopHostSwitcher.status.connected'
+                    : probe.status === 'auth'
+                      ? 'desktopHostSwitcher.status.authRequired'
+                      : probe.status === 'update-recommended'
+                        ? 'desktopHostSwitcher.status.updateRecommended'
+                        : probe.status === 'incompatible'
+                          ? 'desktopHostSwitcher.status.incompatible'
+                          : probe.status === 'wrong-service'
+                            ? 'desktopHostSwitcher.status.wrongService'
+                            : 'desktopHostSwitcher.status.unreachable';
+                const isOnline = probe?.status === 'ok';
+                return (
                 <div key={host.id} className="py-1.5">
                   <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-2">
+                          <span className={cn(
+                            'h-2 w-2 shrink-0 rounded-full',
+                            !probe ? 'bg-muted-foreground/30 animate-pulse' : isOnline ? 'bg-[var(--status-success)]' : 'bg-[var(--status-error)]',
+                          )} />
                           <p className="typography-ui-label text-foreground truncate">{redactSensitiveUrl(host.label)}</p>
-                          {directDefaultHostId === host.id ? <span className="typography-micro text-muted-foreground">{t('desktopHostSwitcher.header.default')}</span> : null}
+                          {directDefaultHostId === host.id ? <span className="typography-micro text-muted-foreground shrink-0">{t('desktopHostSwitcher.header.default')}</span> : null}
+                          <span className={cn('typography-micro shrink-0', isOnline ? 'text-[var(--status-success)]' : 'text-muted-foreground')}>
+                            {t(statusKey)}
+                            {isOnline && typeof probe?.latencyMs === 'number'
+                              ? t('desktopHostSwitcher.status.ping', { ms: Math.max(0, Math.round(probe.latencyMs)) })
+                              : ''}
+                          </span>
                         </div>
                         <p className={cn('typography-micro text-muted-foreground truncate', !host.relay && 'font-mono')}>
                           {host.relay ? t('mobile.connect.relay.badge') : redactSensitiveUrl(host.apiUrl || host.url)}
@@ -1483,7 +1542,8 @@ export const RemoteInstancesPage: React.FC = () => {
                       </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {directError ? <p className="typography-meta text-[var(--status-error)]">{directError}</p> : null}
@@ -1494,12 +1554,15 @@ export const RemoteInstancesPage: React.FC = () => {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>{t('settings.remoteInstances.direct.actions.add')}</DialogTitle>
-              <DialogDescription>{t('settings.remoteInstances.direct.description')}</DialogDescription>
+              <DialogDescription>{t('settings.remoteInstances.direct.addDialog.description')}</DialogDescription>
             </DialogHeader>
             <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void handleAddDirectHost(); }}>
               <Input className="h-8" value={directLabel} onChange={(event) => setDirectLabel(event.target.value)} placeholder={t('settings.remoteInstances.direct.field.labelPlaceholder')} disabled={directSaving} />
               <Input className="h-8" value={directUrl} onChange={(event) => setDirectUrl(event.target.value)} placeholder={t('settings.remoteInstances.direct.field.urlPlaceholder')} disabled={directSaving} autoFocus />
-              <Input className="h-8" value={directToken} onChange={(event) => setDirectToken(event.target.value)} placeholder={t('settings.remoteInstances.direct.field.tokenPlaceholder')} type="password" disabled={directSaving} />
+              <div className="space-y-1">
+                <Input className="h-8" value={directToken} onChange={(event) => setDirectToken(event.target.value)} placeholder={t('settings.remoteInstances.direct.field.tokenPlaceholder')} type="password" disabled={directSaving} />
+                <p className="px-1 typography-micro text-muted-foreground">{t('settings.remoteInstances.direct.note')}</p>
+              </div>
               <div className="space-y-2">
                 <div>
                   <p className="typography-ui-label text-foreground">{t('settings.remoteInstances.direct.headers.title')}</p>

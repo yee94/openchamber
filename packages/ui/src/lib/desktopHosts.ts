@@ -1,4 +1,5 @@
 import { hasDesktopInvoke, invokeDesktop } from '@/lib/desktop';
+import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 
 type DesktopInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -285,6 +286,27 @@ export const desktopInstallIdGet = async (): Promise<string> => {
   if (!invoke) return '';
   const raw = await invoke('desktop_install_id_get').catch(() => null);
   return typeof raw === 'string' ? raw.trim() : '';
+};
+
+/**
+ * Reachability check for a relay host: open a throwaway E2EE tunnel and hit
+ * /health. Relay hosts have no HTTP address for `desktopHostProbe`.
+ */
+export const probeRelayDesktopHost = async (relay: DesktopHostRelay): Promise<HostProbeResult> => {
+  const tunnel = createRelayTunnelClient({
+    relayUrl: relay.relayUrl,
+    serverId: relay.serverId,
+    hostEncPubJwk: relay.hostEncPubJwk,
+  });
+  const startedAt = Date.now();
+  try {
+    const response = await tunnel.fetch('/health');
+    return { status: response.ok ? 'ok' : 'unreachable', latencyMs: Math.max(0, Date.now() - startedAt) };
+  } catch {
+    return { status: 'unreachable', latencyMs: 0 };
+  } finally {
+    tunnel.close();
+  }
 };
 
 export const desktopHostProbe = async (url: string, options?: { clientToken?: string | null; requestHeaders?: Record<string, string> | null }): Promise<HostProbeResult> => {

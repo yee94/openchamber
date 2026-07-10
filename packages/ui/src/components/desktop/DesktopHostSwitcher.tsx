@@ -24,13 +24,12 @@ import {
   getDesktopHostApiUrl,
   locationMatchesHost,
   normalizeHostUrl,
+  probeRelayDesktopHost,
   redactSensitiveUrl,
   resolveDesktopHostUrl,
   type DesktopHost,
-  type DesktopHostRelay,
   type HostProbeResult,
 } from '@/lib/desktopHosts';
-import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import {
   desktopSshConnect,
@@ -47,26 +46,6 @@ const SSH_CONNECT_CANCELLED_ERROR = 'SSH connection cancelled';
 const runtimeKeyForHost = (host: DesktopHost): string => {
   if (host.id === LOCAL_HOST_ID) return 'local';
   return `host:${host.id}`;
-};
-
-// Quick reachability check for a relay host: open a throwaway E2EE tunnel and
-// hit /health. Confirms the relay routes to the (still-online) host before we
-// commit the runtime switch, so an offline host surfaces as an error instead of
-// a broken runtime. The steady-state tunnel is opened by switchRuntimeEndpoint.
-const probeRelayHost = async (relay: DesktopHostRelay): Promise<boolean> => {
-  const tunnel = createRelayTunnelClient({
-    relayUrl: relay.relayUrl,
-    serverId: relay.serverId,
-    hostEncPubJwk: relay.hostEncPubJwk,
-  });
-  try {
-    const response = await tunnel.fetch('/health');
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    tunnel.close();
-  }
 };
 
 type HostStatus = {
@@ -453,9 +432,8 @@ export function DesktopHostSwitcherDialog({
           // Relay hosts have no HTTP address to probe — check reachability
           // through a throwaway E2EE tunnel instead.
           if (h.relay) {
-            const startedAt = performance.now();
-            const ok = await probeRelayHost(h.relay).catch(() => false);
-            return [h.id, { status: ok ? ('ok' as const) : ('unreachable' as const), latencyMs: Math.round(performance.now() - startedAt) } satisfies HostStatus] as const;
+            const res = await probeRelayDesktopHost(h.relay).catch((): HostProbeResult => ({ status: 'unreachable', latencyMs: 0 }));
+            return [h.id, { status: res.status, latencyMs: res.latencyMs } satisfies HostStatus] as const;
           }
           const url = normalizeHostUrl(isElectronShell() ? getDesktopHostApiUrl(h) : h.url);
           if (!url) {
@@ -527,10 +505,11 @@ export function DesktopHostSwitcherDialog({
     // fetch/socket layers route through the tunnel from the singleton registry.
     if (host.relay) {
       setSwitchingHostId(host.id);
-      const reachable = await probeRelayHost(host.relay).catch(() => false);
+      const probe = await probeRelayDesktopHost(host.relay).catch((): HostProbeResult => ({ status: 'unreachable', latencyMs: 0 }));
+      const reachable = probe.status === 'ok';
       setStatusById((prev) => ({
         ...prev,
-        [host.id]: { status: reachable ? 'ok' : 'unreachable', latencyMs: 0 },
+        [host.id]: { status: probe.status, latencyMs: probe.latencyMs },
       }));
       if (!reachable) {
         toast.error(t('desktopHostSwitcher.toast.instanceUnreachable', { host: redactSensitiveUrl(host.label) }));
