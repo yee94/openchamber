@@ -40,13 +40,25 @@ The same physical device keeps one entry even if it signs in again later — you
 
 ## Connect from the command line
 
-If the server runs headless (no UI open), create a connection link from a terminal on that machine:
+If the server runs headless (no UI open), create a connection link from a terminal on that machine.
+
+For a device on the same network:
 
 ```bash
 openchamber connect-url --port 3000 --qr
 ```
 
-The printed link and QR code work exactly like the ones from the settings dialog.
+For a device that should connect from **anywhere** — the equivalent of picking **Anywhere** in the dialog:
+
+```bash
+openchamber connect-url --relay --qr
+```
+
+A `--relay` link carries both routes, just like the dialog: the device connects directly over your local network when it can reach the server, and falls back to the [Private Relay](/private-relay/) when away. The relay starts on its own: a running instance picks the link up within a minute, a stopped one on its next launch.
+
+> The direct route only works if the server actually listens on your network. By default OpenChamber listens on the machine itself only — start it with `--lan` to make it reachable over Wi-Fi. The command warns you (`[LAN_UNREACHABLE]`) when the link's direct route won't be usable from other devices; a `--relay` link still works then, just always through the relay.
+
+The printed link and QR code work exactly like the ones from the settings dialog — single-use, expiring, revocable.
 
 ## Related
 

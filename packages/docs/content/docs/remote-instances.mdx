@@ -36,7 +36,7 @@ You can also create a link from a terminal on the remote machine:
 openchamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
-`connect-url` starts the server first if nothing is running on that port. Add `--api-only` for a headless server, `--lan` to bind to the LAN when starting, `--ui-password` to protect browser access, and `--name` to label the saved connection.
+`connect-url` starts the server first if nothing is running on that port. Add `--api-only` for a headless server, `--lan` to bind to the LAN when starting, `--ui-password` to protect browser access, and `--name` to label the saved connection. Add `--relay` for a link that also works away from the local network: the device prefers the direct connection when reachable and falls back to the [Private Relay](/private-relay/) — the instance brings the relay up on its own.
 
 The generated link contains a single-use pairing secret. Once imported, the device holds its own client token — separate from the browser UI password — which survives server restarts until you revoke it on the issuing server.
 

@@ -40,13 +40,25 @@ To samo fizyczne urządzenie zachowuje jeden wpis, nawet jeśli zaloguje się po
 
 ## Połącz z wiersza poleceń
 
-Jeśli serwer działa headless (bez otwartego UI), utwórz link połączenia z terminala na tej maszynie:
+Jeśli serwer działa headless (bez otwartego UI), utwórz link połączenia z terminala na tej maszynie.
+
+Dla urządzenia w tej samej sieci:
 
 ```bash
 openchamber connect-url --port 3000 --qr
 ```
 
-Wypisany link i kod QR działają dokładnie tak samo jak te z okna ustawień.
+Dla urządzenia, które ma łączyć się **z dowolnego miejsca** — odpowiednik wybrania opcji **Wszędzie** w oknie dialogowym:
+
+```bash
+openchamber connect-url --relay --qr
+```
+
+Link `--relay` zawiera obie trasy, dokładnie jak okno dialogowe: urządzenie łączy się bezpośrednio przez sieć lokalną, gdy może dotrzeć do serwera, a poza domem przełącza się na [Private Relay](/pl/private-relay/). Relay uruchamia się sam: działająca instancja podejmuje link w ciągu minuty, a zatrzymana — przy następnym starcie.
+
+> Trasa bezpośrednia działa tylko wtedy, gdy serwer rzeczywiście nasłuchuje w Twojej sieci. Domyślnie OpenChamber nasłuchuje wyłącznie na samej maszynie — uruchom go z `--lan`, aby był osiągalny przez Wi-Fi. Polecenie ostrzega (`[LAN_UNREACHABLE]`), gdy trasa bezpośrednia linku nie będzie użyteczna z innych urządzeń; link `--relay` nadal wtedy działa, tyle że zawsze przez relay.
+
+Wypisany link i kod QR działają dokładnie tak samo jak te z okna ustawień — są jednorazowe, wygasają i można je unieważnić.
 
 ## Powiązane
 

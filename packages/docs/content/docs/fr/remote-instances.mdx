@@ -36,7 +36,7 @@ Vous pouvez aussi créer un lien depuis un terminal sur la machine distante :
 openchamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
-`connect-url` démarre d’abord le serveur si rien ne tourne sur ce port. Ajoutez `--api-only` pour un serveur headless, `--lan` pour écouter sur le LAN au démarrage, `--ui-password` pour protéger l’accès navigateur et `--name` pour nommer la connexion enregistrée.
+`connect-url` démarre d’abord le serveur si rien ne tourne sur ce port. Ajoutez `--api-only` pour un serveur headless, `--lan` pour écouter sur le LAN au démarrage, `--ui-password` pour protéger l’accès navigateur et `--name` pour nommer la connexion enregistrée. Ajoutez `--relay` pour un lien qui fonctionne aussi hors du réseau local : l’appareil préfère la connexion directe quand elle est joignable et bascule sur le [Relais privé](/private-relay/) — l’instance active le relais toute seule.
 
 Le lien généré contient un secret d’association à usage unique. Une fois importé, l’appareil détient son propre token client — séparé du mot de passe de l’UI navigateur — qui survit aux redémarrages du serveur jusqu’à révocation sur le serveur émetteur.
 

@@ -1508,6 +1508,15 @@ async function main(options = {}) {
   // device/session exists, stop it (and clear a stale enabled flag) otherwise.
   void relayService.reconcile();
 
+  // Relay demand can change outside our routes: `openchamber connect-url
+  // --relay` writes a pending relay session straight to the on-disk store, and
+  // pending sessions expire without any request hitting us. Poll reconcile so a
+  // headless instance picks the relay up (or drops it) within a minute.
+  const relayReconcileTimer = setInterval(() => {
+    void relayService.reconcile();
+  }, 60_000);
+  relayReconcileTimer.unref?.();
+
   return {
     expressApp: app,
     httpServer: server,
@@ -1538,6 +1547,7 @@ async function main(options = {}) {
     },
     stop: (shutdownOptions = {}) => {
       realtimeProxyRuntime.stop();
+      clearInterval(relayReconcileTimer);
       try {
         relayService.stop();
       } catch {

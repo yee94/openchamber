@@ -36,7 +36,7 @@ OpenChamber 会引导你完成各个步骤 — 检查连接、设置远程、启
 openchamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
-如果该端口上没有服务器，`connect-url` 会先启动服务器。使用 `--api-only` 可启动 headless 服务器，`--lan` 可在启动时绑定到 LAN，`--ui-password` 可保护浏览器访问，`--name` 可为保存的连接命名。
+如果该端口上没有服务器，`connect-url` 会先启动服务器。使用 `--api-only` 可启动 headless 服务器，`--lan` 可在启动时绑定到 LAN，`--ui-password` 可保护浏览器访问，`--name` 可为保存的连接命名。加上 `--relay` 可生成一条在本地网络之外也能使用的链接：设备在可达时优先直连，否则回退到 [Private Relay](/zh-cn/private-relay/) — 实例会自行启动中继。
 
 生成的链接包含一个一次性配对密钥。导入后，设备会持有自己的 client token — 独立于浏览器 UI 密码 — 它会在服务器重启后继续有效，直到你在签发它的服务器上撤销它。
 

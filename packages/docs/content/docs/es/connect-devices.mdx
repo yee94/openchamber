@@ -40,13 +40,25 @@ El mismo dispositivo físico mantiene una sola entrada aunque vuelva a iniciar s
 
 ## Conecta desde la línea de comandos
 
-Si el servidor funciona en modo headless (sin UI abierta), crea un enlace de conexión desde una terminal en esa máquina:
+Si el servidor funciona en modo headless (sin UI abierta), crea un enlace de conexión desde una terminal en esa máquina.
+
+Para un dispositivo en la misma red:
 
 ```bash
 openchamber connect-url --port 3000 --qr
 ```
 
-El enlace y el código QR impresos funcionan exactamente igual que los del diálogo de ajustes.
+Para un dispositivo que debe conectarse desde **cualquier lugar** —el equivalente a elegir **En cualquier lugar** en el diálogo—:
+
+```bash
+openchamber connect-url --relay --qr
+```
+
+Un enlace `--relay` lleva ambas rutas, igual que el diálogo: el dispositivo se conecta directamente por tu red local cuando puede alcanzar el servidor, y recurre al [Private Relay](/es/private-relay/) cuando está fuera. El relay arranca por sí solo: una instancia en marcha recoge el enlace en menos de un minuto, y una detenida lo hace en su próximo arranque.
+
+> La ruta directa solo funciona si el servidor realmente escucha en tu red. De forma predeterminada, OpenChamber solo escucha en la propia máquina; inícialo con `--lan` para que sea accesible por Wi-Fi. El comando te avisa (`[LAN_UNREACHABLE]`) cuando la ruta directa del enlace no será utilizable desde otros dispositivos; un enlace `--relay` sigue funcionando en ese caso, solo que siempre a través del relay.
+
+El enlace y el código QR impresos funcionan exactamente igual que los del diálogo de ajustes: de un solo uso, con caducidad y revocables.
 
 ## Relacionado
 
