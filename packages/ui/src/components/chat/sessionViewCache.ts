@@ -1,4 +1,5 @@
 export type SessionViewSelection = {
+    runtimeKey: string;
     sessionId: string;
     directory: string | null;
 };
@@ -20,8 +21,8 @@ const normalizeEstimatedBytes = (estimatedBytes: number): number => {
     return Math.ceil(estimatedBytes);
 };
 
-export const createSessionViewKey = ({ sessionId, directory }: SessionViewSelection): string => {
-    return JSON.stringify([directory ?? '', sessionId]);
+export const createSessionViewKey = ({ runtimeKey, sessionId, directory }: SessionViewSelection): string => {
+    return JSON.stringify([runtimeKey, directory ?? '', sessionId]);
 };
 
 const enforceSessionViewCacheLimits = (
@@ -31,8 +32,12 @@ const enforceSessionViewCacheLimits = (
 ): SessionViewCacheEntry[] => {
     const maxEntries = Math.max(1, Math.floor(limits.maxEntries));
     const maxEstimatedBytes = Math.max(0, limits.maxEstimatedBytes);
+    let totalEstimatedBytes = entries.reduce((total, entry) => total + entry.estimatedBytes, 0);
+    if (entries.length <= maxEntries && totalEstimatedBytes <= maxEstimatedBytes) {
+        return entries;
+    }
+
     const next = [...entries];
-    let totalEstimatedBytes = next.reduce((total, entry) => total + entry.estimatedBytes, 0);
 
     while (next.length > maxEntries || totalEstimatedBytes > maxEstimatedBytes) {
         const evictionIndex = next.findIndex((entry) => entry.key !== activeKey);

@@ -52,6 +52,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { useShallow } from 'zustand/react/shallow';
 import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { markSessionSwitchContentCommitted } from '@/lib/sessionSwitchPerf';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import {
     createSessionViewKey,
     reconcileSessionViewCache,
@@ -76,6 +77,9 @@ const DESKTOP_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
 const CONSTRAINED_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
     maxEntries: 2,
     maxEstimatedBytes: 20 * MEBIBYTE,
+};
+const subscribeRuntimeKey = (notify: () => void): (() => void) => {
+    return subscribeRuntimeEndpointChanged(() => notify());
 };
 const CHAT_SCROLL_STYLE = {
     overflowAnchor: 'none',
@@ -1054,7 +1058,8 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 	);
 };
 
-export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
+const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: string }> = ({ runtimeKey, ...props }) => {
+    const chatSurfaceMode = useChatSurfaceMode();
     const selectedSession = useSessionUIStore(
         useShallow((state) => ({
             sessionId: state.currentSessionId,
@@ -1066,12 +1071,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
             return null;
         }
         return {
+            runtimeKey,
             sessionId: selectedSession.sessionId,
             directory: selectedSession.directory,
         };
-    }, [selectedSession.directory, selectedSession.sessionId]);
+    }, [runtimeKey, selectedSession.directory, selectedSession.sessionId]);
     const selectionKey = selectedSessionView ? createSessionViewKey(selectedSessionView) : null;
-    const cacheLimits = isMobileSurfaceRuntime() || isVSCodeRuntime()
+    const cacheLimits = isMobileSurfaceRuntime() || isVSCodeRuntime() || chatSurfaceMode === 'mini-chat'
         ? CONSTRAINED_SESSION_VIEW_CACHE_LIMITS
         : DESKTOP_SESSION_VIEW_CACHE_LIMITS;
     const [renderedSelection, setRenderedSelection] = React.useState<SessionViewSelection | null>(selectedSessionView);
@@ -1084,23 +1090,35 @@ export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
             DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
         )
         : []);
+    const renderedSessionViews = React.useMemo(
+        () => [...cachedSessionViews].sort((left, right) => left.key.localeCompare(right.key)),
+        [cachedSessionViews],
+    );
     const isSwitchingSession = renderedSelectionKey !== selectionKey;
     const activeSessionViewKey = isSwitchingSession ? null : renderedSelectionKey;
+    const latestSelectionKeyRef = React.useRef(selectionKey);
+    latestSelectionKeyRef.current = selectionKey;
 
     React.useEffect(() => {
         if (!isSwitchingSession) {
             return;
         }
+        const scheduledSelection = selectedSessionView;
+        const scheduledSelectionKey = selectionKey;
         return scheduleAfterPaintTask(() => {
             React.startTransition(() => {
-                setRenderedSelection(selectedSessionView);
-                if (selectedSessionView) {
-                    setCachedSessionViews((current) => reconcileSessionViewCache(
-                        current,
-                        selectedSessionView,
-                        cacheLimits,
-                        DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
-                    ));
+                setRenderedSelection((current) => latestSelectionKeyRef.current === scheduledSelectionKey
+                    ? scheduledSelection
+                    : current);
+                if (scheduledSelection) {
+                    setCachedSessionViews((current) => latestSelectionKeyRef.current === scheduledSelectionKey
+                        ? reconcileSessionViewCache(
+                            current,
+                            scheduledSelection,
+                            cacheLimits,
+                            DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
+                        )
+                        : current);
                 }
             });
         });
@@ -1118,7 +1136,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
 
     return (
         <div className="h-full bg-background" aria-busy={isSwitchingSession || undefined}>
-            {cachedSessionViews.map((view) => (
+            {renderedSessionViews.map((view) => (
                 <React.Activity
                     key={view.key}
                     name={`chat-session-${view.sessionId}`}
@@ -1142,4 +1160,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
             ) : null}
         </div>
     );
+};
+
+export const ChatContainer: React.FC<ChatContainerProps> = (props) => {
+    const runtimeKey = React.useSyncExternalStore(
+        subscribeRuntimeKey,
+        getRuntimeKey,
+        getRuntimeKey,
+    );
+
+    return <RuntimeScopedChatContainer key={runtimeKey} {...props} runtimeKey={runtimeKey} />;
 };

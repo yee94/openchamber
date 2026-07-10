@@ -92,6 +92,33 @@ The trace showed four causal groups:
 - Turn projection cache keys are computed once per projection attempt instead of
   twice on a miss.
 
+### LRU session views
+
+- Previously, `ChatContainerContent` was keyed directly by the selected session,
+  so every switch destroyed the old React tree. The chat shell now retains
+  recently visited session views behind React `Activity` boundaries. Returning
+  A → B → A reuses A's existing React state and DOM instead of remounting it.
+- Hidden activities are not merely transparent or moved offscreen: React applies
+  `display: none` and disconnects their effects and external-store subscriptions.
+  This preserves local view state without letting every cached chat continue its
+  full live workload in the background.
+- Cache identity includes runtime, directory, and session ID. A runtime endpoint
+  change remounts the runtime-scoped cache, so a remote host cannot inherit local
+  composer, timeline, or DOM state even if IDs and paths happen to match. LRU
+  recency is maintained independently from DOM order so a cache hit does not move
+  a large hidden DOM subtree just to update ranking.
+- Desktop keeps at most 4 views / 48 MiB estimated footprint. Mobile, VS Code, and
+  mini-chat keep at most 2 views / 20 MiB. The active view is never evicted; the
+  oldest inactive view is removed when either limit is exceeded.
+- View weight is bucketed from message count and capped at 16 MiB per view. The
+  coarse buckets avoid publishing cache-state updates on every streaming token or
+  message-part delta.
+- A latest-selection generation check is repeated inside transition state updaters,
+  preventing an interrupted A → B → A switch from committing stale B later.
+- Runtime manifests now require React/React DOM 19.2, the first stable release that
+  exposes `Activity`; this avoids relying on the lockfile accidentally supplying a
+  newer runtime than the declared minimum.
+
 ## Optimized verification
 
 Environment: the same local data, React StrictMode, Vite development server,
@@ -131,7 +158,10 @@ that trace.
 | Content commit median < 200 ms | Pass: 142.9 ms |
 | Content commit p95 < 350 ms | Pass: 312.1 ms |
 | Rapid switch keeps only latest authority commit | Pass: unit test |
+| Delayed content transition cannot restore an intermediate session | Pass: 80 ms B → A interactive race check |
 | Historical rich work is cancellable and frame-budgeted | Pass: unit tests + interactive run |
+| A → B → A retains the original chat view | Pass: LRU identity test + interactive Activity DOM check |
+| Session view cache is count- and byte-bounded | Pass: unit tests |
 | UI type-check | Pass |
 | Edited-file lint | Pass |
 
@@ -144,6 +174,7 @@ bun test \
   packages/ui/src/components/chat/hooks/useTurnRecords.test.ts \
   packages/ui/src/components/chat/lib/historyOverscan.test.ts \
   packages/ui/src/components/chat/lib/turns/turnProjectionCache.test.ts \
+  packages/ui/src/components/chat/sessionViewCache.test.ts \
   packages/ui/src/components/session/sidebar/sidebarVisualSelection.test.ts \
   packages/ui/src/components/session/sidebar/hooks/useProjectSessionSelection.test.ts
 

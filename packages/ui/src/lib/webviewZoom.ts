@@ -62,9 +62,14 @@ export const restoreWebviewZoomFactor = (): void => {
 /** Increase Chromium/webview zoom (desktop IPC or CSS zoom fallback). */
 export const zoomWebviewIn = async (): Promise<number> => {
   if (canUseElectronDesktopIPC()) {
-    const result = await invokeDesktop<number>('desktop_zoom_in');
-    if (typeof result === 'number' && Number.isFinite(result)) {
-      return clampZoomFactor(result);
+    try {
+      const result = await invokeDesktop<number>('desktop_zoom_in');
+      if (typeof result === 'number' && Number.isFinite(result)) {
+        return clampZoomFactor(result);
+      }
+    } catch (error) {
+      // Old Electron main without desktop_zoom_* — fall through to CSS zoom.
+      console.warn('[webview-zoom] desktop_zoom_in failed, using CSS zoom', error);
     }
   }
   return applyCssZoomFactor(readCssZoomFactor() + WEBVIEW_ZOOM_STEP);
@@ -73,9 +78,13 @@ export const zoomWebviewIn = async (): Promise<number> => {
 /** Decrease Chromium/webview zoom (desktop IPC or CSS zoom fallback). */
 export const zoomWebviewOut = async (): Promise<number> => {
   if (canUseElectronDesktopIPC()) {
-    const result = await invokeDesktop<number>('desktop_zoom_out');
-    if (typeof result === 'number' && Number.isFinite(result)) {
-      return clampZoomFactor(result);
+    try {
+      const result = await invokeDesktop<number>('desktop_zoom_out');
+      if (typeof result === 'number' && Number.isFinite(result)) {
+        return clampZoomFactor(result);
+      }
+    } catch (error) {
+      console.warn('[webview-zoom] desktop_zoom_out failed, using CSS zoom', error);
     }
   }
   return applyCssZoomFactor(readCssZoomFactor() - WEBVIEW_ZOOM_STEP);
@@ -84,9 +93,13 @@ export const zoomWebviewOut = async (): Promise<number> => {
 /** Reset Chromium/webview zoom to 100%. */
 export const resetWebviewZoom = async (): Promise<number> => {
   if (canUseElectronDesktopIPC()) {
-    const result = await invokeDesktop<number>('desktop_zoom_reset');
-    if (typeof result === 'number' && Number.isFinite(result)) {
-      return clampZoomFactor(result);
+    try {
+      const result = await invokeDesktop<number>('desktop_zoom_reset');
+      if (typeof result === 'number' && Number.isFinite(result)) {
+        return clampZoomFactor(result);
+      }
+    } catch (error) {
+      console.warn('[webview-zoom] desktop_zoom_reset failed, using CSS zoom', error);
     }
   }
   return applyCssZoomFactor(WEBVIEW_ZOOM_DEFAULT);
