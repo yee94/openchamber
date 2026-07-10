@@ -31,7 +31,7 @@ export const SidebarBrandMark: React.FC = () => {
         {/* 前半段：主色前景，对应 Codex 里偏亮的产品名 */}
         <span className="text-foreground">YEE</span>
         {/* 后半段：主题 primary 点缀，对应 Codex 里偏紫的副名 */}
-        <span className="text-primary">WANG</span>
+        <span className="text-primary">CODE</span>
       </span>
     </div>
   );

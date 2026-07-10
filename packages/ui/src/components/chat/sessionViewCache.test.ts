@@ -13,12 +13,21 @@ const limits = (maxEntries: number, maxEstimatedBytes: number): SessionViewCache
     maxEstimatedBytes,
 });
 
-const selection = (sessionId: string, directory: string) => ({ sessionId, directory });
+const selection = (sessionId: string, directory: string, runtimeKey = 'runtime-a') => ({
+    runtimeKey,
+    sessionId,
+    directory,
+});
 
 describe('sessionViewCache', () => {
     test('includes the directory in the cache key', () => {
         expect(createSessionViewKey(selection('session-1', '/repo/a')))
             .not.toBe(createSessionViewKey(selection('session-1', '/repo/b')));
+    });
+
+    test('includes the runtime identity in the cache key', () => {
+        expect(createSessionViewKey(selection('session-1', '/repo', 'runtime-a')))
+            .not.toBe(createSessionViewKey(selection('session-1', '/repo', 'runtime-b')));
     });
 
     test('reuses the same entry and promotes it on A → B → A', () => {
@@ -63,5 +72,15 @@ describe('sessionViewCache', () => {
 
         expect(entries.map((entry) => entry.sessionId)).toEqual(['b']);
         expect(entries[0]?.estimatedBytes).toBe(20);
+    });
+
+    test('preserves the cache array when an estimate is unchanged', () => {
+        const cacheLimits = limits(4, 64);
+        const entries = reconcileSessionViewCache([], selection('a', '/repo'), cacheLimits, 8);
+        const activeKey = createSessionViewKey(selection('a', '/repo'));
+
+        const unchanged = updateSessionViewEstimate(entries, activeKey, 8, activeKey, cacheLimits);
+
+        expect(unchanged).toBe(entries);
     });
 });
