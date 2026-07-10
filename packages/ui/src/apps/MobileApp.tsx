@@ -242,9 +242,10 @@ const useNativeMobileChrome = (): void => {
       const platform = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.();
       const applyStatusBar = async () => {
         if (platform === 'android') {
-          // Android doesn't feed env(safe-area-inset-top) to CSS, so overlaying the status bar
-          // makes content render under it. Inset the WebView below the bar instead and paint the
-          // bar with the resolved theme background (the splash colours the theme system persists).
+          // Inset the WebView below the bar and paint it with the resolved theme background
+          // (the splash colours the theme system persists). On Android 15+ edge-to-edge is
+          // enforced and both calls are no-ops — there the app pads itself via the
+          // Capacitor-injected --safe-area-inset-* CSS vars (see mobile.css, oc-platform-android).
           const isDark = document.documentElement.classList.contains('dark');
           const themeBg =
             (isDark ? localStorage.getItem('splashBgDark') : localStorage.getItem('splashBgLight')) ||
@@ -763,7 +764,7 @@ const MobileConnectionWelcome: React.FC<{ onConnected: () => void }> = ({ onConn
   }, [conn]);
 
   return (
-    <main className="oc-keyboard-fill-screen flex min-h-dvh flex-col overflow-y-auto bg-background px-6 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-[calc(env(safe-area-inset-top)+28px)] text-foreground">
+    <main className="oc-keyboard-fill-screen flex min-h-dvh flex-col overflow-y-auto bg-background px-6 pb-[calc(var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))+28px)] pt-[calc(var(--safe-area-inset-top,env(safe-area-inset-top,0px))+28px)] text-foreground">
       <div className="m-auto flex w-full max-w-[360px] shrink-0 flex-col items-center gap-9 py-8">
         <div className="flex flex-col items-center gap-5 text-center">
           <OpenChamberLogo width={72} height={72} className="size-[72px]" />
