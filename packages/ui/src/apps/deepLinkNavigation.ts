@@ -42,14 +42,23 @@ const execute = (intent: DeepLinkIntent): boolean => {
 
     case 'new-session': {
       const store = useSessionUIStore.getState();
-      store.openNewSessionDraft();
-      if (intent.directory || intent.projectId) {
-        store.setNewSessionDraftTarget({
-          directoryOverride: intent.directory ?? null,
-          projectId: intent.projectId ?? null,
-          selectedProjectId: intent.projectId ?? null,
-        });
-      }
+      store.openNewSessionDraft({
+        directoryOverride: intent.directory ?? null,
+        selectedProjectId: intent.projectId ?? null,
+        preserveDirectoryOverride: Boolean(intent.directory),
+        initialPrompt: intent.prompt,
+      });
+      return true;
+    }
+
+    case 'open-project': {
+      // Desktop/Electron also listens for this DOM event; on mobile we open a
+      // draft targeted at the directory so the user lands in a usable composer.
+      const store = useSessionUIStore.getState();
+      store.openNewSessionDraft({
+        directoryOverride: intent.directory,
+        preserveDirectoryOverride: true,
+      });
       return true;
     }
 

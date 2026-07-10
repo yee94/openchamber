@@ -646,19 +646,23 @@ function App({ apis }: AppProps) {
     if (typeof window === 'undefined') return;
 
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ directory?: string; projectId?: string }>).detail;
+      const detail = (event as CustomEvent<{ directory?: string; projectId?: string; initialPrompt?: string }>).detail;
       const directory = typeof detail?.directory === 'string' && detail.directory.trim().length > 0
         ? detail.directory.trim()
         : null;
       const projectId = typeof detail?.projectId === 'string' && detail.projectId.trim().length > 0
         ? detail.projectId.trim()
         : null;
+      const initialPrompt = typeof detail?.initialPrompt === 'string' && detail.initialPrompt.trim().length > 0
+        ? detail.initialPrompt.trim()
+        : undefined;
       useUIStore.getState().setActiveMainTab('chat');
       useUIStore.getState().setSessionSwitcherOpen(false);
       useSessionUIStore.getState().openNewSessionDraft({
         selectedProjectId: projectId,
         directoryOverride: directory,
         preserveDirectoryOverride: Boolean(directory),
+        initialPrompt,
       });
     };
 

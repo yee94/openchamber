@@ -1,22 +1,11 @@
 import React from 'react';
 import { File as PierreFile } from '@pierre/diffs/react';
-import {
-  RiArrowLeftLine,
-  RiArrowRightSLine,
-  RiClipboardLine,
-  RiCloseLine,
-  RiFileCopyLine,
-  RiFolder3Fill,
-  RiFolderOpenFill,
-  RiLoader4Line,
-  RiRefreshLine,
-  RiSearchLine,
-} from '@remixicon/react';
 
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
+import { Icon } from '@/components/icon/Icon';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
@@ -275,7 +264,7 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
             onClick={onClose}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiCloseLine className="size-5" />
+            <Icon name="close" className="size-5" />
           </button>
         ) : null}
         {canGoBack && parentDirectory ? (
@@ -286,7 +275,7 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
             onClick={() => openDirectory(parentDirectory)}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiArrowLeftLine className="size-5" />
+            <Icon name="arrow-left" className="size-5" />
           </button>
         ) : null}
         <div className="min-w-0 flex-1 px-1">
@@ -299,12 +288,12 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
           onClick={() => void loadDirectory(route.directory)}
           style={{ touchAction: 'manipulation' }}
         >
-          <RiRefreshLine className={cn('size-5', isLoadingDirectory && 'animate-spin')} />
+          <Icon name="refresh" className={cn('size-5', isLoadingDirectory && 'animate-spin')} />
         </button>
       </header>
       <div className="shrink-0 px-4 pb-2 pt-1">
         <div className="relative">
-          <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -355,13 +344,13 @@ const MobileFileRow: React.FC<{
     style={{ touchAction: 'manipulation' }}
   >
     {directory ? (
-      <RiFolder3Fill className="size-5 shrink-0 text-primary/80" />
+      <Icon name="folder-3-fill" className="size-5 shrink-0 text-primary/80" />
     ) : (
       <FileTypeIcon filePath={path} className="size-5 shrink-0" />
     )}
     <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">{name}</span>
     {meta ? <span className="shrink-0 typography-micro text-muted-foreground">{meta}</span> : null}
-    {directory ? <RiArrowRightSLine className="size-4 shrink-0 text-muted-foreground/60" /> : null}
+    {directory ? <Icon name="arrow-right-s" className="size-4 shrink-0 text-muted-foreground/60" /> : null}
   </button>
 );
 
@@ -434,18 +423,18 @@ const MobileFileDetail: React.FC<{
           aria-label={t('header.actions.backAria')}
           onClick={onBack}
         >
-          <RiArrowLeftLine className="size-5" />
+          <Icon name="arrow-left" className="size-5" />
         </button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate typography-ui-header text-foreground">{getNameFromPath(path)}</h2>
         </div>
         {!isImageFile(path) ? (
           <Button type="button" variant="ghost" size="icon" onClick={onCopyContent} aria-label={t('mobile.files.copyContentAria')}>
-            <RiFileCopyLine className="size-4" />
+            <Icon name="file-copy" className="size-4" />
           </Button>
         ) : null}
         <Button type="button" variant="ghost" size="icon" onClick={onCopyPath} aria-label={t('mobile.files.copyPathAria')}>
-          <RiClipboardLine className="size-4" />
+          <Icon name="clipboard" className="size-4" />
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -527,7 +516,7 @@ const MobileTextFile: React.FC<{ path: string; content: string }> = ({ path, con
 const MobileFilesState: React.FC<{ message: string; loading?: boolean }> = ({ message, loading = false }) => (
   <div className="flex h-full items-center justify-center px-6 text-center">
     <div className="flex max-w-sm flex-col items-center gap-2">
-      {loading ? <RiLoader4Line className="size-5 animate-spin text-muted-foreground" /> : <RiFolderOpenFill className="size-6 text-muted-foreground" />}
+      {loading ? <Icon name="loader-4" className="size-5 animate-spin text-muted-foreground" /> : <Icon name="folder-open-fill" className="size-6 text-muted-foreground" />}
       <p className="typography-ui-label font-semibold text-foreground">{message}</p>
     </div>
   </div>

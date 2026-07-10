@@ -591,7 +591,8 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     vars.push('  --ui-caption-font-weight: var(--ui-regular-font-weight, 400);');
 
      vars.push('  /* Markdown line height and letter spacing */');
-     vars.push('  --markdown-body-line-height: 1.5rem;');
+     // Codex App chat body uses Tailwind leading-relaxed (1.625) on text-size-chat.
+     vars.push('  --markdown-body-line-height: 1.625;');
      vars.push('  --markdown-body-letter-spacing: 0;');
      vars.push('  --markdown-body-font-weight: var(--ui-regular-font-weight, 400);');
      vars.push('  --markdown-h1-line-height: 1.25rem;');
@@ -606,20 +607,21 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
      vars.push('  --markdown-h5-letter-spacing: 0;');
      vars.push('  --markdown-h6-line-height: 1.5rem;');
      vars.push('  --markdown-h6-letter-spacing: 0.01em;');
-    vars.push('  --markdown-list-line-height: 1.375rem;');
+    // Keep list leading in lockstep with body (Codex does not tighten li line-height).
+    vars.push('  --markdown-list-line-height: 1.625;');
     vars.push('  --markdown-code-block-line-height: 1rem;');
 
     vars.push('  --ui-button-small-line-height: 1.25rem;');
     vars.push('  --ui-button-small-letter-spacing: 0.02em;');
     vars.push('  --ui-button-small-font-weight: 500;');
-    vars.push('  --markdown-body-small-line-height: 1.375rem;');
+    vars.push('  --markdown-body-small-line-height: 1.5;');
     vars.push('  --markdown-body-small-letter-spacing: 0;');
     vars.push('  --markdown-body-small-font-weight: var(--ui-regular-font-weight, 400);');
 
     vars.push('  --ui-button-large-line-height: 1.5rem;');
     vars.push('  --ui-button-large-letter-spacing: 0.02em;');
     vars.push('  --ui-button-large-font-weight: 500;');
-    vars.push('  --markdown-body-large-line-height: 1.625rem;');
+    vars.push('  --markdown-body-large-line-height: 1.625;');
     vars.push('  --markdown-body-large-letter-spacing: 0;');
     vars.push('  --markdown-body-large-font-weight: var(--ui-regular-font-weight, 400);');
 
@@ -649,12 +651,12 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     vars.push('  --ui-helper-text-font-weight: var(--ui-regular-font-weight, 400);');
 
     vars.push('  /* Additional markdown line height and letter spacing */');
-    vars.push('  --markdown-blockquote-line-height: 1.5rem;');
+    vars.push('  --markdown-blockquote-line-height: 1.625;');
     vars.push('  --markdown-blockquote-letter-spacing: 0;');
     vars.push('  --markdown-blockquote-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --markdown-list-letter-spacing: 0;');
     vars.push('  --markdown-list-font-weight: var(--ui-regular-font-weight, 400);');
-    vars.push('  --markdown-link-line-height: 1.5rem;');
+    vars.push('  --markdown-link-line-height: 1.625;');
     vars.push('  --markdown-link-letter-spacing: 0;');
     vars.push('  --markdown-link-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --markdown-code-line-height: 1.35;');

@@ -5,6 +5,9 @@ import type { IconName } from "./icons"
 
 const SPRITE_ID = "openchamber-icon-sprite"
 
+/** Codex/Lucide-style stroke weight (Lucide default is 2; thinner reads more refined). */
+export const ICON_STROKE_WIDTH = 1.5
+
 let spriteInjected = false
 
 function ensureSpriteOnce() {
@@ -23,8 +26,13 @@ function ensureSpriteOnce() {
   svg.id = SPRITE_ID
   svg.setAttribute("aria-hidden", "true")
   svg.style.display = "none"
+  // Stroke presentation lives on each <symbol> so <use> clones inherit Lucide geometry
+  // with our thinner Codex-style weight, independent of parent CSS fill hacks.
   svg.innerHTML = Object.entries(iconSpriteData)
-    .map(([name, content]) => `<symbol id="oc-${name}" viewBox="0 0 24 24">${content}</symbol>`)
+    .map(
+      ([name, content]) =>
+        `<symbol id="oc-${name}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${ICON_STROKE_WIDTH}" stroke-linecap="round" stroke-linejoin="round">${content}</symbol>`
+    )
     .join("")
   body.insertBefore(svg, body.firstChild)
   spriteInjected = true
@@ -43,9 +51,14 @@ export const Icon = React.memo(({ name, className, ...rest }: IconProps) => {
 
   return (
     <svg
-      className={cn("remixicon", className)}
+      className={cn("oc-icon", className)}
       viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={ICON_STROKE_WIDTH}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
       {...rest}
     >

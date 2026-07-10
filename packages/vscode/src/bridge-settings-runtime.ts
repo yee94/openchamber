@@ -311,6 +311,10 @@ export const persistSettings = async (changes: Record<string, unknown>, ctx?: Br
     delete restChanges.sessionSuggestionEnabled;
   }
 
+  if ('sessionTitleRefreshEnabled' in restChanges && typeof restChanges.sessionTitleRefreshEnabled !== 'boolean') {
+    delete restChanges.sessionTitleRefreshEnabled;
+  }
+
   if (typeof restChanges.usageAutoRefresh !== 'boolean') {
     delete restChanges.usageAutoRefresh;
   }

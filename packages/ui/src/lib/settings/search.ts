@@ -181,6 +181,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['suggestion', 'assist', 'small model', 'follow up'],
   },
   {
+    id: 'chat.session-title-refresh',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.sessionTitleRefresh',
+    keywords: ['title', 'rename', 'refresh', 'throttle', 'small model', 'summary'],
+  },
+  {
     id: 'chat.reasoning-traces',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showReasoningTraces',
@@ -215,7 +221,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showSplitAssistantMessageActions',
     descriptionKey: 'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip',
-    keywords: ['copy', 'save image', 'read aloud'],
+    keywords: ['copy', 'read aloud'],
   },
   {
     id: 'chat.tool-file-icons',

@@ -28,7 +28,7 @@ import { DraggableSessionRow } from './sessionFolderDnd';
 import { nodeContainsSessionId } from './sessionNodeItemUtils';
 import type { SessionNodeChildRenderExtras, SessionNodeRenderExtras } from './sessionNodeItemUtils';
 import type { SessionNode } from './types';
-import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText } from './utils';
+import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, SIDEBAR_ROW_ACTIVE_CLASS, SIDEBAR_ROW_HOVER_CLASS } from './utils';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
@@ -505,7 +505,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     return (
       <div
         key={session.id}
-        className={cn('group relative flex items-center rounded-sm px-1.5 py-1', depth > 0 && 'pl-[20px]')}
+        className={cn('group relative flex items-center rounded-sm px-1.5 py-1')}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
@@ -747,11 +747,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     handleSessionSelect(session.id, sessionDirectory, projectId);
   };
 
-  // The selection/active highlight covers the WHOLE row box (gutter, edge
-  // paddings), while the primary click target is the inner title button.
-  // Make the rest of the highlighted box clickable too — but only for clicks
-  // that did not originate from an interactive child (title button, chevron,
-  // action menu), so nothing double-fires.
+  // The selection/active highlight is an inset rounded chip (Codex-style).
+  // The primary click target is the inner title button; make the rest of the
+  // highlighted box clickable too — but only for clicks that did not originate
+  // from an interactive child (title button, chevron, action menu), so nothing
+  // double-fires.
   const handleRowBackgroundClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.defaultPrevented) return;
     const target = event.target as HTMLElement | null;
@@ -988,17 +988,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 data-session-archived={archivedBucket ? '1' : '0'}
                 onClick={handleRowBackgroundClick}
                 className={cn(
-                  'group relative my-0.5 flex cursor-pointer items-center rounded-md py-1 pr-1.5',
-                  // Pull the row box left into the container gutter so the
-                  // selection highlight covers the chevron/status markers
-                  // (which sit in that gutter), then re-pad so the title text
-                  // stays put.
-                  '-ml-3',
-                  depth > 0 ? 'pl-[32px]' : 'pl-[18px]',
-                  // Active (currently open) session gets a subtle primary tint;
-                  // multi-select highlight takes precedence when both apply.
-                  isActive && !isRowSelected && 'bg-primary/10',
-                  isRowSelected && 'bg-interactive-selection',
+                  'group relative my-0.5 flex cursor-pointer items-center rounded-lg px-2 py-1.5',
+                  // Codex-style: inset neutral chip — never theme/primary tint.
+                  isActive && !isRowSelected && SIDEBAR_ROW_ACTIVE_CLASS,
+                  isRowSelected && SIDEBAR_ROW_ACTIVE_CLASS,
+                  !isActive && !isRowSelected && SIDEBAR_ROW_HOVER_CLASS,
                 )}
               />
             }
@@ -1022,14 +1016,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     }}
                     className={cn(
 	                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none transition-[padding]',
-	                      isTouchPressed && 'bg-interactive-hover/70',
+	                      isTouchPressed && 'bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)]',
                       alwaysShowActions
                         ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
                         : revealPaddingClass,
                     )}
                   >
                     <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-1')}>
-                      <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : 'text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                      <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
                       {alwaysShowActions ? <span className="ml-2 flex-shrink-0 text-[0.72rem] text-muted-foreground/75">{sessionCompactUpdatedLabel}</span> : null}
                       {!alwaysShowActions ? (
                         <div className="relative ml-1 flex h-4 min-w-4 flex-shrink-0 items-center justify-end">
@@ -1086,14 +1080,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 }}
                 className={cn(
 	                  'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none transition-[padding]',
-	                  isTouchPressed && 'bg-interactive-hover/70',
+	                  isTouchPressed && 'bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)]',
                   alwaysShowActions
                     ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
                     : revealPaddingClass
                 )}
               >
                 <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-1')}>
-                    <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : 'text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                    <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
                     {pendingPermissionCount > 0 ? (
                       <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[0.7rem] text-destructive flex-shrink-0" title={t('sessions.sidebar.session.status.permissionRequired')} aria-label={t('sessions.sidebar.session.status.permissionRequired')}>
                         <Icon name="shield" className="h-3 w-3" />
@@ -1104,7 +1098,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
  
                 {!isMinimalMode ? (
                   <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
-                    <div className={cn('flex min-w-0 items-center gap-1.5 overflow-hidden', metadataSubsessionChevron && hasChildren ? 'pl-4' : '')}>
+                    <div className={cn('flex min-w-0 items-center gap-1.5 overflow-hidden')}>
                       <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
                       {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
                       {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}

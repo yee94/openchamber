@@ -1,5 +1,4 @@
 import React from 'react';
-import { RiCheckLine, RiDeleteBinLine, RiDragMove2Line, RiFolder6Line } from '@remixicon/react';
 import {
   DndContext,
   type DragEndEvent,
@@ -83,7 +82,7 @@ const SortableWorktreeRow: React.FC<{
         {...attributes}
         {...listeners}
       >
-        <RiDragMove2Line className="size-4" />
+        <Icon name="drag-move-2" className="size-4" />
       </button>
       <Icon name="node-tree" className="size-4 shrink-0 text-muted-foreground" />
       <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">{label}</span>
@@ -94,7 +93,7 @@ const SortableWorktreeRow: React.FC<{
         onClick={onDelete}
         style={{ touchAction: 'manipulation' }}
       >
-        <RiDeleteBinLine className="size-4" />
+        <Icon name="delete-bin" className="size-4" />
       </button>
     </div>
   );
@@ -234,7 +233,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
             disabled={!name.trim()}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiCheckLine className="size-4" />
+            <Icon name="check" className="size-4" />
             {t('projectEditDialog.actions.save')}
           </Button>
         }
@@ -255,12 +254,12 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                       iconColor: currentTheme.colors.surface.foreground,
                     }}
                     className="size-full object-contain"
-                    fallback={<RiFolder6Line className="size-7" />}
+                    fallback={<Icon name="folder-6" className="size-7" />}
                   />
                 ) : previewIconName ? (
                   <Icon name={previewIconName} className="size-7" style={currentColorVar ? { color: currentColorVar } : undefined} />
                 ) : (
-                  <RiFolder6Line className="size-7" style={currentColorVar ? { color: currentColorVar } : undefined} />
+                  <Icon name="folder-6" className="size-7" style={currentColorVar ? { color: currentColorVar } : undefined} />
                 )}
               </span>
             </div>

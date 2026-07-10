@@ -144,11 +144,10 @@ const SessionFolderItemBase = <TSessionNode,>({
     };
   }, [isRenaming]);
 
-  const folderIconName = isCollapsed ? 'folder' : 'folder-open';
-  const isSubFolder = depth > 0;
+  const folderIconName = 'folder';
 
   return (
-    <div className={cn('oc-folder', isSubFolder && 'ml-3')}>
+    <div className={cn('oc-folder')}>
       {/* Folder header – also acts as a drop zone when droppableRef is provided */}
       <div
         ref={droppableRef}
@@ -180,6 +179,7 @@ const SessionFolderItemBase = <TSessionNode,>({
             ? (alwaysShowActions ? 'pr-7' : 'group-hover/folder:pr-7 group-focus-within/folder:pr-7')
             : '',
         )}>
+          {/* Codex-style: always closed outline folder (image-2), never filled/open */}
           <Icon name={folderIconName} className={cn('h-3.5 w-3.5 flex-shrink-0', isDropTarget ? 'text-primary' : 'text-muted-foreground')} />
 
           {renaming ? (
@@ -324,9 +324,9 @@ const SessionFolderItemBase = <TSessionNode,>({
         ) : null}
       </div>
 
-      {/* Folder body */}
+      {/* Folder body — Codex-style: no extra indent under the header */}
       {!isCollapsed ? (
-        <div className="pb-1 pl-2">
+        <div className="pb-1">
           {/* Sub-folders first */}
           {subFolderItems}
           {/* Then sessions */}

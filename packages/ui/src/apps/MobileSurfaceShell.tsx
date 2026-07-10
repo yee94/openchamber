@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { RiArrowLeftLine, RiCloseLine } from '@remixicon/react';
 
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -191,7 +191,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
       onClick={onBack}
       style={{ touchAction: 'manipulation' }}
     >
-      <RiArrowLeftLine className="size-5" />
+      <Icon name="arrow-left" className="size-5" />
     </button>
   ) : (
     <button
@@ -201,7 +201,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
       onClick={onClose}
       style={{ touchAction: 'manipulation' }}
     >
-      <RiCloseLine className="size-5" />
+      <Icon name="close" className="size-5" />
     </button>
   );
 

@@ -4782,30 +4782,56 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     showTodos
                     leftAccessory={newSessionDraftOpen || !hasPendingChanges ? null : <PendingChangesBar />}
                 />
-                {!isMobile && showDraftTargetSelectors && selectedDraftProject ? (
+                {!isMobile && showDraftTargetSelectors ? (
                     <div className="mb-1.5 flex min-w-0 items-center gap-1.5 px-0.5">
-                        <Select
-                            value={selectedDraftProject.id}
-                            onValueChange={handleDraftProjectChange}
-                        >
-                            <SelectTrigger
-                                size="sm"
-                                className="h-7 min-w-0 w-fit max-w-[42vw] sm:max-w-[18rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[popup-open]:bg-transparent"
+                        {selectedDraftProject ? (
+                            <Select
+                                value={selectedDraftProject.id}
+                                onValueChange={handleDraftProjectChange}
                             >
-                                <SelectValue>
-                                    {renderProjectLabelWithIcon(selectedDraftProject)}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent fitContent>
-                                {projects.map((project) => (
-                                    <SelectItem key={project.id} value={project.id} className="max-w-[24rem] truncate">
-                                        {renderProjectLabelWithIcon(project)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                <SelectTrigger
+                                    size="sm"
+                                    className="h-7 min-w-0 w-fit max-w-[42vw] sm:max-w-[18rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[popup-open]:bg-transparent"
+                                >
+                                    <SelectValue>
+                                        {renderProjectLabelWithIcon(selectedDraftProject)}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent fitContent>
+                                    {projects.map((project) => (
+                                        <SelectItem key={project.id} value={project.id} className="max-w-[24rem] truncate">
+                                            {renderProjectLabelWithIcon(project)}
+                                        </SelectItem>
+                                    ))}
+                                    {/* Fixed footer action: replace the removed sidebar "add project" toolbar button. */}
+                                    <SelectSeparator />
+                                    <button
+                                        type="button"
+                                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left typography-ui-label text-foreground hover:bg-interactive-hover"
+                                        onPointerDown={(event) => { event.stopPropagation(); }}
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            sessionEvents.requestDirectoryDialog();
+                                        }}
+                                    >
+                                        <Icon name="folder-add" className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <span>{t('chat.chatInput.draftPicker.newProject')}</span>
+                                    </button>
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <button
+                                type="button"
+                                className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
+                                onClick={() => sessionEvents.requestDirectoryDialog()}
+                            >
+                                <Icon name="folder-add" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span>{t('chat.chatInput.draftPicker.newProject')}</span>
+                            </button>
+                        )}
 
-                        {shouldShowDraftBranchSelector ? (
+                        {selectedDraftProject && shouldShowDraftBranchSelector ? (
                             <Select
                                 value={selectedDraftDirectory ?? draftBranchItems[0]?.value ?? normalizePath(selectedDraftProject.path) ?? ''}
                                 onValueChange={handleDraftDirectoryChange}
@@ -4856,17 +4882,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         ) : null}
                     </div>
                 ) : null}
-                {isMobile && showDraftTargetSelectors && selectedDraftProject ? (
+                {isMobile && showDraftTargetSelectors ? (
                     <div className="mb-1.5 flex min-w-0 items-center gap-x-2 px-0.5">
-                        <button
-                            type="button"
-                            className="inline-flex h-7 min-w-0 max-w-[42vw] flex-shrink cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
-                            onClick={() => setMobileDraftPicker('project')}
-                        >
-                            {renderProjectLabelWithIcon(selectedDraftProject)}
-                            <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                        </button>
-                        {shouldShowDraftBranchSelector ? (
+                        {selectedDraftProject ? (
+                            <button
+                                type="button"
+                                className="inline-flex h-7 min-w-0 max-w-[42vw] flex-shrink cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
+                                onClick={() => setMobileDraftPicker('project')}
+                            >
+                                {renderProjectLabelWithIcon(selectedDraftProject)}
+                                <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
+                                onClick={() => sessionEvents.requestDirectoryDialog()}
+                            >
+                                <Icon name="folder-add" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span>{t('chat.chatInput.draftPicker.newProject')}</span>
+                            </button>
+                        )}
+                        {selectedDraftProject && shouldShowDraftBranchSelector ? (
                             <button
                                 type="button"
                                 className="inline-flex h-7 min-w-0 max-w-[48vw] flex-shrink cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
@@ -4931,20 +4968,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             ? t('chat.chatInput.placeholder.chatCompact')
                                             : t('chat.chatInput.placeholder.selectSession')}
                                 </span>
-                            </button>
-                            <button
-                                type="button"
-                                className={footerIconButtonClass}
-                                onClick={() => {
-                                    // Start recording in place; the composer morphs
-                                    // into the voice variant once dictation is live
-                                    // (handleMobileDictationActiveChange).
-                                    window.dispatchEvent(new CustomEvent('openchamber:dictation-toggle'));
-                                }}
-                                title={t('chat.dictation.start')}
-                                aria-label={t('chat.dictation.start')}
-                            >
-                                <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
                             </button>
                         </div>
                         {/* New-session button: fades/shrinks away when the draft is
@@ -5301,28 +5324,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     </div>
                                     <div className="flex items-center min-w-0 gap-x-1 justify-end">
                                         <div className="flex items-center gap-x-1 flex-shrink-0">
-                                            <button
-                                                type="button"
-                                                className={footerIconButtonClass}
-                                                // Keep the soft keyboard open (same guard as
-                                                // PermissionAutoAcceptButton); the recording
-                                                // engine lives in the wrapper-level
-                                                // ComposerDictation instance.
-                                                onMouseDown={(event) => event.preventDefault()}
-                                                onPointerDownCapture={(event) => {
-                                                    if (event.pointerType === 'touch') {
-                                                        event.preventDefault();
-                                                    }
-                                                }}
-                                                onClick={() => {
-                                                    window.dispatchEvent(new CustomEvent('openchamber:dictation-toggle'));
-                                                }}
-                                                disabled={mobileDictationActive}
-                                                title={t('chat.dictation.start')}
-                                                aria-label={t('chat.dictation.start')}
-                                            >
-                                                <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
-                                            </button>
                                             <ComposerActionButtons
                                                 isMobile={isMobile}
                                                 footerIconButtonClass={footerIconButtonClass}
@@ -5380,6 +5381,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         onInsert={handleDictationInsert}
                                         onInsertAndSend={handleDictationInsertAndSend}
                                         onContentHeightChange={handleDictationContentHeightChange}
+                                        renderTrigger={false}
                                     />
                                     <ComposerActionButtons
                                         isMobile={isMobile}
@@ -5584,6 +5586,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         ) : null}
                                     </button>
                                 ))}
+                            {/* Fixed footer action: replace the removed sidebar "add project" toolbar button. */}
+                            <button
+                                type="button"
+                                className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg border-t border-border/50 px-2 py-2.5 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"
+                                onClick={() => {
+                                    setMobileDraftPicker(null);
+                                    sessionEvents.requestDirectoryDialog();
+                                }}
+                            >
+                                <Icon name="folder-add" className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span>{t('chat.chatInput.draftPicker.newProject')}</span>
+                            </button>
                         </div>
                     </div>
                 </MobileOverlayPanel>

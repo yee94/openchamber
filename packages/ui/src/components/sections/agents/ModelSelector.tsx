@@ -5,7 +5,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { ModelLogo } from '@/components/ui/ModelLogo';
 import { Icon } from '@/components/icon/Icon';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
@@ -134,8 +134,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                 <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                                 <span className="typography-meta text-muted-foreground">{isUnavailable ? t('common.unavailable') : t('common.loading')}</span>
                             </>
-                        ) : providerId ? (
-                            <ProviderLogo providerId={providerId} className="h-3.5 w-3.5 flex-shrink-0" />
+                        ) : providerId || modelId ? (
+                            <ModelLogo modelId={modelId} providerId={providerId} className="h-3.5 w-3.5 flex-shrink-0" />
                         ) : (
                             <Icon name="pencil-ai" className="h-3 w-3 text-muted-foreground" />
                         )}
@@ -171,7 +171,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         </>
                     ) : (
                         <>
-                            {providerId ? <ProviderLogo providerId={providerId} className="h-3.5 w-3.5 flex-shrink-0" /> : <Icon name="pencil-ai" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+                            {providerId || modelId ? <ModelLogo modelId={modelId} providerId={providerId} className="h-3.5 w-3.5 flex-shrink-0" /> : <Icon name="pencil-ai" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
                             <span className="typography-ui-label min-w-0 flex-1 truncate text-left font-normal text-foreground">{triggerLabel}</span>
                         </>
                     )}

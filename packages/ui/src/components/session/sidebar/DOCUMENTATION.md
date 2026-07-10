@@ -24,9 +24,10 @@
 
 ### Components
 
-- `SidebarHeader.tsx`: Top header UI for add-project, session search, and display mode.
+- `SidebarHeader.tsx`: Optional session-search field only (action toolbar removed).
+- `SidebarDisplayModeMenu.tsx`: Display-mode equalizer menu; rendered on the Recent section title row.
 - `SidebarActivitySections.tsx`: Global top section renderer; currently used for the `recent` section only.
-- `SidebarFooter.tsx`: Static footer with icon-only settings, shortcuts, and about actions.
+- `SidebarFooter.tsx`: Static footer with icon-only settings and shortcuts actions, plus optional update button.
 - `SidebarProjectsList.tsx`: Main scrollable tree renderer for projects, root sessions, worktrees/groups, and empty/search states.
 - `SessionGroupSection.tsx`: Renders a single worktree/archived group, collapse/expand, folder subtree, and group-level controls.
 - `SessionNodeItem.tsx`: Renders one session row/tree node with inline metadata, menu actions, minimal/default variants, and nested children.

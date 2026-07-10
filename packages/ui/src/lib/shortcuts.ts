@@ -56,6 +56,8 @@ const KEY_LABEL_MAP: Record<string, string> = {
   'end': 'End',
   'pageup': 'Page Up',
   'pagedown': 'Page Down',
+  'backtick': '`',
+  'grave': '`',
 };
 
 const MODIFIER_PRIORITY: ShortcutModifier[] = ['mod', 'ctrl', 'shift', 'alt'];
@@ -99,6 +101,7 @@ export function keyToShortcutToken(key: string): string {
   if (lowered === 'arrowdown') return 'arrowdown';
   if (lowered === 'arrowleft') return 'arrowleft';
   if (lowered === 'arrowright') return 'arrowright';
+  if (lowered === '`') return 'backtick';
 
   return SHIFTED_KEY_BASE_MAP[lowered] ?? lowered;
 }
@@ -140,9 +143,16 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'toggle_terminal',
+    defaultCombo: 'mod+backtick',
+    label: 'Toggle terminal',
+    description: 'Toggle the integrated terminal',
+    customizable: true,
+  },
+  {
+    id: 'toggle_bottom_panel',
     defaultCombo: 'mod+j',
-    label: 'Toggle terminal dock',
-    description: 'Toggle the bottom terminal dock',
+    label: 'Toggle bottom panel',
+    description: 'Toggle the bottom panel dock',
     customizable: true,
   },
   {
@@ -160,7 +170,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'toggle_sidebar',
-    defaultCombo: 'mod+l',
+    defaultCombo: 'mod+b',
     label: 'Toggle sidebar',
     description: 'Toggle the session sidebar',
     customizable: true,
@@ -174,9 +184,9 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'toggle_right_sidebar',
-    defaultCombo: 'mod+b',
-    label: 'Toggle right sidebar',
-    description: 'Toggle the right sidebar',
+    defaultCombo: 'mod+alt+b',
+    label: 'Toggle review panel',
+    description: 'Toggle the review panel (right sidebar)',
     customizable: true,
   },
   {
@@ -195,9 +205,23 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'cycle_right_sidebar_tab',
-    defaultCombo: 'mod+shift+]',
+    defaultCombo: 'mod+alt+shift+r',
     label: 'Cycle right sidebar tab',
     description: 'Cycle through right sidebar tabs',
+    customizable: true,
+  },
+  {
+    id: 'previous_session',
+    defaultCombo: 'mod+shift+[',
+    label: 'Previous session',
+    description: 'Switch to the previous session',
+    customizable: true,
+  },
+  {
+    id: 'next_session',
+    defaultCombo: 'mod+shift+]',
+    label: 'Next session',
+    description: 'Switch to the next session',
     customizable: true,
   },
   {
@@ -274,7 +298,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'cycle_services_tab',
-    defaultCombo: 'mod+shift+[',
+    defaultCombo: 'mod+alt+shift+s',
     label: 'Cycle services tab',
     description: 'Cycle through tabs in the services menu',
     customizable: true,
@@ -586,6 +610,9 @@ export function eventMatchesShortcut(
   }
 
   let eventKeyRaw = event.key;
+  if ((!eventKeyRaw || eventKeyRaw === 'Dead') && event.code === 'Backquote') {
+    eventKeyRaw = '`';
+  }
   if (event.altKey) {
     if (event.code.startsWith('Key') && event.code.length === 4) {
       eventKeyRaw = event.code.slice(3).toLowerCase();

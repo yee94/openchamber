@@ -32,8 +32,6 @@ import { TextSelectionMenu } from './TextSelectionMenu';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useChatSurfaceMode } from '@/components/chat/useChatSurfaceMode';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { toPng } from 'html-to-image';
 import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
 import { formatTimestampForDisplay } from './timeFormat';
@@ -702,7 +700,6 @@ interface AssistantMessageActionButtonsProps {
         tooltip: string;
         onClick: () => void | Promise<void>;
     };
-    onShareImage: (sourceElement?: HTMLElement | null) => Promise<void>;
     ttsText: string;
 }
 
@@ -711,7 +708,6 @@ const AssistantMessageActionButtons = React.memo(({
     isTouchContext,
     onCopyMessage,
     reviewTransferAction,
-    onShareImage,
     ttsText,
 }: AssistantMessageActionButtonsProps) => {
     const { t } = useI18n();
@@ -721,7 +717,6 @@ const AssistantMessageActionButtons = React.memo(({
     const voiceProvider = useConfigStore((state) => state.voiceProvider);
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const [isMessageCopied, setIsMessageCopied] = React.useState(false);
-    const [isSharing, setIsSharing] = React.useState(false);
     const [isTransferringReview, setIsTransferringReview] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
     const copiedResetTimeoutRef = React.useRef<number | null>(null);
@@ -798,27 +793,6 @@ const AssistantMessageActionButtons = React.memo(({
             }
         },
         [clearCopiedResetTimeout, hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
-    );
-
-    const handleShareImageClick = React.useCallback(
-        async (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            event.preventDefault();
-
-            if (isSharing || !hasCopyableText) {
-                return;
-            }
-
-            setIsSharing(true);
-            try {
-            const root = event.currentTarget.closest('[data-message-text-export-root]');
-            const sourceElement = root?.querySelector<HTMLElement>('[data-message-text-export-source]') ?? null;
-            await onShareImage(sourceElement);
-            } finally {
-                setIsSharing(false);
-            }
-        },
-        [hasCopyableText, isSharing, onShareImage]
     );
 
     const handleReviewTransferClick = React.useCallback(
@@ -937,31 +911,6 @@ const AssistantMessageActionButtons = React.memo(({
                     <TooltipContent sideOffset={6}>{reviewTransferAction.tooltip}</TooltipContent>
                 </Tooltip>
             ) : null}
-            {chatSurfaceMode !== 'mini-chat' ? <Tooltip>
-                <TooltipTrigger asChild>
-                    <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        disabled={isSharing || !hasCopyableText}
-                        className={cn(
-                            'h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
-                            (!hasCopyableText || isSharing) && 'opacity-50'
-                        )}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                            void handleShareImageClick(event);
-                        }}
-                    >
-                        {isSharing ? (
-                            <Icon name="loader-4" className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Icon name="image-download" className="h-4 w-4" />
-                        )}
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent sideOffset={6}>{isSharing ? t('chat.messageBody.actions.savingImage') : t('chat.messageBody.actions.saveAsImage')}</TooltipContent>
-            </Tooltip> : null}
             {chatSurfaceMode !== 'mini-chat' && showMessageTTSButtons && hasCopyableText && (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -1212,7 +1161,6 @@ const AssistantMessageBody = React.memo(({
     const collapsibleThinkingBlocks = useUIStore((state) => state.collapsibleThinkingBlocks);
     const showSplitAssistantMessageActions = useUIStore((state) => state.showSplitAssistantMessageActions);
     const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
-    const vscodeApi = useRuntimeAPIs().vscode;
     const isSortedRenderMode = chatRenderMode === 'sorted';
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
@@ -1439,113 +1387,6 @@ const AssistantMessageBody = React.memo(({
         [assistantPlanText, currentProjectRef, t]
     );
 
-    const shareMessageAsImage = React.useCallback(
-        async (requestedSourceElement?: HTMLElement | null) => {
-            const sourceElement = requestedSourceElement ?? messageTextContentRef.current ?? messageContentRef.current;
-            if (!sourceElement) return;
-
-            let wrapper: HTMLDivElement | null = null;
-            try {
-                const originalElement = sourceElement;
-                const computedStyle = window.getComputedStyle(originalElement);
-                const rootStyle = window.getComputedStyle(document.documentElement);
-                const resolvedBackgroundColor =
-                    rootStyle.getPropertyValue('--surface-background').trim() ||
-                    computedStyle.backgroundColor ||
-                    window.getComputedStyle(document.body).backgroundColor;
-                const paddingSize = 24;
-
-                wrapper = document.createElement('div');
-                wrapper.style.cssText = `
-                    padding: ${paddingSize}px;
-                    background-color: ${resolvedBackgroundColor};
-                    display: inline-block;
-                `;
-
-                const clone = originalElement.cloneNode(true) as HTMLElement;
-                clone.style.cssText = `
-                    ${computedStyle.cssText}
-                    transform: none;
-                    contain: none;
-                `;
-
-                const actionRows = clone.querySelectorAll<HTMLElement>('[data-message-actions="true"]');
-                actionRows.forEach((row) => {
-                    row.style.display = 'none';
-                });
-                const actionGroups = clone.querySelectorAll<HTMLElement>('[data-message-action-group="true"]');
-                actionGroups.forEach((group) => {
-                    group.style.display = 'none';
-                });
-
-                const timestampElements = clone.querySelectorAll<HTMLElement>('[aria-label^="Message time:"]');
-                const footerRowsAdjusted = new Set<HTMLElement>();
-                timestampElements.forEach((element) => {
-                    const label = element.getAttribute('aria-label');
-                    const timestamp = label?.replace('Message time:', '').trim();
-                    if (!timestamp || element.textContent?.includes(timestamp)) {
-                        return;
-                    }
-
-                    const timestampText = document.createElement('span');
-                    timestampText.style.marginLeft = '4px';
-                    timestampText.textContent = timestamp;
-                    element.appendChild(timestampText);
-
-                    const metaGroup = element.parentElement;
-                    const footerRow = metaGroup?.parentElement as HTMLElement | null;
-                    if (!footerRow || footerRowsAdjusted.has(footerRow)) {
-                        return;
-                    }
-
-                    footerRow.style.justifyContent = 'flex-start';
-                    footerRowsAdjusted.add(footerRow);
-                });
-
-                wrapper.appendChild(clone);
-                document.body.appendChild(wrapper);
-
-                const dataUrl = await toPng(wrapper, {
-                    quality: 1,
-                    pixelRatio: 2,
-                    backgroundColor: resolvedBackgroundColor,
-                });
-
-                const fileName = `message-${messageId}.png`;
-
-                if (isVSCodeRuntime()) {
-                    const payload = await vscodeApi?.saveImage?.({ fileName, dataUrl }) as { saved?: boolean; canceled?: boolean; error?: string } | undefined;
-                    if (!payload) {
-                        throw new Error('Failed to save image in VS Code');
-                    }
-                    if (payload.saved !== true) {
-                        if (payload.canceled) {
-                            return;
-                        }
-                        throw new Error(payload.error || 'Failed to save image in VS Code');
-                    }
-                } else {
-                    const link = document.createElement('a');
-                    link.download = fileName;
-                    link.href = dataUrl;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
-
-                toast.success(t('chat.messageBody.toast.imageSaved'));
-            } catch (error) {
-                console.error('Failed to generate image:', error);
-                toast.error(t('chat.messageBody.toast.generateImageFailed'));
-            } finally {
-                if (wrapper && wrapper.parentNode) {
-                    wrapper.parentNode.removeChild(wrapper);
-                }
-            }
-        },
-        [messageId, t, vscodeApi]
-    );
-
     const activityPartsForTurn = React.useMemo(() => {
         const all = turnGroupingContext?.activityParts;
         if (!isSortedRenderMode || !all) {
@@ -1614,11 +1455,10 @@ const AssistantMessageBody = React.memo(({
             hasCopyableText={hasCopyableText}
             isTouchContext={isTouchContext}
             onCopyMessage={onCopyMessage}
-            onShareImage={shareMessageAsImage}
             ttsText={assistantPlanText}
             reviewTransferAction={reviewTransferAction}
         />
-    ), [assistantPlanText, hasCopyableText, isTouchContext, onCopyMessage, reviewTransferAction, shareMessageAsImage]);
+    ), [assistantPlanText, hasCopyableText, isTouchContext, onCopyMessage, reviewTransferAction]);
 
     const renderJustificationActions = React.useCallback((activity: NonNullable<TurnGroupingContext['activityParts']>[number]) => {
         if (!showSplitAssistantMessageActions || !isSortedRenderMode) {
@@ -1640,11 +1480,10 @@ const AssistantMessageBody = React.memo(({
                 hasCopyableText={true}
                 isTouchContext={isTouchContext}
                 onCopyMessage={copyJustificationText}
-                onShareImage={shareMessageAsImage}
                 ttsText={text}
             />
         );
-    }, [isSortedRenderMode, isTouchContext, shareMessageAsImage, showSplitAssistantMessageActions]);
+    }, [isSortedRenderMode, isTouchContext, showSplitAssistantMessageActions]);
 
     const lastRenderableTextPartIndex = React.useMemo(() => {
         if (!shouldShowStandaloneMessageActions) {
@@ -2009,7 +1848,7 @@ const AssistantMessageBody = React.memo(({
               style={CONTAIN_LAYOUT_STYLE}
           >
               <TextSelectionMenu containerRef={messageContentRef} />
-             {canUseProjectPlanActions ? (
+             {canUseProjectPlanActions && isPlanDialogOpen ? (
                  <SaveProjectPlanDialog
                      open={isPlanDialogOpen}
                      onOpenChange={setIsPlanDialogOpen}

@@ -429,6 +429,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.sessionSuggestionEnabled === 'boolean' && settings.sessionSuggestionEnabled !== store.sessionSuggestionEnabled) {
     store.setSessionSuggestionEnabled(settings.sessionSuggestionEnabled);
   }
+  if (typeof settings.sessionTitleRefreshEnabled === 'boolean' && settings.sessionTitleRefreshEnabled !== store.sessionTitleRefreshEnabled) {
+    store.setSessionTitleRefreshEnabled(settings.sessionTitleRefreshEnabled);
+  }
   if (typeof settings.collapsibleThinkingBlocks === 'boolean' && settings.collapsibleThinkingBlocks !== store.collapsibleThinkingBlocks) {
     store.setCollapsibleThinkingBlocks(settings.collapsibleThinkingBlocks);
   }
@@ -785,6 +788,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
     result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+  }
+  if (typeof candidate.sessionTitleRefreshEnabled === 'boolean') {
+    result.sessionTitleRefreshEnabled = candidate.sessionTitleRefreshEnabled;
   }
   if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
     result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;

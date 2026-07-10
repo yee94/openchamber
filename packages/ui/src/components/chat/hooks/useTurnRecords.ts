@@ -8,6 +8,7 @@ interface UseTurnRecordsOptions {
     sessionKey?: string;
     showTextJustificationActivity: boolean;
     showTurnChangedFiles: boolean;
+    hasLiveTail: boolean;
 }
 
 export interface TurnRecordsResult {
@@ -15,6 +16,23 @@ export interface TurnRecordsResult {
     staticTurns: TurnProjectionResult['turns'];
     streamingTurn: TurnProjectionResult['turns'][number] | undefined;
 }
+
+export const splitTurnRecordsByLiveTail = (
+    turns: TurnRecord[],
+    hasLiveTail: boolean,
+): Pick<TurnRecordsResult, 'staticTurns' | 'streamingTurn'> => {
+    if (!hasLiveTail || turns.length === 0) {
+        return {
+            staticTurns: turns,
+            streamingTurn: undefined,
+        };
+    }
+
+    return {
+        staticTurns: turns.slice(0, -1),
+        streamingTurn: turns[turns.length - 1],
+    };
+};
 
 export const useTurnRecords = (
     messages: ChatMessageEntry[],
@@ -80,9 +98,7 @@ export const useTurnRecords = (
     }, [messages, options.showTextJustificationActivity, options.showTurnChangedFiles, options.sessionKey]);
 
     const staticTurns = React.useMemo(() => {
-        const nextStatic = projection.turns.length <= 1
-            ? []
-            : projection.turns.slice(0, -1);
+        const nextStatic = splitTurnRecordsByLiveTail(projection.turns, options.hasLiveTail).staticTurns;
         const previousStatic = staticTurnsRef.current;
 
         if (previousStatic.length === nextStatic.length) {
@@ -100,18 +116,16 @@ export const useTurnRecords = (
 
         staticTurnsRef.current = nextStatic;
         return nextStatic;
-    }, [projection.turns]);
+    }, [options.hasLiveTail, projection.turns]);
 
     const streamingTurn = React.useMemo(() => {
-        const nextStreamingTurn = projection.turns.length === 0
-            ? undefined
-            : projection.turns[projection.turns.length - 1];
+        const nextStreamingTurn = splitTurnRecordsByLiveTail(projection.turns, options.hasLiveTail).streamingTurn;
         if (streamingTurnRef.current === nextStreamingTurn) {
             return streamingTurnRef.current;
         }
         streamingTurnRef.current = nextStreamingTurn;
         return nextStreamingTurn;
-    }, [projection.turns]);
+    }, [options.hasLiveTail, projection.turns]);
 
     return {
         projection,

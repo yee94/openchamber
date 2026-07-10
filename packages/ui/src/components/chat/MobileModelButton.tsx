@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getModelDisplayName } from './mobileControlsUtils';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { ModelLogo } from '@/components/ui/ModelLogo';
 import { useI18n } from '@/lib/i18n';
 
 interface MobileModelButtonProps {
@@ -43,8 +43,8 @@ export const MobileModelButton: React.FC<MobileModelButtonProps> = ({ onOpenMode
             title={modelLabel}
         >
             <span className="flex h-full w-full min-w-0 items-center gap-1">
-                {currentProviderId ? (
-                    <ProviderLogo providerId={currentProviderId} className="size-4 flex-shrink-0" />
+                {currentModelId || currentProviderId ? (
+                    <ModelLogo modelId={currentModelId} providerId={currentProviderId} className="size-4 flex-shrink-0" />
                 ) : null}
                 <span className="truncate">{modelLabel}</span>
             </span>

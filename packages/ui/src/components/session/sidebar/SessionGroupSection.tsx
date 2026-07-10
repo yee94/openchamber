@@ -22,7 +22,7 @@ import { SessionFolderItem } from '../SessionFolderItem';
 import { DroppableFolderWrapper, SessionFolderDndScope } from './sessionFolderDnd';
 import type { SortableDragHandleProps } from './sortableItems';
 import type { GroupSearchData, SessionGroup, SessionNode } from './types';
-import { compareSessionsByPinnedAndTime, isBranchDifferentFromLabel, normalizePath, renderHighlightedText } from './utils';
+import { compareSessionsByPinnedAndTime, isBranchDifferentFromLabel, normalizePath, renderHighlightedText, SIDEBAR_MUTED_HINT_CLASS } from './utils';
 import {
   collectSubtreeContainingId,
   computeNodeStructureKey,
@@ -1002,7 +1002,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
         }))
       )}
       {totalSessions === 0 && allFoldersForGroup.length === 0 ? (
-        <div className="py-1 text-left typography-micro text-muted-foreground">
+        <div className={SIDEBAR_MUTED_HINT_CLASS}>
           {group.isArchivedBucket
             ? t('sessions.sidebar.group.empty.noArchivedSessions')
             : t('sessions.sidebar.group.empty.noSessionsInWorkspace')}
@@ -1012,7 +1012,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
         <button
           type="button"
           onClick={() => showMoreGroupSessions(groupKey, visibleSessions.length)}
-          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
         >
           {t('sessions.sidebar.group.showMore')}
         </button>
@@ -1021,7 +1021,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
         <button
           type="button"
           onClick={() => resetGroupSessionLimit(groupKey)}
-          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
         >
           {t('sessions.sidebar.group.showFewer')}
         </button>
@@ -1029,7 +1029,8 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     </SessionFolderDndScope>
   );
 
-  const groupBodyPaddingClass = compactBodyPadding ? 'pb-2 pl-1' : 'pb-3 pl-4';
+  // Codex-style: expanded body aligns with the group header — no extra indent.
+  const groupBodyPaddingClass = compactBodyPadding ? 'pb-2' : 'pb-3';
 
   if (hideGroupLabel) {
     return <div className="oc-group"><div className={cn('oc-group-body', groupBodyPaddingClass)}>{body}</div></div>;
