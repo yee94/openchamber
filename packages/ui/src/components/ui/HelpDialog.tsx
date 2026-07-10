@@ -113,6 +113,18 @@ export const HelpDialog: React.FC = () => {
           icon: "git-branch",
           keys: '',
         },
+        {
+          id: 'previous_session',
+          descriptionKey: 'helpDialog.item.previousSession',
+          icon: "arrow-left",
+          keys: '',
+        },
+        {
+          id: 'next_session',
+          descriptionKey: 'helpDialog.item.nextSession',
+          icon: "arrow-right",
+          keys: '',
+        },
         { id: 'focus_input', descriptionKey: "helpDialog.item.focusChatInput", icon: "text", keys: '' },
         {
           id: 'abort_run',
@@ -151,7 +163,13 @@ export const HelpDialog: React.FC = () => {
         },
         {
           id: 'toggle_terminal',
-          descriptionKey: 'helpDialog.item.toggleTerminalDock',
+          descriptionKey: 'helpDialog.item.toggleTerminal',
+          icon: "window",
+          keys: '',
+        },
+        {
+          id: 'toggle_bottom_panel',
+          descriptionKey: 'helpDialog.item.toggleBottomPanel',
           icon: "window",
           keys: '',
         },

@@ -254,6 +254,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
       result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
     }
+    if (typeof candidate.sessionTitleRefreshEnabled === 'boolean') {
+      result.sessionTitleRefreshEnabled = candidate.sessionTitleRefreshEnabled;
+    }
     if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
       result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;
     }

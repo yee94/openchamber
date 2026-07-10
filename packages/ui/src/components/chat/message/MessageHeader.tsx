@@ -1,20 +1,22 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
-import { useProviderLogo } from '@/hooks/useProviderLogo';
+import { useModelLogo } from '@/hooks/useModelLogo';
 import { Icon } from "@/components/icon/Icon";
 
 interface MessageHeaderProps {
     isUser: boolean;
     providerID: string | null;
+    /** 模型 ID：优先按模型名匹配品牌图标，聚合 Provider 不再误显示渠道 logo */
+    modelID?: string | null;
     agentName: string | undefined;
     modelName: string | undefined;
     variant?: string;
-    isDarkTheme: boolean;
 }
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, variant, isDarkTheme }) => {
-    const { src: logoSrc, onError: handleLogoError, hasLogo } = useProviderLogo(providerID);
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, modelID, agentName, modelName, variant }) => {
+    // 按模型品牌解析 logo（openrouter+claude → Claude，而非 OpenRouter）
+    const { src: logoSrc, onError: handleLogoError, hasLogo, brand } = useModelLogo(modelID, providerID);
 
     return (
         <div className={cn('mb-2')}>
@@ -30,11 +32,9 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                 {hasLogo && logoSrc ? (
                                     <img
                                         src={logoSrc}
-                                        alt={`${providerID} logo`}
-                                        className="h-4 w-4"
-                                        style={{
-                                            filter: isDarkTheme ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)',
-                                        }}
+                                        alt={`${brand || modelID || providerID} logo`}
+                                        // 与 ModelLogo 一致：压成纯色后再按主题反色
+                                        className="h-4 w-4 brightness-0 dark:invert"
                                         onError={handleLogoError}
                                     />
                                 ) : (

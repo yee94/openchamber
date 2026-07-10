@@ -253,6 +253,24 @@ describe('openNewSessionDraft project binding', () => {
     expect(draft.open).toBe(true);
     expect(draft.selectedProjectId).toBe(projectB.id);
     expect(draft.directoryOverride).toBe(projectB.path);
+    expect(useProjectsStore.getState().activeProjectId).toBe(projectB.id);
+  });
+
+  test('defaults Welcome draft to the current conversation project', () => {
+    useDirectoryStore.getState().setDirectory(projectB.path, { showOverlay: false });
+    useSessionUIStore.setState({
+      currentSessionId: 'session-alpha',
+      currentSessionDirectory: projectA.path,
+    });
+
+    useSessionUIStore.getState().openNewSessionDraft();
+    const draft = useSessionUIStore.getState().newSessionDraft;
+
+    expect(draft.open).toBe(true);
+    expect(draft.selectedProjectId).toBe(projectA.id);
+    expect(draft.directoryOverride).toBe(projectA.path);
+    expect(useProjectsStore.getState().activeProjectId).toBe(projectA.id);
+    expect(useSessionUIStore.getState().currentSessionId).toBeNull();
   });
 
   test('does not attach active project when current directory is unmatched', () => {

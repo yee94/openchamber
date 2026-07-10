@@ -12,6 +12,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS as DndCSS } from '@dnd-kit/utilities';
 import { Icon } from '@/components/icon/Icon';
 import { Input } from '@/components/ui/input';
+import { ModelLogo } from '@/components/ui/ModelLogo';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -617,7 +618,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
                     <Icon name="draggable" className="size-3.5" />
                   </button>
                 ) : null}
-                {showProviderLogo ? <ProviderLogo providerId={entry.providerID} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
+                {showProviderLogo ? <ModelLogo modelId={entry.modelID} providerId={entry.providerID} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
                 <span className="font-medium truncate">{getModelDisplayName(entry.model)}</span>
                 {contextTokens ? <span className="typography-micro text-muted-foreground flex-shrink-0">{contextTokens}</span> : null}
               </div>
@@ -730,7 +731,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
       {providerIndex > 0 ? <div className="h-px bg-border/40 my-1" /> : null}
       {renderSectionHeader(`provider:${provider.id}`, <ProviderLogo providerId={provider.id} className="h-4 w-4 flex-shrink-0" />, provider.name || provider.id, headerDragProps)}
       {!isSectionCollapsed(`provider:${provider.id}`)
-        ? provider.models.map((model) => renderRow({ model, providerID: provider.id, modelID: model.id as string }, 'provider', false, currentFlatIndex++))
+        ? provider.models.map((model) => renderRow({ model, providerID: provider.id, modelID: model.id as string }, 'provider', true, currentFlatIndex++))
         : null}
     </>
   );

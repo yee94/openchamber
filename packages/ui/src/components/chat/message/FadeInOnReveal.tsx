@@ -22,31 +22,13 @@ export const FadeInDisabledProvider: React.FC<{ disabled: boolean; children: Rea
     </FadeInDisabledContext.Provider>
 );
 
-export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({
-    children,
-    className,
-    skipAnimation,
-    forceAnimation = false,
-    ignoreContextDisabled = false,
-    respectReducedMotion = false,
-}) => {
-    const contextDisabled = React.useContext(FadeInDisabledContext);
-    const reducedMotion =
-        respectReducedMotion &&
-        typeof window !== 'undefined' &&
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const shouldSkip = Boolean(skipAnimation) || (!ignoreContextDisabled && contextDisabled) || reducedMotion;
-    const animationEnabled = FADE_ANIMATION_ENABLED || forceAnimation;
-    const [visible, setVisible] = React.useState(shouldSkip);
+type AnimatedFadeInProps = Pick<FadeInOnRevealProps, 'children' | 'className'>;
+
+const AnimatedFadeIn: React.FC<AnimatedFadeInProps> = ({ children, className }) => {
+    const [visible, setVisible] = React.useState(false);
 
     React.useEffect(() => {
-        if (!animationEnabled || shouldSkip) {
-            return;
-        }
-
         let frame: number | null = null;
-
         const enable = () => setVisible(true);
 
         if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
@@ -64,11 +46,7 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({
                 window.cancelAnimationFrame(frame);
             }
         };
-    }, [animationEnabled, shouldSkip]);
-
-    if (!animationEnabled || shouldSkip) {
-        return <>{children}</>;
-    }
+    }, []);
 
     return (
         <div
@@ -81,4 +59,28 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({
             {children}
         </div>
     );
+};
+
+export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({
+    children,
+    className,
+    skipAnimation,
+    forceAnimation = false,
+    ignoreContextDisabled = false,
+    respectReducedMotion = false,
+}) => {
+    const contextDisabled = React.useContext(FadeInDisabledContext);
+    const reducedMotion =
+        respectReducedMotion &&
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const shouldSkip = Boolean(skipAnimation) || (!ignoreContextDisabled && contextDisabled) || reducedMotion;
+    const animationEnabled = FADE_ANIMATION_ENABLED || forceAnimation;
+
+    if (!animationEnabled || shouldSkip) {
+        return <>{children}</>;
+    }
+
+    return <AnimatedFadeIn className={className}>{children}</AnimatedFadeIn>;
 };

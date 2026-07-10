@@ -2,6 +2,7 @@ import { marked, type Tokens } from 'marked';
 import remend from 'remend';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
+import { DualLimitLru } from '@/lib/dualLimitLru';
 import { buildAgentMentionUrl, parseAgentHref, parseSkillHref } from '@/lib/messages/inlineMessageLinks';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { highlightCodeInWorker } from './markdown-worker';
@@ -312,7 +313,17 @@ const sanitize = (html: string): string => {
 // ---------------------------------------------------------------------------
 
 const CACHE_MAX = 240;
-const htmlCache = new Map<string, { hash: string; html: string }>();
+const CACHE_MAX_BYTES = 16 * 1024 * 1024;
+const SYNC_CACHE_MAX = 160;
+const SYNC_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const htmlCache = new DualLimitLru<string, { hash: string; html: string }>({
+  maxEntries: CACHE_MAX,
+  maxBytes: CACHE_MAX_BYTES,
+});
+const syncHtmlCache = new DualLimitLru<string, { source: string; html: string }>({
+  maxEntries: SYNC_CACHE_MAX,
+  maxBytes: SYNC_CACHE_MAX_BYTES,
+});
 
 // FNV-1a 32-bit hash of the block content.
 const hash = (value: string): string => {
@@ -324,12 +335,14 @@ const hash = (value: string): string => {
   return (h >>> 0).toString(36);
 };
 
-const touch = (key: string, entry: { hash: string; html: string }): void => {
-  htmlCache.delete(key);
-  htmlCache.set(key, entry);
-  if (htmlCache.size <= CACHE_MAX) return;
-  const oldest = htmlCache.keys().next().value;
-  if (oldest) htmlCache.delete(oldest);
+const stringBytes = (value: string): number => value.length * 2;
+
+const cacheRenderedBlock = (key: string, entry: { hash: string; html: string }): void => {
+  htmlCache.set(
+    key,
+    entry,
+    stringBytes(key) + stringBytes(entry.hash) + stringBytes(entry.html),
+  );
 };
 
 const parseBlock = async (block: MarkdownBlock): Promise<string> => {
@@ -350,9 +363,21 @@ const parseBlock = async (block: MarkdownBlock): Promise<string> => {
  */
 export const renderMarkdownSync = (text: string): string => {
   if (!text) return '';
+  const contentHash = hash(text);
+  const key = `${contentHash}:${text.length}`;
+  const cached = syncHtmlCache.get(key);
+  if (cached?.source === text) {
+    return cached.html;
+  }
   const parsed = parser.parse(text) as string;
   const withMath = renderMathExpressions(parsed);
-  return sanitize(withMath);
+  const html = sanitize(withMath);
+  syncHtmlCache.set(
+    key,
+    { source: text, html },
+    stringBytes(key) + stringBytes(text) + stringBytes(html),
+  );
+  return html;
 };
 
 export type RenderedBlock = {
@@ -384,11 +409,10 @@ export const renderMarkdownBlocks = async (
       const key = `${cacheKey}:${index}:${block.mode}`;
       const cached = htmlCache.get(key);
       if (cached && cached.hash === contentHash) {
-        touch(key, cached);
         return { id, html: cached.html };
       }
       const html = await parseBlock(block);
-      touch(key, { hash: contentHash, html });
+      cacheRenderedBlock(key, { hash: contentHash, html });
       return { id, html };
     }),
   );

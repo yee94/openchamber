@@ -2,13 +2,14 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import type { SessionNode } from './types';
 import { useI18n } from '@/lib/i18n';
-import { Icon } from "@/components/icon/Icon";
 import {
   collectSubtreeContainingId,
   computeNodeStructureKey,
   resolveMenuOpenSessionId,
 } from './sessionNodeItemUtils';
 import type { SessionNodeRenderExtras } from './sessionNodeItemUtils';
+import { SidebarSectionHeader } from './SidebarSectionHeader';
+import { SIDEBAR_MUTED_HINT_CLASS } from './utils';
 
 type ActivityItem = {
   node: SessionNode;
@@ -44,6 +45,8 @@ type Props = {
   variant?: 'section' | 'flat';
   initialVisibleCount?: number;
   batchSize?: number;
+  /** Right-side chrome on the section title row (e.g. display-mode equalizer). */
+  headerAccessory?: React.ReactNode;
 };
 
 type RenderExtras = SessionNodeRenderExtras;
@@ -59,6 +62,7 @@ export function SidebarActivitySections({
   variant = 'section',
   initialVisibleCount = MAX_VISIBLE_RECENT_SESSIONS,
   batchSize = MAX_VISIBLE_RECENT_SESSIONS,
+  headerAccessory,
 }: Props): React.ReactNode {
   const { t } = useI18n();
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
@@ -130,14 +134,16 @@ export function SidebarActivitySections({
     });
   }, [currentSessionId, editingId, openSidebarMenuKey]);
 
-  const visibleSections = sections.filter((section) => section.items.length > 0);
+  // Keep the section header (and its accessory) even when Recent is empty so
+  // display-mode controls stay reachable on the "最近" row.
+  const visibleSections = sections.filter((section) => section.items.length > 0 || Boolean(headerAccessory));
   if (visibleSections.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn(flatVariant ? 'space-y-0.5 pb-2' : 'space-y-2 pb-2 pt-1')}>
-      {visibleSections.map((section) => {
+    <div className={cn(flatVariant ? 'space-y-0.5 pb-1' : 'pb-1')}>
+      {visibleSections.map((section, sectionIndex) => {
         const isCollapsed = collapsed.has(section.key);
         const visibleLimit = Math.max(
           initialVisibleCount,
@@ -166,7 +172,7 @@ export function SidebarActivitySections({
                 <button
                   type="button"
                   onClick={() => showMoreSessions(section.key, visibleItems.length, section.items.length)}
-                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                  className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
                 >
                   {t('sessions.sidebar.group.showMore')}
                 </button>
@@ -176,26 +182,22 @@ export function SidebarActivitySections({
         }
 
         return (
-          <div key={section.key} className="space-y-1">
-            <button
-              type="button"
-              onClick={() => toggleSection(section.key)}
-              className="group flex w-full items-center gap-1 rounded-md px-0.5 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              aria-expanded={!isCollapsed}
-            >
-              <span className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground">
-                {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
-              </span>
-              <span className="text-[14px] font-normal text-foreground/95">{section.title}</span>
-            </button>
+          <div key={section.key}>
+            <SidebarSectionHeader
+              title={section.title}
+              isFirst={sectionIndex === 0}
+              onToggle={() => toggleSection(section.key)}
+              expanded={!isCollapsed}
+              accessory={headerAccessory}
+            />
             {!isCollapsed ? (
-              <div className={cn('space-y-0.5 pl-7')}>
+              <div className="space-y-0.5">
                 {visibleItems.map(renderItem)}
                 {remainingCount > 0 ? (
                   <button
                     type="button"
                     onClick={() => showMoreSessions(section.key, visibleItems.length, section.items.length)}
-                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                    className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
                   >
                     {t('sessions.sidebar.group.showMore')}
                   </button>
@@ -204,7 +206,7 @@ export function SidebarActivitySections({
                   <button
                     type="button"
                     onClick={() => resetSectionLimit(section.key)}
-                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                    className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
                   >
                     {t('sessions.sidebar.group.showFewer')}
                   </button>

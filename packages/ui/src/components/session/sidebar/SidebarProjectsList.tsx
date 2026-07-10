@@ -14,9 +14,10 @@ import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import type { SessionGroup } from './types';
 import type { SortableDragHandleProps } from './sortableItems';
 import { SortableGroupItem, SortableProjectItem } from './sortableItems';
-import { formatProjectLabel } from './utils';
+import { formatProjectLabel, SIDEBAR_MUTED_HINT_CLASS } from './utils';
 import { useI18n } from '@/lib/i18n';
 import type { MainTab } from '@/stores/useUIStore';
+import { SidebarSectionHeader } from './SidebarSectionHeader';
 
 type ProjectSection = {
   project: {
@@ -68,6 +69,7 @@ type Props = {
   openProjectEditDialog: (id: string) => void;
   removeProject: (id: string) => void;
   projectHeaderSentinelRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
+  projectReorderEnabled?: boolean;
   reorderProjects: (fromIndex: number, toIndex: number) => void;
   getOrderedGroups: (projectId: string, groups: SessionGroup[]) => SessionGroup[];
   setGroupOrderByProject: React.Dispatch<React.SetStateAction<Map<string, string[]>>>;
@@ -126,7 +128,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
 
   if (props.sharedSessionsOnly) {
     return (
-      <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 pb-1 pr-2', props.mobileVariant ? '' : '')}>
+      <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 px-3 pb-1', props.mobileVariant ? '' : '')}>
         {props.topContent}
         {!props.hasSharedSessions ? (props.hasSessionSearchQuery ? props.searchEmptyState : props.emptyState) : null}
       </ScrollableOverlay>
@@ -134,11 +136,11 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
   }
 
   if (props.projectSections.length === 0) {
-    return <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 pb-1 pl-2.5 pr-2', props.mobileVariant ? '' : '')}>{props.topContent}{props.emptyState}</ScrollableOverlay>;
+    return <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 px-3 pb-1', props.mobileVariant ? '' : '')}>{props.topContent}{props.emptyState}</ScrollableOverlay>;
   }
 
   if (props.sectionsForRender.length === 0) {
-    return <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 pb-1 pl-2.5 pr-2', props.mobileVariant ? '' : '')}>{props.searchEmptyState}</ScrollableOverlay>;
+    return <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 px-3 pb-1', props.mobileVariant ? '' : '')}>{props.searchEmptyState}</ScrollableOverlay>;
   }
 
   return (
@@ -147,7 +149,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
     // button) and holds it in place, which makes newly revealed sessions look
     // like they insert upward. With anchoring off, scrollTop stays put and new
     // rows appear below naturally.
-    <ScrollableOverlay ref={scrollContainerRef} useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 pb-1 pl-2.5 pr-2 [overflow-anchor:none]', props.mobileVariant ? '' : '')}>
+    <ScrollableOverlay ref={scrollContainerRef} useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 px-3 pb-1 [overflow-anchor:none]', props.mobileVariant ? '' : '')}>
       {props.topContent}
       {props.showOnlyMainWorkspace ? (
         <div className="space-y-[0.6rem] py-1">
@@ -162,7 +164,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
               ?? activeSection.groups.find((candidate) => candidate.isMain)
               ?? activeSection.groups[0];
             if (!primaryGroup) {
-              return <div className="py-1 text-left typography-micro text-muted-foreground">{t('sessions.sidebar.empty.noSessions.title')}</div>;
+              return <div className={SIDEBAR_MUTED_HINT_CLASS}>{t('sessions.sidebar.empty.noSessions.title')}</div>;
             }
             const archivedGroup = activeSection.groups.find((candidate) => candidate.isArchivedBucket);
             const groupsToRender = [
@@ -183,11 +185,18 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
         </div>
       ) : (
         <>
+          {/* Codex-style section label above the project tree */}
+          {!props.hasSessionSearchQuery ? (
+            <SidebarSectionHeader
+              title={t('sessions.sidebar.projectsTitle')}
+              isFirst={!props.topContent}
+            />
+          ) : null}
           <DndContext
             sensors={projectSensors}
             collisionDetection={closestCenter}
             onDragEnd={(event) => {
-              if (props.isInlineEditing) return;
+              if (!props.projectReorderEnabled || props.isInlineEditing) return;
               const { active, over } = event;
               if (!over || active.id === over.id) return;
               const oldIndex = props.sectionsForRender.findIndex((section) => section.project.id === active.id);
@@ -251,9 +260,10 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                     showCreateButtons
                     openSidebarMenuKey={props.openSidebarMenuKey}
                     setOpenSidebarMenuKey={props.setOpenSidebarMenuKey}
+                    reorderEnabled={props.projectReorderEnabled ?? false}
                   >
                     {!isCollapsed ? (
-                      <div className="space-y-0 pt-0 pb-0.5 pl-3">
+                      <div className="space-y-0 pt-0 pb-0.5">
                         {section.groups.length > 0 ? (
                           <DndContext
                             sensors={groupSensors}
@@ -288,7 +298,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                             <DragOverlay dropAnimation={null} />
                           </DndContext>
                         ) : (
-                          <div className="py-1 text-left typography-micro text-muted-foreground">{t('sessions.sidebar.empty.noSessions.title')}</div>
+                          <div className={SIDEBAR_MUTED_HINT_CLASS}>{t('sessions.sidebar.empty.noSessions.title')}</div>
                         )}
                       </div>
                     ) : null}

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { ModelLogo } from '@/components/ui/ModelLogo';
 import { useI18n } from '@/lib/i18n';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -214,7 +214,7 @@ export function MultiRunFusionDialog({
               addButtonClassName="h-8 w-fit max-w-[min(28rem,calc(100vw-8rem))] justify-start rounded-[9px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] px-3 py-1.5"
               dropdownSide="bottom"
               dropdownClassName="w-[min(28rem,calc(100vw-8rem))]"
-              triggerIcon={providerID ? <ProviderLogo providerId={providerID} className="h-3.5 w-3.5 mr-1" /> : undefined}
+              triggerIcon={providerID || modelID ? <ModelLogo modelId={modelID} providerId={providerID} className="h-3.5 w-3.5 mr-1" /> : undefined}
             />
           </div>
 
@@ -237,15 +237,22 @@ export function MultiRunFusionDialog({
         <div className="space-y-2">
           <div className="typography-meta font-medium text-foreground">{t('multirun.fusion.sources.label', { count: sources.length })}</div>
           <div className="max-h-56 space-y-1 overflow-auto rounded-lg border border-[var(--interactive-border)] p-1">
-            {sources.map((source) => (
+            {sources.map((source) => {
+              const sourceParsed = parseMultiRunSessionTitle(source.session.title);
+              return (
               <div key={source.session.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 typography-meta">
-                <ProviderLogo providerId={parseMultiRunSessionTitle(source.session.title)?.providerID ?? ''} className="h-4 w-4" />
+                <ModelLogo
+                  modelId={sourceParsed?.modelID}
+                  providerId={sourceParsed?.providerID}
+                  className="h-4 w-4"
+                />
                 <span className="min-w-0 flex-1 truncate">{source.session.title || source.session.id}</span>
                 <button type="button" onClick={() => setSources((prev) => prev.filter((item) => item.session.id !== source.session.id))} className="text-muted-foreground hover:text-foreground">
                   <Icon name="close" className="h-4 w-4" />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

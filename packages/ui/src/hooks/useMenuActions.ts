@@ -1,7 +1,7 @@
 import React from 'react';
 import { toast } from '@/components/ui';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { getSyncSessions } from '@/sync/sync-refs';
+import { resolveAdjacentRootSession, resolveAdjacentRootSessionDirectory } from '@/sync/session-navigation';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -142,21 +142,18 @@ export const useMenuActions = (
   }, []);
 
   const navigateSession = React.useCallback((direction: -1 | 1) => {
-    const sessions = getSyncSessions();
-    if (sessions.length === 0) return;
-
-    const currentSessionId = useSessionUIStore.getState().currentSessionId;
-    const currentIndex = sessions.findIndex((session) => session.id === currentSessionId);
-    let nextIndex = direction > 0 ? 0 : sessions.length - 1;
-    if (currentIndex >= 0) {
-      nextIndex = (currentIndex + direction + sessions.length) % sessions.length;
-    }
-    const nextSession = sessions[nextIndex];
+    const nextSession = resolveAdjacentRootSession(
+      direction,
+      useSessionUIStore.getState().currentSessionId,
+    );
     if (!nextSession) return;
 
     setActiveMainTab('chat');
     setSessionSwitcherOpen(false);
-    useSessionUIStore.getState().setCurrentSession(nextSession.id);
+    useSessionUIStore.getState().setCurrentSession(
+      nextSession.id,
+      resolveAdjacentRootSessionDirectory(nextSession),
+    );
   }, [setActiveMainTab, setSessionSwitcherOpen]);
 
   const navigateProject = React.useCallback((direction: -1 | 1) => {

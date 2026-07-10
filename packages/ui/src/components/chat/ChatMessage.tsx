@@ -10,7 +10,6 @@ import { useContextStore } from '@/stores/contextStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useDeviceInfo } from '@/lib/device';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { cn } from '@/lib/utils';
 
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatAutoFollow';
@@ -152,7 +151,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const alwaysShowMessageActions = isMobile || isTablet;
-    const { currentTheme } = useThemeSystem();
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
@@ -387,10 +385,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const displayAgentName = useStickyDisplayValue<string>(agentName);
     const displayProviderIDValue = useStickyDisplayValue<string>(providerID ?? undefined);
+    const displayModelIDValue = useStickyDisplayValue<string>(modelID ?? undefined);
     const displayModelName = useStickyDisplayValue<string>(modelName);
 
     const headerAgentName = displayAgentName ?? undefined;
     const headerProviderID = displayProviderIDValue ?? null;
+    const headerModelID = displayModelIDValue ?? null;
     const headerModelName = displayModelName ?? undefined;
 
     const messageCompletedAt = React.useMemo(() => {
@@ -534,17 +534,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
         return true;
     }, [assistantTextParts.length, toolParts.length, hasOpenStep, isUser]);
-
-    const themeVariant = currentTheme?.metadata.variant;
-    const isDarkTheme = React.useMemo(() => {
-        if (themeVariant) {
-            return themeVariant === 'dark';
-        }
-        if (typeof document !== 'undefined') {
-            return document.documentElement.classList.contains('dark');
-        }
-        return false;
-    }, [themeVariant]);
 
     const shouldAnimateMessage = React.useMemo(() => {
         if (isUser) return false;
@@ -1086,10 +1075,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 <MessageHeader
                                     isUser={isUser}
                                     providerID={headerProviderID}
+                                    modelID={headerModelID}
                                     agentName={headerAgentName}
                                     modelName={headerModelName}
                                     variant={headerVariant}
-                                    isDarkTheme={isDarkTheme}
                                 />
                             )}
 
@@ -1130,13 +1119,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     )}
                 </div>
             </div>
-            <React.Suspense fallback={null}>
-                <ToolOutputDialog
-                    popup={popupContent}
-                    onOpenChange={handlePopupChange}
-                    isMobile={isMobile}
-                />
-            </React.Suspense>
+            {popupContent.open ? (
+                <React.Suspense fallback={null}>
+                    <ToolOutputDialog
+                        popup={popupContent}
+                        onOpenChange={handlePopupChange}
+                        isMobile={isMobile}
+                    />
+                </React.Suspense>
+            ) : null}
         </>
     );
 };

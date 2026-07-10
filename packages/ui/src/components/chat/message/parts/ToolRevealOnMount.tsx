@@ -11,9 +11,10 @@ interface ToolRevealOnMountProps {
     className?: string;
 }
 
-export const ToolRevealOnMount: React.FC<ToolRevealOnMountProps> = ({
+type AnimatedToolRevealProps = Omit<ToolRevealOnMountProps, 'animate'>;
+
+const AnimatedToolReveal: React.FC<AnimatedToolRevealProps> = ({
     children,
-    animate,
     wipe = true,
     delayMs = 0,
     className,
@@ -39,11 +40,6 @@ export const ToolRevealOnMount: React.FC<ToolRevealOnMountProps> = ({
 
     React.useLayoutEffect(() => {
         const el = rootRef.current;
-
-        if (!animate) {
-            clearRevealStyles(el);
-            return;
-        }
 
         if (!el || typeof window === 'undefined') {
             return;
@@ -115,11 +111,29 @@ export const ToolRevealOnMount: React.FC<ToolRevealOnMountProps> = ({
             animation?.cancel();
             clearRevealStyles(el);
         };
-    }, [animate, clearRevealStyles, delayMs, wipe]);
+    }, [clearRevealStyles, delayMs, wipe]);
 
     return (
         <div ref={rootRef} className={className}>
             {children}
         </div>
+    );
+};
+
+export const ToolRevealOnMount: React.FC<ToolRevealOnMountProps> = ({
+    children,
+    animate,
+    wipe = true,
+    delayMs = 0,
+    className,
+}) => {
+    if (!animate) {
+        return <div className={className}>{children}</div>;
+    }
+
+    return (
+        <AnimatedToolReveal wipe={wipe} delayMs={delayMs} className={className}>
+            {children}
+        </AnimatedToolReveal>
     );
 };

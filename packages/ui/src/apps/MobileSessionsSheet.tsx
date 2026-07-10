@@ -1,35 +1,5 @@
 import React from 'react';
-import {
-  RiAddLine,
-  RiArchiveLine,
-  RiArrowDownSLine,
-  RiArrowUpSLine,
-  RiCheckLine,
-  RiCloseLine,
-  RiDeleteBinLine,
-  RiDragMove2Line,
-  RiEdit2Line,
-  RiFolder6Line,
-  RiFolderAddLine,
-  RiSearchLine,
-} from '@remixicon/react';
 import type { Session } from '@opencode-ai/sdk/v2/client';
-import {
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
 import { Icon } from '@/components/icon/Icon';
@@ -38,10 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toast } from '@/components/ui';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
-import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -56,6 +24,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
+import { sortProjectsByRecentSessionActivity } from '@/components/session/sidebar/utils';
 
 type MobileSessionsSheetProps = {
   open: boolean;
@@ -180,39 +149,19 @@ const sessionMatchesQuery = (session: Session, projectLabel: string, query: stri
 const MobileProjectIcon: React.FC<{
   project: Pick<ProjectMeta, 'id' | 'icon' | 'color' | 'iconImage' | 'iconBackground'>;
   size?: 'sm' | 'md';
-}> = ({ project, size = 'md' }) => {
-  const { currentTheme } = useThemeSystem();
-
-  const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
-  const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] ?? null : null;
-
+}> = ({ size = 'md' }) => {
+  // Codex-style: muted folder only — ignore per-project color/icon chrome.
   const containerClasses = size === 'sm' ? 'size-6 rounded-md' : 'size-8 rounded-lg';
   const innerClasses = size === 'sm' ? 'size-3.5' : 'size-4';
-  const fallbackIcon = ProjectIcon ? (
-    <Icon name={ProjectIcon} className={innerClasses} style={iconColor ? { color: iconColor } : undefined} />
-  ) : (
-    <RiFolder6Line className={innerClasses} style={iconColor ? { color: iconColor } : undefined} />
-  );
 
   return (
     <span
       className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden bg-[var(--surface-muted)] text-muted-foreground',
+        'flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground',
         containerClasses,
       )}
-      style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
     >
-      {project.iconImage ? (
-        <ProjectIconImage
-          project={{ id: project.id, iconImage: project.iconImage ?? null }}
-          options={{
-            themeVariant: currentTheme.metadata.variant,
-            iconColor: currentTheme.colors.surface.foreground,
-          }}
-          className="size-full object-contain"
-          fallback={fallbackIcon}
-        />
-      ) : fallbackIcon}
+      <Icon name="folder" className={innerClasses} />
     </span>
   );
 };
@@ -225,7 +174,7 @@ const ChevronToggle: React.FC<{ expanded: boolean }> = ({ expanded }) => (
       expanded ? 'rotate-0' : '-rotate-90',
     )}
   >
-    <RiArrowDownSLine className="size-4" />
+    <Icon name="arrow-down-s" className="size-4" />
   </span>
 );
 
@@ -316,7 +265,7 @@ const SessionRow: React.FC<{
             onToggleChildren();
           }}
         >
-          <RiArrowDownSLine className={cn('size-[18px] transition-transform duration-150', expanded ? 'rotate-0' : '-rotate-90')} />
+          <Icon name="arrow-down-s" className={cn('size-[18px] transition-transform duration-150', expanded ? 'rotate-0' : '-rotate-90')} />
         </button>
       ) : null}
       <button
@@ -365,7 +314,7 @@ const SessionRow: React.FC<{
               onClick={onConfirmArchive}
               style={{ touchAction: 'manipulation' }}
             >
-              <RiArchiveLine className="size-4" />
+              <Icon name="archive" className="size-4" />
               <span className="typography-ui-label">{t('sessions.sidebar.bulkActions.archive')}</span>
             </button>
           ) : null}
@@ -380,7 +329,7 @@ const SessionRow: React.FC<{
             onClick={onRequestArchive}
             style={{ touchAction: 'manipulation' }}
           >
-            {confirmingArchive ? <RiCloseLine className="size-4" /> : <RiArchiveLine className="size-4" />}
+            {confirmingArchive ? <Icon name="close" className="size-4" /> : <Icon name="archive" className="size-4" />}
           </button>
         </>
       ) : null}
@@ -400,7 +349,7 @@ const ShowMoreRow: React.FC<{
       style={{ paddingLeft: indent, touchAction: 'manipulation' }}
       onClick={onClick}
     >
-      <RiArrowDownSLine className="size-4" />
+      <Icon name="arrow-down-s" className="size-4" />
       <span className="typography-micro">{t('sessions.sidebar.group.showMore')}</span>
     </button>
   );
@@ -418,99 +367,9 @@ const ShowFewerRow: React.FC<{
       style={{ paddingLeft: indent, touchAction: 'manipulation' }}
       onClick={onClick}
     >
-      <RiArrowUpSLine className="size-4" />
+      <Icon name="arrow-up-s" className="size-4" />
       <span className="typography-micro">{t('sessions.sidebar.group.showFewer')}</span>
     </button>
-  );
-};
-
-const SortableProjectRow: React.FC<{
-  project: ProjectMeta;
-  totalSessions: number;
-  confirmingDelete: boolean;
-  onEdit: () => void;
-  onRequestRemove: () => void;
-  onConfirmRemove: () => void;
-}> = ({
-  project,
-  totalSessions,
-  confirmingDelete,
-  onEdit,
-  onRequestRemove,
-  onConfirmRemove,
-}) => {
-  const { t } = useI18n();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : 1,
-  };
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'flex items-center gap-1 rounded-2xl border border-border/40 bg-[var(--surface-elevated)] px-1.5 py-1.5 transition-colors',
-        isDragging && 'shadow-lg shadow-black/20',
-        confirmingDelete && 'border-destructive/50 bg-[color-mix(in_srgb,var(--destructive)_8%,var(--surface-elevated))]',
-      )}
-    >
-      <button
-        type="button"
-        className="flex size-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground/70 transition-colors hover:text-foreground active:cursor-grabbing"
-        aria-label={t('mobile.sessions.dragHandleAria', { label: project.label })}
-        {...attributes}
-        {...listeners}
-      >
-        <RiDragMove2Line className="size-4" />
-      </button>
-      <MobileProjectIcon project={project} />
-      <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">{project.label}</span>
-      {confirmingDelete ? (
-        <button
-          type="button"
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-destructive px-3 text-destructive-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
-          aria-label={t('mobile.sessions.confirmRemoveProjectAria', { label: project.label })}
-          onClick={onConfirmRemove}
-          style={{ touchAction: 'manipulation' }}
-        >
-          <RiDeleteBinLine className="size-4" />
-          <span className="typography-ui-label">{t('mobile.sessions.confirmRemoveProject')}</span>
-        </button>
-      ) : (
-        <>
-          <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">{totalSessions}</span>
-          <button
-            type="button"
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={t('mobile.sessions.editProjectAria', { label: project.label })}
-            onClick={onEdit}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <RiEdit2Line className="size-4" />
-          </button>
-        </>
-      )}
-      <button
-        type="button"
-        className={cn(
-          'flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2',
-          confirmingDelete
-            ? 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:ring-primary'
-            : 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive',
-        )}
-        aria-label={
-          confirmingDelete
-            ? t('mobile.sessions.cancelRemoveProjectAria', { label: project.label })
-            : t('mobile.sessions.removeProjectAria', { label: project.label })
-        }
-        onClick={onRequestRemove}
-        style={{ touchAction: 'manipulation' }}
-      >
-        {confirmingDelete ? <RiCloseLine className="size-4" /> : <RiDeleteBinLine className="size-4" />}
-      </button>
-    </div>
   );
 };
 
@@ -528,8 +387,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
-  const reorderProjects = useProjectsStore((state) => state.reorderProjects);
-  const removeProject = useProjectsStore((state) => state.removeProject);
   const projectExpandedMap = useMobileSessionTreeStore((state) => state.projectExpanded);
   const worktreeExpandedMap = useMobileSessionTreeStore((state) => state.worktreeExpanded);
   const setProjectExpanded = useMobileSessionTreeStore((state) => state.setProjectExpanded);
@@ -547,8 +404,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
   const [worktreesByProject, setWorktreesByProject] = React.useState<Map<string, WorktreeMetadata[]>>(new Map());
   const [gitProjectPaths, setGitProjectPaths] = React.useState<Set<string>>(new Set());
-  const [editingOrder, setEditingOrder] = React.useState(false);
-  const [confirmingDeleteId, setConfirmingDeleteId] = React.useState<string | null>(null);
   // Per-bucket count of sessions revealed past the default page. Ephemeral —
   // resets when the sheet closes or when a group/project is toggled. Expand
   // state itself lives in useMobileSessionTreeStore (persisted).
@@ -558,8 +413,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   React.useEffect(() => {
     if (!open) {
       setQuery('');
-      setEditingOrder(false);
-      setConfirmingDeleteId(null);
       setVisibleCountByBucket(new Map());
       setEditingProjectId(null);
       setConfirmingArchiveSessionId(null);
@@ -569,10 +422,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     // intentionally only on open transition — live overlay handles updates after that
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  React.useEffect(() => {
-    if (!editingOrder) setConfirmingDeleteId(null);
-  }, [editingOrder]);
 
   React.useEffect(() => {
     if (!open || projects.length === 0) return;
@@ -698,8 +547,25 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       }
     }
 
-    return nodes;
-  }, [activeProjectId, projectsMeta, sessions]);
+    return sortProjectsByRecentSessionActivity(
+      nodes.map((node) => ({
+        node,
+        normalizedPath: node.project.path,
+        label: node.project.label,
+        lastOpenedAt: projects.find((entry) => entry.id === node.project.id)?.lastOpenedAt,
+        addedAt: projects.find((entry) => entry.id === node.project.id)?.addedAt,
+      })),
+      (entry) => {
+        let max = 0;
+        for (const bucket of entry.node.buckets) {
+          for (const session of bucket.sessions) {
+            max = Math.max(max, getSessionTimestamp(session));
+          }
+        }
+        return max;
+      },
+    ).map((entry) => entry.node);
+  }, [activeProjectId, projects, projectsMeta, sessions]);
 
   const normalizedDirectory = normalizePath(currentDirectory);
 
@@ -863,31 +729,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     setNewWorktreeDialogOpen(true);
   };
 
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleReorderDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setConfirmingDeleteId(null);
-    if (!over || active.id === over.id) return;
-    const fromIndex = projectsMeta.findIndex((p) => p.id === active.id);
-    const toIndex = projectsMeta.findIndex((p) => p.id === over.id);
-    if (fromIndex < 0 || toIndex < 0) return;
-    reorderProjects(fromIndex, toIndex);
-  };
-
-  const handleRequestRemoveProject = (projectId: string) => {
-    setConfirmingDeleteId((current) => (current === projectId ? null : projectId));
-  };
-
-  const handleConfirmRemoveProject = (project: ProjectMeta) => {
-    removeProject(project.id);
-    setConfirmingDeleteId(null);
-    toast.success(t('mobile.sessions.toast.projectRemoved', { label: project.label }));
-  };
-
   /** Short "Project · branch" string shown under the session title in search results. */
   const buildSessionContextLabel = React.useCallback(
     (session: Session): string => {
@@ -916,8 +757,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     });
   }, [normalizedQuery, projectNodes]);
 
-  // Preserve the store's project order. Reorder mode persists changes via
-  // useProjectsStore.reorderProjects, which writes back to the same source we render here.
+  // Project order follows the newest session activity under each project.
   const orderedNodes = filteredNodes;
 
   // Flat lists used only by the dedicated search-results view.
@@ -948,24 +788,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
 
   const hasNoMatches =
     normalizedQuery && searchSessionMatches.length === 0 && searchProjectMatches.length === 0;
-  const canEditOrder = !normalizedQuery && projectsMeta.length > 1;
-
-  const editToggle = canEditOrder ? (
-    <Button
-      type="button"
-      variant="chip"
-      size="sm"
-      aria-label={editingOrder ? t('mobile.sessions.doneEditing') : t('mobile.sessions.editOrder')}
-      aria-pressed={editingOrder}
-      onClick={() => setEditingOrder((value) => !value)}
-      style={{ touchAction: 'manipulation' }}
-    >
-      {editingOrder ? <RiCheckLine className="size-4" /> : <RiEdit2Line className="size-4" />}
-    </Button>
-  ) : null;
 
   const newChatButton =
-    !editingOrder && projectsMeta.length > 0 ? (
+    projectsMeta.length > 0 ? (
       <Button
         type="button"
         variant="default"
@@ -974,12 +799,12 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         onClick={handleStartNewChat}
         style={{ touchAction: 'manipulation' }}
       >
-        <RiAddLine className="size-4" />
+        <Icon name="add" className="size-4" />
         {t('mobile.sessions.newChat')}
       </Button>
     ) : null;
 
-  const addProjectButton = !editingOrder ? (
+  const addProjectButton = (
     <Button
       type="button"
       variant="chip"
@@ -989,24 +814,23 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       onClick={() => setDirectoryDialogOpen(true)}
       style={{ touchAction: 'manipulation' }}
     >
-      <RiFolderAddLine className="size-4" />
+      <Icon name="folder-add" className="size-4" />
     </Button>
-  ) : null;
+  );
 
   const trailingActions =
-    newChatButton || addProjectButton || editToggle ? (
+    newChatButton || addProjectButton ? (
       <>
         {newChatButton}
         {addProjectButton}
-        {editToggle}
       </>
     ) : null;
 
   const surfaceContent = (
       <div className="flex h-full flex-col">
-        <div className={cn('shrink-0 px-4 pb-2 pt-1', editingOrder && 'hidden')}>
+        <div className="shrink-0 px-4 pb-2 pt-1">
           <div className="relative">
-            <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -1021,7 +845,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                 onClick={() => setQuery('')}
                 style={{ touchAction: 'manipulation' }}
               >
-                <RiCloseLine className="size-4" />
+                <Icon name="close" className="size-4" />
               </button>
             ) : null}
           </div>
@@ -1038,7 +862,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                   className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 typography-ui-label text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   onClick={() => setDirectoryDialogOpen(true)}
                 >
-                  <RiFolderAddLine className="size-4" />
+                  <Icon name="folder-add" className="size-4" />
                   {t('sessions.sidebar.header.actions.addProject')}
                 </button>
               }
@@ -1048,7 +872,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
               title={t('mobile.sessions.empty.searchTitle')}
               description={t('mobile.sessions.empty.searchDescription')}
             />
-          ) : normalizedQuery && !editingOrder ? (
+          ) : normalizedQuery ? (
             <div className="flex flex-col gap-3 px-3 pt-2">
               {searchSessionMatches.length > 0 ? (
                 <section>
@@ -1117,35 +941,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                   </div>
                 </section>
               ) : null}
-            </div>
-          ) : editingOrder ? (
-            <div className="flex flex-col gap-2 px-3 py-2">
-              <p className="px-1 typography-micro text-muted-foreground">
-                {t('mobile.sessions.editOrderHint')}
-              </p>
-              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleReorderDragEnd}>
-                <SortableContext
-                  items={projectsMeta.map((p) => p.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="flex flex-col gap-1.5">
-                    {projectsMeta.map((project) => {
-                      const node = projectNodes.find((n) => n.project.id === project.id);
-                      return (
-                        <SortableProjectRow
-                          key={project.id}
-                          project={project}
-                          totalSessions={node?.totalSessions ?? 0}
-                          confirmingDelete={confirmingDeleteId === project.id}
-                          onEdit={() => setEditingProjectId(project.id)}
-                          onRequestRemove={() => handleRequestRemoveProject(project.id)}
-                          onConfirmRemove={() => handleConfirmRemoveProject(project)}
-                        />
-                      );
-                    })}
-                  </div>
-                </SortableContext>
-              </DndContext>
             </div>
           ) : (
             <div className="flex flex-col">

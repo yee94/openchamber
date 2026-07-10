@@ -1,114 +1,164 @@
 /**
- * Generates the SVG icon sprite file from @remixicon/react bundle.
+ * Generates the SVG icon sprite file from Lucide (Codex-style stroke icons).
  *
  * Usage: bun run scripts/generate-icon-sprite.mjs
  *
- * Reads the minified @remixicon/react bundle, extracts SVG path data
- * for all Ri* icons used in packages/ui/src, and writes
+ * Scans packages/ui/src for Icon name="..." / IconName usages, maps OpenChamber
+ * kebab names → Lucide glyphs via scripts/icon-name-map.mjs, and writes
  * packages/ui/src/components/icon/sprite.ts.
+ *
+ * Brand marks without Lucide equivalents fall back to embedded SVG markup in
+ * the map. Remixicon remains only as a last-resort path extractor for any
+ * unmapped legacy Ri* imports still present in source.
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs"
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { ICON_NAME_MAP } from "./icon-name-map.mjs"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
+const lucideIconsDir = resolve(repoRoot, "node_modules/lucide-static/icons")
 const remixPath = resolve(repoRoot, "node_modules/@remixicon/react/index.mjs")
 const outPath = resolve(repoRoot, "packages/ui/src/components/icon/sprite.ts")
+const srcDir = resolve(repoRoot, "packages/ui/src")
 
-const source = readFileSync(remixPath, "utf-8")
-
-// --- Step 1: extract variable → path mapping ---
-// Pattern: const VARNAME=({color:...})=>...createElement("path",{d:"PATH_DATA"})...,
-// Each icon is defined as `const X=...` where X is 1-4 chars.
-const varPathMap = new Map()
-const varRegex = /(?:[,;]const |\),)([A-Za-z0-9_$]{1,4})=\([{]color:/g
-// Find all variable definitions and their boundaries
-const varPositions = []
-let m
-while ((m = varRegex.exec(source)) !== null) {
-  varPositions.push({
-    varName: m[1],
-    start: m.index + m[0].length - 1, // first `{` after `=({color:`
-  })
-}
-
-for (let i = 0; i < varPositions.length; i++) {
-  const current = varPositions[i]
-  const next = varPositions[i + 1]
-  // End at the )), just before the next variable definition
-  const end = next
-    ? source.indexOf("))," + next.varName + "=(", current.start)
-    : source.length
-  if (end < 0 || end < current.start) continue
-  const segment = source.slice(current.start, end)
-  const pathRegex = /\w+\.createElement\("path",[{]d:"([^"]*)"/g
-  let pm
-  const paths = []
-  while ((pm = pathRegex.exec(segment)) !== null) {
-    paths.push(pm[1])
-  }
-  if (paths.length > 0) {
-    varPathMap.set(current.varName, paths)
-  }
-}
-
-// --- Step 2: extract export mapping ---
-// The export map is near the end of the file:
-// export{V1 as Ri...Z2 as RiLast};
-const exportRegex = /export[{]([^}]+)[}]/
-const exportMatch = exportRegex.exec(source)
-if (!exportMatch) {
-  console.error("Could not find export mapping in remixicon bundle")
+if (!existsSync(lucideIconsDir)) {
+  console.error("lucide-static not found. Run: bun add -d lucide-static")
   process.exit(1)
 }
 
+// --- Lucide SVG extraction ---
+function readLucideInner(lucideName) {
+  const filePath = resolve(lucideIconsDir, `${lucideName}.svg`)
+  if (!existsSync(filePath)) return null
+  const raw = readFileSync(filePath, "utf-8")
+  const match = raw.match(/<svg\b[^>]*>([\s\S]*?)<\/svg>/i)
+  if (!match) return null
+  // Strip XML comments / excess whitespace; keep element markup.
+  return match[1]
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/** Bake solid fill onto Lucide stroke paths for *-fill OpenChamber names. */
+function applyFillVariant(inner) {
+  return inner
+    .replace(/<path\b([^>]*?)(\/?)>/g, (full, attrs, selfClose) => {
+      if (/\bfill=/.test(attrs)) return full
+      return `<path${attrs} fill="currentColor"${selfClose}>`
+    })
+    .replace(/<circle\b([^>]*?)(\/?)>/g, (full, attrs, selfClose) => {
+      if (/\bfill=/.test(attrs)) return full
+      return `<circle${attrs} fill="currentColor"${selfClose}>`
+    })
+}
+
+// --- Optional Remixicon fallback (brands / unmapped Ri* only) ---
+const varPathMap = new Map()
 const nameToVar = new Map()
-const entries = exportMatch[1].split(",")
-for (const entry of entries) {
-  // Pattern: VAR as RiIconName
-  const parts = entry.trim().split(" as ")
-  if (parts.length === 2) {
-    nameToVar.set(parts[1].trim(), parts[0].trim())
-  }
-}
-
-const remixToSpriteName = (name) => {
-  // RiArrowDownSLine → arrow-down-s
-  // RiGithubFill → github-fill (keep Fill for fill variants)
-  return name
-    .replace(/^Ri/, "")
-    .replace(/Line$/, "")
-    .replace(/([a-z])([A-Z0-9])/g, "$1-$2")
-    .replace(/([0-9])([A-Z])/g, "$1-$2")
-    .toLowerCase()
-}
-
 const spriteNameToRi = new Map()
-const hasRemixVariantSuffix = (name) => name.endsWith("Line") || name.endsWith("Fill")
-const shouldPreferSpriteCandidate = (current, candidate) => {
-  if (!current) return true
-  if (!hasRemixVariantSuffix(candidate) && hasRemixVariantSuffix(current)) return true
-  if (!hasRemixVariantSuffix(current)) return false
-  if (candidate.endsWith("Line") && !current.endsWith("Line")) return true
-  return false
-}
 
-for (const iconName of nameToVar.keys()) {
-  const spriteName = remixToSpriteName(iconName)
-  const current = spriteNameToRi.get(spriteName)
-  if (shouldPreferSpriteCandidate(current, iconName)) {
-    spriteNameToRi.set(spriteName, iconName)
+if (existsSync(remixPath)) {
+  const source = readFileSync(remixPath, "utf-8")
+  const varRegex = /(?:[,;]const |\),)([A-Za-z0-9_$]{1,4})=\([{]color:/g
+  const varPositions = []
+  let m
+  while ((m = varRegex.exec(source)) !== null) {
+    varPositions.push({
+      varName: m[1],
+      start: m.index + m[0].length - 1,
+    })
+  }
+
+  for (let i = 0; i < varPositions.length; i++) {
+    const current = varPositions[i]
+    const next = varPositions[i + 1]
+    const end = next
+      ? source.indexOf("))," + next.varName + "=(", current.start)
+      : source.length
+    if (end < 0 || end < current.start) continue
+    const segment = source.slice(current.start, end)
+    const pathRegex = /\w+\.createElement\("path",[{]d:"([^"]*)"/g
+    let pm
+    const paths = []
+    while ((pm = pathRegex.exec(segment)) !== null) {
+      paths.push(pm[1])
+    }
+    if (paths.length > 0) {
+      varPathMap.set(current.varName, paths)
+    }
+  }
+
+  const exportMatch = /export[{]([^}]+)[}]/.exec(source)
+  if (exportMatch) {
+    for (const entry of exportMatch[1].split(",")) {
+      const parts = entry.trim().split(" as ")
+      if (parts.length === 2) {
+        nameToVar.set(parts[1].trim(), parts[0].trim())
+      }
+    }
+  }
+
+  const remixToSpriteName = (name) =>
+    name
+      .replace(/^Ri/, "")
+      .replace(/Line$/, "")
+      .replace(/([a-z])([A-Z0-9])/g, "$1-$2")
+      .replace(/([0-9])([A-Z])/g, "$1-$2")
+      .toLowerCase()
+
+  const hasRemixVariantSuffix = (name) => name.endsWith("Line") || name.endsWith("Fill")
+  const shouldPreferSpriteCandidate = (current, candidate) => {
+    if (!current) return true
+    if (!hasRemixVariantSuffix(candidate) && hasRemixVariantSuffix(current)) return true
+    if (!hasRemixVariantSuffix(current)) return false
+    if (candidate.endsWith("Line") && !current.endsWith("Line")) return true
+    return false
+  }
+
+  for (const iconName of nameToVar.keys()) {
+    const spriteName = remixToSpriteName(iconName)
+    const current = spriteNameToRi.get(spriteName)
+    if (shouldPreferSpriteCandidate(current, iconName)) {
+      spriteNameToRi.set(spriteName, iconName)
+    }
   }
 }
 
-// --- Step 3: find which icons we actually use ---
-const srcDir = resolve(repoRoot, "packages/ui/src")
+function remixInnerForKebab(kebab) {
+  const riName = spriteNameToRi.get(kebab)
+  if (!riName) return null
+  const varName = nameToVar.get(riName)
+  if (!varName) return null
+  const paths = varPathMap.get(varName)
+  if (!paths?.length) return null
+  return paths.map((d) => `<path d="${d}" fill="currentColor"/>`).join("")
+}
 
-// Helper: convert kebab-case name back to RiName
+// --- Scan packages/ui/src for used kebab icon names ---
+function findAllSourceFiles(dir) {
+  const results = []
+  for (const entry of readdirSync(dir)) {
+    const full = resolve(dir, entry)
+    try {
+      const st = statSync(full)
+      if (st.isDirectory()) {
+        if (entry === "node_modules") continue
+        results.push(...findAllSourceFiles(full))
+      } else if (/\.(tsx?)$/.test(entry) && full !== outPath) {
+        results.push(full)
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return results
+}
+
 function nameToRi(kebab) {
-  // "arrow-down-sline" → RiArrowDownSline
   const parts = kebab.split("-")
   let result = "Ri"
   for (let i = 0; i < parts.length; i++) {
@@ -122,55 +172,25 @@ function nameToRi(kebab) {
   return result
 }
 
-// Finish step 3 synchronously with simpler approach
-function findAllSourceFiles(dir) {
-  const results = []
-  for (const entry of readdirSync(dir)) {
-    const full = resolve(dir, entry)
-    try {
-      const st = statSync(full)
-      if (st.isDirectory()) {
-        if (entry === "node_modules") continue
-        results.push(...findAllSourceFiles(full))
-      } else if (/\.(tsx?)$/.test(entry) && full !== outPath) {
-        results.push(full)
-      }
-    } catch { /* skip */ }
-  }
-  return results
-}
+const usedKebab = new Set()
 
-const allSrcFiles = findAllSourceFiles(srcDir)
-const usedIcons = new Set()
 const addKebabIcon = (kebab) => {
-  const exactRiName = spriteNameToRi.get(kebab)
-  if (exactRiName && !hasRemixVariantSuffix(exactRiName)) {
-    usedIcons.add(exactRiName)
+  if (!kebab || typeof kebab !== "string") return false
+  if (!/^[a-z][a-z0-9-]*$/.test(kebab)) return false
+  // Only accept names we know how to render (map or remix fallback).
+  if (ICON_NAME_MAP[kebab] || spriteNameToRi.has(kebab)) {
+    usedKebab.add(kebab)
     return true
   }
-
+  // Also accept if a Ri* Line/Fill variant exists for this kebab.
   for (const suffix of ["Line", "Fill", ""]) {
     const riName = nameToRi(kebab) + suffix
     if (nameToVar.has(riName)) {
-      usedIcons.add(riName)
+      usedKebab.add(kebab)
       return true
     }
   }
-
-  if (exactRiName) {
-    usedIcons.add(exactRiName)
-    return true
-  }
-
   return false
-}
-
-const addIconLiterals = (content) => {
-  const iconLiteralRegex = /["']([a-z][a-z0-9-]*)["']/g
-  let literal
-  while ((literal = iconLiteralRegex.exec(content)) !== null) {
-    addKebabIcon(literal[1])
-  }
 }
 
 function findMatchingBrace(content, openBraceIndex) {
@@ -266,7 +286,12 @@ const addTypedIconNameRecords = (content) => {
     const closeBraceIndex = findMatchingBrace(content, openBraceIndex)
     if (closeBraceIndex === -1) continue
 
-    addIconLiterals(content.slice(openBraceIndex + 1, closeBraceIndex))
+    const body = content.slice(openBraceIndex + 1, closeBraceIndex)
+    const iconLiteralRegex = /["']([a-z][a-z0-9-]*)["']/g
+    let literal
+    while ((literal = iconLiteralRegex.exec(body)) !== null) {
+      addKebabIcon(literal[1])
+    }
     recordRegex.lastIndex = closeBraceIndex + 1
   }
 }
@@ -291,32 +316,38 @@ const addIconNameVariableAssignments = (content) => {
   }
 }
 
-for (const file of allSrcFiles) {
+const remixToSpriteName = (name) =>
+  name
+    .replace(/^Ri/, "")
+    .replace(/Line$/, "")
+    .replace(/([a-z])([A-Z0-9])/g, "$1-$2")
+    .replace(/([0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase()
+
+for (const file of findAllSourceFiles(srcDir)) {
   const content = readFileSync(file, "utf-8")
-  // Match RiIcons from @remixicon/react imports
+
+  // Legacy Ri* imports → kebab via remix naming
   const iconRegex = /Ri[A-Z][A-Za-z0-9]+/g
   let im
   while ((im = iconRegex.exec(content)) !== null) {
     if (nameToVar.has(im[0])) {
-      usedIcons.add(im[0])
+      addKebabIcon(remixToSpriteName(im[0]))
     }
   }
 
-  // Also scan for <Icon name="..." /> patterns (already-migrated icons)
   const iconNameRegex = /<Icon\b[^>]*\bname=(?:["']([^"']+)["']|{\s*["']([^"']+)["']\s*})/g
   let nm
   while ((nm = iconNameRegex.exec(content)) !== null) {
     addKebabIcon(nm[1] || nm[2])
   }
 
-  // Also scan for icon: 'kebab-name' / Icon: 'kebab-name' in object literals.
   const iconPropRegex = /\b[Ii]con:\s*["']([a-z][a-z0-9-]*)["']/g
   let ip
   while ((ip = iconPropRegex.exec(content)) !== null) {
     addKebabIcon(ip[1])
   }
 
-  // Also scan JSX props named icon/Icon with a string literal value.
   const iconJsxPropRegex = /\b[Ii]con=(?:["']([^"']+)["']|{\s*["']([^"']+)["']\s*})/g
   let jp
   while ((jp = iconJsxPropRegex.exec(content)) !== null) {
@@ -328,38 +359,59 @@ for (const file of allSrcFiles) {
   addIconNameVariableAssignments(content)
 }
 
-console.log(`Found ${usedIcons.size} unique remixicon names used in source`)
-
-// --- Step 4: build sprite data ---
-const iconEntries = []
-for (const iconName of [...usedIcons].sort()) {
-  const varName = nameToVar.get(iconName)
-  if (!varName) {
-    console.warn(`  ⚠ Unknown icon: ${iconName}`)
-    continue
-  }
-  const paths = varPathMap.get(varName)
-  if (!paths || paths.length === 0) {
-    console.warn(`  ⚠ No path data for: ${iconName} (var: ${varName})`)
-    continue
-  }
-
-  // Build SVG content from paths
-  const svgContent = paths
-    .map((d) => `<path d="${d}" fill="currentColor"/>`)
-    .join("")
-
-  iconEntries.push({ name: iconName, content: svgContent })
+// Always include every mapped icon so IconName stays complete for typed configs.
+for (const kebab of Object.keys(ICON_NAME_MAP)) {
+  usedKebab.add(kebab)
 }
 
-// --- Step 5: write sprite.ts ---
-const spriteLines = iconEntries.map(({ name, content }) => {
-  const spriteName = remixToSpriteName(name)
-  return `  "${spriteName}": \`${content}\`,`
-})
+console.log(`Found ${usedKebab.size} unique icon names to pack`)
+
+// --- Build sprite entries ---
+const iconEntries = []
+const missing = []
+
+for (const kebab of [...usedKebab].sort()) {
+  const entry = ICON_NAME_MAP[kebab]
+
+  if (entry?.brand) {
+    iconEntries.push({ name: kebab, content: entry.brand, kind: "brand" })
+    continue
+  }
+
+  if (entry?.lucide) {
+    let inner = readLucideInner(entry.lucide)
+    if (!inner) {
+      missing.push(`${kebab} → lucide:${entry.lucide}`)
+      continue
+    }
+    if (entry.fill) {
+      inner = applyFillVariant(inner)
+    }
+    iconEntries.push({ name: kebab, content: inner, kind: "lucide" })
+    continue
+  }
+
+  const remixInner = remixInnerForKebab(kebab)
+  if (remixInner) {
+    iconEntries.push({ name: kebab, content: remixInner, kind: "remix-fallback" })
+    continue
+  }
+
+  missing.push(kebab)
+}
+
+if (missing.length > 0) {
+  console.warn(`\n⚠ Missing ${missing.length} icons:`)
+  for (const name of missing) console.warn(`  - ${name}`)
+}
+
+const spriteLines = iconEntries.map(
+  ({ name, content }) => `  "${name}": \`${content}\`,`
+)
 
 const spriteContent = `// This file is auto-generated by scripts/generate-icon-sprite.mjs
-// Do not edit manually. Run the script to update.
+// Do not edit manually. Run \`bun run icons:generate\` to update.
+// Source: Lucide (stroke) via scripts/icon-name-map.mjs — Codex-style thin icons.
 
 export const iconSpriteData = {
 ${spriteLines.join("\n")}
@@ -367,5 +419,12 @@ ${spriteLines.join("\n")}
 `
 
 writeFileSync(outPath, spriteContent, "utf-8")
+
+const byKind = iconEntries.reduce((acc, e) => {
+  acc[e.kind] = (acc[e.kind] || 0) + 1
+  return acc
+}, {})
+
 console.log(`\n✅ Generated sprite data for ${iconEntries.length} icons → ${outPath}`)
+console.log(`   Breakdown: ${JSON.stringify(byKind)}`)
 console.log(`   Total sprite size: ${Buffer.byteLength(spriteContent).toLocaleString()} bytes`)

@@ -61,7 +61,7 @@ import { useSelectionStore } from "./selection-store"
 import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
-import { setSessionOpener } from "./session-navigation"
+import { setSessionOpener } from "./session-opener"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
 
@@ -688,6 +688,10 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const projects = projectsState.projects
     const availableWorktreesByProject = get().availableWorktreesByProject
     const activeProject = projectsState.getActiveProject()
+    // Prefer the active conversation workspace over the directory store / last draft
+    // target so Mod+N (and other unscoped "new session" entry points) land on Welcome
+    // already switched to the project the user was just talking in.
+    const conversationDirectory = normalizePath(get().currentSessionDirectory ?? null)
     const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory ?? null)
     const persistedTarget = readPersistedDraftTarget()
 
@@ -709,11 +713,16 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       ? projects.find((p) => p.id === persistedTarget.projectId) ?? null
       : null
     const persistedProjectByDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, persistedTarget?.directory ?? null)
+    const conversationProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, conversationDirectory)
     const currentDirProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, currentDirectory)
 
     const selectedProject = (() => {
       if (explicitProject) return explicitProject
       if (explicitDirectory !== null) return inferredProjectFromDir
+      // Live conversation wins over directory-store / last-draft heuristics.
+      if (conversationProject) return conversationProject
+      // Preserve orphan-directory behavior: a known cwd that matches no project
+      // must not silently inherit the active project.
       if (currentDirectory) return currentDirProject
       return persistedProjectByDir ?? persistedProjectById ?? fallbackProject
     })()
@@ -721,12 +730,19 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const directory = (() => {
       if (explicitDirectory !== null) return explicitDirectory
       if (explicitProject) return normalizePath(explicitProject.path ?? null)
+      // Keep the conversation directory (incl. worktree) when starting from a live session.
+      if (conversationDirectory) return conversationDirectory
       if (currentDirectory) return currentDirectory
       if (persistedTarget?.directory) return persistedTarget.directory
       return normalizePath(selectedProject?.path ?? null)
     })()
 
     persistDraftTarget({ projectId: selectedProject?.id ?? null, directory })
+
+    // Mirror sidebar "new session" behavior: switch the active project to the Welcome target.
+    if (selectedProject && projectsState.activeProjectId !== selectedProject.id) {
+      projectsState.setActiveProjectIdOnly(selectedProject.id)
+    }
 
     const nextDraft: NewSessionDraftState = {
       open: true,

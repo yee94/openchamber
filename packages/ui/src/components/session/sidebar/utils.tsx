@@ -124,8 +124,79 @@ const getSessionCreatedAt = (session: Session): number => {
   return toFiniteNumber(session.time?.created) ?? 0;
 };
 
-const getSessionUpdatedAt = (session: Session): number => {
+export const getSessionUpdatedAt = (session: Session): number => {
   return toFiniteNumber(session.time?.updated) ?? toFiniteNumber(session.time?.created) ?? 0;
+};
+
+type ProjectRecencySortable = {
+  normalizedPath: string;
+  label?: string;
+  path?: string;
+  lastOpenedAt?: number;
+  addedAt?: number;
+};
+
+export const getLatestSessionUpdatedAtForProject = (
+  projectRoot: string,
+  sessions: Session[],
+  worktreePaths: string[] = [],
+): number => {
+  const root = normalizePath(projectRoot);
+  if (!root) {
+    return 0;
+  }
+
+  const validDirectories = new Set<string>([root]);
+  worktreePaths.forEach((path) => {
+    const normalized = normalizePath(path);
+    if (normalized) {
+      validDirectories.add(normalized);
+    }
+  });
+
+  let max = 0;
+  sessions.forEach((session) => {
+    if (!isSessionRelatedToProject(session, root, validDirectories)) {
+      return;
+    }
+    const updated = getSessionUpdatedAt(session);
+    if (updated > max) {
+      max = updated;
+    }
+  });
+  return max;
+};
+
+const getProjectRecencyScore = (
+  project: ProjectRecencySortable,
+  latestSessionUpdatedAt: number,
+): number => {
+  if (latestSessionUpdatedAt > 0) {
+    return latestSessionUpdatedAt;
+  }
+  return project.lastOpenedAt ?? project.addedAt ?? 0;
+};
+
+export const compareProjectsByRecentSessionActivity = <T extends ProjectRecencySortable>(
+  a: T,
+  b: T,
+  getLatestUpdatedAt: (project: T) => number,
+): number => {
+  const aScore = getProjectRecencyScore(a, getLatestUpdatedAt(a));
+  const bScore = getProjectRecencyScore(b, getLatestUpdatedAt(b));
+  if (bScore !== aScore) {
+    return bScore - aScore;
+  }
+  const aLabel = a.label || a.path || a.normalizedPath;
+  const bLabel = b.label || b.path || b.normalizedPath;
+  return aLabel.localeCompare(bLabel);
+};
+
+export const sortProjectsByRecentSessionActivity = <T extends ProjectRecencySortable>(
+  projects: T[],
+  getLatestUpdatedAt: (project: T) => number,
+): T[] => {
+  return [...projects].sort((a, b) => compareProjectsByRecentSessionActivity(a, b, getLatestUpdatedAt));
 };
 
 export const compareSessionsByPinnedAndTime = (
@@ -200,6 +271,20 @@ export const formatProjectLabel = (label: string): string => {
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
+
+/** Codex-style muted hint / empty / show-more row under a project or section.
+ *  Matches session-row horizontal padding (px-2) so grey copy shares the same
+ *  left edge as list chips — no extra indent, no flush selection look. */
+export const SIDEBAR_MUTED_HINT_CLASS =
+  'box-border w-full px-2 py-1.5 text-left typography-micro text-muted-foreground/70 select-none';
+
+/** Codex-style active chip: neutral wash from foreground — never theme/primary tint. */
+export const SIDEBAR_ROW_ACTIVE_CLASS =
+  'bg-[color-mix(in_srgb,var(--surface-foreground)_10%,transparent)]';
+
+/** Codex-style hover wash: lighter than active, still neutral. */
+export const SIDEBAR_ROW_HOVER_CLASS =
+  'hover:bg-[color-mix(in_srgb,var(--surface-foreground)_6%,transparent)]';
 
 export const renderHighlightedText = (text: string, query: string): React.ReactNode => {
   if (!query) {

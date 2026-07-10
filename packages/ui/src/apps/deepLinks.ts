@@ -6,6 +6,11 @@
  * {@link parseDeepLink} into a typed {@link DeepLinkIntent}; the navigation layer
  * (deepLinkNavigation) is the only place that knows how to *apply* an intent.
  *
+ * Desktop openers (Raycast / `open`) should prefer the OpenCode-aligned forms:
+ *   openchamber://new-session?directory=${path}
+ *   openchamber://open-project?directory=${path}
+ * Legacy aliases (`dir`, `path`, `new`, `project/<path>`) remain accepted on parse.
+ *
  * Keep this file pure (no React, no stores, no Capacitor) so it can be imported from any
  * context — including, eventually, a tiny encoder shared with the native widget/extension.
  */
@@ -22,7 +27,8 @@ export type ViewTarget = 'files' | 'mcp' | 'instances' | 'update';
  */
 export type DeepLinkIntent =
   | { type: 'session'; sessionId: string; directory?: string }
-  | { type: 'new-session'; directory?: string; projectId?: string; agent?: string; model?: string }
+  | { type: 'new-session'; directory?: string; projectId?: string; agent?: string; model?: string; prompt?: string }
+  | { type: 'open-project'; directory: string }
   | { type: 'sessions'; filter?: SessionsFilter }
   | { type: 'status' }
   | { type: 'settings'; section?: string }
@@ -30,6 +36,14 @@ export type DeepLinkIntent =
   | { type: 'view'; target: ViewTarget };
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, '');
+
+// Prefer OpenCode's `directory`, then legacy mobile `dir`, then CodeX-style `path`.
+const readDirectoryParam = (query: URLSearchParams): string | undefined => {
+  const value = query.get('directory') || query.get('dir') || query.get('path');
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
 
 const segmentsOf = (url: URL): string[] => {
   // Custom-scheme URLs put the first route token in `host` (openchamber://session/<id>),
@@ -74,18 +88,40 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
       if (!sessionId) {
         return null;
       }
-      return { type: 'session', sessionId, directory: query.get('dir') ?? undefined };
+      return { type: 'session', sessionId, directory: readDirectoryParam(query) };
     }
 
     case 'new':
-    case 'new-session':
+    case 'new-session': {
+      const prompt = query.get('prompt')?.trim();
       return {
         type: 'new-session',
-        directory: query.get('dir') ?? undefined,
+        directory: readDirectoryParam(query),
         projectId: query.get('project') ?? undefined,
         agent: query.get('agent') ?? undefined,
         model: query.get('model') ?? undefined,
+        prompt: prompt || undefined,
       };
+    }
+
+    // Align with OpenCode: openchamber://open-project?directory=${path}
+    // Also accept legacy path-form openchamber://project/<path>.
+    case 'project':
+    case 'open-project': {
+      let fromPath: string | undefined;
+      if (rest.length > 0) {
+        try {
+          fromPath = decodeURIComponent(rest.join('/'));
+        } catch {
+          fromPath = rest.join('/');
+        }
+      }
+      const directory = readDirectoryParam(query) || fromPath;
+      if (!directory) {
+        return null;
+      }
+      return { type: 'open-project', directory };
+    }
 
     case 'sessions': {
       const filter = query.get('filter');
@@ -145,14 +181,18 @@ export function buildDeepLink(intent: DeepLinkIntent): string {
 
   switch (intent.type) {
     case 'session':
-      return withQuery(`session/${encodeURIComponent(intent.sessionId)}`, { dir: intent.directory });
+      // Emit OpenCode-aligned `directory=` (parse still accepts legacy `dir` / `path`).
+      return withQuery(`session/${encodeURIComponent(intent.sessionId)}`, { directory: intent.directory });
     case 'new-session':
-      return withQuery('new', {
-        dir: intent.directory,
+      return withQuery('new-session', {
+        directory: intent.directory,
         project: intent.projectId,
         agent: intent.agent,
         model: intent.model,
+        prompt: intent.prompt,
       });
+    case 'open-project':
+      return withQuery('open-project', { directory: intent.directory });
     case 'sessions':
       return withQuery('sessions', { filter: intent.filter });
     case 'status':

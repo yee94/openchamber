@@ -430,16 +430,35 @@ textarea[data-chat-input="true"]:focus-visible {
 
 /* Safari/WebKit fixes for buttons and SVG icons */
 /* Remixicon puts fill="currentColor" on root SVG which WebKit renders as background */
+/* Only stroke-sprite roots need fill:none — do NOT blanket all button svg
+   (that hides filled custom glyphs like StopIcon / brand marks). */
+button svg.oc-icon,
+[role="button"] svg.oc-icon,
 button svg.remixicon,
-[role="button"] svg.remixicon,
-button svg,
-[role="button"] svg {
+[role="button"] svg.remixicon {
   background: none !important;
   background-color: transparent !important;
   /* Override inline fill attribute on SVG root */
   fill: none !important;
   /* Ensure SVG uses CSS rendering, not native */
   shape-rendering: geometricPrecision;
+}
+
+button svg,
+[role="button"] svg {
+  background: none !important;
+  background-color: transparent !important;
+  shape-rendering: geometricPrecision;
+}
+
+/* Codex/Lucide thin stroke defaults (matches Icon.tsx ICON_STROKE_WIDTH).
+   Pale look comes from text-muted-foreground / currentColor — not SVG opacity
+   (folder glyphs must stay fully opaque like Codex). */
+svg.oc-icon {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* GPU acceleration for non-spinning SVGs */
@@ -450,20 +469,29 @@ button svg:not(.animate-spin),
 }
 
 /* Fix SVG elements inside buttons - remove any rect/circle backgrounds */
+/* Stroke icons: only clear decorative rects. Do not force path/circle fills —
+   Lucide geometry is stroke-based; solid *-fill glyphs bake their own fill. */
 button svg rect,
-button svg circle,
-[role="button"] svg rect,
-[role="button"] svg circle {
+[role="button"] svg rect {
   fill: none !important;
 }
 
 /* Ensure SVG paths/shapes inherit color properly */
+/* Legacy remixicon-only: keep fill inheritance for any remaining .remixicon roots.
+   oc-icon paths must NOT get fill:currentColor or thin strokes become solid blobs. */
 button svg.remixicon path,
 button svg.remixicon circle[fill],
 [role="button"] svg.remixicon path,
-[role="button"] svg.remixicon circle[fill],
-button svg path,
-[role="button"] svg path {
+[role="button"] svg.remixicon circle[fill] {
+  fill: currentColor !important;
+}
+
+/* Solid / brand glyphs bake fill="currentColor" on shapes; restore it under the
+   root fill:none !important WebKit workaround above. */
+button svg.oc-icon path[fill],
+button svg.oc-icon circle[fill],
+[role="button"] svg.oc-icon path[fill],
+[role="button"] svg.oc-icon circle[fill] {
   fill: currentColor !important;
 }
 
@@ -923,11 +951,11 @@ html:not(.dark) .chat-scroll {
   }
 }
 
-/* Text font */
+/* Text font — Codex App chat body: text-size-chat + leading-relaxed (1.625). */
 .markdown-content {
   font-family: var(--font-sans);
   font-size: var(--text-markdown);
-  line-height: inherit;
+  line-height: var(--markdown-body-line-height, 1.625);
 }
 
 .markdown-content p,
@@ -935,13 +963,14 @@ html:not(.dark) .chat-scroll {
 .markdown-content blockquote,
 .markdown-content td,
 .markdown-content th {
-  line-height: inherit;
+  line-height: var(--markdown-body-line-height, 1.625);
 }
 
 /* Restore paragraph block spacing inside markdown content. The
    --markdown-paragraph-spacing token existed but was never wired, so Tailwind
    preflight's zeroed <p> margins left adjacent paragraphs collapsed into one
-   visual line. */
+   visual line.
+   Codex App uses [&_p+p]:!mt-5 (1.25rem) between consecutive paragraphs. */
 .markdown-content p {
   margin: 0 0 var(--markdown-paragraph-spacing) 0;
 }
@@ -951,7 +980,9 @@ html:not(.dark) .chat-scroll {
    nullifiers target the wrapper (where margin is ignored), not the paragraph.
    Drop the trailing margin on the last paragraph of the last block directly so
    messages don't gain extra space at the bottom. */
-.markdown-content > [data-md-block]:last-child p:last-child {
+.markdown-content > [data-md-block]:last-child p:last-child,
+.markdown-content > [data-md-block]:last-child ul:last-child,
+.markdown-content > [data-md-block]:last-child ol:last-child {
   margin-bottom: 0;
 }
 

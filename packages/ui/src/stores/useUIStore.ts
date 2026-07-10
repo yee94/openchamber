@@ -574,6 +574,7 @@ interface UIStore {
   showReasoningTraces: boolean;
   sessionRecapEnabled: boolean;
   sessionSuggestionEnabled: boolean;
+  sessionTitleRefreshEnabled: boolean;
   collapsibleThinkingBlocks: boolean;
   chatRenderMode: ChatRenderMode;
   activityRenderMode: ActivityRenderMode;
@@ -724,6 +725,7 @@ interface UIStore {
   setShowReasoningTraces: (value: boolean) => void;
   setSessionRecapEnabled: (value: boolean) => void;
   setSessionSuggestionEnabled: (value: boolean) => void;
+  setSessionTitleRefreshEnabled: (value: boolean) => void;
   setCollapsibleThinkingBlocks: (value: boolean) => void;
   setChatRenderMode: (value: ChatRenderMode) => void;
   setActivityRenderMode: (value: ActivityRenderMode) => void;
@@ -871,6 +873,7 @@ export const useUIStore = create<UIStore>()(
         showReasoningTraces: true,
         sessionRecapEnabled: true,
         sessionSuggestionEnabled: true,
+        sessionTitleRefreshEnabled: true,
         collapsibleThinkingBlocks: true,
         chatRenderMode: 'live',
         activityRenderMode: 'summary',
@@ -1578,6 +1581,10 @@ export const useUIStore = create<UIStore>()(
           set({ sessionSuggestionEnabled: value });
         },
 
+        setSessionTitleRefreshEnabled: (value) => {
+          set({ sessionTitleRefreshEnabled: value });
+        },
+
         setCollapsibleThinkingBlocks: (value) => {
           set({ collapsibleThinkingBlocks: value });
         },
@@ -2267,6 +2274,7 @@ export const useUIStore = create<UIStore>()(
           showReasoningTraces: state.showReasoningTraces,
           sessionRecapEnabled: state.sessionRecapEnabled,
           sessionSuggestionEnabled: state.sessionSuggestionEnabled,
+          sessionTitleRefreshEnabled: state.sessionTitleRefreshEnabled,
           collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
           chatRenderMode: state.chatRenderMode,
           activityRenderMode: state.activityRenderMode,

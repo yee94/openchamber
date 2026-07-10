@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { ModelLogo } from '@/components/ui/ModelLogo';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1691,7 +1692,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                                 <div className="flex min-w-0 items-center gap-1.5">
                                     {showProviderLogo ? (
-                                        <ProviderLogo providerId={providerId} className="size-3.5 flex-shrink-0" />
+                                        <ModelLogo modelId={modelId} providerId={providerId} className="size-3.5 flex-shrink-0" />
                                     ) : null}
                                     <span className="typography-meta font-medium text-foreground truncate">
                                         {getModelDisplayName(model)}
@@ -1929,7 +1930,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             model,
                                             providerId: provider.id as string,
                                             modelId: model.id as string,
-                                            showProviderLogo: false,
+                                            showProviderLogo: true,
                                         }))}
                                     </div>
                                 )}
@@ -2306,7 +2307,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         </>
                                     ) : currentProviderId ? (
                                         <>
-                                            <ProviderLogo
+                                            <ModelLogo
+                                                modelId={currentModelId}
                                                 providerId={currentProviderId}
                                                 className={cn(controlIconSize, 'flex-shrink-0')}
                                             />
@@ -2422,8 +2424,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             </>
                         ) : (
                             <>
-                                {currentProviderId ? (
-                                    <ProviderLogo
+                                {currentProviderId || currentModelId ? (
+                                    <ModelLogo
+                                        modelId={currentModelId}
                                         providerId={currentProviderId}
                                         className={cn(controlIconSize, 'flex-shrink-0')}
                                     />

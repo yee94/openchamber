@@ -11,9 +11,8 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
-import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
+import { SIDEBAR_ROW_HOVER_CLASS } from './utils';
 
 export interface SortableProjectItemProps {
   id: string;
@@ -42,6 +41,7 @@ export interface SortableProjectItemProps {
   hideHeader?: boolean;
   openSidebarMenuKey: string | null;
   setOpenSidebarMenuKey: (key: string | null) => void;
+  reorderEnabled?: boolean;
 }
 
 export type SortableDragHandleProps = {
@@ -53,10 +53,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   id,
   projectLabel,
   projectDescription,
-  projectIcon,
-  projectColor,
-  projectIconImage,
-  projectIconBackground,
   isCollapsed,
   isActiveProject,
   isRepo,
@@ -75,9 +71,9 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   hideHeader = false,
   openSidebarMenuKey,
   setOpenSidebarMenuKey,
+  reorderEnabled = true,
 }) => {
   const { t } = useI18n();
-  const { currentTheme } = useThemeSystem();
   const {
     attributes,
     listeners,
@@ -85,15 +81,12 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id });
+  } = useSortable({ id, disabled: !reorderEnabled });
 
   const suppressNextToggleRef = React.useRef(false);
   const menuInstanceKey = `project:${id}`;
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
-
-  const projectIconName = projectIcon ? PROJECT_ICON_MAP[projectIcon] : null;
-  const iconColor = projectColor ? (PROJECT_COLOR_MAP[projectColor] ?? null) : null;
 
   const handleMenuOpenChange = React.useCallback((open: boolean) => {
     if (open) setIsContextMenuOpen(false);
@@ -177,55 +170,37 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 />
               }
             >
-            <div className="relative flex items-center gap-1 px-0.5 py-0.5" {...attributes}>
+            <div className={cn('relative flex items-center gap-1.5 rounded-lg px-2 py-1.5', SIDEBAR_ROW_HOVER_CLASS)} {...attributes}>
               <Tooltip>
                 <TooltipTrigger asChild>
                     <button
                       type="button"
                       onMouseDown={handleToggleMouseDown}
                       onClick={handleToggleClick}
-                      {...listeners}
+                      {...(reorderEnabled ? listeners : {})}
                       className={cn(
-                        'flex-1 min-w-0 flex items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md cursor-grab active:cursor-grabbing transition-[padding]',
+                        'flex-1 min-w-0 flex items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md transition-[padding]',
+                        reorderEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                         isRepo && !hideDirectoryControls
                           ? (alwaysShowActions ? 'pr-20' : 'pr-7 group-hover/project:pr-20 group-focus-within/project:pr-20')
                           : (alwaysShowActions ? 'pr-14' : 'pr-7 group-hover/project:pr-14 group-focus-within/project:pr-14'),
                       )}
                     >
-                    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
+                    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center text-muted-foreground">
                       <span className={cn(
-                        'h-3.5 w-3.5 items-center justify-center text-muted-foreground',
+                        'h-3.5 w-3.5 items-center justify-center',
                         alwaysShowActions ? 'inline-flex' : 'hidden group-hover/project:inline-flex group-focus-within/project:inline-flex',
                       )}>
                         {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
                       </span>
-                      {projectIconImage ? (
-                        <span
-                          className={cn(
-                            'h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-[3px]',
-                            alwaysShowActions ? 'hidden' : 'inline-flex group-hover/project:hidden group-focus-within/project:hidden',
-                          )}
-                          style={projectIconBackground ? { backgroundColor: projectIconBackground } : undefined}
-                        >
-                          <ProjectIconImage
-                            project={{ id, iconImage: projectIconImage }}
-                            options={{
-                              themeVariant: currentTheme.metadata.variant,
-                              iconColor: currentTheme.colors.surface.foreground,
-                            }}
-                            className="h-full w-full object-contain"
-                            fallback={projectIconName ? (
-                              <Icon name={projectIconName} className="h-3.5 w-3.5" style={iconColor ? { color: iconColor } : undefined} />
-                            ) : (
-                              <Icon name="folder" className="h-3.5 w-3.5 text-muted-foreground/80" style={iconColor ? { color: iconColor } : undefined} />
-                            )}
-                          />
-                        </span>
-                      ) : projectIconName ? (
-                        <Icon name={projectIconName} className={cn('h-3.5 w-3.5', alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden')} style={iconColor ? { color: iconColor } : undefined} />
-                      ) : (
-                        <Icon name="folder" className={cn('h-3.5 w-3.5 text-muted-foreground/80', alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden')} style={iconColor ? { color: iconColor } : undefined} />
-                      )}
+                      {/* Codex-style: opaque muted folder — no per-project color, no SVG opacity */}
+                      <Icon
+                        name="folder"
+                        className={cn(
+                          'h-3.5 w-3.5',
+                          alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden',
+                        )}
+                      />
                     </span>
                     <span className={cn(
                       'text-[14px] font-normal truncate lowercase',

@@ -2145,7 +2145,7 @@ export const Header: React.FC<HeaderProps> = ({
         className="app-region-no-drag shrink-0 self-stretch transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
         style={{ width: headerControlsSpacerWidth }}
       />
-      {/* Sidebar toggle + project actions live in the persistent
+      {/* Sidebar toggle lives in the persistent
           TitlebarLeftControls overlay; the header reserves matching left space
           via padding (see headerStyle) when the sidebar is collapsed. */}
       <div className="flex min-w-0 flex-1 items-center">

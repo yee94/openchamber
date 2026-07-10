@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { ModelLogo } from '@/components/ui/ModelLogo';
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -42,7 +42,7 @@ const ModelChip: React.FC<{
 
   return (
     <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-interactive-selection/20 border border-border/30', CHIP_HEIGHT_CLASS)}>
-      <ProviderLogo providerId={model.providerID} className="h-3.5 w-3.5" />
+      <ModelLogo modelId={model.modelID} providerId={model.providerID} className="h-3.5 w-3.5" />
       <span className="typography-meta font-medium truncate max-w-[140px]">
         {label}
       </span>

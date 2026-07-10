@@ -8,6 +8,7 @@ type AppearanceSlice = {
   showReasoningTraces: boolean;
   sessionRecapEnabled: boolean;
   sessionSuggestionEnabled: boolean;
+  sessionTitleRefreshEnabled: boolean;
   collapsibleThinkingBlocks: boolean;
   showDeletionDialog: boolean;
   nativeNotificationsEnabled: boolean;
@@ -54,6 +55,7 @@ export const startAppearanceAutoSave = (): void => {
     showReasoningTraces: useUIStore.getState().showReasoningTraces,
     sessionRecapEnabled: useUIStore.getState().sessionRecapEnabled,
     sessionSuggestionEnabled: useUIStore.getState().sessionSuggestionEnabled,
+    sessionTitleRefreshEnabled: useUIStore.getState().sessionTitleRefreshEnabled,
     collapsibleThinkingBlocks: useUIStore.getState().collapsibleThinkingBlocks,
     showDeletionDialog: useUIStore.getState().showDeletionDialog,
     nativeNotificationsEnabled: useUIStore.getState().nativeNotificationsEnabled,
@@ -107,6 +109,7 @@ export const startAppearanceAutoSave = (): void => {
       showReasoningTraces: state.showReasoningTraces,
       sessionRecapEnabled: state.sessionRecapEnabled,
       sessionSuggestionEnabled: state.sessionSuggestionEnabled,
+      sessionTitleRefreshEnabled: state.sessionTitleRefreshEnabled,
       collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
       showDeletionDialog: state.showDeletionDialog,
       nativeNotificationsEnabled: state.nativeNotificationsEnabled,
@@ -145,6 +148,9 @@ export const startAppearanceAutoSave = (): void => {
     }
     if (current.sessionSuggestionEnabled !== previous.sessionSuggestionEnabled) {
       diff.sessionSuggestionEnabled = current.sessionSuggestionEnabled;
+    }
+    if (current.sessionTitleRefreshEnabled !== previous.sessionTitleRefreshEnabled) {
+      diff.sessionTitleRefreshEnabled = current.sessionTitleRefreshEnabled;
     }
     if (current.collapsibleThinkingBlocks !== previous.collapsibleThinkingBlocks) {
       diff.collapsibleThinkingBlocks = current.collapsibleThinkingBlocks;

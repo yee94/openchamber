@@ -4,7 +4,6 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell } from '@/lib/desktop';
-import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions } from '@/sync/sync-context';
@@ -35,10 +34,10 @@ import { useStickyProjectHeaders } from './sidebar/hooks/useStickyProjectHeaders
 import { getGitHubPrStatusKey, usePrVisualSummaryByKeys, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
-import { ShareOpinionDialog } from '@/components/feedback/ShareOpinionDialog';
 import { SessionGroupSection } from './sidebar/SessionGroupSection';
 import { SidebarHeader } from './sidebar/SidebarHeader';
 import { SidebarActivitySections } from './sidebar/SidebarActivitySections';
+import { SidebarDisplayModeMenu } from './sidebar/SidebarDisplayModeMenu';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
 import { SessionNodeItem } from './sidebar/SessionNodeItem';
@@ -67,8 +66,11 @@ import {
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
+  dedupeSessionsById,
   formatProjectLabel,
+  getLatestSessionUpdatedAtForProject,
   normalizePath,
+  sortProjectsByRecentSessionActivity,
 } from './sidebar/utils';
 import {
   mergeLiveSessionWithGlobalSession,
@@ -81,7 +83,6 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 
-const SHARE_OPINION_TOAST_STORAGE_KEY = 'openchamber.shareOpinionToast.dismissed.v2';
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
 const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
@@ -198,7 +199,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const newWorktreeDialogOpen = useUIStore((state) => state.isNewWorktreeDialogOpen);
   const setNewWorktreeDialogOpen = useUIStore((state) => state.setNewWorktreeDialogOpen);
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
-  const [shareOpinionDialogOpen, setShareOpinionDialogOpen] = React.useState(false);
   const [openSidebarMenuKey, setOpenSidebarMenuKey] = React.useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = React.useState('');
@@ -276,10 +276,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
-  const setAboutDialogOpen = useUIStore((state) => state.setAboutDialogOpen);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
-  const setScheduledTasksDialogOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);
-  const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
@@ -628,6 +625,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setNewWorktreeDialogOpen(true);
   }, [setNewWorktreeDialogOpen]);
 
+  const handleWorktreeCreated = React.useCallback((worktreePath: string, options?: { sessionId?: string }) => {
+    setActiveMainTab('chat');
+    if (mobileVariant) {
+      setSessionSwitcherOpen(false);
+    }
+    if (options?.sessionId) {
+      setCurrentSession(options.sessionId, worktreePath);
+      return;
+    }
+    openNewSessionDraft({ directoryOverride: worktreePath, preserveDirectoryOverride: true });
+  }, [mobileVariant, openNewSessionDraft, setActiveMainTab, setCurrentSession, setSessionSwitcherOpen]);
+
   const handleOpenUpdateDialog = React.useCallback(() => {
     const current = useUpdateStore.getState();
     if (current.available && current.info) {
@@ -648,36 +657,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       setUpdateDialogOpen(true);
     });
   }, [t, updateStore]);
-
-  const handleOpenShareOpinionDialog = React.useCallback(() => {
-    setShareOpinionDialogOpen(true);
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      if (window.localStorage.getItem(SHARE_OPINION_TOAST_STORAGE_KEY) === 'true') {
-        return;
-      }
-      window.localStorage.setItem(SHARE_OPINION_TOAST_STORAGE_KEY, 'true');
-    } catch {
-      // If storage is unavailable, still show once for this sidebar mount.
-    }
-    const timeoutId = window.setTimeout(() => {
-      toast.info(t('shareOpinion.toast.title'), {
-        description: t('shareOpinion.toast.description'),
-        action: {
-          label: t('shareOpinion.actions.shareOpinion'),
-          onClick: () => setShareOpinionDialogOpen(true),
-        },
-        duration: 12_000,
-      });
-    }, 1_000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [t]);
 
   const handleOpenSettings = React.useCallback(() => {
     if (mobileVariant) {
@@ -745,10 +724,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setDeleteFolderConfirm(null);
     deleteFolder(scopeKey, folderId);
   }, [deleteFolderConfirm, deleteFolder]);
-
-  const handleOpenDirectoryDialog = React.useCallback(() => {
-    sessionEvents.requestDirectoryDialog();
-  }, []);
 
   // Auto-expand parent session when navigating to a subagent (child) session.
   // We don't know which render context the user will look at the parent in
@@ -1000,6 +975,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     normalizedProjects,
   });
 
+  const normalizedProjectsForSidebar = React.useMemo(() => {
+    if (isVSCode) {
+      return normalizedProjects;
+    }
+
+    const combinedSessions = dedupeSessionsById([...sessions, ...archivedSessions]);
+    return sortProjectsByRecentSessionActivity(
+      normalizedProjects,
+      (project) => {
+        const worktrees = availableWorktreesByProject.get(project.normalizedPath) ?? [];
+        return getLatestSessionUpdatedAtForProject(
+          project.normalizedPath,
+          combinedSessions,
+          worktrees.map((meta) => meta.path),
+        );
+      },
+    );
+  }, [archivedSessions, availableWorktreesByProject, isVSCode, normalizedProjects, sessions]);
+
   useArchivedAutoFolders({
     normalizedProjects,
     sessions,
@@ -1025,7 +1019,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     sectionsForRender,
     searchMatchCount,
   } = useSessionSidebarSections({
-    normalizedProjects,
+    normalizedProjects: normalizedProjectsForSidebar,
     getSessionsForProject,
     getArchivedSessionsForProject,
     availableWorktreesByProject,
@@ -1317,12 +1311,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setPrStatusParams,
   ]);
 
-  const desktopHeaderActionButtonClass =
-    'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed';
-  const mobileHeaderActionButtonClass =
-    'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed';
-  const headerActionButtonClass = mobileVariant ? mobileHeaderActionButtonClass : desktopHeaderActionButtonClass;
-  const headerActionIconClass = 'h-4.5 w-4.5';
   const stuckProjectHeaders = useStickyProjectHeaders({
     isDesktopShellRuntime,
     projectSections,
@@ -1522,15 +1510,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ],
   );
 
-  const topContent = (!isVSCode && showRecentSection && !hasSessionSearchQuery) ? (
-    <SidebarActivitySections
-      sections={activitySections}
-      renderSessionNode={renderSessionNode}
-      currentSessionId={currentSessionId}
-      editingId={editingId}
-      openSidebarMenuKey={openSidebarMenuKey}
-      variant="section"
+  // Display-mode equalizer sits on the Recent title row (or a thin fallback
+  // bar when Recent is hidden) so the old sidebar action toolbar can stay gone.
+  const displayModeMenu = !hideDirectoryControls ? (
+    <SidebarDisplayModeMenu
+      showRecentControls={!isVSCode}
+      collapseAllProjects={collapseAllProjects}
+      expandAllProjects={expandAllProjects}
     />
+  ) : null;
+  const topContent = (!isVSCode && !hasSessionSearchQuery) ? (
+    showRecentSection ? (
+      <SidebarActivitySections
+        sections={activitySections}
+        renderSessionNode={renderSessionNode}
+        currentSessionId={currentSessionId}
+        editingId={editingId}
+        openSidebarMenuKey={openSidebarMenuKey}
+        variant="section"
+        headerAccessory={displayModeMenu}
+      />
+    ) : displayModeMenu ? (
+      <div className="flex justify-end px-0.5 pb-2 pt-1">
+        {displayModeMenu}
+      </div>
+    ) : null
   ) : null;
   const isInlineEditing = Boolean(renamingFolderId || editingId || editingProjectDialogId);
 
@@ -1542,7 +1546,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     derivedSelectionScope,
     bulkScopeFolders,
     bulkCanRemoveFromFolder,
-    handleToggleSelectionMode,
     handleExitSelectionMode,
     handleBulkMoveToFolder,
     handleBulkCreateFolderAndMove,
@@ -1560,22 +1563,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     deleteSessions,
     setBulkDeleteConfirm,
   });
-  const handleOpenMultiRunFromHeader = React.useCallback(() => {
-    setActiveMainTab('chat');
-    if (mobileVariant) {
-      setSessionSwitcherOpen(false);
-    }
-    openMultiRunLauncher();
-  }, [mobileVariant, openMultiRunLauncher, setActiveMainTab, setSessionSwitcherOpen]);
-
-  const handleOpenNewSessionDraftFromHeader = React.useCallback(() => {
-    setActiveMainTab('chat');
-    if (mobileVariant) {
-      setSessionSwitcherOpen(false);
-    }
-    openNewSessionDraft();
-  }, [mobileVariant, openNewSessionDraft, setActiveMainTab, setSessionSwitcherOpen]);
-
   return (
     <div
       ref={sessionSearchContainerRef}
@@ -1586,13 +1573,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     >
       <SidebarHeader
         hideDirectoryControls={hideDirectoryControls}
-        showRecentControls={!isVSCode}
-        handleOpenDirectoryDialog={handleOpenDirectoryDialog}
-        openNewSessionDraft={handleOpenNewSessionDraftFromHeader}
-        canOpenMultiRun={projects.length > 0}
-        openMultiRunLauncher={handleOpenMultiRunFromHeader}
-        headerActionIconClass={headerActionIconClass}
-        headerActionButtonClass={headerActionButtonClass}
         isSessionSearchOpen={isSessionSearchOpen}
         setIsSessionSearchOpen={setIsSessionSearchOpen}
         sessionSearchInputRef={sessionSearchInputRef}
@@ -1600,11 +1580,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setSessionSearchQuery={setSessionSearchQuery}
         hasSessionSearchQuery={hasSessionSearchQuery}
         searchMatchCount={searchMatchCount}
-        collapseAllProjects={collapseAllProjects}
-        expandAllProjects={expandAllProjects}
-        openScheduledTasksDialog={() => setScheduledTasksDialogOpen(true)}
-        selectionModeEnabled={selectionModeEnabled}
-        onToggleSelectionMode={handleToggleSelectionMode}
       />
 
       <SidebarProjectsList
@@ -1635,6 +1610,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         openProjectEditDialog={setEditingProjectDialogId}
         removeProject={removeProject}
         projectHeaderSentinelRefs={projectHeaderSentinelRefs}
+        projectReorderEnabled={false}
         reorderProjects={reorderProjects}
         getOrderedGroups={getOrderedGroups}
         setGroupOrderByProject={setGroupOrderByProject}
@@ -1661,57 +1637,46 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       <SidebarFooter
         onOpenSettings={handleOpenSettings}
         onOpenShortcuts={toggleHelpDialog}
-        onOpenAbout={() => setAboutDialogOpen(true)}
         onOpenUpdate={handleOpenUpdateDialog}
-        onOpenShareOpinion={handleOpenShareOpinionDialog}
         showRuntimeButtons={!isVSCode}
         showUpdateButton={showSidebarUpdateButton}
       />
 
-      <ShareOpinionDialog
-        open={shareOpinionDialogOpen}
-        onOpenChange={setShareOpinionDialogOpen}
-      />
+      {updateDialogOpen ? (
+        <UpdateDialog
+          open={updateDialogOpen}
+          onOpenChange={setUpdateDialogOpen}
+          info={updateStore.info}
+          downloading={updateStore.downloading}
+          downloaded={updateStore.downloaded}
+          progress={updateStore.progress}
+          error={updateStore.error}
+          onDownload={updateStore.downloadUpdate}
+          onRestart={updateStore.restartToUpdate}
+          runtimeType={updateStore.runtimeType}
+        />
+      ) : null}
 
-      <UpdateDialog
-        open={updateDialogOpen}
-        onOpenChange={setUpdateDialogOpen}
-        info={updateStore.info}
-        downloading={updateStore.downloading}
-        downloaded={updateStore.downloaded}
-        progress={updateStore.progress}
-        error={updateStore.error}
-        onDownload={updateStore.downloadUpdate}
-        onRestart={updateStore.restartToUpdate}
-        runtimeType={updateStore.runtimeType}
-      />
+      {editingProject ? (
+        <ProjectEditDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingProjectDialogId(null);
+            }
+          }}
+          project={editingProject}
+          onSave={handleSaveProjectEdit}
+        />
+      ) : null}
 
-      <ProjectEditDialog
-        open={Boolean(editingProject)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditingProjectDialogId(null);
-          }
-        }}
-        project={editingProject}
-        onSave={handleSaveProjectEdit}
-      />
-
-      <NewWorktreeDialog
-        open={newWorktreeDialogOpen}
-        onOpenChange={setNewWorktreeDialogOpen}
-        onWorktreeCreated={(worktreePath, options) => {
-          setActiveMainTab('chat');
-          if (mobileVariant) {
-            setSessionSwitcherOpen(false);
-          }
-          if (options?.sessionId) {
-            setCurrentSession(options.sessionId, worktreePath);
-            return;
-          }
-          openNewSessionDraft({ directoryOverride: worktreePath, preserveDirectoryOverride: true });
-        }}
-      />
+      {newWorktreeDialogOpen ? (
+        <NewWorktreeDialog
+          open={true}
+          onOpenChange={setNewWorktreeDialogOpen}
+          onWorktreeCreated={handleWorktreeCreated}
+        />
+      ) : null}
 
       <ScheduledTasksDialog />
 

@@ -70,6 +70,10 @@
     },
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "npmRebuild": false,
+    "protocols": {
+      "name": "OpenChamber",
+      "schemes": ["openchamber"]
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "resources/icons/icon.icns",

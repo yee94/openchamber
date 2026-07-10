@@ -1788,6 +1788,18 @@ const setTaskbarProgress = (value) => {
 
 const pendingDeepLinks = [];
 
+// Resolve a workspace path from OpenCode-aligned query keys (`directory`),
+// legacy mobile (`dir`), CodeX-style (`path`), or a path-form URL segment.
+const resolveDeepLinkDirectory = (url, pathValue = '') => {
+  const fromQuery = url.searchParams.get('directory')
+    || url.searchParams.get('dir')
+    || url.searchParams.get('path')
+    || '';
+  const trimmedQuery = typeof fromQuery === 'string' ? fromQuery.trim() : '';
+  if (trimmedQuery) return trimmedQuery;
+  return typeof pathValue === 'string' ? pathValue.trim() : '';
+};
+
 const parseDeepLink = (raw) => {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -1801,7 +1813,11 @@ const parseDeepLink = (raw) => {
     const value = segments.length > 0
       ? decodeURIComponent(segments.join('/'))
       : '';
-    return { type, value, raw: trimmed };
+    // OpenCode: opencode://new-session?directory=…&prompt=…
+    // OpenChamber keeps the same query shape under openchamber://.
+    const directory = resolveDeepLinkDirectory(url, value);
+    const prompt = (url.searchParams.get('prompt') || '').trim();
+    return { type, value, directory, prompt, raw: trimmed };
   } catch {
     return null;
   }
@@ -2044,8 +2060,24 @@ const dispatchDeepLink = (link) => {
     emitToAllWindows('openchamber:open-session', { sessionId: link.value });
     return;
   }
-  if (link.type === 'project' && link.value) {
-    emitToAllWindows('openchamber:open-project', { projectPath: link.value });
+  // Align with OpenCode: openchamber://new-session?directory=${path}&prompt=…
+  // Also accept bare `new` (mobile vocabulary) and path-form fallbacks.
+  if (link.type === 'new-session' || link.type === 'new') {
+    emitToAllWindows('openchamber:open-draft-session', {
+      directory: link.directory || '',
+      projectId: '',
+      initialPrompt: link.prompt || '',
+    });
+    return;
+  }
+  // Align with OpenCode open-project?directory=…; keep legacy project/<path>.
+  if (link.type === 'project' || link.type === 'open-project') {
+    const projectPath = link.directory || link.value || '';
+    if (!projectPath) {
+      log.warn('[electron] open-project deep-link missing directory');
+      return;
+    }
+    emitToAllWindows('openchamber:open-project', { projectPath });
     return;
   }
   if (link.type === 'host' && link.value) {
@@ -4258,21 +4290,31 @@ const buildMacMenu = () => {
     {
       label: 'View',
       submenu: [
-        { label: 'Toggle Right Sidebar', accelerator: 'Cmd+B', click: () => dispatchAction('toggle-right-sidebar') },
-        { label: 'Open Git Sidebar', accelerator: 'Cmd+Shift+G', click: () => dispatchAction('open-right-sidebar-git') },
-        { label: 'Open Files Sidebar', accelerator: 'Cmd+Shift+F', click: () => dispatchAction('open-right-sidebar-files') },
+        // registerAccelerator:false → menu shows the hint; renderer owns the
+        // (customizable) binding so toggle actions are not fired twice.
+        { label: 'Toggle Review Panel', accelerator: 'Cmd+Alt+B', registerAccelerator: false, click: () => dispatchAction('toggle-right-sidebar') },
+        { label: 'Open Git Sidebar', accelerator: 'Cmd+Shift+G', registerAccelerator: false, click: () => dispatchAction('open-right-sidebar-git') },
+        { label: 'Open Files Sidebar', accelerator: 'Cmd+Shift+F', registerAccelerator: false, click: () => dispatchAction('open-right-sidebar-files') },
         { type: 'separator' },
-        { label: 'Toggle Terminal Dock', accelerator: 'Cmd+J', click: () => dispatchAction('toggle-terminal') },
-        { label: 'Toggle Terminal Expanded', accelerator: 'Cmd+Shift+J', click: () => dispatchAction('toggle-terminal-expanded') },
+        { label: 'Toggle Bottom Panel', accelerator: 'Cmd+J', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
+        { label: 'Toggle Terminal', accelerator: 'Cmd+`', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
+        { label: 'Toggle Terminal Expanded', accelerator: 'Cmd+Shift+J', registerAccelerator: false, click: () => dispatchAction('toggle-terminal-expanded') },
         { type: 'separator' },
         { label: 'Light Theme', click: () => dispatchAction('theme-light') },
         { label: 'Dark Theme', click: () => dispatchAction('theme-dark') },
         { label: 'System Theme', click: () => dispatchAction('theme-system') },
         { type: 'separator' },
-        { label: 'Toggle Session Sidebar', accelerator: 'Cmd+L', click: () => dispatchAction('toggle-sidebar') },
+        { label: 'Toggle Session Sidebar', accelerator: 'Cmd+B', registerAccelerator: false, click: () => dispatchAction('toggle-sidebar') },
         { label: 'Toggle Memory Debug', accelerator: 'Cmd+Shift+D', click: () => dispatchAction('toggle-memory-debug') },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Go',
+      submenu: [
+        { label: 'Previous Session', accelerator: 'Cmd+Shift+[', registerAccelerator: false, click: () => dispatchAction('previous-session') },
+        { label: 'Next Session', accelerator: 'Cmd+Shift+]', registerAccelerator: false, click: () => dispatchAction('next-session') },
       ],
     },
     {
@@ -4359,18 +4401,21 @@ const buildAutoHiddenMenu = () => {
         { role: 'forceReload' },
         { label: 'Toggle Developer Tools', accelerator: 'Ctrl+Alt+I', click: () => openDevToolsForMenuTarget() },
         { type: 'separator' },
-        { label: 'Toggle Right Sidebar', accelerator: 'Ctrl+B', click: () => dispatchAction('toggle-right-sidebar') },
-        { label: 'Open Git Sidebar', accelerator: 'Ctrl+Shift+G', click: () => dispatchAction('open-right-sidebar-git') },
-        { label: 'Open Files Sidebar', accelerator: 'Ctrl+Shift+F', click: () => dispatchAction('open-right-sidebar-files') },
+        // registerAccelerator:false → menu shows the hint; renderer owns the
+        // (customizable) binding so toggle actions are not fired twice.
+        { label: 'Toggle Review Panel', accelerator: 'Ctrl+Alt+B', registerAccelerator: false, click: () => dispatchAction('toggle-right-sidebar') },
+        { label: 'Open Git Sidebar', accelerator: 'Ctrl+Shift+G', registerAccelerator: false, click: () => dispatchAction('open-right-sidebar-git') },
+        { label: 'Open Files Sidebar', accelerator: 'Ctrl+Shift+F', registerAccelerator: false, click: () => dispatchAction('open-right-sidebar-files') },
         { type: 'separator' },
-        { label: 'Toggle Terminal Dock', accelerator: 'Ctrl+J', click: () => dispatchAction('toggle-terminal') },
-        { label: 'Toggle Terminal Expanded', accelerator: 'Ctrl+Shift+J', click: () => dispatchAction('toggle-terminal-expanded') },
+        { label: 'Toggle Bottom Panel', accelerator: 'Ctrl+J', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
+        { label: 'Toggle Terminal', accelerator: 'Ctrl+`', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
+        { label: 'Toggle Terminal Expanded', accelerator: 'Ctrl+Shift+J', registerAccelerator: false, click: () => dispatchAction('toggle-terminal-expanded') },
         { type: 'separator' },
         { label: 'Light Theme', click: () => dispatchAction('theme-light') },
         { label: 'Dark Theme', click: () => dispatchAction('theme-dark') },
         { label: 'System Theme', click: () => dispatchAction('theme-system') },
         { type: 'separator' },
-        { label: 'Toggle Session Sidebar', accelerator: 'Ctrl+L', click: () => dispatchAction('toggle-sidebar') },
+        { label: 'Toggle Session Sidebar', accelerator: 'Ctrl+B', registerAccelerator: false, click: () => dispatchAction('toggle-sidebar') },
         { label: 'Toggle Memory Debug', accelerator: 'Ctrl+Shift+D', click: () => dispatchAction('toggle-memory-debug') },
         { type: 'separator' },
         { role: 'togglefullscreen' },
@@ -4382,8 +4427,8 @@ const buildAutoHiddenMenu = () => {
         { label: 'Back', accelerator: 'Ctrl+[', click: () => dispatchAction('go-back') },
         { label: 'Forward', accelerator: 'Ctrl+]', click: () => dispatchAction('go-forward') },
         { type: 'separator' },
-        { label: 'Previous Session', accelerator: 'Alt+Up', click: () => dispatchAction('previous-session') },
-        { label: 'Next Session', accelerator: 'Alt+Down', click: () => dispatchAction('next-session') },
+        { label: 'Previous Session', accelerator: 'Ctrl+Shift+[', registerAccelerator: false, click: () => dispatchAction('previous-session') },
+        { label: 'Next Session', accelerator: 'Ctrl+Shift+]', registerAccelerator: false, click: () => dispatchAction('next-session') },
         { type: 'separator' },
         { label: 'Previous Project', accelerator: 'Ctrl+Alt+Up', click: () => dispatchAction('previous-project') },
         { label: 'Next Project', accelerator: 'Ctrl+Alt+Down', click: () => dispatchAction('next-project') },
@@ -4807,6 +4852,10 @@ app.on('open-url', (event, url) => {
   handleDeepLinks([url]);
   if (BrowserWindow.getAllWindows().length === 0) {
     void openMainWindow();
+  } else {
+    // Bring the app forward when an external opener (e.g. Raycast
+    // `open "openchamber://new-session?directory=…"`) hands us a deep link.
+    focusForegroundWindow();
   }
 });
 

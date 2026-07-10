@@ -33,6 +33,7 @@ import {
   type MermaidRender,
 } from './markdown/decorate';
 import { createMermaidViewerRegistry, MERMAID_BLOCK_SELECTOR, shouldRefreshMermaidViewers } from './markdown/mermaidViewer';
+import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import {
   BLOCK_PATH_TOKEN_RE,
   isAbsoluteReferencePath,
@@ -934,8 +935,10 @@ const useMorphdomMarkdown = ({
     mermaidViewerRef.current.refresh();
   }, [containerRef]);
 
-  // Synchronous first paint: while the async parse is in-flight, show escaped
-  // plain text immediately so there is no blank frame on initial mount. Only
+  // Synchronous first paint: while rich hydration is queued, show a safe text
+  // fallback immediately so there is no blank frame on initial mount. Completed
+  // history deliberately avoids markdown parsing/sanitizing on this path; the
+  // shared frame-budget queue upgrades it after the selection has painted. Only
   // runs when the target is empty — subsequent updates keep the prior rich DOM
   // until the next async render morphs in (no flash). Mirrors OpenCode's
   // `initialValue: fallback(text)` resource pattern.
@@ -949,19 +952,18 @@ const useMorphdomMarkdown = ({
       // `display:contents` keeps margin-collapsing/spacing identical to a flat
       // HTML body — the wrapper exists only for per-block reconciliation.
       block.style.display = 'contents';
-      block.innerHTML = renderMarkdownSync(text);
-      // Decorate synchronously too: wrap code blocks in their framed card,
-      // mark inline code, build table controls, etc. The async pass re-decorates
-      // its own DOM before morphing, so without this the first paint shows bare
-      // <pre>/tables that "snap" into their decorated form a tick later. Matching
-      // the structure here keeps the async morph to syntax colors only.
-      decorateMarkdown(block, ctx);
-      target.appendChild(block);
-      if (shouldRefreshMermaidViewers(block)) {
-        refreshMermaidViewers();
+      if (streaming) {
+        block.innerHTML = renderMarkdownSync(text);
+      } else {
+        const fallback = document.createElement('span');
+        fallback.setAttribute('data-md-fallback', '');
+        fallback.style.whiteSpace = 'pre-wrap';
+        fallback.textContent = text;
+        block.appendChild(fallback);
       }
+      target.appendChild(block);
     }
-  }, [containerRef, text, ctx, refreshMermaidViewers]);
+  }, [containerRef, streaming, text]);
 
   React.useEffect(() => () => {
     mermaidViewerRef.current?.cleanup();
@@ -973,9 +975,13 @@ const useMorphdomMarkdown = ({
     if (!container) return;
     const target = container.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
     let active = true;
+    let cancelQueuedRender = () => {};
+    let cancelQueuedCommit = () => {};
 
-    void renderMarkdownBlocks(text, streaming, cacheKey).then((blocks) => {
-      if (!active) return;
+    const commitBlocks = (blocks: Awaited<ReturnType<typeof renderMarkdownBlocks>>) => {
+      if (!active) {
+        return;
+      }
       const existing = Array.from(target.children) as HTMLElement[];
 
       // Reconcile per block: only re-morph blocks whose content changed, leaving
@@ -1023,10 +1029,31 @@ const useMorphdomMarkdown = ({
       if (!ctx.deferCodeLineNumberSync) {
         scheduleMarkdownCodeLineNumberSync(target);
       }
-    });
+    };
+
+    const renderBlocks = () => {
+      void renderMarkdownBlocks(text, streaming, cacheKey).then((blocks) => {
+        if (!active) {
+          return;
+        }
+        if (streaming) {
+          commitBlocks(blocks);
+          return;
+        }
+        cancelQueuedCommit = scheduleAfterPaintTask(() => commitBlocks(blocks));
+      });
+    };
+
+    if (streaming) {
+      renderBlocks();
+    } else {
+      cancelQueuedRender = scheduleAfterPaintTask(renderBlocks);
+    }
 
     return () => {
       active = false;
+      cancelQueuedRender();
+      cancelQueuedCommit();
     };
   }, [containerRef, text, streaming, cacheKey, ctx, refreshMermaidViewers]);
 

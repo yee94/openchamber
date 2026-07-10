@@ -7,9 +7,7 @@ import { useI18n } from '@/lib/i18n';
 type Props = {
   onOpenSettings: () => void;
   onOpenShortcuts: () => void;
-  onOpenAbout: () => void;
   onOpenUpdate: () => void;
-  onOpenShareOpinion: () => void;
   showRuntimeButtons?: boolean;
   showUpdateButton?: boolean;
 };
@@ -19,16 +17,14 @@ const footerButtonClassName = 'inline-flex h-8 w-8 items-center justify-center r
 export function SidebarFooter({
   onOpenSettings,
   onOpenShortcuts,
-  onOpenAbout,
   onOpenUpdate,
-  onOpenShareOpinion,
   showRuntimeButtons = true,
   showUpdateButton = true,
 }: Props): React.ReactNode {
   const { t } = useI18n();
 
   return (
-    <div className="flex shrink-0 items-center justify-start gap-1 px-2.5 py-2">
+    <div className="flex shrink-0 items-center justify-start gap-1 px-3 py-2">
       {showRuntimeButtons ? (
         <>
           <Tooltip>
@@ -47,14 +43,6 @@ export function SidebarFooter({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.shortcuts')}</p></TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" onClick={onOpenAbout} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.aboutOpenChamber')}>
-                <Icon name="information" className="h-4.5 w-4.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.aboutOpenChamber')}</p></TooltipContent>
-          </Tooltip>
         </>
       ) : null}
       {showUpdateButton ? (
@@ -67,17 +55,7 @@ export function SidebarFooter({
         >
           {t('sessions.sidebar.footer.actions.update')}
         </Button>
-      ) : (
-        <Button
-          type="button"
-          variant="default"
-          size="xs"
-          className="ml-auto border-[var(--primary-base)]/15 bg-[var(--primary-base)]/5 text-[var(--primary-base)]/60 hover:bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]/75"
-          onClick={onOpenShareOpinion}
-        >
-          {t('sessions.sidebar.footer.actions.shareOpinion')}
-        </Button>
-      )}
+      ) : null}
     </div>
   );
 }

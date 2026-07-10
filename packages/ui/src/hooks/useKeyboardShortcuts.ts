@@ -14,6 +14,7 @@ import { readEmbeddedThemeSearchParams } from '@/contexts/theme-embedded-bootstr
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { getCycledPrimaryAgentName } from '@/components/chat/mobileControlsUtils';
+import { resolveAdjacentRootSession, resolveAdjacentRootSessionDirectory } from '@/sync/session-navigation';
 
 export const useKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
@@ -99,6 +100,17 @@ export const useKeyboardShortcuts = () => {
       }
 
       if (eventMatchesShortcut(e, combo('toggle_terminal'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        toggleBottomTerminal();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_bottom_panel'))) {
         const { isMobile } = useUIStore.getState();
         if (isMobile) {
           return;
@@ -328,7 +340,46 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
+      const navigateSession = (direction: -1 | 1) => {
+        const nextSession = resolveAdjacentRootSession(
+          direction,
+          useSessionUIStore.getState().currentSessionId,
+        );
+        if (!nextSession) {
+          return;
+        }
+
+        setActiveMainTab('chat');
+        setSessionSwitcherOpen(false);
+        useSessionUIStore.getState().setCurrentSession(
+          nextSession.id,
+          resolveAdjacentRootSessionDirectory(nextSession),
+        );
+      };
+
+      if (eventMatchesShortcut(e, combo('previous_session'))) {
+        e.preventDefault();
+        navigateSession(-1);
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('next_session'))) {
+        e.preventDefault();
+        navigateSession(1);
+        return;
+      }
+
       if (eventMatchesShortcut(e, combo('toggle_terminal'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        toggleBottomTerminal();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_bottom_panel'))) {
         const { isMobile } = useUIStore.getState();
         if (isMobile) {
           return;
