@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.15.0] - 2026-07-10
 
 - Chat/Tools: every tool call now expands to show its input, result, and errors, including MCP, plugin, and custom tools; Read and Skill stay compact links to their files. JSON results now offer navigable summary, tree, and raw views.
 - Chat/Tools: expanded file-edit and patch results include per-file buttons to open the diff or jump to the first changed line in the editor.
