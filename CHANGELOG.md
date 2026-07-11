@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.3] - 2026-07-11
+
+- **Android release:** publish the signed Android APK and AAB alongside this release, so the mobile client is available from GitHub Releases.
+
 ## [1.15.2] - 2026-07-11
 
 - **Session startup performance:** Electron restores each project's latest session summaries from its own SQLite index, then refreshes OpenCode incrementally instead of rebuilding the full sidebar on every launch.
