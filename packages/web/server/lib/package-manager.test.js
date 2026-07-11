@@ -248,6 +248,105 @@ describe('checkForUpdates', () => {
 
     expect(result.available).toBe(false);
   });
+
+  // --- Mobile (Capacitor / Android) via GitHub Releases ---
+
+  it('mobile: returns available=true when GitHub release is newer with APK asset', async () => {
+    fetchMock.when('api.github.com', {
+      ok: true,
+      json: async () => ({
+        tag_name: 'v1.11.0',
+        name: 'v1.11.0',
+        body: '## [1.11.0] - 2026-06-01\n\n- Fixes for Android',
+        html_url: 'https://github.com/yee94/openchamber/releases/tag/v1.11.0',
+        assets: [
+          { name: 'app-debug.apk', browser_download_url: 'https://github.com/yee94/openchamber/releases/download/v1.11.0/app-debug.apk' },
+        ],
+      }),
+    });
+
+    const result = await checkForUpdates({
+      appType: 'mobile-capacitor',
+      platform: 'android',
+      currentVersion: '1.10.5',
+    });
+
+    expect(result.available).toBe(true);
+    expect(result.version).toBe('1.11.0');
+    expect(result.downloadUrl).toBe('https://github.com/yee94/openchamber/releases/download/v1.11.0/app-debug.apk');
+    expect(result.releaseUrl).toBe('https://github.com/yee94/openchamber/releases/tag/v1.11.0');
+    // Should not call npm registry for mobile
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('mobile: returns available=false when GitHub release is the same version', async () => {
+    fetchMock.when('api.github.com', {
+      ok: true,
+      json: async () => ({
+        tag_name: 'v1.10.5',
+        name: 'v1.10.5',
+        body: '',
+        html_url: 'https://github.com/yee94/openchamber/releases/tag/v1.10.5',
+        assets: [],
+      }),
+    });
+
+    const result = await checkForUpdates({
+      appType: 'mobile-capacitor',
+      platform: 'android',
+      currentVersion: '1.10.5',
+    });
+
+    expect(result.available).toBe(false);
+  });
+
+  it('mobile: returns available=false with error when GitHub API is unreachable', async () => {
+    fetchMock.when('api.github.com', Promise.reject(new Error('Network error')));
+
+    const result = await checkForUpdates({
+      appType: 'mobile-capacitor',
+      platform: 'android',
+      currentVersion: '1.10.5',
+    });
+
+    expect(result.available).toBe(false);
+    expect(result.error).toBe('Unable to check for mobile updates');
+  });
+
+  it('mobile: returns available=false when GitHub release has no APK asset', async () => {
+    fetchMock.when('api.github.com', {
+      ok: true,
+      json: async () => ({
+        tag_name: 'v1.11.0',
+        name: 'v1.11.0',
+        body: 'Release notes',
+        html_url: 'https://github.com/yee94/openchamber/releases/tag/v1.11.0',
+        assets: [],
+      }),
+    });
+
+    const result = await checkForUpdates({
+      appType: 'mobile-capacitor',
+      platform: 'android',
+      currentVersion: '1.10.5',
+    });
+
+    expect(result.available).toBe(true);
+    expect(result.version).toBe('1.11.0');
+    expect(result.downloadUrl).toBeUndefined();
+  });
+
+  it('mobile: returns available=false when currentVersion is unknown', async () => {
+    // Should not call GitHub at all — unknown version means can't compare
+    const result = await checkForUpdates({
+      appType: 'mobile-capacitor',
+      platform: 'android',
+      currentVersion: 'unknown',
+    });
+
+    expect(result.available).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('getCurrentVersion', () => {
