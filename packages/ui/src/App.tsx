@@ -700,6 +700,7 @@ function App({ apis }: AppProps) {
         selectedProjectId: projectId,
         directoryOverride: directory,
         preserveDirectoryOverride: Boolean(directory),
+        ensureProjectForDirectory: Boolean(directory),
         initialPrompt,
       });
     };
