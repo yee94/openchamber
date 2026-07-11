@@ -179,7 +179,8 @@ function printReleaseNextSteps(version) {
   console.log(`  git add -A`);
   console.log(`  git commit -m "release v${version}"`);
   console.log(`  git tag v${version}`);
-  console.log(`  git push origin main --tags`);
+  console.log('  git push origin main');
+  console.log(`  git push origin v${version}`);
   console.log('');
   console.log('This will trigger the GitHub Actions release workflow.');
   console.log(`Make sure CHANGELOG.md contains a section like "## [${version}] - YYYY-MM-DD" before pushing.`);
