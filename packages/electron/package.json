@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/electron",
-  "version": "1.15.4",
+  "version": "1.15.5",
   "private": true,
   "description": "Electron desktop runtime for OpenChamber",
   "author": "OpenChamber",
@@ -72,7 +72,9 @@
     "npmRebuild": false,
     "protocols": {
       "name": "OpenChamber",
-      "schemes": ["openchamber"]
+      "schemes": [
+        "openchamber"
+      ]
     },
     "mac": {
       "category": "public.app-category.developer-tools",

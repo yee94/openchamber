@@ -24,6 +24,7 @@ const createService = (initialDirectories = []) => {
       };
       directories = [...directories.filter((entry) => entry.directory !== input.directory), next];
     }),
+    replaceChildSessions: vi.fn(),
   };
 };
 
@@ -34,6 +35,10 @@ const waitUntil = async (predicate) => {
   }
   throw new Error('condition not reached');
 };
+
+const isFullyIdle = (runtime) => (
+  runtime.snapshot().sync.active === false && runtime.snapshot().sync.enriching === false
+);
 
 describe('session index background sync runtime', () => {
   it('runs directory sync sequentially and publishes long-poll progress', async () => {
@@ -59,12 +64,13 @@ describe('session index background sync runtime', () => {
     const initial = runtime.enqueue(['/repo/a', '/repo/b']);
     const changed = await runtime.waitForChange(initial.revision);
     expect(changed.revision).toBeGreaterThan(initial.revision);
-    await waitUntil(() => runtime.snapshot().sync.active === false);
+    await waitUntil(() => isFullyIdle(runtime));
 
     expect(maxActive).toBe(1);
-    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(fetchFn).toHaveBeenCalledTimes(4);
     expect(fetchFn.mock.calls[0][0].pathname).toBe('/experimental/session');
     expect(service.replaceDirectory).toHaveBeenCalledTimes(2);
+    expect(service.replaceChildSessions).toHaveBeenCalledTimes(2);
     expect(runtime.snapshot().sync).toMatchObject({ completed: 2, total: 2, failedDirectories: [] });
   });
 
@@ -84,14 +90,14 @@ describe('session index background sync runtime', () => {
       getOpenCodeAuthHeaders: () => ({}),
       waitForOpenCodeReady: async () => true,
       fetchFn: async (url) => {
-        requestedUrl = url;
+        if (url.pathname === '/experimental/session') requestedUrl = url;
         return new Response(JSON.stringify([session('ses_new', 20)]), { status: 200 });
       },
       now: () => 2000,
     });
 
     runtime.enqueue(['/repo']);
-    await waitUntil(() => runtime.snapshot().sync.active === false);
+    await waitUntil(() => isFullyIdle(runtime));
 
     expect(requestedUrl.searchParams.get('start')).toBe('1000');
     expect(service.replaceDirectory.mock.calls[0][0]).toMatchObject({
@@ -121,7 +127,7 @@ describe('session index background sync runtime', () => {
     runtime.enqueue(['/repo']);
     await waitUntil(() => calls === 1);
     runtime.noteInteractiveRequest();
-    await waitUntil(() => runtime.snapshot().sync.active === false);
+    await waitUntil(() => isFullyIdle(runtime));
 
     expect(calls).toBe(2);
     expect(runtime.snapshot().sync.completed).toBe(1);
@@ -139,9 +145,9 @@ describe('session index background sync runtime', () => {
     });
 
     runtime.enqueue(['/repo']);
-    await waitUntil(() => runtime.snapshot().sync.active === false);
+    await waitUntil(() => isFullyIdle(runtime));
     runtime.enqueue(['/repo']);
-    await waitUntil(() => runtime.snapshot().sync.active === false);
+    await waitUntil(() => isFullyIdle(runtime));
 
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });

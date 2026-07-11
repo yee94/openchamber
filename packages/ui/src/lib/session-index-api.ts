@@ -9,7 +9,7 @@ export type SessionIndexDirectory = {
   lastSyncedAt: number;
   lastFullSyncedAt: number;
   lastAccessedAt: number;
-  sessions: Session[];
+  sessions: Array<Session & { hasChildren?: boolean }>;
 };
 
 export type SessionIndexSnapshot = {
@@ -21,6 +21,8 @@ export type SessionIndexSnapshot = {
     pendingDirectories: string[];
     completedDirectories: string[];
     failedDirectories: string[];
+    /** Low-priority child-session existence checks still running after root rows are ready. */
+    enriching?: boolean;
   };
   directories: SessionIndexDirectory[];
 };
@@ -46,6 +48,7 @@ export const loadSessionIndexSnapshot = async (): Promise<SessionIndexSnapshot |
       pendingDirectories: [],
       completedDirectories: [],
       failedDirectories: [],
+      enriching: false,
     },
     directories: payload.directories,
   };

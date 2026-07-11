@@ -61,7 +61,8 @@
   nest pad) so they share one vertical line with sibling folders; their direct sessions/folders
   keep that same depth so worktree items align with surrounding project items. Subsession
   expand chevrons align to the folder-icon column and stay hidden until row hover (unless
-  always-show-actions).
+  always-show-actions). They render only when the session has loaded children or the
+  persistent session index has confirmed that it has at least one child.
   Recent rows stay flat: no pin glyph, no subsession chevron, and no nested children — that tree
   chrome belongs only under Projects.
 - Session rows are single-line (no inline timestamp); details (title, relative time, folder/project,

@@ -1169,7 +1169,9 @@ html:not(.dark) .chat-scroll {
 
 /* Markdown horizontal rule - use theme colors */
 .markdown-content hr {
-  border-color: var(--markdown-hr, var(--border));
+  /* The preceding block supplies the upper gap; match it below the rule. */
+  margin: 0 0 var(--markdown-paragraph-spacing);
+  border-color: color-mix(in srgb, var(--markdown-hr, var(--border)) 45%, transparent);
 }
 
 /* Markdown bold/italic/strikethrough - use theme colors */

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 4;
 const MAX_ROOT_SESSIONS = 20;
 
 const normalizeDirectory = (value) => {
@@ -35,6 +35,7 @@ const toSummary = (session, fallbackDirectory) => {
     updatedAt: toTimestamp(session.time?.updated),
     archivedAt: toTimestamp(session.time?.archived),
     parentID: typeof session.parentID === 'string' ? session.parentID : null,
+    hasChildren: typeof session.hasChildren === 'boolean' ? session.hasChildren : null,
   };
 };
 
@@ -47,7 +48,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
   db.pragma('foreign_keys = ON');
   const existingTables = new Set(db.prepare(`
     SELECT name FROM sqlite_master
-    WHERE type = 'table' AND name IN ('session_index_meta', 'runtime_directory', 'session_summary')
+    WHERE type = 'table' AND name IN ('session_index_meta', 'runtime_directory', 'session_summary', 'session_child')
   `).all().map((row) => row.name));
   const hasMetaTable = existingTables.has('session_index_meta');
   const storedSchemaVersion = hasMetaTable
@@ -58,6 +59,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     // rebuild from OpenCode instead of carrying migration compatibility code.
     db.exec(`
       DROP TABLE IF EXISTS session_summary;
+      DROP TABLE IF EXISTS session_child;
       DROP TABLE IF EXISTS runtime_directory;
       DROP TABLE IF EXISTS session_index_meta;
     `);
@@ -86,13 +88,23 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       updated_at INTEGER NOT NULL,
       archived_at INTEGER NOT NULL DEFAULT 0,
       parent_id TEXT,
+      has_children INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (runtime_key, directory, session_id),
       FOREIGN KEY (runtime_key, directory)
         REFERENCES runtime_directory(runtime_key, directory)
         ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS session_child (
+      runtime_key TEXT NOT NULL,
+      directory TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      parent_id TEXT NOT NULL,
+      PRIMARY KEY (runtime_key, directory, session_id)
+    );
     CREATE INDEX IF NOT EXISTS session_summary_runtime_updated
       ON session_summary(runtime_key, directory, updated_at DESC, session_id DESC);
+    CREATE INDEX IF NOT EXISTS session_child_parent
+      ON session_child(runtime_key, directory, parent_id);
   `);
   db.prepare('INSERT OR REPLACE INTO session_index_meta(key, value) VALUES (?, ?)')
     .run('schema_version', String(SCHEMA_VERSION));
@@ -118,25 +130,65 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       last_accessed_at = excluded.last_accessed_at
   `);
   const deleteDirectoryRows = db.prepare('DELETE FROM session_summary WHERE runtime_key = ? AND directory = ?');
+  const existingChildrenFlags = db.prepare(`
+    SELECT session_id, has_children AS hasChildren
+    FROM session_summary WHERE runtime_key = ? AND directory = ?
+  `);
   const insertSummary = db.prepare(`
-    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, archived_at, parent_id)
-    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @archivedAt, @parentID)
+    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, archived_at, parent_id, has_children)
+    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @archivedAt, @parentID, @hasChildren)
   `);
   const upsertSummary = db.prepare(`
-    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, archived_at, parent_id)
-    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @archivedAt, @parentID)
+    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, archived_at, parent_id, has_children)
+    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @archivedAt, @parentID, @hasChildren)
     ON CONFLICT(runtime_key, directory, session_id) DO UPDATE SET
       title = excluded.title,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
       archived_at = excluded.archived_at,
-      parent_id = excluded.parent_id
+      parent_id = excluded.parent_id,
+      has_children = excluded.has_children
+  `);
+  const setHasChildren = db.prepare(`
+    UPDATE session_summary SET has_children = ?
+    WHERE runtime_key = ? AND directory = ? AND session_id = ?
+  `);
+  const upsertChild = db.prepare(`
+    INSERT INTO session_child(runtime_key, directory, session_id, parent_id)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(runtime_key, directory, session_id) DO UPDATE SET parent_id = excluded.parent_id
+  `);
+  const deleteChildrenForParent = db.prepare(`
+    DELETE FROM session_child WHERE runtime_key = ? AND directory = ? AND parent_id = ?
+  `);
+  const insertChild = db.prepare(`
+    INSERT INTO session_child(runtime_key, directory, session_id, parent_id) VALUES (?, ?, ?, ?)
+  `);
+  const parentForChild = db.prepare(`
+    SELECT directory, parent_id AS parentID FROM session_child
+    WHERE runtime_key = ? AND session_id = ?
+  `);
+  const deleteChild = db.prepare('DELETE FROM session_child WHERE runtime_key = ? AND session_id = ?');
+  const deleteChildrenWithParent = db.prepare('DELETE FROM session_child WHERE runtime_key = ? AND parent_id = ?');
+  const deleteOrphanChildRows = db.prepare(`
+    DELETE FROM session_child
+    WHERE runtime_key = ? AND directory = ?
+      AND parent_id NOT IN (
+        SELECT session_id FROM session_summary WHERE runtime_key = ? AND directory = ?
+      )
+  `);
+  const countChildrenForParent = db.prepare(`
+    SELECT COUNT(*) AS count FROM session_child
+    WHERE runtime_key = ? AND directory = ? AND parent_id = ?
   `);
 
   const replaceDirectoryRows = ({ directory, sessions, cursor, hasMore, fullSync = true, now = Date.now() }) => {
     const normalizedDirectory = normalizeDirectory(directory);
     if (!normalizedDirectory) throw new Error('directory is required');
     const key = runtimeKey();
+    const previousHasChildrenByID = new Map(
+      existingChildrenFlags.all(key, normalizedDirectory).map((row) => [row.session_id, Boolean(row.hasChildren)]),
+    );
     const summaries = Array.isArray(sessions)
       ? sessions.map((session) => toSummary(session, normalizedDirectory)).filter(Boolean).slice(0, MAX_ROOT_SESSIONS)
       : [];
@@ -151,7 +203,15 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       fullSync: toBooleanInt(fullSync),
     });
     deleteDirectoryRows.run(key, normalizedDirectory);
-    for (const summary of summaries) insertSummary.run({ ...summary, runtimeKey: key, directory: normalizedDirectory });
+    for (const summary of summaries) {
+      insertSummary.run({
+        ...summary,
+        hasChildren: toBooleanInt(summary.hasChildren ?? previousHasChildrenByID.get(summary.id) ?? false),
+        runtimeKey: key,
+        directory: normalizedDirectory,
+      });
+    }
+    deleteOrphanChildRows.run(key, normalizedDirectory, key, normalizedDirectory);
   };
   const replaceDirectory = db.transaction(replaceDirectoryRows);
   const replaceDirectories = db.transaction((directories, now = Date.now()) => {
@@ -167,6 +227,16 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     const key = runtimeKey();
     if (summary.archivedAt) {
       db.prepare('DELETE FROM session_summary WHERE runtime_key = ? AND session_id = ?').run(key, summary.id);
+      const parent = parentForChild.get(key, summary.id);
+      deleteChild.run(key, summary.id);
+      if (parent) {
+        setHasChildren.run(
+          toBooleanInt(Number(countChildrenForParent.get(key, parent.directory, parent.parentID)?.count ?? 0) > 0),
+          key,
+          parent.directory,
+          parent.parentID,
+        );
+      }
       return true;
     }
     touchExistingDirectory.run({
@@ -174,7 +244,20 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       directory: summary.directory,
       lastAccessedAt: toTimestamp(now),
     });
-    upsertSummary.run({ ...summary, runtimeKey: key });
+    if (summary.parentID) {
+      upsertChild.run(key, summary.directory, summary.id, summary.parentID);
+      setHasChildren.run(1, key, summary.directory, summary.parentID);
+      return true;
+    }
+    const existing = db.prepare(`
+      SELECT has_children AS hasChildren FROM session_summary
+      WHERE runtime_key = ? AND directory = ? AND session_id = ?
+    `).get(key, summary.directory, summary.id);
+    upsertSummary.run({
+      ...summary,
+      hasChildren: toBooleanInt(summary.hasChildren ?? Boolean(existing?.hasChildren)),
+      runtimeKey: key,
+    });
     const extra = db.prepare(`
       SELECT session_id FROM session_summary
       WHERE runtime_key = ? AND directory = ?
@@ -199,7 +282,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       hasMore: Boolean(directory.hasMore),
       sessions: db.prepare(`
         SELECT session_id AS id, title, created_at AS createdAt, updated_at AS updatedAt,
-          archived_at AS archivedAt, parent_id AS parentID
+          archived_at AS archivedAt, parent_id AS parentID, has_children AS hasChildren
         FROM session_summary WHERE runtime_key = ? AND directory = ?
         ORDER BY updated_at DESC, id DESC
       `).all(key, directory.directory).map((session) => ({
@@ -208,6 +291,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
         directory: directory.directory,
         time: { created: session.createdAt, updated: session.updatedAt, ...(session.archivedAt ? { archived: session.archivedAt } : {}) },
         ...(session.parentID ? { parentID: session.parentID } : {}),
+        ...(session.hasChildren ? { hasChildren: true } : {}),
       })),
     }));
     return { directories };
@@ -215,15 +299,43 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
 
   const remove = (sessionID) => {
     if (typeof sessionID !== 'string' || !sessionID) return false;
-    const result = db.prepare('DELETE FROM session_summary WHERE runtime_key = ? AND session_id = ?').run(runtimeKey(), sessionID);
+    const key = runtimeKey();
+    const parent = parentForChild.get(key, sessionID);
+    const result = db.prepare('DELETE FROM session_summary WHERE runtime_key = ? AND session_id = ?').run(key, sessionID);
+    deleteChildrenWithParent.run(key, sessionID);
+    deleteChild.run(key, sessionID);
+    if (parent) {
+      setHasChildren.run(
+        toBooleanInt(Number(countChildrenForParent.get(key, parent.directory, parent.parentID)?.count ?? 0) > 0),
+        key,
+        parent.directory,
+        parent.parentID,
+      );
+    }
     return result.changes > 0;
   };
+
+  const replaceChildSessions = db.transaction((directory, parentSessionID, children) => {
+    const normalizedDirectory = normalizeDirectory(directory);
+    if (!normalizedDirectory || typeof parentSessionID !== 'string' || !parentSessionID) return false;
+    const key = runtimeKey();
+    const childIDs = Array.isArray(children)
+      ? children
+        .filter((child) => child && typeof child.id === 'string' && child.id)
+        .map((child) => child.id)
+      : [];
+    deleteChildrenForParent.run(key, normalizedDirectory, parentSessionID);
+    for (const childID of childIDs) insertChild.run(key, normalizedDirectory, childID, parentSessionID);
+    const result = setHasChildren.run(toBooleanInt(childIDs.length > 0), key, normalizedDirectory, parentSessionID);
+    return result.changes > 0;
+  });
 
   return {
     replaceDirectory,
     replaceDirectories,
     upsert,
     remove,
+    replaceChildSessions,
     snapshot,
     getRuntimeKey: runtimeKey,
     close: () => db.close(),
