@@ -227,10 +227,10 @@ const SessionShortcutHint = React.memo(function SessionShortcutHint({
   return (
     <kbd
       data-sidebar-shortcut-number={number}
-      className="pointer-events-none relative z-20 inline-flex h-6 min-w-0 shrink-0 select-none items-center justify-center rounded-full bg-[var(--surface-subtle)] px-2.5 font-normal leading-none text-muted-foreground"
+      className="pointer-events-none absolute right-0 top-1/2 z-20 inline-flex h-4 min-w-0 -translate-y-1/2 select-none items-center justify-center rounded-full bg-[var(--surface-subtle)] px-1.5 font-normal leading-none text-muted-foreground"
       style={{
         fontFamily: 'inherit',
-        fontSize: 'var(--text-ui-label)',
+        fontSize: 'calc(var(--text-ui-label) * 0.78)',
       }}
       aria-hidden="true"
     >
@@ -617,24 +617,62 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const pendingPermissionCount = sessionPermissions.length;
   const showUnreadStatus = !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
+  // Trailing status owns a shrink-0 gutter on the right (same idea as hover
+  // action padding): context-style ring while busy, slightly larger info dot
+  // when unread. Hide when row actions take over so the two never fight for
+  // the same edge.
+  const hideTrailingStatusOnActionReveal = !alwaysShowActions || isVSCode;
+  // Match ContextUsageDisplay subtle ring geometry (track + bright arc).
+  const busyRingSize = 14;
+  const busyRingStroke = 1.5;
+  const busyRingRadius = (busyRingSize - busyRingStroke) / 2;
+  const busyRingCircumference = 2 * Math.PI * busyRingRadius;
+  const busyRingArc = busyRingCircumference * 0.28;
   const statusMarkerContent = isStreaming
     ? (
         <span
-          className="h-1.5 w-1.5 rounded-full bg-primary animate-busy-pulse"
+          className="inline-flex h-3.5 w-3.5 items-center justify-center"
           aria-label={t('sessions.sidebar.session.status.active')}
           title={t('sessions.sidebar.session.status.active')}
-        />
+        >
+          <svg
+            viewBox={`0 0 ${busyRingSize} ${busyRingSize}`}
+            className="h-3.5 w-3.5 animate-spin"
+            aria-hidden="true"
+          >
+            <circle
+              cx={busyRingSize / 2}
+              cy={busyRingSize / 2}
+              r={busyRingRadius}
+              fill="none"
+              stroke="var(--interactive-border)"
+              strokeWidth={busyRingStroke}
+            />
+            <circle
+              cx={busyRingSize / 2}
+              cy={busyRingSize / 2}
+              r={busyRingRadius}
+              fill="none"
+              stroke="var(--surface-muted-foreground)"
+              strokeWidth={busyRingStroke}
+              strokeLinecap="round"
+              strokeDasharray={`${busyRingArc} ${busyRingCircumference - busyRingArc}`}
+            />
+          </svg>
+        </span>
       )
     : (
         <span
-          className="h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
+          className="inline-flex h-3.5 w-3.5 items-center justify-center"
           aria-label={t('sessions.sidebar.session.status.unread')}
           title={t('sessions.sidebar.session.status.unread')}
-        />
+        >
+          <span className="h-2 w-2 rounded-full bg-[var(--status-info)]" />
+        </span>
       );
   // Recent: no pin glyph and no chevron swap-on-hover (tree chrome stays in Projects).
-  const hideLeadingIndicatorOnHover = !isRecentContext && !alwaysShowActions && hasChildren && (showStatusMarker || isPinnedSession);
-  const showPinnedMarker = !isRecentContext && isPinnedSession && !showStatusMarker;
+  const hideLeadingIndicatorOnHover = !isRecentContext && !alwaysShowActions && hasChildren && isPinnedSession;
+  const showPinnedMarker = !isRecentContext && isPinnedSession;
   const pinnedMarkerContent = (
     <Icon
       name="pushpin-2-fill"
@@ -642,7 +680,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       aria-label={t('sessions.sidebar.session.status.pinned')}
     />
   );
-  const leadingIndicators = showStatusMarker || showPinnedMarker ? (
+  const leadingIndicators = showPinnedMarker ? (
     <span
       className={cn(
         'pointer-events-none absolute inline-flex h-3.5 w-3.5 items-center justify-center transition-opacity',
@@ -652,8 +690,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       // Icon/chevron column = parent depth (aligns with folder glyphs above).
       style={{ left: getSidebarRowPaddingLeft(Math.max(0, depth - 1)) }}
     >
-      {showStatusMarker ? statusMarkerContent : null}
-      {showPinnedMarker ? pinnedMarkerContent : null}
+      {pinnedMarkerContent}
     </span>
   ) : null;
   // Subsession chevron: align with the folder-icon column; idle hidden, hover only
@@ -1080,7 +1117,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       handleSessionDoubleClick(session.id, sessionTitle);
                     }}
                     className={cn(
-                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none transition-[padding]',
+                      'relative flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none transition-[padding]',
                       isTouchPressed && 'bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)]',
                       alwaysShowActions
                         ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
@@ -1095,8 +1132,26 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                           <span className="leading-none">{pendingPermissionCount}</span>
                         </span>
                       ) : null}
-                      {shortcutNumber ? <SessionShortcutHint number={shortcutNumber} /> : null}
+                      {/* Trailing busy/unread marker: shrink-0 so title truncates before it. */}
+                      {showStatusMarker ? (
+                        <span
+                          className={cn(
+                            'inline-flex shrink-0 items-center justify-center',
+                            hideTrailingStatusOnActionReveal
+                              ? cn(
+                                  'group-hover:hidden group-focus-within:hidden',
+                                  isSessionMenuOpen ? 'hidden' : '',
+                                )
+                              : isSessionMenuOpen
+                                ? 'invisible'
+                                : '',
+                          )}
+                        >
+                          {statusMarkerContent}
+                        </span>
+                      ) : null}
                     </div>
+                    {shortcutNumber ? <SessionShortcutHint number={shortcutNumber} /> : null}
                   </button>
                 </TooltipTrigger>
                 {/* VS Code already shows project context via workspace headers, so

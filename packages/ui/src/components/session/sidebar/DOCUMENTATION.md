@@ -22,6 +22,10 @@
 - Compact relative times use `common.relative.*Compact` i18n keys.
 - Row action icons (archive, menu) use title-matched `h-3.5` glyphs with `gap-1` spacing; the title
   reserves right padding on hover so icons own their space — no fade veil behind them.
+- Session busy/unread status is a trailing shrink-0 marker on the right of the title
+  (ContextUsage-style track+arc ring while busy, info-colored unread dot when
+  idle+unseen). It owns its own gutter so long titles truncate before it, and
+  hides when hover/always-visible row actions take that edge.
 - Archived groups are collapsed by default and support bulk deletion at group/folder level.
 - Session rows support compact inline dates in minimal mode and simplified metadata in default mode.
 - Session-row visual selection is published through a narrow row-only Focus store before authoritative navigation. Focus includes the render scope (`recent` or `project`) plus session/project identity, so duplicate representations never both receive the Active background or satisfy the wrong paint barrier.
