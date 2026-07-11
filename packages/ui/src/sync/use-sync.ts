@@ -20,6 +20,7 @@ import {
   clearSessionPrefetch,
 } from "./session-prefetch-cache"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
+import { sessionLoadDebug } from "./session-load-debug"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const INITIAL_MESSAGE_PAGE_SIZE = 50
@@ -322,6 +323,8 @@ export function useSync() {
   // Fetch messages from API
   const fetchMessages = useCallback(
     async (sessionID: string, limit: number, before?: string) => {
+      const startedAt = performance.now()
+      sessionLoadDebug("reactive-request-start", { sessionID, directory, limit, before: before ?? null })
       const result = await retry(async () => {
         const response = await sdk.session.messages({ sessionID, directory, limit, before })
         assertSdkSuccess(response, "session.messages")
@@ -336,6 +339,15 @@ export function useSync() {
         part: sortParts(x.parts),
       }))
       const cursor = result.response?.headers?.get?.("x-next-cursor") ?? undefined
+      sessionLoadDebug("reactive-request-response", {
+        sessionID,
+        directory,
+        limit,
+        before: before ?? null,
+        records: session.length,
+        hasCursor: Boolean(cursor),
+        durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      })
       return { session, part, cursor, complete: !cursor }
     },
     [sdk, directory],
@@ -345,8 +357,12 @@ export function useSync() {
   const loadMessages = useCallback(
     async (sessionID: string, options?: { before?: string; mode?: "replace" | "prepend"; isStale?: () => boolean }) => {
       const m = getMetaFor(sessionID)
-      if (m.loading) return
+      if (m.loading) {
+        sessionLoadDebug("reactive-load-deduped", { sessionID, directory, before: options?.before ?? null })
+        return
+      }
       setMetaFor(sessionID, { loading: true })
+      const startedAt = performance.now()
 
       try {
         // A resync (no `before`) must fetch at least as many messages as we
@@ -367,6 +383,7 @@ export function useSync() {
         if (!options?.before && !page.complete && !hasUserMessage(page.session)) {
           for (const nextLimit of getInitialPageExpansionLimits()) {
             if (nextLimit <= limit) continue
+            sessionLoadDebug("reactive-expand", { sessionID, directory, fromLimit: limit, toLimit: nextLimit })
             page = await fetchMessages(sessionID, nextLimit)
             if (page.complete || hasUserMessage(page.session)) break
           }
@@ -412,6 +429,13 @@ export function useSync() {
             ...(materialized.partsChanged ? { part: materialized.part } : {}),
           })
         }
+        sessionLoadDebug("reactive-committed", {
+          sessionID,
+          directory,
+          messages: materialized.messages.length,
+          mode: options?.mode ?? "replace",
+          durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        })
         setSessionPrefetch({
           directory,
           sessionID,
@@ -419,7 +443,13 @@ export function useSync() {
           cursor: merged.cursor,
           complete: merged.complete,
         })
-      } catch {
+      } catch (error) {
+        sessionLoadDebug("reactive-error", {
+          sessionID,
+          directory,
+          durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+          error: error instanceof Error ? error.message : String(error),
+        })
         setMetaFor(sessionID, { loading: false })
       }
     },
@@ -478,6 +508,16 @@ export function useSync() {
 
       const shouldLoadMessages = Boolean(!cachedReady || force)
       const shouldFetchSession = shouldFetchSessionForRenderableSync({ hasSession, shouldLoadMessages, force: Boolean(force) })
+      sessionLoadDebug("reactive-sync-decision", {
+        sessionID,
+        directory,
+        cached,
+        cachedReady,
+        hasSession,
+        shouldLoadMessages,
+        shouldFetchSession,
+        force: Boolean(force),
+      })
       const promise = (async () => {
         await Promise.all([
           shouldFetchSession
@@ -522,6 +562,7 @@ export function useSync() {
         if (!isStale() && !isMobileSurfaceRuntime()) {
           const currentMeta = getMetaFor(sessionID)
           if (currentMeta.cursor && !currentMeta.complete) {
+            sessionLoadDebug("reactive-auto-prepend", { sessionID, directory, before: currentMeta.cursor })
             loadMessages(sessionID, { before: currentMeta.cursor, mode: "prepend", isStale })
           }
         }

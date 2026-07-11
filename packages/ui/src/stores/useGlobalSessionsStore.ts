@@ -12,6 +12,12 @@ type LoadResult = {
   archivedSessions: Session[];
 };
 
+type DirectorySessionPagination = {
+  cursor: number | null;
+  hasMore: boolean;
+  loadingMore: boolean;
+};
+
 type GlobalSessionsState = {
   activeSessions: Session[];
   archivedSessions: Session[];
@@ -19,12 +25,23 @@ type GlobalSessionsState = {
   reviewTransferBySessionId: Map<string, ReviewTransferDirection>;
   /** Directories that have completed at least one successful per-directory refresh. */
   loadedDirectories: Set<string>;
-  /** Directories with an in-flight per-directory session.list refresh. */
+  /** Directories with no usable active snapshot and an in-flight initial load. */
   loadingDirectories: Set<string>;
+  /** Directories refreshing active sessions while an existing snapshot stays visible. */
+  refreshingDirectories: Set<string>;
+  /** Directories that have completed at least one archived-session refresh. */
+  archivedLoadedDirectories: Set<string>;
+  /** Directories with an in-flight archived-session refresh. */
+  archivedLoadingDirectories: Set<string>;
+  activePaginationByDirectory: Map<string, DirectorySessionPagination>;
+  /** True only after the unfiltered catalog used by retention has loaded successfully. */
+  hasLoadedFullCatalog: boolean;
   hasLoaded: boolean;
   status: GlobalSessionsStatus;
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>;
   refreshSessionsForDirectories: (directories: Iterable<string>, fallbackActive?: Session[]) => Promise<LoadResult>;
+  refreshArchivedSessionsForDirectories: (directories: Iterable<string>) => Promise<LoadResult>;
+  loadMoreSessionsForDirectory: (directory: string) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   upsertSession: (session: Session) => void;
   removeSessions: (ids: Iterable<string>) => void;
@@ -35,6 +52,10 @@ type GlobalSessionsState = {
 };
 
 const PAGE_SIZE = 500;
+/** The sidebar only needs the newest sessions for each directory. */
+const DIRECTORY_SESSION_LIMIT = 20;
+// Three attempts plus 500ms/1s backoff keep the total directory budget near 10s.
+const DIRECTORY_SESSION_TIMEOUT_MS = 3_000;
 /** Cap concurrent per-directory session.list fanout so OpenCode stays responsive for create/send. */
 const DIRECTORY_FETCH_CONCURRENCY = 2;
 
@@ -42,8 +63,32 @@ let inflightLoad: Promise<LoadResult> | null = null;
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
 let loadGeneration = 0;
-/** Coalesce overlapping per-directory refreshes for the same directory set. */
-const inflightDirectoryRefresh = new Map<string, Promise<LoadResult>>();
+/** Coalesce overlapping refreshes by directory, regardless of which caller supplied the set. */
+const inflightActiveDirectoryRefresh = new Map<string, Promise<boolean>>();
+const inflightArchivedDirectoryRefresh = new Map<string, Promise<boolean>>();
+const inflightActiveDirectoryLoadMore = new Map<string, Promise<boolean>>();
+const directoryTaskQueue: Array<() => void> = [];
+const directoryAbortControllers = new Set<AbortController>();
+let runningDirectoryTasks = 0;
+
+const drainDirectoryTaskQueue = (): void => {
+  while (runningDirectoryTasks < DIRECTORY_FETCH_CONCURRENCY && directoryTaskQueue.length > 0) {
+    const start = directoryTaskQueue.shift();
+    if (!start) return;
+    runningDirectoryTasks += 1;
+    start();
+  }
+};
+
+const scheduleDirectoryTask = <T>(task: () => Promise<T>): Promise<T> => new Promise<T>((resolve, reject) => {
+  directoryTaskQueue.push(() => {
+    void task().then(resolve, reject).finally(() => {
+      runningDirectoryTasks -= 1;
+      drainDirectoryTaskQueue();
+    });
+  });
+  drainDirectoryTaskQueue();
+});
 
 const normalizePath = (value?: string | null): string | null => {
   if (typeof value !== 'string') {
@@ -196,6 +241,25 @@ const normalizeDirectorySet = (directories: Iterable<string>): Set<string> => {
   return next;
 };
 
+const getNextSessionCursor = (sessions: Session[]): number | null => {
+  const updatedAt = sessions[sessions.length - 1]?.time?.updated;
+  return typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : null;
+};
+
+const getPaginationAfterPage = (
+  sessions: Session[],
+  previousCursor?: number | null,
+): DirectorySessionPagination => {
+  const cursor = getNextSessionCursor(sessions);
+  return {
+    cursor,
+    hasMore: sessions.length === DIRECTORY_SESSION_LIMIT
+      && cursor !== null
+      && (previousCursor === undefined || previousCursor === null || cursor < previousCursor),
+    loadingMore: false,
+  };
+};
+
 const replaceSessionsForDirectories = (
   existing: Session[],
   incoming: Session[],
@@ -222,13 +286,11 @@ const replaceSessionsForDirectories = (
   return sortSessionsByUpdated([...incomingById.values(), ...kept]);
 };
 
-const directoryRefreshKey = (directories: Set<string>): string => [...directories].sort().join('\0');
-
 const applyDirectoryRefreshPatch = (
   state: GlobalSessionsState,
   input: {
     activeSessions: Session[];
-    archivedSessions: Session[];
+    archivedSessions?: Session[];
     directories: Set<string>;
     fallbackActive?: Session[];
     markReady: boolean;
@@ -244,11 +306,13 @@ const applyDirectoryRefreshPatch = (
     nextActiveSessions = state.activeSessions;
   }
 
-  let nextArchivedSessions = replaceSessionsForDirectories(
-    state.archivedSessions,
-    input.archivedSessions,
-    input.directories,
-  );
+  let nextArchivedSessions = input.archivedSessions === undefined
+    ? state.archivedSessions
+    : replaceSessionsForDirectories(
+        state.archivedSessions,
+        input.archivedSessions,
+        input.directories,
+      );
   if (sameSessionList(state.archivedSessions, nextArchivedSessions)) {
     nextArchivedSessions = state.archivedSessions;
   }
@@ -426,6 +490,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   reviewTransferBySessionId: new Map(),
   loadedDirectories: new Set(),
   loadingDirectories: new Set(),
+  refreshingDirectories: new Set(),
+  archivedLoadedDirectories: new Set(),
+  archivedLoadingDirectories: new Set(),
+  activePaginationByDirectory: new Map(),
+  hasLoadedFullCatalog: false,
   hasLoaded: false,
   status: 'idle',
 
@@ -436,7 +505,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   resetForRuntimeSwitch: () => {
     loadGeneration += 1;
     inflightLoad = null;
-    inflightDirectoryRefresh.clear();
+    inflightActiveDirectoryRefresh.clear();
+    inflightArchivedDirectoryRefresh.clear();
+    inflightActiveDirectoryLoadMore.clear();
+    directoryAbortControllers.forEach((controller) => controller.abort());
+    directoryAbortControllers.clear();
     set({
       activeSessions: [],
       archivedSessions: [],
@@ -444,6 +517,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       reviewTransferBySessionId: new Map(),
       loadedDirectories: new Set(),
       loadingDirectories: new Set(),
+      refreshingDirectories: new Set(),
+      archivedLoadedDirectories: new Set(),
+      archivedLoadingDirectories: new Set(),
+      activePaginationByDirectory: new Map(),
+      hasLoadedFullCatalog: false,
       hasLoaded: false,
       status: 'idle',
     });
@@ -487,7 +565,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           // instance — drop it.
           return { activeSessions: [], archivedSessions: [] };
         }
-        set((state) => applySnapshot(state, nextActiveSessions, nextArchivedSessions, 'ready'));
+        set((state) => {
+          const snapshot = applySnapshot(state, nextActiveSessions, nextArchivedSessions, 'ready');
+          const hasLoadedFullCatalog = activeResult.status === 'fulfilled' && archivedResult.status === 'fulfilled';
+          return snapshot === state ? { hasLoadedFullCatalog } : { ...snapshot, hasLoadedFullCatalog };
+        });
         return { activeSessions: nextActiveSessions, archivedSessions: nextArchivedSessions };
       } catch (error) {
         if (generation !== loadGeneration) {
@@ -515,126 +597,269 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       const state = get();
       return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
     }
-
-    const refreshKey = directoryRefreshKey(directorySet);
-    const existing = inflightDirectoryRefresh.get(refreshKey);
-    if (existing) {
-      return existing;
-    }
-
     const generation = loadGeneration;
-    // Mark directories loading immediately so the sidebar can swap the project
-    // folder icon for a spinner before the first page returns.
+
+    // Seed known live sessions before the request. Refresh results replace only
+    // their own directory, so stale rows remain visible until authoritative data
+    // for that directory arrives.
     set((state) => {
+      const nextActiveSessions = mergeSessionLists(state.activeSessions, fallbackActive);
       const nextLoading = new Set(state.loadingDirectories);
+      const nextRefreshing = new Set(state.refreshingDirectories);
       for (const directory of directorySet) {
-        nextLoading.add(directory);
+        nextRefreshing.add(directory);
+        const hasSnapshot = state.loadedDirectories.has(directory)
+          || state.sessionsByDirectory.has(directory)
+          || Boolean(fallbackActive?.some((session) => resolveGlobalSessionDirectory(session) === directory));
+        if (!hasSnapshot) nextLoading.add(directory);
       }
       return {
+        ...(nextActiveSessions === state.activeSessions ? {} : {
+          activeSessions: nextActiveSessions,
+          sessionsByDirectory: buildSessionsByDirectory(nextActiveSessions),
+          reviewTransferBySessionId: buildReviewTransferMap(nextActiveSessions),
+        }),
         loadingDirectories: nextLoading,
-        // Only the first cold-start wave flips idle → loading. Later expand-on-
-        // demand refreshes must not re-show a global syncing indicator.
+        refreshingDirectories: nextRefreshing,
         status: state.status === 'idle' ? 'loading' : state.status,
       };
     });
 
-    const run = (async (): Promise<LoadResult> => {
-      const sdk = opencodeClient.getSdkClient();
-      const list = [...directorySet];
-      let cursor = 0;
-      const errors: unknown[] = [];
+    const tasks = [...directorySet].map((directory) => {
+      const existing = inflightActiveDirectoryRefresh.get(directory);
+      if (existing) return existing;
 
-      // Apply one directory at a time (bounded concurrency). Each successful
-      // directory commits its own patch so the sidebar never jumps from empty
-      // → thousands of rows in a single React commit.
-      const workers = Array.from(
-        { length: Math.min(DIRECTORY_FETCH_CONCURRENCY, list.length) },
-        async () => {
-          while (true) {
-            const index = cursor;
-            cursor += 1;
-            if (index >= list.length) return;
-            if (generation !== loadGeneration) return;
-
-            const directory = list[index];
-            const dirSet = new Set([directory]);
-            try {
-              const [activeSessions, archivedSessions] = await Promise.all([
-                listGlobalSessionPages(sdk, { directory, archived: false, pageSize: PAGE_SIZE }),
-                listGlobalSessionPages(sdk, { directory, archived: true, pageSize: PAGE_SIZE }),
-              ]);
-              if (generation !== loadGeneration) return;
-
-              set((state) => applyDirectoryRefreshPatch(state, {
-                activeSessions,
-                archivedSessions,
-                directories: dirSet,
-                // Fallback live sessions only on the first directory so we
-                // don't re-merge the same snapshot N times.
-                fallbackActive: index === 0 ? fallbackActive : undefined,
-                markReady: true,
-              }));
-            } catch (error) {
-              errors.push(error);
-              // Clear the spinner even on failure so the project is not stuck
-              // loading forever; loadedDirectories stays unset for retry.
-              set((state) => {
-                if (!state.loadingDirectories.has(directory)) return state;
-                const nextLoading = new Set(state.loadingDirectories);
-                nextLoading.delete(directory);
-                return { loadingDirectories: nextLoading };
-              });
-            }
+      const task = scheduleDirectoryTask(async (): Promise<boolean> => {
+        const controller = new AbortController();
+        directoryAbortControllers.add(controller);
+        try {
+          if (generation !== loadGeneration) return false;
+          const activeSessions = await listGlobalSessionPages(opencodeClient.getSdkClient(), {
+            directory,
+            archived: false,
+            roots: true,
+            pageSize: DIRECTORY_SESSION_LIMIT,
+            maxItems: DIRECTORY_SESSION_LIMIT,
+            timeoutMs: DIRECTORY_SESSION_TIMEOUT_MS,
+            signal: controller.signal,
+          });
+          if (generation !== loadGeneration) return false;
+          set((state) => {
+            const patch = applyDirectoryRefreshPatch(state, {
+              activeSessions,
+              directories: new Set([directory]),
+              markReady: true,
+            });
+            const nextRefreshing = new Set(state.refreshingDirectories);
+            const nextPagination = new Map(state.activePaginationByDirectory);
+            nextRefreshing.delete(directory);
+            nextPagination.set(directory, getPaginationAfterPage(activeSessions));
+            return patch === state
+              ? { refreshingDirectories: nextRefreshing, activePaginationByDirectory: nextPagination }
+              : { ...patch, refreshingDirectories: nextRefreshing, activePaginationByDirectory: nextPagination };
+          });
+          return true;
+        } catch (error) {
+          if (generation === loadGeneration) {
+            console.warn(`[GlobalSessions] Failed to refresh active sessions for ${directory}:`, error);
+            set((state) => {
+              const nextLoading = new Set(state.loadingDirectories);
+              const nextRefreshing = new Set(state.refreshingDirectories);
+              nextLoading.delete(directory);
+              nextRefreshing.delete(directory);
+              return { loadingDirectories: nextLoading, refreshingDirectories: nextRefreshing };
+            });
           }
-        },
-      );
-
-      await Promise.all(workers);
-
-      if (generation !== loadGeneration) {
-        return { activeSessions: [], archivedSessions: [] };
-      }
-
-      if (errors.length > 0) {
-        console.warn('[GlobalSessions] Failed to refresh sessions for some directories:', errors[0]);
-      }
-
-      // Drop any directories still marked loading (e.g. aborted mid-flight) and
-      // settle global status if we never left the cold-start loading wave.
-      set((state) => {
-        let nextLoading = state.loadingDirectories;
-        let loadingChanged = false;
-        for (const directory of directorySet) {
-          if (nextLoading.has(directory)) {
-            if (!loadingChanged) {
-              nextLoading = new Set(state.loadingDirectories);
-              loadingChanged = true;
-            }
-            nextLoading.delete(directory);
-          }
+          return false;
+        } finally {
+          directoryAbortControllers.delete(controller);
         }
-        const nextStatus = state.status === 'loading'
-          ? (errors.length === list.length ? 'error' as const : 'ready' as const)
-          : state.status;
-        if (!loadingChanged && state.status === nextStatus && state.hasLoaded) {
-          return state;
-        }
-        return {
-          loadingDirectories: nextLoading,
-          status: nextStatus,
-          hasLoaded: true,
-        };
       });
+      inflightActiveDirectoryRefresh.set(directory, task);
+      void task.finally(() => {
+        if (inflightActiveDirectoryRefresh.get(directory) === task) {
+          inflightActiveDirectoryRefresh.delete(directory);
+        }
+      });
+      return task;
+    });
 
-      return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
-    })();
+    const results = await Promise.all(tasks);
+    if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
+    set((state) => ({
+      status: state.status === 'loading'
+        ? (results.some(Boolean) ? 'ready' : 'error')
+        : state.status,
+      hasLoaded: true,
+    }));
+    return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
+  },
 
-    inflightDirectoryRefresh.set(refreshKey, run);
-    try {
-      return await run;
-    } finally {
-      inflightDirectoryRefresh.delete(refreshKey);
+  loadMoreSessionsForDirectory: async (directoryInput) => {
+    const directory = normalizePath(directoryInput);
+    if (!directory) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
     }
+    const existing = inflightActiveDirectoryLoadMore.get(directory);
+    if (existing) {
+      await existing;
+      return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
+    }
+    const pagination = get().activePaginationByDirectory.get(directory);
+    if (!pagination?.hasMore || pagination.cursor === null) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+    }
+
+    const generation = loadGeneration;
+    set((state) => {
+      const nextPagination = new Map(state.activePaginationByDirectory);
+      nextPagination.set(directory, { ...pagination, loadingMore: true });
+      return { activePaginationByDirectory: nextPagination };
+    });
+
+    const task = scheduleDirectoryTask(async (): Promise<boolean> => {
+      const controller = new AbortController();
+      directoryAbortControllers.add(controller);
+      try {
+        const page = await listGlobalSessionPages(opencodeClient.getSdkClient(), {
+          directory,
+          archived: false,
+          roots: true,
+          cursor: pagination.cursor ?? undefined,
+          pageSize: DIRECTORY_SESSION_LIMIT,
+          maxItems: DIRECTORY_SESSION_LIMIT,
+          timeoutMs: DIRECTORY_SESSION_TIMEOUT_MS,
+          signal: controller.signal,
+        });
+        if (generation !== loadGeneration) return false;
+        set((state) => {
+          const existingForDirectory = state.activeSessions.filter(
+            (session) => resolveGlobalSessionDirectory(session) === directory,
+          );
+          const byId = new Map(existingForDirectory.map((session) => [session.id, session]));
+          page.forEach((session) => {
+            byId.set(session.id, mergeSessionDirectoryMetadata(session, byId.get(session.id)));
+          });
+          const mergedDirectorySessions = sortSessionsByUpdated([...byId.values()]);
+          const nextActiveSessions = replaceSessionsForDirectories(
+            state.activeSessions,
+            mergedDirectorySessions,
+            new Set([directory]),
+          );
+          const nextPagination = new Map(state.activePaginationByDirectory);
+          nextPagination.set(directory, getPaginationAfterPage(page, pagination.cursor));
+          return {
+            activeSessions: sameSessionList(state.activeSessions, nextActiveSessions)
+              ? state.activeSessions
+              : nextActiveSessions,
+            sessionsByDirectory: buildSessionsByDirectory(nextActiveSessions),
+            reviewTransferBySessionId: buildReviewTransferMap(nextActiveSessions),
+            activePaginationByDirectory: nextPagination,
+          };
+        });
+        return true;
+      } catch (error) {
+        if (generation === loadGeneration) {
+          console.warn(`[GlobalSessions] Failed to load more sessions for ${directory}:`, error);
+          set((state) => {
+            const current = state.activePaginationByDirectory.get(directory);
+            if (!current) return state;
+            const nextPagination = new Map(state.activePaginationByDirectory);
+            nextPagination.set(directory, { ...current, loadingMore: false });
+            return { activePaginationByDirectory: nextPagination };
+          });
+        }
+        return false;
+      } finally {
+        directoryAbortControllers.delete(controller);
+      }
+    });
+    inflightActiveDirectoryLoadMore.set(directory, task);
+    try {
+      await task;
+    } finally {
+      if (inflightActiveDirectoryLoadMore.get(directory) === task) {
+        inflightActiveDirectoryLoadMore.delete(directory);
+      }
+    }
+    return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
+  },
+
+  refreshArchivedSessionsForDirectories: async (directories) => {
+    const directorySet = normalizeDirectorySet(directories);
+    if (directorySet.size === 0) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+    }
+    const generation = loadGeneration;
+    set((state) => {
+      const nextLoading = new Set(state.archivedLoadingDirectories);
+      directorySet.forEach((directory) => nextLoading.add(directory));
+      return { archivedLoadingDirectories: nextLoading };
+    });
+
+    const tasks = [...directorySet].map((directory) => {
+      const existing = inflightArchivedDirectoryRefresh.get(directory);
+      if (existing) return existing;
+      const task = scheduleDirectoryTask(async (): Promise<boolean> => {
+        const controller = new AbortController();
+        directoryAbortControllers.add(controller);
+        try {
+          if (generation !== loadGeneration) return false;
+          const archivedSessions = await listGlobalSessionPages(opencodeClient.getSdkClient(), {
+            directory,
+            archived: true,
+            roots: true,
+            pageSize: DIRECTORY_SESSION_LIMIT,
+            maxItems: DIRECTORY_SESSION_LIMIT,
+            timeoutMs: DIRECTORY_SESSION_TIMEOUT_MS,
+            signal: controller.signal,
+          });
+          if (generation !== loadGeneration) return false;
+          set((state) => {
+            const nextArchived = replaceSessionsForDirectories(
+              state.archivedSessions,
+              archivedSessions,
+              new Set([directory]),
+            );
+            const nextLoaded = new Set(state.archivedLoadedDirectories);
+            const nextLoading = new Set(state.archivedLoadingDirectories);
+            nextLoaded.add(directory);
+            nextLoading.delete(directory);
+            return {
+              archivedSessions: sameSessionList(state.archivedSessions, nextArchived) ? state.archivedSessions : nextArchived,
+              archivedLoadedDirectories: nextLoaded,
+              archivedLoadingDirectories: nextLoading,
+            };
+          });
+          return true;
+        } catch (error) {
+          if (generation === loadGeneration) {
+            console.warn(`[GlobalSessions] Failed to refresh archived sessions for ${directory}:`, error);
+            set((state) => {
+              const nextLoading = new Set(state.archivedLoadingDirectories);
+              nextLoading.delete(directory);
+              return { archivedLoadingDirectories: nextLoading };
+            });
+          }
+          return false;
+        } finally {
+          directoryAbortControllers.delete(controller);
+        }
+      });
+      inflightArchivedDirectoryRefresh.set(directory, task);
+      void task.finally(() => {
+        if (inflightArchivedDirectoryRefresh.get(directory) === task) {
+          inflightArchivedDirectoryRefresh.delete(directory);
+        }
+      });
+      return task;
+    });
+    await Promise.all(tasks);
+    if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
+    return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
   },
 
   upsertSession: (session) => {
@@ -747,6 +972,17 @@ export const ensureGlobalSessionsLoaded = async (fallbackActive?: Session[]): Pr
   return state.loadSessions(fallbackActive);
 };
 
+export const ensureFullGlobalSessionsLoaded = async (fallbackActive?: Session[]): Promise<LoadResult> => {
+  const state = useGlobalSessionsStore.getState();
+  if (state.hasLoadedFullCatalog && state.status !== 'error') {
+    return {
+      activeSessions: state.activeSessions,
+      archivedSessions: state.archivedSessions,
+    };
+  }
+  return state.loadSessions(fallbackActive);
+};
+
 export const refreshGlobalSessions = async (fallbackActive?: Session[]): Promise<LoadResult> => {
   return useGlobalSessionsStore.getState().loadSessions(fallbackActive);
 };
@@ -756,4 +992,14 @@ export const refreshGlobalSessionsForDirectories = async (
   fallbackActive?: Session[],
 ): Promise<LoadResult> => {
   return useGlobalSessionsStore.getState().refreshSessionsForDirectories(directories, fallbackActive);
+};
+
+export const refreshArchivedSessionsForDirectories = async (
+  directories: Iterable<string>,
+): Promise<LoadResult> => {
+  return useGlobalSessionsStore.getState().refreshArchivedSessionsForDirectories(directories);
+};
+
+export const loadMoreGlobalSessionsForDirectory = async (directory: string): Promise<LoadResult> => {
+  return useGlobalSessionsStore.getState().loadMoreSessionsForDirectory(directory);
 };

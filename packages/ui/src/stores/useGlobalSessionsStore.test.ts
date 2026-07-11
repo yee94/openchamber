@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@opencode-ai/sdk/v2';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { OpencodeClient, Session } from '@opencode-ai/sdk/v2';
 
 import { resolveGlobalSessionDirectory, mergeLiveSessionWithGlobalSession, useGlobalSessionsStore } from './useGlobalSessionsStore';
+import { opencodeClient } from '@/lib/opencode/client';
 
 type SessionExtra = Partial<Session> & {
   directory?: string | null;
@@ -17,6 +18,8 @@ const buildSession = (shareUrl: string, extra: SessionExtra = {}): Session => ({
 } as Session);
 
 describe('useGlobalSessionsStore', () => {
+  let restoreGetSdkClient: (() => void) | null = null;
+
   beforeEach(() => {
     useGlobalSessionsStore.setState({
       activeSessions: [],
@@ -24,9 +27,178 @@ describe('useGlobalSessionsStore', () => {
       sessionsByDirectory: new Map(),
       loadedDirectories: new Set(),
       loadingDirectories: new Set(),
+      refreshingDirectories: new Set(),
+      archivedLoadedDirectories: new Set(),
+      archivedLoadingDirectories: new Set(),
+      activePaginationByDirectory: new Map(),
+      hasLoadedFullCatalog: false,
       hasLoaded: false,
       status: 'idle',
     });
+  });
+
+  afterEach(() => {
+    restoreGetSdkClient?.();
+    restoreGetSdkClient = null;
+  });
+
+  test('coalesces overlapping active refreshes by directory and keeps a cached snapshot visible', async () => {
+    type ListResult = { data?: Session[]; error?: { message: string }; response: Response };
+    let resolveList: (value: ListResult) => void = () => undefined;
+    const calls: Array<Record<string, unknown>> = [];
+    const list = (input: Record<string, unknown>) => new Promise<ListResult>((resolve) => {
+      calls.push(input);
+      resolveList = resolve;
+    });
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+
+    const cached = buildSession('https://share.example/a', { directory: '/repo/app' });
+    useGlobalSessionsStore.setState({
+      activeSessions: [cached],
+      sessionsByDirectory: new Map([['/repo/app', [cached]]]),
+      loadedDirectories: new Set(['/repo/app']),
+      hasLoaded: true,
+      status: 'ready',
+    });
+
+    const first = useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo/app']);
+    const second = useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo/app']);
+
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toEqual({ directory: '/repo/app', archived: false, roots: true, limit: 20 });
+    expect(useGlobalSessionsStore.getState().activeSessions[0]?.id).toBe('ses_1');
+    expect(useGlobalSessionsStore.getState().loadingDirectories.has('/repo/app')).toBe(false);
+    expect(useGlobalSessionsStore.getState().refreshingDirectories.has('/repo/app')).toBe(true);
+
+    resolveList({
+      data: [{ ...cached, title: 'Fresh session', time: { created: 1, updated: 3 } }],
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    await Promise.all([first, second]);
+
+    expect(calls.length).toBe(1);
+    expect(useGlobalSessionsStore.getState().activeSessions[0]?.title).toBe('Fresh session');
+    expect(useGlobalSessionsStore.getState().refreshingDirectories.has('/repo/app')).toBe(false);
+  });
+
+  test('loads archived sessions through the independent lazy path', async () => {
+    const archived = buildSession('https://share.example/a', {
+      directory: '/repo/app',
+      time: { created: 1, updated: 2, archived: 3 },
+    });
+    const calls: Array<Record<string, unknown>> = [];
+    const list = async (input: Record<string, unknown>) => {
+      calls.push(input);
+      return {
+      data: [archived],
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+      };
+    };
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+
+    await useGlobalSessionsStore.getState().refreshArchivedSessionsForDirectories(['/repo/app']);
+
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toEqual({ directory: '/repo/app', archived: true, roots: true, limit: 20 });
+    expect(useGlobalSessionsStore.getState().archivedSessions[0]?.id).toBe('ses_1');
+    expect(useGlobalSessionsStore.getState().archivedLoadedDirectories.has('/repo/app')).toBe(true);
+    expect(useGlobalSessionsStore.getState().archivedLoadingDirectories.has('/repo/app')).toBe(false);
+  });
+
+  test('preserves cached active sessions and clears refresh state after a fetch failure', async () => {
+    const cached = buildSession('https://share.example/a', { directory: '/repo/app' });
+    const list = async () => ({
+      data: undefined,
+      error: { message: 'bad request' },
+      response: new Response(null, { status: 400 }),
+    });
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+    useGlobalSessionsStore.setState({
+      activeSessions: [cached],
+      sessionsByDirectory: new Map([['/repo/app', [cached]]]),
+      loadedDirectories: new Set(['/repo/app']),
+      hasLoaded: true,
+      status: 'ready',
+    });
+
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo/app']);
+
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([cached]);
+    expect(useGlobalSessionsStore.getState().loadingDirectories.has('/repo/app')).toBe(false);
+    expect(useGlobalSessionsStore.getState().refreshingDirectories.has('/repo/app')).toBe(false);
+  });
+
+  test('loads the next 20 root sessions from the stored cursor and appends them', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const makePage = (start: number) => Array.from({ length: 20 }, (_, index) => ({
+      id: `ses_${start + index}`,
+      title: `Session ${start + index}`,
+      directory: '/repo/app',
+      time: { created: 100 - start - index, updated: 100 - start - index },
+    } as Session));
+    const list = async (input: Record<string, unknown>) => {
+      calls.push(input);
+      return {
+        data: input.cursor === undefined ? makePage(0) : makePage(20),
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    };
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo/app']);
+    await useGlobalSessionsStore.getState().loadMoreSessionsForDirectory('/repo/app');
+
+    expect(calls.length).toBe(2);
+    expect(calls[1]).toEqual({
+      directory: '/repo/app',
+      archived: false,
+      roots: true,
+      cursor: 81,
+      limit: 20,
+    });
+    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/app')?.length).toBe(40);
+    expect(useGlobalSessionsStore.getState().activePaginationByDirectory.get('/repo/app')).toEqual({
+      cursor: 61,
+      hasMore: true,
+      loadingMore: false,
+    });
+  });
+
+  test('aborts an in-flight directory request on runtime reset', async () => {
+    let requestSignal: AbortSignal | undefined;
+    const list = (_input: Record<string, unknown>, options?: { signal?: AbortSignal }) => {
+      requestSignal = options?.signal;
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    };
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+
+    const refresh = useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo/app']);
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    await refresh;
+
+    expect(requestSignal?.aborted).toBe(true);
+    expect(useGlobalSessionsStore.getState().status).toBe('idle');
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
   });
 
   test('updates an existing session when the share URL changes', () => {

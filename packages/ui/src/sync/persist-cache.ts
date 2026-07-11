@@ -3,15 +3,15 @@
  *
  * VCS info, project metadata, and icons are cached to localStorage
  * per directory so they survive page reloads.
- * Only metadata is persisted — session/message/part data is always fresh
- * from the server via SSE bootstrap.
+ * A small root-session snapshot is persisted for instant sidebar paint;
+ * messages and parts are always loaded from the server.
  */
 
 import type { Session, VcsInfo } from "@opencode-ai/sdk/v2/client"
 import type { ProjectMeta } from "./types"
 
 /** Cap persisted session lists so localStorage stays bounded per directory. */
-const PERSISTED_SESSION_LIMIT = 50
+const PERSISTED_SESSION_LIMIT = 20
 
 // ---------------------------------------------------------------------------
 // Storage key generation
@@ -95,10 +95,12 @@ export function persistSessions(directory: string, sessions: Session[] | undefin
     writeCache(directory, "sessions", undefined)
     return
   }
-  // Keep the most recent N by id (ids are time-ordered hex) to bound storage.
-  const capped = sessions.length > PERSISTED_SESSION_LIMIT
-    ? [...sessions].sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)).slice(0, PERSISTED_SESSION_LIMIT)
-    : sessions
+  // Persist only recent root conversations. Child sessions are discovered via
+  // live events or the targeted parent children endpoint when they are active.
+  const roots = sessions.filter((session) => !session.parentID)
+  const capped = [...roots]
+    .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    .slice(0, PERSISTED_SESSION_LIMIT)
   writeCache(directory, "sessions", capped)
 }
 

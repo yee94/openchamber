@@ -50,6 +50,9 @@ type Props = {
   headerAccessory?: React.ReactNode;
   /** Publishes the exact root-session rows currently revealed by collapse/Show more state. */
   onVisibleSessionIdsChange?: (sessionIds: readonly string[]) => void;
+  hasMoreSessions?: boolean;
+  isLoadingMoreSessions?: boolean;
+  onLoadMoreSessions?: () => void;
 };
 
 type RenderExtras = SessionNodeRenderExtras;
@@ -69,6 +72,9 @@ export function SidebarActivitySections({
   batchSize = MAX_VISIBLE_RECENT_SESSIONS,
   headerAccessory,
   onVisibleSessionIdsChange,
+  hasMoreSessions = false,
+  isLoadingMoreSessions = false,
+  onLoadMoreSessions,
 }: Props): React.ReactNode {
   const { t } = useI18n();
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
@@ -153,13 +159,18 @@ export function SidebarActivitySections({
   }, [resetSectionLimit]);
 
   const showMoreSessions = React.useCallback((key: string, currentVisibleCount: number, totalCount: number) => {
+    const nextVisibleCount = currentVisibleCount + batchSize;
     setVisibleCountBySection((prev) => {
-      const nextVisibleCount = Math.min(totalCount, currentVisibleCount + batchSize);
       const next = new Map(prev);
+      // Keep the requested count even when it crosses the current local
+      // boundary; a remote page can then reveal rows immediately on arrival.
       next.set(key, nextVisibleCount);
       return next;
     });
-  }, [batchSize]);
+    if (nextVisibleCount >= totalCount && hasMoreSessions && !isLoadingMoreSessions) {
+      onLoadMoreSessions?.();
+    }
+  }, [batchSize, hasMoreSessions, isLoadingMoreSessions, onLoadMoreSessions]);
 
   const buildRenderExtras = React.useCallback((nodes: SessionNode[]) => {
     const subtreeContainsActive = new Set<string>();
@@ -208,7 +219,10 @@ export function SidebarActivitySections({
         );
         const visibleItems = section.items.slice(0, visibleLimit);
         const remainingCount = section.items.length - visibleItems.length;
-        const canShowFewer = !flatVariant && section.items.length > initialVisibleCount && remainingCount === 0;
+        const canShowFewer = !flatVariant
+          && section.items.length > initialVisibleCount
+          && remainingCount === 0
+          && !hasMoreSessions;
         const getRenderExtras = buildRenderExtras(visibleItems.map((item) => item.node));
         const renderItem = (item: ActivityItem) => (
           <React.Fragment key={`${item.projectId ?? ''}:${item.node.session.id}`}>
@@ -229,11 +243,16 @@ export function SidebarActivitySections({
           return (
             <div key={section.key} className="space-y-0.5">
               {visibleItems.map(renderItem)}
-              {remainingCount > 0 ? (
+              {remainingCount > 0 || hasMoreSessions ? (
                 <button
                   type="button"
                   onClick={() => showMoreSessions(section.key, visibleItems.length, section.items.length)}
-                  className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
+                  disabled={isLoadingMoreSessions}
+                  className={cn(
+                    SIDEBAR_MUTED_HINT_CLASS,
+                    'hover:text-foreground hover:underline disabled:pointer-events-none',
+                    isLoadingMoreSessions && 'animate-pulse',
+                  )}
                 >
                   {t('sessions.sidebar.group.showMore')}
                 </button>
@@ -254,11 +273,16 @@ export function SidebarActivitySections({
             {!isCollapsed ? (
               <div className="space-y-0.5">
                 {visibleItems.map(renderItem)}
-                {remainingCount > 0 ? (
+                {remainingCount > 0 || hasMoreSessions ? (
                   <button
                     type="button"
                     onClick={() => showMoreSessions(section.key, visibleItems.length, section.items.length)}
-                    className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
+                    disabled={isLoadingMoreSessions}
+                    className={cn(
+                      SIDEBAR_MUTED_HINT_CLASS,
+                      'hover:text-foreground hover:underline disabled:pointer-events-none',
+                      isLoadingMoreSessions && 'animate-pulse',
+                    )}
                   >
                     {t('sessions.sidebar.group.showMore')}
                   </button>

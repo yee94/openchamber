@@ -3,14 +3,13 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { desktopHostsGet, getDesktopHostApiUrl, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
-import { getSyncChildStores, getAllSyncSessions } from '@/sync/sync-refs';
+import { getSyncChildStores } from '@/sync/sync-refs';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useGlobalSessionStatusStore, applyGlobalSessionStatusSnapshot } from '@/sync/global-session-status';
 import { useNotificationStore } from '@/sync/notification-store';
 import { respondToPermission } from '@/sync/session-actions';
 import {
   useGlobalSessionsStore,
-  refreshGlobalSessionsForDirectories,
   resolveGlobalSessionDirectory,
 } from '@/stores/useGlobalSessionsStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
@@ -37,10 +36,6 @@ const TRAY_ACTION_EVENT = 'openchamber:tray-action';
 // Event-driven updates do the real work; this is just a slow safety net.
 const POLL_INTERVAL_MS = 5000;
 const FLUSH_DEBOUNCE_MS = 120;
-// Pull the full cross-project session list periodically. SSE keeps the active
-// directory instant; this catches sessions created in directories this client
-// never opened (other worktrees, other projects, the TUI, …).
-const GLOBAL_REFRESH_MS = 45000;
 const MAX_SESSIONS = 20;
 
 type TraySessionStatus = 'idle' | 'busy' | 'retry';
@@ -521,37 +516,6 @@ export const useTraySync = (): void => {
     // event stream, and seeded/reconciled by the poll below.
     const unsubscribeGlobalStatus = useGlobalSessionStatusStore.subscribe(() => scheduleFlush());
 
-    // Tray needs cross-project coverage, but must not cold-start with an
-    // unfiltered global session.list (that saturates OpenCode and freezes the
-    // sidebar). Refresh known project/worktree directories only, and defer the
-    // first wave so the active-project send path wins the startup race.
-    const collectKnownDirectories = (): string[] => {
-      const directories = new Set<string>();
-      const projectEntries = useProjectsStore.getState().projects;
-      const worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject;
-      for (const project of projectEntries) {
-        const path = normalizeProjectPath(project.path);
-        if (path) directories.add(path);
-        const worktrees = worktreesByProject.get(path ?? '') ?? [];
-        for (const worktree of worktrees) {
-          const directory = normalizeProjectPath(worktree.path);
-          if (directory) directories.add(directory);
-        }
-      }
-      for (const session of getAllSyncSessions()) {
-        const directory = resolveGlobalSessionDirectory(session);
-        if (directory) directories.add(directory);
-      }
-      return [...directories];
-    };
-
-    const refreshTraySessions = () => {
-      void refreshGlobalSessionsForDirectories(collectKnownDirectories(), getAllSyncSessions());
-    };
-
-    const deferredTrayLoad = window.setTimeout(refreshTraySessions, 2500);
-    const refreshInterval = window.setInterval(refreshTraySessions, GLOBAL_REFRESH_MS);
-
     // Global busy/retry status: fetch now and poll, so unsynced sessions don't
     // sit looking idle. Synced directories stay instant via their SSE stores.
     void refreshGlobalStatus();
@@ -583,9 +547,7 @@ export const useTraySync = (): void => {
     return () => {
       disposed = true;
       if (flushTimer !== null) window.clearTimeout(flushTimer);
-      window.clearTimeout(deferredTrayLoad);
       window.clearInterval(interval);
-      window.clearInterval(refreshInterval);
       window.clearInterval(globalStatusInterval);
       window.clearInterval(usageRefreshTick);
       unsubscribeNotif();

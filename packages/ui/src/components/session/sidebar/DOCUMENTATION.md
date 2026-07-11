@@ -5,11 +5,15 @@
 - `SessionSidebar.tsx` now acts mainly as orchestration; core logic moved to focused hooks/components.
 - Sidebar is now a single multi-project tree: `recent` top section, then projects, then worktrees/archived groups, then sessions.
 - The Recent section defaults to 3 visible sessions and supports the same Show more / Show fewer batching as project groups (batch size 3).
+- Show more first reveals already-fetched rows. When it reaches the local boundary, Recent fetches the next page for every loaded directory that still has a cursor, while project/worktree groups fetch only their own directory. Each remote page appends 20 root sessions and preserves existing rows on failure.
 - Project rows retain the persisted project-registry order while session and worktree data hydrates. A successfully sent message promotes its owning project to the top; ordinary activity and selection do not reorder the structural project tree. The Recent section represents session recency instead.
 - The Projects section header no longer shows a global syncing accessory. While a
   project's session directories are fetching, that project's folder icon swaps to a
-  spinner and the expanded body shows localized "Loading sessions…" copy.
-- Cold start hydrates **only the current / active project directories** via `refreshGlobalSessionsForDirectories`. Other projects load when expanded (or on expand-all). The store applies one directory at a time (concurrency 2) so the sidebar never jumps from empty → full catalog in a single commit; consumers also `useDeferredValue` the session arrays so typing/send stay on the urgent lane.
+  spinner. The expanded body shows localized "Loading sessions…" only when there is
+  no usable snapshot; background refresh keeps the existing rows visible.
+- Cold start gives the current / active project first priority via `refreshGlobalSessionsForDirectories`, fetching at most the newest 20 active sessions per directory. Once persisted collapse state is restored, other projects load only when they are already expanded, later expanded, or included by expand-all. Requests coalesce per directory and share a global concurrency limit of 2. Archived sessions are a separate lazy path: the always-present, initially collapsed archived bucket fetches at most 20 archived sessions per directory when first expanded.
+- After persisted project-collapse state is restored, every project that is already logically expanded is hydrated automatically. Startup-expanded projects do not require a collapse/re-expand click to trigger their first session request.
+- The native tray consumes the sidebar/global cache and lightweight global status; it does not trigger a delayed all-project session-list fanout.
 - An idle global-session store always triggers a priority refresh, including after a runtime endpoint reset; the status therefore cannot remain idle after the sidebar's one-time mount effect has already run.
 - `NavRail` is no longer part of sidebar/navigation flow.
 - Project headers now own root sessions directly; there is no separate rendered `project root` subgroup.
@@ -43,6 +47,7 @@
 - Previous/next-session navigation consumes ordered snapshots published from the rendered sidebar model. A Recent-origin focus cycles Recent items; a project-origin focus cycles only the logically visible rows inside its current expanded project. Rows hidden by project/group/folder collapse or the group's Show more boundary are excluded, and shortcuts never cross into another project as a fallback.
 - Global Mod+1…9 navigation numbers the first nine logically visible session rows from top to bottom across Recent and the expanded project tree. Container headers never consume a number; duplicate Recent/Project representations remain distinct Focus rows. Holding the platform primary modifier for 500ms reveals compact shortcut chips only on those rows, while releasing it, window blur, or page hide clears the hints immediately.
 - Every session navigation announces a monotonic intent revision. A later sidebar, keyboard, deep-link, or switcher intent invalidates an older pending sidebar commit, including ABA sequences such as A -> B -> A.
+- Project/group/folder ancestors are auto-expanded at most once for each navigation intent. Explicitly collapsing the project that owns the focused session remains respected during later hydration or persistence refreshes.
 - Chat LRU visibility follows the authoritative selection synchronously: cache hits reveal the retained Activity immediately, while misses show an explicit skeleton. A newly rendered Activity enters the bounded LRU only after its DOM commit, so interrupted keyboard switches cannot evict a reusable view.
 - New extractions in latest pass reduced local effect/callback bulk further:
   - project session list builders

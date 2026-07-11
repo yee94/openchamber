@@ -62,6 +62,7 @@ export const useSidebarPersistence = (args: Args) => {
 
   const persistCollapsedProjectsTimer = React.useRef<number | null>(null);
   const pendingCollapsedProjects = React.useRef<Set<string> | null>(null);
+  const [hasRestoredProjectCollapse, setHasRestoredProjectCollapse] = React.useState(false);
 
   const flushCollapsedProjectsPersist = React.useCallback(() => {
     if (isVSCode) {
@@ -146,6 +147,8 @@ export const useSidebarPersistence = (args: Args) => {
       }
     } catch {
       // ignored
+    } finally {
+      setHasRestoredProjectCollapse(true);
     }
   }, [keys.projectCollapse, keys.sessionExpanded, keys.sessionExpandedLegacy, safeStorage, setCollapsedProjects, setExpandedParents]);
 
@@ -199,5 +202,5 @@ export const useSidebarPersistence = (args: Args) => {
     }
   }, [collapsedGroups, keys.groupCollapse, safeStorage]);
 
-  return { scheduleCollapsedProjectsPersist };
+  return { scheduleCollapsedProjectsPersist, hasRestoredProjectCollapse };
 };
