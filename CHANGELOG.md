@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-07-11
+
+- **Desktop release:** rebuild the current `yee94/openchamber` desktop commit as version 1.15.2 for macOS arm64, macOS x64, and Windows x64.
+- **Release automation:** create new Git tags from the exact workflow commit so release source and generated artifacts always match.
+
 ## [1.15.1] - 2026-07-11
 
 - **Desktop releases:** GitHub Releases and update metadata now publish from `yee94/openchamber`.
