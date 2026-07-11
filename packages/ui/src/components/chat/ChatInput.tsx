@@ -76,7 +76,6 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
-import { usePermissionStore } from '@/stores/permissionStore';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -557,8 +556,7 @@ const ComposerAttachmentControls = React.memo(function ComposerAttachmentControl
             type="button"
             className={footerIconButtonClass}
             onClick={handlePickLocalFiles}
-            // Same guard as PermissionAutoAcceptButton: keep the tap
-            // from dismissing the keyboard. On Android's
+            // Keep the tap from dismissing the keyboard. On Android's
             // resizes-content viewport the keyboard-close relayout
             // moves this button mid-tap and the click never lands.
             onMouseDown={isMobileAttach ? (event) => event.preventDefault() : undefined}
@@ -670,78 +668,6 @@ const ComposerAttachmentControls = React.memo(function ComposerAttachmentControl
     && prev.onOpenMobileSheet === next.onOpenMobileSheet
     && prev.withTooltip === next.withTooltip
 ));
-
-type PermissionAutoAcceptButtonProps = {
-    footerIconButtonClass: string;
-    iconSizeClass: string;
-    permissionScopeSessionId: string | null;
-    permissionAutoAcceptEnabled: boolean;
-    handlePermissionAutoAcceptToggle: () => void;
-    withTooltip?: boolean;
-};
-
-const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButton(props: PermissionAutoAcceptButtonProps) {
-    const { t } = useI18n();
-    const {
-        footerIconButtonClass,
-        iconSizeClass,
-        permissionScopeSessionId,
-        permissionAutoAcceptEnabled,
-        handlePermissionAutoAcceptToggle,
-        withTooltip = false,
-    } = props;
-
-    const ariaLabel = permissionAutoAcceptEnabled
-        ? t('chat.chatInput.permissionAutoAccept.disable')
-        : t('chat.chatInput.permissionAutoAccept.enable');
-    const tooltipLabel = permissionAutoAcceptEnabled
-        ? t('chat.chatInput.permissionAutoAccept.on')
-        : t('chat.chatInput.permissionAutoAccept.off');
-
-    const button = (
-        <button
-            type="button"
-            onClick={handlePermissionAutoAcceptToggle}
-            className={cn(
-                footerIconButtonClass,
-                !permissionScopeSessionId && 'opacity-30',
-            )}
-            onMouseDown={(event) => {
-                event.preventDefault();
-            }}
-            onPointerDownCapture={(event) => {
-                if (event.pointerType === 'touch') {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-            }}
-            aria-pressed={permissionAutoAcceptEnabled}
-            aria-label={ariaLabel}
-            title={ariaLabel}
-        >
-            {permissionAutoAcceptEnabled ? (
-                <Icon name="shield-check" className={cn(iconSizeClass)} style={{ color: 'var(--status-info)' }} />
-            ) : (
-                <Icon name="shield-user" className={cn(iconSizeClass)} />
-            )}
-        </button>
-    );
-
-    if (!withTooltip) {
-        return button;
-    }
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                {button}
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={8}>
-                {tooltipLabel}
-            </TooltipContent>
-        </Tooltip>
-    );
-});
 
 type FocusModeButtonProps = {
     footerIconButtonClass: string;
@@ -1124,7 +1050,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         (sessionIdOverride?: string) => sessionActions.abortCurrentOperation(sessionIdOverride ?? currentSessionId ?? ''),
         [currentSessionId],
     );
-    const currentManagementSessionId = currentSessionId;
     const projects = useProjectsStore((state) => state.projects);
     const activeProjectId = useProjectsStore((state) => state.activeProjectId);
     const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
@@ -1161,7 +1086,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const ensureGitStatus = useGitStore((state) => state.ensureStatus);
     const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
-    const setSessionAutoAccept = usePermissionStore((state) => state.setSessionAutoAccept);
     const composerHighlightRef = React.useRef<HTMLDivElement | null>(null);
     const [agentPortalContainer, setAgentPortalContainer] = React.useState<HTMLDivElement | null>(null);
     const [desktopComposerFocused, setDesktopComposerFocused] = React.useState(false);
@@ -4527,26 +4451,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         COMPOSER_ICON_HOVER_CLASS,
     );
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
-    const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId;
-    const permissionAutoAcceptEnabled = usePermissionStore((state) => {
-        if (!permissionScopeSessionId) {
-            return false;
-        }
-        return state.isSessionAutoAccepting(permissionScopeSessionId);
-    });
-
-    const handlePermissionAutoAcceptToggle = React.useCallback(() => {
-        if (!permissionScopeSessionId) {
-            toast.error(t('chat.chatInput.toast.openSessionFirst'));
-            return;
-        }
-
-        const nextEnabled = !permissionAutoAcceptEnabled;
-        setSessionAutoAccept(permissionScopeSessionId, nextEnabled).catch(() => {
-            toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed'));
-        });
-    }, [permissionAutoAcceptEnabled, permissionScopeSessionId, setSessionAutoAccept, t]);
-
+    // Idle composer stays quieter; focus / open pickers / hover restore full weight.
+    const composerChromeEmphasized = isMobile
+        ? (mobileTextareaFocused || isAgentSelectorOpen || isModelSelectorOpen || Boolean(mobileControlsPanel))
+        : (desktopComposerFocused || isAgentSelectorOpen || isModelSelectorOpen);
+    const composerChromeOpacityClass = composerChromeEmphasized
+        ? 'opacity-100'
+        : 'opacity-45 hover:opacity-100 focus-within:opacity-100';
     React.useEffect(() => {
         const pendingAbortBanner = Boolean(abortPromptSessionId) && abortPromptSessionId === currentSessionId;
         if (!prevWasAbortedRef.current && pendingAbortBanner && !showAbortStatus) {
@@ -5153,7 +5064,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     )}
                     {/* Positioning context for the dictation overlay: covers the
                         text area + footer exactly, excluding MobileSessionStatusBar. */}
-                    <div className={cn('relative flex flex-col', isComposerExpanded && 'flex-1 min-h-0')}>
+                    <div
+                        className={cn(
+                            'relative flex flex-col transition-opacity duration-200',
+                            composerChromeOpacityClass,
+                            isComposerExpanded && 'flex-1 min-h-0',
+                        )}
+                    >
                     <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         {mobileComposerHandle}
                         {isMobile ? (
@@ -5350,12 +5267,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         {isMobile ? (
                             <>
                                 <div className="flex w-full items-center justify-between gap-x-1.5">
-                                    <div className={cn(
-                                        'composer-mobile-actions flex items-center gap-x-2 pl-1 transition-opacity duration-200',
-                                        (mobileTextareaFocused || isAgentSelectorOpen)
-                                            ? 'opacity-100'
-                                            : 'opacity-45',
-                                    )}>
+                                    <div className="composer-mobile-actions flex items-center gap-x-2 pl-1">
                                         <MobileSessionPanelTrigger
                                             footerIconButtonClass={footerIconButtonClass}
                                             iconSizeClass={iconSizeClass}
@@ -5369,13 +5281,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             openPrPicker={openPrPicker}
                                             onOpenSettings={onOpenSettings}
                                             onOpenMobileSheet={openMobileAttachSheet}
-                                        />
-                                        <PermissionAutoAcceptButton
-                                            footerIconButtonClass={footerIconButtonClass}
-                                            iconSizeClass={iconSizeClass}
-                                            permissionScopeSessionId={permissionScopeSessionId}
-                                            permissionAutoAcceptEnabled={permissionAutoAcceptEnabled}
-                                            handlePermissionAutoAcceptToggle={handlePermissionAutoAcceptToggle}
                                         />
                                     </div>
                                     <div className="flex items-center min-w-0 gap-x-1 justify-end">
@@ -5402,12 +5307,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             <>
                                 <div
                                     className={cn(
-                                        'flex items-center flex-shrink-0 transition-opacity duration-200',
+                                        'flex items-center flex-shrink-0',
                                         footerGapClass,
-                                        // Idle: quieter than the model/send cluster; focus/hover restores full weight.
-                                        (desktopComposerFocused || isAgentSelectorOpen)
-                                            ? 'opacity-100'
-                                            : 'opacity-45 hover:opacity-100 focus-within:opacity-100',
                                     )}
                                 >
                                     <ComposerAttachmentControls
@@ -5425,14 +5326,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         iconSizeClass={iconSizeClass}
                                         isExpandedInput={isExpandedInput}
                                         onToggle={handleToggleExpandedInput}
-                                    />
-                                    <PermissionAutoAcceptButton
-                                        footerIconButtonClass={footerIconButtonClass}
-                                        iconSizeClass={iconSizeClass}
-                                        permissionScopeSessionId={permissionScopeSessionId}
-                                        permissionAutoAcceptEnabled={permissionAutoAcceptEnabled}
-                                        handlePermissionAutoAcceptToggle={handlePermissionAutoAcceptToggle}
-                                        withTooltip
                                     />
                                     <div ref={setAgentPortalContainer} className="flex items-center" />
                                 </div>
