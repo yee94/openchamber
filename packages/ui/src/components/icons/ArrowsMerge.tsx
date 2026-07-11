@@ -7,14 +7,14 @@ import { ICON_STROKE_WIDTH } from '@/components/icon/Icon';
  * Phosphor arrows-merge orientation (two streams converging downward).
  */
 export function ArrowsMerge(props: SVGProps<SVGSVGElement>) {
-  const { className, ...rest } = props;
+  const { className, strokeWidth = ICON_STROKE_WIDTH, ...rest } = props;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={ICON_STROKE_WIDTH}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

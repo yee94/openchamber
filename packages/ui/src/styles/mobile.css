@@ -95,6 +95,14 @@
     min-width: 0 !important;
   }
 
+  /* Message action / footer icons: don't inflate to 36px touch min — keeps
+     equal gaps and left-align with message body on mobile. */
+  :root.mobile-pointer:not(.desktop-runtime) [data-message-action-group="true"] button,
+  :root.mobile-pointer:not(.desktop-runtime) [data-message-action-group="true"] [role="button"] {
+    min-height: 0 !important;
+    min-width: 0 !important;
+  }
+
   /* Improve input field touch targets */
   :root.mobile-pointer:not(.desktop-runtime) input,
   :root.mobile-pointer:not(.desktop-runtime) textarea,

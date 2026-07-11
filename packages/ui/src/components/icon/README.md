@@ -41,6 +41,15 @@ The `Icon` component does not have a `size` prop. Use Tailwind classes instead:
 <Icon name="arrow-down-s" className="h-6 w-6" />     {/* 24px */}
 ```
 
+## Stroke weight
+
+Default stroke is 1.5 (Codex/refined). For small action chrome that must stay
+legible on mobile, pass `weight="medium"` (stroke 2, Lucide-like):
+
+```tsx
+<Icon name="file-copy" weight="medium" className="size-3.5" />
+```
+
 ## Type Safety
 
 ```tsx

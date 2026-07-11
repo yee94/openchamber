@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.6] - 2026-07-12
+
+- **Chat message actions:** clearer medium-stroke icons on send and reply (shared size), with a coordinated footer — actions and duration/time meta share color, grouped spacing, slightly smaller meta type, and left-aligned chrome on mobile.
+
 ## [1.15.5] - 2026-07-12
 
 - **Session sidebar:** only sessions with verified SubAgent children show an expansion chevron. Electron persists child-session membership in its SQLite index, updates it immediately while a delegation is created or removed, and reconciles it in the background after launch without delaying the sidebar.
