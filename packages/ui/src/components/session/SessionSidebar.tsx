@@ -45,7 +45,7 @@ import { SessionNodeItem } from './sidebar/SessionNodeItem';
 import type { SessionNodeRenderExtras } from './sidebar/sessionNodeItemUtils';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useShallow } from 'zustand/react/shallow';
-import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
+import { listProjectWorktrees, worktreeMapsEqual } from '@/lib/worktrees/worktreeManager';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SortableDragHandleProps } from './sidebar/sortableItems';
@@ -477,10 +477,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       if (cancelled) return;
 
-      useSessionUIStore.setState({
-        availableWorktrees: allWorktrees,
-        availableWorktreesByProject: worktreesByProject,
-      });
+      // Skip update if nothing changed — see worktreeMapsEqual JSDoc.
+      const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
+      if (!worktreeMapsEqual(worktreesByProject, currentByProject)) {
+        useSessionUIStore.setState({
+          availableWorktrees: allWorktrees,
+          availableWorktreesByProject: worktreesByProject,
+        });
+      }
     };
 
     // Skip if we already discovered worktrees for this exact project set.
