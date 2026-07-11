@@ -1037,25 +1037,43 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const projectSortOrder = useSessionDisplayStore((state) => state.projectSortOrder);
   const manualProjectOrder = useProjectsStore((state) => state.manualProjectOrder);
 
+  const recentProjectIdsRef = React.useRef<Set<string>>(new Set());
   const recentProjectIds = React.useMemo(() => {
     const recentSessions = deriveRecentSessions(sessions);
-    if (recentSessions.length === 0) return new Set<string>();
-
-    const pathToId = new Map<string, string>();
-    for (const project of normalizedProjects) {
-      if (project.normalizedPath) {
-        pathToId.set(project.normalizedPath, project.id);
-      }
-    }
-
     const ids = new Set<string>();
-    for (const session of recentSessions) {
-      const directory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
-      if (directory) {
-        const projectId = pathToId.get(directory);
-        if (projectId) ids.add(projectId);
+
+    if (recentSessions.length > 0) {
+      const pathToId = new Map<string, string>();
+      for (const project of normalizedProjects) {
+        if (project.normalizedPath) {
+          pathToId.set(project.normalizedPath, project.id);
+        }
+      }
+
+      for (const session of recentSessions) {
+        const directory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+        if (directory) {
+          const projectId = pathToId.get(directory);
+          if (projectId) ids.add(projectId);
+        }
       }
     }
+
+    // Sessions update on every SSE event; keep the previous Set reference when
+    // membership is unchanged so sortedProjects (and the sidebar sections built
+    // from it) do not recompute on every streaming event.
+    const previous = recentProjectIdsRef.current;
+    if (previous.size === ids.size) {
+      let unchanged = true;
+      for (const id of ids) {
+        if (!previous.has(id)) {
+          unchanged = false;
+          break;
+        }
+      }
+      if (unchanged) return previous;
+    }
+    recentProjectIdsRef.current = ids;
     return ids;
   }, [sessions, normalizedProjects]);
 
