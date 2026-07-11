@@ -35,9 +35,9 @@ const DEFAULT_DEVICE_INFO: DeviceInfo = {
   hasTouchOnlyPointer: false,
 };
 
-const isEmbeddedSessionChat = (): boolean => {
+const hasDesktopSurfaceOverride = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('ocPanel') === 'session-chat';
+  return new URLSearchParams(window.location.search).get('surface') === 'desktop';
 };
 
 const getNavigatorDeviceHints = (maxTouchPoints: number) => {
@@ -109,7 +109,7 @@ export function getDeviceInfo(): DeviceInfo {
   const noHover = hoverQuery?.matches ?? false;
   const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
   // Desktop panels are desktop surfaces even when their viewport is narrow.
-  const isDesktopShellRuntime = isDesktopShell() || isVSCodeRuntime() || isEmbeddedSessionChat();
+  const isDesktopShellRuntime = isDesktopShell() || isVSCodeRuntime() || hasDesktopSurfaceOverride();
   const { isExplicitTablet } = getNavigatorDeviceHints(maxTouchPoints);
 
   const hasTouchInput = prefersCoarsePointer || noHover || maxTouchPoints > 0;
