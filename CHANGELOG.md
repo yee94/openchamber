@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.7] - 2026-07-12
+
+- **Android updates:** the Capacitor client now checks `yee94/openchamber` GitHub Releases directly, reads the latest stable release version and notes, and uses the uploaded APK asset as its update download URL.
+
 ## [1.15.6] - 2026-07-12
 
 - **Chat message actions:** clearer medium-stroke icons on send and reply (shared size), with a coordinated footer — actions and duration/time meta share color, grouped spacing, slightly smaller meta type, and left-aligned chrome on mobile.
