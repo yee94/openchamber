@@ -45,6 +45,7 @@ import {
 import { useSync } from '@/sync/use-sync';
 import { getSessionPrefetch, subscribeSessionPrefetch } from '@/sync/session-prefetch-cache';
 import { getSessionMaterializationStatus } from '@/sync/materialization';
+import { sessionLoadDebug } from '@/sync/session-load-debug';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { useI18n } from '@/lib/i18n';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
@@ -824,6 +825,17 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const isSessionHydrating =
         Boolean(currentSessionId)
         && !hasRenderableSessionSnapshot;
+
+    React.useEffect(() => {
+        if (!currentSessionId) return;
+        sessionLoadDebug('render-state', {
+            sessionID: currentSessionId,
+            directory: effectiveSessionDirectory,
+            renderable: hasRenderableSessionSnapshot,
+            messages: sessionMessages.length,
+            working: sessionIsWorking,
+        });
+    }, [currentSessionId, effectiveSessionDirectory, hasRenderableSessionSnapshot, sessionIsWorking, sessionMessages.length]);
 
     React.useEffect(() => {
         if (!currentSessionId) return;

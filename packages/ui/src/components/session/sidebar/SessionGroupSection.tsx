@@ -33,6 +33,7 @@ import type { SessionNodeRenderExtras } from './sessionNodeItemUtils';
 import type { SessionFolder } from '@/stores/useSessionFoldersStore';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { openExternalUrl } from '@/lib/url';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
@@ -52,6 +53,7 @@ type DeleteFolderConfirm = {
 type Props = {
   group: SessionGroup;
   groupKey: string;
+  isArchivedLoading?: boolean;
   projectId?: string | null;
   hideGroupLabel?: boolean;
   hasSessionSearchQuery: boolean;
@@ -78,7 +80,7 @@ type Props = {
   ) => React.ReactNode;
   projectRepoStatus: Map<string, boolean | null>;
   lastRepoStatus: boolean;
-  showMoreGroupSessions: (groupKey: string, currentVisibleCount: number) => void;
+  showMoreGroupSessions: (groupKey: string, currentVisibleCount: number, totalSessions: number) => void;
   resetGroupSessionLimit: (groupKey: string) => void;
   mobileVariant: boolean;
   alwaysShowActions: boolean;
@@ -211,6 +213,7 @@ const areGroupPropsEqual = (prev: Props, next: Props): boolean => {
   // any change should force a re-render of this group.
   if (prev.group !== next.group) return false;
   if (prev.groupKey !== next.groupKey) return false;
+  if (prev.isArchivedLoading !== next.isArchivedLoading) return false;
   if (prev.projectId !== next.projectId) return false;
   if (prev.hideGroupLabel !== next.hideGroupLabel) return false;
   if (prev.compactBodyPadding !== next.compactBodyPadding) return false;
@@ -325,6 +328,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   const {
     group,
     groupKey,
+    isArchivedLoading = false,
     projectId,
     hideGroupLabel,
     hasSessionSearchQuery,
@@ -388,6 +392,10 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
   // VS Code always uses the expanded layout (see SessionNodeItem).
   const isMinimalMode = displayMode === 'minimal' && !isVSCodeRuntime();
+  const paginationDirectory = group.isArchivedBucket ? null : normalizePath(group.directory ?? null);
+  const sessionPagination = useGlobalSessionsStore((state) => (
+    paginationDirectory ? state.activePaginationByDirectory.get(paginationDirectory) : undefined
+  ));
   const isCollapsed = hasSessionSearchQuery ? false : collapsedGroups.has(groupKey);
   const maxVisible = getDefaultProjectGroupVisibleCount(hideDirectoryControls);
   const nonArchivedVisibleCount = Math.max(maxVisible, visibleSessionCount ?? maxVisible);
@@ -562,7 +570,13 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
       ? ungroupedSessions
       : ungroupedSessions.slice(0, nonArchivedVisibleCount);
   const remainingCount = totalSessions - visibleSessions.length;
-  const canShowLess = !group.isArchivedBucket && !hasSessionSearchQuery && totalSessions > maxVisible && remainingCount === 0;
+  const hasRemoteSessions = sessionPagination?.hasMore === true;
+  const isLoadingRemoteSessions = sessionPagination?.loadingMore === true;
+  const canShowLess = !group.isArchivedBucket
+    && !hasSessionSearchQuery
+    && totalSessions > maxVisible
+    && remainingCount === 0
+    && !hasRemoteSessions;
 
   // Virtualize large groups. Archived buckets grow into the hundreds or
   // thousands of rows; active/worktree groups can also hit 80+ sessions
@@ -1062,16 +1076,23 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
           className={SIDEBAR_MUTED_HINT_CLASS}
           style={{ paddingLeft: getSidebarRowPaddingLeft(contentDepth) }}
         >
-          {group.isArchivedBucket
+          {isArchivedLoading
+            ? t('sessions.sidebar.project.loadingSessions')
+            : group.isArchivedBucket
             ? t('sessions.sidebar.group.empty.noArchivedSessions')
             : t('sessions.sidebar.group.empty.noSessionsInWorkspace')}
         </div>
       ) : null}
-      {remainingCount > 0 ? (
+      {remainingCount > 0 || hasRemoteSessions ? (
         <button
           type="button"
-          onClick={() => showMoreGroupSessions(groupKey, visibleSessions.length)}
-          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
+          onClick={() => showMoreGroupSessions(groupKey, visibleSessions.length, totalSessions)}
+          disabled={isLoadingRemoteSessions}
+          className={cn(
+            SIDEBAR_MUTED_HINT_CLASS,
+            'hover:text-foreground hover:underline disabled:pointer-events-none',
+            isLoadingRemoteSessions && 'animate-pulse',
+          )}
           style={{ paddingLeft: getSidebarRowPaddingLeft(contentDepth) }}
         >
           {t('sessions.sidebar.group.showMore')}

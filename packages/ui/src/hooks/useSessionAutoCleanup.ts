@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { opencodeClient } from '@/lib/opencode/client';
-import { ensureGlobalSessionsLoaded, useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { ensureFullGlobalSessionsLoaded, useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useUIStore } from '@/stores/useUIStore';
@@ -72,7 +72,7 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const isLoading = useSessionUIStore((state) => state.isLoading);
   const globalSessions = useGlobalSessionsStore((state) => state.activeSessions);
-  const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded);
+  const hasLoadedFullCatalog = useGlobalSessionsStore((state) => state.hasLoadedFullCatalog);
 
   const autoDeleteEnabled = useUIStore((state) => state.autoDeleteEnabled);
   const autoDeleteAfterDays = useUIStore((state) => state.autoDeleteAfterDays);
@@ -84,13 +84,14 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
   const runningRef = React.useRef(false);
 
   React.useEffect(() => {
+    if (!enabled || !autoDeleteEnabled || autoDeleteAfterDays <= 0) return;
     // Retention cleanup needs a broad catalog eventually, but must not race the
     // active-project cold-start send path with an unfiltered global list.
     const timer = window.setTimeout(() => {
-      void ensureGlobalSessionsLoaded(getAllSyncSessions());
+      void ensureFullGlobalSessionsLoaded(getAllSyncSessions());
     }, 8000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [autoDeleteAfterDays, autoDeleteEnabled, enabled]);
 
   const candidates = React.useMemo(() => {
     if (autoDeleteAfterDays <= 0) {
@@ -124,7 +125,7 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
         return { completedIds: [], failedIds: [], action: sessionRetentionAction, skippedReason: 'cooldown' };
       }
 
-      const { activeSessions: sessions } = await ensureGlobalSessionsLoaded(getAllSyncSessions());
+      const { activeSessions: sessions } = await ensureFullGlobalSessionsLoaded(getAllSyncSessions());
 
       if (sessions.length === 0) {
         return { completedIds: [], failedIds: [], action: sessionRetentionAction, skippedReason: 'no-candidates' };
@@ -203,7 +204,7 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
     if (!autoDeleteEnabled || autoDeleteAfterDays <= 0) {
       return;
     }
-    if (isLoading || !hasLoadedGlobalSessions || globalSessions.length === 0) {
+    if (isLoading || !hasLoadedFullCatalog || globalSessions.length === 0) {
       return;
     }
     const now = Date.now();
@@ -217,7 +218,7 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
     autoDeleteLastRunAt,
     autoRun,
     enabled,
-    hasLoadedGlobalSessions,
+    hasLoadedFullCatalog,
     globalSessions.length,
     isLoading,
     runCleanup,

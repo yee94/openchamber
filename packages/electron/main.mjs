@@ -1826,6 +1826,12 @@ const setTaskbarProgress = (value) => {
 };
 
 const pendingDeepLinks = [];
+// macOS can deliver `open-url` before Electron reaches `ready`. The link is
+// safe to parse and queue then, but creating a window starts the local server.
+// Let the normal startup path own that first initialization so it cannot race
+// a second `openMainWindow()` call and bind the server port twice.
+let initialStartupComplete = false;
+let pendingDeepLinkFlushTimer = null;
 
 // Resolve a workspace path from OpenCode-aligned query keys (`directory`),
 // legacy mobile (`dir`), CodeX-style (`path`), or a path-form URL segment.
@@ -2137,6 +2143,19 @@ const isMainWindowReadyForDeepLink = () =>
   && !state.mainWindow.isDestroyed()
   && !state.mainWindow.webContents.isLoading();
 
+const schedulePendingDeepLinkFlush = () => {
+  if (!initialStartupComplete || pendingDeepLinks.length === 0 || pendingDeepLinkFlushTimer) return;
+  pendingDeepLinkFlushTimer = setTimeout(() => {
+    pendingDeepLinkFlushTimer = null;
+    if (isMainWindowReadyForDeepLink()) {
+      flushPendingDeepLinks();
+      return;
+    }
+    schedulePendingDeepLinkFlush();
+  }, 400);
+  if (typeof pendingDeepLinkFlushTimer?.unref === 'function') pendingDeepLinkFlushTimer.unref();
+};
+
 const handleDeepLinks = (urls) => {
   for (const raw of urls) {
     const parsed = parseDeepLink(raw);
@@ -2315,6 +2334,18 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   browserWindow.__ocRuntimeConfig = { apiBaseUrl: desktopApiBaseUrl, clientToken: desktopClientToken, requestHeaders: desktopRequestHeaders };
   browserWindow.__ocInitScript = buildInitScript(desktopLocalOrigin, state.bootOutcome, desktopApiBaseUrl, desktopClientToken, desktopRequestHeaders);
   browserWindow.__ocTitleBarOverlayEnabled = titleBarOverlayEnabled;
+
+  if (isDev) {
+    browserWindow.webContents.on('console-message', (_event, ...args) => {
+      const details = args[0];
+      const message = details && typeof details === 'object'
+        ? details.message
+        : args[1];
+      if (typeof message === 'string' && message.includes('[session-load]')) {
+        console.log(`[renderer:${browserWindow.__ocLabel}] ${message}`);
+      }
+    });
+  }
 
   if (useSaved && saved.maximized) {
     browserWindow.maximize();
@@ -2496,10 +2527,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   browserWindow.webContents.on('did-finish-load', () => {
     // Navigation/reload resets Chromium zoom — re-apply the session factor.
     applyWebviewZoomFactor(browserWindow.webContents, state.webviewZoomFactor);
-    if (state.mainWindow && browserWindow.id === state.mainWindow.id && pendingDeepLinks.length > 0) {
-      const timer = setTimeout(flushPendingDeepLinks, 400);
-      if (typeof timer?.unref === 'function') timer.unref();
-    }
+    schedulePendingDeepLinkFlush();
   });
 
   browserWindow.once('ready-to-show', () => {
@@ -4918,6 +4946,7 @@ app.on('second-instance', (_event, argv) => {
     ? argv.filter((arg) => typeof arg === 'string' && arg.startsWith(`${DEEP_LINK_PROTOCOL}://`))
     : [];
   if (urls.length > 0) handleDeepLinks(urls);
+  if (!initialStartupComplete) return;
   if (BrowserWindow.getAllWindows().length > 0) {
     focusForegroundWindow();
   } else {
@@ -4928,6 +4957,7 @@ app.on('second-instance', (_event, argv) => {
 app.on('open-url', (event, url) => {
   event.preventDefault();
   handleDeepLinks([url]);
+  if (!initialStartupComplete) return;
   if (BrowserWindow.getAllWindows().length === 0) {
     void openMainWindow();
   } else {
@@ -4997,6 +5027,7 @@ app.whenReady().then(async () => {
     state.requestHeaders = sanitizeRuntimeRequestHeaders(requestHeaders || {});
     state.initScript = buildInitScript(localOrigin, state.bootOutcome, '', '', state.requestHeaders);
     log.info('[electron] started in background without window');
+    initialStartupComplete = true;
     return;
   }
 
@@ -5011,6 +5042,8 @@ app.whenReady().then(async () => {
 
   const { initialUrl, localOrigin, bootOutcome, apiBaseUrl, clientToken, requestHeaders } = await resolveInitialUrl();
   await activateMainWindow(initialUrl, localOrigin, bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
+  initialStartupComplete = true;
+  schedulePendingDeepLinkFlush();
 
   // Notify renderer on OS wake-from-sleep so the SSE event pipeline can
   // reconnect immediately instead of waiting for the heartbeat watchdog.

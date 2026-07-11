@@ -79,28 +79,48 @@ export async function listGlobalSessionPages(
         directory?: string;
         archived: boolean;
         roots?: boolean;
+        cursor?: number;
         pageSize: number;
+        /** Stop after collecting this many sessions. Omit for a full paginated load. */
+        maxItems?: number;
+        /** Per-page request budget. The proxy's generic timeout is intentionally much longer. */
+        timeoutMs?: number;
+        signal?: AbortSignal;
         onPage?: (sessions: GlobalSessionRecord[]) => void;
     },
 ): Promise<GlobalSessionRecord[]> {
     const all: GlobalSessionRecord[] = [];
     const seenIds = new Set<string>();
-    let cursor: number | undefined;
+    let cursor: number | undefined = options.cursor;
 
     while (true) {
-        const response = await retry(
-            () => apiClient.experimental.session.list({
+        const remaining = options.maxItems === undefined
+            ? options.pageSize
+            : Math.max(0, options.maxItems - all.length);
+        if (remaining === 0) break;
+        const requestLimit = Math.min(options.pageSize, remaining);
+        const { response, payload } = await retry(async () => {
+            const timeoutSignal = options.timeoutMs === undefined
+                ? undefined
+                : AbortSignal.timeout(options.timeoutMs);
+            const requestSignal = options.signal && timeoutSignal
+                ? AbortSignal.any([options.signal, timeoutSignal])
+                : options.signal ?? timeoutSignal;
+            const result = await apiClient.experimental.session.list({
                 ...(options.directory ? { directory: options.directory } : {}),
                 archived: options.archived,
                 ...(options.roots !== undefined ? { roots: options.roots } : {}),
-                limit: options.pageSize,
+                limit: requestLimit,
                 ...(cursor !== undefined ? { cursor } : {}),
-            }),
-            { attempts: 3, delay: 500, retryIf: () => true },
-        );
-
-        const payload = unwrapSessionList(response, "experimental.session.list")
-            .map((session) => stripSessionListDetails(session) as GlobalSessionRecord);
+            }, requestSignal ? { signal: requestSignal } : undefined);
+            return {
+                response: result.response,
+                // Unwrap inside retry so resolved SDK `{ error }` responses
+                // participate in the transient 5xx retry policy.
+                payload: unwrapSessionList(result, "experimental.session.list")
+                    .map((session) => stripSessionListDetails(session) as GlobalSessionRecord),
+            };
+        }, { attempts: 3, delay: 500 });
         if (payload.length === 0) break;
 
         let appended = 0;
@@ -113,9 +133,10 @@ export async function listGlobalSessionPages(
         if (appended > 0) {
             options.onPage?.(payload);
         }
+        if (options.maxItems !== undefined && all.length >= options.maxItems) break;
 
         // Stop on partial page — nothing more to fetch.
-        if (payload.length < options.pageSize) break;
+        if (payload.length < requestLimit) break;
 
         // Prefer server header; fall back to last session's `time.updated`
         // (cursor semantics on server = "updated strictly before this timestamp").

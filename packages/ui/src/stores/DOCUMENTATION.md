@@ -57,6 +57,12 @@ separately from the authoritative current session. Shortcut navigation and row
 Active styling must read this identity instead of inferring origin from duplicate
 session data.
 
+`useGlobalSessionsStore.ts` distinguishes bounded display snapshots from the full
+retention catalog. Sidebar active/archived loads are directory-keyed, capped, and
+deduplicated; `hasLoadedFullCatalog` is the only success signal for retention work.
+Initial loading and background refreshing are separate sets so an in-flight refresh
+never hides an existing session snapshot.
+
 ## Git / PR Stores
 
 The Git and PR stores are the most important stores to understand before editing this directory.

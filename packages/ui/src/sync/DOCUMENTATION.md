@@ -98,6 +98,17 @@ This keeps cold/global lists responsive without requiring a refetch after every 
 
 Live activity/status indicators must not depend on this cache. They must derive from aggregated child-store state.
 
+Sidebar directory refreshes are intentionally bounded snapshots, not full catalogs:
+
+- active and archived requests are independent and capped at 20 rows per directory
+- directory-sync bootstrap also loads only 20 root sessions; it no longer performs a 500-row full pagination pass or a 200-row mixed root/child prefetch
+- active requests coalesce by directory with bounded concurrency
+- active pagination stores a per-directory cursor; reaching the local Show more boundary requests and appends the next 20 roots
+- child-session recovery queries `session.children` only for active parent candidates instead of periodically listing 200 mixed sessions
+- `loadingDirectories` means no usable active snapshot; `refreshingDirectories` keeps stale rows visible
+- archived rows load only when the archived bucket is expanded
+- retention must wait for `hasLoadedFullCatalog` and use `ensureFullGlobalSessionsLoaded()`, never treat a bounded directory snapshot as authoritative for cleanup
+
 ## Session action rules
 
 Session actions live in `session-actions.ts` and are the canonical place for SDK-calling session mutations that affect global session lists.

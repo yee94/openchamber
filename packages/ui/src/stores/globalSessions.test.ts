@@ -4,6 +4,73 @@ import type { OpencodeClient } from '@opencode-ai/sdk/v2'
 import { listGlobalSessionPages } from './globalSessions'
 
 describe('listGlobalSessionPages', () => {
+  test('retries resolved transient SDK errors before returning data', async () => {
+    let attempts = 0
+    const apiClient = {
+      experimental: {
+        session: {
+          list: async () => {
+            attempts += 1
+            if (attempts < 3) {
+              return {
+                data: undefined,
+                error: { message: 'warming up' },
+                response: new Response(null, { status: 503 }),
+              }
+            }
+            return {
+              data: [{ id: 'ses_ready', directory: '/repo/app', time: { created: 1, updated: 2 } }],
+              error: undefined,
+              response: new Response(null, { status: 200 }),
+            }
+          },
+        },
+      },
+    } as unknown as OpencodeClient
+
+    const sessions = await listGlobalSessionPages(apiClient, {
+      directory: '/repo/app',
+      archived: false,
+      pageSize: 20,
+      maxItems: 20,
+    })
+
+    expect(attempts).toBe(3)
+    expect(sessions.map((session) => session.id)).toEqual(['ses_ready'])
+  })
+
+  test('stops a directory-style load at the requested item limit', async () => {
+    const calls: Array<{ limit?: number; cursor?: number }> = []
+    const apiClient = {
+      experimental: {
+        session: {
+          list: async (input: { limit?: number; cursor?: number }) => {
+            calls.push(input)
+            return {
+              data: Array.from({ length: input.limit ?? 0 }, (_, index) => ({
+                id: `ses_${index}`,
+                directory: '/repo/app',
+                title: `Session ${index}`,
+                time: { created: index, updated: 100 - index },
+              })),
+              response: { headers: new Headers({ 'x-next-cursor': '80' }) },
+            }
+          },
+        },
+      },
+    } as unknown as OpencodeClient
+
+    const sessions = await listGlobalSessionPages(apiClient, {
+      directory: '/repo/app',
+      archived: false,
+      pageSize: 500,
+      maxItems: 20,
+    })
+
+    expect(sessions).toHaveLength(20)
+    expect(calls).toEqual([{ directory: '/repo/app', archived: false, limit: 20 }])
+  })
+
   test('sanitizes session list records before returning them', async () => {
     const apiClient = {
       experimental: {

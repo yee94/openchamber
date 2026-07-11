@@ -168,6 +168,8 @@ const RECONNECT_MESSAGE_LIMIT = 30
 const SESSION_MATERIALIZATION_MESSAGE_LIMIT = 30
 const RECONNECT_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const ACTIVE_SESSION_WATCHDOG_INTERVAL_MS = 5_000
+const DIRECTORY_SESSION_PAGE_SIZE = 20
+const DIRECTORY_SESSION_PAGE_TIMEOUT_MS = 3_000
 const ACTIVE_SESSION_STATUS_POLL_INTERVAL_MS = 5_000
 const ACTIVE_SESSION_STALE_EVENT_MS = 20_000
 const ACTIVE_SESSION_FULL_RESYNC_COOLDOWN_MS = 15_000
@@ -1773,34 +1775,13 @@ export function SyncProvider(props: {
                 directory: dir,
                 archived: false,
                 roots: true,
-                pageSize: 500,
+                pageSize: DIRECTORY_SESSION_PAGE_SIZE,
+                maxItems: DIRECTORY_SESSION_PAGE_SIZE,
+                timeoutMs: DIRECTORY_SESSION_PAGE_TIMEOUT_MS,
               }))
                 .filter((s) => !!s?.id)
                 .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-
-              // Also load child sessions (sub-agent delegations) so they
-              // appear in the sidebar immediately instead of relying on
-              // the async global session store.
-              let allSessions: typeof rootSessions = []
-              try {
-                const allResult = await props.sdk.session.list({
-                  directory: dir,
-                  limit: 200,
-                })
-                const allError = (allResult as { error?: unknown }).error
-                if (!allError) {
-                  allSessions = ((allResult as { data?: unknown }).data ?? []) as typeof rootSessions
-                }
-              } catch {
-                // Child load is best-effort; fall back to roots only
-              }
-
-              // Merge: keep root sessions from the first query (for accurate
-              // sessionTotal), plus any child sessions from the broader query.
-              const rootIds = new Set(rootSessions.map((s: { id: string }) => s.id))
-              const childSessions = allSessions.filter((s: { id: string; parentID?: string | null }) => s?.id && !rootIds.has(s.id) && s.parentID)
-
-              const sessions = rootSessions.concat(childSessions)
+              const sessions = rootSessions
               // Race guard: if the list came back empty but event pipeline
               // already populated the store, don't clobber. OpenCode can
               // answer HTTP with empty sessions while WS delivers session
@@ -1971,8 +1952,13 @@ export function SyncProvider(props: {
       if (parentSessionIds.length === 0) return
       try {
         const scopedClient = opencodeClient.getScopedSdkClient(directory)
-        const result = await scopedClient.session.list({ directory, limit: 200 })
-        const allSessions = ((result as { data?: unknown }).data ?? []) as Session[]
+        const results = await Promise.allSettled(parentSessionIds.map((sessionID) => (
+          scopedClient.session.children({ sessionID, directory })
+        )))
+        const allSessions = results.flatMap((result) => {
+          if (result.status !== "fulfilled" || result.value.error) return []
+          return (result.value.data ?? []) as Session[]
+        })
         const state = store.getState()
         const existingIds = new Set(state.session.map((s) => s.id))
         const parentIdSet = new Set(parentSessionIds)

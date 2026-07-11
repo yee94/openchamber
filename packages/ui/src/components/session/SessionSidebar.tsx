@@ -78,7 +78,8 @@ import {
 } from './sidebar/utils';
 import {
   mergeLiveSessionWithGlobalSession,
-  refreshGlobalSessions,
+  loadMoreGlobalSessionsForDirectory,
+  refreshArchivedSessionsForDirectories,
   refreshGlobalSessionsForDirectories,
   resolveGlobalSessionDirectory,
   useGlobalSessionsStore,
@@ -91,7 +92,11 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { announceSessionSwitchIntent } from '@/lib/sessionSwitchIntent';
+import {
+  announceSessionSwitchIntent,
+  getSessionSwitchIntent,
+  subscribeSessionSwitchIntent,
+} from '@/lib/sessionSwitchIntent';
 import {
   publishSessionNavigationSnapshot,
   type SessionNavigationTarget,
@@ -346,6 +351,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const archivedSessionsRaw = useGlobalSessionsStore((state) => state.archivedSessions);
   const loadingDirectories = useGlobalSessionsStore((state) => state.loadingDirectories);
+  const refreshingDirectories = useGlobalSessionsStore((state) => state.refreshingDirectories);
+  const archivedLoadingDirectories = useGlobalSessionsStore((state) => state.archivedLoadingDirectories);
+  const activeSessionPagination = useGlobalSessionsStore((state) => state.activePaginationByDirectory);
   // Defer the heavy sidebar memo/DOM commit so typing/send stay on the urgent
   // lane while a per-directory session wave lands. Without this, one project
   // with a large history still freezes input for a frame when the list commits.
@@ -353,6 +361,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const archivedSessions = React.useDeferredValue(archivedSessionsRaw);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const sessionFocus = useSessionFocusStore((state) => state.focus);
+  const sessionSwitchIntent = React.useSyncExternalStore(
+    subscribeSessionSwitchIntent,
+    getSessionSwitchIntent,
+    getSessionSwitchIntent,
+  );
   const newSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
@@ -555,7 +568,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         clearTimeout(refreshTimeout);
       }
       refreshTimeout = setTimeout(() => {
-        void refreshGlobalSessions(syncSessionsSnapshotRef.current);
+        const project = useProjectsStore.getState().projects.find((entry) => entry.id === event.projectId);
+        const projectPath = normalizePath(project?.path ?? null);
+        if (!projectPath) return;
+        const directories = [projectPath];
+        const worktrees = useSessionUIStore.getState().availableWorktreesByProject.get(projectPath) ?? [];
+        worktrees.forEach((worktree) => {
+          const directory = normalizePath(worktree.path);
+          if (directory) directories.push(directory);
+        });
+        void refreshGlobalSessionsForDirectories(directories, syncSessionsSnapshotRef.current);
       }, 500);
     });
     return () => {
@@ -583,7 +605,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     isVSCode,
   });
 
-  const { scheduleCollapsedProjectsPersist } = useSidebarPersistence({
+  const { scheduleCollapsedProjectsPersist, hasRestoredProjectCollapse } = useSidebarPersistence({
     isVSCode,
     hasLoadedGlobalSessions,
     safeStorage,
@@ -880,12 +902,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const stableHandleDeleteSession = useStableRenderCallback(handleDeleteSession);
   const stableCreateFolderAndStartRename = useStableRenderCallback(createFolderAndStartRename);
 
-  const showMoreGroupSessions = React.useCallback((groupId: string, currentVisibleCount: number) => {
+  const showMoreGroupSessions = React.useCallback((
+    group: SessionGroup,
+    groupId: string,
+    currentVisibleCount: number,
+    totalSessions: number,
+  ) => {
+    const nextVisibleCount = currentVisibleCount + 7;
     setVisibleSessionCountByGroup((prev) => {
       const next = new Map(prev);
-      next.set(groupId, currentVisibleCount + 7);
+      next.set(groupId, nextVisibleCount);
       return next;
     });
+    if (group.isArchivedBucket || nextVisibleCount < totalSessions) return;
+    const directory = normalizePath(group.directory ?? null);
+    if (!directory) return;
+    const pagination = useGlobalSessionsStore.getState().activePaginationByDirectory.get(directory);
+    if (pagination?.hasMore && !pagination.loadingMore) {
+      void loadMoreGlobalSessionsForDirectory(directory);
+    }
   }, []);
 
   const resetGroupSessionLimit = React.useCallback((groupId: string) => {
@@ -939,6 +974,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     if (missing.length === 0) return;
     void refreshGlobalSessionsForDirectories(missing, syncSessionsSnapshotRef.current);
   }, [collectDirectoriesForProjectId]);
+
+  // Persisted expanded projects are already open when the sidebar mounts, so
+  // they never pass through toggleProject's "expanding" branch. Once collapse
+  // state restoration is authoritative, hydrate every logically expanded
+  // project exactly as if the user had expanded it manually.
+  React.useEffect(() => {
+    if (!hasRestoredProjectCollapse) return;
+    const state = useGlobalSessionsStore.getState();
+    const missing = projects.flatMap((project) => {
+      if (collapsedProjects.has(project.id)) return [];
+      return collectDirectoriesForProjectId(project.id).filter((directory) => (
+        !state.loadedDirectories.has(directory)
+        && !state.loadingDirectories.has(directory)
+        && !state.refreshingDirectories.has(directory)
+      ));
+    });
+    if (missing.length > 0) {
+      void refreshGlobalSessionsForDirectories(missing, syncSessionsSnapshotRef.current);
+    }
+  }, [collapsedProjects, collectDirectoriesForProjectId, hasRestoredProjectCollapse, projects]);
 
   const collapseAllProjects = React.useCallback(() => {
     ignoreIntersectionUntil.current = Date.now() + 150;
@@ -1176,8 +1231,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
     return ids;
   }, [availableWorktreesByProject, isVSCode, loadingDirectories, normalizedProjects]);
+  const refreshingProjectIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (refreshingDirectories.size === 0) return ids;
+    for (const project of normalizedProjects) {
+      const directories = collectDirectoriesForProjectId(project.id);
+      if (directories.some((directory) => refreshingDirectories.has(directory))) ids.add(project.id);
+    }
+    return ids;
+  }, [collectDirectoriesForProjectId, normalizedProjects, refreshingDirectories]);
   // Gate focus reconcile while any directory refresh is still moving the tree.
   const isProjectSessionsSyncing = loadingDirectories.size > 0
+    || refreshingDirectories.size > 0
     || globalSessionsStatus === 'idle'
     || globalSessionsStatus === 'loading';
 
@@ -1640,13 +1705,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     )) ?? null;
   }, [projectNavigationTargets, sessionFocus]);
 
+  const revealedSessionSwitchRevisionRef = React.useRef<number | null>(null);
+
   // Shortcut navigation can target rows whose project/group/folder is not
   // mounted yet. Reveal the full ancestor chain synchronously, before paint,
-  // so the precise Project row can satisfy the visual-selection barrier.
+  // so the precise Project row can satisfy the visual-selection barrier. Each
+  // navigation revision may reveal once; later dependency refreshes must not
+  // undo an explicit project collapse while that session remains focused.
   React.useLayoutEffect(() => {
-    if (!focusedProjectTarget?.projectId) {
+    if (
+      !focusedProjectTarget?.projectId
+      || sessionSwitchIntent.sessionId !== focusedProjectTarget.sessionId
+      || revealedSessionSwitchRevisionRef.current === sessionSwitchIntent.revision
+    ) {
       return;
     }
+    revealedSessionSwitchRevisionRef.current = sessionSwitchIntent.revision;
 
     ensureProjectExpanded(focusedProjectTarget.projectId);
 
@@ -1680,7 +1754,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         return next;
       });
     }
-  }, [ensureProjectExpanded, focusedProjectTarget]);
+  }, [ensureProjectExpanded, focusedProjectTarget, sessionSwitchIntent]);
 
   const prLookupKeys = React.useMemo(() => {
     const keys = new Set<string>();
@@ -1865,6 +1939,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
   }, [resetGroupSessionLimit]);
 
+  const ensureArchivedSessionsLoaded = React.useCallback((projectId: string) => {
+    const directories = collectDirectoriesForProjectId(projectId);
+    if (directories.length === 0) return;
+    const state = useGlobalSessionsStore.getState();
+    const missing = directories.filter((directory) => !state.archivedLoadedDirectories.has(directory));
+    if (missing.length > 0) void refreshArchivedSessionsForDirectories(missing);
+  }, [collectDirectoriesForProjectId]);
+
   const prVisualStateByDirectoryBranch = React.useMemo(() => {
     const result = new Map<string, PrIndicator>();
     for (const [key, summary] of prVisualSummaryMap) {
@@ -1899,6 +1981,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       <SessionGroupSection
         group={group}
         groupKey={groupKey}
+        isArchivedLoading={Boolean(group.isArchivedBucket && projectId
+          && collectDirectoriesForProjectId(projectId).some((directory) => archivedLoadingDirectories.has(directory)))}
         projectId={projectId}
         hideGroupLabel={hideGroupLabel}
         compactBodyPadding={compactBodyPadding}
@@ -1917,7 +2001,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         renderSessionNode={renderSessionNode}
         projectRepoStatus={projectRepoStatus}
         lastRepoStatus={lastRepoStatusRef.current}
-        showMoreGroupSessions={showMoreGroupSessions}
+        showMoreGroupSessions={(key, currentVisibleCount, totalSessions) => (
+          showMoreGroupSessions(group, key, currentVisibleCount, totalSessions)
+        )}
         resetGroupSessionLimit={resetGroupSessionLimit}
         mobileVariant={mobileVariant}
         alwaysShowActions={alwaysShowSidebarActions}
@@ -1947,7 +2033,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         openSidebarMenuKey={openSidebarMenuKey}
         liveSessionById={liveSessionById}
         prVisualStateByDirectoryBranch={prVisualStateByDirectoryBranch}
-        onToggleCollapsedGroup={toggleCollapsedGroup}
+        onToggleCollapsedGroup={(key) => {
+          if (group.isArchivedBucket && collapsedGroups.has(key) && projectId) {
+            ensureArchivedSessionsLoaded(projectId);
+          }
+          toggleCollapsedGroup(key);
+        }}
         dragHandleProps={dragHandleProps}
         scrollContainerRef={scrollContainerRef}
       />
@@ -1956,6 +2047,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       hasSessionSearchQuery,
       normalizedSessionSearchQuery,
       groupSearchDataByGroup,
+      archivedLoadingDirectories,
+      collectDirectoriesForProjectId,
       visibleSessionCountByGroup,
       collapsedGroups,
       hideDirectoryControls,
@@ -1990,6 +2083,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       liveSessionById,
       prVisualStateByDirectoryBranch,
       toggleCollapsedGroup,
+      ensureArchivedSessionsLoaded,
     ],
   );
 
@@ -2002,6 +2096,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       expandAllProjects={expandAllProjects}
     />
   ) : null;
+  const hasMoreRecentSessions = [...activeSessionPagination.values()].some((page) => page.hasMore);
+  const isLoadingMoreRecentSessions = [...activeSessionPagination.values()].some((page) => page.loadingMore);
+  const loadMoreRecentSessions = () => {
+    const directories = [...activeSessionPagination.entries()]
+      .filter(([, page]) => page.hasMore && !page.loadingMore)
+      .map(([directory]) => directory);
+    directories.forEach((directory) => {
+      void loadMoreGlobalSessionsForDirectory(directory);
+    });
+  };
   // Brand mark sits above Recent (Codex-style top-left wordmark). Kept outside
   // the Recent toggle so it still shows when the Recent section is hidden.
   const topContent = (!isVSCode && !hasSessionSearchQuery) ? (
@@ -2016,6 +2120,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           openSidebarMenuKey={openSidebarMenuKey}
           variant="section"
           headerAccessory={displayModeMenu}
+          hasMoreSessions={hasMoreRecentSessions}
+          isLoadingMoreSessions={isLoadingMoreRecentSessions}
+          onLoadMoreSessions={loadMoreRecentSessions}
           onVisibleSessionIdsChange={handleVisibleRecentShortcutSessionIdsChange}
         />
       ) : displayModeMenu ? (
@@ -2107,6 +2214,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setOpenSidebarMenuKey={setOpenSidebarMenuKey}
         isInlineEditing={isInlineEditing}
         loadingProjectIds={loadingProjectIds}
+        refreshingProjectIds={refreshingProjectIds}
         isProjectSessionsSyncing={isProjectSessionsSyncing}
       />
 

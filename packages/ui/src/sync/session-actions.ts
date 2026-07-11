@@ -16,6 +16,7 @@ import { registerSessionDirectory } from "./sync-refs"
 import { isSyntheticPart } from "@/lib/messages/synthetic"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
 import { retry } from "./retry"
+import { sessionLoadDebug } from "./session-load-debug"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
@@ -1273,9 +1274,15 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
   if (!resolvedDir) return
 
   const loadingKey = `${resolvedDir}:${sessionID}`
-  if (FETCH_MESSAGES_LOADING.has(loadingKey)) return
+  if (FETCH_MESSAGES_LOADING.has(loadingKey)) {
+    sessionLoadDebug("imperative-deduped", { sessionID, directory: resolvedDir })
+    return
+  }
 
   FETCH_MESSAGES_LOADING.add(loadingKey)
+  const startedAt = performance.now()
+  const limit = getFetchPageSize()
+  sessionLoadDebug("imperative-start", { sessionID, directory: resolvedDir, limit })
 
   try {
     const s = sdk()
@@ -1283,29 +1290,45 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
       ? dirStoreForDirectory(directory)
       : dirStore()
 
-    if (getSessionMaterializationStatus(store.getState(), sessionID).renderable) return
+    if (getSessionMaterializationStatus(store.getState(), sessionID).renderable) {
+      sessionLoadDebug("imperative-cache-hit", { sessionID, directory: resolvedDir })
+      return
+    }
 
     const result = await retry(async () => {
       const response = await s.session.messages({
         sessionID,
         directory: resolvedDir,
-        limit: getFetchPageSize(),
+        limit,
       })
       return response
     })
 
     const records = (assertSdkSuccess(result, "session.messages") ?? [])
       .filter((record: { info?: { id?: string } }) => !!record?.info?.id)
+    sessionLoadDebug("imperative-response", {
+      sessionID,
+      directory: resolvedDir,
+      limit,
+      records: records.length,
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+    })
     if (records.length === 0) return
 
     // Staleness guard: a rapid session switch may have moved the user off this
     // session while the fetch was in flight. Skip the write so a slow fetch
     // can't repopulate (and un-evict) a session already navigated away from.
-    if (useSessionUIStore.getState().currentSessionId !== sessionID) return
+    if (useSessionUIStore.getState().currentSessionId !== sessionID) {
+      sessionLoadDebug("imperative-stale", { sessionID, directory: resolvedDir })
+      return
+    }
 
     const latestState = store.getState()
     const latestStatus = getSessionMaterializationStatus(latestState, sessionID)
-    if (latestStatus.renderable && (latestState.message[sessionID]?.length ?? 0) >= records.length) return
+    if (latestStatus.renderable && (latestState.message[sessionID]?.length ?? 0) >= records.length) {
+      sessionLoadDebug("imperative-superseded", { sessionID, directory: resolvedDir })
+      return
+    }
 
     store.setState((state) => {
       const materialized = materializeSessionSnapshots(
@@ -1320,7 +1343,18 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
       if (!materialized.messagesChanged && !materialized.partsChanged) return state
       return { message: materialized.message, part: materialized.part }
     })
-  } catch {
+    sessionLoadDebug("imperative-committed", {
+      sessionID,
+      directory: resolvedDir,
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+    })
+  } catch (error) {
+    sessionLoadDebug("imperative-error", {
+      sessionID,
+      directory: resolvedDir,
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      error: error instanceof Error ? error.message : String(error),
+    })
     // Transient failure — the reactive path in ChatContainer will retry
   } finally {
     FETCH_MESSAGES_LOADING.delete(loadingKey)

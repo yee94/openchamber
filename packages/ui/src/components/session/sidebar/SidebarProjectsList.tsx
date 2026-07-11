@@ -78,6 +78,8 @@ type Props = {
   isInlineEditing: boolean;
   /** Project ids whose session directories are currently fetching. */
   loadingProjectIds: Set<string>;
+  /** Project ids refreshing a usable session snapshot in the background. */
+  refreshingProjectIds: Set<string>;
   /** True while any project session refresh is in flight (focus reconcile gate). */
   isProjectSessionsSyncing: boolean;
 };
@@ -224,6 +226,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                 const isCollapsed = props.collapsedProjects.has(projectKey);
                 const isActiveProject = projectKey === props.activeProjectId;
                 const isSessionsLoading = props.loadingProjectIds.has(projectKey);
+                const isSessionsRefreshing = props.refreshingProjectIds.has(projectKey);
                 const isRepo = props.projectRepoStatus.get(projectKey);
                 const orderedGroups = cachedGetOrderedGroups(projectKey, section.groups);
                 const rootGroup = orderedGroups.find((group) => group.isMain) ?? null;
@@ -243,7 +246,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                     projectIconBackground={project.iconBackground}
                     isCollapsed={isCollapsed}
                     isActiveProject={isActiveProject}
-                    isSessionsLoading={isSessionsLoading}
+                    isSessionsLoading={isSessionsLoading || isSessionsRefreshing}
                     isRepo={Boolean(isRepo)}
                     isDesktopShell={props.isDesktopShellRuntime}
                     isStuck={props.stuckProjectHeaders.has(projectKey)}
