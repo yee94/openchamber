@@ -360,14 +360,14 @@ export function useSync() {
           mode: "replace" | "prepend" | undefined,
           isStale?: () => boolean,
         ) => {
+          if (isStale?.()) {
+            return { messages: [], cursor: page.cursor, complete: page.complete }
+          }
+
           const items = getOptimistic(sessionID)
           const merged = mergeOptimisticPage(page, items)
           for (const messageID of merged.confirmed) {
             clearOptimistic(sessionID, messageID)
-          }
-
-          if (isStale?.()) {
-            return { messages: [], cursor: merged.cursor, complete: merged.complete }
           }
 
           const current = store.getState()
