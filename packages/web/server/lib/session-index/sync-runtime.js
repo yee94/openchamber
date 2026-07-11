@@ -43,12 +43,15 @@ export const createSessionIndexSyncRuntime = ({
   let revision = 0;
   let stopped = false;
   let running = false;
+  let enrichingChildFlags = false;
   let currentController = null;
   let currentWasPreempted = false;
   let interactiveUntil = 0;
   let runtimeKey = sessionIndexService.getRuntimeKey();
   const queue = [];
+  const childFlagQueue = [];
   const queuedDirectories = new Set();
+  const queuedChildFlagKeys = new Set();
   const completedDirectories = new Set();
   const failedDirectories = new Set();
   const waiters = new Set();
@@ -56,6 +59,7 @@ export const createSessionIndexSyncRuntime = ({
 
   const syncState = () => ({
     active: running || queue.length > 0,
+    enriching: enrichingChildFlags || childFlagQueue.length > 0,
     completed: completedDirectories.size,
     total: batchDirectories.size,
     pendingDirectories: [...queuedDirectories],
@@ -138,6 +142,13 @@ export const createSessionIndexSyncRuntime = ({
         fullSync: !useIncremental,
         now: now(),
       });
+      for (const session of nextSessions) {
+        if (!session?.id) continue;
+        const key = `${task.runtimeKey}\n${task.directory}\n${session.id}`;
+        if (queuedChildFlagKeys.has(key)) continue;
+        queuedChildFlagKeys.add(key);
+        childFlagQueue.push({ directory: task.directory, sessionID: session.id, runtimeKey: task.runtimeKey, key });
+      }
       return 'completed';
     } catch (error) {
       if (stopped || task.runtimeKey !== runtimeKey) return 'discarded';
@@ -150,8 +161,73 @@ export const createSessionIndexSyncRuntime = ({
     }
   };
 
+  const fetchChildFlag = async (task) => {
+    const controller = new AbortController();
+    currentController = controller;
+    currentWasPreempted = false;
+    const timeout = setTimer(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const url = new URL(buildOpenCodeUrl(`/session/${encodeURIComponent(task.sessionID)}/children`));
+      url.searchParams.set('directory', task.directory);
+      const response = await fetchFn(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const error = new Error(`OpenCode child-session list failed (${response.status})`);
+        error.status = response.status;
+        throw error;
+      }
+      const children = await response.json();
+      if (!Array.isArray(children)) throw new Error('Invalid OpenCode child-session list payload');
+      sessionIndexService.replaceChildSessions(task.directory, task.sessionID, children);
+      return 'completed';
+    } catch (error) {
+      if (stopped || task.runtimeKey !== runtimeKey) return 'discarded';
+      if (currentWasPreempted) return 'preempted';
+      console.warn(`[SessionIndex] Child-session check failed for ${task.sessionID}:`, error);
+      // Keep the last persisted value: a failed read must not masquerade as an
+      // authoritative empty child list.
+      return 'failed';
+    } finally {
+      clearTimer(timeout);
+      if (currentController === controller) currentController = null;
+      currentWasPreempted = false;
+    }
+  };
+
+  const runChildFlagEnrichment = async () => {
+    if (running || enrichingChildFlags || stopped || childFlagQueue.length === 0) return;
+    enrichingChildFlags = true;
+    notify();
+    try {
+      // Root-summary refreshes take priority over child checks. A newly queued
+      // directory preempts this low-priority pass instead of waiting behind it.
+      while (!stopped && !running && queue.length === 0 && childFlagQueue.length > 0) {
+        const task = childFlagQueue.shift();
+        if (!task) break;
+        const result = await fetchChildFlag(task);
+        if (result === 'preempted') {
+          childFlagQueue.unshift(task);
+          await delay(Math.max(0, interactiveUntil - now()));
+          continue;
+        }
+        queuedChildFlagKeys.delete(task.key);
+        notify();
+      }
+    } finally {
+      enrichingChildFlags = false;
+      notify();
+      if (!stopped) {
+        if (queue.length > 0) void run();
+        else if (childFlagQueue.length > 0) void runChildFlagEnrichment();
+      }
+    }
+  };
+
   const run = async () => {
-    if (running || stopped) return;
+    if (running || enrichingChildFlags || stopped) return;
     running = true;
     notify();
     try {
@@ -188,7 +264,10 @@ export const createSessionIndexSyncRuntime = ({
       console.warn('[SessionIndex] Background sync could not reach OpenCode:', error);
     } finally {
       running = false;
-      if (!stopped) notify();
+      if (!stopped) {
+        notify();
+        void runChildFlagEnrichment();
+      }
     }
   };
 
@@ -199,7 +278,9 @@ export const createSessionIndexSyncRuntime = ({
       currentWasPreempted = true;
       currentController?.abort();
       queue.length = 0;
+      childFlagQueue.length = 0;
       queuedDirectories.clear();
+      queuedChildFlagKeys.clear();
       completedDirectories.clear();
       failedDirectories.clear();
       batchDirectories = new Set();
@@ -215,6 +296,10 @@ export const createSessionIndexSyncRuntime = ({
       batchDirectories.add(directory);
       queuedDirectories.add(directory);
       queue.push({ directory, runtimeKey });
+    }
+    if (enrichingChildFlags && currentController) {
+      currentWasPreempted = true;
+      currentController.abort();
     }
     notify();
     void run();
@@ -252,7 +337,9 @@ export const createSessionIndexSyncRuntime = ({
     stopped = true;
     currentController?.abort();
     queue.length = 0;
+    childFlagQueue.length = 0;
     queuedDirectories.clear();
+    queuedChildFlagKeys.clear();
     notify();
   };
 

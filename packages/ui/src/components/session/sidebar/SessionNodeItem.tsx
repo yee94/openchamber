@@ -406,7 +406,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     }
   }, [isActive, rowFocus]);
   const sessionTitle = resolvedSession.title || t('sessions.sidebar.session.untitled');
-  const hasChildren = node.children.length > 0;
+  const hasChildren = node.children.length > 0
+    || Boolean((resolvedSession as Session & { hasChildren?: boolean }).hasChildren);
   const isPinnedSession = pinnedSessionIds.has(session.id);
   // Per-render-context expansion key: the same session can appear in both
   // the project's root and the "Recent" list, and expanding one should not
@@ -697,7 +698,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   ) : null;
   // Subsession chevron: align with the folder-icon column; idle hidden, hover only
   // (touch / alwaysShowActions keeps it visible). Omitted entirely in Recent.
-  const canExpandSubsessions = !isRecentContext && !isSubtaskSession;
+  const canExpandSubsessions = !isRecentContext && !isSubtaskSession && hasChildren;
   const hideChevronUntilHover = canExpandSubsessions && !alwaysShowActions;
   const subsessionChevronLeft = getSidebarRowPaddingLeft(Math.max(0, depth - 1));
   const toggleSubsessionTree = () => {

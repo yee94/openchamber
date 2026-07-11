@@ -230,6 +230,13 @@ export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Sess
     changed = true;
   }
 
+  const incomingHasChildren = (incomingRecord as { hasChildren?: unknown }).hasChildren;
+  const existingHasChildren = (existingRecord as { hasChildren?: unknown }).hasChildren;
+  if (typeof incomingHasChildren !== 'boolean' && typeof existingHasChildren === 'boolean') {
+    (next as typeof next & { hasChildren?: boolean }).hasChildren = existingHasChildren;
+    changed = true;
+  }
+
   return changed ? next : incoming;
 };
 
@@ -270,6 +277,7 @@ const getSessionSignature = (session: Session): string => {
     session.time?.archived ?? 0,
     session.share?.url ?? '',
     JSON.stringify((session as Session & { metadata?: unknown }).metadata ?? null),
+    String((session as Session & { hasChildren?: boolean }).hasChildren ?? false),
     resolveGlobalSessionDirectory(session) ?? '',
   ].join(':');
 };
@@ -734,6 +742,16 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     if (!shouldBlock) {
       set({ startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 } });
     }
+    let resolveRootSync: () => void = () => undefined;
+    const rootSyncFinished = new Promise<void>((resolve) => {
+      resolveRootSync = resolve;
+    });
+    let rootSyncSettled = false;
+    const settleRootSync = () => {
+      if (rootSyncSettled) return;
+      rootSyncSettled = true;
+      resolveRootSync();
+    };
     const consume = async () => {
       let current = initialSnapshot;
       while (!controller.signal.aborted && generation === loadGeneration) {
@@ -748,7 +766,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
               }
             : state.startupSyncProgress,
         }));
-        if (!current.sync.active) break;
+        if (!current.sync.active) settleRootSync();
+        if (!current.sync.active && !current.sync.enriching) break;
         const next = await pollSessionIndexChanges(current.revision, controller.signal);
         if (!next) break;
         current = next;
@@ -759,6 +778,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         console.warn('[GlobalSessions] Session index long poll failed:', error);
       }
     }).finally(() => {
+      settleRootSync();
       if (sessionIndexPollController === controller) sessionIndexPollController = null;
       if (shouldBlock && generation === loadGeneration) {
         set((state) => ({
@@ -771,7 +791,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         }));
       }
     });
-    if (shouldBlock) await polling;
+    if (shouldBlock) await rootSyncFinished;
     else void polling;
     return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
   },

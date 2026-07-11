@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.5] - 2026-07-12
+
+- **Session sidebar:** only sessions with verified SubAgent children show an expansion chevron. Electron persists child-session membership in its SQLite index, updates it immediately while a delegation is created or removed, and reconciles it in the background after launch without delaying the sidebar.
+- **Markdown:** horizontal rules now use balanced spacing and a subtler theme-aware divider.
+
 ## [1.15.4] - 2026-07-11
 
 - **Deep-link projects:** `openchamber://new-session?directory=…` now reuses the matching project or worktree, and registers an unmatched directory as a project before its first session is created. Sessions opened this way reliably appear in the project sidebar without duplicate project entries.

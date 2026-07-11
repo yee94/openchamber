@@ -95,6 +95,32 @@ describe('Electron session index', () => {
     service.close();
   });
 
+  it('persists child-session membership and clears the parent flag when the final child is removed', () => {
+    const runtimeRef = { value: 'http://runtime-a.test' };
+    const service = createService(runtimeRef);
+    service.replaceDirectory({ directory: '/repo', sessions: [session('ses_parent', 10)], cursor: null, hasMore: false });
+
+    service.upsert({ ...session('ses_child', 11), parentID: 'ses_parent' });
+    expect(service.snapshot().directories[0].sessions[0]).toMatchObject({ id: 'ses_parent', hasChildren: true });
+
+    service.remove('ses_child');
+    expect(service.snapshot().directories[0].sessions[0]).not.toHaveProperty('hasChildren');
+    service.close();
+  });
+
+  it('reconciles persisted child membership from an authoritative child list', () => {
+    const runtimeRef = { value: 'http://runtime-a.test' };
+    const service = createService(runtimeRef);
+    service.replaceDirectory({ directory: '/repo', sessions: [session('ses_parent', 10)], cursor: null, hasMore: false });
+
+    service.replaceChildSessions('/repo', 'ses_parent', [session('ses_child', 11)]);
+    expect(service.snapshot().directories[0].sessions[0]).toMatchObject({ id: 'ses_parent', hasChildren: true });
+
+    service.replaceChildSessions('/repo', 'ses_parent', []);
+    expect(service.snapshot().directories[0].sessions[0]).not.toHaveProperty('hasChildren');
+    service.close();
+  });
+
   it('tracks incremental writes without advancing the last full reconciliation', () => {
     const runtimeRef = { value: 'http://runtime-a.test' };
     const service = createService(runtimeRef);
