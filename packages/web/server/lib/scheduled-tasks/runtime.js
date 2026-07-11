@@ -444,9 +444,22 @@ export const createScheduledTasksRuntime = (deps) => {
   // from session events like any other goal.
   const createTaskGoal = async ({ baseUrl, authHeaders, sessionID, projectPath, task }) => {
     const now = Date.now();
+    // File-backed objective keyed by session id: metadata stays light, the
+    // full expanded prompt lives under the OpenChamber data dir. If the file
+    // write fails, fall back to an inline (clamped) objective.
+    const objectiveText = expandSnippets(task.execution.prompt, projectPath);
+    let objectiveFile = false;
+    try {
+      const { writeObjective } = await import('../session-goal/objectives.js');
+      await writeObjective(sessionID, objectiveText);
+      objectiveFile = true;
+    } catch (error) {
+      console.warn('[scheduled-tasks] goal objective file write failed, falling back to inline:', error?.message || error);
+    }
     const goal = {
       id: `${now.toString(36)}${Math.random().toString(36).slice(2, 8)}`,
-      objective: expandSnippets(task.execution.prompt, projectPath).slice(0, 2000),
+      objective: objectiveFile ? '' : objectiveText.slice(0, 5000),
+      objectiveFile,
       status: 'active',
       tokenBudget: task.execution.goalTokenBudget || null,
       tokensUsed: 0,

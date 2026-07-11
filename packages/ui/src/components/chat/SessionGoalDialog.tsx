@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { NumberInput } from '@/components/ui/number-input';
 import { toast } from '@/components/ui';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useSessionGoal } from '@/hooks/useSessionGoal';
+import { useGoalObjectiveContent, useSessionGoal } from '@/hooks/useSessionGoal';
 import {
   formatGoalTokens,
   SESSION_GOAL_OBJECTIVE_CHAR_LIMIT,
@@ -32,6 +32,7 @@ interface SessionGoalDialogProps {
 export function SessionGoalDialog({ open, onOpenChange, sessionId, directory }: SessionGoalDialogProps) {
   const { t } = useI18n();
   const { goal } = useSessionGoal(sessionId, directory);
+  const objectiveContent = useGoalObjectiveContent(sessionId, goal);
 
   const [objective, setObjective] = React.useState('');
   const [budgetEnabled, setBudgetEnabled] = React.useState(false);
@@ -40,13 +41,21 @@ export function SessionGoalDialog({ open, onOpenChange, sessionId, directory }: 
 
   React.useEffect(() => {
     if (!open) return;
-    setObjective(goal?.objective ?? '');
+    setObjective(goal?.objectiveFile ? (objectiveContent ?? '') : (goal?.objective ?? ''));
     setBudgetEnabled(Boolean(goal?.tokenBudget));
     setTokenBudget(goal?.tokenBudget ?? 200_000);
     // Seed the form only when the dialog opens; live goal updates while it is
     // open must not clobber the user's edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // File-backed objectives fetch async — the content usually lands right
+  // after the dialog opens. Late-seed the textarea only while it is still
+  // untouched so a slow fetch never clobbers the user's typing.
+  React.useEffect(() => {
+    if (!open || !goal?.objectiveFile || objectiveContent === null) return;
+    setObjective((current) => (current === '' ? objectiveContent : current));
+  }, [open, goal?.objectiveFile, objectiveContent]);
 
   const run = React.useCallback(async (action: () => Promise<void>, closeAfter: boolean) => {
     setBusy(true);
@@ -62,7 +71,8 @@ export function SessionGoalDialog({ open, onOpenChange, sessionId, directory }: 
   }, [onOpenChange, t]);
 
   const trimmedObjective = objective.trim();
-  const objectiveChanged = trimmedObjective !== (goal?.objective ?? '');
+  const savedObjective = goal?.objectiveFile ? (objectiveContent ?? '') : (goal?.objective ?? '');
+  const objectiveChanged = trimmedObjective !== savedObjective;
   const budgetValue = budgetEnabled ? tokenBudget : null;
   const budgetChanged = budgetValue !== (goal?.tokenBudget ?? null);
   // A completed goal is read-only: remove it and arm a new one instead of
@@ -112,7 +122,7 @@ export function SessionGoalDialog({ open, onOpenChange, sessionId, directory }: 
           )}
 
           {isCompleted ? (
-            <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words typography-meta text-muted-foreground">{goal.objective}</p>
+            <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words typography-meta text-muted-foreground">{objectiveContent ?? goal.objective}</p>
           ) : (
             <>
               <div className="space-y-1">
