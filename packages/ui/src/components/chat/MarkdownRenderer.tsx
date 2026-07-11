@@ -3,6 +3,7 @@ import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { cn } from '@/lib/utils';
 import { loadMarkdownRendererModule } from './markdownRendererLoader';
+import { useMarkdownHydrationEnabled } from './markdown/markdownHydrationContext';
 
 // Thin lazy wrapper around the MarkdownRenderer implementation.
 // The full implementation (marked + Shiki highlighting + KaTeX + morphdom
@@ -37,14 +38,44 @@ const MobileMarkdownFallback = (props: { content?: unknown; className?: unknown;
   );
 };
 
-export const MarkdownRenderer: React.FC<React.ComponentPropsWithoutRef<typeof MarkdownRendererLazy>> = (props) => (
-  <React.Suspense fallback={<MobileMarkdownFallback {...props} />}>
-    <MarkdownRendererLazy {...props} />
-  </React.Suspense>
-);
+const DeferredMarkdownFallback = (props: { content?: unknown; className?: unknown; variant?: unknown }) => {
+  const content = typeof props.content === 'string' ? props.content : '';
+  return (
+    <div
+      className={cn(
+        'break-words w-full min-w-0 whitespace-pre-wrap',
+        fallbackContentClassName(props.variant),
+        typeof props.className === 'string' ? props.className : undefined,
+      )}
+      data-markdown-hydration="deferred"
+    >
+      {content}
+    </div>
+  );
+};
 
-export const SimpleMarkdownRenderer: React.FC<React.ComponentPropsWithoutRef<typeof SimpleMarkdownRendererLazy>> = (props) => (
-  <React.Suspense fallback={<MobileMarkdownFallback {...props} />}>
-    <SimpleMarkdownRendererLazy {...props} />
-  </React.Suspense>
-);
+export const MarkdownRenderer: React.FC<React.ComponentPropsWithoutRef<typeof MarkdownRendererLazy>> = (props) => {
+  const hydrationEnabled = useMarkdownHydrationEnabled();
+  if (!hydrationEnabled && props.isStreaming !== true) {
+    return <DeferredMarkdownFallback {...props} />;
+  }
+
+  return (
+    <React.Suspense fallback={<MobileMarkdownFallback {...props} />}>
+      <MarkdownRendererLazy {...props} />
+    </React.Suspense>
+  );
+};
+
+export const SimpleMarkdownRenderer: React.FC<React.ComponentPropsWithoutRef<typeof SimpleMarkdownRendererLazy>> = (props) => {
+  const hydrationEnabled = useMarkdownHydrationEnabled();
+  if (!hydrationEnabled) {
+    return <DeferredMarkdownFallback {...props} />;
+  }
+
+  return (
+    <React.Suspense fallback={<MobileMarkdownFallback {...props} />}>
+      <SimpleMarkdownRendererLazy {...props} />
+    </React.Suspense>
+  );
+};

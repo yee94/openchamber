@@ -50,14 +50,16 @@ import { useI18n } from '@/lib/i18n';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useShallow } from 'zustand/react/shallow';
-import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { markSessionSwitchContentCommitted } from '@/lib/sessionSwitchPerf';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import {
+    applyLatestSessionViewRenderIntent,
     createSessionViewKey,
+    createSessionViewRenderIntent,
     reconcileSessionViewCache,
     updateSessionViewEstimate,
     type SessionViewCacheLimits,
+    type SessionViewRenderState,
     type SessionViewSelection,
 } from './sessionViewCache';
 
@@ -1058,6 +1060,9 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 	);
 };
 
+const MemoizedChatContainerContent = React.memo(ChatContainerContent);
+MemoizedChatContainerContent.displayName = 'MemoizedChatContainerContent';
+
 const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: string }> = ({ runtimeKey, ...props }) => {
     const chatSurfaceMode = useChatSurfaceMode();
     const selectedSession = useSessionUIStore(
@@ -1076,63 +1081,74 @@ const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: st
             directory: selectedSession.directory,
         };
     }, [runtimeKey, selectedSession.directory, selectedSession.sessionId]);
-    const selectionKey = selectedSessionView ? createSessionViewKey(selectedSessionView) : null;
+    const selectionIntent = React.useMemo(
+        () => createSessionViewRenderIntent(selectedSessionView),
+        [selectedSessionView],
+    );
+    const selectionKey = selectionIntent.key;
     const cacheLimits = isMobileSurfaceRuntime() || isVSCodeRuntime() || chatSurfaceMode === 'mini-chat'
         ? CONSTRAINED_SESSION_VIEW_CACHE_LIMITS
         : DESKTOP_SESSION_VIEW_CACHE_LIMITS;
-    const [renderedSelection, setRenderedSelection] = React.useState<SessionViewSelection | null>(selectedSessionView);
+    const [sessionViewRenderState, setSessionViewRenderState] = React.useState<SessionViewRenderState>(() => ({
+        renderedSelection: selectedSessionView,
+        cachedSessionViews: selectedSessionView
+            ? reconcileSessionViewCache(
+                [],
+                selectedSessionView,
+                cacheLimits,
+                DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
+            )
+            : [],
+    }));
+    const { cachedSessionViews, renderedSelection } = sessionViewRenderState;
     const renderedSelectionKey = renderedSelection ? createSessionViewKey(renderedSelection) : null;
-    const [cachedSessionViews, setCachedSessionViews] = React.useState(() => selectedSessionView
-        ? reconcileSessionViewCache(
-            [],
-            selectedSessionView,
-            cacheLimits,
-            DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
-        )
-        : []);
     const renderedSessionViews = React.useMemo(
         () => [...cachedSessionViews].sort((left, right) => left.key.localeCompare(right.key)),
         [cachedSessionViews],
     );
     const isSwitchingSession = renderedSelectionKey !== selectionKey;
     const activeSessionViewKey = isSwitchingSession ? null : renderedSelectionKey;
-    const latestSelectionKeyRef = React.useRef(selectionKey);
-    latestSelectionKeyRef.current = selectionKey;
+    const activeSessionViewKeyRef = React.useRef(activeSessionViewKey);
+    activeSessionViewKeyRef.current = activeSessionViewKey;
+    const latestSelectionIntentRef = React.useRef(selectionIntent);
+    latestSelectionIntentRef.current = selectionIntent;
 
     React.useEffect(() => {
         if (!isSwitchingSession) {
             return;
         }
-        const scheduledSelection = selectedSessionView;
-        const scheduledSelectionKey = selectionKey;
-        return scheduleAfterPaintTask(() => {
-            React.startTransition(() => {
-                setRenderedSelection((current) => latestSelectionKeyRef.current === scheduledSelectionKey
-                    ? scheduledSelection
-                    : current);
-                if (scheduledSelection) {
-                    setCachedSessionViews((current) => latestSelectionKeyRef.current === scheduledSelectionKey
-                        ? reconcileSessionViewCache(
-                            current,
-                            scheduledSelection,
-                            cacheLimits,
-                            DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
-                        )
-                        : current);
-                }
-            });
+        const scheduledIntent = selectionIntent;
+        let cancelled = false;
+        React.startTransition(() => {
+            setSessionViewRenderState((current) => cancelled
+                ? current
+                : applyLatestSessionViewRenderIntent(
+                    current,
+                    scheduledIntent,
+                    latestSelectionIntentRef.current,
+                    cacheLimits,
+                    DEFAULT_SESSION_VIEW_ESTIMATED_BYTES,
+                ));
         });
-    }, [cacheLimits, isSwitchingSession, selectedSessionView, selectionKey]);
+        return () => {
+            cancelled = true;
+        };
+    }, [cacheLimits, isSwitchingSession, selectionIntent]);
 
     const handleSessionViewEstimateChange = React.useCallback((key: string, estimatedBytes: number) => {
-        setCachedSessionViews((current) => updateSessionViewEstimate(
-            current,
-            key,
-            estimatedBytes,
-            activeSessionViewKey ?? key,
-            cacheLimits,
-        ));
-    }, [activeSessionViewKey, cacheLimits]);
+        setSessionViewRenderState((current) => {
+            const cachedViews = updateSessionViewEstimate(
+                current.cachedSessionViews,
+                key,
+                estimatedBytes,
+                activeSessionViewKeyRef.current ?? key,
+                cacheLimits,
+            );
+            return cachedViews === current.cachedSessionViews
+                ? current
+                : { ...current, cachedSessionViews: cachedViews };
+        });
+    }, [cacheLimits]);
 
     return (
         <div className="h-full bg-background" aria-busy={isSwitchingSession || undefined}>
@@ -1142,7 +1158,7 @@ const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: st
                     name={`chat-session-${view.sessionId}`}
                     mode={activeSessionViewKey === view.key ? 'visible' : 'hidden'}
                 >
-                    <ChatContainerContent
+                    <MemoizedChatContainerContent
                         {...props}
                         sessionId={view.sessionId}
                         sessionDirectory={view.directory}
@@ -1152,7 +1168,7 @@ const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: st
                 </React.Activity>
             ))}
             {!isSwitchingSession && !renderedSelection ? (
-                <ChatContainerContent
+                <MemoizedChatContainerContent
                     {...props}
                     sessionId={null}
                     sessionDirectory={selectedSession.directory}

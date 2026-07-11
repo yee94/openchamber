@@ -7,9 +7,11 @@ import {
     syncSidebarVisualSelection,
     useSidebarVisualSelectionStore,
 } from './sidebarVisualSelection';
+import { announceSessionSwitchIntent } from '@/lib/sessionSwitchIntent';
 
 afterEach(() => {
     cancelPendingSidebarVisualSelection();
+    announceSessionSwitchIntent(null);
     syncSidebarVisualSelection(null);
 });
 
@@ -38,5 +40,16 @@ describe('sidebarVisualSelection', () => {
 
         notifySidebarVisualSelectionCommitted('session-b');
         expect(commits).toEqual(['session-b']);
+    });
+
+    test('a newer direct navigation intent invalidates an already pending sidebar commit', () => {
+        const commits: string[] = [];
+        requestSidebarVisualSelection('session-b', () => commits.push('session-b'));
+
+        announceSessionSwitchIntent('session-c');
+        notifySidebarVisualSelectionCommitted('session-b');
+
+        expect(commits).toEqual([]);
+        expect(useSidebarVisualSelectionStore.getState().sessionId).toBe('session-c');
     });
 });

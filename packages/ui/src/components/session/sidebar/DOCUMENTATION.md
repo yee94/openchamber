@@ -9,6 +9,8 @@
 - Active/hover row styling is text-first; selected sessions use primary text instead of background fills.
 - Archived groups are collapsed by default and support bulk deletion at group/folder level.
 - Session rows support compact inline dates in minimal mode and simplified metadata in default mode.
+- Session-row visual selection is published through a narrow row-only store before authoritative navigation. Its dedicated two-frame paint barrier is intentionally separate from Markdown/tool background queues, so hydration backlog cannot delay the highlight.
+- Every session navigation announces a monotonic intent revision. A later sidebar, keyboard, deep-link, or switcher intent invalidates an older pending sidebar commit, including ABA sequences such as A -> B -> A.
 - New extractions in latest pass reduced local effect/callback bulk further:
   - project session list builders
   - folder cleanup sync

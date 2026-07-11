@@ -14,6 +14,16 @@ export type SessionViewCacheLimits = {
     maxEstimatedBytes: number;
 };
 
+export type SessionViewRenderState = {
+    renderedSelection: SessionViewSelection | null;
+    cachedSessionViews: SessionViewCacheEntry[];
+};
+
+type SessionViewRenderIntent = Readonly<{
+    key: string | null;
+    selection: SessionViewSelection | null;
+}>;
+
 const normalizeEstimatedBytes = (estimatedBytes: number): number => {
     if (!Number.isFinite(estimatedBytes) || estimatedBytes < 0) {
         return 0;
@@ -24,6 +34,13 @@ const normalizeEstimatedBytes = (estimatedBytes: number): number => {
 export const createSessionViewKey = ({ runtimeKey, sessionId, directory }: SessionViewSelection): string => {
     return JSON.stringify([runtimeKey, directory ?? '', sessionId]);
 };
+
+export const createSessionViewRenderIntent = (
+    selection: SessionViewSelection | null,
+): SessionViewRenderIntent => ({
+    key: selection ? createSessionViewKey(selection) : null,
+    selection,
+});
 
 const enforceSessionViewCacheLimits = (
     entries: SessionViewCacheEntry[],
@@ -97,4 +114,39 @@ export const updateSessionViewEstimate = (
             : entry);
 
     return enforceSessionViewCacheLimits(next, activeKey, limits);
+};
+
+export const applyLatestSessionViewRenderIntent = (
+    current: SessionViewRenderState,
+    scheduledIntent: SessionViewRenderIntent,
+    latestIntent: SessionViewRenderIntent,
+    limits: SessionViewCacheLimits,
+    estimatedBytes: number,
+): SessionViewRenderState => {
+    // Object identity is intentional: A -> B -> A creates a fresh second-A
+    // intent even though its cache key matches the first A.
+    if (scheduledIntent !== latestIntent) {
+        return current;
+    }
+
+    const cachedSessionViews = scheduledIntent.selection
+        ? reconcileSessionViewCache(
+            current.cachedSessionViews,
+            scheduledIntent.selection,
+            limits,
+            estimatedBytes,
+        )
+        : current.cachedSessionViews;
+
+    if (
+        current.renderedSelection === scheduledIntent.selection
+        && cachedSessionViews === current.cachedSessionViews
+    ) {
+        return current;
+    }
+
+    return {
+        renderedSelection: scheduledIntent.selection,
+        cachedSessionViews,
+    };
 };

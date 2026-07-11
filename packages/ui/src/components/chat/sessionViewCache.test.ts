@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+    applyLatestSessionViewRenderIntent,
     createSessionViewKey,
+    createSessionViewRenderIntent,
     reconcileSessionViewCache,
     updateSessionViewEstimate,
     type SessionViewCacheEntry,
     type SessionViewCacheLimits,
+    type SessionViewRenderState,
 } from './sessionViewCache';
 
 const limits = (maxEntries: number, maxEstimatedBytes: number): SessionViewCacheLimits => ({
@@ -82,5 +85,46 @@ describe('sessionViewCache', () => {
         const unchanged = updateSessionViewEstimate(entries, activeKey, 8, activeKey, cacheLimits);
 
         expect(unchanged).toBe(entries);
+    });
+
+    test('stale transition intents cannot become visible or pollute the LRU', () => {
+        const cacheLimits = limits(2, 64);
+        const a = selection('a', '/repo');
+        const bIntent = createSessionViewRenderIntent(selection('b', '/repo'));
+        const cIntent = createSessionViewRenderIntent(selection('c', '/repo'));
+        const initial: SessionViewRenderState = {
+            renderedSelection: a,
+            cachedSessionViews: reconcileSessionViewCache([], a, cacheLimits, 8),
+        };
+
+        const staleB = applyLatestSessionViewRenderIntent(initial, bIntent, cIntent, cacheLimits, 8);
+        expect(staleB).toBe(initial);
+
+        const committedC = applyLatestSessionViewRenderIntent(initial, cIntent, cIntent, cacheLimits, 8);
+        expect(committedC.renderedSelection?.sessionId).toBe('c');
+        expect(committedC.cachedSessionViews.map((entry) => entry.sessionId)).toEqual(['a', 'c']);
+
+        const lateB = applyLatestSessionViewRenderIntent(committedC, bIntent, cIntent, cacheLimits, 8);
+        expect(lateB).toBe(committedC);
+        expect(lateB.cachedSessionViews.map((entry) => entry.sessionId)).toEqual(['a', 'c']);
+    });
+
+    test('intent identity rejects a stale A after A -> B -> A', () => {
+        const cacheLimits = limits(2, 64);
+        const a = selection('a', '/repo');
+        const firstAIntent = createSessionViewRenderIntent(a);
+        const secondAIntent = createSessionViewRenderIntent(a);
+        const current: SessionViewRenderState = {
+            renderedSelection: selection('b', '/repo'),
+            cachedSessionViews: [],
+        };
+
+        expect(applyLatestSessionViewRenderIntent(
+            current,
+            firstAIntent,
+            secondAIntent,
+            cacheLimits,
+            8,
+        )).toBe(current);
     });
 });

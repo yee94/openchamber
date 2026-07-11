@@ -1,6 +1,21 @@
 type QueuedTask = {
     cancelled: boolean;
+    consumed: boolean;
+    next: QueuedTask | null;
+    previous: QueuedTask | null;
+    priority: AfterPaintTaskPriority;
     run: () => void;
+};
+
+type TaskLane = {
+    head: QueuedTask | null;
+    tail: QueuedTask | null;
+};
+
+type AfterPaintTaskPriority = 'user-blocking' | 'visible' | 'background';
+
+type AfterPaintTaskOptions = {
+    priority?: AfterPaintTaskPriority;
 };
 
 type AfterPaintTaskQueueOptions = {
@@ -12,23 +27,72 @@ type AfterPaintTaskQueueOptions = {
 };
 
 type AfterPaintTaskQueue = {
-    enqueue: (task: () => void) => () => void;
+    enqueue: (task: () => void, taskOptions?: AfterPaintTaskOptions) => () => void;
     clear: () => void;
 };
+
+const PRIORITY_ORDER: readonly AfterPaintTaskPriority[] = [
+    'user-blocking',
+    'visible',
+    'background',
+];
 
 export const createAfterPaintTaskQueue = (
     options: AfterPaintTaskQueueOptions,
 ): AfterPaintTaskQueue => {
-    const pending: QueuedTask[] = [];
+    const pending: Record<AfterPaintTaskPriority, TaskLane> = {
+        'user-blocking': { head: null, tail: null },
+        visible: { head: null, tail: null },
+        background: { head: null, tail: null },
+    };
     const maxTasksPerFrame = Math.max(1, Math.floor(options.maxTasksPerFrame));
     const frameBudgetMs = Math.max(1, options.frameBudgetMs);
     let scheduledFrame: number | null = null;
     let awaitingFirstPaint = false;
+    let runnableTaskCount = 0;
 
-    const hasRunnableTask = (): boolean => pending.some((task) => !task.cancelled);
+    const appendTask = (task: QueuedTask): void => {
+        const lane = pending[task.priority];
+        task.previous = lane.tail;
+        if (lane.tail) {
+            lane.tail.next = task;
+        } else {
+            lane.head = task;
+        }
+        lane.tail = task;
+    };
+
+    const removeTask = (task: QueuedTask): void => {
+        const lane = pending[task.priority];
+        if (task.previous) {
+            task.previous.next = task.next;
+        } else {
+            lane.head = task.next;
+        }
+        if (task.next) {
+            task.next.previous = task.previous;
+        } else {
+            lane.tail = task.previous;
+        }
+        task.next = null;
+        task.previous = null;
+    };
+
+    const takeNextTask = (): QueuedTask | null => {
+        for (const priority of PRIORITY_ORDER) {
+            const task = pending[priority].head;
+            if (task) {
+                removeTask(task);
+                task.consumed = true;
+                runnableTaskCount -= 1;
+                return task;
+            }
+        }
+        return null;
+    };
 
     const scheduleDrain = (): void => {
-        if (scheduledFrame !== null || !hasRunnableTask()) {
+        if (scheduledFrame !== null || runnableTaskCount === 0) {
             return;
         }
         scheduledFrame = options.requestFrame(drain);
@@ -39,10 +103,10 @@ export const createAfterPaintTaskQueue = (
         const startedAt = options.now();
         let completed = 0;
 
-        while (pending.length > 0 && completed < maxTasksPerFrame) {
-            const task = pending.shift();
-            if (!task || task.cancelled) {
-                continue;
+        while (runnableTaskCount > 0 && completed < maxTasksPerFrame) {
+            const task = takeNextTask();
+            if (!task) {
+                break;
             }
             task.run();
             completed += 1;
@@ -55,7 +119,7 @@ export const createAfterPaintTaskQueue = (
     };
 
     const scheduleAfterInitialPaint = (): void => {
-        if (scheduledFrame !== null || awaitingFirstPaint || !hasRunnableTask()) {
+        if (scheduledFrame !== null || awaitingFirstPaint || runnableTaskCount === 0) {
             return;
         }
         awaitingFirstPaint = true;
@@ -67,21 +131,51 @@ export const createAfterPaintTaskQueue = (
     };
 
     return {
-        enqueue(task) {
-            const entry: QueuedTask = { cancelled: false, run: task };
-            pending.push(entry);
-            if (awaitingFirstPaint || scheduledFrame !== null) {
-                return () => {
-                    entry.cancelled = true;
-                };
-            }
-            scheduleAfterInitialPaint();
-            return () => {
-                entry.cancelled = true;
+        enqueue(task, taskOptions) {
+            const priority = taskOptions?.priority ?? 'background';
+            const entry: QueuedTask = {
+                cancelled: false,
+                consumed: false,
+                next: null,
+                previous: null,
+                priority,
+                run: task,
             };
+            appendTask(entry);
+            runnableTaskCount += 1;
+            const cancel = () => {
+                if (entry.cancelled || entry.consumed) return;
+                entry.cancelled = true;
+                removeTask(entry);
+                runnableTaskCount -= 1;
+                if (runnableTaskCount === 0) {
+                    if (scheduledFrame !== null) {
+                        options.cancelFrame(scheduledFrame);
+                        scheduledFrame = null;
+                    }
+                    awaitingFirstPaint = false;
+                }
+            };
+            if (!awaitingFirstPaint && scheduledFrame === null) {
+                scheduleAfterInitialPaint();
+            }
+            return cancel;
         },
         clear() {
-            pending.length = 0;
+            for (const priority of PRIORITY_ORDER) {
+                const lane = pending[priority];
+                let task = lane.head;
+                while (task) {
+                    const next = task.next;
+                    task.cancelled = true;
+                    task.next = null;
+                    task.previous = null;
+                    task = next;
+                }
+                lane.head = null;
+                lane.tail = null;
+            }
+            runnableTaskCount = 0;
             if (scheduledFrame !== null) {
                 options.cancelFrame(scheduledFrame);
                 scheduledFrame = null;
@@ -110,11 +204,14 @@ const getBrowserQueue = (): AfterPaintTaskQueue | null => {
     return browserQueue;
 };
 
-export const scheduleAfterPaintTask = (task: () => void): (() => void) => {
+export const scheduleAfterPaintTask = (
+    task: () => void,
+    options?: AfterPaintTaskOptions,
+): (() => void) => {
     const queue = getBrowserQueue();
     if (!queue) {
         task();
         return () => {};
     }
-    return queue.enqueue(task);
+    return queue.enqueue(task, options);
 };

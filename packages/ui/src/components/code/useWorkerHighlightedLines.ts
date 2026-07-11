@@ -13,12 +13,17 @@ export const useWorkerHighlightedLines = (code: string, language: string): strin
 
   React.useEffect(() => {
     let active = true;
+    const abortController = new AbortController();
     setLines(null);
-    void highlightLinesInWorker(code, (language || 'text').toLowerCase()).then((result) => {
+    void highlightLinesInWorker(code, (language || 'text').toLowerCase(), {
+      signal: abortController.signal,
+      priority: 'visible',
+    }).then((result) => {
       if (active) setLines(result);
     });
     return () => {
       active = false;
+      abortController.abort();
     };
   }, [code, language]);
 

@@ -260,7 +260,9 @@ const useDeferredExpandedContent = (isExpanded: boolean) => {
         }
 
         return scheduleDeferredToolBodyMount(() => {
-            setShouldRender(true);
+            React.startTransition(() => {
+                setShouldRender(true);
+            });
         });
     }, [isExpanded]);
 
@@ -2791,7 +2793,9 @@ const ToolPart: React.FC<ToolPartProps> = (props) => {
         }
         return scheduleAfterPaintTask(() => {
             hydratedHistoricalToolIds.set(props.part.id, true, props.part.id.length * 2 + 8);
-            setIsHydrated(true);
+            React.startTransition(() => {
+                setIsHydrated(true);
+            });
         });
     }, [deferHydration, isHydrated, props.part.id]);
 

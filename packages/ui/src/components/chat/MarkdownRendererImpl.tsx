@@ -937,9 +937,10 @@ const useMorphdomMarkdown = ({
 
   // Synchronous first paint: while rich hydration is queued, show a safe text
   // fallback immediately so there is no blank frame on initial mount. Completed
-  // history deliberately avoids markdown parsing/sanitizing on this path; the
-  // shared frame-budget queue upgrades it after the selection has painted. Only
-  // runs when the target is empty — subsequent updates keep the prior rich DOM
+  // history deliberately avoids markdown parsing/sanitizing on this path. The
+  // MessageList hydration window releases completed rows from newest to oldest,
+  // then this shared frame-budget queue performs the rich upgrade. Only runs
+  // when the target is empty — subsequent updates keep the prior rich DOM
   // until the next async render morphs in (no flash). Mirrors OpenCode's
   // `initialValue: fallback(text)` resource pattern.
   React.useLayoutEffect(() => {
@@ -1041,14 +1042,17 @@ const useMorphdomMarkdown = ({
           commitBlocks(blocks);
           return;
         }
-        cancelQueuedCommit = scheduleAfterPaintTask(() => commitBlocks(blocks));
+        cancelQueuedCommit = scheduleAfterPaintTask(
+          () => commitBlocks(blocks),
+          { priority: 'visible' },
+        );
       });
     };
 
     if (streaming) {
       renderBlocks();
     } else {
-      cancelQueuedRender = scheduleAfterPaintTask(renderBlocks);
+      cancelQueuedRender = scheduleAfterPaintTask(renderBlocks, { priority: 'visible' });
     }
 
     return () => {
