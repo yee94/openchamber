@@ -32,6 +32,7 @@ import {
     formatInputForDisplay,
     renderTodoOutput,
     tryParseJsonOutput,
+    coerceToText,
 } from '../toolRenderers';
 import { JsonTreeViewer } from '@/components/ui/JsonTreeViewer';
 import { JsonSummaryView } from './JsonSummaryView';
@@ -1868,7 +1869,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                             color: 'var(--status-error)',
                             borderColor: 'var(--status-error-border)',
                         }}>
-                            {state.error}
+                            {coerceToText(state.error)}
                         </div>
                     </div>
                 );
@@ -1884,14 +1885,14 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                         {questionInput.questions.map((q, index) => (
                             <div key={index} className="space-y-0.5">
                                 {q.header ? (
-                                    <div className="typography-micro text-muted-foreground">{q.header}</div>
+                                    <div className="typography-micro text-muted-foreground">{coerceToText(q.header)}</div>
                                 ) : null}
-                                <div className="typography-meta text-foreground">{q.question}</div>
+                                <div className="typography-meta text-foreground">{coerceToText(q.question)}</div>
                                 {Array.isArray(q.options) && q.options.length > 0 ? (
                                     <div className="flex flex-wrap gap-1 mt-0.5">
                                         {q.options.map((opt) => (
-                                            <span key={opt.label} className="typography-micro px-1.5 py-0.5 rounded bg-muted/30 border border-border/30 text-muted-foreground">
-                                                {opt.label}
+                                            <span key={coerceToText(opt.label)} className="typography-micro px-1.5 py-0.5 rounded bg-muted/30 border border-border/30 text-muted-foreground">
+                                                {coerceToText(opt.label)}
                                             </span>
                                         ))}
                                     </div>
@@ -1909,7 +1910,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (part.tool === 'task' && hasStringOutput) {
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
-                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} />
+                    <SimpleMarkdownRenderer content={coerceToText(outputString)} variant="tool" onShowPopup={onShowPopup} />
                 </div>
             );
         }
@@ -1978,7 +1979,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (hasStringOutput && outputString.trim()) {
             return renderScrollableBlock(
                 <ToolScrollableTextOutput
-                    output={outputString}
+                    output={coerceToText(outputString)}
                     part={part}
                     metadata={metadata}
                     input={input}
@@ -2097,7 +2098,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                                 color: 'var(--status-error)',
                                 borderColor: 'var(--status-error-border)',
                             }}>
-                                {state.error}
+                                {coerceToText(state.error)}
                             </div>
                         </div>
                     )}
