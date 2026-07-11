@@ -2,7 +2,8 @@
 
 import { bundledLanguages, createHighlighter, type BundledLanguage, type ThemedToken } from 'shiki';
 import { MARKDOWN_SHIKI_THEME, MARKDOWN_SHIKI_THEME_DEFINITION } from './markdownShikiThemeDefinition';
-import type { MarkdownWorkerRequest, MarkdownWorkerResponse } from './markdown-worker-protocol';
+import type { MarkdownWorkerJobRequest, MarkdownWorkerRequest, MarkdownWorkerResponse } from './markdown-worker-protocol';
+import { createMarkdownWorkerTaskQueue } from './markdown-worker-task-queue';
 
 // Shiki FontStyle bitmask (from @shikijs/types). Inlined to avoid an extra import.
 const FONT_STYLE_ITALIC = 1;
@@ -29,9 +30,6 @@ const tokenSpan = (token: ThemedToken): string => {
 // Single shared highlighter for the worker. Languages load lazily on demand.
 let highlighter: ReturnType<typeof createHighlighter> | undefined;
 
-// Serialize work so language loading / tokenization never overlaps.
-let queue = Promise.resolve();
-
 const ensureHighlighter = (): ReturnType<typeof createHighlighter> => {
   highlighter ??= createHighlighter({
     // Cast: the theme is a CSS-variable TextMate theme; Shiki accepts the shape.
@@ -41,26 +39,39 @@ const ensureHighlighter = (): ReturnType<typeof createHighlighter> => {
   return highlighter;
 };
 
+const taskQueue = createMarkdownWorkerTaskQueue(async (request, isCancelled) => {
+  if (request.type === 'highlight') {
+    await highlight(request, isCancelled);
+    return;
+  }
+  if (request.type === 'highlightTokens') {
+    await highlightTokens(request, isCancelled);
+    return;
+  }
+  await highlightLines(request, isCancelled);
+});
+
 self.onmessage = (event: MessageEvent<MarkdownWorkerRequest>) => {
   const request = event.data;
   if (request.type === 'init') {
     ensureHighlighter();
     return;
   }
-  if (request.type === 'highlight') {
-    queue = queue.then(() => highlight(request)).catch(() => {});
+  if (request.type === 'cancel') {
+    taskQueue.cancel(request.id);
     return;
   }
-  if (request.type === 'highlightTokens') {
-    queue = queue.then(() => highlightTokens(request)).catch(() => {});
-    return;
-  }
-  queue = queue.then(() => highlightLines(request)).catch(() => {});
+  taskQueue.enqueue(request);
 };
 
 type Instance = Awaited<ReturnType<typeof createHighlighter>>;
 
-const resolveLanguage = async (instance: Instance, requested: string): Promise<string> => {
+const resolveLanguage = async (
+  instance: Instance,
+  requested: string,
+  isCancelled: () => boolean,
+): Promise<string | null> => {
+  if (isCancelled()) return null;
   let lang = requested in bundledLanguages ? requested : 'text';
   if (lang !== 'text' && !instance.getLoadedLanguages().includes(lang)) {
     try {
@@ -69,56 +80,79 @@ const resolveLanguage = async (instance: Instance, requested: string): Promise<s
       lang = 'text';
     }
   }
+  if (isCancelled()) return null;
   return lang;
 };
 
-async function highlight(request: Extract<MarkdownWorkerRequest, { type: 'highlight' }>): Promise<void> {
+async function highlight(
+  request: Extract<MarkdownWorkerJobRequest, { type: 'highlight' }>,
+  isCancelled: () => boolean,
+): Promise<void> {
   try {
+    if (isCancelled()) return;
     const instance = await ensureHighlighter();
-    const lang = await resolveLanguage(instance, request.lang);
+    const lang = await resolveLanguage(instance, request.lang, isCancelled);
+    if (lang === null || isCancelled()) return;
     const html = instance.codeToHtml(request.code, {
       lang,
       theme: MARKDOWN_SHIKI_THEME,
       tabindex: false,
     });
+    if (isCancelled()) return;
     post({ type: 'highlight', id: request.id, html });
   } catch (error) {
+    if (isCancelled()) return;
     post({ type: 'error', id: request.id, message: error instanceof Error ? error.message : String(error) });
   }
 }
 
-async function highlightTokens(request: Extract<MarkdownWorkerRequest, { type: 'highlightTokens' }>): Promise<void> {
+async function highlightTokens(
+  request: Extract<MarkdownWorkerJobRequest, { type: 'highlightTokens' }>,
+  isCancelled: () => boolean,
+): Promise<void> {
   try {
+    if (isCancelled()) return;
     const instance = await ensureHighlighter();
+    if (isCancelled()) return;
     if (request.theme && !instance.getLoadedThemes().includes(request.themeName)) {
       // Cast: a resolved TextMate theme object from the app theme registry.
       await instance.loadTheme(request.theme as Parameters<typeof instance.loadTheme>[0]);
     }
-    const lang = await resolveLanguage(instance, request.lang);
+    const lang = await resolveLanguage(instance, request.lang, isCancelled);
+    if (lang === null || isCancelled()) return;
     const { tokens } = instance.codeToTokens(request.code, {
       lang: lang as BundledLanguage,
       theme: request.themeName,
     });
+    if (isCancelled()) return;
     const lines = tokens.map((line) =>
       line.map((token) => [token.content.length, token.color ?? '', token.fontStyle ?? 0] as [number, string, number]),
     );
     post({ type: 'highlightTokens', id: request.id, lines });
   } catch (error) {
+    if (isCancelled()) return;
     post({ type: 'error', id: request.id, message: error instanceof Error ? error.message : String(error) });
   }
 }
 
-async function highlightLines(request: Extract<MarkdownWorkerRequest, { type: 'highlightLines' }>): Promise<void> {
+async function highlightLines(
+  request: Extract<MarkdownWorkerJobRequest, { type: 'highlightLines' }>,
+  isCancelled: () => boolean,
+): Promise<void> {
   try {
+    if (isCancelled()) return;
     const instance = await ensureHighlighter();
-    const lang = await resolveLanguage(instance, request.lang);
+    const lang = await resolveLanguage(instance, request.lang, isCancelled);
+    if (lang === null || isCancelled()) return;
     const { tokens } = instance.codeToTokens(request.code, {
       lang: lang as BundledLanguage,
       theme: MARKDOWN_SHIKI_THEME,
     });
+    if (isCancelled()) return;
     const lines = tokens.map((line) => line.map(tokenSpan).join(''));
     post({ type: 'highlightLines', id: request.id, lines });
   } catch (error) {
+    if (isCancelled()) return;
     post({ type: 'error', id: request.id, message: error instanceof Error ? error.message : String(error) });
   }
 }

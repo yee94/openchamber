@@ -91,6 +91,7 @@ const shikiHighlightPlugin = (options: ShikiHighlightOptions) =>
     class {
       private timer: ReturnType<typeof setTimeout> | undefined;
       private generation = 0;
+      private abortController: AbortController | undefined;
 
       constructor(view: EditorView) {
         void this.tokenize(view);
@@ -110,10 +111,17 @@ const shikiHighlightPlugin = (options: ShikiHighlightOptions) =>
 
       private async tokenize(view: EditorView) {
         const generation = ++this.generation;
+        this.abortController?.abort();
+        const abortController = new AbortController();
+        this.abortController = abortController;
         const text = view.state.doc.toString();
-        const lines = await highlightTokensInWorker(text, options.language, options.themeName, options.theme);
+        const lines = await highlightTokensInWorker(text, options.language, options.themeName, options.theme, {
+          signal: abortController.signal,
+          priority: 'visible',
+        });
         if (!lines) return;
         // Drop if a newer tokenization started or the doc length changed since.
+        if (abortController.signal.aborted) return;
         if (generation !== this.generation) return;
         if (view.state.doc.length !== text.length) return;
         view.dispatch({ effects: setShikiDecorations.of(buildDecorations(view, lines)) });
@@ -121,6 +129,8 @@ const shikiHighlightPlugin = (options: ShikiHighlightOptions) =>
 
       destroy() {
         if (this.timer) clearTimeout(this.timer);
+        this.abortController?.abort();
+        this.abortController = undefined;
       }
     },
   );

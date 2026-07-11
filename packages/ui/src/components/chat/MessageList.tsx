@@ -23,6 +23,13 @@ import type { ReviewTransferDirection } from '@/lib/reviewFlow';
 import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { getInitialHistoryOverscan, getNextHistoryOverscan } from './lib/historyOverscan';
 import { DeferredToolHydrationProvider } from './message/parts/DeferredToolHydrationProvider';
+import { MarkdownHydrationProvider } from './markdown/MarkdownHydrationProvider';
+import {
+    createInitialMarkdownHydratedKeys,
+    getMarkdownHydrationCandidates,
+    pruneMarkdownHydratedKeys,
+    type MarkdownHydrationScrollDirection,
+} from './lib/markdownHydrationWindow';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5;
 const EMPTY_STATIC_ENTRY_MESSAGES: ChatMessageEntry[] = [];
@@ -50,6 +57,7 @@ const TANSTACK_OVERSCAN = 8;
 // Touch flings cover more distance between paints than desktop wheels; a
 // larger window keeps fast mobile scrolling over mounted rows.
 const TANSTACK_MOBILE_OVERSCAN = 16;
+const MARKDOWN_PRELOAD_ENTRIES = 3;
 const resolveTanstackOverscan = (): number => (
     isMobileSurfaceRuntime() ? TANSTACK_MOBILE_OVERSCAN : TANSTACK_OVERSCAN
 );
@@ -1080,6 +1088,10 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
 
     const entriesRef = React.useRef(renderEntries);
     entriesRef.current = renderEntries;
+    const entryKeys = React.useMemo(
+        () => renderEntries.map((entry) => entry.key),
+        [renderEntries],
+    );
     const targetOverscan = resolveTanstackOverscan();
     const [historyOverscan, setHistoryOverscan] = React.useState(() => getInitialHistoryOverscan(targetOverscan));
     React.useEffect(() => {
@@ -1087,7 +1099,9 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
             return;
         }
         return scheduleAfterPaintTask(() => {
-            setHistoryOverscan((current) => getNextHistoryOverscan(current, targetOverscan));
+            React.startTransition(() => {
+                setHistoryOverscan((current) => getNextHistoryOverscan(current, targetOverscan));
+            });
         });
     }, [historyOverscan, isTanstack, targetOverscan]);
     // Initial-only read: measurement cache restore is a mount-time concern;
@@ -1138,6 +1152,55 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
         const firstVisibleIndex = instance.range?.startIndex;
         return firstVisibleIndex !== undefined && item.index < firstVisibleIndex;
     };
+    const virtualItems = tanstackVirtualizer.getVirtualItems();
+    const mountedIndexes = virtualItems.map((item) => item.index);
+    const [hydratedMarkdownEntryKeys, setHydratedMarkdownEntryKeys] = React.useState(() => (
+        createInitialMarkdownHydratedKeys(entryKeys)
+    ));
+    const lastScrollDirectionRef = React.useRef<MarkdownHydrationScrollDirection>(null);
+    if (tanstackVirtualizer.scrollDirection) {
+        lastScrollDirectionRef.current = tanstackVirtualizer.scrollDirection;
+    }
+    const visibleRangeStart = tanstackVirtualizer.range?.startIndex
+        ?? virtualItems[0]?.index
+        ?? Math.max(0, renderEntries.length - 1);
+    const visibleRangeEnd = tanstackVirtualizer.range?.endIndex
+        ?? virtualItems[virtualItems.length - 1]?.index
+        ?? Math.max(0, renderEntries.length - 1);
+    const markdownHydrationCandidates = getMarkdownHydrationCandidates({
+        entryKeys,
+        mountedIndexes,
+        visibleStartIndex: visibleRangeStart,
+        visibleEndIndex: visibleRangeEnd,
+        scrollDirection: lastScrollDirectionRef.current,
+        preloadEntries: MARKDOWN_PRELOAD_ENTRIES,
+        hydratedKeys: hydratedMarkdownEntryKeys,
+    });
+    const nextMarkdownHydrationKey = markdownHydrationCandidates[0];
+    const deferMarkdownHydrationForMobileScroll = isMobileSurfaceRuntime()
+        && tanstackVirtualizer.isScrolling;
+
+    React.useEffect(() => {
+        if (!isTanstack || !nextMarkdownHydrationKey || deferMarkdownHydrationForMobileScroll) {
+            return;
+        }
+        return scheduleAfterPaintTask(() => {
+            React.startTransition(() => {
+                setHydratedMarkdownEntryKeys((current) => {
+                    if (current.has(nextMarkdownHydrationKey)) {
+                        return current;
+                    }
+                    const next = new Set(current);
+                    next.add(nextMarkdownHydrationKey);
+                    return next;
+                });
+            });
+        });
+    }, [deferMarkdownHydrationForMobileScroll, isTanstack, nextMarkdownHydrationKey]);
+
+    React.useEffect(() => {
+        setHydratedMarkdownEntryKeys((current) => pruneMarkdownHydratedKeys(current, entryKeys));
+    }, [entryKeys]);
 
     React.useEffect(() => {
         if (!isTanstack) return;
@@ -1165,26 +1228,28 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
         };
     }, [isTanstack, registerTanstackVirtualizer, tanstackVirtualizer, virtualizerKey]);
 
-    const renderEntry = React.useCallback((entry: RenderEntry) => {
+    const renderEntry = React.useCallback((entry: RenderEntry, hydrateMarkdown = true) => {
         return (
-            <MessageListEntry
-                key={entry.key}
-                entry={entry}
-                onMessageContentChange={onMessageContentChange}
-                getAnimationHandlers={getAnimationHandlers}
-                scrollToBottom={scrollToBottom}
-                stickyUserHeader={stickyUserHeader}
-                sessionIsWorking={false}
-                defaultActivityExpanded={defaultActivityExpanded}
-                turnUiStates={turnUiStates}
-                onToggleTurnGroup={onToggleTurnGroup}
-                chatRenderMode={chatRenderMode}
-                shouldAnimateUserMessage={shouldAnimateUserMessage}
-                onUserAnimationConsumed={onUserAnimationConsumed}
-                activeStreamingMessageId={null}
-                activeStreamingPhase={null}
-                reviewTransferDirection={reviewTransferDirection}
-            />
+            <MarkdownHydrationProvider enabled={hydrateMarkdown}>
+                <MessageListEntry
+                    key={entry.key}
+                    entry={entry}
+                    onMessageContentChange={onMessageContentChange}
+                    getAnimationHandlers={getAnimationHandlers}
+                    scrollToBottom={scrollToBottom}
+                    stickyUserHeader={stickyUserHeader}
+                    sessionIsWorking={false}
+                    defaultActivityExpanded={defaultActivityExpanded}
+                    turnUiStates={turnUiStates}
+                    onToggleTurnGroup={onToggleTurnGroup}
+                    chatRenderMode={chatRenderMode}
+                    shouldAnimateUserMessage={shouldAnimateUserMessage}
+                    onUserAnimationConsumed={onUserAnimationConsumed}
+                    activeStreamingMessageId={null}
+                    activeStreamingPhase={null}
+                    reviewTransferDirection={reviewTransferDirection}
+                />
+            </MarkdownHydrationProvider>
         );
     }, [chatRenderMode, defaultActivityExpanded, getAnimationHandlers, onMessageContentChange, onToggleTurnGroup, onUserAnimationConsumed, reviewTransferDirection, scrollToBottom, shouldAnimateUserMessage, stickyUserHeader, turnUiStates]);
 
@@ -1204,7 +1269,6 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
     }
 
     if (engine === 'tanstack') {
-        const virtualItems = tanstackVirtualizer.getVirtualItems();
         const startOffset = virtualItems[0]?.start ?? 0;
         // Rendered rows stay in normal flow inside a single offset wrapper (not
         // per-row absolute positioning) so per-turn sticky user headers keep
@@ -1227,7 +1291,10 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
                                 ref={tanstackVirtualizer.measureElement}
                                 data-turn-entry={entry.key}
                             >
-                                {renderEntry(entry)}
+                                {renderEntry(
+                                    entry,
+                                    hydratedMarkdownEntryKeys.has(entry.key),
+                                )}
                             </div>
                         );
                     })}

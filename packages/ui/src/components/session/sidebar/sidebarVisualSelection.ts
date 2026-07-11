@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import { flushSync } from 'react-dom';
 
-import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { beginSessionSwitchMeasure, markSessionSwitchHighlightPainted } from '@/lib/sessionSwitchPerf';
+import {
+    announceSessionSwitchIntent,
+    getSessionSwitchIntent,
+    subscribeSessionSwitchIntent,
+    type SessionSwitchIntent,
+} from '@/lib/sessionSwitchIntent';
 
 type SidebarVisualSelectionState = {
     sessionId: string | null;
@@ -10,10 +15,10 @@ type SidebarVisualSelectionState = {
 };
 
 type PendingSelection = {
-    cancelCommit: () => void;
     commit: () => void;
     commitFrame: number | null;
     fallbackTimer: number | null;
+    intent: SessionSwitchIntent;
     paintFrame: number | null;
     scheduled: boolean;
     sessionId: string;
@@ -47,7 +52,6 @@ export const cancelPendingSidebarVisualSelection = (): void => {
     if (!pendingSelection) {
         return;
     }
-    pendingSelection.cancelCommit();
     cancelFrames(pendingSelection);
     pendingSelection = null;
 };
@@ -55,11 +59,12 @@ export const cancelPendingSidebarVisualSelection = (): void => {
 export const requestSidebarVisualSelection = (sessionId: string, commit: () => void): void => {
     cancelPendingSidebarVisualSelection();
     beginSessionSwitchMeasure(true);
+    const intent = announceSessionSwitchIntent(sessionId);
     pendingSelection = {
-        cancelCommit: () => {},
         commit,
         commitFrame: null,
         fallbackTimer: null,
+        intent,
         paintFrame: null,
         scheduled: false,
         sessionId,
@@ -85,18 +90,28 @@ export const notifySidebarVisualSelectionCommitted = (sessionId: string): void =
         pending.fallbackTimer = null;
     }
 
-    if (typeof window !== 'undefined') {
-        pending.commitFrame = window.requestAnimationFrame(() => {
-            pending.paintFrame = window.requestAnimationFrame(markSessionSwitchHighlightPainted);
-        });
-    }
-
-    pending.cancelCommit = scheduleAfterPaintTask(() => {
-        if (pendingSelection !== pending) {
+    const commitPendingSelection = () => {
+        if (pendingSelection !== pending || getSessionSwitchIntent() !== pending.intent) {
             return;
         }
         pendingSelection = null;
+        markSessionSwitchHighlightPainted();
         pending.commit();
+    };
+
+    if (typeof window === 'undefined') {
+        commitPendingSelection();
+        return;
+    }
+
+    // This interaction owns its paint barrier instead of joining the shared
+    // background hydration queue. The first rAF lets the visual row selection
+    // paint; the second commits session authority before the following paint.
+    pending.commitFrame = window.requestAnimationFrame(() => {
+        if (pendingSelection !== pending || getSessionSwitchIntent() !== pending.intent) {
+            return;
+        }
+        pending.paintFrame = window.requestAnimationFrame(commitPendingSelection);
     });
 };
 
@@ -106,3 +121,12 @@ export const syncSidebarVisualSelection = (sessionId: string | null): void => {
     }
     useSidebarVisualSelectionStore.getState().setSessionId(sessionId);
 };
+
+subscribeSessionSwitchIntent((intent) => {
+    const pending = pendingSelection;
+    if (!pending || pending.intent === intent) {
+        return;
+    }
+    cancelPendingSidebarVisualSelection();
+    useSidebarVisualSelectionStore.getState().setSessionId(intent.sessionId);
+});

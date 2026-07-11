@@ -7,6 +7,7 @@ import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { buildAgentMentionUrl, parseAgentHref, parseSkillHref } from '@/lib/messages/inlineMessageLinks';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { highlightCodeInWorker } from './markdown-worker';
+import type { MarkdownWorkerPriority } from './markdown-worker-protocol';
 
 const escapeAttr = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -242,7 +243,12 @@ const unescapeHtml = (value: string): string =>
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&');
 
-const highlightCodeBlocks = async (html: string): Promise<string> => {
+const highlightCodeBlocks = async (
+  html: string,
+  signal: AbortSignal | undefined,
+  priority: MarkdownWorkerPriority,
+): Promise<string | null> => {
+  if (signal?.aborted) return null;
   const matches = [...html.matchAll(CODE_BLOCK_RE)];
   if (matches.length === 0) return html;
 
@@ -250,6 +256,7 @@ const highlightCodeBlocks = async (html: string): Promise<string> => {
 
   let result = html;
   for (const match of matches) {
+    if (signal?.aborted) return null;
     const [full, rawLang, escapedCode] = match;
     const requested = (rawLang || 'text').toLowerCase();
     // Leave mermaid fences untouched so the decorate pass can render them as
@@ -266,7 +273,8 @@ const highlightCodeBlocks = async (html: string): Promise<string> => {
 
     // Tokenize off the main thread. On failure the worker resolves to null and
     // we keep the original escaped <pre><code> (no main-thread highlight).
-    const highlighted = await highlightCodeInWorker(code, requested);
+    const highlighted = await highlightCodeInWorker(code, requested, { signal, priority });
+    if (signal?.aborted) return null;
     if (highlighted) {
       // Stamp the language so the decorate pass can show a header label.
       const stamped = highlighted.replace(/^<pre/, `<pre data-md-lang="${requested}"`);
@@ -346,11 +354,22 @@ const cacheRenderedBlock = (key: string, entry: { hash: string; html: string }):
   );
 };
 
-const parseBlock = async (block: MarkdownBlock): Promise<string> => {
+const parseBlock = async (
+  block: MarkdownBlock,
+  signal: AbortSignal | undefined,
+  priority: MarkdownWorkerPriority,
+): Promise<string | null> => {
+  if (signal?.aborted) return null;
   const parsed = await Promise.resolve(parser.parse(block.src));
+  if (signal?.aborted) return null;
   const withMath = renderMathExpressions(parsed);
-  const highlighted = block.highlight ? await highlightCodeBlocks(withMath) : withMath;
-  return sanitize(highlighted);
+  if (signal?.aborted) return null;
+  const highlighted = block.highlight
+    ? await highlightCodeBlocks(withMath, signal, priority)
+    : withMath;
+  if (highlighted === null || signal?.aborted) return null;
+  const sanitized = sanitize(highlighted);
+  return signal?.aborted ? null : sanitized;
 };
 
 /**
@@ -404,7 +423,9 @@ export const renderMarkdownBlocks = async (
   if (!text) return [];
 
   const blocks = streamBlocks(text, streaming);
-  const renderBlock = async (block: MarkdownBlock, index: number): Promise<RenderedBlock> => {
+  const priority: MarkdownWorkerPriority = streaming ? 'visible' : 'background';
+  const renderBlock = async (block: MarkdownBlock, index: number): Promise<RenderedBlock | null> => {
+    if (signal?.aborted) return null;
     const contentHash = hash(block.raw);
     const id = `${contentHash}:${block.mode}:${block.highlight ? 1 : 0}`;
     const key = `${cacheKey}:${index}:${block.mode}`;
@@ -412,13 +433,15 @@ export const renderMarkdownBlocks = async (
     if (cached && cached.hash === contentHash) {
       return { id, html: cached.html };
     }
-    const html = await parseBlock(block);
+    const html = await parseBlock(block, signal, priority);
+    if (html === null || signal?.aborted) return null;
     cacheRenderedBlock(key, { hash: contentHash, html });
     return { id, html };
   };
 
   if (streaming) {
-    return Promise.all(blocks.map(renderBlock));
+    const results = await Promise.all(blocks.map(renderBlock));
+    return results.filter((result): result is RenderedBlock => result !== null);
   }
 
   const rendered: RenderedBlock[] = [];
@@ -446,7 +469,7 @@ export const renderMarkdownBlocks = async (
           return;
         }
         void renderBlock(block, index).then((value) => finish(value));
-      });
+      }, { priority: 'visible' });
       const handleAbort = () => {
         cancel();
         finish(null);

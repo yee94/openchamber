@@ -62,8 +62,10 @@ The trace showed four causal groups:
   `state.sessionId === row.id`, so a click re-renders the old and new rows rather
   than the complete project tree.
 - The visual row update commits first. The selected row's layout effect then
-  schedules the authoritative session switch after a paint opportunity.
-- Rapid switches cancel the intermediate authoritative commit.
+  uses a dedicated nested-rAF barrier to commit authority only after the row had
+  a paint opportunity; it never waits behind the shared Markdown/tool queue.
+- Every sidebar and direct navigation publishes a unique intent revision. Rapid
+  or cross-entry switches cancel the intermediate authoritative commit.
 - The chat root shows an inert lightweight surface during the authority change,
   preventing stale-session input or actions.
 - Added User Timing measures:
@@ -77,11 +79,45 @@ The trace showed four causal groups:
 - Initial history overscan starts at 2 and grows by 2 in the shared frame-budget
   queue instead of mounting 8 desktop / 16 mobile overscan turns at once.
 - Completed Markdown first paints a safe text fallback, then parses and commits
-  rich Markdown block by block. Work is cancelled when the row/session unmounts.
+  rich Markdown block by block after its turn enters the hydration window. Work
+  is cancelled when the row/session unmounts.
+- Markdown hydration is scroll-driven rather than equal to virtual-list overscan:
+  the newest turn is enabled first, visible turns follow from bottom to top, and
+  upward scrolling preloads only the nearest three mounted turns above the
+  viewport. Idle time no longer upgrades every mounted overscan row.
+- Hydrated history is tracked by stable entry keys, so prepends and far jumps do
+  not accidentally hydrate unseen intermediate history. Streaming-tail Markdown
+  remains immediate.
 - Historical tool bodies hydrate individually through the same queue. Hydrated
   tool IDs are retained in a count-and-byte bounded LRU so scrolling does not
   repeatedly show placeholders.
 - `animate=false` reveal paths no longer register layout/effect hooks.
+
+### Cooperative scheduling and cancellation
+
+- The shared frame queue now uses O(1) linked lanes ordered as
+  `user-blocking > visible > background`. Cancelling an Activity removes its
+  queued entries immediately instead of leaving FIFO tombstones that a later
+  frame must scan with repeated `Array.shift()` calls.
+- Markdown rendering for the current hydration window uses the visible lane;
+  overscan and historical tool releases remain background work. Their React
+  state updates run inside transitions, so a new synchronous session authority
+  update can interrupt and discard the in-progress Fiber tree.
+- Session-view selection and LRU promotion commit in one transition state update.
+  The updater validates an intent object, not only a session key, so stale work
+  also fails for A -> B -> A.
+- Cached `ChatContainerContent` trees are memoized and receive a stable estimate
+  callback. Switching the active key therefore does not create prop-update work
+  in every hidden Activity.
+- Shiki requests carry `AbortSignal` and visible/background priority through the
+  main-thread client and worker. Hidden-session jobs that have not started are
+  removed; current visible highlighting overtakes queued history; cancelled
+  results cannot mutate the DOM.
+- React cannot preempt arbitrary synchronous JavaScript. One already-running
+  Shiki tokenizer, one `marked`/DOMPurify block, Mermaid render, or morphdom
+  commit must return before the browser can handle another task. The surrounding
+  work is cancellable and block-scoped so stale work is bounded rather than
+  draining an entire old session.
 
 ### Waste and cache control
 
@@ -113,8 +149,9 @@ The trace showed four causal groups:
 - View weight is bucketed from message count and capped at 16 MiB per view. The
   coarse buckets avoid publishing cache-state updates on every streaming token or
   message-part delta.
-- A latest-selection generation check is repeated inside transition state updaters,
-  preventing an interrupted A → B → A switch from committing stale B later.
+- A unique latest-intent identity is checked by the atomic transition updater,
+  preventing interrupted A → B → A or A → B → C work from changing visibility
+  or polluting/evicting the LRU later.
 - Runtime manifests now require React/React DOM 19.2, the first stable release that
   exposes `Activity`; this avoids relying on the lockfile accidentally supplying a
   newer runtime than the declared minimum.
@@ -150,6 +187,11 @@ Chrome recording can be passed to the analyzer to compare click slices and long
 tasks on exactly the same basis; the User Timing measures will also appear in
 that trace.
 
+A post-change rapid B -> C -> A browser run ended with exactly one selected row,
+the final A session in the URL, two hidden cached Activity views, 14 deferred
+Markdown blocks, 28.2 ms highlight latency, and 187.0 ms content latency. No
+intermediate session regained authority.
+
 ## Acceptance gates
 
 | Gate (development mode) | Result |
@@ -158,8 +200,14 @@ that trace.
 | Content commit median < 200 ms | Pass: 142.9 ms |
 | Content commit p95 < 350 ms | Pass: 312.1 ms |
 | Rapid switch keeps only latest authority commit | Pass: unit test |
+| Direct navigation invalidates an older pending sidebar commit | Pass: unit test |
 | Delayed content transition cannot restore an intermediate session | Pass: 80 ms B → A interactive race check |
+| A → B → A stale transition cannot enter/evict the LRU | Pass: identity-token unit test |
+| Visible work overtakes background backlog; cancellation leaves no tombstones | Pass: queue tests |
+| Cancelled Shiki work cannot publish; visible jobs overtake history | Pass: worker queue tests |
 | Historical rich work is cancellable and frame-budgeted | Pass: unit tests + interactive run |
+| Idle history leaves offscreen overscan Markdown deferred | Pass: interactive run (14 deferred after 2.5 s) |
+| Upward scroll hydrates only visible + nearest older turns | Pass: candidate-order tests + interactive scroll |
 | A → B → A retains the original chat view | Pass: LRU identity test + interactive Activity DOM check |
 | Session view cache is count- and byte-bounded | Pass: unit tests |
 | UI type-check | Pass |
@@ -173,7 +221,10 @@ bun test \
   packages/ui/src/lib/dualLimitLru.test.ts \
   packages/ui/src/components/chat/hooks/useTurnRecords.test.ts \
   packages/ui/src/components/chat/lib/historyOverscan.test.ts \
+  packages/ui/src/components/chat/lib/markdownHydrationWindow.test.ts \
+  packages/ui/src/components/chat/markdown/markdown-worker-task-queue.test.ts \
   packages/ui/src/components/chat/lib/turns/turnProjectionCache.test.ts \
+  packages/ui/src/components/chat/MarkdownRenderer.deferred.test.tsx \
   packages/ui/src/components/chat/sessionViewCache.test.ts \
   packages/ui/src/components/session/sidebar/sidebarVisualSelection.test.ts \
   packages/ui/src/components/session/sidebar/hooks/useProjectSessionSelection.test.ts

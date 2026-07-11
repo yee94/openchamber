@@ -9,19 +9,25 @@
 // bitmask (1=italic, 2=bold, 4=underline).
 export type MarkdownTokenRun = [length: number, color: string, fontStyle: number];
 
-export type MarkdownWorkerRequest =
-  | { type: 'init' }
+export type MarkdownWorkerPriority = 'visible' | 'background';
+
+export type MarkdownWorkerJobRequest =
   // Highlight a whole block to ready-to-splice Shiki `<pre>` HTML.
-  | { type: 'highlight'; id: number; code: string; lang: string }
+  | { type: 'highlight'; id: number; code: string; lang: string; priority: MarkdownWorkerPriority }
   // Highlight a whole block but return per-line inner HTML (one entry per line),
   // so per-line layouts (diffs, gutters, virtualization) tokenize in ONE call
   // instead of one worker round-trip per line.
-  | { type: 'highlightLines'; id: number; code: string; lang: string }
+  | { type: 'highlightLines'; id: number; code: string; lang: string; priority: MarkdownWorkerPriority }
   // Tokenize with an arbitrary registered theme and return per-line styled runs
   // with offsets — for building CodeMirror decorations. `theme` (a resolved
   // TextMate theme object) is sent only the first time a theme name is used;
   // afterwards only `themeName` is sent and the worker reuses the loaded theme.
-  | { type: 'highlightTokens'; id: number; code: string; lang: string; themeName: string; theme?: unknown };
+  | { type: 'highlightTokens'; id: number; code: string; lang: string; themeName: string; theme?: unknown; priority: MarkdownWorkerPriority };
+
+export type MarkdownWorkerRequest =
+  | { type: 'init' }
+  | { type: 'cancel'; id: number }
+  | MarkdownWorkerJobRequest;
 
 export type MarkdownWorkerResponse =
   | { type: 'highlight'; id: number; html: string }

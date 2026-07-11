@@ -90,13 +90,18 @@ export const WorkerHighlightedCode: React.FC<WorkerHighlightedCodeProps> = ({
     const host = hostRef.current;
     if (!host) return;
     let active = true;
-    void highlightCodeInWorker(code, (language || 'text').toLowerCase()).then((html) => {
+    const abortController = new AbortController();
+    void highlightCodeInWorker(code, (language || 'text').toLowerCase(), {
+      signal: abortController.signal,
+      priority: 'visible',
+    }).then((html) => {
       if (!active || !host || !html) return;
       host.innerHTML = html;
       applyPreStyles(host, wrap, codeStyle);
     });
     return () => {
       active = false;
+      abortController.abort();
     };
   }, [code, language, wrap, codeStyle]);
 

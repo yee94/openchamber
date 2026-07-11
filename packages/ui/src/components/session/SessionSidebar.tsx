@@ -88,6 +88,7 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
+import { announceSessionSwitchIntent } from '@/lib/sessionSwitchIntent';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
@@ -730,6 +731,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     projectId?: string | null,
   ) => {
     if (sessionId === currentSessionId) {
+      announceSessionSwitchIntent(sessionId);
       syncSidebarVisualSelection(sessionId);
       commitSessionSelect(sessionId, sessionDirectory, projectId);
       return;

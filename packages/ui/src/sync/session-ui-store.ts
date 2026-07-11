@@ -65,6 +65,7 @@ import { setSessionOpener } from "./session-opener"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
 import { beginSessionSwitchMeasure } from "@/lib/sessionSwitchPerf"
+import { announceSessionSwitchIntent } from "@/lib/sessionSwitchIntent"
 
 export type { AttachedFile }
 
@@ -565,6 +566,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // setCurrentSession
   // ---------------------------------------------------------------------------
   setCurrentSession: (id, directoryHint?: string | null) => {
+    announceSessionSwitchIntent(id)
     const previousSessionId = get().currentSessionId
     if (previousSessionId !== id) {
       beginSessionSwitchMeasure()
