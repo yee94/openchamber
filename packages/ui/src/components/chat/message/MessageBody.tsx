@@ -18,6 +18,7 @@ import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialo
 import { ForkSessionDialog, type ForkSessionExecution } from '@/components/session/ForkSessionDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
+import { ICON_STROKE_WIDTH_MEDIUM } from '@/components/icon/Icon';
 import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
 
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
@@ -56,16 +57,27 @@ import {
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
-const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-1.5 mb-0.5 flex items-center justify-start gap-3';
-/** Icon-only message-footer actions — 12px glyphs; leave icon+label meta alone. */
+const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-1.5 mb-0.5 flex items-center justify-start gap-1.5';
+/** 移动端：正文与底栏再拉开一点，避免贴死. */
+const INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME = 'mt-3 mb-0.5 flex items-center justify-start gap-1.5';
+/** Icon-only message-footer actions — ~14px glyphs in 24px hit; medium stroke. */
 const MESSAGE_ACTION_ICON_BUTTON_CLASS =
-  'size-5! p-0 text-muted-foreground/70 bg-transparent hover:text-foreground/90 hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50';
-const MESSAGE_ACTION_ICON_CLASS = 'size-3!';
-const MESSAGE_ACTION_GROUP_CLASS = 'flex items-center gap-3';
-/** Duration / timestamp meta next to icon-only actions — one shared chrome. */
+  'size-6! p-0 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50';
+const MESSAGE_ACTION_ICON_CLASS = 'size-3.5!';
+/**
+ * 底栏整行：操作组 | 耗时组 — 组内 gap-2，组间 gap-3，颜色同一档.
+ * 移动端 -ml 抵消 size-6 按钮图标居中内缩，与正文左对齐.
+ */
+const MESSAGE_FOOTER_ROW_CLASS = 'mt-1.5 mb-0.5 flex flex-wrap items-center gap-3';
+const MESSAGE_FOOTER_ROW_MOBILE_CLASS = 'mt-3 mb-0.5 flex flex-wrap items-center gap-3 -ml-[5px]';
+const MESSAGE_ACTION_GROUP_CLASS = 'flex items-center gap-2';
+/** Duration / timestamp — 与操作图标同色；字略小，行高贴齐图标高度保持垂直对齐. */
+const MESSAGE_FOOTER_META_GROUP_CLASS = 'flex items-center gap-2 text-muted-foreground';
 const MESSAGE_FOOTER_META_CLASS =
-  'text-xs text-muted-foreground/60 tabular-nums flex items-center gap-0.5';
-const MESSAGE_FOOTER_META_ICON_CLASS = 'h-2.5 w-2.5';
+  'inline-flex h-3.5 items-center gap-1 text-[11px] leading-none tabular-nums text-muted-foreground';
+const MESSAGE_FOOTER_META_ICON_CLASS = 'size-3.5!';
+/** Message-action icons: medium stroke — PC + mobile 同一套. */
+const MESSAGE_ACTION_ICON_WEIGHT = 'medium' as const;
 
 const getDisplayFileName = (file: string): string => {
     const normalized = file.replace(/\\/g, '/');
@@ -536,6 +548,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
     );
 
     const effectiveOnFork = chatSurfaceMode === 'mini-chat' ? undefined : onFork;
+    // 移动端：尺寸/间距与桌面一致；左对齐由底栏 -ml 处理
     const actionsBlock = ((canCopyMessage && hasCopyableText) || onRevert || effectiveOnFork) && showUserActions ? (
         <div className={cn(
             'group/user-actions',
@@ -551,18 +564,15 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
         )}>
             <div
                 className={cn(
-                    'flex items-center justify-end gap-2.5',
-                    isMobile
-                        ? userActionsMode === 'inline'
-                            ? 'translate-x-5'
-                            : 'translate-x-0'
-                        : userActionsMode === 'inline'
-                            ? 'translate-x-5'
-                            : 'translate-x-0',
+                    MESSAGE_ACTION_GROUP_CLASS,
+                    'justify-end',
+                    // 移动端去掉 translate-x，保持与气泡右缘对齐且间距均匀
+                    !isMobile && userActionsMode === 'inline' && 'translate-x-5',
                     alwaysShowActions
                         ? 'pointer-events-auto opacity-100'
                         : 'pointer-events-none opacity-0 transition-opacity duration-150 group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-hover/user-actions:pointer-events-auto group-hover/user-actions:opacity-100 group-hover/user-shell:pointer-events-auto group-hover/user-shell:opacity-100'
                 )}
+                data-message-action-group="true"
             >
                 {onRevert && (
                 <Tooltip>
@@ -579,7 +589,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
                                     onRevert();
                                 }}
                             >
-                                <Icon name="arrow-go-back" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="arrow-go-back" className={MESSAGE_ACTION_ICON_CLASS} />
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.revert')}</TooltipContent>
@@ -600,7 +610,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
                                     effectiveOnFork();
                                 }}
                             >
-                                <Icon name="git-branch" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="git-branch" className={MESSAGE_ACTION_ICON_CLASS} />
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.fork')}</TooltipContent>
@@ -626,9 +636,9 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
                                 }}
                             >
                                 {isMessageCopied ? (
-                                    <Icon name="check" className={cn(MESSAGE_ACTION_ICON_CLASS, 'text-[color:var(--status-success)]')} />
+                                    <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="check" className={cn(MESSAGE_ACTION_ICON_CLASS, 'text-[color:var(--status-success)]')} />
                                 ) : (
-                                    <Icon name="file-copy" className={MESSAGE_ACTION_ICON_CLASS} />
+                                    <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="file-copy" className={MESSAGE_ACTION_ICON_CLASS} />
                                 )}
                             </Button>
                         </TooltipTrigger>
@@ -884,9 +894,9 @@ const AssistantMessageActionButtons = React.memo(({
                             }}
                         >
                             {isMessageCopied ? (
-                                <Icon name="check" className={cn(MESSAGE_ACTION_ICON_CLASS, 'text-[color:var(--status-success)]')} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="check" className={cn(MESSAGE_ACTION_ICON_CLASS, 'text-[color:var(--status-success)]')} />
                             ) : (
-                                <Icon name="file-copy" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="file-copy" className={MESSAGE_ACTION_ICON_CLASS} />
                             )}
                         </Button>
                     </TooltipTrigger>
@@ -912,9 +922,9 @@ const AssistantMessageActionButtons = React.memo(({
                             }}
                         >
                             {isTransferringReview ? (
-                                <Icon name="loader-4" className={cn(MESSAGE_ACTION_ICON_CLASS, 'animate-spin')} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="loader-4" className={cn(MESSAGE_ACTION_ICON_CLASS, 'animate-spin')} />
                             ) : (
-                                <Icon name="arrow-left-right" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="arrow-left-right" className={MESSAGE_ACTION_ICON_CLASS} />
                             )}
                         </Button>
                     </TooltipTrigger>
@@ -937,9 +947,9 @@ const AssistantMessageActionButtons = React.memo(({
                             onClick={handleTTSClick}
                         >
                             {isTTSPlaying ? (
-                                <Icon name="stop" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="stop" className={MESSAGE_ACTION_ICON_CLASS} />
                             ) : (
-                                <Icon name="volume-up" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="volume-up" className={MESSAGE_ACTION_ICON_CLASS} />
                             )}
                         </Button>
                     </TooltipTrigger>
@@ -991,6 +1001,8 @@ const AssistantMessageBody = React.memo(({
 
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
     const alwaysShowMessageActions = Boolean(alwaysShowActions ?? isMobile);
+    // 移动端尺寸/间距与桌面一致；底栏分组 + 左对齐
+    const footerRowClass = isMobile ? MESSAGE_FOOTER_ROW_MOBILE_CLASS : MESSAGE_FOOTER_ROW_CLASS;
     const awaitingMessageCompletion = !isMessageCompleted;
     const animateActivityRows = awaitingMessageCompletion || Boolean(turnGroupingContext?.isWorking);
 
@@ -1589,7 +1601,7 @@ const AssistantMessageBody = React.memo(({
                 );
                 if (shouldShowStandaloneMessageActions && i === lastRenderableTextPartIndex) {
                     rendered.push(
-                        <div key={`message-actions-${messageId}`} className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
+                        <div key={`message-actions-${messageId}`} className={isMobile ? INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME : INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                             <div className={MESSAGE_ACTION_GROUP_CLASS} data-message-action-group="true">
                                 {messageActionButtons}
                             </div>
@@ -1784,7 +1796,7 @@ const AssistantMessageBody = React.memo(({
                                 openContextPreview(directory, messagePreviewUrl);
                             }}
                         >
-                            <Icon name="global" className={MESSAGE_ACTION_ICON_CLASS} />
+                            <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="global" className={MESSAGE_ACTION_ICON_CLASS} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.openPreview')}</TooltipContent>
@@ -1805,7 +1817,7 @@ const AssistantMessageBody = React.memo(({
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={handleSaveAsPlanClick}
                         >
-                            <Icon name="booklet" className={MESSAGE_ACTION_ICON_CLASS} />
+                            <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="booklet" className={MESSAGE_ACTION_ICON_CLASS} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.saveAsPlan')}</TooltipContent>
@@ -1821,7 +1833,7 @@ const AssistantMessageBody = React.memo(({
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={handleForkClick}
                     >
-                        <Icon name="chat-new" className={MESSAGE_ACTION_ICON_CLASS} />
+                        <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="chat-new" className={MESSAGE_ACTION_ICON_CLASS} />
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.startNewSession')}</TooltipContent>
@@ -1837,7 +1849,7 @@ const AssistantMessageBody = React.memo(({
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={handleForkMultiRunClick}
                         >
-                            <ArrowsMerge className={MESSAGE_ACTION_ICON_CLASS} />
+                            <ArrowsMerge className={MESSAGE_ACTION_ICON_CLASS} strokeWidth={ICON_STROKE_WIDTH_MEDIUM} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.startNewMultiRun')}</TooltipContent>
@@ -1920,7 +1932,7 @@ const AssistantMessageBody = React.memo(({
                 </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
                 {shouldRenderStandaloneActionsAfterContent && (
-                    <div className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
+                    <div className={cn(isMobile ? INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME : INLINE_MESSAGE_ACTIONS_CLASS_NAME)} data-message-actions="true">
                         <div className={MESSAGE_ACTION_GROUP_CLASS} data-message-action-group="true">
                             {messageActionButtons}
                         </div>
@@ -1928,37 +1940,42 @@ const AssistantMessageBody = React.memo(({
                 )}
                 {shouldShowTurnFooter && (
                     <div
-                        className="mt-1.5 mb-0.5 flex flex-wrap items-center justify-start gap-3"
+                        className={footerRowClass}
+                        data-message-footer="true"
                         style={MESSAGE_FOOTER_CONTAINER_STYLE}
                     >
                         <div className={MESSAGE_ACTION_GROUP_CLASS} data-message-action-group="true">
                             {messageActionButtons}
                             {finalTurnActionButtons}
                         </div>
-                        {turnDurationText ? (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span className={MESSAGE_FOOTER_META_CLASS}>
-                                        <Icon name="hourglass" className={MESSAGE_FOOTER_META_ICON_CLASS} />
-                                        <span className="message-footer__label">{turnDurationText}</span>
-                                    </span>
-                                </TooltipTrigger>
-                                <TooltipContent>{turnDurationText}</TooltipContent>
-                            </Tooltip>
-                        ) : null}
-                        {footerTimestamp ? (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span
-                                        className={MESSAGE_FOOTER_META_CLASS}
-                                        aria-label={`Message time: ${footerTimestamp}`}
-                                    >
-                                        <Icon name="time" className={MESSAGE_FOOTER_META_ICON_CLASS} />
-                                        <span className="message-footer__label">{footerTimestamp}</span>
-                                    </span>
-                                </TooltipTrigger>
-                                <TooltipContent>{footerTimestamp}</TooltipContent>
-                            </Tooltip>
+                        {(turnDurationText || footerTimestamp) ? (
+                            <div className={MESSAGE_FOOTER_META_GROUP_CLASS}>
+                                {turnDurationText ? (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className={MESSAGE_FOOTER_META_CLASS}>
+                                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="hourglass" className={MESSAGE_FOOTER_META_ICON_CLASS} />
+                                                <span className="message-footer__label">{turnDurationText}</span>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{turnDurationText}</TooltipContent>
+                                    </Tooltip>
+                                ) : null}
+                                {footerTimestamp ? (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span
+                                                className={MESSAGE_FOOTER_META_CLASS}
+                                                aria-label={`Message time: ${footerTimestamp}`}
+                                            >
+                                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="time" className={MESSAGE_FOOTER_META_ICON_CLASS} />
+                                                <span className="message-footer__label">{footerTimestamp}</span>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{footerTimestamp}</TooltipContent>
+                                    </Tooltip>
+                                ) : null}
+                            </div>
                         ) : null}
                         {!isMiniChatSurface && isLastAssistantInTurn && hasStopFinish ? (
                             <TurnChangedFilesDropdown activityParts={turnGroupingContext?.activityParts} />
