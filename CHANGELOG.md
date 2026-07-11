@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.4] - 2026-07-11
+
+- **Deep-link projects:** `openchamber://new-session?directory=…` now reuses the matching project or worktree, and registers an unmatched directory as a project before its first session is created. Sessions opened this way reliably appear in the project sidebar without duplicate project entries.
+
 ## [1.15.3] - 2026-07-11
 
 - **Android release:** publish the signed Android APK and AAB alongside this release, so the mobile client is available from GitHub Releases.

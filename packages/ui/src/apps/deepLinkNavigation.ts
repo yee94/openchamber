@@ -46,6 +46,7 @@ const execute = (intent: DeepLinkIntent): boolean => {
         directoryOverride: intent.directory ?? null,
         selectedProjectId: intent.projectId ?? null,
         preserveDirectoryOverride: Boolean(intent.directory),
+        ensureProjectForDirectory: Boolean(intent.directory),
         initialPrompt: intent.prompt,
       });
       return true;

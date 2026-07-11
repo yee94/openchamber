@@ -299,6 +299,35 @@ describe('openNewSessionDraft project binding', () => {
     expect(draft.open).toBe(true);
     expect(draft.selectedProjectId).toBe(projectB.id);
   });
+
+  test('registers an unmatched deep-link directory as a project before opening its draft', () => {
+    useSessionUIStore.getState().openNewSessionDraft({
+      directoryOverride: '/projects/from-deep-link',
+      ensureProjectForDirectory: true,
+    });
+
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    const createdProject = useProjectsStore.getState().projects.find((project) => project.path === '/projects/from-deep-link');
+
+    expect(createdProject).toBeDefined();
+    expect(draft.open).toBe(true);
+    expect(draft.selectedProjectId).toBe(createdProject?.id);
+    expect(draft.directoryOverride).toBe('/projects/from-deep-link');
+    expect(useProjectsStore.getState().activeProjectId).toBe(createdProject?.id);
+  });
+
+  test('does not create a duplicate project when a deep-link directory is already covered', () => {
+    useSessionUIStore.getState().openNewSessionDraft({
+      directoryOverride: '/projects/beta/src',
+      ensureProjectForDirectory: true,
+    });
+
+    const draft = useSessionUIStore.getState().newSessionDraft;
+
+    expect(useProjectsStore.getState().projects).toHaveLength(2);
+    expect(draft.selectedProjectId).toBe(projectB.id);
+    expect(draft.directoryOverride).toBe('/projects/beta/src');
+  });
 });
 
 describe('routeMessage skill invocation', () => {

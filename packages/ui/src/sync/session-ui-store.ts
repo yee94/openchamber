@@ -208,6 +208,15 @@ export type NewSessionDraftState = {
   targetFolderId?: string
 }
 
+type OpenNewSessionDraftOptions = Partial<NewSessionDraftState> & {
+  /**
+   * An explicit directory from an external deep link represents a project
+   * target. If it is not already covered by a project or worktree, register
+   * it before creating the draft so the first session appears in the sidebar.
+   */
+  ensureProjectForDirectory?: boolean
+}
+
 export type ViewportAnchor = {
   sessionId: string
   value: number
@@ -250,7 +259,7 @@ export type SessionUIState = {
   setCurrentSession: (id: string | null, directoryHint?: string | null) => void
   prepareForRuntimeSwitch: (apiBaseUrl?: string | null) => void
   restoreForRuntimeSwitch: (apiBaseUrl?: string | null) => void
-  openNewSessionDraft: (options?: Partial<NewSessionDraftState>) => void
+  openNewSessionDraft: (options?: OpenNewSessionDraftOptions) => void
   closeNewSessionDraft: () => void
   setNewSessionDraftTarget: (target: { projectId?: string | null; selectedProjectId?: string | null; directoryOverride?: string | null }, options?: { force?: boolean }) => void
   setDraftPreserveDirectoryOverride: (value: boolean) => void
@@ -716,10 +725,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // openNewSessionDraft
   // ---------------------------------------------------------------------------
   openNewSessionDraft: (options) => {
-    const projectsState = useProjectsStore.getState()
+    let projectsState = useProjectsStore.getState()
     const projects = projectsState.projects
     const availableWorktreesByProject = get().availableWorktreesByProject
-    const activeProject = projectsState.getActiveProject()
     // Prefer the active conversation workspace over the directory store / last draft
     // target so Mod+N (and other unscoped "new session" entry points) land on Welcome
     // already switched to the project the user was just talking in.
@@ -730,27 +738,38 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const explicitDirectory = options?.directoryOverride !== undefined
       ? normalizePath(options.directoryOverride)
       : null
-    const explicitProject = options?.selectedProjectId
-      ? projects.find((p) => p.id === options.selectedProjectId) ?? null
+    const inferredProjectFromDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, explicitDirectory)
+    const ensuredProject = options?.ensureProjectForDirectory && explicitDirectory && !inferredProjectFromDir
+      ? projectsState.addProject(explicitDirectory)
       : null
 
-    const inferredProjectFromDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, explicitDirectory)
+    // addProject synchronously activates and persists the project. Re-read
+    // before resolving draft defaults so this draft binds to the new entry.
+    if (ensuredProject) {
+      projectsState = useProjectsStore.getState()
+    }
+    const resolvedProjects = projectsState.projects
+    const activeProject = projectsState.getActiveProject()
+    const explicitProject = options?.selectedProjectId
+      ? resolvedProjects.find((p) => p.id === options.selectedProjectId) ?? null
+      : null
+
     const fallbackProject = (() => {
       if (activeProject) return activeProject
-      if (projectsState.activeProjectId) return projects.find((p) => p.id === projectsState.activeProjectId) ?? null
-      return projects[0] ?? null
+      if (projectsState.activeProjectId) return resolvedProjects.find((p) => p.id === projectsState.activeProjectId) ?? null
+      return resolvedProjects[0] ?? null
     })()
 
     const persistedProjectById = persistedTarget?.projectId
-      ? projects.find((p) => p.id === persistedTarget.projectId) ?? null
+      ? resolvedProjects.find((p) => p.id === persistedTarget.projectId) ?? null
       : null
-    const persistedProjectByDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, persistedTarget?.directory ?? null)
-    const conversationProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, conversationDirectory)
-    const currentDirProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, currentDirectory)
+    const persistedProjectByDir = resolveDraftProjectForDirectory(resolvedProjects, availableWorktreesByProject, persistedTarget?.directory ?? null)
+    const conversationProject = resolveDraftProjectForDirectory(resolvedProjects, availableWorktreesByProject, conversationDirectory)
+    const currentDirProject = resolveDraftProjectForDirectory(resolvedProjects, availableWorktreesByProject, currentDirectory)
 
     const selectedProject = (() => {
       if (explicitProject) return explicitProject
-      if (explicitDirectory !== null) return inferredProjectFromDir
+      if (explicitDirectory !== null) return ensuredProject ?? inferredProjectFromDir
       // Live conversation wins over directory-store / last-draft heuristics.
       if (conversationProject) return conversationProject
       // Preserve orphan-directory behavior: a known cwd that matches no project
