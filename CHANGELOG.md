@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.18] - 2026-07-12
+
+- **Native haptics:** synchronize feedback with visible streaming updates. Thinking vibrates once when its UI first appears, while assistant text vibrates once per rendered text update; fixed-interval pulses are removed.
+- **Mobile generation controls:** keep the stop action available inside the collapsed composer while the current response is running.
+
 ## [1.15.17] - 2026-07-12
 
 - **Mobile message queue:** refine the queued-message card with tighter padding, smaller type and icons, denser rows, a shorter scroll region, and compact corners while preserving the established desktop layout.
