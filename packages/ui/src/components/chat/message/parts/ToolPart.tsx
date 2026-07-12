@@ -1572,7 +1572,7 @@ const renderPathLikeGitChanges = (path: string, grow = true) => {
             </span>
             <span className="flex-shrink-0">
                 <span className="text-muted-foreground">/</span>
-                <span className="text-foreground">{name}</span>
+                <span className="text-muted-foreground">{name}</span>
             </span>
         </span>
     );
@@ -1595,7 +1595,7 @@ const renderAnimatedPathWithIcon = (
                 <Text
                     variant={animate ? 'generate-effect' : 'static'}
                     className={cn('min-w-0 truncate whitespace-nowrap', textClassName, grow && 'flex-1')}
-                    style={{ color: 'var(--tools-title)' }}
+                    style={{ color: 'var(--tools-description)' }}
                 >
                     {path}
                 </Text>
@@ -1628,7 +1628,7 @@ const renderAnimatedPathWithIcon = (
                 <Text
                     variant={animate ? 'generate-effect' : 'static'}
                     className="flex-shrink-0"
-                    style={{ color: 'var(--tools-title)' }}
+                    style={{ color: 'var(--tools-description)' }}
                 >
                     {name}
                 </Text>

@@ -250,7 +250,7 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
             <Text
                 variant={animate ? 'generate-effect' : 'static'}
                 className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
-                style={{ color: 'var(--tools-title)' }}
+                style={{ color: 'var(--tools-description)' }}
                 title={displayPath}
             >
                 {displayPath}
@@ -281,7 +281,7 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
             <Text
                 variant={animate ? 'generate-effect' : 'static'}
                 className="flex-shrink-0"
-                style={{ color: 'var(--tools-title)' }}
+                style={{ color: 'var(--tools-description)' }}
             >
                 {name}
             </Text>
