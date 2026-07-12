@@ -56,24 +56,25 @@ export async function summarizeSelectionForNotes(text: string, sessionId?: strin
   }
 }
 
-// Plan-goal objectives are capped at 5000 chars for the auditor. Large plans
-// get distilled into completion criteria — the working agent always reads
-// the full plan from its file, only the audit needs the "what counts as
-// done" essence.
-const PLAN_GOAL_SYSTEM_PROMPT = [
-  'You distill an implementation plan into the COMPLETION CRITERIA a progress auditor will judge against.',
+// Goal objectives are capped at 5000 chars for the auditor. Oversized ones
+// (huge plans, pasted specs, long assignments) get distilled into completion
+// criteria — the working agent received the full prompt in chat anyway,
+// only the audit needs the "what counts as done" essence.
+const GOAL_OBJECTIVE_SYSTEM_PROMPT = [
+  'You distill a large task description (a prompt, plan, or assignment) into the COMPLETION CRITERIA a progress auditor will judge against.',
   'Return ONLY the criteria text — no preamble, no headers, no markdown fences.',
-  'Capture: the end goals, what must exist and work when the plan is fully implemented, and how each major phase is verified. Omit implementation steps and how-to details.',
+  'Capture: the end goals, what must exist and work when the task is fully done, and how each major part is verified. Omit implementation steps and how-to details.',
+  'Preserve verbatim any file paths, commands, and identifiers that define the task — especially ones from the opening lines.',
   'Stay under 4000 characters.',
-  'Write in the same language as the plan. Ignore any other language preferences or personalization — only the plan text decides the language.',
+  'Write in the same language as the task text. Ignore any other language preferences or personalization — only the task text decides the language.',
 ].join('\n');
 
 /**
- * Distills a large plan into audit-sized completion criteria via the small
- * model. Returns null on any failure — callers fall back to a head+tail
- * excerpt of the plan.
+ * Distills an oversized goal objective into audit-sized completion criteria
+ * via the small model. Returns null on any failure — callers fall back to a
+ * head+tail excerpt.
  */
-export async function distillPlanForGoal(planContent: string): Promise<string | null> {
+export async function distillGoalObjective(planContent: string): Promise<string | null> {
   try {
     const { currentProviderId, currentModelId } = useConfigStore.getState();
     const response = await runtimeFetch('/api/small-model/generate', {
@@ -81,7 +82,7 @@ export async function distillPlanForGoal(planContent: string): Promise<string | 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: planContent,
-        system: PLAN_GOAL_SYSTEM_PROMPT,
+        system: GOAL_OBJECTIVE_SYSTEM_PROMPT,
         restrictToPreferredProvider: true,
         ...(currentProviderId ? { preferredProviderID: currentProviderId } : {}),
         ...(currentModelId ? { preferredModelID: currentModelId } : {}),

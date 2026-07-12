@@ -1437,7 +1437,7 @@ export const dict = {
   'chat.goal.action.save': 'Save goal',
   'chat.goal.action.start': 'Start goal',
   'chat.goal.toast.actionFailed': 'Goal update failed',
-  "plans.goal.toast.distillFallback": "Couldn't distill the plan for the auditor — a trimmed excerpt was used instead",
+  "chat.goal.toast.distillFallback": "Objective exceeded the limit and couldn't be distilled — a trimmed version is used for the auditor",
   'chat.goal.row.aria': 'Session goal — open details',
   'chat.goal.button.createAria': 'Set a session goal',
   'chat.goal.button.manageAria': 'Manage session goal',
