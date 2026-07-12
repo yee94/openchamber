@@ -8,6 +8,7 @@ import { resolveAssistantDisplayText, shouldRenderAssistantText } from './assist
 import { streamPerfCount, streamPerfObserve } from '@/stores/utils/streamDebug';
 import { GeneratedJsonResultCard } from './GeneratedJsonResultCard';
 import { parseGeneratedJsonResult } from './generatedJsonResult';
+import { emitStreamingHapticEvent, hasStreamingHapticSubscribers } from '@/sync/streaming-haptic-events';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
@@ -23,6 +24,7 @@ interface AssistantTextPartProps {
 
 const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     part,
+    sessionId,
     messageId,
     streamPhase,
     chatRenderMode = 'live',
@@ -57,6 +59,31 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         throttledTextContent,
         isStreaming,
     });
+    const hapticIdentity = `${messageId}:${part.id ?? 'text'}`;
+    const hapticStateRef = React.useRef({ identity: hapticIdentity, displayLength: displayTextContent.length, thinkingEmitted: false });
+
+    React.useEffect(() => {
+        const state = hapticStateRef.current;
+        if (state.identity !== hapticIdentity) {
+            hapticStateRef.current = { identity: hapticIdentity, displayLength: displayTextContent.length, thinkingEmitted: false };
+            return;
+        }
+        if (!isStreaming || !sessionId || !hasStreamingHapticSubscribers()) {
+            state.displayLength = displayTextContent.length;
+            return;
+        }
+        if (part.type === 'reasoning') {
+            if (!state.thinkingEmitted) {
+                state.thinkingEmitted = true;
+                emitStreamingHapticEvent({ sessionID: sessionId, messageID: messageId, partID: part.id, kind: 'thinking' });
+            }
+            return;
+        }
+        if (part.type === 'text' && displayTextContent.length > state.displayLength) {
+            emitStreamingHapticEvent({ sessionID: sessionId, messageID: messageId, partID: part.id, kind: 'text' });
+        }
+        state.displayLength = displayTextContent.length;
+    }, [displayTextContent, hapticIdentity, isStreaming, messageId, part.id, part.type, sessionId]);
 
     streamPerfObserve('ui.assistant_text_part.display_len', displayTextContent.length);
 

@@ -12,12 +12,14 @@ import { MarkdownRenderer } from '../../MarkdownRenderer';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
 import type { StreamPhase } from '../types';
 import { TOOL_ROW_INTERACTIVE_CHROME_CLASS } from './toolRowChrome';
+import { emitStreamingHapticEvent, hasStreamingHapticSubscribers } from '@/sync/streaming-haptic-events';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
 const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 
 type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
+type PartWithSession = Part & { sessionID?: string };
 
 type ReasoningVariant = 'thinking' | 'justification';
 
@@ -466,6 +468,14 @@ const ReasoningPart = React.memo(({
         isStreaming,
         identityKey: `${messageId}:${part.id ?? 'reasoning'}`,
     });
+    const thinkingHapticEmittedRef = React.useRef(false);
+    const sessionID = (part as PartWithSession).sessionID;
+
+    React.useEffect(() => {
+        if (thinkingHapticEmittedRef.current || !isStreaming || !sessionID || !throttledText.trim() || !hasStreamingHapticSubscribers()) return;
+        thinkingHapticEmittedRef.current = true;
+        emitStreamingHapticEvent({ sessionID, messageID: messageId, partID: part.id, kind: 'thinking' });
+    }, [isStreaming, messageId, part.id, sessionID, throttledText]);
 
     // Show reasoning even if time.end isn't set yet (during streaming)
     // Only hide if there's no text content

@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { useStreamingStore } from '@/sync/streaming';
+import { subscribeToStreamingHapticEvents } from '@/sync/streaming-haptic-events';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 // ---------------------------------------------------------------------------
@@ -34,42 +34,27 @@ export function isCapacitorMobileNative(): boolean {
 
 /** Snapshot of the store + environment used by the decision function. */
 export type HapticsInput = {
-  /** The message ID currently streaming for the active session (or null). */
-  streamingMsgId: string | null;
-  /** The phase + lastUpdateAt for the streaming message (or null). */
-  streamState: { phase: string; lastUpdateAt: number } | null;
+  /** Session that produced the visible part update. */
+  eventSessionId: string;
+  /** Session currently displayed by the mobile shell. */
+  currentSessionId: string | null;
   /** True when the app is in the foreground (e.g. `oc-native-app-active` class is set). */
   isForeground: boolean;
   /** True when document.visibilityState is 'visible'. */
   isVisible: boolean;
-  /** Current wall-clock time used by the cadence limiter. */
-  now: number;
-};
-
-/** Internal dedup / throttle state. */
-export type HapticsState = {
-  /** The message ID for which we last fired a haptic. */
-  lastTriggeredMsgId: string | null;
-  /** Wall-clock time when the latest haptic fired. */
-  lastTriggeredAt: number;
 };
 
 /** The result of evaluating whether haptics should fire. */
 export type HapticsDecision = {
   shouldTrigger: boolean;
   reason: HapticsDecisionReason;
-  nextState: HapticsState;
 };
 
 type HapticsDecisionReason =
   | 'trigger'
-  | 'no-message'
+  | 'different-session'
   | 'background'
-  | 'hidden'
-  | 'not-streaming'
-  | 'throttled';
-
-export const STREAMING_HAPTIC_INTERVAL_MS = 40;
+  | 'hidden';
 
 /**
  * Pure function: given the current dedup state and the latest snapshot,
@@ -82,18 +67,13 @@ export const STREAMING_HAPTIC_INTERVAL_MS = 40;
  * 4. Same message ID within the haptic cadence window → skip.
  * 5. Otherwise → fire and update dedup state.
  */
-export function evaluateHaptics(
-  state: HapticsState,
-  input: HapticsInput,
-): HapticsDecision {
-  const { streamingMsgId, streamState, isForeground, isVisible, now } = input;
+export function evaluateHaptics(input: HapticsInput): HapticsDecision {
+  const { eventSessionId, currentSessionId, isForeground, isVisible } = input;
 
-  // 1. Nothing streaming
-  if (!streamingMsgId || !streamState) {
+  if (!currentSessionId || eventSessionId !== currentSessionId) {
     return {
       shouldTrigger: false,
-      reason: 'no-message',
-      nextState: state,
+      reason: 'different-session',
     };
   }
 
@@ -102,35 +82,12 @@ export function evaluateHaptics(
     return {
       shouldTrigger: false,
       reason: 'background',
-      nextState: state,
     };
   }
   if (!isVisible) {
     return {
       shouldTrigger: false,
       reason: 'hidden',
-      nextState: state,
-    };
-  }
-
-  // 3. Not in streaming phase
-  if (streamState.phase !== 'streaming') {
-    return {
-      shouldTrigger: false,
-      reason: 'not-streaming',
-      nextState: state,
-    };
-  }
-
-  // 4. Keep impacts close enough to feel continuous without flooding the native bridge.
-  if (
-    state.lastTriggeredMsgId === streamingMsgId &&
-    now - state.lastTriggeredAt < STREAMING_HAPTIC_INTERVAL_MS
-  ) {
-    return {
-      shouldTrigger: false,
-      reason: 'throttled',
-      nextState: state,
     };
   }
 
@@ -138,18 +95,8 @@ export function evaluateHaptics(
   return {
     shouldTrigger: true,
     reason: 'trigger',
-    nextState: {
-      lastTriggeredMsgId: streamingMsgId,
-      lastTriggeredAt: now,
-    },
   };
 }
-
-/** Initial (reset) dedup state. */
-export const INITIAL_HAPTICS_STATE: HapticsState = {
-  lastTriggeredMsgId: null,
-  lastTriggeredAt: 0,
-};
 
 // ---------------------------------------------------------------------------
 // Dynamic import cache – prevents repeated imports of the Capacitor plugin
@@ -184,77 +131,45 @@ async function getHapticsModuleCached(): Promise<typeof import('@capacitor/hapti
 // ---------------------------------------------------------------------------
 
 /**
- * Subscribes to the streaming store and fires a light haptic (`ImpactStyle.Light`)
- * every 40ms while the current session is streaming.
+ * Fires a light haptic (`ImpactStyle.Light`) when a visible streaming part updates.
  *
  * - Only active on Capacitor iOS / Android native builds.
- * - Starts immediately and keeps a dense, typewriter-like cadence.
- * - Stops when the session switches, streaming finishes, app backgrounds,
- *   or the document is hidden.
+ * - Thinking fires once when its part first appears.
+ * - Visible assistant text fires once for each applied text update.
  */
 export function useStreamingHaptics(): void {
   React.useEffect(() => {
     if (!isCapacitorMobileNative()) return;
 
     let disposed = false;
-    let state = INITIAL_HAPTICS_STATE;
-    let hapticInFlight = false;
-
-    // Keep at most one native bridge call in flight so slow devices do not build a queue.
     const fireHaptic = () => {
-      if (hapticInFlight) return;
-      hapticInFlight = true;
       void getHapticsModuleCached().then((mod) => {
         if (!mod || disposed) return;
         return mod.Haptics.impact({ style: mod.ImpactStyle.Light }).catch(() => undefined);
-      }).finally(() => {
-        hapticInFlight = false;
       });
     };
 
-    const tick = () => {
+    const unsubscribe = subscribeToStreamingHapticEvents((event) => {
       if (disposed) return;
 
       const currentSessionId = useSessionUIStore.getState().currentSessionId;
-      if (!currentSessionId) {
-        // No active session → reset dedup so next streaming session fires fresh.
-        state = INITIAL_HAPTICS_STATE;
-        return;
-      }
-
-      const streamingStore = useStreamingStore.getState();
-      const streamingMsgId = streamingStore.streamingMessageIds.get(currentSessionId) ?? null;
-      const streamState = streamingMsgId
-        ? streamingStore.messageStreamStates.get(streamingMsgId) ?? null
-        : null;
-
-      // Detect foreground via the CSS class set by useNativeMobileLifecycle.
       const isForeground = document.documentElement.classList.contains('oc-native-app-active');
 
-      const decision = evaluateHaptics(state, {
-        streamingMsgId,
-        streamState: streamState
-          ? { phase: streamState.phase, lastUpdateAt: streamState.lastUpdateAt }
-          : null,
+      const decision = evaluateHaptics({
+        eventSessionId: event.sessionID,
+        currentSessionId,
         isForeground,
         isVisible: document.visibilityState === 'visible',
-        now: Date.now(),
       });
-
-      state = decision.nextState;
 
       if (decision.shouldTrigger) {
         fireHaptic();
       }
-    };
-
-    tick();
-    const intervalId = window.setInterval(tick, STREAMING_HAPTIC_INTERVAL_MS);
+    });
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
-      state = INITIAL_HAPTICS_STATE;
+      unsubscribe();
     };
   }, []);
 }

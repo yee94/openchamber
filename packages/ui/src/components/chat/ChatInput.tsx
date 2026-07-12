@@ -5010,6 +5010,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         : t('chat.chatInput.placeholder.selectSession')}
                             </span>
                         </button>
+                        {canAbort ? (
+                            <ComposerActionButtons
+                                isMobile
+                                footerIconButtonClass={footerIconButtonClass}
+                                sendIconSizeClass={sendIconSizeClass}
+                                stopIconSizeClass={stopIconSizeClass}
+                                canSend={canSend}
+                                canAbort
+                                hasContent={false}
+                                currentSessionId={currentSessionId}
+                                newSessionDraftOpen={newSessionDraftOpen}
+                                draftSubmitting={draftSubmitting}
+                                onPrimaryAction={handlePrimaryAction}
+                                onQueueMessage={handleQueueMessage}
+                                onAbort={handleAbort}
+                            />
+                        ) : null}
                     </div>
                     </div>
                 ) : (
