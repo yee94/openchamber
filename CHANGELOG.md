@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.12] - 2026-07-12
+
+- **CI:** enforce all-platform builds (desktop + Android + iOS) on every release tag.
+
 ## [1.15.11] - 2026-07-12
 
 - **Release:** fix version bump and changelog to trigger desktop + Android build pipeline.
