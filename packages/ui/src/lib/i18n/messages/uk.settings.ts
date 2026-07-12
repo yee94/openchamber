@@ -1766,6 +1766,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsAria": "Вбудовані дії асистента",
   "settings.openchamber.visual.field.showSplitAssistantMessageActions": "Вбудовані дії асистента",
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Показує «Скопіювати відповідь», «Зберегти як зображення» та озвучення для текстових блоків асистента, які з’являються перед пізнішими викликами інструментів у тій самій відповіді.",
+  "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "Дозволити надсилати запити в сесії субагентів",
+  "settings.openchamber.visual.field.allowPromptingSubagentSessions": "Дозволити запити в сесіях субагентів",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Показати значки файлів інструментів",
   "settings.openchamber.visual.field.codeBlockLineWrapAria": "Переносити рядки блоків коду",
   "settings.openchamber.visual.field.codeBlockLineWrap": "Переносити рядки блоків коду",

@@ -1801,6 +1801,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsAria': 'Inline assistant actions',
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Inline Assistant Actions',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Show Copy Answer, Save as image, and Read aloud on assistant text blocks that appear before later tool calls in the same response.',
+  'settings.openchamber.visual.field.allowPromptingSubagentSessionsAria': 'Allow prompting subagent sessions',
+  'settings.openchamber.visual.field.allowPromptingSubagentSessions': 'Allow Prompting Subagent Sessions',
   'settings.openchamber.visual.field.showToolFileIconsAria': 'Show tool file icons',
   'settings.openchamber.visual.field.showToolFileIcons': 'Show Tool File Icons',
   'settings.openchamber.visual.field.showTurnChangedFilesAria': 'Show changed files for completed turns',

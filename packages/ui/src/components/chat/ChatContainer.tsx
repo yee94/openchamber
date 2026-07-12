@@ -404,6 +404,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     // UI store
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
     const stickyUserHeader = useUIStore((state) => state.stickyUserHeader);
+    const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
     const isTimelineDialogOpen = useUIStore((s) => s.isTimelineDialogOpen);
     const setTimelineDialogOpen = useUIStore((s) => s.setTimelineDialogOpen);
 
@@ -585,7 +586,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
             {t('chat.container.returnToParent.label')}
         </Button>
     ) : null;
-    const promptReadOnly = readOnly || Boolean(parentSession);
+    const promptReadOnly = readOnly || (Boolean(parentSession) && !allowPromptingSubagentSessions);
 
     React.useEffect(() => {
         if (autoOpenDraft && !currentSessionId && !draftOpen) {
@@ -839,7 +840,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 								: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
 				>
-						{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                        {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
 			</div>
         );
@@ -899,7 +900,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 							: 'bg-background'
 					)}
 				>
-					{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                    {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
             </div>
         );
@@ -934,7 +935,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 							: 'bg-background'
 					)}
 				>
-					{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                    {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
             </div>
         );

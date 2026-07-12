@@ -1017,6 +1017,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Akcje asystenta w treści',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsAria': 'Akcje asystenta w treści',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Pokaż Kopiuj odpowiedź, Zapisz jako obraz i Odczytaj na głos w blokach tekstu asystenta, które pojawiają się przed późniejszymi wywołaniami narzędzi w tej samej odpowiedzi.',
+  'settings.openchamber.visual.field.allowPromptingSubagentSessionsAria': 'Zezwalaj na wysyłanie promptów do sesji podagentów',
+  'settings.openchamber.visual.field.allowPromptingSubagentSessions': 'Zezwalaj na prompty w sesjach podagentów',
   'settings.openchamber.visual.field.showToolFileIcons': 'Pokaż ikony plików narzędzi',
   'settings.openchamber.visual.field.showToolFileIconsAria': 'Pokaż ikony plików narzędzi',
   'settings.openchamber.visual.field.codeBlockLineWrapAria': 'Zawijaj wiersze bloków kodu',

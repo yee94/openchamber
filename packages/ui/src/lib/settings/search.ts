@@ -238,6 +238,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['copy', 'save image', 'read aloud'],
   },
   {
+    id: 'chat.subagent-read-only-banner',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.allowPromptingSubagentSessions',
+    keywords: ['subagent', 'read only', 'prompt', 'banner'],
+  },
+  {
     id: 'chat.tool-file-icons',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showToolFileIcons',
