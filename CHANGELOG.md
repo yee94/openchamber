@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.20] - 2026-07-12
+
+- **Tool output styling:** align file and Git path labels with the shared secondary tool-description color across progressive and completed tool rows.
+
 ## [1.15.19] - 2026-07-12
 
 - **Cross-runtime session startup:** Web, Electron, and mobile restore project session summaries from the shared SQLite index, while background synchronization stays bounded and session panels avoid redundant global history requests.
