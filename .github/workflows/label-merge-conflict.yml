@@ -11,7 +11,7 @@ permissions: {}
 
 jobs:
   label:
-    if: ${{ github.repository == 'openchamber/openchamber' }}
+    if: ${{ github.repository == 'yee94/openchamber' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

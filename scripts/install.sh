@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # OpenChamber Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/btriapitsyn/openchamber/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/yee94/openchamber/main/scripts/install.sh | bash
 
 set -euo pipefail
 

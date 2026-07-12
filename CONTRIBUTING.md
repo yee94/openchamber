@@ -3,7 +3,7 @@
 ## Getting Started
 
 ```bash
-git clone https://github.com/btriapitsyn/openchamber.git
+git clone https://github.com/yee94/openchamber.git
 cd openchamber
 bun install
 ```
@@ -149,4 +149,4 @@ You can still help:
 
 ## Questions?
 
-Open an [issue](https://github.com/btriapitsyn/openchamber/issues) or ask in [Discord](https://discord.gg/ZYRSdnwwKA).
+Open an [issue](https://github.com/yee94/openchamber/issues) or ask in [Discord](https://discord.gg/ZYRSdnwwKA).
