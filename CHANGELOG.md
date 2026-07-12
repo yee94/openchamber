@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.22] - 2026-07-12
+
+- **Sidebar pinned sessions:** replace the central "Activity" section with per-directory pinned sessions that persist across restarts, reducing session list noise and keeping important conversations visible.
+- **Sidebar focus and navigation:** simplified focus reconciliation and numbered-navigation scoping let keyboard-driven session switching and numbered shortcuts share one recent/visible session row order.
+- **Session-title express refresh:** set `requestedAt` on the session when in-browser generation starts so that reconnects don't retry the same request; the server routes explicit sidebar requests through the same generation flow without depending on the background throttle or the settings gate.
+- **Mobile status bar:** session counter popover respects multi-run and file-review sessions.
+
 ## [1.15.21] - 2026-07-12
 
 - **Tool row layout:** each tool and reasoning block use a stable flow-root wrapper with padding that works consistently in grouped and sequential tool rows, replacing fragile margin collapsing on mobile and desktop.
