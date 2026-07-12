@@ -8,12 +8,20 @@ export const TOOL_ROW_CHIP_GEOMETRY_CLASS = 'rounded-lg px-2 py-0.5';
  * Codex-style interactive chip for chat tool / reasoning headers.
  * Matches sidebar session-row wash (neutral foreground mix — never theme/primary tint).
  * Background only appears on hover — idle rows stay flush with the message body.
- * Tight `py-0.5` keeps row height compact; `my-1.5` spaces tool rows apart.
+ * Tight `py-0.5` keeps row height compact; top-level tool wrappers own vertical padding.
  * `-mx-2` cancels `px-2` so hover wash expands outward without shifting icon/text.
  * `oc-tool-row` opts into pointer cursor even under desktop-runtime neutralization.
  */
 export const TOOL_ROW_CHIP_CLASS =
-  `oc-tool-row -mx-2 ${TOOL_ROW_CHIP_GEOMETRY_CLASS} my-1.5 cursor-pointer`;
+  `oc-tool-row -mx-2 ${TOOL_ROW_CHIP_GEOMETRY_CLASS} cursor-pointer`;
+
+/**
+ * Every top-level tool uses this block wrapper. Padding keeps the rhythm stable
+ * across static and expandable tools without vertical-margin collapsing.
+ */
+export const getToolRowBlockClass = (isMobile: boolean): string => (
+  `flow-root ${isMobile ? 'py-1' : 'py-1.5'}`
+);
 
 /** Hover wash — same formula as sidebar `SIDEBAR_ROW_HOVER_CLASS`. */
 export const TOOL_ROW_CHIP_HOVER_CLASS =

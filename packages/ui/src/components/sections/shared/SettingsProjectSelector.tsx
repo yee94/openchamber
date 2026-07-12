@@ -12,10 +12,6 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 
-const formatProjectLabel = (label: string): string => {
-  return label.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-};
-
 export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ className }) => {
   const { t } = useI18n();
   const projects = useProjectsStore((state) => state.projects);
@@ -39,10 +35,9 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
     return null;
   }
 
-  const rawLabel = activeProject?.label && activeProject.label.trim().length > 0
-    ? activeProject.label
-    : (activeProject?.path.split('/').filter(Boolean).pop() || activeProject?.path || t('settings.shared.projectSelector.fallbackProject'));
-  const label = formatProjectLabel(rawLabel);
+  const label = activeProject?.path.split('/').filter(Boolean).pop()
+    || activeProject?.path
+    || t('settings.shared.projectSelector.fallbackProject');
 
   return (
     <div className={cn(className)}>
@@ -73,10 +68,7 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
             }}
           >
             {sortedProjects.map((project) => {
-              const raw = project.label?.trim()
-                ? project.label.trim()
-                : (project.path.split('/').filter(Boolean).pop() || project.path);
-              const itemLabel = formatProjectLabel(raw);
+              const itemLabel = project.path.split('/').filter(Boolean).pop() || project.path;
               return (
                 <DropdownMenuRadioItem key={project.id} value={project.id}>
                   <span className="min-w-0 truncate typography-ui">{itemLabel}</span>

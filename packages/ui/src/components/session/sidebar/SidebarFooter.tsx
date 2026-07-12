@@ -46,15 +46,21 @@ export function SidebarFooter({
         </>
       ) : null}
       {showUpdateButton ? (
-        <Button
-          type="button"
-          variant="default"
-          size="xs"
-          className="ml-auto border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)] hover:bg-[var(--status-info-background)]/80 hover:text-[var(--status-info)] dark:border-[var(--status-info-border)] dark:bg-[var(--status-info-background)] dark:hover:bg-[var(--status-info-background)]/80"
-          onClick={onOpenUpdate}
-        >
-          {t('sessions.sidebar.footer.actions.update')}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="default"
+              size="icon"
+              className="ml-auto size-8 rounded-full border-[var(--primary-base)] bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] hover:text-[var(--primary-foreground)]"
+              onClick={onOpenUpdate}
+              aria-label={t('sessions.sidebar.footer.actions.update')}
+            >
+              <Icon name="download" className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.update')}</p></TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   );

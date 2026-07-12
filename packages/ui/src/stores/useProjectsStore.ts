@@ -171,8 +171,7 @@ const deriveProjectLabel = (path: string): string => {
     return 'Root';
   }
   const segments = normalized.split('/').filter(Boolean);
-  const raw = segments[segments.length - 1] || normalized;
-  return raw.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return segments[segments.length - 1] || normalized;
 };
 
 const sanitizeProjectIconImage = (value: unknown): ProjectEntry['iconImage'] | undefined => {

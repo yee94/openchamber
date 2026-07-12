@@ -127,15 +127,13 @@ const basenameOf = (p: string): string => {
 // worktree's recorded branch when the directory isn't currently synced.
 const resolveSessionSubtitle = (
   directory: string,
-  session: Session,
   projects: ProjectEntry[],
   worktreesByProject: Map<string, WorktreeMetadata[]>,
   branchByDirectory: Map<string, string>,
 ): string => {
   if (!directory) return '';
   const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);
-  const globalProjectName = (session as { project?: { name?: string } | null }).project?.name;
-  const projectName = project?.label?.trim() || globalProjectName?.trim() || basenameOf(directory);
+  const projectName = project ? basenameOf(project.path) : basenameOf(directory);
   const normDir = normalizeProjectPath(directory);
 
   // Branch resolution, most-authoritative first: live VCS from the sync store,
@@ -384,7 +382,7 @@ const buildSnapshot = (instanceName: string): TraySnapshot => {
         unseen: family.reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0),
         hasError: family.some((id) => notif.unseenHasError[id] ?? false),
         directory,
-        subtitle: resolveSessionSubtitle(directory, session, projects, worktreesByProject, live.branchByDirectory),
+        subtitle: resolveSessionSubtitle(directory, projects, worktreesByProject, live.branchByDirectory),
       };
     });
 

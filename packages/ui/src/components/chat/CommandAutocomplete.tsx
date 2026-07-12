@@ -48,6 +48,19 @@ const NEUTRAL_BADGE_CLASS = cn(
   "bg-[var(--surface-muted)] text-muted-foreground border-[var(--interactive-border)]/60"
 );
 
+const sortCommands = (searchQuery: string) => (a: CommandInfo, b: CommandInfo) => {
+  if (a.isBuiltIn !== b.isBuiltIn) {
+    return a.isBuiltIn ? -1 : 1;
+  }
+
+  const normalizedQuery = searchQuery.toLowerCase();
+  const aStartsWith = a.name.toLowerCase().startsWith(normalizedQuery);
+  const bStartsWith = b.name.toLowerCase().startsWith(normalizedQuery);
+  if (aStartsWith && !bStartsWith) return -1;
+  if (!aStartsWith && bStartsWith) return 1;
+  return a.name.localeCompare(b.name);
+};
+
 interface CommandAutocompleteProps {
   searchQuery: string;
   onCommandSelect: (command: CommandInfo, submit?: boolean) => void;
@@ -194,14 +207,9 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             )
           : allCommands).filter(cmd => allowInitCommand || cmd.name !== 'init');
 
-        filtered.sort((a, b) => {
-          const aStartsWith = a.name.toLowerCase().startsWith(searchQuery.toLowerCase());
-          const bStartsWith = b.name.toLowerCase().startsWith(searchQuery.toLowerCase());
-          if (aStartsWith && !bStartsWith) return -1;
-          if (!aStartsWith && bStartsWith) return 1;
-          return a.name.localeCompare(b.name);
-        });
+        filtered.sort(sortCommands(searchQuery));
 
+        filtered.sort(sortCommands(searchQuery));
         setCommands(filtered);
       } catch {
 

@@ -387,8 +387,7 @@ const ReadOnlyPromptBanner: React.FC = () => {
 };
 
 const getProjectDisplayLabel = (project: { label?: string; path: string }): string => {
-    const label = project.label?.trim();
-    return label || formatDirectoryName(project.path);
+    return formatDirectoryName(project.path);
 };
 
 const renderDraftTitle = (title: string, projectLabel: string | null): React.ReactNode => {

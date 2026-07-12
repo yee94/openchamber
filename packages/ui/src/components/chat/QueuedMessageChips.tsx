@@ -162,7 +162,7 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
             <div className="overflow-hidden rounded-lg border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm md:rounded-xl">
                 <div className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left md:gap-2 md:px-3 md:py-2">
                     <span className="flex-shrink-0 typography-micro font-medium leading-4 text-foreground md:typography-ui-label">
-                        {t('chat.queuedMessage.title')} {queuedMessages.length}
+                        {t('chat.queuedMessage.title', { count: queuedMessages.length })}
                     </span>
                     <Icon name="time" className="ml-auto size-3.5 text-muted-foreground md:size-4" aria-hidden="true" />
                 </div>

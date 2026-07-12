@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '@/lib/i18n';
 import { BusyDots } from './BusyDots';
 
 interface WorkingPlaceholderProps {
@@ -25,33 +26,6 @@ const toRetryTargetTimestamp = (next: number): number => {
   return Date.now() + next;
 };
 
-const formatRetryCountdown = (seconds: number): string => {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60);
-    const remainderSeconds = seconds % 60;
-    return remainderSeconds > 0 ? `${minutes}m ${remainderSeconds}s` : `${minutes}m`;
-  }
-
-  if (seconds < 86400) {
-    const hours = Math.floor(seconds / 3600);
-    const remainderMinutes = Math.floor((seconds % 3600) / 60);
-    return remainderMinutes > 0 ? `${hours}h ${remainderMinutes}m` : `${hours}h`;
-  }
-
-  const days = Math.floor(seconds / 86400);
-  const remainderHours = Math.floor((seconds % 86400) / 3600);
-  if (remainderHours > 0) {
-    return `${days}d ${remainderHours}h`;
-  }
-
-  return `${days}d`;
-
-};
-
 export function WorkingPlaceholder({
   isWorking,
   statusText,
@@ -59,6 +33,7 @@ export function WorkingPlaceholder({
   isWaitingForPermission,
   retryInfo,
 }: WorkingPlaceholderProps) {
+  const { locale, t } = useI18n();
   const [displayedText, setDisplayedText] = React.useState<string | null>(null);
   const [displayedPermission, setDisplayedPermission] = React.useState<boolean>(false);
   const displayedTextRef = React.useRef(displayedText);
@@ -137,7 +112,7 @@ export function WorkingPlaceholder({
       return;
     }
 
-    const incomingText = isWaitingForPermission ? 'waiting for permission' : statusText;
+    const incomingText = isWaitingForPermission ? t('chat.assistantStatus.waitingForPermission') : statusText;
     const incomingPermission = Boolean(isWaitingForPermission);
     const incomingGeneric = Boolean(isGenericStatus) && !incomingPermission;
 
@@ -176,6 +151,7 @@ export function WorkingPlaceholder({
     clearTimers,
     showStatus,
     scheduleQueueProcess,
+    t,
   ]);
 
   React.useEffect(() => () => clearTimers(), [clearTimers]);
@@ -186,11 +162,16 @@ export function WorkingPlaceholder({
 
   // Retry state: show countdown and attempt info
   if (retryInfo) {
-    const attemptLabel = retryInfo.attempt && retryInfo.attempt > 1 ? ` (attempt ${retryInfo.attempt})` : '';
-    const countdownLabel = retryCountdown !== null && retryCountdown > 0
-      ? ` in ${formatRetryCountdown(retryCountdown)}`
-      : '';
-    const retryText = `Retrying${countdownLabel}${attemptLabel}`;
+    const retryDuration = retryCountdown !== null && retryCountdown > 0
+      ? new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'short' }).format(retryCountdown, 'second')
+      : null;
+    const retryText = retryDuration
+      ? retryInfo.attempt && retryInfo.attempt > 1
+        ? t('chat.assistantStatus.retryingInAttempt', { duration: retryDuration, attempt: retryInfo.attempt })
+        : t('chat.assistantStatus.retryingIn', { duration: retryDuration })
+      : retryInfo.attempt && retryInfo.attempt > 1
+        ? t('chat.assistantStatus.retryingAttempt', { attempt: retryInfo.attempt })
+        : t('chat.assistantStatus.retrying');
 
     return (
       <div
@@ -211,7 +192,7 @@ export function WorkingPlaceholder({
     return null;
   }
 
-  const label = displayedText.charAt(0).toUpperCase() + displayedText.slice(1);
+  const label = displayedText;
 
   return (
     <div

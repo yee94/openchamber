@@ -59,7 +59,7 @@ const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLA
 const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 /** Agent Task 内部摘要行：比工具标题小一号，行高与行距保持匀称 */
 const TASK_SUMMARY_TEXT_CLASS = 'typography-micro !text-[length:calc(var(--text-meta)-0.0625rem)] !leading-5 tracking-normal';
-const TASK_SUMMARY_LIST_CLASS = 'w-full min-w-0 space-y-1';
+const TASK_SUMMARY_LIST_CLASS = 'flex w-full min-w-0 flex-col gap-1';
 
 /** 从 task input 解析子 Agent 名（OpenCode 子 Agent 不一定在主选择器里） */
 const resolveTaskAgentName = (input: Record<string, unknown> | undefined): string | undefined => {
@@ -1438,7 +1438,7 @@ const TaskToolSummary: React.FC<{
 
     if (entries.length === 0 && !hasOutput && !sessionId) {
         return (
-            <div className="relative pr-2 pb-1.5 pt-0.5 space-y-1 pl-[1.4375rem]">
+            <div className="relative flex flex-col gap-1 pr-2 pb-1.5 pt-0.5 pl-[1.4375rem]">
                 <div className={cn(TASK_SUMMARY_TEXT_CLASS, 'text-muted-foreground/70')}>
                     {isActive ? 'Waiting for subagent activity...' : 'No subagent session id on task metadata.'}
                 </div>
@@ -1449,7 +1449,7 @@ const TaskToolSummary: React.FC<{
     return (
         <div
             className={cn(
-                'relative pr-2 pb-1.5 pt-0.5 space-y-1 pl-[1.4375rem]',
+                'relative flex flex-col gap-1 pr-2 pb-1.5 pt-0.5 pl-[1.4375rem]',
                 'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
                 'before:top-0 before:bottom-0'
             )}
@@ -1477,7 +1477,7 @@ const TaskToolSummary: React.FC<{
             )}
 
             {hasOutput ? (
-                <div className={cn('space-y-1', (entries.length > 0 || sessionId) && 'pt-1')}
+                <div className={cn('flex flex-col gap-1', (entries.length > 0 || sessionId) && 'pt-1')}
                 >
                     <button
                         type="button"
@@ -1823,7 +1823,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
             return (
                 <div
-                    className="tool-output-surface rounded-xl border p-2 space-y-2"
+                    className="tool-output-surface flex flex-col gap-2 rounded-xl border p-2"
                     style={{
                         borderColor: 'var(--status-error-border)',
                         backgroundColor: 'var(--status-error-background)',
@@ -1832,11 +1832,11 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                     <div className="typography-meta font-medium" style={{ color: 'var(--status-error)' }}>
                         {t('chat.toolPart.lspErrors')}
                     </div>
-                    <div className="space-y-1">
+                    <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1 min-w-0">
                             {renderPathLikeGitChanges(diagnosticSection.displayPath, false)}
                         </div>
-                        <div className="space-y-1">
+                        <div className="flex flex-col gap-1">
                             {diagnosticSection.diagnostics.map((diagnostic, index) => (
                                 <div key={`${diagnosticSection.displayPath}:${diagnostic.line}:${diagnostic.character}:${index}`} className="rounded-md border px-2 py-1" style={{ borderColor: 'var(--status-error-border)', backgroundColor: 'var(--surface-elevated)' }}>
                                     <div className="flex items-start gap-2 min-w-0">
@@ -1866,9 +1866,9 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 const parsedQA = parseQuestionOutput(outputString);
                 if (parsedQA && parsedQA.length > 0) {
                     return renderScrollableBlock(
-                        <div className="space-y-2">
+                        <div className="flex flex-col gap-2">
                             {parsedQA.map((qa, index) => (
-                                <div key={index} className="space-y-0.5">
+                                <div key={index} className="flex flex-col gap-0.5">
                                     <div className="typography-micro text-muted-foreground">{qa.question}</div>
                                     <div className="typography-meta text-foreground whitespace-pre-wrap">{qa.answer}</div>
                                 </div>
@@ -1881,8 +1881,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
             if (state.status === 'error' && 'error' in state) {
                 return (
-                    <div>
-                        <div className="typography-meta font-medium text-muted-foreground mb-1">{t('chat.toolPart.error')}</div>
+                    <div className="flex flex-col gap-1">
+                        <div className="typography-meta font-medium text-muted-foreground">{t('chat.toolPart.error')}</div>
                         <div className="typography-meta p-2 rounded-xl border" style={{
                             backgroundColor: 'var(--status-error-background)',
                             color: 'var(--status-error)',
@@ -1900,9 +1900,9 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             const questionInput = input as { questions?: Array<{ question?: string; header?: string; options?: Array<{ label: string; description: string }>; multiple?: boolean }> } | undefined;
             if (questionInput?.questions && Array.isArray(questionInput.questions) && questionInput.questions.length > 0) {
                 return renderScrollableBlock(
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                         {questionInput.questions.map((q, index) => (
-                            <div key={index} className="space-y-0.5">
+                            <div key={index} className="flex flex-col gap-0.5">
                                 {q.header ? (
                                     <div className="typography-micro text-muted-foreground">{q.header}</div>
                                 ) : null}
@@ -1936,7 +1936,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
         if ((part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch' || part.tool === 'write') && (diffEntries.length > 0 || !!diagnosticSection)) {
             return renderScrollableBlock(
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                     {diffEntries.map((entry) => (
                         <div key={entry.id} className="w-full min-w-0">
                             {entry.renderMode === 'diff' ? (
@@ -1959,7 +1959,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
         if (part.tool === 'write' && diagnosticSection) {
             return renderScrollableBlock(
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                     {renderDiagnosticsSection()}
                 </div>,
                 { className: 'p-1' },
@@ -1994,8 +1994,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     if (isTodoTool) {
         if (state.status === 'error' && 'error' in state) {
             return (
-                <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-4">
-                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
+                <div className="relative flex flex-col gap-2 pr-2 pb-2 pt-2 pl-4">
+                    <div className="typography-meta font-medium text-muted-foreground/80">{t('chat.toolPart.error')}</div>
                     <div className="typography-meta p-2 rounded-xl border" style={{
                         backgroundColor: 'var(--status-error-background)',
                         color: 'var(--status-error)',
@@ -2016,7 +2016,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         }, { unstyled: true });
 
         return (
-            <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-4">
+            <div className="relative flex flex-col gap-2 pr-2 pb-2 pt-2 pl-4">
                 {renderScrollableBlock(
                     todoOutput ?? (
                         <ToolScrollableTextOutput
@@ -2035,7 +2035,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     return (
         <div
             className={cn(
-                'relative pr-2 pb-2 pt-2 space-y-2 pl-4'
+                'relative flex flex-col gap-2 pr-2 pb-2 pt-2 pl-4'
             )}
         >
             {part.tool === 'question' ? (
@@ -2043,7 +2043,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             ) : (
                 <>
                     {hasInputText ? (
-                        <div className="my-1">
+                        <div>
                             {renderScrollableBlock(
                                 part.tool === 'bash' ? (
                                     <pre className="tool-input-text whitespace-pre-wrap break-words typography-code text-muted-foreground/90 m-0 p-0">
@@ -2076,8 +2076,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                     )}
 
                     {state.status === 'error' && 'error' in state && (
-                        <div>
-                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
+                        <div className="flex flex-col gap-1">
+                            <div className="typography-meta font-medium text-muted-foreground/80">{t('chat.toolPart.error')}</div>
                             <div className="typography-meta p-2 rounded-xl border" style={{
                                 backgroundColor: 'var(--status-error-background)',
                                 color: 'var(--status-error)',
@@ -2171,6 +2171,9 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
         const element = expandedContentRef.current;
         if (!element) {
+            if (shouldNotifyStructuralChange) {
+                onContentChangeRef.current?.('structural');
+            }
             return;
         }
 
@@ -2865,13 +2868,13 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 />
             ) : null}
 
-            {!isTaskTool && !isFileNavTool ? (
+            {!isTaskTool && !isFileNavTool && isExpanded ? (
                 <div
                     ref={expandedContentRef}
-                    aria-hidden={!isExpanded}
+                    aria-hidden={false}
                     style={{
-                        height: isExpanded ? 'auto' : '0px',
-                        overflow: isExpanded ? 'visible' : 'hidden',
+                        height: 'auto',
+                        overflow: 'visible',
                         overflowAnchor: 'none',
                     }}
                 >

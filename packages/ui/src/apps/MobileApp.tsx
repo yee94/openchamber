@@ -656,7 +656,7 @@ const getProjectLabel = (path: string): string => {
   const normalized = normalizePath(path);
   if (!normalized) return '';
   const segments = normalized.split('/').filter(Boolean);
-  return segments[segments.length - 1]?.replace(/[-_]/g, ' ') || normalized;
+  return segments[segments.length - 1] || normalized;
 };
 
 type OverflowItem = {
@@ -675,7 +675,7 @@ type ContextDisplay = {
 } | null;
 
 const getProjectDisplayLabel = (project: ProjectEntry | null, fallbackDirectory: string): string => {
-  if (project) return project.label?.trim() || getProjectLabel(project.path);
+  if (project) return getProjectLabel(project.path);
   return getProjectLabel(fallbackDirectory);
 };
 

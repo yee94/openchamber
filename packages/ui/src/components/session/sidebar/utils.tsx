@@ -195,12 +195,6 @@ export const isSessionRelatedToProject = (
 };
 
 
-export const formatProjectLabel = (label: string): string => {
-  return label
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-};
-
 /** Codex-style muted hint / empty / show-more row under a project or section.
  *  Matches session-row horizontal padding (px-2) so grey copy shares the same
  *  left edge as list chips — no extra indent, no flush selection look. */

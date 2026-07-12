@@ -7,10 +7,6 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 
 const APP_TITLE = 'OpenChamber';
 
-const formatProjectLabel = (label: string): string => {
-  return label.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-};
-
 const getProjectNameFromPath = (path: string): string => {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
   const segments = normalized.split('/').filter(Boolean);
@@ -35,14 +31,9 @@ export const useWindowTitle = () => {
       return null;
     }
 
-    const label = activeProject.label?.trim();
-    if (label) {
-      return formatProjectLabel(label);
-    }
-
     const pathName = getProjectNameFromPath(activeProject.path);
     if (pathName) {
-      return formatProjectLabel(pathName);
+      return pathName;
     }
 
     return null;

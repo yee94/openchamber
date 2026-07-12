@@ -237,6 +237,7 @@ All scripts are in `package.json`.
 - React: prefer function components + hooks; use classes only when required.
 - Control flow: prefer early returns and explicit branching over nested ternaries.
 - Styling: Tailwind v4, typography via `packages/ui/src/lib/typography.ts`, theme vars via `packages/ui/src/lib/theme/`.
+- Mobile UI: use runtime device signals for mobile-specific layout and spacing. `isMobile` controls JSX layout; `:root.mobile-pointer` controls touch-mode CSS and can change with pointer capabilities. Viewport breakpoints serve responsive sizing; wide mobile shells can match desktop breakpoints.
 - Shared UI patterns: reuse shared primitives before introducing feature-local markup patterns.
 - Toasts: use the wrapper from `@/components/ui`; do not import `sonner` directly in feature code.
 - No new deps unless asked.
@@ -456,13 +457,6 @@ A single store with N properties means every subscriber re-evaluates on every st
 - When handling optimistic updates, ask: where is rollback, reconciliation, and duplicate prevention?
 - When changing shared routes or state contracts, ask: what breaks in web, desktop, and VS Code?
 - When fixing a bug with a heuristic, prefer narrowing the heuristic over widening it.
-
-## Validation expectations
-
-- Run type-check/lint validation before finalizing source-code changes that can affect TypeScript, runtime behavior, builds, lint rules, package resolution, or generated assets, and run `bun run dead-code` when the change can add, remove, rename, or reshape files, exports, types, workspace entrypoints, or module imports. Keep validation scoped to the edited workspace by default. Prefer the package-level command for the package you changed (for example the relevant workspace's `type-check`/`lint`) instead of workspace-wide `bun run type-check` / `bun run lint`. Use workspace-wide checks only when the change spans multiple workspaces, shared package contracts, root tooling/config, dependency resolution, generated assets used across packages, or when a narrower command cannot cover the risk. Use a sufficiently long tool timeout for any broad checks (for example 240000ms) so successful package-level results are not lost to a tool timeout. For docs-only or isolated config-only changes, run the narrowest relevant validation instead (for example JSON/schema validation) and do not run full checks unless the change can affect code execution.
-- For hot-path changes, verify behavior under streaming or repeated events, not just static render.
-- For sync or startup changes, verify fresh load, retry/failure, and restart behavior.
-- For session changes, verify create, stream, abort, permission, archive/delete, and revisit flows when relevant.
 
 ## Recent changes
 

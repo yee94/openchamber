@@ -5,6 +5,7 @@ import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectorySync, useSessionPermissions, useSessionQuestions, useSessionStatus } from '@/sync/sync-context';
 import { isFullySyntheticMessage } from '@/lib/messages/synthetic';
+import { useI18n, type I18nKey, type I18nParams } from '@/lib/i18n';
 import { useCurrentSessionActivity } from './useSessionActivity';
 
 type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
@@ -67,42 +68,42 @@ const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_PARTS: Part[] = [];
 const STATUS_SIGNATURE_SEPARATOR = '\u0000';
 const EDITING_TOOLS = new Set(['edit', 'write', 'multiedit', 'apply_patch']);
-const TOOL_STATUS_PHRASES: Record<string, string> = {
-    read: 'reading file',
-    write: 'writing file',
-    edit: 'editing file',
-    multiedit: 'editing files',
-    apply_patch: 'applying patch',
-    bash: 'running command',
-    grep: 'searching content',
-    glob: 'finding files',
-    list: 'listing directory',
-    task: 'delegating task',
-    webfetch: 'fetching URL',
-    websearch: 'searching web',
-    codesearch: 'web code search',
-    todowrite: 'updating todos',
-    todoread: 'reading todos',
-    skill: 'learning skill',
-    question: 'asking question',
-    plan_enter: 'switching to planning',
-    plan_exit: 'switching to building',
+const TOOL_STATUS_KEYS: Record<string, I18nKey> = {
+    read: 'chat.assistantStatus.readingFile',
+    write: 'chat.assistantStatus.writingFile',
+    edit: 'chat.assistantStatus.editingFile',
+    multiedit: 'chat.assistantStatus.editingFiles',
+    apply_patch: 'chat.assistantStatus.applyingPatch',
+    bash: 'chat.assistantStatus.runningCommand',
+    grep: 'chat.assistantStatus.searchingContent',
+    glob: 'chat.assistantStatus.findingFiles',
+    list: 'chat.assistantStatus.listingDirectory',
+    task: 'chat.assistantStatus.delegatingTask',
+    webfetch: 'chat.assistantStatus.fetchingUrl',
+    websearch: 'chat.assistantStatus.searchingWeb',
+    codesearch: 'chat.assistantStatus.webCodeSearch',
+    todowrite: 'chat.assistantStatus.updatingTodos',
+    todoread: 'chat.assistantStatus.readingTodos',
+    skill: 'chat.assistantStatus.learningSkill',
+    question: 'chat.assistantStatus.askingQuestion',
+    plan_enter: 'chat.assistantStatus.switchingToPlanning',
+    plan_exit: 'chat.assistantStatus.switchingToBuilding',
 };
-const WORKING_PHRASES = [
-    'working',
-    'processing',
-    'preparing',
-    'warming up',
-    'gears turning',
-    'computing',
-    'calculating',
-    'analyzing',
-    'wheels spinning',
-    'calibrating',
-    'synthesizing',
-    'connecting dots',
-    'inspecting logic',
-    'weighing options',
+const WORKING_PHRASE_KEYS: I18nKey[] = [
+    'chat.assistantStatus.working',
+    'chat.assistantStatus.processing',
+    'chat.assistantStatus.preparing',
+    'chat.assistantStatus.warmingUp',
+    'chat.assistantStatus.gearsTurning',
+    'chat.assistantStatus.computing',
+    'chat.assistantStatus.calculating',
+    'chat.assistantStatus.analyzing',
+    'chat.assistantStatus.wheelsSpinning',
+    'chat.assistantStatus.calibrating',
+    'chat.assistantStatus.synthesizing',
+    'chat.assistantStatus.connectingDots',
+    'chat.assistantStatus.inspectingLogic',
+    'chat.assistantStatus.weighingOptions',
 ];
 
 type ParsedStatusResult = {
@@ -112,8 +113,9 @@ type ParsedStatusResult = {
     isGenericStatus: boolean;
 };
 
-const getToolStatusPhrase = (toolName: string): string => {
-    return TOOL_STATUS_PHRASES[toolName] ?? `using ${toolName}`;
+const getToolStatusPhrase = (toolName: string, t: (key: I18nKey, params?: I18nParams) => string): string => {
+    const key = TOOL_STATUS_KEYS[toolName];
+    return key ? t(key) : t('chat.assistantStatus.usingTool', { tool: toolName });
 };
 
 const hashString = (value: string): number => {
@@ -124,11 +126,16 @@ const hashString = (value: string): number => {
     return Math.abs(hash);
 };
 
-const getStableWorkingPhrase = (key: string): string => {
-    return WORKING_PHRASES[hashString(key) % WORKING_PHRASES.length] ?? 'working';
+const getStableWorkingPhrase = (key: string, t: (key: I18nKey, params?: I18nParams) => string): string => {
+    const phraseKey = WORKING_PHRASE_KEYS[hashString(key) % WORKING_PHRASE_KEYS.length] ?? 'chat.assistantStatus.working';
+    return t(phraseKey);
 };
 
-const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResult => {
+const createParsedStatus = (
+    parts: Part[],
+    genericKey: string,
+    t: (key: I18nKey, params?: I18nParams) => string,
+): ParsedStatusResult => {
     let activePartType: ParsedStatusResult['activePartType'] = undefined;
     let activeToolName: string | undefined = undefined;
 
@@ -179,11 +186,11 @@ const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResu
 
     const isGenericStatus = activePartType === undefined;
     const statusText = (() => {
-        if (activePartType === 'editing') return activeToolName === 'multiedit' ? getToolStatusPhrase(activeToolName) : 'editing file';
-        if (activePartType === 'tool' && activeToolName) return getToolStatusPhrase(activeToolName);
-        if (activePartType === 'reasoning') return 'thinking';
-        if (activePartType === 'text') return 'composing';
-        return getStableWorkingPhrase(genericKey);
+        if (activePartType === 'editing') return activeToolName === 'multiedit' ? getToolStatusPhrase(activeToolName, t) : t('chat.assistantStatus.editingFile');
+        if (activePartType === 'tool' && activeToolName) return getToolStatusPhrase(activeToolName, t);
+        if (activePartType === 'reasoning') return t('chat.assistantStatus.thinking');
+        if (activePartType === 'text') return t('chat.assistantStatus.composing');
+        return getStableWorkingPhrase(genericKey, t);
     })();
 
     return { activePartType, activeToolName, statusText, isGenericStatus };
@@ -248,6 +255,7 @@ const getToolDisplayName = (part: ToolPart): string => {
 };
 
 export function useAssistantStatus(): AssistantStatusSnapshot {
+    const { t } = useI18n();
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
 
@@ -274,8 +282,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         React.useCallback((state) => {
             const genericKey = `${currentSessionId ?? ''}:${lastAssistantId ?? ''}`;
             const parts = lastAssistantId ? (state.part[lastAssistantId] ?? EMPTY_PARTS) : EMPTY_PARTS;
-            return encodeParsedStatus(createParsedStatus(parts, genericKey));
-        }, [currentSessionId, lastAssistantId]),
+            return encodeParsedStatus(createParsedStatus(parts, genericKey, t));
+        }, [currentSessionId, lastAssistantId, t]),
         currentSessionDirectory ?? undefined,
     );
 
@@ -404,12 +412,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
         return {
             ...baseWorking,
-            statusText: 'waiting for permission',
+            statusText: t('chat.assistantStatus.waitingForPermission'),
             isWaitingForPermission: true,
             canAbort: false,
             retryInfo: null,
         };
-    }, [baseWorking, sessionPermissionRequests, sessionQuestionRequests]);
+    }, [baseWorking, sessionPermissionRequests, sessionQuestionRequests, t]);
 
     return {
         forming,

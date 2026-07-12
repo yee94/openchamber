@@ -21,6 +21,11 @@ describe('matchesModelSearch', () => {
     expect(matchesModelSearch('Claude Sonnet 4.5', 'claude-sonnet-4.5')).toBe(true);
   });
 
+  test('matches project names when separators differ', () => {
+    expect(matchesModelSearch('oh-my-opencode-slim', 'oh my opencode')).toBe(true);
+    expect(matchesModelSearch('openchamber-yee', 'openchamberyee')).toBe(true);
+  });
+
   test('still matches plain substrings and empty query', () => {
     expect(matchesModelSearch('GPT-5.5', 'gpt-5')).toBe(true);
     expect(matchesModelSearch('Gemini 3.5 Flash', '')).toBe(true);

@@ -38,7 +38,7 @@ import { Icon } from "@/components/icon/Icon";
 import { formatTimestampForDisplay } from './timeFormat';
 import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
 import { StaticToolRow } from './parts/ProgressiveGroup';
-import { TOOL_ROW_CHIP_GEOMETRY_CLASS } from './parts/toolRowChrome';
+import { getToolRowBlockClass, TOOL_ROW_CHIP_GEOMETRY_CLASS } from './parts/toolRowChrome';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 import { createProjectPlanFile } from '@/lib/openchamberConfig';
@@ -1545,7 +1545,7 @@ const AssistantMessageBody = React.memo(({
                     return;
                 }
                 rendered.push(
-                    <div key={`progressive-group-${segment.id}`} className="mb-3">
+                    <div key={`progressive-group-${segment.id}`}>
                         <TurnActivity
                             parts={visibleSegmentParts}
                             isExpanded={turnGroupingContext.isGroupExpanded === true}
@@ -1636,13 +1636,14 @@ const AssistantMessageBody = React.memo(({
                     } else {
                         // Per-part mode: each reasoning block at its natural position.
                         rendered.push(
-                            <ReasoningPart
-                                key={`reasoning-${messageId}-${i}`}
-                                part={part}
-                                messageId={messageId}
-                                streamPhase={effectiveStreamPhase}
-                                onContentChange={onContentChange}
-                            />
+                            <div key={`reasoning-${messageId}-${i}`} className={getToolRowBlockClass(isMobile)}>
+                                <ReasoningPart
+                                    part={part}
+                                    messageId={messageId}
+                                    streamPhase={effectiveStreamPhase}
+                                    onContentChange={onContentChange}
+                                />
+                            </div>
                         );
                     }
                 }
@@ -1673,20 +1674,22 @@ const AssistantMessageBody = React.memo(({
                 // Expandable tools: bash, edit, write, task, question — individual rows
                 if (isExpandableTool(toolName)) {
                     rendered.push(
-                        <FadeInOnReveal key={`tool-${toolPart.id}`}>
-                            <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
-                                <ToolPart
-                                    part={toolPart}
-                                    isExpanded={expandedTools.has(toolPart.id)}
-                                    onToggle={onToggleTool}
-                                    isMobile={isMobile}
-                                    alwaysShowActions={alwaysShowMessageActions}
-                                    onContentChange={onContentChange}
-                                    onShowPopup={onShowPopup}
-                                    animateTailText={animatedToolIdsLookup.has(toolPart.id)}
-                                />
-                            </ToolRevealOnMount>
-                        </FadeInOnReveal>
+                        <div key={`tool-${toolPart.id}`} className={getToolRowBlockClass(isMobile)}>
+                            <FadeInOnReveal>
+                                <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
+                                    <ToolPart
+                                        part={toolPart}
+                                        isExpanded={expandedTools.has(toolPart.id)}
+                                        onToggle={onToggleTool}
+                                        isMobile={isMobile}
+                                        alwaysShowActions={alwaysShowMessageActions}
+                                        onContentChange={onContentChange}
+                                        onShowPopup={onShowPopup}
+                                        animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                    />
+                                </ToolRevealOnMount>
+                            </FadeInOnReveal>
+                        </div>
                     );
                     i++;
                     continue;
@@ -1694,24 +1697,26 @@ const AssistantMessageBody = React.memo(({
 
                 // Static tools: one row per tool call (no grouping)
                 rendered.push(
-                    <FadeInOnReveal key={`static-tools-${toolPart.id}`}>
-                        <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
-                            <StaticToolRow
-                                toolName={toolName}
-                                activities={[
-                                    {
-                                        id: toolPart.id,
-                                        turnId: '',
-                                        messageId,
-                                        partIndex: 0,
-                                        part: toolPart,
-                                        kind: 'tool' as const,
-                                    },
-                                ]}
-                                animateTailText={animatedToolIdsLookup.has(toolPart.id)}
-                            />
-                        </ToolRevealOnMount>
-                    </FadeInOnReveal>
+                    <div key={`static-tools-${toolPart.id}`} className={getToolRowBlockClass(isMobile)}>
+                        <FadeInOnReveal>
+                            <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
+                                <StaticToolRow
+                                    toolName={toolName}
+                                    activities={[
+                                        {
+                                            id: toolPart.id,
+                                            turnId: '',
+                                            messageId,
+                                            partIndex: 0,
+                                            part: toolPart,
+                                            kind: 'tool' as const,
+                                        },
+                                    ]}
+                                    animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                />
+                            </ToolRevealOnMount>
+                        </FadeInOnReveal>
+                    </div>
                 );
                 i++;
                 continue;
@@ -1897,7 +1902,7 @@ const AssistantMessageBody = React.memo(({
                     {showErrorMessage && (
                         <FadeInOnReveal key="assistant-error">
                             <div className={cn(
-                                'group/assistant-text relative break-words max-w-full',
+                                'group/assistant-text relative flow-root my-1.5 break-words max-w-full',
                                 // Info: quiet chip — 圆角/padding 与 tool row 几何一致
                                 // Error: keep a clearer callout.
                                 // 移动端：-ml-2.5 抵消 px-2.5，info 图标与正文 / copy 同左缘

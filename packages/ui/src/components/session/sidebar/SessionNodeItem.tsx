@@ -37,6 +37,7 @@ import { useShiftKeyHeld } from '@/hooks/useShiftKeyHeld';
 import { useDelayedModKeyHeld } from '@/hooks/useDelayedModKeyHeld';
 import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
+import { opencodeClient } from '@/lib/opencode/client';
 import { parseMultiRunSessionTitle } from '@/lib/multirun/title';
 import { MultiRunFusionDialog } from '@/components/multirun/MultiRunFusionDialog';
 import { FusionIcon } from '@/components/icons/FusionIcon';
@@ -333,6 +334,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const handleSaveEditRef = React.useRef(handleSaveEdit);
   handleSaveEditRef.current = handleSaveEdit;
   const [renameDraft, setRenameDraft] = React.useState(editTitle);
+  const [pendingSmartTitle, setPendingSmartTitle] = React.useState<string | null>(null);
   const renameDraftRef = React.useRef(renameDraft);
   renameDraftRef.current = renameDraft;
   const renameTargetRef = React.useRef<string | null>(null);
@@ -407,6 +409,37 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     }
   }, [isActive, rowFocus]);
   const sessionTitle = resolvedSession.title || t('sessions.sidebar.session.untitled');
+  const titleRefreshMetadata = (resolvedSession as Session & {
+    metadata?: {
+      openchamber?: {
+        titleRefresh?: {
+          isGenerating?: unknown;
+          lastError?: unknown;
+          failedAt?: unknown;
+        };
+      };
+    };
+  }).metadata?.openchamber?.titleRefresh;
+  const titleGenerationError = typeof titleRefreshMetadata?.lastError === 'string'
+    ? titleRefreshMetadata.lastError
+    : null;
+  const titleGenerationFailedAt = typeof titleRefreshMetadata?.failedAt === 'number'
+    ? titleRefreshMetadata.failedAt
+    : null;
+  React.useEffect(() => {
+    if (!titleGenerationError || titleGenerationFailedAt === null) return;
+    setPendingSmartTitle(null);
+    console.warn(`[session-title] generation failed for ${session.id}: ${titleGenerationError}`);
+  }, [session.id, titleGenerationError, titleGenerationFailedAt]);
+  React.useEffect(() => {
+    if (pendingSmartTitle === null) return;
+    if (sessionTitle !== pendingSmartTitle) {
+      setPendingSmartTitle(null);
+      return;
+    }
+    const timeout = window.setTimeout(() => setPendingSmartTitle(null), 30_000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingSmartTitle, sessionTitle]);
   const hasChildren = node.children.length > 0
     || Boolean((resolvedSession as Session & { hasChildren?: boolean }).hasChildren);
   const isPinnedSession = pinnedSessionIds.has(session.id);
@@ -555,10 +588,42 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   }, [editingId, editTitle, session.id]);
 
   if (editingId === session.id) {
+    const handleEnableSmartTitle = async () => {
+      setPendingSmartTitle(sessionTitle);
+      handleCancelEdit();
+      const metadata = (resolvedSession as Session & { metadata?: Record<string, unknown> }).metadata ?? {};
+      const openchamber = metadata.openchamber && typeof metadata.openchamber === 'object'
+        ? metadata.openchamber as Record<string, unknown>
+        : {};
+      const titleRefresh = openchamber.titleRefresh && typeof openchamber.titleRefresh === 'object'
+        ? openchamber.titleRefresh as Record<string, unknown>
+        : {};
+
+      try {
+        await opencodeClient.updateSession(session.id, {
+          metadata: {
+            ...metadata,
+            openchamber: {
+              ...openchamber,
+              titleRefresh: {
+                ...titleRefresh,
+                lastAutoTitle: sessionTitle,
+                requestedAt: Date.now(),
+              },
+            },
+          },
+        }, sessionDirectory);
+      } catch (error) {
+        setPendingSmartTitle(null);
+        console.warn('[session-sidebar] failed to request smart title:', error);
+      }
+    };
+
     return (
       <div
         key={session.id}
-        className={cn('group relative flex items-center rounded-sm px-1.5 py-1')}
+        className="group relative my-0.5 flex items-center rounded-lg py-1.5 pr-2"
+        style={{ paddingLeft: getSidebarRowPaddingLeft(depth) }}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
@@ -584,21 +649,21 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
               }}
             />
             <button
+              type="button"
+              onClick={() => { void handleEnableSmartTitle(); }}
+              aria-label={t('sessions.sidebar.session.rename.smartTitle')}
+              title={t('sessions.sidebar.session.rename.smartTitle')}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <Icon name="ai-generate-2" className="size-3.5" />
+            </button>
+            <button
               type="submit"
               aria-label={t('sessions.sidebar.session.rename.save')}
               title={t('sessions.sidebar.session.rename.save')}
               className="shrink-0 text-muted-foreground hover:text-foreground"
             >
-              <Icon name="check" className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              aria-label={t('sessions.sidebar.session.rename.cancel')}
-              title={t('sessions.sidebar.session.rename.cancel')}
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-            >
-              <Icon name="close" className="size-4" />
+              <Icon name="check" className="size-3.5" />
             </button>
           </form>
           {!isMinimalMode ? (
@@ -618,6 +683,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
   const statusType = sessionStatus?.type ?? 'idle';
   const isStreaming = statusType === 'busy' || statusType === 'retry';
+  const isTitleGenerating = pendingSmartTitle !== null || titleRefreshMetadata?.isGenerating === true;
   const pendingPermissionCount = sessionPermissions.length;
   const showUnreadStatus = !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
@@ -1109,7 +1175,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     )}
                   >
                     <div className="flex w-full items-center min-w-0 flex-1 gap-1 overflow-hidden">
-                      <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                      <div
+                        className={cn(
+                          'block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground',
+                          isTitleGenerating && 'animate-text-shimmer',
+                        )}
+                        aria-busy={isTitleGenerating || undefined}
+                      >
+                        {renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}
+                      </div>
                       {pendingPermissionCount > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[0.7rem] text-destructive flex-shrink-0" title={t('sessions.sidebar.session.status.permissionRequired')} aria-label={t('sessions.sidebar.session.status.permissionRequired')}>
                           <Icon name="shield" className="h-3 w-3" />
