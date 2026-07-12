@@ -67,8 +67,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
         const fallback = <Icon name={iconName ?? 'folder'} className="h-4 w-4" style={iconColor ? { color: iconColor } : undefined} />;
         const icon = (
           <span
-            className={cn('flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--surface-muted)]', selected ? 'text-foreground' : 'text-muted-foreground')}
-            style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+            className={cn('flex size-5 shrink-0 items-center justify-center overflow-hidden', selected ? 'text-foreground' : 'text-muted-foreground')}
           >
             {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
           </span>

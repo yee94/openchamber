@@ -161,10 +161,9 @@ const MobileProjectIcon: React.FC<{
   return (
     <span
       className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden bg-[var(--surface-muted)] text-muted-foreground',
+        'flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground',
         containerClasses,
       )}
-      style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
     >
       {project.iconImage ? (
         <ProjectIconImage

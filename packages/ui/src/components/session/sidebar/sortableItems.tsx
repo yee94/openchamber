@@ -22,7 +22,6 @@ export interface SortableProjectItemProps {
   projectIcon?: string;
   projectColor?: string;
   projectIconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' };
-  projectIconBackground?: string;
   isCollapsed: boolean;
   isActiveProject: boolean;
   /** True while this project's session directories are still fetching. */
@@ -59,7 +58,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   projectIcon,
   projectColor,
   projectIconImage,
-  projectIconBackground,
   isCollapsed,
   isActiveProject,
   isSessionsLoading = false,
@@ -198,8 +196,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                       )}
                     >
                     <span
-                      className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--surface-muted)] text-muted-foreground"
-                      style={projectIconBackground ? { backgroundColor: projectIconBackground } : undefined}
+                      className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden text-muted-foreground"
                     >
                       {isSessionsLoading ? (
                         <Icon

@@ -241,7 +241,6 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                     projectIcon={project.icon}
                     projectColor={project.color}
                     projectIconImage={project.iconImage}
-                    projectIconBackground={project.iconBackground}
                     isCollapsed={isCollapsed}
                     isActiveProject={isActiveProject}
                     isSessionsLoading={isSessionsLoading || isSessionsRefreshing}

@@ -342,6 +342,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   renameDraftRef.current = renameDraft;
   const renameTargetRef = React.useRef<string | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
+  const renameInputRef = React.useRef<HTMLInputElement>(null);
 
   const session = node.session;
   // Batched live-session lookup. `liveSessionById` is built once per
@@ -585,6 +586,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     if (renameTargetRef.current === session.id) return;
     renameTargetRef.current = session.id;
     setRenameDraft(editTitle);
+    queueMicrotask(() => renameInputRef.current?.select());
   }, [editingId, editTitle, session.id]);
 
   if (editingId === session.id) {
@@ -635,6 +637,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
             }}
           >
             <input
+              ref={renameInputRef}
               value={renameDraft}
               onChange={(event) => setRenameDraft(event.target.value)}
               className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
@@ -927,6 +930,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     event.stopPropagation();
     handleSessionDoubleClick(session.id, sessionTitle);
   };
+  const handleTitleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    handleRowSelect(event);
+    if (!mouseFocusedTitleRef.current) return;
+    const titleButton = event.currentTarget;
+    window.requestAnimationFrame(() => {
+      mouseFocusedTitleRef.current = true;
+      titleButton.focus({ preventScroll: true });
+    });
+  };
   const handleRowBlur = () => {
     mouseFocusedTitleRef.current = false;
   };
@@ -1177,7 +1189,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     onMouseDown={handleRowMouseDown}
                     onKeyDown={handleRowKeyDown}
                     onBlur={handleRowBlur}
-                    onClick={(event) => handleRowSelect(event)}
+                    onClick={handleTitleClick}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       handleSessionDoubleClick(session.id, sessionTitle);
