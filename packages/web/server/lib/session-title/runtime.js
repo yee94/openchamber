@@ -156,6 +156,18 @@ const extractTitleRefreshRequest = (payload) => {
   return { sessionId, directory };
 };
 
+const extractCreatedSession = (payload) => {
+  if (!payload || payload.type !== 'session.created') return null;
+  const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
+  const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
+  const sessionId = typeof info.id === 'string' ? info.id.trim() : '';
+  if (!sessionId || (typeof info.parentID === 'string' && info.parentID)) return null;
+  const directory = typeof properties.directory === 'string' && properties.directory
+    ? properties.directory
+    : (typeof info.directory === 'string' ? info.directory : '');
+  return { sessionId, directory };
+};
+
 const extractUserMessage = (payload) => {
   if (!payload || payload.type !== 'message.updated') return null;
   const info = payload.properties?.info;
@@ -164,6 +176,9 @@ const extractUserMessage = (payload) => {
   return {
     sessionId: info.sessionID,
     createdAt: typeof info.time?.created === 'number' ? info.time.created : 0,
+    directory: typeof payload.properties?.directory === 'string'
+      ? payload.properties.directory
+      : (typeof info.directory === 'string' ? info.directory : ''),
   };
 };
 
@@ -261,6 +276,8 @@ export const createSessionTitleRuntime = ({
   const timers = new Map();
   const inflight = new Set();
   const forcedRefreshes = new Set();
+  const initialRefreshes = new Set();
+  const newSessions = new Set();
   /** In-memory throttle timestamps (metadata also persists across restarts). */
   const lastGeneratedAtBySession = new Map();
   let stopped = false;
@@ -363,11 +380,40 @@ export const createSessionTitleRuntime = ({
     });
   };
 
+  const recordUserActivity = async (sessionId, directory, createdAt) => {
+    if (!Number.isFinite(createdAt) || createdAt <= 0) return;
+    const session = await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, { directory })
+      .catch(() => null);
+    if (!session || typeof session !== 'object') return;
+
+    const meta = readTitleRefreshMeta(session);
+    const previous = Number(meta.titleRefresh.activityUpdatedAt);
+    const activityUpdatedAt = Number.isFinite(previous) ? Math.max(previous, createdAt) : createdAt;
+    if (activityUpdatedAt === previous) return;
+    await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, {
+      directory,
+      method: 'PATCH',
+      body: {
+        metadata: {
+          ...meta.metadata,
+          openchamber: {
+            ...meta.openchamber,
+            titleRefresh: {
+              ...meta.titleRefresh,
+              activityUpdatedAt,
+            },
+          },
+        },
+      },
+    });
+  };
+
   // Declared early so generateTitle can re-arm when still inside the throttle window.
   let armTimer = (_sessionId, _directory, _delayMs) => {};
 
   const generateTitle = async (sessionId, directory) => {
     const forceRefresh = forcedRefreshes.delete(sessionId);
+    const initialRefresh = initialRefreshes.delete(sessionId);
     if (!forceRefresh && !isSessionTitleRefreshEnabled()) return;
 
     const session = await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, { directory })
@@ -392,7 +438,7 @@ export const createSessionTitleRuntime = ({
       now(),
       throttleMs,
     );
-    if (throttleLeft > 0 && !forceRefresh) {
+    if (throttleLeft > 0 && !forceRefresh && !initialRefresh) {
       // Re-arm for when the window opens — do not drop the pending refresh.
       armTimer(sessionId, directory, throttleLeft);
       return;
@@ -407,12 +453,12 @@ export const createSessionTitleRuntime = ({
     // Let OpenCode's first-message title land first. We only refresh once the
     // conversation has moved on (2+ real user turns), unless the title is
     // still the default placeholder.
-    if (!forceRefresh && realUserCount < 2 && !isDefaultSessionTitle(currentTitle)) {
+    if (!forceRefresh && !initialRefresh && realUserCount < 2 && !isDefaultSessionTitle(currentTitle)) {
       return;
     }
 
     // Same tail as last refresh — nothing new to summarize.
-    if (!forceRefresh && lastAssistantId && lastAssistantId === meta.forMessageID && !isDefaultSessionTitle(currentTitle)) {
+    if (!forceRefresh && !initialRefresh && lastAssistantId && lastAssistantId === meta.forMessageID && !isDefaultSessionTitle(currentTitle)) {
       return;
     }
 
@@ -557,6 +603,11 @@ export const createSessionTitleRuntime = ({
 
   const processPayload = (payload, directoryHint = '') => {
     if (stopped) return;
+    const createdSession = extractCreatedSession(payload);
+    if (createdSession) {
+      newSessions.add(createdSession.sessionId);
+      return;
+    }
     const titleRefreshRequest = extractTitleRefreshRequest(payload);
     if (titleRefreshRequest) {
       forcedRefreshes.add(titleRefreshRequest.sessionId);
@@ -566,7 +617,12 @@ export const createSessionTitleRuntime = ({
     const status = extractSessionStatus(payload);
     if (status) {
       if (status.type === 'idle') {
-        armTimer(status.sessionId, status.directory || directoryHint, quietMs);
+        if (newSessions.delete(status.sessionId)) {
+          initialRefreshes.add(status.sessionId);
+          armTimer(status.sessionId, status.directory || directoryHint, 0);
+        } else {
+          armTimer(status.sessionId, status.directory || directoryHint, quietMs);
+        }
       } else {
         clearTimer(status.sessionId);
       }
@@ -574,6 +630,13 @@ export const createSessionTitleRuntime = ({
     }
     const userMessage = extractUserMessage(payload);
     if (userMessage) {
+      void recordUserActivity(
+        userMessage.sessionId,
+        userMessage.directory || directoryHint,
+        userMessage.createdAt,
+      ).catch((error) => {
+        console.warn('[session-title] failed to record user activity:', error?.message || error);
+      });
       // OpenCode re-emits message.updated for OLD user messages after the
       // session settles. Only a message created after the timer was armed
       // means the user actually moved on.

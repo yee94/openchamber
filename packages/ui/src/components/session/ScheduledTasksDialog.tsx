@@ -22,6 +22,7 @@ import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { ProjectEntry } from '@/lib/api/types';
+import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import {
   deleteScheduledTask,
   fetchScheduledTasks,
@@ -193,10 +194,17 @@ export function ScheduledTasksDialog() {
 
   const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
     const displayLabel = formatDirectoryName(project.path);
-    // Codex-style: muted open-folder only — no per-project color/icon chrome.
+    const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+    const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+    const fallback = <Icon name={iconName ?? 'folder'} className="h-3.5 w-3.5" style={iconColor ? { color: iconColor } : undefined} />;
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        <Icon name="folder" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span
+          className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--surface-muted)] text-muted-foreground"
+          style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+        >
+          {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
+        </span>
         <span className="truncate">{displayLabel}</span>
       </span>
     );

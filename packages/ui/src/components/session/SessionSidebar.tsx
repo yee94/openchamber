@@ -34,7 +34,7 @@ import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { SessionGroupSection } from './sidebar/SessionGroupSection';
 import { SidebarHeader } from './sidebar/SidebarHeader';
-import { SidebarActivitySections } from './sidebar/SidebarActivitySections';
+import { SidebarPinnedSessions } from './sidebar/SidebarPinnedSessions';
 import { SidebarDisplayModeMenu } from './sidebar/SidebarDisplayModeMenu';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
@@ -63,10 +63,7 @@ import {
   type SessionFocusScope,
 } from '@/stores/useSessionFocusStore';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
-import {
-  deriveRecentSessions,
-  RECENT_SESSION_LIMIT,
-} from './sidebar/activitySections';
+import { derivePinnedSessions } from './sidebar/pinnedSessions';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
@@ -1287,30 +1284,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
   }, [currentSessionId, sessionSidebarMetaById]);
 
-  const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
   const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
 
-  const activeNowSessions = React.useMemo(() => {
-    if (!showRecentSection || isVSCode) {
+  const pinnedSessions = React.useMemo(() => {
+    if (isVSCode) {
       return [];
     }
+    return derivePinnedSessions(sessions, pinnedSessionIds);
+  }, [isVSCode, pinnedSessionIds, sessions]);
 
-    return deriveRecentSessions(sessions)
-      .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds))
-      .slice(0, RECENT_SESSION_LIMIT);
-  }, [isVSCode, pinnedSessionIds, sessions, showRecentSection]);
-
-  // Prefetch is wired below, after recentSessionIds is computed.
-
-  const activitySections = React.useMemo(() => {
-    // VS Code renders the full grouped project view (one group per open
-    // workspace, folders + pinned native); the flat "recent" activity list is
-    // web/desktop-only.
-    if (isVSCode || !showRecentSection) {
+  const pinnedItems = React.useMemo(() => {
+    if (isVSCode) {
       return [];
     }
-
-    const recentSessions = activeNowSessions;
 
     const toItem = (session: Session) => {
       const existing = sessionSidebarMetaById.get(session.id);
@@ -1337,19 +1323,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       };
     };
 
-    const items = recentSessions
+    return pinnedSessions
       .map(toItem)
       .filter((item): item is NonNullable<ReturnType<typeof toItem>> => item !== null);
-
-    return [
-      { key: 'active-now' as const, title: t('sessions.sidebar.activity.recentTitle'), items },
-    ];
-  }, [activeNowSessions, filterSessionNodesForSearch, hasSessionSearchQuery, isVSCode, normalizedSessionSearchQuery, sessionSidebarMetaById, showRecentSection, t]);
-
-  const hasActivitySectionItems = React.useMemo(
-    () => activitySections.some((section) => section.items.length > 0),
-    [activitySections],
-  );
+  }, [filterSessionNodesForSearch, hasSessionSearchQuery, isVSCode, normalizedSessionSearchQuery, pinnedSessions, sessionSidebarMetaById]);
 
 
   const sectionsForSidebarRender = React.useMemo(() => {
@@ -1413,14 +1390,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     visibleSessionCountByGroup,
   ]);
 
-  const recentNavigationTargets = React.useMemo<SessionNavigationTarget[]>(() => {
-    if (hasSessionSearchQuery || isVSCode || !showRecentSection) {
+  const pinnedNavigationTargets = React.useMemo<SessionNavigationTarget[]>(() => {
+    if (hasSessionSearchQuery || isVSCode) {
       return [];
     }
-    return activeNowSessions.map((session, visibleIndex) => {
+    return pinnedSessions.map((session, visibleIndex) => {
       const meta = sessionSidebarMetaById.get(session.id);
       return {
-        scope: 'recent',
+        scope: 'pinned',
         sessionId: session.id,
         projectId: meta?.projectId ?? null,
         directory: normalizePath(resolveGlobalSessionDirectory(session))
@@ -1429,11 +1406,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         visibleIndex,
       };
     });
-  }, [activeNowSessions, hasSessionSearchQuery, isVSCode, sessionSidebarMetaById, showRecentSection]);
+  }, [hasSessionSearchQuery, isVSCode, pinnedSessions, sessionSidebarMetaById]);
 
-  const [visibleRecentShortcutSessionIds, setVisibleRecentShortcutSessionIds] = React.useState<readonly string[] | null>(null);
-  const handleVisibleRecentShortcutSessionIdsChange = React.useCallback((nextIds: readonly string[]) => {
-    setVisibleRecentShortcutSessionIds((previousIds) => {
+  const [visiblePinnedShortcutSessionIds, setVisiblePinnedShortcutSessionIds] = React.useState<readonly string[] | null>(null);
+  const handleVisiblePinnedShortcutSessionIdsChange = React.useCallback((nextIds: readonly string[]) => {
+    setVisiblePinnedShortcutSessionIds((previousIds) => {
       if (previousIds
         && previousIds.length === nextIds.length
         && previousIds.every((sessionId, index) => sessionId === nextIds[index])) {
@@ -1443,20 +1420,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
   }, []);
 
-  const visibleRecentNavigationTargets = React.useMemo(() => {
-    if (!visibleRecentShortcutSessionIds) return recentNavigationTargets;
-    const visibleSessionIds = new Set(visibleRecentShortcutSessionIds);
-    return recentNavigationTargets.filter((target) => visibleSessionIds.has(target.sessionId));
-  }, [recentNavigationTargets, visibleRecentShortcutSessionIds]);
+  const visiblePinnedNavigationTargets = React.useMemo(() => {
+    if (!visiblePinnedShortcutSessionIds) return pinnedNavigationTargets;
+    const visibleSessionIds = new Set(visiblePinnedShortcutSessionIds);
+    return pinnedNavigationTargets.filter((target) => visibleSessionIds.has(target.sessionId));
+  }, [pinnedNavigationTargets, visiblePinnedShortcutSessionIds]);
 
   const numberedSidebarSessionTargets = React.useMemo(() => (
     mobileVariant
       ? []
       : buildSidebarNumberedSessionTargets({
-          recentTargets: visibleRecentNavigationTargets,
+          pinnedTargets: visiblePinnedNavigationTargets,
           projectTargets: visibleProjectNavigationTargets,
         })
-  ), [mobileVariant, visibleProjectNavigationTargets, visibleRecentNavigationTargets]);
+  ), [mobileVariant, visiblePinnedNavigationTargets, visibleProjectNavigationTargets]);
 
   const handleNumberedSidebarSessionActivate = React.useCallback((target: SessionNavigationTarget) => {
     setActiveMainTab('chat');
@@ -1497,24 +1474,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return result;
   }, [numberedSidebarSessionTargets]);
 
-  const recentFocusIdentities = React.useMemo<SessionFocusIdentity[]>(() => {
-    if (!currentSessionId || hasSessionSearchQuery || isVSCode || !showRecentSection) {
+  const pinnedFocusIdentities = React.useMemo<SessionFocusIdentity[]>(() => {
+    if (!currentSessionId || hasSessionSearchQuery || isVSCode) {
       return [];
     }
 
     const identities: SessionFocusIdentity[] = [];
     const visit = (node: SessionNode, projectId: string | null): void => {
       if (node.session.id === currentSessionId) {
-        identities.push({ scope: 'recent', sessionId: currentSessionId, projectId });
+        identities.push({ scope: 'pinned', sessionId: currentSessionId, projectId });
         return;
       }
       node.children.forEach((child) => visit(child, projectId));
     };
-    activitySections.forEach((section) => {
-      section.items.forEach((item) => visit(item.node, item.projectId));
-    });
+    pinnedItems.forEach((item) => visit(item.node, item.projectId));
     return identities;
-  }, [activitySections, currentSessionId, hasSessionSearchQuery, isVSCode, showRecentSection]);
+  }, [currentSessionId, hasSessionSearchQuery, isVSCode, pinnedItems]);
 
   const projectFocusIdentities = React.useMemo<SessionFocusIdentity[]>(() => {
     if (!currentSessionId) {
@@ -1537,9 +1512,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [currentSessionId, projectSections]);
 
   React.useLayoutEffect(() => publishSessionNavigationSnapshot({
-    recent: recentNavigationTargets,
+    pinned: pinnedNavigationTargets,
     project: visibleProjectNavigationTargets,
-  }), [recentNavigationTargets, visibleProjectNavigationTargets]);
+  }), [pinnedNavigationTargets, visibleProjectNavigationTargets]);
 
   React.useLayoutEffect(() => {
     if (isProjectSessionsSyncing) {
@@ -1549,7 +1524,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     const reconciledFocus = reconcileSessionFocus({
       currentSessionId,
       focus: sessionFocus,
-      recentFocuses: recentFocusIdentities,
+      pinnedFocuses: pinnedFocusIdentities,
       projectFocuses: projectFocusIdentities,
       fallbackProjectId: currentSessionId
         ? sessionSidebarMetaById.get(currentSessionId)?.projectId ?? null
@@ -1560,7 +1535,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     currentSessionId,
     isProjectSessionsSyncing,
     projectFocusIdentities,
-    recentFocusIdentities,
+    pinnedFocusIdentities,
     sessionFocus,
     sessionSidebarMetaById,
   ]);
@@ -1740,7 +1715,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       projectId?: string | null,
       archivedBucket: boolean = false,
       secondaryMeta?: { projectLabel?: string | null; branchLabel?: string | null } | null,
-      renderContext: 'project' | 'recent' = 'project',
+      renderContext: 'project' | 'pinned' = 'project',
       renderExtras?: SessionNodeRenderExtras,
     ): React.ReactNode => (
       <SessionNodeItem
@@ -1955,35 +1930,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ],
   );
 
-  // Display-mode equalizer sits on the Recent title row (or a thin fallback
-  // bar when Recent is hidden) so the old sidebar action toolbar can stay gone.
   const displayModeMenu = !hideDirectoryControls ? (
     <SidebarDisplayModeMenu
-      showRecentControls={!isVSCode}
       collapseAllProjects={collapseAllProjects}
       expandAllProjects={expandAllProjects}
     />
   ) : null;
-  // Brand mark sits above Recent (Codex-style top-left wordmark). Kept outside
-  // the Recent toggle so it still shows when the Recent section is hidden.
   const topContent = (!isVSCode && !hasSessionSearchQuery) ? (
     <>
       <SidebarBrandMark />
-      {showRecentSection ? (
-        <SidebarActivitySections
-          sections={activitySections}
+      {pinnedItems.length > 0 ? (
+        <SidebarPinnedSessions
+          items={pinnedItems}
           renderSessionNode={renderSessionNode}
           currentSessionId={currentSessionId}
           editingId={editingId}
           openSidebarMenuKey={openSidebarMenuKey}
-          variant="section"
           headerAccessory={displayModeMenu}
-          onVisibleSessionIdsChange={handleVisibleRecentShortcutSessionIdsChange}
+          onVisibleSessionIdsChange={handleVisiblePinnedShortcutSessionIdsChange}
         />
-      ) : displayModeMenu ? (
-        <div className="flex justify-end px-0.5 pb-2 pt-1">
-          {displayModeMenu}
-        </div>
       ) : null}
     </>
   ) : null;
@@ -2035,7 +2000,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       <SidebarProjectsList
         topContent={topContent}
-        hasSharedSessions={hasActivitySectionItems}
+        headerAccessory={pinnedItems.length === 0 ? displayModeMenu : null}
         sectionsForRender={sectionsForSidebarRender}
         projectSections={projectSections}
         activeProjectId={activeProjectId}

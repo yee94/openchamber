@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type SessionFocusScope = 'recent' | 'project';
+export type SessionFocusScope = 'pinned' | 'project';
 
 export type SessionFocusIdentity = Readonly<{
   scope: SessionFocusScope;

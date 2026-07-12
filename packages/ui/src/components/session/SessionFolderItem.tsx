@@ -22,7 +22,7 @@ interface SessionFolderItemProps<TSessionNode> {
     projectId?: string | null,
     archivedBucket?: boolean,
     secondaryMeta?: { projectLabel?: string | null; branchLabel?: string | null } | null,
-    renderContext?: 'project' | 'recent',
+    renderContext?: 'project' | 'pinned',
     renderExtras?: SessionNodeChildRenderExtras,
   ) => React.ReactNode;
   /**

@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { Icon } from '@/components/icon/Icon';
 
 type SidebarSectionHeaderProps = {
   title: string;
@@ -39,10 +40,14 @@ export function SidebarSectionHeader({
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
+          className="group/toggle flex min-w-0 flex-1 items-center gap-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-expanded={expanded}
         >
           <span className={titleClassName}>{title}</span>
+          <Icon
+            name={expanded ? 'arrow-down-s' : 'arrow-right-s'}
+            className="size-3 shrink-0 opacity-0 transition-opacity group-hover/toggle:opacity-100 group-focus-visible/toggle:opacity-100"
+          />
         </button>
       ) : (
         <span className={cn('flex min-w-0 flex-1 items-center gap-1', titleClassName)}>

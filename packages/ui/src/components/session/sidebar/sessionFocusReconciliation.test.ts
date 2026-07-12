@@ -10,21 +10,21 @@ const focus = (
 ): SessionFocusIdentity => ({ scope, sessionId, projectId });
 
 describe('reconcileSessionFocus', () => {
-  test('fills a Recent focus project once sidebar metadata resolves', () => {
+  test('fills a pinned focus project once sidebar metadata resolves', () => {
     expect(reconcileSessionFocus({
       currentSessionId: 'session-a',
-      focus: focus('recent', 'session-a', null),
-      recentFocuses: [focus('recent', 'session-a', 'project-a')],
+      focus: focus('pinned', 'session-a', null),
+      pinnedFocuses: [focus('pinned', 'session-a', 'project-a')],
       projectFocuses: [focus('project', 'session-a', 'project-a')],
       fallbackProjectId: 'project-a',
-    })).toEqual(focus('recent', 'session-a', 'project-a'));
+    })).toEqual(focus('pinned', 'session-a', 'project-a'));
   });
 
-  test('falls back to the corresponding Project occurrence when Recent disappears', () => {
+  test('falls back to the corresponding project occurrence when a pin is removed', () => {
     expect(reconcileSessionFocus({
       currentSessionId: 'session-a',
-      focus: focus('recent', 'session-a', 'project-a'),
-      recentFocuses: [],
+      focus: focus('pinned', 'session-a', 'project-a'),
+      pinnedFocuses: [],
       projectFocuses: [focus('project', 'session-a', 'project-a')],
       fallbackProjectId: 'project-a',
     })).toEqual(focus('project', 'session-a', 'project-a'));
@@ -33,8 +33,8 @@ describe('reconcileSessionFocus', () => {
   test('uses metadata fallback during search when both rendered rings omit the session', () => {
     expect(reconcileSessionFocus({
       currentSessionId: 'session-a',
-      focus: focus('recent', 'session-a', 'project-a'),
-      recentFocuses: [],
+      focus: focus('pinned', 'session-a', 'project-a'),
+      pinnedFocuses: [],
       projectFocuses: [],
       fallbackProjectId: 'project-a',
     })).toEqual(focus('project', 'session-a', 'project-a'));
@@ -44,7 +44,7 @@ describe('reconcileSessionFocus', () => {
     expect(reconcileSessionFocus({
       currentSessionId: 'session-a',
       focus: focus('project', 'session-a', 'project-parent'),
-      recentFocuses: [],
+      pinnedFocuses: [],
       projectFocuses: [
         focus('project', 'session-a', 'project-child'),
         focus('project', 'session-a', 'project-parent'),
@@ -56,8 +56,8 @@ describe('reconcileSessionFocus', () => {
   test('reconciles stale focus to current content without changing the session id', () => {
     expect(reconcileSessionFocus({
       currentSessionId: 'session-b',
-      focus: focus('recent', 'session-a', 'project-a'),
-      recentFocuses: [focus('recent', 'session-a', 'project-a')],
+      focus: focus('pinned', 'session-a', 'project-a'),
+      pinnedFocuses: [focus('pinned', 'session-a', 'project-a')],
       projectFocuses: [focus('project', 'session-b', 'project-b')],
       fallbackProjectId: 'project-b',
     })).toEqual(focus('project', 'session-b', 'project-b'));
@@ -66,8 +66,8 @@ describe('reconcileSessionFocus', () => {
   test('clears focus when there is no current session', () => {
     expect(reconcileSessionFocus({
       currentSessionId: null,
-      focus: focus('recent', 'session-a', 'project-a'),
-      recentFocuses: [focus('recent', 'session-a', 'project-a')],
+      focus: focus('pinned', 'session-a', 'project-a'),
+      pinnedFocuses: [focus('pinned', 'session-a', 'project-a')],
       projectFocuses: [focus('project', 'session-a', 'project-a')],
       fallbackProjectId: 'project-a',
     })).toBeNull();

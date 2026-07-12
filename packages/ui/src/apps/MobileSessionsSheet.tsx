@@ -10,6 +10,7 @@ import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toast } from '@/components/ui';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
+import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -150,19 +151,28 @@ const sessionMatchesQuery = (session: Session, projectLabel: string, query: stri
 const MobileProjectIcon: React.FC<{
   project: Pick<ProjectMeta, 'id' | 'icon' | 'color' | 'iconImage' | 'iconBackground'>;
   size?: 'sm' | 'md';
-}> = ({ size = 'md' }) => {
-  // Codex-style: muted folder only — ignore per-project color/icon chrome.
+}> = ({ project, size = 'md' }) => {
   const containerClasses = size === 'sm' ? 'size-6 rounded-md' : 'size-8 rounded-lg';
   const innerClasses = size === 'sm' ? 'size-3.5' : 'size-4';
+  const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+  const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+  const fallback = <Icon name={iconName ?? 'folder-open'} className={innerClasses} style={iconColor ? { color: iconColor } : undefined} />;
 
   return (
     <span
       className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground',
+        'flex shrink-0 items-center justify-center overflow-hidden bg-[var(--surface-muted)] text-muted-foreground',
         containerClasses,
       )}
+      style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
     >
-      <Icon name="folder-open" className={innerClasses} />
+      {project.iconImage ? (
+        <ProjectIconImage
+          project={project}
+          className="size-full object-contain"
+          fallback={fallback}
+        />
+      ) : fallback}
     </span>
   );
 };

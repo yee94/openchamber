@@ -12,6 +12,7 @@ import {
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 
 type Args = {
   homeDirectory: string | null;
@@ -68,6 +69,7 @@ export const useSessionGrouping = (args: Args) => {
     ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
       const sortedProjectSessions = dedupeSessionsById(projectSessions)
+        .filter((session) => !args.pinnedSessionIds.has(session.id))
         .sort((a, b) => compareSessionsByPinnedAndTime(a, b, args.pinnedSessionIds));
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
@@ -168,7 +170,7 @@ export const useSessionGrouping = (args: Args) => {
         const hasActiveSession = sessionsInWorktree.length > 0;
         // Calculate the latest update time among all sessions in this worktree
         const lastUpdatedAt = sessionsInWorktree.reduce((max, node) => {
-          const updatedAt = Number(node.session.time?.updated ?? node.session.time?.created ?? 0);
+          const updatedAt = getSessionActivityUpdatedAt(node.session);
           if (!Number.isFinite(updatedAt)) {
             return max;
           }

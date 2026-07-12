@@ -9,28 +9,9 @@ import { createProjectIdFromPath } from '@/lib/projectId';
 import { getDeferredSafeStorage } from './utils/safeStorage';
 import { useDirectoryStore } from './useDirectoryStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
-import { PROJECT_COLORS } from '@/lib/projectMeta';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
-
-/** Pick a color key that's least used among existing projects */
-const pickAutoColor = (projects: ProjectEntry[]): string => {
-  const colorKeys = PROJECT_COLORS.map((c) => c.key);
-  const usageCounts = new Map<string, number>();
-  for (const key of colorKeys) {
-    usageCounts.set(key, 0);
-  }
-  for (const p of projects) {
-    if (p.color && usageCounts.has(p.color)) {
-      usageCounts.set(p.color, (usageCounts.get(p.color) ?? 0) + 1);
-    }
-  }
-  // Find minimum usage, then pick randomly among those with min usage
-  const minUsage = Math.min(...usageCounts.values());
-  const candidates = colorKeys.filter((k) => usageCounts.get(k) === minUsage);
-  return candidates[Math.floor(Math.random() * candidates.length)];
-};
 
 interface ProjectPathValidationResult {
   ok: boolean;
@@ -574,7 +555,6 @@ export const useProjectsStore = create<ProjectsStore>()(
         id,
         path: normalizedPath,
         label,
-        color: pickAutoColor(get().projects),
         addedAt: now,
         lastOpenedAt: now,
       };

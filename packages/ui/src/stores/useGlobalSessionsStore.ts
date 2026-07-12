@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Session } from '@opencode-ai/sdk/v2';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 import { opencodeClient } from '@/lib/opencode/client';
 import { listGlobalSessionPages } from '@/stores/globalSessions';
 import { getReviewTransferDirection, type ReviewTransferDirection } from '@/lib/reviewFlow';
@@ -297,18 +298,9 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
   return true;
 };
 
-const getSessionUpdatedAt = (session: Session): number => {
-  const updatedAt = session.time?.updated;
-  if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
-    return updatedAt;
-  }
-  const createdAt = session.time?.created;
-  return typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : 0;
-};
-
 const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
   return [...sessions].sort((left, right) => {
-    const timeDelta = getSessionUpdatedAt(right) - getSessionUpdatedAt(left);
+    const timeDelta = getSessionActivityUpdatedAt(right) - getSessionActivityUpdatedAt(left);
     if (timeDelta !== 0) return timeDelta;
     return right.id.localeCompare(left.id);
   });

@@ -156,7 +156,7 @@
 
   :root.mobile-pointer:not(.desktop-runtime)
     :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]):active:not(:has(:where(button, [role="button"]):active)) {
-    scale: 1.06;
+    scale: 1.04;
     transition-duration: 0ms;
   }
 

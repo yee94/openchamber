@@ -150,6 +150,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         }));
 
         const builtInCommands: CommandInfo[] = [
+          { id: 'openchamber:new', name: 'new', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.newDescription'), isBuiltIn: true },
           ...(hasSession && !hasMessagesInCurrentSession
             ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.initDescription'), isBuiltIn: true }]
             : []
@@ -215,6 +216,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
         const allowInitCommand = !hasMessagesInCurrentSession;
         const builtInCommands: CommandInfo[] = [
+          { id: 'openchamber:new', name: 'new', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.newDescription'), isBuiltIn: true },
           ...(hasSession && !hasMessagesInCurrentSession
             ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.initDescription'), isBuiltIn: true }]
             : []
@@ -330,6 +332,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const getCommandIcon = (command: CommandInfo) => {
 
     switch (command.name) {
+      case 'new':
+        return <Icon name="add" className="h-3.5 w-3.5" />;
       case 'init':
         return <Icon name="file" className="h-3.5 w-3.5 text-green-500" />;
       case 'undo':

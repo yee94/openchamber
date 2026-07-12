@@ -70,6 +70,7 @@ import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { matchesModelSearch } from '@/lib/search/modelSearch';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { useGitBranches, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
@@ -1039,6 +1040,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
+    const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject);
     const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId);
@@ -2105,6 +2107,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
                 }
+                return;
+            }
+            else if (commandName === 'new') {
+                const currentProject = projects.find((project) => project.id === activeProjectId);
+                openNewSessionDraft(currentProject
+                    ? { selectedProjectId: currentProject.id, directoryOverride: currentProject.path }
+                    : undefined,
+                );
                 return;
             }
             else if (commandName === 'redo' && currentSessionId) {
@@ -4082,10 +4092,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         iconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' } | null;
         iconBackground?: string | null;
     }) => {
-        // Codex-style: muted open-folder only — no per-project color/icon chrome.
+        const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+        const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+        const fallback = <Icon name={iconName ?? 'folder'} className="h-3.5 w-3.5" style={iconColor ? { color: iconColor } : undefined} />;
         return (
             <span className="inline-flex min-w-0 items-center gap-1.5">
-                <Icon name="folder" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span
+                    className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--surface-muted)] text-muted-foreground"
+                    style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+                >
+                    {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
+                </span>
                 <span className="truncate">{getProjectDisplayLabel(project)}</span>
             </span>
         );

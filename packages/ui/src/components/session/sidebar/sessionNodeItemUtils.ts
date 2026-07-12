@@ -98,7 +98,7 @@ export const computeNodeStructureKey = (node: SessionNode): string => {
 export const resolveMenuOpenSessionId = (
   nodes: SessionNode[],
   menuKey: string | null,
-  renderContext: 'project' | 'recent',
+  renderContext: 'project' | 'pinned',
   archivedBucket: boolean,
 ): string | null => {
   if (!menuKey) return null;

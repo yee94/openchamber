@@ -14,7 +14,6 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 type Props = {
-  showRecentControls: boolean;
   collapseAllProjects: () => void;
   expandAllProjects: () => void;
   /** Button sizing — match nearby sidebar chrome. */
@@ -27,7 +26,6 @@ type Props = {
  * header row so the old sidebar action toolbar can stay empty.
  */
 export function SidebarDisplayModeMenu({
-  showRecentControls,
   collapseAllProjects,
   expandAllProjects,
   buttonClassName,
@@ -35,10 +33,8 @@ export function SidebarDisplayModeMenu({
 }: Props): React.ReactNode {
   const { t } = useI18n();
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
-  const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
   const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
   const setDisplayMode = useSessionDisplayStore((state) => state.setDisplayMode);
-  const toggleRecentSection = useSessionDisplayStore((state) => state.toggleRecentSection);
   const toggleArchivedSessions = useSessionDisplayStore((state) => state.toggleArchivedSessions);
   // VS Code forces the expanded layout, so the mode toggle is meaningless there.
   const showDisplayModeToggle = !isVSCodeRuntime();
@@ -56,7 +52,6 @@ export function SidebarDisplayModeMenu({
               )}
               aria-label={t('sessions.sidebar.header.actions.sessionDisplayMode')}
               onClick={(event) => {
-                // Keep the Recent section from toggling when opening the menu.
                 event.stopPropagation();
               }}
             >
@@ -87,25 +82,14 @@ export function SidebarDisplayModeMenu({
             </DropdownMenuItem>
           </>
         ) : null}
-        {showRecentControls ? (
-          <>
-            {showDisplayModeToggle ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuItem
-              onClick={toggleRecentSection}
-              className="flex items-center justify-between"
-            >
-              <span>{t('sessions.sidebar.header.displayMode.showRecent')}</span>
-              {showRecentSection ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={toggleArchivedSessions}
-              className="flex items-center justify-between"
-            >
-              <span>{t('sessions.sidebar.header.displayMode.showArchived')}</span>
-              {showArchivedSessions ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
-            </DropdownMenuItem>
-          </>
-        ) : null}
+        {showDisplayModeToggle ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuItem
+          onClick={toggleArchivedSessions}
+          className="flex items-center justify-between"
+        >
+          <span>{t('sessions.sidebar.header.displayMode.showArchived')}</span>
+          {showArchivedSessions ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={collapseAllProjects} className="flex items-center gap-2">
           <Icon name="contract-up-down" className="h-4 w-4" />

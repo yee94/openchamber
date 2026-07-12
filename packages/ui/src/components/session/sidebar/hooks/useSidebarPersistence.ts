@@ -26,8 +26,8 @@ type Keys = {
 const LEGACY_EXPANSION_CONTEXT_PREFIXES = [
   'project:active:',
   'project:archived:',
-  'recent:active:',
-  'recent:archived:',
+  'pinned:active:',
+  'pinned:archived:',
 ];
 
 type Args = {

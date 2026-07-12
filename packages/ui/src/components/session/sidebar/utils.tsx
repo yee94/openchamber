@@ -2,6 +2,7 @@ import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 
 const t = (key: Parameters<typeof formatMessage>[1], params?: Parameters<typeof formatMessage>[2]) =>
   formatMessage(useI18nStore.getState().dictionary, key, params);
@@ -124,10 +125,6 @@ const getSessionCreatedAt = (session: Session): number => {
   return toFiniteNumber(session.time?.created) ?? 0;
 };
 
-const getSessionUpdatedAt = (session: Session): number => {
-  return toFiniteNumber(session.time?.updated) ?? toFiniteNumber(session.time?.created) ?? 0;
-};
-
 export const compareSessionsByPinnedAndTime = (
   a: Session,
   b: Session,
@@ -143,7 +140,7 @@ export const compareSessionsByPinnedAndTime = (
     return getSessionCreatedAt(b) - getSessionCreatedAt(a);
   }
 
-  return getSessionUpdatedAt(b) - getSessionUpdatedAt(a);
+  return getSessionActivityUpdatedAt(b) - getSessionActivityUpdatedAt(a);
 };
 
 export const dedupeSessionsById = (sessions: Session[]): Session[] => {

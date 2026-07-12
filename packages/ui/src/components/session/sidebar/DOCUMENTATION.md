@@ -3,14 +3,15 @@
 ## Refactor result
 
 - `SessionSidebar.tsx` now acts mainly as orchestration; core logic moved to focused hooks/components.
-- Sidebar is now a single multi-project tree: `recent` top section, then projects, then worktrees/archived groups, then sessions.
-- The Recent section is capped at the newest 8 sessions, defaults to 3 visible
-  sessions, and Show more reveals all remaining Recent rows at once before
-  switching to Show fewer. Expanded project/worktree
+- Sidebar is now a single multi-project tree: an optional `pinned` top section,
+  then projects, then worktrees/archived groups, then sessions. Pinned sessions
+  render only in the top section and are excluded from project groups.
+- The Pinned section renders every pinned session and supports header collapse.
+  Expanded project/worktree
   groups reveal 5 sessions by default from the already-fetched 20-session page;
   Show more reveals cached rows before loading the next 20-session page on demand.
-- Project/worktree Show more first reveals already-fetched rows, then fetches the next 20-session page for its own directory at the local boundary. Recent never paginates remotely from its Show more control because its display set is capped at 8.
-- Project rows retain the persisted project-registry order while session and worktree data hydrates. A successfully sent message promotes its owning project to the top; ordinary activity and selection do not reorder the structural project tree. The Recent section represents session recency instead.
+- Project/worktree Show more first reveals already-fetched rows, then fetches the next 20-session page for its own directory at the local boundary.
+- Project rows retain the persisted project-registry order while session and worktree data hydrates. A successfully sent message promotes its owning project to the top; ordinary activity and selection do not reorder the structural project tree.
 - The Projects section header no longer shows a global syncing accessory. While a
   project's session directories are fetching, that project's folder icon swaps to a
   spinner. The expanded body shows localized "Loading sessions…" only when there is
@@ -70,6 +71,9 @@
   chrome belongs only under Projects.
 - Session rows are single-line (no inline timestamp); details (title, relative time, folder/project,
   branch) open in an immediate floating hover card (`delayDuration={0}`, top-left aligned).
+- A session title button focused by an explicit mouse click enters inline rename
+  on Enter. Keyboard or programmatic focus does not arm this shortcut, and blur
+  clears the mouse-focus authorization.
 - Compact relative times use `common.relative.*Compact` i18n keys.
 - Row action icons (archive, menu) use title-matched `h-3.5` glyphs with `gap-1` spacing; the title
   reserves right padding on hover so icons own their space — no fade veil behind them.
@@ -103,8 +107,8 @@
 ### Components
 
 - `SidebarHeader.tsx`: Optional session-search field only (action toolbar removed).
-- `SidebarDisplayModeMenu.tsx`: Display-mode equalizer menu; rendered on the Recent section title row.
-- `SidebarActivitySections.tsx`: Global top section renderer; currently used for the `recent` section only.
+- `SidebarDisplayModeMenu.tsx`: Display-mode equalizer menu; rendered on the first section title row.
+- `SidebarPinnedSessions.tsx`: Global top section renderer for pinned sessions.
 - `SidebarFooter.tsx`: Static footer with icon-only settings and shortcuts actions, plus optional update button.
 - `SidebarProjectsList.tsx`: Main scrollable tree renderer for projects, root sessions, worktrees/groups, and empty/search states.
 - `SessionGroupSection.tsx`: Renders a single worktree/archived group, collapse/expand, folder subtree, and group-level controls.
