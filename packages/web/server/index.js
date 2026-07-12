@@ -76,6 +76,7 @@ import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionTitleRuntime } from './lib/session-title/runtime.js';
 import { createSessionIndexService } from './lib/session-index/service.js';
 import { createSessionIndexSyncRuntime } from './lib/session-index/sync-runtime.js';
+import { resolveSessionIndexDbPath } from './lib/session-index/resolve-db-path.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/opencode/tunnel-wiring-runtime.js';
@@ -1220,7 +1221,7 @@ async function main(options = {}) {
     ? options.getDesktopRuntimeConfig
     : null;
   const sessionIndexService = createSessionIndexService({
-    dbPath: typeof options.sessionIndexDbPath === 'string' ? options.sessionIndexDbPath : undefined,
+    dbPath: resolveSessionIndexDbPath(options, OPENCHAMBER_DATA_DIR),
     getRuntimeConfig: () => getDesktopRuntimeConfig?.() ?? null,
   });
   const sessionIndexSyncRuntime = createSessionIndexSyncRuntime({

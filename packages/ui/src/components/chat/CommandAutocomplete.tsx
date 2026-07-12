@@ -50,7 +50,7 @@ const NEUTRAL_BADGE_CLASS = cn(
 
 interface CommandAutocompleteProps {
   searchQuery: string;
-  onCommandSelect: (command: CommandInfo) => void;
+  onCommandSelect: (command: CommandInfo, submit?: boolean) => void;
   onClose: () => void;
   style?: React.CSSProperties;
 }
@@ -313,7 +313,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         const safeIndex = ((selectedIndexRef.current % total) + total) % total;
         const command = commands[safeIndex];
         if (command) {
-          onCommandSelect(command);
+          onCommandSelect(command, key === 'Enter');
         }
       }
     }

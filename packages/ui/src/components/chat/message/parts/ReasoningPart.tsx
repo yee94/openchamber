@@ -468,12 +468,13 @@ const ReasoningPart = React.memo(({
         isStreaming,
         identityKey: `${messageId}:${part.id ?? 'reasoning'}`,
     });
-    const thinkingHapticEmittedRef = React.useRef(false);
+    const hapticDisplayLengthRef = React.useRef(throttledText.length);
     const sessionID = (part as PartWithSession).sessionID;
 
     React.useEffect(() => {
-        if (thinkingHapticEmittedRef.current || !isStreaming || !sessionID || !throttledText.trim() || !hasStreamingHapticSubscribers()) return;
-        thinkingHapticEmittedRef.current = true;
+        const previousLength = hapticDisplayLengthRef.current;
+        hapticDisplayLengthRef.current = throttledText.length;
+        if (!isStreaming || !sessionID || throttledText.length <= previousLength || !hasStreamingHapticSubscribers()) return;
         emitStreamingHapticEvent({ sessionID, messageID: messageId, partID: part.id, kind: 'thinking' });
     }, [isStreaming, messageId, part.id, sessionID, throttledText]);
 

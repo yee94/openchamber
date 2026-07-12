@@ -15,13 +15,16 @@
   project's session directories are fetching, that project's folder icon swaps to a
   spinner. The expanded body shows localized "Loading sessions…" only when there is
   no usable snapshot; background refresh keeps the existing rows visible.
-- Electron cold start first hydrates the local SQLite session-summary index, then
-  asks the Electron-owned Web Server to refresh the newest 20 root sessions for
+- Runtime session index cold start first hydrates the local SQLite session-summary index, then
+  asks the runtime-owned Web Server to refresh the newest 20 root sessions for
   every persisted project root and known worktree directory. The browser never
   fans out project `session.list` calls. The server uses one preemptible background
   lane; selected-session detail/message/children requests abort that lane, run
   first, and let the directory resume afterward. Git/worktree discovery is not
   part of session startup. Archived sessions remain a separate lazy path.
+
+  When the session-index API is unavailable (501), the coordinator falls back to
+  the existing SDK-backed global session list.
 - Cached starts use OpenCode's `start` timestamp filter and merge only sessions
   changed since the last successful sync. SQLite separately tracks the last
   incremental and last full reconciliation times; a full newest-20 pass runs at

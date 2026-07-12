@@ -1,4 +1,4 @@
-const unsupported = (res) => res.status(501).json({ error: 'Electron session index is unavailable for this runtime' });
+const unsupported = (res) => res.status(501).json({ error: 'Session index is unavailable for this runtime' });
 
 export const registerSessionIndexRoutes = (app, { sessionIndexService, sessionIndexSyncRuntime }) => {
   app.get('/api/openchamber/session-index', (_req, res) => {

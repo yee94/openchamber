@@ -38,6 +38,60 @@ const MESSAGE_REFETCH_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"
 const UNREVERT_REFETCH_ATTEMPTS = 3
 const UNREVERT_REFETCH_RETRY_MS = 150
 
+let activeForkCopy: {
+  operationId: number
+  runtimeKey: string
+  directory: string
+  sourceSessionID: string
+  expectedTargetTitle: string
+  targetSessionID?: string
+} | null = null
+const forkCopyEventCutoffs = new Map<string, { messageID: string; expiresAt: number }>()
+const FORK_COPY_EVENT_CUTOFF_TTL_MS = 30_000
+
+export function trackForkCopySessionCreated(directory: string, session?: { id?: string; title?: string }): void {
+  const sessionID = session?.id
+  if (
+    !activeForkCopy
+    || activeForkCopy.runtimeKey !== getRuntimeKey()
+    || activeForkCopy.directory !== directory
+    || !sessionID
+    || session?.title !== activeForkCopy.expectedTargetTitle
+    || sessionID === activeForkCopy.sourceSessionID
+    || activeForkCopy.targetSessionID
+  ) {
+    return
+  }
+  activeForkCopy.targetSessionID = sessionID
+}
+
+function getForkedSessionTitle(title: string): string {
+  const match = title.match(/^(.+) \(fork #(\d+)\)$/)
+  if (!match) return `${title} (fork #1)`
+  return `${match[1]} (fork #${Number.parseInt(match[2], 10) + 1})`
+}
+
+export function shouldSuppressForkCopyEvent(directory: string, sessionID?: string, messageID?: string): boolean {
+  if (
+    activeForkCopy
+    && activeForkCopy.runtimeKey === getRuntimeKey()
+    && activeForkCopy.directory === directory
+    && sessionID
+    && sessionID === activeForkCopy.targetSessionID
+  ) {
+    return true
+  }
+  if (!sessionID || !messageID) return false
+  const key = `${getRuntimeKey()}:${directory}:${sessionID}`
+  const cutoff = forkCopyEventCutoffs.get(key)
+  if (!cutoff) return false
+  if (cutoff.expiresAt <= Date.now()) {
+    forkCopyEventCutoffs.delete(key)
+    return false
+  }
+  return messageID <= cutoff.messageID
+}
+
 // Reference set by SyncProvider — allows actions to access SDK and stores
 let _sdk: OpencodeClient | null = null
 let _childStores: ChildStoreManager | null = null
@@ -1244,9 +1298,13 @@ export async function unrevertSession(sessionId: string): Promise<void> {
  * 3. Insert the new session into the child store (so sidebar updates immediately)
  * 4. Switch to new session and set pending input text
  */
-export async function forkFromMessage(sessionId: string, messageId: string): Promise<void> {
+export async function forkFromMessage(sessionId: string, messageId: string, operationId: number): Promise<boolean> {
+  const forkRuntimeKey = getRuntimeKey()
   const { store, directory } = dirStoreForSession(sessionId)
+  if (!directory) throw new Error("Fork session directory is unavailable")
   const state = store.getState()
+  const sourceSession = state.session.find((session) => session.id === sessionId)
+  if (!sourceSession) throw new Error("Fork source session is unavailable")
 
   // Extract message text and file attachments for input restoration.
   // Only non-synthetic text parts — the server adds file content as synthetic
@@ -1261,19 +1319,73 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
     .trim()
   const fileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>
 
-  const forkedSession = await opencodeClient.forkSession(sessionId, messageId, directory)
+  activeForkCopy = {
+    operationId,
+    runtimeKey: forkRuntimeKey,
+    directory,
+    sourceSessionID: sessionId,
+    expectedTargetTitle: getForkedSessionTitle(sourceSession.title),
+  }
+  useSessionUIStore.setState((state) => ({
+    forkTransition: state.forkTransition?.operationId === operationId
+      ? { ...state.forkTransition, stage: "copying" }
+      : state.forkTransition,
+  }))
 
-  // Insert new session into child store so sidebar updates immediately
-  const current = store.getState()
-  const sessions = [...current.session]
-  const searchResult = Binary.search(sessions, forkedSession.id, (s) => s.id)
-  if (!searchResult.found) {
-    sessions.splice(searchResult.index, 0, forkedSession)
-    store.setState({ session: sessions })
+  let forkedSession: Session
+  try {
+    forkedSession = await opencodeClient.forkSession(sessionId, messageId, directory)
+    if (getRuntimeKey() !== forkRuntimeKey) {
+      if (activeForkCopy?.operationId === operationId) activeForkCopy = null
+      return false
+    }
+    useSessionUIStore.setState((state) => ({
+      forkTransition: state.forkTransition?.operationId === operationId
+        ? { ...state.forkTransition, stage: "opening" }
+        : state.forkTransition,
+    }))
+  } catch (error) {
+    if (activeForkCopy?.operationId === operationId) activeForkCopy = null
+    throw error
   }
 
-  // Switch to new session
-  useSessionUIStore.getState().setCurrentSession(forkedSession.id)
+  try {
+    // Insert new session into child store so sidebar updates immediately
+    const current = store.getState()
+    const sessions = [...current.session]
+    const searchResult = Binary.search(sessions, forkedSession.id, (s) => s.id)
+    if (!searchResult.found) {
+      sessions.splice(searchResult.index, 0, forkedSession)
+      store.setState({ session: sessions })
+    }
+
+    // Fork emits every cloned message and part over SSE. Discard any target data
+    // that raced into the store so selection follows the regular bounded tail load.
+    const beforeSelection = store.getState()
+    const leakedMessages = beforeSelection.message[forkedSession.id] ?? []
+    const nextMessages = { ...beforeSelection.message }
+    const nextParts = { ...beforeSelection.part }
+    delete nextMessages[forkedSession.id]
+    for (const message of leakedMessages) {
+      delete nextParts[message.id]
+    }
+    store.setState({ message: nextMessages, part: nextParts })
+
+    // Switch immediately once OpenCode reveals the real ID, then keep the
+    // transition visible until the bounded initial page is available.
+    useSessionUIStore.getState().setCurrentSession(forkedSession.id, directory)
+    await fetchMessagesForSession(forkedSession.id, directory)
+    const loadedMessages = store.getState().message[forkedSession.id] ?? []
+    const newestLoadedMessageID = loadedMessages.at(-1)?.id
+    if (newestLoadedMessageID) {
+      forkCopyEventCutoffs.set(`${getRuntimeKey()}:${directory}:${forkedSession.id}`, {
+        messageID: newestLoadedMessageID,
+        expiresAt: Date.now() + FORK_COPY_EVENT_CUTOFF_TTL_MS,
+      })
+    }
+  } finally {
+    if (activeForkCopy?.operationId === operationId) activeForkCopy = null
+  }
 
   // Restore forked message text and file attachments to input
   if (messageText) {
@@ -1284,6 +1396,7 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   }
   // Clear existing attachments and restore file parts from the forked message.
   restoreFilePartsToInput(fileParts)
+  return true
 }
 
 // ---------------------------------------------------------------------------
@@ -1291,7 +1404,7 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
 // setCurrentSession, before the React commit cycle fires useEffect.
 // ---------------------------------------------------------------------------
 
-const FETCH_MESSAGES_LOADING = new Set<string>()
+const FETCH_MESSAGES_LOADING = new Map<string, Promise<void>>()
 const CONSTRAINED_INITIAL_PAGE_SIZE = 30
 
 const getFetchPageSize = () => CONSTRAINED_INITIAL_PAGE_SIZE
@@ -1306,21 +1419,28 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
     sessionLoadDebug("imperative-queued", { sessionID, directory: resolvedDir })
     return
   }
-  if (FETCH_MESSAGES_LOADING.has(loadingKey)) {
+  const existingRequest = FETCH_MESSAGES_LOADING.get(loadingKey)
+  if (existingRequest) {
     sessionLoadDebug("imperative-deduped", { sessionID, directory: resolvedDir })
-    return
+    return existingRequest
   }
 
-  FETCH_MESSAGES_LOADING.add(loadingKey)
+  const request = fetchMessagesForSessionInternal(sessionID, resolvedDir)
+  const trackedRequest = request.finally(() => {
+    FETCH_MESSAGES_LOADING.delete(loadingKey)
+  })
+  FETCH_MESSAGES_LOADING.set(loadingKey, trackedRequest)
+  return trackedRequest
+}
+
+async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: string): Promise<void> {
   const startedAt = performance.now()
   const limit = getFetchPageSize()
   sessionLoadDebug("imperative-start", { sessionID, directory: resolvedDir, limit })
 
   try {
     const s = sdk()
-    const store = directory
-      ? dirStoreForDirectory(directory)
-      : dirStore()
+    const store = dirStoreForDirectory(resolvedDir)
 
     if (getSessionMaterializationStatus(store.getState(), sessionID).renderable) {
       sessionLoadDebug("imperative-cache-hit", { sessionID, directory: resolvedDir })
@@ -1402,7 +1522,5 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
       error: error instanceof Error ? error.message : String(error),
     })
     // Transient failure — the reactive path in ChatContainer will retry
-  } finally {
-    FETCH_MESSAGES_LOADING.delete(loadingKey)
   }
 }

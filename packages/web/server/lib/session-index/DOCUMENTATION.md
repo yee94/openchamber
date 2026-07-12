@@ -1,7 +1,8 @@
 # Session Index Runtime
 
-Electron injects `session-index.sqlite` into the in-process OpenChamber Web
-Server. `service.js` exclusively owns the WAL database and stores at most the
+Every OpenChamber Web Server enables `session-index.sqlite` in its data
+directory by default. Electron injects its user-data path explicitly.
+`service.js` exclusively owns the WAL database and stores at most the
 newest 20 root-session summaries per runtime and directory. It never stores
 messages, attachments, permissions, provider data, or model metadata.
 
@@ -22,5 +23,5 @@ and mutations. That aborts the current background list, yields for one second,
 then resumes the same directory. Consequently a startup index refresh cannot
 sit ahead of conversation content or user actions.
 
-Non-Electron runtimes receive deterministic `501 unsupported` responses and
-retain their existing SDK-backed in-memory loading path.
+Runtimes that explicitly disable or cannot host the index receive deterministic
+`501 unsupported` responses and retain the bounded SDK-backed loading path.

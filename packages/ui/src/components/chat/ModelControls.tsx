@@ -447,6 +447,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         closeMobilePanel();
     }, [setSelectedProvider, setSettingsPage, setSettingsDialogOpen, setAgentMenuOpen, closeMobilePanel]);
     const [desktopModelQuery, setDesktopModelQuery] = React.useState('');
+    const [modelTooltipOpen, setModelTooltipOpen] = React.useState(false);
+    const suppressModelTooltipUntilRef = React.useRef(0);
     const keyboardOwnsModelSelectionRef = React.useRef(false);
     const lastModelPointerPositionRef = React.useRef<{ x: number; y: number } | null>(null);
     const activeModelPickerEntryRef = React.useRef<ModelPickerEntry | undefined>(undefined);
@@ -2242,7 +2244,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         };
 
         const handleModelMenuOpenChange = (nextOpen: boolean) => {
+            setModelTooltipOpen(false);
+            if (!nextOpen) {
+                suppressModelTooltipUntilRef.current = performance.now() + 200;
+            }
             setAgentMenuOpen(nextOpen);
+        };
+
+        const handleModelTooltipOpenChange = (nextOpen: boolean) => {
+            if (nextOpen && (agentMenuOpen || performance.now() < suppressModelTooltipUntilRef.current)) {
+                return;
+            }
+            setModelTooltipOpen(nextOpen);
         };
 
         const modelPickerLabels = {
@@ -2282,7 +2295,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         };
 
         return (
-            <Tooltip delayDuration={600}>
+            <Tooltip open={agentMenuOpen ? false : modelTooltipOpen} onOpenChange={handleModelTooltipOpenChange} delayDuration={600}>
                 {!isCompact ? (
                     <DropdownMenu open={isReady && agentMenuOpen} onOpenChange={isReady ? handleModelMenuOpenChange : undefined}>
                         <TooltipTrigger asChild>

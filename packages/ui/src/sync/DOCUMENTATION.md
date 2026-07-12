@@ -116,16 +116,19 @@ Sidebar directory refreshes are intentionally bounded snapshots, not full catalo
 - archived rows load only when the archived bucket is expanded
 - retention must wait for `hasLoadedFullCatalog` and use `ensureFullGlobalSessionsLoaded()`, never treat a bounded directory snapshot as authoritative for cleanup
 
-### Electron cold-start ownership
+### Runtime session index cold-start ownership
 
-Electron has one durable session-summary source: the runtime-isolated SQLite
-session index. The legacy per-directory `localStorage` session list is removed
+The runtime session index (SQLite-backed) provides one durable session-summary
+source. The legacy per-directory `localStorage` session list is removed
 on child-store creation and must not be reintroduced. `main.tsx` establishes a
-startup barrier before React effects; `SessionStartupCoordinator` restores the
-SQLite snapshot, refreshes each known root/worktree directory through the
-bounded scheduler, writes one transaction batch, then releases normal global
-and directory bootstrap. A successful empty root page replaces stale index
-rows; a failed page preserves its last good cache.
+startup barrier before React effects; `SessionStartupCoordinator` starts the
+session-index flow at mount, restores the SQLite snapshot,
+refreshes each known root/worktree directory through the bounded scheduler,
+writes one transaction batch, then releases normal global and directory
+bootstrap. A runtime that reports the capability as unsupported uses the
+existing bounded SDK-backed path. A successful
+empty root page replaces stale index rows; a failed page preserves its last
+good cache.
 
 ## Session message loading
 
@@ -193,6 +196,21 @@ Examples of global-store updates performed in `session-actions.ts`:
 - `shareSession()` / `unshareSession()` -> `upsertSession(result.data)`
 - `archiveSession()` -> `archiveSessions([id], archivedAt)`
 - `deleteSession()` -> `removeSessions([id])`
+
+### Fork transition and event isolation
+
+OpenCode publishes one `message.updated` event per cloned message and one
+`message.part.updated` event per cloned part while `session.fork` runs. The UI
+must not materialize that complete copied history into the directory store.
+
+- Enter the shared fork transition view before dispatching the SDK request.
+- Suppress copied message/part events for the target session while the request
+  is active.
+- When the real session ID arrives, select it and load the normal bounded tail
+  page through `fetchMessagesForSession()`.
+- Keep a short message-ID cutoff after the response so transport-buffered copy
+  events cannot refill the complete history. Newer user/assistant events pass
+  through normally.
 
 ### New conversation orchestration
 

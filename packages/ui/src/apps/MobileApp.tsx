@@ -52,6 +52,7 @@ import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { SessionStartupCoordinator } from '@/components/session/SessionStartupCoordinator';
 import { SyncProvider, useParentSession, useSession, useSessionMessages } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
@@ -3120,6 +3121,7 @@ export function MobileApp({ apis }: MobileAppProps) {
         <RuntimeAPIProvider apis={apis}>
           <TooltipProvider delayDuration={300} skipDelayDuration={150}>
             <div className="h-full bg-background text-foreground">
+              <SessionStartupCoordinator />
               <SyncAppEffects embeddedBackgroundWorkEnabled={isInitialized} />
               <OpenCodeUpdateToast />
               <MobileAppUpdateToast />

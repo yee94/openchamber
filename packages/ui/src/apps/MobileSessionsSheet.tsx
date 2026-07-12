@@ -13,7 +13,7 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { mergeLiveSessionWithGlobalSession, refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useMobileSessionExpansionStore } from '@/stores/useMobileSessionExpansionStore';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -459,9 +459,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       setConfirmingArchiveSessionId(null);
       return;
     }
-    void refreshGlobalSessions(liveSessions);
-    // intentionally only on open transition — live overlay handles updates after that
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   React.useEffect(() => {

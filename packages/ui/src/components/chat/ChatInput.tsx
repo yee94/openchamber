@@ -3424,9 +3424,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         textareaRef.current?.focus();
     };
 
-    const handleCommandSelect = (command: CommandInfo) => {
+    const handleCommandSelect = (command: CommandInfo, submit = false) => {
 
-        setMessage(`/${command.name} `);
+        const commandText = `/${command.name}`;
+        setMessage(`${commandText} `);
 
         const textareaElement = textareaRef.current as HTMLTextAreaElement & { _commandMetadata?: typeof command };
         if (textareaElement) {
@@ -3435,6 +3436,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         setShowCommandAutocomplete(false);
         setCommandQuery('');
+
+        if (submit) {
+            void handleSubmit({ presetText: commandText });
+            return;
+        }
 
         const refocus = () => {
             if (textareaRef.current) {

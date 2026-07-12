@@ -443,6 +443,30 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
     void checkStatus();
   }, [checkStatus, skipAuth]);
 
+  // The startup splash lives outside the React root so App can retain it while
+  // session startup is in progress. When authentication blocks App from
+  // mounting, however, App cannot dismiss that layer and it would cover this
+  // gate's password or retry screen indefinitely.
+  React.useEffect(() => {
+    if (state === 'pending' || state === 'authenticated' || typeof document === 'undefined') {
+      return;
+    }
+
+    const loadingElement = document.getElementById('initial-loading');
+    if (!loadingElement) {
+      return;
+    }
+
+    loadingElement.classList.add('fade-out');
+    const timer = window.setTimeout(() => {
+      loadingElement.remove();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [state]);
+
   React.useEffect(() => {
     if (skipAuth) {
       return;
