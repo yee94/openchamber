@@ -172,11 +172,13 @@ function useSessionGrouping(
 }
 
 function useSessionHelpers() {
+  const { t } = useI18n();
+
   const getSessionTitle = React.useCallback((session: Session): string => {
     const title = session.title;
     if (title && title.trim()) return title;
-    return 'New session';
-  }, []);
+    return t('mobile.sessions.newChat');
+  }, [t]);
 
   const unseenCounts = useNotificationStore((s) => s.index.session.unseenCount);
   const needsAttention = React.useCallback((sessionId: string): boolean => {
