@@ -20,6 +20,7 @@ const base = (
   startY: 30,
   endX: 200,
   endY: 35,
+  viewportWidth: 180,
   disabled: false,
   startedOnInteractive: false,
   ...overrides,
@@ -27,7 +28,7 @@ const base = (
 
 describe('evaluateHeaderSwipe', () => {
   // -----------------------------------------------------------------------
-  // Happy path: clean rightward swipe on header
+  // Happy path: clean rightward swipe across more than half the viewport
   // -----------------------------------------------------------------------
   test('opens on clean horizontal rightward swipe', () => {
     expect(evaluateHeaderSwipe(base()).open).toBe(true);
@@ -46,21 +47,18 @@ describe('evaluateHeaderSwipe', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Minimum distance
+  // Half-viewport threshold
   // -----------------------------------------------------------------------
-  test('rejects swipe below minimum distance', () => {
-    // dx = 71 < 72
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 171 })).open).toBe(false);
+  test('rejects swipe below half the viewport', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 189, viewportWidth: 180 })).open).toBe(false);
   });
 
-  test('accepts swipe exactly at minimum distance', () => {
-    // dx = 72
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 172 })).open).toBe(true);
+  test('rejects swipe exactly at half the viewport', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 190, viewportWidth: 180 })).open).toBe(false);
   });
 
-  test('accepts swipe well above minimum distance', () => {
-    // dx = 200
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 300 })).open).toBe(true);
+  test('accepts swipe beyond half the viewport', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 191, viewportWidth: 180 })).open).toBe(true);
   });
 
   // -----------------------------------------------------------------------

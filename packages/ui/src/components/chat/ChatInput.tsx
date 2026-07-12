@@ -41,7 +41,7 @@ import { PendingChangesBar } from './PendingChangesBar';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
-import { MobileSessionStatusBar, MobileSessionPanelTrigger } from './MobileSessionStatusBar';
+import { MobileSessionStatusBar } from './MobileSessionStatusBar';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -2686,7 +2686,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         // Handle Enter/Ctrl+Enter based on selected follow-up behavior.
-        if (e.key === 'Enter' && !e.shiftKey && (!isMobile || e.ctrlKey || e.metaKey)) {
+        // When enterkeyhint="send" is set on mobile, the keyboard shows
+        // a send button; plain Enter should submit, Shift+Enter for newline.
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
 
             const isCtrlEnter = e.ctrlKey || e.metaKey;
@@ -4973,13 +4975,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         className="mb-1.5"
                     />
                     <div
+                        data-mobile-composer-surface="true"
+                        data-session-swipe-surface="true"
                         className="flex h-11 min-w-0 w-full items-center gap-x-0.5 rounded-full border border-border/80 pl-2 pr-1"
                         style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
                     >
-                        <MobileSessionPanelTrigger
-                            footerIconButtonClass={footerIconButtonClass}
-                            iconSizeClass={iconSizeClass}
-                        />
                         <ComposerAttachmentControls
                             isVSCode={isVSCode}
                             footerIconButtonClass={footerIconButtonClass}
@@ -4992,6 +4992,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         />
                         <button
                             type="button"
+                            data-mobile-composer-trigger="true"
+                            data-mobile-press-feedback="none"
                             className="flex h-full min-w-0 flex-1 cursor-text items-center px-1.5 text-left"
                             onClick={() => expandMobileComposer('focus')}
                         >
@@ -5020,6 +5022,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     className="mb-1.5"
                 />
                 <div
+                    data-mobile-composer-surface={isMobile ? 'true' : undefined}
+                    data-session-swipe-surface={isMobile ? 'true' : undefined}
                     className={cn(
                         "flex flex-col relative overflow-visible",
                         isComposerExpanded && 'flex-1 min-h-0',
@@ -5307,6 +5311,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         : t(useCompactChatPlaceholder ? 'chat.chatInput.placeholder.chatCompact' : 'chat.chatInput.placeholder.chat')
                                     : t('chat.chatInput.placeholder.selectSession')}
                                 disabled={(!currentSessionId && !newSessionDraftOpen) || draftSubmitting}
+                                enterKeyHint={isMobile ? "send" : undefined}
                                 autoCorrect={isMobile ? "on" : "off"}
                                 autoCapitalize={isMobile ? "sentences" : "off"}
                                 spellCheck={isMobile || inputSpellcheckEnabled}
@@ -5349,10 +5354,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             <>
                                 <div className="flex w-full items-center justify-between gap-x-1.5">
                                     <div className="composer-mobile-actions flex items-center gap-x-2 pl-1">
-                                        <MobileSessionPanelTrigger
-                                            footerIconButtonClass={footerIconButtonClass}
-                                            iconSizeClass={iconSizeClass}
-                                        />
                                         <ComposerAttachmentControls
                                             isVSCode={isVSCode}
                                             footerIconButtonClass={footerIconButtonClass}
@@ -5476,9 +5477,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     />
                 ) : null}
                 </div>
-                {/* Mobile session panel: slide-up overlay toggled by
-                    MobileSessionPanelTrigger. Mounted outside the pill
-                    conditional so the pill's trigger works too. */}
+                {/* Mobile session panel: slide-up overlay opened by the mobile shell. */}
                 {isMobile && <MobileSessionStatusBar />}
                 {/* Hidden host for the model/agent/variant bottom sheets. Kept
                     outside the pill conditional so an open panel survives (and

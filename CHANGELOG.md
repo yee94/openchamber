@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.16] - 2026-07-12
+
+- **Mobile session picker:** consolidate phone session selection into the slide-up panel. The existing top-left folders button and session deep links open it, while a right swipe across more than half the conversation provides a gesture shortcut.
+- **Mobile session navigation:** horizontal swipes switch conversations only when they begin on the collapsed or expanded composer; vertical gestures and conversation content retain their native scrolling and interaction behavior.
+- **Mobile session status:** running conversations use the shared busy ring, unread conversations use the desktop information marker, and completed conversations no longer show an idle status dot.
+- **Mobile generation controls:** the conversation status row exposes the shared stop action while generation is active, and Android back navigation returns from a child conversation to its parent.
+- **Mobile input feedback:** streaming output drives continuous light native haptics, touch controls use immediate scale feedback, and the mobile keyboard Send key submits the composer while Shift+Enter inserts a line break.
+
 ## [1.15.15] - 2026-07-12
 
 - **Mobile session navigation:** swipe across the conversation in any direction to move between newer and older sessions, and swipe right across the header to open the project and session list without relying on Android system-edge gestures.

@@ -5,19 +5,15 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 /**
- * Touch-swipe gesture to switch sessions in the mobile chat content area.
+ * Horizontal touch-swipe gesture to switch sessions on the mobile composer.
  *
- * The gesture covers the entire chat container (no edge-zone restriction) and
- * detects four touch directions:
+ * The listeners live on the chat container, while gesture starts are accepted
+ * only from a composer surface marked with `data-session-swipe-surface`:
  *
  * - Left  swipe → step +1 (next / older session)
- * - Up    swipe → step +1 (next / older session)
  * - Right swipe → step -1 (prev / newer session)
- * - Down  swipe → step -1 (prev / newer session)
  *
- * The dominant axis is selected at end time by comparing |dx| and |dy|:
- * axis with the larger travel is the primary axis; the other must stay
- * within a reasonable off-axis ratio or the gesture is suppressed.
+ * Vertical movement must stay within the off-axis tolerance.
  *
  * Interactive controls, code blocks, and scrollable ancestors (only in the
  * dominant direction) are excluded so the gesture never fights scrolling or
@@ -59,9 +55,11 @@ const INTERACTIVE_SELECTORS = [
 ].join(',');
 
 const CODE_SELECTOR = '[class*="code-block"], [class*="codeBlock"], pre, .cm-editor';
+const SESSION_SWIPE_SURFACE_SELECTOR = '[data-session-swipe-surface="true"]';
 
 const isInteractiveTarget = (element: Element | null): boolean => {
   if (!element) return false;
+  if (element.closest(SESSION_SWIPE_SURFACE_SELECTOR)) return false;
   return element.matches(INTERACTIVE_SELECTORS)
     || element.closest(INTERACTIVE_SELECTORS) !== null;
 };
@@ -120,18 +118,9 @@ export const evaluateSwipeDirection = (input: SwipeDirectionInput): SwipeDirecti
   const absDx = Math.abs(dx);
   const absDy = Math.abs(dy);
 
-  // Choose dominant axis
-  if (absDx >= absDy) {
-    // Horizontal dominant
-    if (absDx < MIN_DISTANCE) return null;
-    if (absDy > absDx * MAX_OFF_AXIS_RATIO) return null;
-    return dx < 0 ? 'next' : 'prev';
-  } else {
-    // Vertical dominant
-    if (absDy < MIN_DISTANCE) return null;
-    if (absDx > absDy * MAX_OFF_AXIS_RATIO) return null;
-    return dy < 0 ? 'next' : 'prev';
-  }
+  if (absDx < MIN_DISTANCE) return null;
+  if (absDy > absDx * MAX_OFF_AXIS_RATIO) return null;
+  return dx < 0 ? 'next' : 'prev';
 };
 
 // ---------------------------------------------------------------------------
@@ -196,6 +185,8 @@ export const useEdgeSwipeSessionSwitch = (
     let startX = 0;
     let startY = 0;
     let startedOnSwallowTarget = false;
+    let suppressNextClick = false;
+    let clickResetTimer: number | null = null;
 
     const isSwallowTarget = (touch: Touch): boolean => {
       const target = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -208,6 +199,11 @@ export const useEdgeSwipeSessionSwitch = (
         return;
       }
       const touch = event.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (!target?.closest(SESSION_SWIPE_SURFACE_SELECTOR)) {
+        tracking = false;
+        return;
+      }
       tracking = true;
       startX = touch.clientX;
       startY = touch.clientY;
@@ -222,15 +218,8 @@ export const useEdgeSwipeSessionSwitch = (
       const touch = event.changedTouches[0];
       if (!touch) return;
 
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
-
-      // Check scrollable ancestors in the dominant direction before committing
-      const isHorizontal = absDx >= absDy;
       const target = document.elementFromPoint(touch.clientX, touch.clientY);
-      if (hasScrollableAncestorInDirection(target, isHorizontal)) return;
+      if (hasScrollableAncestorInDirection(target, true)) return;
 
       const direction = evaluateSwipeDirection({
         startX,
@@ -243,6 +232,12 @@ export const useEdgeSwipeSessionSwitch = (
 
       const step = direction === 'prev' ? -1 : 1;
       if (switchByStep(step)) {
+        suppressNextClick = true;
+        if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);
+        clickResetTimer = window.setTimeout(() => {
+          suppressNextClick = false;
+          clickResetTimer = null;
+        }, 500);
         onSwitchRef.current?.(direction);
       }
     };
@@ -251,13 +246,27 @@ export const useEdgeSwipeSessionSwitch = (
       tracking = false;
     };
 
+    const onClickCapture = (event: MouseEvent) => {
+      if (!suppressNextClick) return;
+      suppressNextClick = false;
+      if (clickResetTimer !== null) {
+        window.clearTimeout(clickResetTimer);
+        clickResetTimer = null;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
     element.addEventListener('touchstart', onTouchStart, { passive: true });
     element.addEventListener('touchend', onTouchEnd, { passive: true });
     element.addEventListener('touchcancel', onTouchCancel, { passive: true });
+    element.addEventListener('click', onClickCapture, true);
     return () => {
+      if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);
       element.removeEventListener('touchstart', onTouchStart);
       element.removeEventListener('touchend', onTouchEnd);
       element.removeEventListener('touchcancel', onTouchCancel);
+      element.removeEventListener('click', onClickCapture, true);
     };
   }, [ref]);
 };

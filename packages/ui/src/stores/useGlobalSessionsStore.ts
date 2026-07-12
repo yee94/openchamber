@@ -1284,17 +1284,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 }));
 
-export const ensureGlobalSessionsLoaded = async (fallbackActive?: Session[]): Promise<LoadResult> => {
-  const state = useGlobalSessionsStore.getState();
-  if (state.hasLoaded && state.status !== 'error') {
-    return {
-      activeSessions: state.activeSessions,
-      archivedSessions: state.archivedSessions,
-    };
-  }
-  return state.loadSessions(fallbackActive);
-};
-
 export const ensureFullGlobalSessionsLoaded = async (fallbackActive?: Session[]): Promise<LoadResult> => {
   const state = useGlobalSessionsStore.getState();
   if (state.hasLoadedFullCatalog && state.status !== 'error') {

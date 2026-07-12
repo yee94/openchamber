@@ -10,7 +10,7 @@ import type { SwipeDirectionInput } from './useEdgeSwipeSessionSwitch';
  * scrollable-ancestor detection) exercises touch-event patterns that are
  * verified through component-level smoke on device. These tests cover every
  * geometric gate: axis selection, minimum distance, off-axis ratio, and
- * direction mapping for all four swipe directions.
+ * direction mapping for horizontal swipes.
  */
 
 const baseSwipe = (
@@ -50,27 +50,25 @@ describe('evaluateSwipeDirection', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Vertical: up swipe → next
+  // Vertical gestures are reserved for composer expansion and page scrolling.
   // -----------------------------------------------------------------------
-  test('up swipe maps to next', () => {
-    expect(evaluateSwipeDirection(baseSwipe({ endX: 203, endY: 200 }))).toBe('next');
-    // dy = -100, absDy = 100 > 64
+  test('up swipe is ignored', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ endX: 203, endY: 200 }))).toBe(null);
   });
 
-  test('up swipe exactly at min distance maps to next', () => {
-    expect(evaluateSwipeDirection(baseSwipe({ startY: 364, endY: 300, endX: 202 }))).toBe('next');
+  test('up swipe exactly at horizontal min distance is ignored', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ startY: 364, endY: 300, endX: 202 }))).toBe(null);
   });
 
   // -----------------------------------------------------------------------
-  // Vertical: down swipe → prev
+  // Vertical: down is ignored
   // -----------------------------------------------------------------------
-  test('down swipe maps to prev', () => {
-    expect(evaluateSwipeDirection(baseSwipe({ endX: 203, endY: 400 }))).toBe('prev');
-    // dy = 100, absDy = 100 > 64
+  test('down swipe is ignored', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ endX: 203, endY: 400 }))).toBe(null);
   });
 
-  test('down swipe exactly at min distance maps to prev', () => {
-    expect(evaluateSwipeDirection(baseSwipe({ startY: 300, endY: 364, endX: 202 }))).toBe('prev');
+  test('down swipe exactly at horizontal min distance is ignored', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ startY: 300, endY: 364, endX: 202 }))).toBe(null);
   });
 
   // -----------------------------------------------------------------------
@@ -87,16 +85,14 @@ describe('evaluateSwipeDirection', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Axis selection: vertical wins when |dy| > |dx|
+  // Vertical-dominant gestures are ignored
   // -----------------------------------------------------------------------
-  test('vertical wins when dy is larger', () => {
-    // dx = -60, dy = -100 → vertical dominant (100 > 60) → up → next
-    expect(evaluateSwipeDirection(baseSwipe({ endX: 140, endY: 200 }))).toBe('next');
+  test('ignores vertical-dominant upward movement', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ endX: 140, endY: 200 }))).toBe(null);
   });
 
-  test('vertical down wins when dy is larger positive', () => {
-    expect(evaluateSwipeDirection(baseSwipe({ endX: 210, endY: 450 }))).toBe('prev');
-    // dx = 10, dy = 150 → vertical dominant → down → prev
+  test('ignores vertical-dominant downward movement', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ endX: 210, endY: 450 }))).toBe(null);
   });
 
   // -----------------------------------------------------------------------
@@ -137,8 +133,7 @@ describe('evaluateSwipeDirection', () => {
     expect(evaluateSwipeDirection(baseSwipe({ endX: 265, endY: 200 }))).toBe(null);
   });
 
-  test('vertical swipe accepted when off-axis within tolerance', () => {
-    // dx = 59, dy = -100 → |dx|/|dy| = 0.59 < 0.6
-    expect(evaluateSwipeDirection(baseSwipe({ endX: 259, endY: 200 }))).toBe('next');
+  test('vertical swipe within the old tolerance is ignored', () => {
+    expect(evaluateSwipeDirection(baseSwipe({ endX: 259, endY: 200 }))).toBe(null);
   });
 });
