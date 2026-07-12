@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.19] - 2026-07-12
+
+- **Cross-runtime session startup:** Web, Electron, and mobile restore project session summaries from the shared SQLite index, while background synchronization stays bounded and session panels avoid redundant global history requests.
+- **Session forks:** show a dedicated transition while OpenCode copies a conversation, suppress duplicate fork events, and open the fork from one bounded initial message page.
+- **Mobile generation controls:** keep stop controls in the composer, simplify the status row, and preserve streaming haptics with the visible response lifecycle.
+- **Authentication startup:** dismiss the initial loading layer when authentication or network recovery needs to present an interactive screen.
+
 ## [1.15.18] - 2026-07-12
 
 - **Native haptics:** synchronize feedback with visible streaming updates. Thinking vibrates once when its UI first appears, while assistant text vibrates once per rendered text update; fixed-interval pulses are removed.
