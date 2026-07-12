@@ -12,20 +12,19 @@ let publishedRevision = 0;
 
 /**
  * Build the global Mod+1…9 order from the session rows that are logically
- * visible in the sidebar. Recent rows come first because that section renders
+ * visible in the sidebar. Pinned rows come first because that section renders
  * above the project tree; project rows retain their rendered tree order.
  *
- * A session may intentionally appear twice (Recent and its project). Those are
- * distinct visual rows with distinct Focus identities, so both keep a slot.
+ * Each session has one visual home, so every row keeps one slot.
  */
 export const buildSidebarNumberedSessionTargets = ({
-  recentTargets,
+  pinnedTargets,
   projectTargets,
 }: {
-  recentTargets: readonly SessionNavigationTarget[];
+  pinnedTargets: readonly SessionNavigationTarget[];
   projectTargets: readonly SessionNavigationTarget[];
 }): SessionNavigationTarget[] => (
-  [...recentTargets, ...projectTargets].slice(0, MAX_NUMBERED_SIDEBAR_SESSIONS)
+  [...pinnedTargets, ...projectTargets].slice(0, MAX_NUMBERED_SIDEBAR_SESSIONS)
 );
 
 export const getSidebarNumberedSessionNumber = (

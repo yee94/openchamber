@@ -34,6 +34,7 @@ type ProjectSection = {
 
 type Props = {
   topContent?: React.ReactNode;
+  headerAccessory?: React.ReactNode;
   sharedSessionsOnly?: boolean;
   hasSharedSessions?: boolean;
   sectionsForRender: ProjectSection[];
@@ -198,6 +199,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
             <SidebarSectionHeader
               title={t('sessions.sidebar.projectsTitle')}
               isFirst={!props.topContent}
+              accessory={props.headerAccessory}
             />
           ) : null}
           <DndContext

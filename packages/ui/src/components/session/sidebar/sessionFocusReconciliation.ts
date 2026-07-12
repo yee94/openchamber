@@ -3,7 +3,7 @@ import type { SessionFocusIdentity } from '@/stores/useSessionFocusStore';
 type ReconcileSessionFocusArgs = {
   currentSessionId: string | null;
   focus: SessionFocusIdentity | null;
-  recentFocuses: readonly SessionFocusIdentity[];
+  pinnedFocuses: readonly SessionFocusIdentity[];
   projectFocuses: readonly SessionFocusIdentity[];
   fallbackProjectId: string | null;
 };
@@ -38,7 +38,7 @@ const findPreferredFocus = (
 export const reconcileSessionFocus = ({
   currentSessionId,
   focus,
-  recentFocuses,
+  pinnedFocuses,
   projectFocuses,
   fallbackProjectId,
 }: ReconcileSessionFocusArgs): SessionFocusIdentity | null => {
@@ -62,7 +62,7 @@ export const reconcileSessionFocus = ({
   }
 
   return findPreferredFocus(
-    recentFocuses,
+    pinnedFocuses,
     currentSessionId,
     preferredProjectId,
     fallbackProjectId,

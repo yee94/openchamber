@@ -38,6 +38,7 @@ import { useDelayedModKeyHeld } from '@/hooks/useDelayedModKeyHeld';
 import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { opencodeClient } from '@/lib/opencode/client';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 import { parseMultiRunSessionTitle } from '@/lib/multirun/title';
 import { MultiRunFusionDialog } from '@/components/multirun/MultiRunFusionDialog';
 import { FusionIcon } from '@/components/icons/FusionIcon';
@@ -80,7 +81,7 @@ type Props = {
     sessionId: string,
     sessionDirectory: string | null,
     projectId?: string | null,
-    renderContext?: 'project' | 'recent',
+    renderContext?: 'project' | 'pinned',
   ) => void;
   handleSessionDoubleClick: (sessionId: string, sessionTitle: string) => void;
   togglePinnedSession: (sessionId: string) => void;
@@ -107,11 +108,11 @@ type Props = {
     projectId?: string | null,
     archivedBucket?: boolean,
     secondaryMeta?: SecondaryMeta | null,
-    renderContext?: 'project' | 'recent',
+    renderContext?: 'project' | 'pinned',
     renderExtras?: SessionNodeRenderExtras,
   ) => React.ReactNode;
   secondaryMeta?: SecondaryMeta | null;
-  renderContext?: 'project' | 'recent';
+  renderContext?: 'project' | 'pinned';
   /**
    * Precomputed set of session IDs whose subtree contains the current
    * active session. Computed once per SessionGroupSection render (when
@@ -305,11 +306,12 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     ? 'group-hover:opacity-100 group-hover:pointer-events-auto'
     : 'group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto';
   const showOpenInEditorAction = isVSCode;
-  const showQuickArchiveAction = !archivedBucket && !mobileVariant;
+  const showQuickUnpinAction = renderContext === 'pinned';
+  const showQuickArchiveAction = !showQuickUnpinAction && !archivedBucket && !mobileVariant;
   // Match typography-ui-label (~14px) so action icons align with the title text.
   const actionButtonSizeClass = 'h-5 w-5';
   const actionIconSizeClass = 'h-3.5 w-3.5';
-  const hoverActionCount = (showQuickArchiveAction ? 1 : 0)
+  const hoverActionCount = (showQuickArchiveAction || showQuickUnpinAction ? 1 : 0)
     + (showOpenInEditorAction ? 1 : 0)
     + 1; // overflow menu
   const hoverActionPadClass = hoverActionCount >= 3
@@ -327,6 +329,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     : hoverActionPadClass;
   const alwaysActionPaddingClass = hoverActionCount >= 2 ? 'pr-12' : 'pr-8';
   const suppressNextSelectRef = React.useRef(false);
+  const mouseFocusedTitleRef = React.useRef(false);
   const [isTouchPressed, setIsTouchPressed] = React.useState(false);
   const editingIdRef = React.useRef(editingId);
   editingIdRef.current = editingId;
@@ -443,16 +446,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const hasChildren = node.children.length > 0
     || Boolean((resolvedSession as Session & { hasChildren?: boolean }).hasChildren);
   const isPinnedSession = pinnedSessionIds.has(session.id);
-  // Per-render-context expansion key: the same session can appear in both
-  // the project's root and the "Recent" list, and expanding one should not
-  // expand the other. Matches the format of menuInstanceKey.
+  // Per-render-context expansion key matches the format of menuInstanceKey.
   const expansionKey = menuInstanceKey;
   const isExpanded = hasSessionSearchQuery ? true : expandedParents.has(expansionKey);
   const isSubtaskSession = Boolean((resolvedSession as Session & { parentID?: string | null }).parentID);
-  const isRecentContext = renderContext === 'recent';
+  const isPinnedContext = renderContext === 'pinned';
   const unseenCount = useSessionUnseenCount(session.id);
   const needsAttention = unseenCount > 0 && (!isSubtaskSession || notifyOnSubtasks);
-  const sessionTimestamp = resolvedSession.time?.updated || resolvedSession.time?.created || Date.now();
+  const sessionTimestamp = getSessionActivityUpdatedAt(resolvedSession) || Date.now();
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
@@ -460,7 +461,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const isSessionMenuOpen = isMenuOpen || isContextMenuOpen;
   const isMultiRunLikeSession = React.useMemo(() => parseMultiRunSessionTitle(resolvedSession.title) !== null, [resolvedSession.title]);
   const [fusionDialogOpen, setFusionDialogOpen] = React.useState(false);
-  // Recent is a flat recency list — no pin/chevron/tree chrome (those live in Projects).
 
   const descendantCount = React.useMemo(() => collectNodeDescendantIds(node).length, [collectNodeDescendantIds, node]);
 
@@ -669,7 +669,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           {!isMinimalMode ? (
             <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
               <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                {hasChildren && !isRecentContext ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
+                {hasChildren && !isPinnedContext ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
                 <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
                 {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
                 {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
@@ -711,9 +711,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           <span className="h-2 w-2 rounded-full bg-[var(--status-info)]" />
         </span>
       );
-  // Recent: no pin glyph and no chevron swap-on-hover (tree chrome stays in Projects).
-  const hideLeadingIndicatorOnHover = !isRecentContext && !alwaysShowActions && hasChildren && isPinnedSession;
-  const showPinnedMarker = !isRecentContext && isPinnedSession;
+  const hideLeadingIndicatorOnHover = !isPinnedContext && !alwaysShowActions && hasChildren && isPinnedSession;
+  const showPinnedMarker = !isPinnedContext && isPinnedSession;
   const pinnedMarkerContent = (
     <Icon
       name="pushpin-2-fill"
@@ -735,8 +734,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     </span>
   ) : null;
   // Subsession chevron: align with the folder-icon column; idle hidden, hover only
-  // (touch / alwaysShowActions keeps it visible). Omitted entirely in Recent.
-  const canExpandSubsessions = !isRecentContext && !isSubtaskSession && hasChildren;
+  // (touch / alwaysShowActions keeps it visible).
+  const canExpandSubsessions = !isPinnedContext && !isSubtaskSession && hasChildren;
   const hideChevronUntilHover = canExpandSubsessions && !alwaysShowActions;
   const subsessionChevronLeft = getSidebarRowPaddingLeft(Math.max(0, depth - 1));
   const toggleSubsessionTree = () => {
@@ -844,6 +843,13 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     handleDeleteSession(session, { archivedBucket, hardDelete: true, skipConfirm: true });
   };
 
+  const handleQuickUnpinClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpenSidebarMenuKey(null);
+    togglePinnedSession(session.id);
+  };
+
   const handleOpenInEditorPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -905,6 +911,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     }
   };
   const handleRowPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    mouseFocusedTitleRef.current = event.pointerType === 'mouse';
     if (mobileVariant && event.pointerType === 'touch') {
       setIsTouchPressed(true);
     }
@@ -913,6 +920,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     if (mobileVariant && event.pointerType === 'touch') {
       setIsTouchPressed(false);
     }
+  };
+  const handleRowKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'Enter' || !mouseFocusedTitleRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleSessionDoubleClick(session.id, sessionTitle);
+  };
+  const handleRowBlur = () => {
+    mouseFocusedTitleRef.current = false;
   };
 
   const renderSessionMenuItems = ({
@@ -1159,6 +1175,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     onPointerUp={handleRowPointerEnd}
                     onPointerCancel={handleRowPointerEnd}
                     onMouseDown={handleRowMouseDown}
+                    onKeyDown={handleRowKeyDown}
+                    onBlur={handleRowBlur}
                     onClick={(event) => handleRowSelect(event)}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
@@ -1281,6 +1299,29 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 onDelete={handleQuickDeleteClick}
               />
             ) : null}
+            {showQuickUnpinAction ? (
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-none',
+                      actionButtonSizeClass,
+                    )}
+                    aria-label={t('sessions.sidebar.session.actions.pinned')}
+                    onPointerDown={handleQuickArchivePointerDown}
+                    onMouseDown={handleQuickArchiveMouseDown}
+                    onClick={handleQuickUnpinClick}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <Icon name="pushpin-2-fill" className={actionIconSizeClass} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" sideOffset={8}>
+                  {t('sessions.sidebar.session.actions.pinned')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             {showOpenInEditorAction ? (
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -1331,7 +1372,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           {contextMenuContent}
         </ContextMenu.Root>
       </DraggableSessionRow>
-      {!isRecentContext && hasChildren && isExpanded
+      {!isPinnedContext && hasChildren && isExpanded
         ? node.children.map((child): React.ReactNode => {
           const childRenderExtras: SessionNodeChildRenderExtras = childRenderExtrasFor
             ? childRenderExtrasFor(child)

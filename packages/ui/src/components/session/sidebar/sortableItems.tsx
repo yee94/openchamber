@@ -12,6 +12,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { SIDEBAR_ROW_HOVER_CLASS } from './utils';
 
 export interface SortableProjectItemProps {
@@ -55,6 +56,10 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   id,
   projectLabel,
   projectDescription,
+  projectIcon,
+  projectColor,
+  projectIconImage,
+  projectIconBackground,
   isCollapsed,
   isActiveProject,
   isSessionsLoading = false,
@@ -90,6 +95,9 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   const menuInstanceKey = `project:${id}`;
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
+  const projectIconName = projectIcon ? PROJECT_ICON_MAP[projectIcon] : null;
+  const projectIconColor = projectColor ? PROJECT_COLOR_MAP[projectColor] : undefined;
+  const projectIconFallback = <Icon name={projectIconName ?? 'folder-open'} className="h-4 w-4" style={projectIconColor ? { color: projectIconColor } : undefined} />;
 
   const handleMenuOpenChange = React.useCallback((open: boolean) => {
     if (open) setIsContextMenuOpen(false);
@@ -189,7 +197,10 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                           : (alwaysShowActions ? 'pr-14' : 'pr-7 group-hover/project:pr-14 group-focus-within/project:pr-14'),
                       )}
                     >
-                    <span className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-muted-foreground">
+                    <span
+                      className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--surface-muted)] text-muted-foreground"
+                      style={projectIconBackground ? { backgroundColor: projectIconBackground } : undefined}
+                    >
                       {isSessionsLoading ? (
                         <Icon
                           name="loader-4"
@@ -204,14 +215,15 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                           )}>
                             {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
                           </span>
-                          {/* Codex-style open folder (folder-open), not the closed boxy glyph */}
-                          <Icon
-                            name="folder-open"
-                            className={cn(
-                              'h-4 w-4',
-                              alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden',
-                            )}
-                          />
+                          <span className={cn(alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden')}>
+                            {projectIconImage ? (
+                              <ProjectIconImage
+                                project={{ id, iconImage: projectIconImage }}
+                                className="size-full object-contain"
+                                fallback={projectIconFallback}
+                              />
+                            ) : projectIconFallback}
+                          </span>
                         </>
                       )}
                     </span>

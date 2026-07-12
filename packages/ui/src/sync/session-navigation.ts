@@ -30,7 +30,7 @@ export type SessionNavigationTarget = Readonly<{
 }>;
 
 type SessionNavigationSnapshot = Readonly<{
-  recent: readonly SessionNavigationTarget[];
+  pinned: readonly SessionNavigationTarget[];
   project: readonly SessionNavigationTarget[];
 }>;
 
@@ -51,7 +51,7 @@ const normalizeNavigationTargets = (
       continue;
     }
 
-    const targetKey = scope === 'recent'
+    const targetKey = scope === 'pinned'
       ? target.sessionId
       : `${target.projectId ?? ''}:${target.sessionId}`;
     if (seen.has(targetKey)) {
@@ -76,7 +76,7 @@ export const publishSessionNavigationSnapshot = (
 ): (() => void) => {
   const revision = ++publishedNavigationRevision;
   publishedNavigationSnapshot = {
-    recent: normalizeNavigationTargets('recent', snapshot.recent),
+    pinned: normalizeNavigationTargets('pinned', snapshot.pinned),
     project: normalizeNavigationTargets('project', snapshot.project),
   };
 
@@ -312,7 +312,7 @@ export const resolveAdjacentNavigationTarget = (
     rootSessionId,
     currentFocus,
   );
-  const scopedTargets = requestedScope === 'recent' ? snapshot.recent : projectTargets;
+  const scopedTargets = requestedScope === 'pinned' ? snapshot.pinned : projectTargets;
   const scopedTarget = cycleNavigationTargets(
     scopedTargets,
     direction,
@@ -323,7 +323,7 @@ export const resolveAdjacentNavigationTarget = (
     return scopedTarget;
   }
 
-  if (requestedScope === 'recent') {
+  if (requestedScope === 'pinned') {
     return cycleNavigationTargets(
       projectTargets,
       direction,

@@ -10,6 +10,7 @@ import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
 import { opencodeClient } from "@/lib/opencode/client"
+import { getSessionActivityUpdatedAt } from "@/lib/sessionActivity"
 import { mergeSessionDirectoryMetadata, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
@@ -692,7 +693,28 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
 
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
   const sessionDirectory = getSessionDirectory(sessionId)
-  const session = await opencodeClient.updateSession(sessionId, { title }, sessionDirectory)
+  const current = getGlobalSessionSnapshot(sessionId)
+  const metadata = (current as Session & { metadata?: Record<string, unknown> } | null)?.metadata ?? {}
+  const openchamber = metadata.openchamber && typeof metadata.openchamber === "object"
+    ? metadata.openchamber as Record<string, unknown>
+    : {}
+  const titleRefresh = openchamber.titleRefresh && typeof openchamber.titleRefresh === "object"
+    ? openchamber.titleRefresh as Record<string, unknown>
+    : {}
+  const activityUpdatedAt = current ? getSessionActivityUpdatedAt(current) : 0
+  const session = await opencodeClient.updateSession(sessionId, {
+    title,
+    metadata: {
+      ...metadata,
+      openchamber: {
+        ...openchamber,
+        titleRefresh: {
+          ...titleRefresh,
+          activityUpdatedAt,
+        },
+      },
+    },
+  }, sessionDirectory)
   useGlobalSessionsStore.getState().upsertSession(session)
 }
 

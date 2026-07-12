@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
+import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 
 export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onItemSelect }) => {
   const { t } = useI18n();
@@ -61,9 +62,16 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
     >
       {projects.map((project) => {
         const selected = project.id === selectedId;
-        // Codex-style: muted open-folder only — no per-project color/icon chrome.
+        const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+        const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+        const fallback = <Icon name={iconName ?? 'folder'} className="h-4 w-4" style={iconColor ? { color: iconColor } : undefined} />;
         const icon = (
-          <Icon name="folder" className={cn('h-4 w-4', selected ? 'text-foreground' : 'text-muted-foreground')} />
+          <span
+            className={cn('flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--surface-muted)]', selected ? 'text-foreground' : 'text-muted-foreground')}
+            style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+          >
+            {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
+          </span>
         );
 
         return (

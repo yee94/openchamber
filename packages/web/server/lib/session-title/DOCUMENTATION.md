@@ -15,8 +15,10 @@ discussing, throttled to at most once per 5 minutes per session.
    fan-out (`index.js` → `globalMessageStreamHub.subscribeEvent`), same
    pattern as session-assist. Purely event-driven — dormant sessions never
    generate anything.
-2. `session.status: idle` arms a 15-second quiet timer; any `busy`/`retry`
-   status or a fresh user `message.updated` clears it.
+2. A newly observed root `session.created` generates its first title immediately
+   on the first `session.status: idle`. Later idle transitions arm a 15-second
+   quiet timer; any `busy`/`retry` status or a fresh user `message.updated`
+   clears it.
    A sidebar smart-title request sets `titleRefresh.requestedAt`; its
    `session.updated` event arms the same flow immediately.
 3. On fire:
@@ -41,6 +43,13 @@ discussing, throttled to at most once per 5 minutes per session.
    `generatedAt`) from a fresh session read so concurrent metadata writes
    are preserved. Transient `requestedAt` and `isGenerating` flags clear
    after the model call finishes.
+
+## Sidebar ordering
+
+`message.updated` events for real user messages persist their creation time as
+`metadata.openchamber.titleRefresh.activityUpdatedAt`. Sidebar/global ordering
+uses this user-activity timestamp. Assistant output, tool events, title writes,
+and other session updates keep the existing ordering timestamp unchanged.
 
 ## Settings gate
 

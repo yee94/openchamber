@@ -54,7 +54,7 @@ const bootstrapSessions = (sessions: Session[], directory = '/workspace/project'
 };
 
 const makeNavigationTarget = (
-  scope: 'recent' | 'project',
+  scope: 'pinned' | 'project',
   sessionId: string,
   projectId: string | null,
 ): SessionNavigationTarget => ({
@@ -185,12 +185,12 @@ describe('session-navigation', () => {
     expect(resolveAdjacentRootSession(-1, 'root-b')?.id).toBe('root-a');
   });
 
-  test('cycles within the published Recent order when focus came from Recent', () => {
+  test('cycles within the published pinned order when focus came from pinned', () => {
     publishSessionNavigationSnapshot({
-      recent: [
-        makeNavigationTarget('recent', 'recent-a', 'p1'),
-        makeNavigationTarget('recent', 'recent-b', 'p2'),
-        makeNavigationTarget('recent', 'recent-c', 'p1'),
+      pinned: [
+        makeNavigationTarget('pinned', 'pinned-a', 'p1'),
+        makeNavigationTarget('pinned', 'pinned-b', 'p2'),
+        makeNavigationTarget('pinned', 'pinned-c', 'p1'),
       ],
       project: [
         makeNavigationTarget('project', 'project-a', 'p1'),
@@ -198,26 +198,26 @@ describe('session-navigation', () => {
       ],
     });
 
-    const recentFocus = {
-      scope: 'recent' as const,
-      sessionId: 'recent-b',
+    const pinnedFocus = {
+      scope: 'pinned' as const,
+      sessionId: 'pinned-b',
       projectId: 'p2',
     };
 
-    expect(resolveAdjacentNavigationTarget(1, 'recent-b', recentFocus)?.sessionId).toBe('recent-c');
-    expect(resolveAdjacentNavigationTarget(-1, 'recent-b', recentFocus)?.sessionId).toBe('recent-a');
-    expect(resolveAdjacentNavigationTarget(1, 'recent-c', {
-      ...recentFocus,
-      sessionId: 'recent-c',
+    expect(resolveAdjacentNavigationTarget(1, 'pinned-b', pinnedFocus)?.sessionId).toBe('pinned-c');
+    expect(resolveAdjacentNavigationTarget(-1, 'pinned-b', pinnedFocus)?.sessionId).toBe('pinned-a');
+    expect(resolveAdjacentNavigationTarget(1, 'pinned-c', {
+      ...pinnedFocus,
+      sessionId: 'pinned-c',
       projectId: 'p1',
-    })?.sessionId).toBe('recent-a');
+    })?.sessionId).toBe('pinned-a');
   });
 
   test('cycles only within the focused project visible order', () => {
     publishSessionNavigationSnapshot({
-      recent: [
-        makeNavigationTarget('recent', 'project-c', 'p2'),
-        makeNavigationTarget('recent', 'project-a', 'p1'),
+      pinned: [
+        makeNavigationTarget('pinned', 'project-c', 'p2'),
+        makeNavigationTarget('pinned', 'project-a', 'p1'),
       ],
       project: [
         makeNavigationTarget('project', 'project-a', 'p1'),
@@ -243,34 +243,34 @@ describe('session-navigation', () => {
 
   test('updates focus scope before committing a scoped navigation target', () => {
     publishSessionNavigationSnapshot({
-      recent: [
-        makeNavigationTarget('recent', 'recent-a', 'p1'),
-        makeNavigationTarget('recent', 'recent-b', 'p2'),
+      pinned: [
+        makeNavigationTarget('pinned', 'pinned-a', 'p1'),
+        makeNavigationTarget('pinned', 'pinned-b', 'p2'),
       ],
       project: [makeNavigationTarget('project', 'project-a', 'p1')],
     });
     useSessionFocusStore.getState().setFocus({
-      scope: 'recent',
-      sessionId: 'recent-a',
+      scope: 'pinned',
+      sessionId: 'pinned-a',
       projectId: 'p1',
     });
 
     let focusAtCommit = null as ReturnType<typeof useSessionFocusStore.getState>['focus'];
-    const committedTarget = navigateAdjacentSession(1, 'recent-a', () => {
+    const committedTarget = navigateAdjacentSession(1, 'pinned-a', () => {
       focusAtCommit = useSessionFocusStore.getState().focus;
     });
 
-    expect(committedTarget?.sessionId).toBe('recent-b');
+    expect(committedTarget?.sessionId).toBe('pinned-b');
     expect(focusAtCommit).toEqual({
-      scope: 'recent',
-      sessionId: 'recent-b',
+      scope: 'pinned',
+      sessionId: 'pinned-b',
       projectId: 'p2',
     });
   });
 
-  test('falls back from an unavailable Recent sequence only within its project', () => {
+  test('falls back from an unavailable pinned sequence only within its project', () => {
     publishSessionNavigationSnapshot({
-      recent: [],
+      pinned: [],
       project: [
         makeNavigationTarget('project', 'project-a', 'p1'),
         makeNavigationTarget('project', 'project-a-next', 'p1'),
@@ -279,7 +279,7 @@ describe('session-navigation', () => {
     });
 
     const target = resolveAdjacentNavigationTarget(1, 'project-a', {
-      scope: 'recent',
+      scope: 'pinned',
       sessionId: 'project-a',
       projectId: 'p1',
     });
@@ -289,9 +289,9 @@ describe('session-navigation', () => {
     expect(target?.projectId).toBe('p1');
   });
 
-  test('anchors a Recent-to-project fallback at the matching project occurrence', () => {
+  test('anchors a pinned-to-project fallback at the matching project occurrence', () => {
     publishSessionNavigationSnapshot({
-      recent: [],
+      pinned: [],
       project: [
         makeNavigationTarget('project', 'shared-session', 'p1'),
         makeNavigationTarget('project', 'p1-next', 'p1'),
@@ -301,7 +301,7 @@ describe('session-navigation', () => {
     });
 
     const target = resolveAdjacentNavigationTarget(1, 'shared-session', {
-      scope: 'recent',
+      scope: 'pinned',
       sessionId: 'shared-session',
       projectId: 'p2',
     });
@@ -331,7 +331,7 @@ describe('session-navigation', () => {
     });
 
     const target = resolveAdjacentNavigationTarget(1, 'root-b', {
-      scope: 'recent',
+      scope: 'pinned',
       sessionId: 'root-b',
       projectId: 'p1',
     });
@@ -341,7 +341,7 @@ describe('session-navigation', () => {
 
   test('does not leave the focused project when it has no visible targets', () => {
     publishSessionNavigationSnapshot({
-      recent: [],
+      pinned: [],
       project: [makeNavigationTarget('project', 'visible-in-p2', 'p2')],
     });
 

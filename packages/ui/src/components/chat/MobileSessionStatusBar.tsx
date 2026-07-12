@@ -4,6 +4,7 @@ import { useAllSessionStatuses, useAllLiveSessions } from '@/sync/sync-context';
 import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import type { Session } from '@opencode-ai/sdk/v2';
 import type { ProjectEntry } from '@/lib/api/types';
 import { cn, formatDirectoryName } from '@/lib/utils';
@@ -47,9 +48,8 @@ function useAllProjectSessions(): Session[] {
   }, [globalActiveSessions, liveSessions]);
 }
 
-// Max sessions shown per (filtered) project list - a "recent" cap applied
-// after filtering, so each project view shows at most this many.
 const MAX_RECENT_SESSIONS = 25;
+const PINNED_SESSION_FILTER_ID = '__pinned_sessions__';
 
 // Normalize path for comparison
 const normalize = (value: string): string => {
@@ -346,6 +346,7 @@ function SessionItem({
 // the session list; it does NOT switch the active project.
 interface ProjectFilterChipProps {
   label: string;
+  leadingIcon?: React.ReactNode;
   icon?: string | null;
   project?: Pick<ProjectEntry, 'id' | 'iconImage'> | null;
   iconOptions?: React.ComponentProps<typeof ProjectIconImage>['options'];
@@ -358,6 +359,7 @@ interface ProjectFilterChipProps {
 
 function ProjectFilterChip({
   label,
+  leadingIcon,
   icon,
   project,
   iconOptions,
@@ -383,6 +385,7 @@ function ProjectFilterChip({
           : "border-[var(--interactive-border)] bg-[var(--surface-subtle)] text-[var(--surface-foreground)] active:bg-[var(--interactive-hover)]"
       )}
     >
+      {leadingIcon}
       {status && (status.hasRunning || status.hasUnread) && !isActive && (
         status.hasRunning
           ? <SessionBusyIndicator size={10} />
@@ -423,17 +426,27 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const setOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
 
   const projects = useProjectsStore((state) => state.projects);
+  const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
 
   const { sessions: sortedSessions, totalRunning, totalUnread } = useSessionGrouping(sessions, sessionStatus);
   const { getSessionTitle, needsAttention } = useSessionHelpers();
   const getProjectStatus = useProjectStatus(sessions, sessionStatus, currentSessionId);
   const resolveProjectRoots = useProjectRootsResolver();
 
-  // Project filter, persisted in the UI store so the choice survives closing and
-  // reopening the sheet. Defaults to "All" so sessions from every project are
-  // visible regardless of which session is currently selected.
+  // Project filter persists across sheet openings. The pinned sentinel shares
+  // the same state slot because it is a list scope alongside project scopes.
   const filterProjectId = useUIStore((state) => state.mobileSessionFilterProjectId);
   const setFilterProjectId = useUIStore((state) => state.setMobileSessionFilterProjectId);
+  const hasPinnedSessions = React.useMemo(
+    () => sortedSessions.some((session) => pinnedSessionIds.has(session.id)),
+    [pinnedSessionIds, sortedSessions],
+  );
+
+  React.useEffect(() => {
+    if (!hasPinnedSessions && filterProjectId === PINNED_SESSION_FILTER_ID) {
+      setFilterProjectId(null);
+    }
+  }, [filterProjectId, hasPinnedSessions, setFilterProjectId]);
 
   // Refresh the cross-project session list when the panel opens (mirrors the
   // dedicated MobileSessionsSheet). The active-directory sync only upserts the
@@ -453,6 +466,9 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   // store's canonical directory keying.
   const filteredSessions = React.useMemo(() => {
     if (!filterProjectId) return sortedSessions;
+    if (filterProjectId === PINNED_SESSION_FILTER_ID) {
+      return sortedSessions.filter((session) => pinnedSessionIds.has(session.id));
+    }
     const project = projects.find((p) => p.id === filterProjectId);
     if (!project) return sortedSessions;
     const roots = resolveProjectRoots(project);
@@ -460,12 +476,15 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       const dir = sessionDirectory(session);
       return roots.some((root) => pathBelongsToRoot(dir, root));
     });
-  }, [sortedSessions, filterProjectId, projects, resolveProjectRoots]);
+  }, [sortedSessions, filterProjectId, pinnedSessionIds, projects, resolveProjectRoots]);
 
-  // Cap to the most recent N (already sorted running-first, then by updated).
+  // The All and Pinned scopes expose their complete result sets. Project scopes
+  // retain the compact mobile cap.
   const visibleSessions = React.useMemo(
-    () => filteredSessions.slice(0, MAX_RECENT_SESSIONS),
-    [filteredSessions],
+    () => filterProjectId === null || filterProjectId === PINNED_SESSION_FILTER_ID
+      ? filteredSessions
+      : filteredSessions.slice(0, MAX_RECENT_SESSIONS),
+    [filterProjectId, filteredSessions],
   );
 
   const handleSessionClick = (session: SessionWithStatus) => {
@@ -528,7 +547,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         </div>
       </div>
 
-      {projects.length > 1 && (
+      {(projects.length > 1 || hasPinnedSessions) && (
         <div
           className="flex items-center gap-2 overflow-x-auto border-t border-[color-mix(in_srgb,var(--interactive-border)_40%,transparent)] px-4 py-2.5 scrollbar-none"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -538,6 +557,14 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
             isActive={filterProjectId === null}
             onClick={() => setFilterProjectId(null)}
           />
+          {hasPinnedSessions ? (
+            <ProjectFilterChip
+              label={t('sessions.sidebar.session.actions.pinned')}
+              leadingIcon={<Icon name="pushpin-2-fill" className="size-3.5" />}
+              isActive={filterProjectId === PINNED_SESSION_FILTER_ID}
+              onClick={() => setFilterProjectId(PINNED_SESSION_FILTER_ID)}
+            />
+          ) : null}
           {projects.map((project) => (
             <ProjectFilterChip
               key={project.id}
@@ -558,7 +585,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         </div>
       )}
     </div>
-  ), [t, totalRunning, totalUnread, projects, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, setOpen]);
+  ), [t, totalRunning, totalUnread, projects, hasPinnedSessions, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, setOpen]);
 
   if (!isMobile) {
     return null;
