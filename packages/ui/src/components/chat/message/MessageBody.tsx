@@ -1900,23 +1900,45 @@ const AssistantMessageBody = React.memo(({
                                 'group/assistant-text relative break-words max-w-full',
                                 // Info: quiet chip — 圆角/padding 与 tool row 几何一致
                                 // Error: keep a clearer callout.
+                                // 移动端：-ml-2.5 抵消 px-2.5，info 图标与正文 / copy 同左缘
+                                // （优先字形对齐；边框略探入 gutter，同 tool row -mx 逻辑）.
                                 errorVariant === 'info'
                                     ? cn(
-                                        'inline-flex w-fit max-w-full items-center gap-1.5 border border-[var(--status-info-border)]/45 bg-[var(--status-info-background)]/40',
-                                        TOOL_ROW_CHIP_GEOMETRY_CLASS,
+                                        'inline-flex w-fit max-w-full border border-[var(--status-info-border)]/45 bg-[var(--status-info-background)]/40',
+                                        isMobile
+                                            ? 'items-start gap-1.5 -ml-2.5 rounded-lg px-2.5 py-1.5'
+                                            : cn('items-center gap-1.5', TOOL_ROW_CHIP_GEOMETRY_CLASS),
                                     )
                                     : 'mt-3 flex items-center gap-2 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] p-3',
                             )}>
-                                <Icon name={errorIconName} className={cn(
-                                    'shrink-0',
-                                    errorVariant === 'info'
-                                        ? 'h-3.5 w-3.5 text-[var(--status-info)]/75'
-                                        : 'h-4 w-4 text-[var(--status-error)]',
-                                )} />
+                                <Icon
+                                    name={errorIconName}
+                                    weight={errorVariant === 'info' ? MESSAGE_ACTION_ICON_WEIGHT : undefined}
+                                    className={cn(
+                                        'shrink-0',
+                                        errorVariant === 'info'
+                                            ? cn(
+                                                // 与底栏 copy/edit/time 同尺寸 + medium stroke，避免相对正文感图标过细
+                                                MESSAGE_ACTION_ICON_CLASS,
+                                                'text-[var(--status-info)]/80',
+                                                // 首行 leading-5 光学居中：图标略下移贴齐首行字心
+                                                isMobile && 'mt-0.5',
+                                            )
+                                            : 'h-4 w-4 text-[var(--status-error)]',
+                                    )}
+                                />
                                 <div className={cn(
                                     'min-w-0 break-words',
                                     errorVariant === 'info'
-                                        ? 'typography-ui-label text-[13px] leading-5 text-muted-foreground [&_.markdown-content]:leading-5 [&_.markdown-content]:text-muted-foreground [&_p]:m-0'
+                                        ? cn(
+                                            // 关键：.markdown-content 默认 --text-markdown（移动端 1rem），
+                                            // 必须 ! 压回 meta，否则 14px 图标对着 16px 正文会失调.
+                                            'text-muted-foreground [&_.markdown-content]:text-muted-foreground [&_p]:m-0',
+                                            '[&_.markdown-content]:!leading-5',
+                                            isMobile
+                                                ? '[&_.markdown-content]:!text-[length:var(--text-meta)]'
+                                                : '[&_.markdown-content]:!text-[13px]',
+                                        )
                                         : 'flex-1',
                                 )}>
                                     <SimpleMarkdownRenderer

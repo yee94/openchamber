@@ -92,6 +92,7 @@ export const dict = {
   'mobile.header.metadata.branch': 'Branch',
   'mobile.header.metadata.usage': 'Usage',
   'mobile.menu.titleAria': 'Workspace tools',
+  'mobile.menu.newSession': 'New session',
   'mobile.menu.files': 'Files',
   'mobile.menu.changes': 'Changes',
   'mobile.menu.mcp': 'MCP',

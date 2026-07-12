@@ -7,6 +7,7 @@ import { Icon } from "@/components/icon/Icon";
 
 interface MessageHeaderProps {
     isUser: boolean;
+    isMobile: boolean;
     providerID: string | null;
     /** 模型 ID：优先按模型名匹配品牌图标，聚合 Provider 不再误显示渠道 logo */
     modelID?: string | null;
@@ -15,7 +16,7 @@ interface MessageHeaderProps {
     variant?: string;
 }
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, modelID, agentName, modelName, variant }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, isMobile, providerID, modelID, agentName, modelName, variant }) => {
     // 按模型品牌解析 logo（openrouter+claude → Claude，而非 OpenRouter）
     const { src: logoSrc, onError: handleLogoError, hasLogo, brand } = useModelLogo(modelID, providerID);
 
@@ -48,7 +49,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, model
                     <div className="flex items-center gap-2">
                         <h3
                             className={cn(
-                                'font-bold typography-ui-header tracking-tight leading-none',
+                                'font-semibold typography-ui-header tracking-tight leading-none',
                                 isUser ? 'text-primary' : 'text-foreground'
                             )}
                         >
@@ -58,7 +59,8 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, model
                             <div
                                 className={cn(
                                     'flex items-center gap-1 px-1.5 py-0 rounded cursor-default',
-                                    'agent-badge typography-meta',
+                                    'agent-badge',
+                                    isMobile ? 'text-[12px]' : 'typography-meta',
                                     'hover:bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] hover:border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)]',
                                     getAgentColor(agentName).class
                                 )}
@@ -74,7 +76,8 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, model
                             <div
                                 className={cn(
                                     'flex items-center gap-1 px-1.5 py-0 rounded cursor-default',
-                                    'agent-badge typography-meta',
+                                    'agent-badge',
+                                    isMobile ? 'text-[12px]' : 'typography-meta',
                                     'hover:bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] hover:border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)]',
                                     variant === 'Default' ? undefined : 'agent-info'
                                 )}

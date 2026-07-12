@@ -44,7 +44,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - Shared Codex-style rounded chip classes for interactive tool / reasoning headers.
   - Hover-only wash matches sidebar session-row hover (`surface-foreground` color-mix); idle rows stay flush.
   - Tight `py-0.5` + `my-1.5` keeps row height compact while spacing tool rows apart; `-mx-2` cancels `px-2` so hover wash expands without shifting icons (message body must not `overflow-hidden` or the wash radius gets clipped); `oc-tool-row` keeps pointer cursor on desktop.
-  - `TOOL_ROW_CHIP_GEOMETRY_CLASS` (`rounded-lg px-2 py-0.5`) is shared with assistant info/status chips so radius + padding stay consistent.
+  - `TOOL_ROW_CHIP_GEOMETRY_CLASS` (`rounded-lg px-2 py-0.5`) is shared with desktop assistant info/status chips so radius + padding stay consistent. Mobile info chips use roomier `px-2.5 py-1.5` with `-ml-2.5` (cancels left pad so the info glyph shares the body / copy left edge; border may sit slightly in the gutter, same idea as tool-row `-mx`), medium-stroke `size-3.5`, and force `[&_.markdown-content]:!text-[length:var(--text-meta)]` — SimpleMarkdown defaults to body `--text-markdown`, which would otherwise dwarf the icon on mobile.
   - Also exports composer chrome (`SELECTOR_CHIP_HOVER_CLASS`, `COMPOSER_TRIGGER_CHROME_CLASS`, `COMPOSER_ICON_HOVER_CLASS`) for draft project/branch selectors and input footer controls.
   - Used by `ToolPart.tsx`, `ReasoningPart.tsx`, `ProgressiveGroup.tsx`, `ChatInput.tsx`, and `ModelControls.tsx`.
 

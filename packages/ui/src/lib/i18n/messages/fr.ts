@@ -2582,6 +2582,7 @@ export const dict = {
   'mobile.header.metadata.branch': 'Branche',
   'mobile.header.metadata.usage': 'Utilisation',
   'mobile.menu.titleAria': 'Outils de l’espace de travail',
+  'mobile.menu.newSession': 'Nouvelle session',
   'mobile.menu.files': 'Fichiers',
   'mobile.menu.changes': 'Modifications',
   'mobile.menu.mcp': 'MCP',
