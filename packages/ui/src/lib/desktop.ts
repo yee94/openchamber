@@ -23,6 +23,8 @@ export type UpdateInfo = {
   // Web-specific fields
   packageManager?: string;
   updateCommand?: string;
+  /** The update was found through GitHub Releases and must be installed manually. */
+  manualUpdate?: boolean;
 };
 
 export type UpdateProgress = {
@@ -611,16 +613,14 @@ export const stopAccessingDirectory = async (
 
 export const checkForDesktopUpdates = async (): Promise<UpdateInfo | null> => {
   if (!hasDesktopInvoke()) {
-    return null;
+    throw new Error('Desktop update checker is unavailable');
   }
 
-  try {
-    const info = await invokeDesktop<UpdateInfo>('desktop_check_for_updates');
-    return info as UpdateInfo;
-  } catch (error) {
-    console.warn('Failed to check for updates', error);
-    return null;
+  const info = await invokeDesktop<UpdateInfo>('desktop_check_for_updates');
+  if (!info) {
+    throw new Error('Desktop update checker returned no result');
   }
+  return info;
 };
 
 export const downloadDesktopUpdate = async (

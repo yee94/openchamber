@@ -2,12 +2,12 @@
   "name": "openchamber",
   "displayName": "OpenChamber",
   "description": "%extension.description%",
-  "version": "1.15.8",
+  "version": "1.15.9",
   "publisher": "fedaykindev",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/btriapitsyn/openchamber.git"
+    "url": "https://github.com/yee94/openchamber.git"
   },
   "qna": "https://discord.gg/ZYRSdnwwKA",
   "license": "MIT",

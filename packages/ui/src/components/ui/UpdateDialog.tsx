@@ -31,7 +31,7 @@ interface UpdateDialogProps {
   runtimeType?: 'desktop' | 'web' | 'vscode' | 'mobile' | null;
 }
 
-const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/yee94/openchamber/releases';
 
 type ChangelogSection = {
   version: string;
@@ -217,6 +217,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
 
   const isWebRuntime = runtimeType === 'web';
   const isMobileRuntime = runtimeType === 'mobile';
+  const isManualDesktopUpdate = runtimeType === 'desktop' && info?.manualUpdate === true;
   const updateCommand = info?.updateCommand || 'openchamber update';
 
   // Reset state when dialog closes
@@ -481,7 +482,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
 
           <div className="flex-1 flex justify-end">
             {/* Desktop Buttons */}
-            {!isWebRuntime && !isMobileRuntime && !downloaded && !downloading && (
+            {!isWebRuntime && !isMobileRuntime && !isManualDesktopUpdate && !downloaded && !downloading && (
               <button
                 onClick={onDownload}
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
@@ -489,6 +490,13 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 <Icon name="download" className="h-4 w-4" />
                 {t('updateDialog.actions.downloadUpdate')}
               </button>
+            )}
+
+            {!isWebRuntime && !isMobileRuntime && isManualDesktopUpdate && !downloaded && !downloading && (
+              <Button onClick={() => void handleOpenExternal(releaseUrl)} size="default">
+                <Icon name="external-link" className="h-4 w-4" />
+                {t('updateDialog.actions.openMobileUpdate')}
+              </Button>
             )}
 
             {!isWebRuntime && !isMobileRuntime && downloading && (

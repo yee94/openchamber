@@ -88,10 +88,10 @@ The `Release` GitHub Actions workflow runs for `v*` tags or by manual dispatch. 
 
 1. Run `bun run version:bump -- <version>` and update the matching `CHANGELOG.md` section.
 2. No Apple signing or notarization secrets are required for the ad-hoc macOS desktop build.
-3. Configure `NPM_TOKEN` and the mobile signing secrets only when using the manual `all` scope or the tag-triggered full release.
+3. Configure `NPM_TOKEN` only when publishing to npm. iOS signing secrets are required only for the manual `all` scope; tag-triggered releases build Android but skip iOS.
 4. For a desktop-only release, manually dispatch the workflow with scope `desktop` (the default). Pushing tag `v<version>` retains the full-release behavior.
 
-The workflow creates the GitHub Release and uploads the desktop artifacts. Windows retains in-app automatic updates. Ad-hoc macOS builds cannot use Electron's in-app updater, so macOS users must download and install each release manually. A dry run keeps the Release as a draft. The version validation step fails early if the requested version differs from the root or Electron package version.
+The workflow creates the GitHub Release and uploads the desktop artifacts. Windows retains in-app automatic updates. Ad-hoc macOS builds cannot use Electron's in-app updater, so macOS users must download and install each release manually. Tag-triggered releases also upload Android artifacts but skip iOS/TestFlight. A dry run keeps the Release as a draft. The version validation step fails early if the requested version differs from the root or Electron package version.
 
 Managed local Desktop startup prefers OpenCode binaries in this order:
 

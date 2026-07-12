@@ -2938,6 +2938,38 @@ const parseGithubRepo = () => {
   return GITHUB_REPOSITORY;
 };
 
+const checkMacOSReleaseUpdate = async () => {
+  const { owner, repo } = parseGithubRepo();
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': `OpenChamber/${APP_VERSION}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub Releases responded with ${response.status}`);
+  }
+
+  const release = await response.json();
+  const tagName = typeof release?.tag_name === 'string' ? release.tag_name : '';
+  const nextVersion = tagName.replace(/^v/, '');
+  if (!nextVersion) {
+    throw new Error('GitHub Releases did not provide a version tag');
+  }
+
+  return {
+    available: compareSemver(nextVersion, APP_VERSION) > 0,
+    currentVersion: APP_VERSION,
+    version: nextVersion,
+    body: typeof release?.body === 'string' ? release.body : null,
+    date: typeof release?.published_at === 'string' ? release.published_at : null,
+    releaseUrl: typeof release?.html_url === 'string' ? release.html_url : null,
+    manualUpdate: true,
+  };
+};
+
 const setupAutoUpdater = () => {
   if (!app.isPackaged) {
     return;
@@ -4017,11 +4049,11 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 
     case 'desktop_check_for_updates': {
       const currentVersion = APP_VERSION;
-      let updateResult = null;
-      try {
-        updateResult = await autoUpdater.checkForUpdates();
-      } catch {
+      if (process.platform === 'darwin') {
+        return checkMacOSReleaseUpdate();
       }
+
+      const updateResult = await autoUpdater.checkForUpdates();
 
       const updateInfo = updateResult?.updateInfo;
       const nextVersion =

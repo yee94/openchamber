@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       repository:
-        description: Repository to checkout, for example openchamber/openchamber or daveotero/openchamber
+        description: Repository to checkout, for example yee94/openchamber or daveotero/openchamber
         required: false
-        default: openchamber/openchamber
+        default: yee94/openchamber
         type: string
       ref:
         description: Git ref to build (branch, tag, or sha)

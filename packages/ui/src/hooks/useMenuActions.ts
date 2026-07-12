@@ -13,6 +13,7 @@ import { showOpenCodeStatus } from '@/lib/openCodeStatus';
 import { resetWebviewZoom, zoomWebviewIn, zoomWebviewOut } from '@/lib/webviewZoom';
 import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
 import { resolveEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useI18n } from '@/lib/i18n';
 
 // Close the active context-panel tab when open; otherwise close the desktop window.
 // Shared by File/Window menu "Close" and the Cmd/Ctrl+W shortcut path.
@@ -144,6 +145,7 @@ export const useMenuActions = (
   const setBottomTerminalExpanded = useUIStore((s) => s.setBottomTerminalExpanded);
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates);
   const { setThemeMode } = useThemeSystem();
+  const { t } = useI18n();
   const checkUpdatesInFlightRef = React.useRef(false);
   const desktopBridge = typeof window === 'undefined'
     ? null
@@ -160,20 +162,20 @@ export const useMenuActions = (
       .then(() => {
         const { available, error } = useUpdateStore.getState();
         if (error) {
-          toast.error('Failed to check for updates', {
+          toast.error(t('sessions.sidebar.updateCheck.errorTitle'), {
             description: error,
           });
           return;
         }
 
         if (!available) {
-          toast.success('You are on the latest version');
+          toast.success(t('sessions.sidebar.updateCheck.latestVersion'));
         }
       })
       .finally(() => {
         checkUpdatesInFlightRef.current = false;
       });
-  }, [checkForUpdates]);
+  }, [checkForUpdates, t]);
 
   const handleChangeWorkspace = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog();
