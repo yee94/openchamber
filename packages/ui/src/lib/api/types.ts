@@ -1,5 +1,11 @@
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DraftStarterRef } from '@/lib/draftStarters';
+import type {
+  Session,
+  TextPartInput,
+  FilePartInput,
+  AgentPartInput,
+} from '@opencode-ai/sdk/v2';
 
 type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 
@@ -1202,6 +1208,7 @@ export interface RuntimeAPIs {
   editor?: EditorAPI;
   vscode?: VSCodeAPI;
   worktrees?: WorktreeMetadata[];
+  conversations?: ConversationsAPI;
 }
 
 export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
@@ -1323,4 +1330,62 @@ export interface SkillsInstallResponse {
   requiresReload?: boolean;
   message?: string;
   reloadDelayMs?: number;
+}
+
+// ============== Conversations Types ==============
+
+// Request wrapper mirrors POST /api/openchamber/conversations body contract.
+// model is required; input.type 'prompt' is the only discriminator.
+export interface ConversationCreateWithPromptInput {
+  input: { type: 'prompt' };
+  directory: string;
+  title?: string;
+  parentID?: string;
+  metadata?: Record<string, unknown>;
+  messageID: string;
+  model: { providerID: string; modelID: string };
+  agent?: string;
+  variant?: string;
+  parts: ConversationMessagePart[];
+}
+
+// Part types: use the SDK-native types so callers can pass send-ready parts
+// directly. Re-export for convenience at the shared-contract level.
+type ConversationTextPart = TextPartInput;
+type ConversationFilePart = FilePartInput;
+type ConversationAgentPart = AgentPartInput;
+
+export type ConversationMessagePart =
+  | ConversationTextPart
+  | ConversationFilePart
+  | ConversationAgentPart;
+
+// Session shape: the @opencode-ai/sdk Session type. The server returns the
+// full SDK session object on success / prompt failure; clients need directory,
+// title etc. — not just id.
+export type ConversationSession = Session;
+
+// result discriminated union — mirrors the server contract exactly
+export type ConversationCreateWithPromptResult =
+  | { ok: true; session: ConversationSession; messageID: string }
+  | { ok: false; phase: 'validate'; error: string; errors: string[] }
+  | { ok: false; phase: 'create'; error: string; status?: number }
+  | {
+      ok: false;
+      phase: 'prompt';
+      session: ConversationSession;
+      messageID: string;
+      ambiguous: boolean;
+      error: string;
+      status?: number;
+    }
+  | { ok: false; phase: 'conflict'; error: string }
+  | { ok: false; phase: 'unavailable'; error: string }
+  | { ok: false; phase: 'internal'; error: string };
+
+export interface ConversationsAPI {
+  createWithPrompt(
+    input: ConversationCreateWithPromptInput,
+    signal?: AbortSignal,
+  ): Promise<ConversationCreateWithPromptResult>;
 }

@@ -1451,6 +1451,8 @@ async function main(options = {}) {
     buildAugmentedPath,
     projectConfigRuntime,
     scheduledTasksRuntime,
+    markUserMessageSent: (sessionID) => sessionRuntime.markUserMessageSent(sessionID),
+    waitForOpenCodeReady,
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
   });

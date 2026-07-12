@@ -777,6 +777,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         type="button"
         variant="default"
         size="sm"
+        className="normal-case"
         aria-label={t('mobile.sessions.newChat')}
         onClick={handleStartNewChat}
         style={{ touchAction: 'manipulation' }}

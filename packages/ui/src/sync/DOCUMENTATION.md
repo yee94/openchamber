@@ -194,6 +194,27 @@ Examples of global-store updates performed in `session-actions.ts`:
 - `archiveSession()` -> `archiveSessions([id], archivedAt)`
 - `deleteSession()` -> `removeSessions([id])`
 
+### New conversation orchestration
+
+Normal first prompts from an open draft use the optional runtime
+`conversations.createWithPrompt` capability. Web and mobile send one
+OpenChamber-owned request; the server creates the OpenCode session and admits
+the first prompt. VS Code provides the same contract through its extension-host
+bridge. Existing sessions, shell input, slash commands, explicit delivery
+modes, and older runtimes keep the regular SDK sequence.
+
+The client generates the message ID before the request. The server/runtime host
+uses it as the bounded operation key, so reconnect retries reuse the in-flight
+or completed operation instead of creating another session. The draft remains
+visible in a submitting state until a real session ID is returned.
+
+After success, commit the real session to directory routing, global session
+state, selection state, and the optimistic shadow map. If SSE delivered the
+message first, preserve that authoritative object and skip optimistic insertion.
+Create-phase failures restore the draft and input. Prompt-phase failures keep
+the created session; ambiguous delivery is confirmed by message ID and is never
+automatically re-submitted.
+
 ## The golden rule
 
 When creating a draft in `handleDirectoryEvent`, **only clone the state fields the event will mutate**. Never spread all fields eagerly.

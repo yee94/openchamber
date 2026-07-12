@@ -183,6 +183,14 @@ export async function stopSseProxy(options: { streamId: string }): Promise<{ sto
   return sendBridgeMessage<{ stopped: boolean }>('api:sse:stop', options);
 }
 
+export function postAbortMessage(type: string, requestID: string): void {
+  try {
+    getVSCodeAPI().postMessage({ type, payload: { requestID } });
+  } catch {
+    // best-effort
+  }
+}
+
 export async function executeVSCodeCommand(command: string, args?: unknown[]): Promise<{ result?: unknown }> {
   return sendBridgeMessage<{ result?: unknown }>('vscode:command', { command, args });
 }

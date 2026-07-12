@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.13] - 2026-07-12
+
+- **New conversations:** normal first prompts are now orchestrated by the OpenChamber server, which creates the OpenCode session and admits the first message through one authenticated runtime operation.
+- **Remote reliability:** relay disconnects no longer cancel in-flight conversation setup. Message-ID idempotency deduplicates reconnect retries and preserves partial create/prompt outcomes without duplicate sessions or messages.
+- **Mobile feedback:** submitting a new conversation immediately shows an establishing state and locks duplicate input; failures restore the draft and message for retry.
+- **Mobile sessions:** swiping left across chat content opens the Sessions sheet while edge session switching, vertical scrolling, controls, and horizontal code scrolling retain their gestures.
+- **Mobile copy:** the Sessions sheet preserves the authored `New Chat` capitalization.
+- **Cross-runtime parity:** Web, Electron, relay clients, and VS Code share the same create-with-prompt result contract, including explicit create, prompt, conflict, unavailable, and ambiguous-delivery recovery states.
+- **Task status:** the expanded task list highlights and focuses the active task with clearer status, priority, progress, and scrolling behavior.
+
 ## [1.15.12] - 2026-07-12
 
 - **CI:** enforce all-platform builds (desktop + Android + iOS) on every release tag.

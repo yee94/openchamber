@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { type OpenCodeManager } from './opencode';
 import { handleStandardGitBridgeMessage } from './bridge-git-runtime';
 import { handleSpecialGitBridgeMessage } from './bridge-git-special-runtime';
+import { handleConversationsBridgeMessage } from './bridge-conversations-runtime';
 import { handleFsBridgeMessage } from './bridge-fs-runtime';
 import { handleConfigBridgeMessage } from './bridge-config-runtime';
 import { handleSystemBridgeMessage } from './bridge-system-runtime';
@@ -63,6 +64,15 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
   const { id, type, payload } = message;
 
   try {
+    // Conversations handler runs first: it handles api:conversations:* messages
+    // (including abort) and returns null for everything else without side effects.
+    const conversationsResponse = await handleConversationsBridgeMessage(
+      { id, type, payload },
+      ctx,
+    );
+    if (conversationsResponse) {
+      return conversationsResponse;
+    }
     const standardGitResponse = await handleStandardGitBridgeMessage({ id, type, payload });
     if (standardGitResponse) {
       return standardGitResponse;
