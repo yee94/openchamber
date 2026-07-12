@@ -1,31 +1,30 @@
 import React from 'react';
 
 /**
- * Phone-only content-area left-swipe gesture to open the sessions sheet.
+ * Phone-only header right-swipe gesture to open the sessions / project sheet.
  *
- * A horizontal right-to-left swipe inside the chat content area (away from the
- * left/right screen edges) opens the sessions sheet — a natural complement to
- * the mobile header's hamburger button.
+ * A horizontal left-to-right swipe in the MobileHeader area opens the
+ * sessions sheet — a natural complement to the header's hamburger button.
  *
- * - Only active on phone (not iPad/desktop, gated by the caller).
- * - Must start > 32 px from both left AND right edges so it never collides
- *   with the edge-swipe session switch (useEdgeSwipeSessionSwitch).
- * - Vertical scrolling, text selections, interactive controls, code blocks,
- *   and horizontally-scrollable ancestors are ignored.
- * - Only touchstart / touchend are observed (both passive), so this never
- *   blocks scrolling.
- * - Does not fire when the sessions sheet or any other overlay is already open.
+ * - Only active on phone (not iPad), gated by the caller via `disabled`.
+ * - Disabled when any overlay (sessions sheet, settings, files, etc.) is
+ *   already open so the gesture doesn't stack sheets or compete with
+ *   overlay dismiss gestures.
+ * - Interactive controls (buttons, links, inputs) and horizontally-scrollable
+ *   ancestors are excluded so the gesture never fights scrolling or steals
+ *   taps from the header's own toolbar buttons.
+ * - Only `touchstart` / `touchend` are observed (both passive), so this
+ *   never blocks scrolling.
  */
 
-const EDGE_EXCLUDE = 32; // px from a screen side excluded from this gesture
-const MIN_DISTANCE = 72; // px of horizontal leftward travel required
-const MAX_OFF_AXIS_RATIO = 0.55; // |dy| must stay below |dx| * this
+const MIN_DISTANCE = 72; // px of horizontal rightward travel required
+const MAX_OFF_AXIS_RATIO = 0.55; // |dy| must stay below |dx| × this
 
 // ---------------------------------------------------------------------------
 // Pure helpers — exported for targeted testing
 // ---------------------------------------------------------------------------
 
-export interface SwipeToSessionsInput {
+export interface HeaderSwipeInput {
   /** touchstart clientX */
   startX: number;
   /** touchstart clientY */
@@ -34,49 +33,41 @@ export interface SwipeToSessionsInput {
   endX: number;
   /** touchend clientY */
   endY: number;
-  /** clientWidth of the container element */
-  containerWidth: number;
-  /** whether the sessions sheet or any overlay is already open */
+  /** whether the gesture is disabled (iPad or overlay open) */
   disabled: boolean;
   /** whether the touch started on an interactive / horizontally-scrollable target */
   startedOnInteractive: boolean;
 }
 
-interface SwipeToSessionsResult {
+interface HeaderSwipeResult {
   /** Whether the gesture should trigger opening the sessions sheet */
   open: boolean;
 }
 
 /**
- * Pure function: determine whether a completed touch gesture should open the
- * sessions sheet. Callers inject the gate flags; this function only evaluates
- * the geometric and interactive constraints.
+ * Pure function: determine whether a completed touch gesture on the header
+ * should open the sessions sheet. Callers inject the gate flags; this function
+ * only evaluates the geometric and interactive constraints.
  */
-export const evaluateSwipeToSessions = (input: SwipeToSessionsInput): SwipeToSessionsResult => {
+export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult => {
   if (input.disabled) return { open: false };
   if (input.startedOnInteractive) return { open: false };
-
-  // Must start inside the content area, away from both edges
-  if (input.startX <= EDGE_EXCLUDE) return { open: false };
-  if (input.startX >= input.containerWidth - EDGE_EXCLUDE) return { open: false };
 
   const dx = input.endX - input.startX;
   const dy = input.endY - input.startY;
 
-  // Must be a horizontal leftward swipe (right-to-left)
-  if (dx >= 0) return { open: false };
+  // Must be a horizontal rightward swipe (left-to-right)
+  if (dx <= 0) return { open: false };
   if (Math.abs(dx) < MIN_DISTANCE) return { open: false };
 
-  // Suppress off-axis (vertical) gestures — kept stricter than the edge
-  // swipe so diagonal scrolls don't open the sheet.
+  // Suppress off-axis (vertical) gestures so diagonal scrolls don't open the sheet
   if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return { open: false };
 
   return { open: true };
 };
 
 // ---------------------------------------------------------------------------
-// Helper: did the touch start on an interactive or horizontally-scrollable
-// target whose ancestors we should not intercept?
+// Interactive / scrollable exclusion helpers
 // ---------------------------------------------------------------------------
 
 const INTERACTIVE_SELECTORS = [
@@ -110,7 +101,6 @@ const hasHorizontallyScrollableAncestor = (element: Element | null): boolean => 
     const style = window.getComputedStyle(current);
     const overflowX = style.overflowX;
     if (overflowX === 'auto' || overflowX === 'scroll') {
-      // Only treat as a block if it actually has scrollable width
       if (current.scrollWidth > current.clientWidth) return true;
     }
     current = current.parentElement;
@@ -127,16 +117,16 @@ const isSwallowTarget = (touch: Touch): boolean => {
 // Hook
 // ---------------------------------------------------------------------------
 
-interface ContentSwipeToSessionsOptions {
+interface HeaderSwipeToSessionsOptions {
   /** Called when a qualifying swipe is detected. */
   onOpen: () => void;
-  /** Whether the gesture is currently disabled (e.g. overlay open). */
+  /** Whether the gesture is currently disabled (iPad or overlay open). */
   disabled: boolean;
 }
 
-export const useContentSwipeToSessions = (
+export const useHeaderSwipeToSessions = (
   ref: React.RefObject<HTMLElement | null>,
-  options: ContentSwipeToSessionsOptions,
+  options: HeaderSwipeToSessionsOptions,
 ): void => {
   const onOpenRef = React.useRef(options.onOpen);
   onOpenRef.current = options.onOpen;
@@ -163,14 +153,6 @@ export const useContentSwipeToSessions = (
       }
 
       const touch = event.touches[0];
-      const width = element.clientWidth;
-
-      // Exclude edge zones — those belong to the session-switch edge swipe
-      if (touch.clientX <= EDGE_EXCLUDE || touch.clientX >= width - EDGE_EXCLUDE) {
-        tracking = false;
-        return;
-      }
-
       tracking = true;
       startX = touch.clientX;
       startY = touch.clientY;
@@ -185,12 +167,11 @@ export const useContentSwipeToSessions = (
       const touch = event.changedTouches[0];
       if (!touch) return;
 
-      const { open } = evaluateSwipeToSessions({
+      const { open } = evaluateHeaderSwipe({
         startX,
         startY,
         endX: touch.clientX,
         endY: touch.clientY,
-        containerWidth: element.clientWidth,
         disabled: disabledRef.current,
         startedOnInteractive,
       });

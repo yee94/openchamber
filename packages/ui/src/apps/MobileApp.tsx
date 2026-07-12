@@ -68,7 +68,8 @@ import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
 import { useEdgeSwipeSessionSwitch } from './useEdgeSwipeSessionSwitch';
-import { useContentSwipeToSessions } from './useContentSwipeToSessions';
+import { useHeaderSwipeToSessions } from './useHeaderSwipeToSessions';
+import { useStreamingHaptics } from '@/hooks/streamingHaptics';
 import { useNativePushRegistration } from './useNativePushRegistration';
 
 const MOBILE_SETTINGS_PAGES = [
@@ -2058,6 +2059,7 @@ const MobileHeader: React.FC<{
 
 const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
   const { t } = useI18n();
+  useStreamingHaptics();
   const [sessionsSheetOpen, setSessionsSheetOpen] = React.useState(false);
   const [filesOpen, setFilesOpen] = React.useState(false);
   const [changesOpen, setChangesOpen] = React.useState(false);
@@ -2213,10 +2215,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, []);
   useEdgeSwipeSessionSwitch(chatMainRef, { onSwitch: recordSwipeDirection });
 
-  // Content-area left-swipe to open sessions sheet (phone only, non-iPad).
+  // Header-area left-swipe to open sessions sheet (phone only, non-iPad).
   // Disabled when any overlay is already open so the gesture doesn't stack
   // sheets or compete with dismiss gestures.
-  const contentSwipeDisabled = isIPad
+  const headerSwipeDisabled = isIPad
     || sessionsSheetOpen
     || filesOpen
     || changesOpen
@@ -2225,12 +2227,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     || settingsOpen
     || updateOpen
     || overflowOpen;
-  const handleContentSwipeOpen = React.useCallback(() => {
+  const handleHeaderSwipeOpen = React.useCallback(() => {
     setSessionsSheetOpen(true);
   }, []);
-  useContentSwipeToSessions(chatMainRef, {
-    onOpen: handleContentSwipeOpen,
-    disabled: contentSwipeDisabled,
+  const headerRef = React.useRef<HTMLDivElement>(null);
+  useHeaderSwipeToSessions(headerRef, {
+    onOpen: handleHeaderSwipeOpen,
+    disabled: headerSwipeDisabled,
   });
 
   React.useLayoutEffect(() => {
@@ -2466,16 +2469,18 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         ) : null}
 
         <div className="flex h-full min-w-0 flex-1 flex-col" data-page-scroll-lock="true">
-          <MobileHeader
-            onOpenSessions={() => (isIPad ? toggleIpadSidebar() : setSessionsSheetOpen(true))}
-            onOpenMenu={() => setOverflowOpen(true)}
-            surfaceShortcuts={isIPad ? {
+          <div ref={headerRef}>
+            <MobileHeader
+              onOpenSessions={() => (isIPad ? toggleIpadSidebar() : setSessionsSheetOpen(true))}
+              onOpenMenu={() => setOverflowOpen(true)}
+              surfaceShortcuts={isIPad ? {
               activePanel: ipadRightPanel,
               changesDirty: dirtyChangeCount > 0,
               onToggleFiles: () => toggleIpadRightPanel('files'),
               onToggleChanges: () => toggleIpadRightPanel('changes'),
             } : undefined}
-          />
+            />
+          </div>
           <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
             <div ref={chatAnimRef} className="h-full w-full">
               <ErrorBoundary>

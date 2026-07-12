@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/ui",
-  "version": "1.15.14",
+  "version": "1.15.15",
   "private": true,
   "type": "module",
   "main": "src/main.tsx",
@@ -15,6 +15,7 @@
     "@base-ui/react": "^1.4.0",
     "@capacitor/app": "^8.0.0",
     "@capacitor/core": "^8.4.1",
+    "@capacitor/haptics": "^8.0.0",
     "@capacitor/keyboard": "^8.0.0",
     "@capacitor/push-notifications": "^8.1.1",
     "@capacitor/status-bar": "^8.0.0",

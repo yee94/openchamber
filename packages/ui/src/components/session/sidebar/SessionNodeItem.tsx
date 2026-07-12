@@ -40,6 +40,7 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { parseMultiRunSessionTitle } from '@/lib/multirun/title';
 import { MultiRunFusionDialog } from '@/components/multirun/MultiRunFusionDialog';
 import { FusionIcon } from '@/components/icons/FusionIcon';
+import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { notifySidebarVisualSelectionCommitted, useSidebarVisualSelectionStore } from './sidebarVisualSelection';
 import {
@@ -625,12 +626,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   // when unread. Hide when row actions take over so the two never fight for
   // the same edge.
   const hideTrailingStatusOnActionReveal = !alwaysShowActions || isVSCode;
-  // Match ContextUsageDisplay subtle ring geometry (track + bright arc).
-  const busyRingSize = 14;
-  const busyRingStroke = 1.5;
-  const busyRingRadius = (busyRingSize - busyRingStroke) / 2;
-  const busyRingCircumference = 2 * Math.PI * busyRingRadius;
-  const busyRingArc = busyRingCircumference * 0.28;
   const statusMarkerContent = isStreaming
     ? (
         <span
@@ -638,30 +633,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           aria-label={t('sessions.sidebar.session.status.active')}
           title={t('sessions.sidebar.session.status.active')}
         >
-          <svg
-            viewBox={`0 0 ${busyRingSize} ${busyRingSize}`}
-            className="h-3.5 w-3.5 animate-spin"
-            aria-hidden="true"
-          >
-            <circle
-              cx={busyRingSize / 2}
-              cy={busyRingSize / 2}
-              r={busyRingRadius}
-              fill="none"
-              stroke="var(--interactive-border)"
-              strokeWidth={busyRingStroke}
-            />
-            <circle
-              cx={busyRingSize / 2}
-              cy={busyRingSize / 2}
-              r={busyRingRadius}
-              fill="none"
-              stroke="var(--surface-muted-foreground)"
-              strokeWidth={busyRingStroke}
-              strokeLinecap="round"
-              strokeDasharray={`${busyRingArc} ${busyRingCircumference - busyRingArc}`}
-            />
-          </svg>
+          <SessionBusyIndicator />
         </span>
       )
     : (

@@ -10,6 +10,7 @@ import { cn, formatDirectoryName } from '@/lib/utils';
 import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { Icon } from "@/components/icon/Icon";
+import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useNotificationStore } from '@/sync/notification-store';
 import { useI18n } from '@/lib/i18n';
@@ -260,7 +261,7 @@ function useProjectRootsResolver() {
 
 function StatusIndicator({ isRunning, needsAttention }: { isRunning: boolean; needsAttention: boolean }) {
   if (isRunning) {
-    return <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin text-[var(--status-info)]" />;
+    return <SessionBusyIndicator />;
   }
   if (needsAttention) {
     return <div className="h-2 w-2 rounded-full bg-[var(--status-error)]" />;
@@ -271,8 +272,8 @@ function StatusIndicator({ isRunning, needsAttention }: { isRunning: boolean; ne
 function RunningIndicator({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="flex items-center gap-1 text-[13px] text-[var(--status-info)]">
-      <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
+    <span className="flex items-center gap-1 text-[13px] text-[var(--surface-mutedForeground)]">
+      <SessionBusyIndicator />
       {count}
     </span>
   );
@@ -326,8 +327,8 @@ function SessionItem({
       </span>
 
       {(session._runningChildrenCount ?? 0) > 0 && (
-        <span className="flex flex-shrink-0 items-center gap-1 text-[12px] text-[var(--status-info)]">
-          <Icon name="loader-4" className="h-3 w-3 animate-spin" />
+        <span className="flex flex-shrink-0 items-center gap-1 text-[12px] text-[var(--surface-mutedForeground)]">
+          <SessionBusyIndicator size={12} />
           {session._runningChildrenCount}
         </span>
       )}
@@ -382,7 +383,7 @@ function ProjectFilterChip({
     >
       {status && (status.hasRunning || status.hasUnread) && !isActive && (
         status.hasRunning
-          ? <Icon name="loader-4" className="h-2.5 w-2.5 animate-spin text-[var(--status-info)]" />
+          ? <SessionBusyIndicator size={10} />
           : <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-error)]" />
       )}
 

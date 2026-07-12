@@ -137,6 +137,28 @@
     pointer-events: auto;
   }
 
+  /* Give touch controls immediate press feedback. Target only the deepest
+     active control so nested action buttons do not also dim their row. */
+  :root.mobile-pointer:not(.desktop-runtime)
+    :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]) {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: opacity 80ms ease-out;
+  }
+
+  :root.mobile-pointer:not(.desktop-runtime)
+    :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]):active:not(:has(:where(button, [role="button"]):active)) {
+    opacity: 0.72;
+    transition-duration: 0ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root.mobile-pointer:not(.desktop-runtime)
+      :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]) {
+      transition: none;
+    }
+  }
+
   /* Prevent system context menu on message content when using custom selection menu */
   :root.mobile-pointer:not(.desktop-runtime) .message-content-text {
     -webkit-touch-callout: none;

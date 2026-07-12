@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.15] - 2026-07-12
+
+- **Mobile session navigation:** swipe across the conversation in any direction to move between newer and older sessions, and swipe right across the header to open the project and session list without relying on Android system-edge gestures.
+- **Mobile session controls:** running sessions use the same server-backed busy state and spinning status ring as desktop; visible rows and collapsed project, worktree, or child-session groups can stop their active work directly.
+- **Mobile touch feedback:** buttons and interactive rows respond immediately on touch-down, with disabled, nested, drag, and reduced-motion behavior handled consistently.
+- **Native haptics:** Android and iOS clients provide a light, throttled haptic pulse while the visible conversation is streaming, and stop when the stream ends or the app moves to the background.
+- **Message recovery:** failed sends and slash-command operations restore composer text, attachments, queued messages, synthetic parts, and inline drafts without overwriting content entered while the request was pending.
+
 ## [1.15.14] - 2026-07-12
 
 - **Mobile new conversations:** parse JSON bodies for the OpenChamber create-with-first-prompt endpoint, restoring New Chat creation over direct and relay connections.
