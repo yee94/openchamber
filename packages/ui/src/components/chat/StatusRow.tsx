@@ -12,9 +12,7 @@ import { useTodosPersistStore } from "@/stores/useTodosPersistStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/icon/Icon";
-import { StopIcon } from "@/components/icons/StopIcon";
 import { useI18n } from "@/lib/i18n";
 
 const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "status-row" };
@@ -96,9 +94,6 @@ interface StatusRowProps {
   wasAborted?: boolean;
   abortActive?: boolean;
   retryInfo?: { attempt?: number; next?: number } | null;
-  // Abort state (for mobile/vscode)
-  showAbort?: boolean;
-  onAbort?: () => void;
   // Abort status display
   showAbortStatus?: boolean;
   showAssistantStatus?: boolean;
@@ -115,8 +110,6 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   wasAborted,
   abortActive,
   retryInfo,
-  showAbort,
-  onAbort,
   showAbortStatus,
   showAssistantStatus = true,
   showTodos = true,
@@ -226,20 +219,6 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     left: statusSummary.left,
   });
 
-  // Abort button for mobile/vscode
-  const abortButton = showAbort && onAbort ? (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      onClick={onAbort}
-      className="size-8 shrink-0 text-[var(--status-error)] hover:text-[var(--status-error)]"
-      aria-label={t('chat.statusRow.actions.stopGeneratingAria')}
-    >
-      <StopIcon className="size-5" aria-hidden="true" />
-    </Button>
-  ) : null;
-
   // Todo trigger button
   const todoTrigger = hasTodoContent ? (
     <button
@@ -308,9 +287,8 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           ) : null}
         </div>
 
-        {/* Right: Abort (mobile only) + Todo */}
+        {/* Right: Todo */}
         <div className={cn("relative flex items-center gap-2 flex-shrink-0", hasLeftAccessory ? "pr-1.5" : "-mr-3")} ref={popoverRef}>
-          {abortButton}
           {todoTrigger}
 
           {/* Popover dropdown */}

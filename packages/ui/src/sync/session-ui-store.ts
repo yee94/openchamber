@@ -219,6 +219,13 @@ export type NewSessionDraftState = {
   draftSubmitting?: boolean
 }
 
+type ForkTransitionState = {
+  operationId: number
+  sourceSessionId: string
+  directory: string
+  stage: "preparing" | "copying" | "opening"
+}
+
 type OpenNewSessionDraftOptions = Partial<NewSessionDraftState> & {
   /**
    * An explicit directory from an external deep link represents a project
@@ -246,6 +253,7 @@ export type SessionUIState = {
   currentSessionId: string | null
   currentSessionDirectory: string | null
   newSessionDraft: NewSessionDraftState
+  forkTransition: ForkTransitionState | null
   abortPromptSessionId: string | null
   abortPromptExpiresAt: number | null
   error: string | null
@@ -412,6 +420,7 @@ const DEFAULT_DRAFT: NewSessionDraftState = {
 }
 
 const activeSessionByRuntime = new Map<string, string | null>()
+let nextForkOperationId = 0
 type RuntimeSessionMemory = {
   sessionId: string | null
   directory: string | null
@@ -735,6 +744,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   currentSessionId: null,
   currentSessionDirectory: null,
   newSessionDraft: { ...DEFAULT_DRAFT },
+  forkTransition: null,
   abortPromptSessionId: null,
   abortPromptExpiresAt: null,
   error: null,
@@ -870,6 +880,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       currentSessionId: restoredSessionId,
       currentSessionDirectory: restoredSessionId ? restoredDirectory : null,
       newSessionDraft: restoredSessionId ? { ...DEFAULT_DRAFT } : restoredDraft,
+      forkTransition: null,
       abortPromptSessionId: null,
       abortPromptExpiresAt: null,
       error: null,
@@ -1568,12 +1579,28 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // forkFromMessage — delegates to session-actions (handles text + sidebar)
   // ---------------------------------------------------------------------------
   forkFromMessage: async (sessionId, messageId) => {
+    if (get().forkTransition) return
     const sessions = getSyncSessions()
     const existingSession = sessions.find((s) => s.id === sessionId)
     if (!existingSession) return
+    const operationId = ++nextForkOperationId
 
     try {
-      await forkFromMessageAction(sessionId, messageId)
+      const directory = resolveSessionDirectory(
+        sessionId,
+        (sid) => get().worktreeMetadata.get(sid),
+      ) ?? opencodeClient.getDirectory() ?? ""
+      set({
+        forkTransition: {
+          operationId,
+          sourceSessionId: sessionId,
+          directory,
+          stage: "preparing",
+        },
+      })
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      const completed = await forkFromMessageAction(sessionId, messageId, operationId)
+      if (!completed) return
 
       const { toast } = await import("sonner")
       toast.success(`Forked from ${existingSession.title}`)
@@ -1581,6 +1608,10 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       console.error("Failed to fork session:", error)
       const { toast } = await import("sonner")
       toast.error("Failed to fork session")
+    } finally {
+      set((state) => state.forkTransition?.operationId === operationId
+        ? { forkTransition: null }
+        : state)
     }
   },
 

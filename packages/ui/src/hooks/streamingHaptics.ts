@@ -134,8 +134,7 @@ async function getHapticsModuleCached(): Promise<typeof import('@capacitor/hapti
  * Fires a light haptic (`ImpactStyle.Light`) when a visible streaming part updates.
  *
  * - Only active on Capacitor iOS / Android native builds.
- * - Thinking fires once when its part first appears.
- * - Visible assistant text fires once for each applied text update.
+ * - Visible reasoning and assistant text fire once for each applied text update.
  */
 export function useStreamingHaptics(): void {
   React.useEffect(() => {

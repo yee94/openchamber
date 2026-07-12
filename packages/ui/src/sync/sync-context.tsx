@@ -1541,6 +1541,22 @@ function handleEvent(
   // type will mutate. This preserves reference identity for untouched slices
   // so Zustand selectors skip re-renders for unrelated subscribers.
   const current = store.getState()
+  const eventSessionID = getSessionIdFromPayload(payload) ?? undefined
+  const eventMessageID = getMessageIdFromPayload(payload) ?? undefined
+  if (payload.type === "session.created") {
+    const createdSession = (payload.properties as { info?: { id?: string; title?: string } }).info
+    sessionActions.trackForkCopySessionCreated(resolvedDirectory, createdSession)
+  }
+  if (
+    (payload.type === "message.updated"
+      || payload.type === "message.removed"
+      || payload.type === "message.part.updated"
+      || payload.type === "message.part.removed"
+      || payload.type === "message.part.delta")
+    && sessionActions.shouldSuppressForkCopyEvent(resolvedDirectory, eventSessionID, eventMessageID)
+  ) {
+    return
+  }
   const draft: State = { ...current }
 
   switch (payload.type) {

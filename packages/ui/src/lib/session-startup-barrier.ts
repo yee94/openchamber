@@ -1,4 +1,4 @@
-/** Coordinates Electron's initial session pass before normal boot work starts. */
+/** Coordinates the runtime session-index pass before normal boot work starts. */
 let active = false;
 let releasePromise: Promise<void> = Promise.resolve();
 let releaseCurrent: (() => void) | null = null;

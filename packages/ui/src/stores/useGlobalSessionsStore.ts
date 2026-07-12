@@ -68,7 +68,7 @@ type GlobalSessionsState = {
   hasLoadedFullCatalog: boolean;
   hasLoaded: boolean;
   status: GlobalSessionsStatus;
-  /** Blocking Electron cold-start refresh progress for persisted directories. */
+  /** Blocking session-index cold-start refresh progress for persisted directories. */
   startupSyncProgress: StartupSessionSyncProgress;
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>;
   refreshSessionsForDirectories: (
@@ -695,7 +695,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     } catch (error) {
       // The index is an acceleration cache. A failed read must not block the
       // authoritative OpenCode session flow.
-      console.warn('[GlobalSessions] Failed to hydrate Electron session index:', error);
+      console.warn('[GlobalSessions] Failed to hydrate runtime session index:', error);
     } finally {
       set((state) => state.hasHydratedSessionIndex ? state : { hasHydratedSessionIndex: true });
     }

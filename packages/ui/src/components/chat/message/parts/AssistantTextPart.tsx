@@ -60,27 +60,25 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         isStreaming,
     });
     const hapticIdentity = `${messageId}:${part.id ?? 'text'}`;
-    const hapticStateRef = React.useRef({ identity: hapticIdentity, displayLength: displayTextContent.length, thinkingEmitted: false });
+    const hapticStateRef = React.useRef({ identity: hapticIdentity, displayLength: displayTextContent.length });
 
     React.useEffect(() => {
         const state = hapticStateRef.current;
         if (state.identity !== hapticIdentity) {
-            hapticStateRef.current = { identity: hapticIdentity, displayLength: displayTextContent.length, thinkingEmitted: false };
+            hapticStateRef.current = { identity: hapticIdentity, displayLength: displayTextContent.length };
             return;
         }
         if (!isStreaming || !sessionId || !hasStreamingHapticSubscribers()) {
             state.displayLength = displayTextContent.length;
             return;
         }
-        if (part.type === 'reasoning') {
-            if (!state.thinkingEmitted) {
-                state.thinkingEmitted = true;
-                emitStreamingHapticEvent({ sessionID: sessionId, messageID: messageId, partID: part.id, kind: 'thinking' });
-            }
-            return;
-        }
-        if (part.type === 'text' && displayTextContent.length > state.displayLength) {
-            emitStreamingHapticEvent({ sessionID: sessionId, messageID: messageId, partID: part.id, kind: 'text' });
+        if ((part.type === 'text' || part.type === 'reasoning') && displayTextContent.length > state.displayLength) {
+            emitStreamingHapticEvent({
+                sessionID: sessionId,
+                messageID: messageId,
+                partID: part.id,
+                kind: part.type === 'reasoning' ? 'thinking' : 'text',
+            });
         }
         state.displayLength = displayTextContent.length;
     }, [displayTextContent, hapticIdentity, isStreaming, messageId, part.id, part.type, sessionId]);

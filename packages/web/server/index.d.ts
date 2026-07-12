@@ -17,6 +17,7 @@ export interface StartWebUiServerOptions {
   attachSignals?: boolean;
   exitOnShutdown?: boolean;
   uiPassword?: string | null;
+  sessionIndexDbPath?: string | null;
 }
 
 export declare function startWebUiServer(

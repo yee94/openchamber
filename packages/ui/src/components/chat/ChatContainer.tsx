@@ -442,6 +442,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
+    const forkTransition = useSessionUIStore((s) => s.forkTransition);
     const projects = useProjectsStore((s) => s.projects);
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
 
@@ -867,6 +868,24 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         if (effectiveSessionDirectory !== syncDirectory) return;
         void ensureSessionRenderable(currentSessionId);
     }, [currentSessionId, effectiveSessionDirectory, ensureSessionRenderable, hasRenderableSessionSnapshot, syncDirectory]);
+
+	if (forkTransition) {
+		const stageKey = forkTransition.stage === 'preparing'
+			? 'chat.forkTransition.preparing'
+			: forkTransition.stage === 'copying'
+				? 'chat.forkTransition.copying'
+				: 'chat.forkTransition.opening';
+		return (
+			<div className="flex h-full flex-col items-center justify-center bg-background px-6 text-center">
+				<div className="flex flex-col items-center gap-3" role="status" aria-live="polite" aria-label={t(stageKey)}>
+					<span className="typography-ui-header text-muted-foreground">
+						<span className="animate-text-shimmer">{t(stageKey)}</span>
+						<BusyDots />
+					</span>
+				</div>
+			</div>
+		);
+	}
 
 	if (!currentSessionId && !draftOpen) {
 		// With auto-open, the draft welcome opens on the next tick (effect below),
