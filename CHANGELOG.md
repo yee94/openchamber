@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.14] - 2026-07-12
+
+- **Mobile new conversations:** parse JSON bodies for the OpenChamber create-with-first-prompt endpoint, restoring New Chat creation over direct and relay connections.
+- **Task status:** simplify task rows, keep semantic list markup, and center the active task without moving keyboard focus when the status panel opens.
+
 ## [1.15.13] - 2026-07-12
 
 - **New conversations:** normal first prompts are now orchestrated by the OpenChamber server, which creates the OpenCode session and admits the first message through one authenticated runtime operation.

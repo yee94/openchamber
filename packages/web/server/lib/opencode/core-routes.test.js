@@ -158,6 +158,26 @@ describe('core-routes', () => {
     });
   });
 
+  it('should parse JSON bodies for conversation creation', async () => {
+    const app = express();
+    registerCommonRequestMiddleware(app, { express });
+    app.post('/api/openchamber/conversations', (req, res) => {
+      res.json({ body: req.body });
+    });
+
+    const payload = {
+      input: { type: 'prompt' },
+      directory: '/repo',
+      messageID: 'msg_1',
+    };
+    const response = await request(app)
+      .post('/api/openchamber/conversations')
+      .send(payload)
+      .expect(200);
+
+    expect(response.body).toEqual({ body: payload });
+  });
+
   it('should require API auth before probing loopback preview URLs', async () => {
     const app = express();
     const originalFetch = globalThis.fetch;

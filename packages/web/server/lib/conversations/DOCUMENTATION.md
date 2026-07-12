@@ -6,6 +6,7 @@ Server-owned conversation orchestration for OpenChamber. Provides an idempotent 
 ## Scope
 - This module is OpenChamber feature logic, intentionally separate from OpenCode proxy/runtime internals.
 - Registered in `feature-routes-runtime.js` before the generic OpenCode proxy.
+- JSON request bodies are parsed by the explicit OpenChamber route allowlist in `core-routes.js`.
 - Only accepts `input.type === 'prompt'`; shell/slash commands use the existing SDK sequence.
 - `promptAsync` returns 204 immediately (does not wait for model completion).
 
