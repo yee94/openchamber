@@ -55,3 +55,43 @@ export async function summarizeSelectionForNotes(text: string, sessionId?: strin
     return trimmed;
   }
 }
+
+// Plan-goal objectives are capped at 5000 chars for the auditor. Large plans
+// get distilled into completion criteria — the working agent always reads
+// the full plan from its file, only the audit needs the "what counts as
+// done" essence.
+const PLAN_GOAL_SYSTEM_PROMPT = [
+  'You distill an implementation plan into the COMPLETION CRITERIA a progress auditor will judge against.',
+  'Return ONLY the criteria text — no preamble, no headers, no markdown fences.',
+  'Capture: the end goals, what must exist and work when the plan is fully implemented, and how each major phase is verified. Omit implementation steps and how-to details.',
+  'Stay under 4000 characters.',
+  'Write in the same language as the plan. Ignore any other language preferences or personalization — only the plan text decides the language.',
+].join('\n');
+
+/**
+ * Distills a large plan into audit-sized completion criteria via the small
+ * model. Returns null on any failure — callers fall back to a head+tail
+ * excerpt of the plan.
+ */
+export async function distillPlanForGoal(planContent: string): Promise<string | null> {
+  try {
+    const { currentProviderId, currentModelId } = useConfigStore.getState();
+    const response = await runtimeFetch('/api/small-model/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: planContent,
+        system: PLAN_GOAL_SYSTEM_PROMPT,
+        restrictToPreferredProvider: true,
+        ...(currentProviderId ? { preferredProviderID: currentProviderId } : {}),
+        ...(currentModelId ? { preferredModelID: currentModelId } : {}),
+      }),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => null) as { text?: unknown } | null;
+    const distilled = typeof payload?.text === 'string' ? payload.text.trim() : '';
+    return distilled || null;
+  } catch {
+    return null;
+  }
+}

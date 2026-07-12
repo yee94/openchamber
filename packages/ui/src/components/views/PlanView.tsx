@@ -30,6 +30,9 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
+import { SESSION_GOAL_OBJECTIVE_CHAR_LIMIT } from '@/lib/sessionGoalMetadata';
+import { distillPlanForGoal } from '@/lib/smallModel';
+import { toast } from '@/components/ui';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -598,15 +601,34 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         // "Run as goal" rides the same arm mechanism as the composer target
         // button; set explicitly either way so a stray armed flag cannot
         // leak into a non-goal plan send. The objective override carries the
-        // actual plan content — "Implement this plan: X" alone would give
-        // the progress audit nothing to judge against.
-        const goalObjective = execution.runAsGoal === true
-          ? [
-              `Implement the plan "${sendPromptTitle}" end-to-end${resolvedPath ? ` (plan file: ${resolvedPath})` : ''}.`,
-              '',
-              content,
-            ].join('\n')
-          : null;
+        // plan substance — "Implement this plan: X" alone would give the
+        // progress audit nothing to judge against. Plans that exceed the
+        // objective limit are distilled into completion criteria by the
+        // small model (the working agent always reads the full plan from
+        // its file); on distillation failure a head+tail excerpt keeps the
+        // intent (top) and acceptance criteria (bottom), sacrificing the
+        // implementation middle the agent reads from the file anyway.
+        let goalObjective: string | null = null;
+        if (execution.runAsGoal === true) {
+          const header = [
+            `Implement the plan "${sendPromptTitle}" end-to-end${resolvedPath ? ` (plan file: ${resolvedPath})` : ''}.`,
+            'Re-read that file for full details — it is the source of truth.',
+          ].join(' ');
+          const budget = SESSION_GOAL_OBJECTIVE_CHAR_LIMIT - header.length - 2;
+          if (content.length <= budget) {
+            goalObjective = `${header}\n\n${content}`;
+          } else {
+            const distilled = await distillPlanForGoal(content);
+            if (distilled) {
+              goalObjective = `${header}\n\n${distilled.slice(0, budget)}`;
+            } else {
+              const marker = '\n\n[… plan trimmed for the auditor — the plan file has the full version …]\n\n';
+              const half = Math.max(0, Math.floor((budget - marker.length) / 2));
+              goalObjective = `${header}\n\n${content.slice(0, half)}${marker}${content.slice(-half)}`;
+              toast.error(t('plans.goal.toast.distillFallback'));
+            }
+          }
+        }
         useSessionGoalArmStore.getState().setArmed(execution.runAsGoal === true, goalObjective);
         await sendMessage(
           visiblePrompt,
@@ -624,7 +646,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         setIsPlanSendSubmitting(false);
       }
     },
-    [canCreateWorktree, content, createSession, currentProjectRef, initializeNewOpenChamberSession, pendingPlanSend, resolvedPath, routeToChat, sendMessage, sendPromptTitle, setCurrentSession]
+    [canCreateWorktree, content, createSession, currentProjectRef, initializeNewOpenChamberSession, pendingPlanSend, resolvedPath, routeToChat, sendMessage, sendPromptTitle, setCurrentSession, t]
   );
 
   const blockWidgets = React.useMemo(() => {

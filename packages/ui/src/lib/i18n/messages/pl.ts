@@ -2122,6 +2122,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.goal.action.save': 'Zapisz cel',
   'chat.goal.action.start': 'Rozpocznij cel',
   'chat.goal.toast.actionFailed': 'Nie udało się zaktualizować celu',
+  'plans.goal.toast.distillFallback': 'Nie udało się skondensować planu dla audytora — użyto skróconego fragmentu',
   'chat.goal.row.aria': 'Cel sesji — otwórz szczegóły',
   'chat.goal.button.createAria': 'Ustaw cel sesji',
   'chat.goal.button.manageAria': 'Zarządzaj celem sesji',
