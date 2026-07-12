@@ -19,8 +19,10 @@ import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { orderWorktrees, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useAllLiveSessions } from '@/sync/sync-context';
+import { useAllLiveSessions, useAllSessionStatuses } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
+import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
+import { abortCurrentOperation } from '@/sync/session-actions';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
@@ -227,6 +229,10 @@ const SessionRow: React.FC<{
   /** When provided, an archive affordance is shown; first tap arms confirm, X cancels. */
   onRequestArchive?: () => void;
   onConfirmArchive?: () => void;
+  /** When provided, a stop button is shown on the row. */
+  onStop?: () => void;
+  /** Aria label for the stop button. */
+  stopAriaLabel?: string;
 }> = ({
   session,
   active,
@@ -239,6 +245,8 @@ const SessionRow: React.FC<{
   onSelect,
   onRequestArchive,
   onConfirmArchive,
+  onStop,
+  stopAriaLabel,
 }) => {
   const { t } = useI18n();
   const time = formatRelativeShort(getSessionTimestamp(session));
@@ -303,6 +311,20 @@ const SessionRow: React.FC<{
           ) : null}
         </span>
       </button>
+      {onStop ? (
+        <button
+          type="button"
+          className="mr-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+          aria-label={stopAriaLabel}
+          onClick={(event) => {
+            event.stopPropagation();
+            onStop();
+          }}
+          style={{ touchAction: 'manipulation' }}
+        >
+          <SessionBusyIndicator />
+        </button>
+      ) : null}
       {onRequestArchive ? (
         <>
           {confirmingArchive ? (
@@ -408,6 +430,26 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // state itself lives in useMobileSessionTreeStore (persisted).
   // Key: `${projectId}::${bucketKey}`.
   const [visibleCountByBucket, setVisibleCountByBucket] = React.useState<Map<string, number>>(new Map());
+
+  const allStatuses = useAllSessionStatuses();
+
+  // Single-pass running session map: session ID → true if busy or retry.
+  const runningSessionMap = React.useMemo<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    for (const [id, status] of Object.entries(allStatuses)) {
+      map[id] = status.type === 'busy' || status.type === 'retry';
+    }
+    return map;
+  }, [allStatuses]);
+
+  // Abort helpers — debounced identity via useCallback for stable prop passing.
+  const handleStopSession = React.useCallback((sessionId: string) => {
+    void abortCurrentOperation(sessionId);
+  }, []);
+
+  const handleStopSessions = React.useCallback((sessionIds: string[]) => {
+    void Promise.all(sessionIds.map((id) => abortCurrentOperation(id)));
+  }, []);
 
   React.useEffect(() => {
     if (!open) {
@@ -630,6 +672,13 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       const children = childrenByParent.get(session.id) ?? [];
       const hasChildren = children.length > 0;
       const expanded = Boolean(expandedParents[session.id]);
+      const isRunning = runningSessionMap[session.id] || false;
+      const runningChildIds = hasChildren && !expanded ? (children.filter((c) => runningSessionMap[c.id]).map((c) => c.id)) : [];
+      const hasRunningHiddenChildren = runningChildIds.length > 0;
+      const stopIds = isRunning
+        ? [session.id, ...runningChildIds]
+        : runningChildIds;
+      const title = session.title?.trim() || t('mobile.sessions.untitled');
       return (
         <React.Fragment key={session.id}>
           <SessionRow
@@ -643,6 +692,12 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             onSelect={() => handleSelectSession(session)}
             onRequestArchive={() => handleRequestArchive(session.id)}
             onConfirmArchive={() => void handleConfirmArchive(session)}
+            onStop={(isRunning || hasRunningHiddenChildren) ? () => handleStopSessions(stopIds) : undefined}
+            stopAriaLabel={
+              hasRunningHiddenChildren
+                ? t('mobile.sessions.stopSubsessionsAria', { title })
+                : t('mobile.sessions.stopSessionAria', { title })
+            }
           />
           {hasChildren && expanded
             ? children.map((child) => renderNode(child, rowIndent + CHILD_INDENT_STEP))
@@ -868,17 +923,22 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                     </span>
                   </div>
                   <div className="overflow-hidden rounded-2xl border border-border/40 bg-[var(--surface-elevated)]">
-                    {searchSessionMatches.map((session, index) => (
-                      <div key={session.id} className={cn(index > 0 && 'border-t border-border/30')}>
-                        <SessionRow
-                          session={session}
-                          active={currentSessionId === session.id}
-                          indent={12}
-                          contextLabel={buildSessionContextLabel(session)}
-                          onSelect={() => handleSelectSession(session)}
-                        />
-                      </div>
-                    ))}
+                    {searchSessionMatches.map((session, index) => {
+                       const isRunning = runningSessionMap[session.id] || false;
+                       const title = session.title?.trim() || t('mobile.sessions.untitled');
+                       return (
+                       <div key={session.id} className={cn(index > 0 && 'border-t border-border/30')}>
+                         <SessionRow
+                           session={session}
+                           active={currentSessionId === session.id}
+                           indent={12}
+                           contextLabel={buildSessionContextLabel(session)}
+                           onSelect={() => handleSelectSession(session)}
+                           onStop={isRunning ? () => handleStopSession(session.id) : undefined}
+                           stopAriaLabel={t('mobile.sessions.stopSessionAria', { title })}
+                         />
+                       </div>
+                     )})}
                   </div>
                 </section>
               ) : null}
@@ -964,6 +1024,25 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                           {node.totalSessions}
                         </span>
                       </button>
+                      {(() => {
+                        const projectRunningIds = !projectExpanded
+                          ? [...new Set(node.buckets.flatMap((b) => b.sessions.filter((s) => runningSessionMap[s.id]).map((s) => s.id)))]
+                          : [];
+                        return projectRunningIds.length > 0 ? (
+                          <button
+                            type="button"
+                            className="flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] mr-1"
+                            aria-label={t('mobile.sessions.stopGroupAria', { label: node.project.label })}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleStopSessions(projectRunningIds);
+                            }}
+                            style={{ touchAction: 'manipulation' }}
+                          >
+                            <SessionBusyIndicator />
+                          </button>
+                        ) : null;
+                      })()}
                       {node.project.isGitRepo ? (
                         <NewWorktreeIconButton
                           className="mr-2"
@@ -1021,6 +1100,25 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                                       {isActiveWt ? (
                                         <ActiveDot ariaLabel={t('mobile.sessions.activeWorktreeAria')} />
                                       ) : null}
+                                      {(() => {
+                                        const worktreeRunningIds = !worktreeExpanded
+                                          ? bucket.sessions.filter((s) => runningSessionMap[s.id]).map((s) => s.id)
+                                          : [];
+                                        return worktreeRunningIds.length > 0 ? (
+                                          <button
+                                            type="button"
+                                            className="flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+                                            aria-label={t('mobile.sessions.stopGroupAria', { label: bucket.label })}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              handleStopSessions(worktreeRunningIds);
+                                            }}
+                                            style={{ touchAction: 'manipulation' }}
+                                          >
+                                            <SessionBusyIndicator />
+                                          </button>
+                                        ) : null;
+                                      })()}
                                       <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">
                                         {bucket.sessions.length}
                                       </span>

@@ -1127,6 +1127,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   return (
     <div className="oc-group">
       <div
+        data-mobile-press-feedback={dragHandleProps ? 'none' : undefined}
         className={cn(
           // No extra my-* — adjacent session my-0.5 already sets the row gap;
           // adding my-0.5 here stacked with the previous group's body pad.

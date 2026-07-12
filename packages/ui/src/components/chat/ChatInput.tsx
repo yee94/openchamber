@@ -26,6 +26,7 @@ import { AttachedFilesList, AttachedVSCodeFileChips, ActiveEditorFileSuggestion 
 import ToolOutputDialog from './message/ToolOutputDialog';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessageChips } from './QueuedMessageChips';
+import { mergeFailedAttachments, mergeFailedComposerText } from './chat-input-recovery';
 import { AutoReviewBanner } from './AutoReviewBanner';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from './CommandAutocomplete';
@@ -1027,7 +1028,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // TODO: port sendMessage to session-actions (complex — creates sessions, handles attachments, etc.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sendMessage = React.useRef((...args: any[]) =>
-        Promise.resolve((useSessionUIStore.getState().sendMessage as (...a: unknown[]) => unknown)(...args)),
+        Promise.resolve().then(() =>
+            (useSessionUIStore.getState().sendMessage as (...a: unknown[]) => unknown)(...args),
+        ),
     ).current;
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const fallbackDirectory = useDirectoryStore((s) => s.currentDirectory);
@@ -1803,6 +1806,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 hasContent: options.presetText.trim().length > 0 || sendableAttachedFiles.length > 0 || hasDrafts,
             }
             : getCurrentInputSnapshot();
+        const inputAttachmentsSnapshot = attachedFiles;
         const normalizedInput = inputSnapshot.message.trimStart();
         const isModelCommand = inputMode === 'normal' && /^\/model(?:\s|$)/i.test(normalizedInput);
 
@@ -2025,6 +2029,63 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             setExpandedInput(false);
         }
 
+        const restoreFailedSubmission = () => {
+            if (currentSessionId && queuedMessagesToSend.length > 0) {
+                useMessageQueueStore.setState((state) => {
+                    const currentQueue = state.queuedMessages[currentSessionId] ?? [];
+                    const restoredIds = new Set(queuedMessagesToSend.map((queuedMessage) => queuedMessage.id));
+                    return {
+                        queuedMessages: {
+                            ...state.queuedMessages,
+                            [currentSessionId]: [
+                                ...queuedMessagesToSend,
+                                ...currentQueue.filter((queuedMessage) => !restoredIds.has(queuedMessage.id)),
+                            ],
+                        },
+                    };
+                });
+            }
+
+            if (queuedOnly) {
+                if (syntheticParts) {
+                    useInputStore.setState((state) => ({
+                        pendingSyntheticParts: [
+                            ...syntheticParts,
+                            ...(state.pendingSyntheticParts ?? []).filter((part) => !syntheticParts.includes(part)),
+                        ],
+                    }));
+                }
+                return;
+            }
+
+            const inputState = useInputStore.getState();
+            if (inputState.pendingInputText === inputSnapshot.message) {
+                inputState.consumePendingInputText();
+            }
+            setMessage((currentText) => mergeFailedComposerText(inputSnapshot.message, currentText));
+            useInputStore.setState((state) => ({
+                attachedFiles: mergeFailedAttachments(inputAttachmentsSnapshot, state.attachedFiles),
+                pendingSyntheticParts: syntheticParts
+                    ? [...syntheticParts, ...(state.pendingSyntheticParts ?? []).filter((part) => !syntheticParts.includes(part))]
+                    : state.pendingSyntheticParts,
+            }));
+            if (sessionKey && drafts.length > 0) {
+                useInlineCommentDraftStore.setState((state) => {
+                    const currentDrafts = state.drafts[sessionKey] ?? [];
+                    const restoredIds = new Set(drafts.map((draft) => draft.id));
+                    return {
+                        drafts: {
+                            ...state.drafts,
+                            [sessionKey]: [
+                                ...drafts,
+                                ...currentDrafts.filter((draft) => !restoredIds.has(draft.id)),
+                            ],
+                        },
+                    };
+                });
+            }
+        };
+
         if (isMobile) {
             textareaRef.current?.blur();
         }
@@ -2039,13 +2100,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 ?.toLowerCase();
 
             if (commandName === 'undo' && currentSessionId) {
-                await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
-                scrollToBottom?.();
+                try {
+                    await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
+                    scrollToBottom?.();
+                } catch (error) {
+                    restoreFailedSubmission();
+                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
+                }
                 return;
             }
             else if (commandName === 'redo' && currentSessionId) {
-                await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
-                scrollToBottom?.();
+                try {
+                    await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
+                    scrollToBottom?.();
+                } catch (error) {
+                    restoreFailedSubmission();
+                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
+                }
                 return;
             }
             else if (commandName === 'timeline' && currentSessionId) {
@@ -2058,6 +2129,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     const compactDirectory = useSessionUIStore.getState().getDirectoryForSession(currentSessionId) || currentDirectory || undefined;
                     await opencodeClient.summarizeSession(currentSessionId, currentProviderId, currentModelId, compactDirectory);
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.compactFailed'));
                 }
                 return;
@@ -2088,6 +2160,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.summaryFailed'));
                 }
                 return;
@@ -2111,6 +2184,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.reviewFailed'));
                 }
                 return;
@@ -2138,6 +2212,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.planFeatureFailed'));
                 }
                 return;
@@ -2161,6 +2236,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.catchUpFailed'));
                 }
                 return;
@@ -2184,6 +2260,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.debugFailed'));
                 }
                 return;
@@ -2207,6 +2284,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.weighFailed'));
                 }
                 return;
@@ -2230,6 +2308,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.exploreFailed'));
                 }
                 return;
@@ -2259,12 +2338,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         } catch (error) {
             console.warn('[ChatInput] Failed to expand snippets, sending original text:', error);
         }
-
-        // Collect all attachments for error recovery
-        const allAttachments = [
-            ...primaryAttachments,
-            ...additionalParts.flatMap(p => p.attachments ?? []),
-        ];
 
         const sendPromise = sendMessage(
             primaryText,
@@ -2296,6 +2369,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 setLinkedPr(null);
             }
         }).catch((error: unknown) => {
+            restoreFailedSubmission();
             const rawMessage =
                 error instanceof Error
                     ? error.message
@@ -2319,23 +2393,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
             if (normalized.includes('payload too large') || normalized.includes('413') || normalized.includes('entity too large')) {
                 toast.error(t('chat.chatInput.toast.attachmentsTooLarge'));
-                if (allAttachments.length > 0) {
-                    useInputStore.getState().setAttachedFiles(allAttachments);
-                }
                 return;
             }
 
             if (isSoftNetworkError) {
-                if (allAttachments.length > 0) {
-                    useInputStore.getState().setAttachedFiles(allAttachments);
+                if (inputAttachmentsSnapshot.length > 0) {
                     toast.error(t('chat.chatInput.toast.sendAttachmentsFailed'));
                 }
                 return;
             }
 
-            if (allAttachments.length > 0) {
-                useInputStore.getState().setAttachedFiles(allAttachments);
-            }
             toast.error(rawMessage || t('chat.chatInput.toast.messageSendFailed'));
         });
 
