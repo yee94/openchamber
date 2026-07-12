@@ -181,6 +181,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['recap', 'assist', 'small model', 'summary'],
   },
   {
+    id: 'chat.session-assistance',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.sessionAssistance',
+    keywords: ['recap', 'suggestion', 'subagent'],
+  },
+  {
     id: 'chat.session-suggestion',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.sessionSuggestion',
@@ -207,6 +213,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'reasoning'],
   },
   {
+    id: 'chat.reasoning',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.reasoning',
+    keywords: ['thinking', 'traces'],
+  },
+  {
     id: 'chat.sticky-user-header',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.stickyUserHeader',
@@ -223,6 +235,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.wideChatLayout',
     keywords: ['layout', 'wide', 'messages'],
+  },
+  {
+    id: 'chat.message-appearance',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.messageAppearance',
+    keywords: ['layout', 'messages', 'appearance'],
   },
   {
     id: 'chat.code-block-line-wrap',
@@ -250,6 +268,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['tools', 'files', 'icons'],
   },
   {
+    id: 'chat.tools-and-files',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.toolsAndFiles',
+    keywords: ['tools', 'files', 'dotfiles'],
+  },
+  {
     id: 'chat.changed-files',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showTurnChangedFiles',
@@ -274,6 +298,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.persistDraftMessages',
     keywords: ['draft', 'message'],
+  },
+  {
+    id: 'chat.composer',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.composer',
+    keywords: ['input', 'draft', 'spellcheck'],
   },
   {
     id: 'chat.spellcheck',
