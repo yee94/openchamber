@@ -1044,20 +1044,32 @@ let candidateRefreshInFlight = false;
 export const refreshActiveConnectionCandidates = async (): Promise<CandidateRefreshResult> => {
   if (candidateRefreshInFlight) return 'skipped';
   const active = findActiveConnection();
-  if (!active) return 'skipped';
+  if (!active) {
+    logConnect('candidates:refresh-skip', { reason: 'no-active-connection' });
+    return 'skipped';
+  }
   const relay = relayCandidateOf(active);
-  if (!relay) return 'skipped';
+  if (!relay) {
+    logConnect('candidates:refresh-skip', { reason: 'no-relay-candidate' });
+    return 'skipped';
+  }
   candidateRefreshInFlight = true;
   try {
     const response = await raceWithTimeout(
       RELAY_CONNECT_TIMEOUT_MS,
       runtimeFetch('/api/client-auth/connection/candidates').then((r): Response | null => r).catch(() => null),
     );
-    if (!response?.ok) return 'skipped';
+    if (!response?.ok) {
+      logConnect('candidates:refresh-skip', { reason: 'fetch-failed', status: response?.status ?? null });
+      return 'skipped';
+    }
     const payload = await response.json().catch(() => null) as { serverId?: unknown; candidates?: unknown } | null;
     // Identity gate: the refresh must come from the server this device paired
     // with. Old servers (no serverId) are skipped rather than trusted blindly.
-    if (!payload || payload.serverId !== relay.serverId) return 'skipped';
+    if (!payload || payload.serverId !== relay.serverId) {
+      logConnect('candidates:refresh-skip', { reason: 'server-id-mismatch' });
+      return 'skipped';
+    }
     const reported = Array.isArray(payload.candidates) ? payload.candidates : [];
     const lanUrls: string[] = [];
     for (const entry of reported) {
@@ -1074,7 +1086,10 @@ export const refreshActiveConnectionCandidates = async (): Promise<CandidateRefr
     // No LAN reported (loopback-only bind or interface-scan failure): keep the
     // existing candidates — deleting them on a possibly-transient empty answer
     // would be silent data loss; a stale entry only costs one fast probe.
-    if (lanUrls.length === 0) return 'skipped';
+    if (lanUrls.length === 0) {
+      logConnect('candidates:refresh-skip', { reason: 'no-lan-reported' });
+      return 'skipped';
+    }
     const preservedHttps = directCandidates(active).filter((candidate) => candidate.url.startsWith('https://'));
     const next: MobileTransportCandidate[] = [
       ...lanUrls.map((url): MobileTransportCandidate => ({ kind: 'direct', url })),
@@ -1102,6 +1117,7 @@ const scheduleCandidateRefresh = (): void => {
   window.setTimeout(() => {
     void (async () => {
       const result = await refreshActiveConnectionCandidates().catch((): CandidateRefreshResult => 'skipped');
+      logConnect('candidates:refresh-result', { result });
       if (result === 'updated' && isRelayModeActive()) {
         await reprobeActiveConnection().catch(() => null);
       }
