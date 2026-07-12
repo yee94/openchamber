@@ -28,7 +28,7 @@ on:
       build_ios:
         description: Build iOS IPA and upload it to TestFlight.
         required: false
-        default: true
+        default: false
         type: boolean
   workflow_call:
     inputs:
@@ -57,7 +57,7 @@ on:
       build_ios:
         description: Build iOS IPA and upload it to TestFlight.
         required: false
-        default: true
+        default: false
         type: boolean
 
 concurrency:
