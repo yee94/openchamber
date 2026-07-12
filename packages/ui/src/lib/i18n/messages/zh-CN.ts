@@ -63,6 +63,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.saved.empty': '暂无已保存的连接。',
   'mobile.connect.relay.badge': '通过 OpenChamber Relay 连接',
   'mobile.connect.error.urlRequired': '请输入服务器 URL。',
+  'mobile.connect.splash.connectingTo': '正在连接设备：',
   'mobile.connect.error.invalidUrl': '该服务器 URL 无效。',
   'mobile.connect.error.unreachable': '无法连接到该 OpenChamber 服务器。',
   'mobile.connect.error.authRequired': '该服务器需要密码或客户端令牌。',

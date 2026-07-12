@@ -62,6 +62,7 @@ export const dict = {
   'mobile.connect.saved.empty': 'No saved connections yet.',
   'mobile.connect.relay.badge': 'via OpenChamber Relay',
   'mobile.connect.error.urlRequired': 'Enter a server URL.',
+  'mobile.connect.splash.connectingTo': 'Connecting to device:',
   'mobile.connect.error.invalidUrl': 'That server URL is not valid.',
   'mobile.connect.error.unreachable': 'Could not reach that OpenChamber server.',
   'mobile.connect.error.authRequired': 'This server needs a password or client token.',

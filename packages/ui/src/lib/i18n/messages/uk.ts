@@ -63,6 +63,7 @@ export const dict: Record<I18nKey, string> = {
   "mobile.connect.saved.empty": "Збережених підключень ще немає.",
   "mobile.connect.relay.badge": "через OpenChamber Relay",
   "mobile.connect.error.urlRequired": "Введи адресу сервера.",
+  "mobile.connect.splash.connectingTo": "Підключення до пристрою:",
   "mobile.connect.error.invalidUrl": "Ця адреса сервера некоректна.",
   "mobile.connect.error.unreachable": "Не вдалося достукатись до цього OpenChamber сервера.",
   "mobile.connect.error.authRequired": "Цьому серверу потрібен пароль або client token.",

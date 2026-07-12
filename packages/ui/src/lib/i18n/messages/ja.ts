@@ -62,6 +62,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.saved.empty': '保存された接続はまだありません。',
   'mobile.connect.relay.badge': 'OpenChamber Relay 経由',
   'mobile.connect.error.urlRequired': 'サーバー URL を入力してください。',
+  'mobile.connect.splash.connectingTo': 'デバイスに接続中:',
   'mobile.connect.error.invalidUrl': 'そのサーバー URL は無効です。',
   'mobile.connect.error.unreachable': 'その OpenChamber サーバーに接続できませんでした。',
   'mobile.connect.error.authRequired': 'このサーバーにはパスワードまたはクライアントトークンが必要です。',

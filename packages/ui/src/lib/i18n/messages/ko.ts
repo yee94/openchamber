@@ -63,6 +63,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.connect.saved.empty': '아직 저장된 연결이 없습니다.',
   'mobile.connect.relay.badge': 'OpenChamber Relay 경유',
   'mobile.connect.error.urlRequired': '서버 URL을 입력하세요.',
+  'mobile.connect.splash.connectingTo': '기기에 연결하는 중:',
   'mobile.connect.error.invalidUrl': '유효하지 않은 서버 URL입니다.',
   'mobile.connect.error.unreachable': '해당 OpenChamber 서버에 연결할 수 없습니다.',
   'mobile.connect.error.authRequired': '이 서버에는 비밀번호 또는 클라이언트 토큰이 필요합니다.',
