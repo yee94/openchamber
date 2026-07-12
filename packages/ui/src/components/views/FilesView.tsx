@@ -2326,6 +2326,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const isDrawio = Boolean(selectedFile?.path && isDrawioFile(selectedFile.path));
   const isTextFile = Boolean(selectedFile && !isSelectedImage && !isSelectedPdf);
   const canUseShikiFileView = isTextFile && !isMarkdown && !isDrawio && !(isHtml && htmlViewMode === 'preview');
+  const isEditingFile = (isMarkdown && mdViewMode === 'edit')
+    || (isHtml && htmlViewMode === 'edit')
+    || (isJson && jsonViewMode === 'text')
+    || (!isMarkdown && !isHtml && !isJson && textViewMode === 'edit');
   const staticLanguageExtension = React.useMemo(
     () => (selectedFilePath ? languageByExtension(selectedFilePath) : null),
     [selectedFilePath],
@@ -2369,8 +2373,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    const defaultMode: TextViewMode = settingsDefaultFileViewerPreview ? 'view' : 'edit';
-    setTextViewMode(textViewModeByPathRef.current[selectedPath] ?? defaultMode);
+    setTextViewMode(textViewModeByPathRef.current[selectedPath] ?? 'edit');
 
     // Respect per-type localStorage preference when available,
     // falling back to the setting-derived default when nothing is stored.
@@ -2395,7 +2398,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       // Ignore localStorage errors
     }
     setHtmlViewMode(htmlViewModeByPathRef.current[selectedPath] ?? htmlDefault);
-    setDrawioViewMode(drawioViewModeByPathRef.current[selectedPath] ?? 'preview');
+    setDrawioViewMode(drawioViewModeByPathRef.current[selectedPath] ?? (settingsDefaultFileViewerPreview ? 'preview' : 'edit'));
 
     let jsonDefault: 'tree' | 'text' = settingsDefaultFileViewerPreview ? 'tree' : 'text';
     try {
@@ -2560,23 +2563,26 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   React.useEffect(() => {
     const applyDefaultFileViewerMode = (enabled: boolean) => {
-      const textMode: TextViewMode = enabled ? 'view' : 'edit';
       const previewMode: PreviewViewMode = enabled ? 'preview' : 'edit';
       const nextJsonMode: 'tree' | 'text' = enabled ? 'tree' : 'text';
 
       for (const path of openPaths) {
-        textViewModeByPathRef.current[path] = textMode;
+        textViewModeByPathRef.current[path] = 'edit';
         if (isMarkdownFile(path)) {
           mdViewModeByPathRef.current[path] = previewMode;
         }
         if (isHtmlFile(path)) {
           htmlViewModeByPathRef.current[path] = previewMode;
         }
+        if (isDrawioFile(path)) {
+          drawioViewModeByPathRef.current[path] = previewMode;
+        }
       }
 
-      setTextViewMode(textMode);
+      setTextViewMode('edit');
       setMdViewMode(previewMode);
       setHtmlViewMode(previewMode);
+      setDrawioViewMode(previewMode);
       setJsonViewMode(nextJsonMode);
 
       try {
@@ -3152,7 +3158,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     return (
       <div className={wrapperCls}>
-        {canEdit && textViewMode === 'edit' && (
+        {canEdit && isEditingFile && (
           <>
             {isSaving ? (
               <span className="flex items-center gap-1 px-1 text-muted-foreground typography-meta">
@@ -3733,10 +3739,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           <div
             ref={floatingToolbarRef}
             className="absolute right-3 top-3 z-30"
-            onMouseEnter={() => {
-              if (isMarkdown) return;
-              setIsFloatingToolbarOpen(true);
-            }}
             onMouseLeave={() => {
               if (toolbarDropdownOpenCountRef.current > 0) return;
               setIsFloatingToolbarOpen(false);
@@ -3774,7 +3776,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 ) : null}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex">
+                    <span
+                      className="inline-flex"
+                      onMouseEnter={() => setIsFloatingToolbarOpen(true)}
+                    >
                       <Button
                         variant="ghost"
                         size="sm"
