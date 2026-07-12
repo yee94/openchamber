@@ -8,7 +8,6 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import type { ProjectEntry } from '@/lib/api/types';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP, ProjectIconImage } from '@/lib/projectMeta';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { Icon } from "@/components/icon/Icon";
 import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -424,7 +423,6 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const setOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
 
   const projects = useProjectsStore((state) => state.projects);
-  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
 
   const { sessions: sortedSessions, totalRunning, totalUnread } = useSessionGrouping(sessions, sessionStatus);
   const { getSessionTitle, needsAttention } = useSessionHelpers();
@@ -448,10 +446,8 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   }, [open]);
 
   const formatProjectLabel = React.useCallback((project: ProjectEntry): string => {
-    return project.label?.trim()
-      || formatDirectoryName(project.path, homeDirectory)
-      || project.path;
-  }, [homeDirectory]);
+    return formatDirectoryName(project.path) || project.path;
+  }, []);
 
   // Filter sessions by the selected project (root + worktrees), using the
   // store's canonical directory keying.

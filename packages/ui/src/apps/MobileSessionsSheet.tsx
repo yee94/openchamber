@@ -95,7 +95,7 @@ const getProjectLabel = (path: string): string => {
   const normalized = normalizePath(path);
   if (!normalized) return '';
   const segments = normalized.split('/').filter(Boolean);
-  return segments[segments.length - 1]?.replace(/[-_]/g, ' ') || normalized;
+  return segments[segments.length - 1] || normalized;
 };
 
 const getSessionTimestamp = (session: Session): number => {
@@ -498,7 +498,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     () =>
       projects.map((project) => ({
         id: project.id,
-        label: project.label?.trim() || getProjectLabel(project.path),
+        label: getProjectLabel(project.path),
         path: normalizePath(project.path),
         icon: project.icon,
         color: project.color,

@@ -67,6 +67,7 @@ import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog'
 import { Icon } from "@/components/icon/Icon";
 import { DraftPresetChips } from './DraftPresetChips';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
+import { matchesModelSearch } from '@/lib/search/modelSearch';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitBranches, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
@@ -359,10 +360,6 @@ const normalizePath = (value?: string | null): string | null => {
 };
 
 const getProjectDisplayLabel = (project: { label?: string; path: string }): string => {
-    const label = project.label?.trim();
-    if (label) {
-        return label;
-    }
     return formatDirectoryName(project.path);
 };
 
@@ -985,6 +982,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const [mobileAttachMenuOpen, setMobileAttachMenuOpen] = React.useState(false);
     const [mobileDraftPicker, setMobileDraftPicker] = React.useState<'project' | 'branch' | null>(null);
     const [mobileDraftPickerQuery, setMobileDraftPickerQuery] = React.useState('');
+    const [desktopDraftProjectQuery, setDesktopDraftProjectQuery] = React.useState('');
     // True while ANY MobileOverlayPanel is open (sessions sheet, model/agent
     // panels, pickers...). Opening one closes the keyboard, which must not
     // collapse the composer into the pill under the overlay.
@@ -4817,6 +4815,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             <Select
                                 value={selectedDraftProject.id}
                                 onValueChange={handleDraftProjectChange}
+                                onOpenChange={(open) => {
+                                    if (!open) {
+                                        setDesktopDraftProjectQuery('');
+                                    }
+                                }}
                             >
                                 <SelectTrigger
                                     size="sm"
@@ -4830,7 +4833,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent fitContent>
-                                    {projects.map((project) => (
+                                    <Input
+                                        autoFocus
+                                        value={desktopDraftProjectQuery}
+                                        onChange={(event) => setDesktopDraftProjectQuery(event.target.value)}
+                                        onKeyDown={(event) => event.stopPropagation()}
+                                        placeholder={t('chat.chatInput.draftPicker.searchProjects')}
+                                        className="mb-1 h-8 min-w-56"
+                                    />
+                                    {projects.filter((project) => (
+                                        matchesModelSearch(getProjectDisplayLabel(project), desktopDraftProjectQuery)
+                                        || matchesModelSearch(project.path, desktopDraftProjectQuery)
+                                    )).map((project) => (
                                         <SelectItem key={project.id} value={project.id} className="max-w-[24rem] truncate">
                                             {renderProjectLabelWithIcon(project)}
                                         </SelectItem>
@@ -5645,10 +5659,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         <div className="flex flex-col">
                             {projects
                                 .filter((project) => {
-                                    const query = mobileDraftPickerQuery.trim().toLowerCase();
-                                    if (!query) return true;
-                                    return getProjectDisplayLabel(project).toLowerCase().includes(query)
-                                        || project.path.toLowerCase().includes(query);
+                                    return matchesModelSearch(getProjectDisplayLabel(project), mobileDraftPickerQuery)
+                                        || matchesModelSearch(project.path, mobileDraftPickerQuery);
                                 })
                                 .map((project) => (
                                     <button

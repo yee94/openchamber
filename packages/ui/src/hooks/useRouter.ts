@@ -1,10 +1,13 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import type { RouteState, AppRouteState } from '@/lib/router';
 import type { MainTab } from '@/stores/useUIStore';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
+
+const SESSION_ROUTE_TIMEOUT_MS = 30_000;
 
 /**
  * Check if running in VS Code webview context.
@@ -36,6 +39,7 @@ export function useRouter(): void {
   // Track initialization to avoid duplicate applies
   const initializedRef = React.useRef(false);
   const isApplyingRouteRef = React.useRef(false);
+  const [route, setRoute] = React.useState<RouteState>(() => parseRoute());
 
   // Get store actions (stable references)
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
@@ -43,6 +47,30 @@ export function useRouter(): void {
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const navigateToDiff = useUIStore((state) => state.navigateToDiff);
+  const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded);
+  const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
+  const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
+
+  const redirectToHome = React.useCallback(() => {
+    if (isVSCode) {
+      return;
+    }
+
+    isApplyingRouteRef.current = true;
+    try {
+      setSettingsDialogOpen(false);
+      setActiveMainTab('chat');
+      updateBrowserURL({
+        sessionId: null,
+        tab: 'chat',
+        isSettingsOpen: false,
+        settingsPath: 'home',
+        diffFile: null,
+      }, { replace: true, force: true });
+    } finally {
+      isApplyingRouteRef.current = false;
+    }
+  }, [isVSCode, setActiveMainTab, setSettingsDialogOpen]);
 
   /**
    * Apply a parsed route state to the application stores.
@@ -58,9 +86,22 @@ export function useRouter(): void {
       try {
         // 1. Apply session first (may trigger async operations)
         if (route.sessionId) {
-          const currentSessionId = useSessionUIStore.getState().currentSessionId;
-          if (route.sessionId !== currentSessionId) {
-            const directoryHint = useSessionUIStore.getState().getDirectoryForSession(route.sessionId);
+          const globalSessions = useGlobalSessionsStore.getState();
+          const session = [...globalSessions.activeSessions, ...globalSessions.archivedSessions]
+            .find((candidate) => candidate.id === route.sessionId);
+          const directoryHint = session ? resolveGlobalSessionDirectory(session) : null;
+          const currentSession = useSessionUIStore.getState();
+
+          // Session summaries arrive asynchronously at startup. Keep the URL
+          // target pending until the authoritative index provides its directory.
+          if (
+            globalSessions.hasLoaded
+            && directoryHint
+            && (
+              route.sessionId !== currentSession.currentSessionId
+              || directoryHint !== currentSession.currentSessionDirectory
+            )
+          ) {
             setCurrentSession(route.sessionId, directoryHint);
           }
         }
@@ -162,6 +203,38 @@ export function useRouter(): void {
     void initializeRoute();
   }, [applyRoute, getCurrentAppState, isVSCode]);
 
+  // A deep-linked session can be absent while the startup index is loading.
+  // Resolve it from the completed authoritative snapshot, or return home.
+  React.useEffect(() => {
+    if (!route.sessionId || !hasLoadedGlobalSessions) {
+      return;
+    }
+
+    const session = [...activeSessions, ...archivedSessions]
+      .find((candidate) => candidate.id === route.sessionId);
+    if (!session || !resolveGlobalSessionDirectory(session)) {
+      redirectToHome();
+      return;
+    }
+
+    void applyRoute(route);
+  }, [activeSessions, applyRoute, archivedSessions, hasLoadedGlobalSessions, redirectToHome, route]);
+
+  React.useEffect(() => {
+    if (!route.sessionId || isVSCode) {
+      return;
+    }
+
+    const sessionId = route.sessionId;
+    const timeout = setTimeout(() => {
+      if (parseRoute().sessionId === sessionId) {
+        redirectToHome();
+      }
+    }, SESSION_ROUTE_TIMEOUT_MS);
+
+    return () => clearTimeout(timeout);
+  }, [isVSCode, redirectToHome, route.sessionId]);
+
   // Subscribe to session changes
   React.useEffect(() => {
     if (isVSCode) {
@@ -230,11 +303,12 @@ export function useRouter(): void {
 
     const handlePopState = () => {
       // Parse the new URL and apply it
-      const route = parseRoute();
+      const nextRoute = parseRoute();
+      setRoute(nextRoute);
 
       // Check if this is a route with any params, or if we should restore defaults
       if (hasRouteParams()) {
-        void applyRoute(route);
+        void applyRoute(nextRoute);
       } else {
         // URL has no route params - this might be a "back to home" navigation
         // Close settings if open, keep current session

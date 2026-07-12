@@ -33,8 +33,6 @@ const normalize = (value: string | null | undefined): string | null => {
 
 const formatProjectLabel = (project: { label?: string | null; path: string } | null): string | null => {
   if (!project) return null;
-  const trimmed = project.label?.trim();
-  if (trimmed) return trimmed;
   const segments = project.path.split(/[\\/]/).filter(Boolean);
   return segments[segments.length - 1] ?? null;
 };

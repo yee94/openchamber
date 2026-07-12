@@ -102,7 +102,6 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
-  const homeDirectory = useDirectoryStore((state) => state.homeDirectory ?? null);
 
   const vscodeWorkspaceFolder = React.useMemo(() => {
     if (typeof window === 'undefined') return null;
@@ -140,7 +139,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   }, [activeProjectId, setActiveProjectIdOnly]);
 
   const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
-    const displayLabel = project.label?.trim() || formatDirectoryName(project.path, homeDirectory);
+    const displayLabel = formatDirectoryName(project.path);
     // Codex-style: muted open-folder only — no per-project color/icon chrome.
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -148,7 +147,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
         <span className="truncate">{displayLabel}</span>
       </span>
     );
-  }, [homeDirectory]);
+  }, []);
 
   const projectRef = React.useMemo<ProjectRef | null>(() => {
     if (selectedProject?.path) {

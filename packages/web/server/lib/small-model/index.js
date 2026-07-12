@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { readAuthFile } from '../opencode/auth.js';
 import { readConfigLayers } from '../opencode/shared.js';
-import { getModelCatalog } from './catalog.js';
+import { getCatalogProvider, getModelCatalog } from './catalog.js';
 import { resolveSmallModel, parseModelRef, isUsableAuthEntry, getAuthEntryForProvider } from './resolve.js';
 import { callSmallModel } from './call.js';
 
@@ -132,11 +132,17 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
  * actually call. Used by the settings override picker to hide providers that
  * would only ever fail (e.g. opencode free models without a token).
  */
-export function listAuthenticatedProviders() {
+export async function listCallableProviders() {
   try {
     const auth = readAuthFile();
+    const catalog = await getModelCatalog().catch(() => ({}));
     const ids = new Set(
-      Object.keys(auth || {}).filter((providerID) => isUsableAuthEntry(auth[providerID])),
+      Object.keys(auth || {}).filter((providerID) => {
+        if (!isUsableAuthEntry(auth[providerID])) return false;
+        if (providerID === 'openai' || providerID === 'anthropic' || providerID === 'google') return true;
+        const provider = getCatalogProvider(catalog, providerID);
+        return typeof provider?.api === 'string' && provider.api.length > 0;
+      }),
     );
     // The catalog id is github-copilot while legacy auth entries may sit
     // under the copilot alias.
@@ -148,6 +154,7 @@ export function listAuthenticatedProviders() {
     return [];
   }
 }
+
 
 /**
  * Reports which model would be used, without calling it.

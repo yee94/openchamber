@@ -280,8 +280,8 @@ type DefaultAgentModelSelection = {
 // Shared default-selection cascade used both at startup (loadAgents) and when opening a
 // fresh draft (applyDefaultModelAgentSelection), so the two paths stay identical.
 //
-//   Agent: settings.defaultAgent → opencode default_agent → build → first primary → first
-//   Model: project.defaultModel → settings.defaultModel → resolved agent's pinned model+variant → opencode config.model
+//   Agent: settings.defaultAgent → inherit → opencode default_agent → build → first primary → first
+//   Model: project.defaultModel → settings.defaultModel → inherit → resolved agent's pinned model+variant → opencode config.model
 //          → opencode/big-pickle → first
 //
 // The opencode default_agent / default model (config fields on the OpenCode server) are honored
@@ -298,6 +298,9 @@ const resolveDefaultAgentModelSelection = ({
     settingsDefaultVariant,
     opencodeDefaultAgent,
     opencodeDefaultModel,
+    inheritAgentName,
+    inheritProviderId,
+    inheritModelId,
 }: {
     agents: Agent[];
     providers: ProviderWithModelList[];
@@ -307,6 +310,9 @@ const resolveDefaultAgentModelSelection = ({
     settingsDefaultVariant?: string;
     opencodeDefaultAgent?: string;
     opencodeDefaultModel?: string;
+    inheritAgentName?: string;
+    inheritProviderId?: string;
+    inheritModelId?: string;
 }): DefaultAgentModelSelection => {
     if (agents.length === 0) {
         return { agentName: undefined };
@@ -330,6 +336,12 @@ const resolveDefaultAgentModelSelection = ({
     let resolvedAgent: Agent | undefined;
     if (settingsDefaultAgent) {
         resolvedAgent = agents.find((agent) => agent.name === settingsDefaultAgent);
+    }
+    if (!resolvedAgent && inheritAgentName) {
+        const candidate = agents.find((agent) => agent.name === inheritAgentName);
+        if (candidate && isPrimaryMode(candidate.mode) && candidate.hidden !== true) {
+            resolvedAgent = candidate;
+        }
     }
     if (!resolvedAgent && opencodeDefaultAgent) {
         const candidate = agents.find((agent) => agent.name === opencodeDefaultAgent);
@@ -359,6 +371,12 @@ const resolveDefaultAgentModelSelection = ({
             modelId = parsed.modelId;
             variant = resolveVariant(providerId, modelId, projectDefaultModel ? undefined : settingsDefaultVariant);
         }
+    }
+
+    if (!providerId && inheritProviderId && inheritModelId
+        && hasProviderModel(providers, inheritProviderId, inheritModelId)) {
+        providerId = inheritProviderId;
+        modelId = inheritModelId;
     }
 
     if (!providerId
@@ -2519,6 +2537,12 @@ export const useConfigStore = create<ConfigStore>()(
                         return;
                     }
 
+                    const selState = useSelectionStore.getState();
+                    const lastSel = selState.lastUsedProvider;
+                    const lastAgentEntry = selState.sessionAgentSelections.size > 0
+                        ? Array.from(selState.sessionAgentSelections).at(-1)?.[1]
+                        : undefined;
+
                     const {
                         agentName: resolvedAgentName,
                         providerId: resolvedProviderId,
@@ -2533,6 +2557,9 @@ export const useConfigStore = create<ConfigStore>()(
                         settingsDefaultVariant,
                         opencodeDefaultAgent,
                         opencodeDefaultModel,
+                        inheritAgentName: lastAgentEntry,
+                        inheritProviderId: lastSel?.providerID,
+                        inheritModelId: lastSel?.modelID,
                     });
 
                     if (!resolvedAgentName) {

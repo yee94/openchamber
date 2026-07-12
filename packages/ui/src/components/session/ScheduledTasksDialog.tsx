@@ -17,7 +17,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { cn, formatDirectoryName } from '@/lib/utils';
@@ -177,7 +176,6 @@ export function ScheduledTasksDialog() {
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const projects = useProjectsStore((state) => state.projects);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
-  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
 
   const [selectedProjectID, setSelectedProjectID] = React.useState<string>('');
   const [tasks, setTasks] = React.useState<ScheduledTask[]>([]);
@@ -194,7 +192,7 @@ export function ScheduledTasksDialog() {
   );
 
   const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
-    const displayLabel = project.label?.trim() || formatDirectoryName(project.path, homeDirectory || undefined);
+    const displayLabel = formatDirectoryName(project.path);
     // Codex-style: muted open-folder only — no per-project color/icon chrome.
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -202,7 +200,7 @@ export function ScheduledTasksDialog() {
         <span className="truncate">{displayLabel}</span>
       </span>
     );
-  }, [homeDirectory]);
+  }, []);
 
   const reloadTasks = React.useCallback(async (projectID: string, options?: { silent?: boolean }) => {
     if (!projectID) {

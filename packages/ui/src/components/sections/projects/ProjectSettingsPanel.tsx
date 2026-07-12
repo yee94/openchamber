@@ -39,7 +39,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     return null;
   }
 
-  const headerLabel = project.label ?? t('settings.projects.page.title.default');
+  const headerLabel = project.path.split(/[\\/]/).filter(Boolean).at(-1) ?? t('settings.projects.page.title.default');
 
   return (
     <div className="space-y-0">

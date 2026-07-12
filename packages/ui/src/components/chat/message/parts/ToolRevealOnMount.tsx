@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 
 const WIPE_MASK =
     'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 45%, rgba(0,0,0,0) 60%, rgba(0,0,0,0) 100%)';
@@ -114,7 +115,7 @@ const AnimatedToolReveal: React.FC<AnimatedToolRevealProps> = ({
     }, [clearRevealStyles, delayMs, wipe]);
 
     return (
-        <div ref={rootRef} className={className}>
+        <div ref={rootRef} className={cn('flow-root', className)}>
             {children}
         </div>
     );
@@ -128,7 +129,7 @@ export const ToolRevealOnMount: React.FC<ToolRevealOnMountProps> = ({
     className,
 }) => {
     if (!animate) {
-        return <div className={className}>{children}</div>;
+        return <div className={cn('flow-root', className)}>{children}</div>;
     }
 
     return (

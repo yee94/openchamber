@@ -21,7 +21,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, isMobile, provide
     const { src: logoSrc, onError: handleLogoError, hasLogo, brand } = useModelLogo(modelID, providerID);
 
     return (
-        <div className={cn('mb-2')}>
+        <div className={cn('mb-1.5')}>
             <div className={cn('flex items-center justify-between gap-2')}>
                 <div className="flex items-center gap-2">
                     <div className="flex-shrink-0">

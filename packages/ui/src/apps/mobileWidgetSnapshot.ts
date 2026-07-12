@@ -59,9 +59,7 @@ const projectLabelForDirectory = (directory: string | null, projects: ProjectEnt
       }
     }
   }
-  if (best) {
-    return best.label?.trim() || basename(best.path);
-  }
+  if (best) return basename(best.path);
   return basename(directory);
 };
 

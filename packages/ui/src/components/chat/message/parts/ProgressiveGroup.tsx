@@ -25,7 +25,7 @@ import JustificationBlock from './JustificationBlock';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { getExternalFaviconUrl } from '@/lib/url';
 import { getDirectoryForFilePath, getRelativeFilePath, isFilePathWithinDirectory, normalizeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
-import { TOOL_ROW_INTERACTIVE_CHROME_CLASS } from './toolRowChrome';
+import { getToolRowBlockClass, TOOL_ROW_INTERACTIVE_CHROME_CLASS } from './toolRowChrome';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -396,15 +396,17 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
     }, [activity.id, onToggleTool]);
 
     const content = (
-        <ToolPart
-            part={activity.part as ToolPartType}
-            isExpanded={isExpanded}
-            onToggle={handleToggle}
-            isMobile={isMobile}
-            onContentChange={onContentChange}
-            onShowPopup={onShowPopup}
-            animateTailText={animateTailText}
-        />
+        <div className={getToolRowBlockClass(isMobile)}>
+            <ToolPart
+                part={activity.part as ToolPartType}
+                isExpanded={isExpanded}
+                onToggle={handleToggle}
+                isMobile={isMobile}
+                onContentChange={onContentChange}
+                onShowPopup={onShowPopup}
+                animateTailText={animateTailText}
+            />
+        </div>
     );
 
     const maybeWrapped = animateTailText ? (
@@ -437,6 +439,7 @@ const MemoExpandableToolRow = React.memo(ExpandableToolRow, (prev, next) => {
 interface StaticGroupedToolRowProps {
     toolName: string;
     activities: TurnActivityPart[];
+    isMobile: boolean;
     animateTailText: boolean;
     animateRows: boolean;
 }
@@ -444,15 +447,18 @@ interface StaticGroupedToolRowProps {
 const StaticGroupedToolRow: React.FC<StaticGroupedToolRowProps> = ({
     toolName,
     activities,
+    isMobile,
     animateTailText,
     animateRows,
 }) => {
     const content = (
-        <StaticToolRow
-            toolName={toolName}
-            activities={activities}
-            animateTailText={animateTailText}
-        />
+        <div className={getToolRowBlockClass(isMobile)}>
+            <StaticToolRow
+                toolName={toolName}
+                activities={activities}
+                animateTailText={animateTailText}
+            />
+        </div>
     );
 
     const maybeWrapped = animateTailText ? (
@@ -470,6 +476,7 @@ const StaticGroupedToolRow: React.FC<StaticGroupedToolRowProps> = ({
 
 const MemoStaticGroupedToolRow = React.memo(StaticGroupedToolRow, (prev, next) => {
     return prev.toolName === next.toolName
+        && prev.isMobile === next.isMobile
         && prev.animateTailText === next.animateTailText
         && prev.animateRows === next.animateRows
         && areActivityListsEqual(prev.activities, next.activities);
@@ -872,10 +879,11 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     }
 
     const wrapRow = (key: string, content: React.ReactNode) => {
+        const row = <div className={getToolRowBlockClass(isMobile)}>{content}</div>;
         if (!animateRows) {
-            return <React.Fragment key={key}>{content}</React.Fragment>;
+            return <React.Fragment key={key}>{row}</React.Fragment>;
         }
-        return <FadeInOnReveal key={key}>{content}</FadeInOnReveal>;
+        return <FadeInOnReveal key={key}>{row}</FadeInOnReveal>;
     };
 
     const renderedRows = shouldRenderRows
@@ -926,6 +934,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         key={`static-${row.toolName}-${row.activities[0]?.id ?? index}`}
                         toolName={row.toolName}
                         activities={row.activities}
+                        isMobile={isMobile}
                         animateTailText={row.activities.some((activity) => animatedToolIds?.has(activity.id))}
                         animateRows={animateRows}
                     />
@@ -957,14 +966,14 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     if (!showHeader) {
         return (
             <FadeInOnReveal>
-                <div className="mt-1 mb-1 space-y-1.5">{renderedRows}</div>
+                <div className={getToolRowBlockClass(isMobile)}>{renderedRows}</div>
             </FadeInOnReveal>
         );
     }
 
     return (
         <FadeInOnReveal>
-            <div className="mt-1 mb-1">
+            <div className={getToolRowBlockClass(isMobile)}>
                 <button
                     type="button"
                     className={cn(
@@ -1003,7 +1012,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                                 +{previewHiddenCount} more...
                             </button>
                         ) : null}
-                        <div className="space-y-1.5">{renderedRows}</div>
+                        <div className="flow-root">{renderedRows}</div>
                     </div>
                 ) : null}
             </div>

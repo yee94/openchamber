@@ -6,7 +6,6 @@ import { GitView } from '@/components/views/GitView';
 import { Icon } from "@/components/icon/Icon";
 import { useGitStore } from '@/stores/useGitStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -71,7 +70,6 @@ function useRightSidebarGitSync(
 export const ProjectContextPanel: React.FC = () => {
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const projects = useProjectsStore((state) => state.projects);
-  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const gitDirectories = useGitStore((state) => state.directories);
 
   const activeProject = React.useMemo(() => {
@@ -95,10 +93,8 @@ export const ProjectContextPanel: React.FC = () => {
     if (!activeProject) {
       return null;
     }
-    return activeProject.label?.trim()
-      || formatDirectoryName(activeProject.path, homeDirectory)
-      || activeProject.path;
-  }, [activeProject, homeDirectory]);
+    return formatDirectoryName(activeProject.path) || activeProject.path;
+  }, [activeProject]);
 
   const canCreateWorktree = React.useMemo(() => {
     if (!activeProject) {

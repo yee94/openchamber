@@ -17,6 +17,8 @@ discussing, throttled to at most once per 5 minutes per session.
    generate anything.
 2. `session.status: idle` arms a 15-second quiet timer; any `busy`/`retry`
    status or a fresh user `message.updated` clears it.
+   A sidebar smart-title request sets `titleRefresh.requestedAt`; its
+   `session.updated` event arms the same flow immediately.
 3. On fire:
    - Skip when Settings → Chat → session title refresh is off.
    - Skip sub-agent sessions (`parentID`), multi-run/fusion structural titles,
@@ -28,19 +30,23 @@ discussing, throttled to at most once per 5 minutes per session.
      placeholder) so OpenCode's first-message title can land first.
    - Skip when `forMessageID` still matches the latest assistant message
      (no new content since the last refresh).
+   - Set `metadata.openchamber.titleRefresh.isGenerating` while the small
+     model call is active so connected clients animate the existing sidebar
+     title as a loading state.
    - Call `generateSmallModelText` with the latest few turns, biased toward
      the most recent topic, restricted to the session's own provider unless
      the user explicitly configured a small model.
 4. Clean the model output to a single short line, then PATCH `title` and
    `metadata.openchamber.titleRefresh` (`lastAutoTitle`, `forMessageID`,
    `generatedAt`) from a fresh session read so concurrent metadata writes
-   are preserved.
+   are preserved. Transient `requestedAt` and `isGenerating` flags clear
+   after the model call finishes.
 
 ## Settings gate
 
 `sessionTitleRefreshEnabled` in OpenChamber settings (Settings → Chat,
-default on) is a hard generation switch checked at fire time. When off, no
-small-model calls run and titles are left alone.
+default on) controls background title refreshes. Explicit smart-title actions
+still run when background refresh is disabled.
 
 ## Manual rename contract
 

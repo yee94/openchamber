@@ -141,6 +141,21 @@ const extractSessionStatus = (payload) => {
   return { sessionId, type, directory };
 };
 
+const extractTitleRefreshRequest = (payload) => {
+  if (!payload || payload.type !== 'session.updated') return null;
+  const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
+  const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
+  const sessionId = typeof info.id === 'string' ? info.id.trim() : '';
+  const titleRefresh = info.metadata?.openchamber?.titleRefresh;
+  const requestedAt = titleRefresh?.requestedAt;
+  if (titleRefresh?.isGenerating === true) return null;
+  if (!sessionId || typeof requestedAt !== 'number' || !Number.isFinite(requestedAt)) return null;
+  const directory = typeof properties.directory === 'string' && properties.directory
+    ? properties.directory
+    : (typeof info.directory === 'string' ? info.directory : '');
+  return { sessionId, directory };
+};
+
 const extractUserMessage = (payload) => {
   if (!payload || payload.type !== 'message.updated') return null;
   const info = payload.properties?.info;
@@ -195,6 +210,7 @@ const readTitleRefreshMeta = (session) => {
   return {
     metadata,
     openchamber,
+    titleRefresh,
     lastAutoTitle: typeof titleRefresh.lastAutoTitle === 'string' ? titleRefresh.lastAutoTitle : '',
     generatedAt: typeof titleRefresh.generatedAt === 'number' ? titleRefresh.generatedAt : 0,
     forMessageID: typeof titleRefresh.forMessageID === 'string' ? titleRefresh.forMessageID : '',
@@ -244,6 +260,7 @@ export const createSessionTitleRuntime = ({
 }) => {
   const timers = new Map();
   const inflight = new Set();
+  const forcedRefreshes = new Set();
   /** In-memory throttle timestamps (metadata also persists across restarts). */
   const lastGeneratedAtBySession = new Map();
   let stopped = false;
@@ -294,11 +311,64 @@ export const createSessionTitleRuntime = ({
     return Math.max(memory, metaGeneratedAt || 0);
   };
 
+  const clearTitleGenerationState = async (sessionId, directory) => {
+    const session = await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, { directory })
+      .catch(() => null);
+    if (!session || typeof session !== 'object') return;
+
+    const meta = readTitleRefreshMeta(session);
+    if (meta.titleRefresh.isGenerating !== true) return;
+    const {
+      isGenerating: _isGenerating,
+      requestedAt: _requestedAt,
+      ...titleRefresh
+    } = meta.titleRefresh;
+    await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, {
+      directory,
+      method: 'PATCH',
+      body: {
+        metadata: {
+          ...meta.metadata,
+          openchamber: {
+            ...meta.openchamber,
+            titleRefresh,
+          },
+        },
+      },
+    });
+  };
+
+  const setTitleGenerationError = async (sessionId, directory, error) => {
+    const session = await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, { directory })
+      .catch(() => null);
+    if (!session || typeof session !== 'object') return;
+
+    const meta = readTitleRefreshMeta(session);
+    await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, {
+      directory,
+      method: 'PATCH',
+      body: {
+        metadata: {
+          ...meta.metadata,
+          openchamber: {
+            ...meta.openchamber,
+            titleRefresh: {
+              ...meta.titleRefresh,
+              lastError: error instanceof Error ? error.message : String(error),
+              failedAt: now(),
+            },
+          },
+        },
+      },
+    });
+  };
+
   // Declared early so generateTitle can re-arm when still inside the throttle window.
   let armTimer = (_sessionId, _directory, _delayMs) => {};
 
   const generateTitle = async (sessionId, directory) => {
-    if (!isSessionTitleRefreshEnabled()) return;
+    const forceRefresh = forcedRefreshes.delete(sessionId);
+    if (!forceRefresh && !isSessionTitleRefreshEnabled()) return;
 
     const session = await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, { directory })
       .catch((error) => {
@@ -322,7 +392,7 @@ export const createSessionTitleRuntime = ({
       now(),
       throttleMs,
     );
-    if (throttleLeft > 0) {
+    if (throttleLeft > 0 && !forceRefresh) {
       // Re-arm for when the window opens — do not drop the pending refresh.
       armTimer(sessionId, directory, throttleLeft);
       return;
@@ -337,12 +407,12 @@ export const createSessionTitleRuntime = ({
     // Let OpenCode's first-message title land first. We only refresh once the
     // conversation has moved on (2+ real user turns), unless the title is
     // still the default placeholder.
-    if (realUserCount < 2 && !isDefaultSessionTitle(currentTitle)) {
+    if (!forceRefresh && realUserCount < 2 && !isDefaultSessionTitle(currentTitle)) {
       return;
     }
 
     // Same tail as last refresh — nothing new to summarize.
-    if (lastAssistantId && lastAssistantId === meta.forMessageID && !isDefaultSessionTitle(currentTitle)) {
+    if (!forceRefresh && lastAssistantId && lastAssistantId === meta.forMessageID && !isDefaultSessionTitle(currentTitle)) {
       return;
     }
 
@@ -358,6 +428,26 @@ export const createSessionTitleRuntime = ({
     const languageSample = transcript.slice(0, 200).replace(/\s+/g, ' ').trim();
     const { generateSmallModelText } = await getSmallModelService();
     let generated;
+    await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, {
+      directory,
+      method: 'PATCH',
+      body: {
+        metadata: {
+          ...meta.metadata,
+          openchamber: {
+            ...meta.openchamber,
+            titleRefresh: {
+              ...meta.titleRefresh,
+              isGenerating: true,
+              lastError: undefined,
+              failedAt: undefined,
+            },
+          },
+        },
+      },
+    }).catch((error) => {
+      console.warn('[session-title] failed to set generation state:', error?.message || error);
+    });
     try {
       generated = await generateSmallModelText({
         // Background feature: conversation content must never leave the
@@ -375,7 +465,14 @@ export const createSessionTitleRuntime = ({
       if (Number(error?.statusCode) !== 404) {
         console.warn('[session-title] generation failed:', error?.message || error);
       }
+      await setTitleGenerationError(sessionId, directory, error).catch((metadataError) => {
+        console.warn('[session-title] failed to publish generation error:', metadataError?.message || metadataError);
+      });
       return;
+    } finally {
+      await clearTitleGenerationState(sessionId, directory).catch((error) => {
+        console.warn('[session-title] failed to clear generation state:', error?.message || error);
+      });
     }
 
     const nextTitle = cleanGeneratedTitle(generated?.text);
@@ -428,6 +525,7 @@ export const createSessionTitleRuntime = ({
           openchamber: {
             ...currentNamespace,
             titleRefresh: {
+              ...freshMeta.titleRefresh,
               lastAutoTitle: nextTitle,
               forMessageID: lastAssistantId || latestAssistantId || '',
               generatedAt,
@@ -459,6 +557,12 @@ export const createSessionTitleRuntime = ({
 
   const processPayload = (payload, directoryHint = '') => {
     if (stopped) return;
+    const titleRefreshRequest = extractTitleRefreshRequest(payload);
+    if (titleRefreshRequest) {
+      forcedRefreshes.add(titleRefreshRequest.sessionId);
+      armTimer(titleRefreshRequest.sessionId, titleRefreshRequest.directory || directoryHint, 0);
+      return;
+    }
     const status = extractSessionStatus(payload);
     if (status) {
       if (status.type === 'idle') {

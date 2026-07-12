@@ -85,6 +85,13 @@
     min-width: 36px;
   }
 
+  /* Tool rows provide their own compact rhythm. The generic touch target rule
+     would otherwise enlarge expandable rows such as Search Files only. */
+  :root.mobile-pointer:not(.desktop-runtime) .oc-tool-row[role="button"] {
+    min-height: auto;
+    min-width: auto;
+  }
+
   /* Composer footer action buttons (sessions / attach / auto-accept): hug the
      icon so the group stays tight. The container only renders in the mobile
      JSX, so no pointer/runtime gating is needed; !important overrides both the

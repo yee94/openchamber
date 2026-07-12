@@ -25,7 +25,7 @@ export function SidebarSectionHeader({
   expanded,
   className,
 }: SidebarSectionHeaderProps) {
-  const titleClassName = 'typography-micro font-normal lowercase tracking-wide text-muted-foreground/80';
+  const titleClassName = 'typography-micro font-normal tracking-wide text-muted-foreground/80';
 
   return (
     <div

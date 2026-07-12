@@ -14,7 +14,7 @@ import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import type { SessionGroup } from './types';
 import type { SortableDragHandleProps } from './sortableItems';
 import { SortableGroupItem, SortableProjectItem } from './sortableItems';
-import { formatProjectLabel, SIDEBAR_MUTED_HINT_CLASS, getSidebarRowPaddingLeft } from './utils';
+import { SIDEBAR_MUTED_HINT_CLASS, getSidebarRowPaddingLeft } from './utils';
 import { useI18n } from '@/lib/i18n';
 import type { MainTab } from '@/stores/useUIStore';
 import { SidebarSectionHeader } from './SidebarSectionHeader';
@@ -217,11 +217,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
               {props.sectionsForRender.map((section) => {
                 const project = section.project;
                 const projectKey = project.id;
-                const projectLabel = formatProjectLabel(
-                  project.label?.trim()
-                  || formatDirectoryName(project.normalizedPath, props.homeDirectory)
-                  || project.normalizedPath,
-                );
+                const projectLabel = formatDirectoryName(project.normalizedPath) || project.normalizedPath;
                 const projectDescription = formatPathForDisplay(project.normalizedPath, props.homeDirectory);
                 const isCollapsed = props.collapsedProjects.has(projectKey);
                 const isActiveProject = projectKey === props.activeProjectId;

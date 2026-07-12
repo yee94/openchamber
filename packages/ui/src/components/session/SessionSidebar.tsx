@@ -70,7 +70,6 @@ import {
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
-  formatProjectLabel,
   normalizePath,
 } from './sidebar/utils';
 import {
@@ -1226,11 +1225,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     const projectPathLengthBySessionId = new Map<string, number>();
 
     projectSections.forEach((section) => {
-      const projectLabel = formatProjectLabel(
-        section.project.label?.trim()
-        || formatDirectoryName(section.project.normalizedPath, homeDirectory)
-        || section.project.normalizedPath,
-      );
+      const projectLabel = formatDirectoryName(section.project.normalizedPath) || section.project.normalizedPath;
       section.groups.forEach((group) => {
         const branchCandidate = group.branch && group.branch !== 'HEAD' && group.branch !== projectLabel
           ? group.branch
@@ -1263,7 +1258,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
 
     return meta;
-  }, [projectSections, homeDirectory]);
+  }, [projectSections]);
 
   // External navigation surfaces do not carry a sidebar origin. Keep their
   // deterministic fallback in project scope, while preserving an explicit

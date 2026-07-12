@@ -127,8 +127,6 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   const projectLabel = React.useMemo(() => {
     const project = pathMatchedProject ?? activeProject;
     if (!project) return directoryLabel || 'OpenChamber';
-    const label = project.label?.trim();
-    if (label) return label;
     const segments = project.path.split(/[\\/]/).filter(Boolean);
     return segments.at(-1) ?? project.path;
   }, [activeProject, directoryLabel, pathMatchedProject]);

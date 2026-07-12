@@ -775,11 +775,6 @@ export const Header: React.FC<HeaderProps> = ({
       return null;
     }
 
-    const trimmedLabel = activeProject.label?.trim();
-    if (trimmedLabel) {
-      return trimmedLabel;
-    }
-
     const pathSegments = activeProject.path.split(/[\\/]/).filter(Boolean);
     return pathSegments[pathSegments.length - 1] ?? null;
   }, [activeProject]);

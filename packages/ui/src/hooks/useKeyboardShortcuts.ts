@@ -98,6 +98,7 @@ export const useKeyboardShortcuts = () => {
   const abortPrimedUntilRef = React.useRef<number | null>(null);
   const abortPrimedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const leaderTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consumeLeaderTextInputRef = React.useRef(false);
   const themeModeRef = React.useRef(themeMode);
 
   React.useEffect(() => {
@@ -220,6 +221,13 @@ export const useKeyboardShortcuts = () => {
       const leaderCombo = combo('leader_key');
 
       if (leaderPending) {
+        const consumeLeaderTextInput = () => {
+          consumeLeaderTextInputRef.current = true;
+          window.setTimeout(() => {
+            consumeLeaderTextInputRef.current = false;
+          }, 0);
+        };
+
         // Pressing the leader again re-arms the chord window.
         if (leaderCombo && eventMatchesShortcut(e, leaderCombo)) {
           e.preventDefault();
@@ -244,6 +252,9 @@ export const useKeyboardShortcuts = () => {
 
         // Any other modified chord cancels instead of typing into the input.
         if (e.metaKey || e.ctrlKey || e.altKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          consumeLeaderTextInput();
           clearLeaderKey();
           return;
         }
@@ -259,6 +270,7 @@ export const useKeyboardShortcuts = () => {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
+          consumeLeaderTextInput();
           clearLeaderKey();
           // Mounting and auto-focusing the search input during this keydown can
           // let the chord's trailing "m" become its first query character.
@@ -272,6 +284,7 @@ export const useKeyboardShortcuts = () => {
         if (key === 'a' && canRunChatChord) {
           e.preventDefault();
           e.stopPropagation();
+          consumeLeaderTextInput();
           clearLeaderKey();
           setAgentSelectorOpen(!isAgentSelectorOpen);
           return;
@@ -280,6 +293,7 @@ export const useKeyboardShortcuts = () => {
         if (key === 'n' && canRunChatChord) {
           e.preventDefault();
           e.stopPropagation();
+          consumeLeaderTextInput();
           clearLeaderKey();
           setActiveMainTab('chat');
           setSessionSwitcherOpen(false);
@@ -290,6 +304,7 @@ export const useKeyboardShortcuts = () => {
         if (key === 'c' && canRunChatChord) {
           e.preventDefault();
           e.stopPropagation();
+          consumeLeaderTextInput();
           clearLeaderKey();
           void runLeaderCompact();
           return;
@@ -298,6 +313,7 @@ export const useKeyboardShortcuts = () => {
         // Unknown follow-up: consume the key so it does not land in the input, then exit.
         e.preventDefault();
         e.stopPropagation();
+        consumeLeaderTextInput();
         clearLeaderKey();
         return;
       }
@@ -318,6 +334,12 @@ export const useKeyboardShortcuts = () => {
       e.preventDefault();
       e.stopPropagation();
       armLeaderKey();
+    };
+
+    const handleLeaderBeforeInputCapture = (event: InputEvent) => {
+      if (useLeaderKeyStore.getState().pending || consumeLeaderTextInputRef.current) {
+        event.preventDefault();
+      }
     };
 
     const handleTerminalShortcutCapture = (e: KeyboardEvent) => {
@@ -902,11 +924,13 @@ export const useKeyboardShortcuts = () => {
     };
 
     window.addEventListener('keydown', handleLeaderKeyCapture, true);
+    window.addEventListener('beforeinput', handleLeaderBeforeInputCapture, true);
     window.addEventListener('keydown', handleTerminalShortcutCapture, true);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       window.removeEventListener('keydown', handleLeaderKeyCapture, true);
+      window.removeEventListener('beforeinput', handleLeaderBeforeInputCapture, true);
       window.removeEventListener('keydown', handleTerminalShortcutCapture, true);
       window.removeEventListener('keydown', handleKeyDown);
     };

@@ -499,6 +499,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
             // Restore focus to chat input when model selector closes
             if (wasOpen && !isCompact) {
+                setModelTooltipOpen(false);
+                suppressModelTooltipUntilRef.current = performance.now() + 200;
                 requestAnimationFrame(() => {
                     const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
                     textarea?.focus();
