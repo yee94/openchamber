@@ -17,14 +17,16 @@ const baseInput = (overrides: Partial<HapticsInput> = {}): HapticsInput => ({
   streamState: { phase: 'streaming', lastUpdateAt: 1000 },
   isForeground: true,
   isVisible: true,
+  now: 1000,
   ...overrides,
 });
 
-// Advance the heartbeat by the canonical 1s step.
+// Advance by one continuous haptic cadence step.
 const nextHeartbeat = (prev: HapticsInput): HapticsInput => ({
   ...prev,
+  now: prev.now + 40,
   streamState: prev.streamState
-    ? { ...prev.streamState, lastUpdateAt: prev.streamState.lastUpdateAt + 1000 }
+    ? { ...prev.streamState, lastUpdateAt: prev.streamState.lastUpdateAt }
     : null,
 });
 
@@ -129,20 +131,20 @@ describe('evaluateHaptics', () => {
   // Same heartbeat – dedup
   // -----------------------------------------------------------------------
 
-  test('dedup: skips same heartbeat (same msgId, same lastUpdateAt)', () => {
+  test('throttles the same message within the 40ms cadence window', () => {
     const state: HapticsState = {
       lastTriggeredMsgId: 'msg_1',
       lastTriggeredAt: 1000,
     };
     const decision = evaluateHaptics(state, baseInput());
     expect(decision.shouldTrigger).toBe(false);
-    expect(decision.reason).toBe('same-heartbeat');
+    expect(decision.reason).toBe('throttled');
     // State unchanged
     expect(decision.nextState.lastTriggeredMsgId).toBe('msg_1');
     expect(decision.nextState.lastTriggeredAt).toBe(1000);
   });
 
-  test('dedup: fires on next heartbeat tick (different lastUpdateAt)', () => {
+  test('fires again after 40ms even when the store heartbeat is unchanged', () => {
     const state: HapticsState = {
       lastTriggeredMsgId: 'msg_1',
       lastTriggeredAt: 1000,
@@ -150,7 +152,7 @@ describe('evaluateHaptics', () => {
     const decision = evaluateHaptics(state, nextHeartbeat(baseInput()));
     expect(decision.shouldTrigger).toBe(true);
     expect(decision.nextState.lastTriggeredMsgId).toBe('msg_1');
-    expect(decision.nextState.lastTriggeredAt).toBe(2000);
+    expect(decision.nextState.lastTriggeredAt).toBe(1040);
   });
 
   // -----------------------------------------------------------------------
@@ -168,7 +170,7 @@ describe('evaluateHaptics', () => {
     }));
     expect(decision.shouldTrigger).toBe(true);
     expect(decision.nextState.lastTriggeredMsgId).toBe('msg_new');
-    expect(decision.nextState.lastTriggeredAt).toBe(100);
+    expect(decision.nextState.lastTriggeredAt).toBe(1000);
   });
 
   // -----------------------------------------------------------------------
@@ -253,7 +255,7 @@ describe('evaluateHaptics', () => {
     // for this heartbeat before backgrounding. Dedup should still hold.
     d = evaluateHaptics(state, { ...input, isForeground: true });
     expect(d.shouldTrigger).toBe(false);
-    expect(d.reason).toBe('same-heartbeat');
+    expect(d.reason).toBe('throttled');
 
     // Next heartbeat in foreground fires normally
     d = evaluateHaptics(state, nextHeartbeat(input));

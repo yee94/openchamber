@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllSessionStatuses, useAllLiveSessions } from '@/sync/sync-context';
-import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore, ensureGlobalSessionsLoaded, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
+import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import type { Session } from '@opencode-ai/sdk/v2';
@@ -259,14 +259,14 @@ function useProjectRootsResolver() {
   }, [availableWorktreesByProject]);
 }
 
-function StatusIndicator({ isRunning, needsAttention }: { isRunning: boolean; needsAttention: boolean }) {
+function StatusIndicator({ isRunning, showUnread }: { isRunning: boolean; showUnread: boolean }) {
   if (isRunning) {
     return <SessionBusyIndicator />;
   }
-  if (needsAttention) {
-    return <div className="h-2 w-2 rounded-full bg-[var(--status-error)]" />;
+  if (showUnread) {
+    return <div className="h-2 w-2 rounded-full bg-[var(--status-info)]" />;
   }
-  return <div className="h-2 w-2 rounded-full border border-[var(--surface-mutedForeground)]" />;
+  return null;
 }
 
 function RunningIndicator({ count }: { count: number }) {
@@ -282,8 +282,8 @@ function RunningIndicator({ count }: { count: number }) {
 function UnreadIndicator({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="flex items-center gap-1 text-[13px] text-[var(--status-error)]">
-      <div className="h-2 w-2 rounded-full bg-[var(--status-error)]" />
+    <span className="flex items-center gap-1 text-[13px] text-[var(--status-info)]">
+      <div className="h-2 w-2 rounded-full bg-[var(--status-info)]" />
       {count}
     </span>
   );
@@ -316,7 +316,10 @@ function SessionItem({
       )}
     >
       <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
-        <StatusIndicator isRunning={session._statusType !== 'idle'} needsAttention={attention} />
+        <StatusIndicator
+          isRunning={session._statusType !== 'idle'}
+          showUnread={attention && !isCurrent}
+        />
       </span>
 
       <span className={cn(
@@ -384,7 +387,7 @@ function ProjectFilterChip({
       {status && (status.hasRunning || status.hasUnread) && !isActive && (
         status.hasRunning
           ? <SessionBusyIndicator size={10} />
-          : <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-error)]" />
+          : <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-info)]" />
       )}
 
       {project?.iconImage ? (
@@ -405,53 +408,6 @@ function ProjectFilterChip({
     </button>
   );
 }
-
-// The chip that lives in the composer footer and toggles the slide-up sheet.
-// This is the only persistent affordance; there is no longer a permanent bar.
-interface MobileSessionPanelTriggerProps {
-  footerIconButtonClass: string;
-  iconSizeClass: string;
-}
-
-export const MobileSessionPanelTrigger: React.FC<MobileSessionPanelTriggerProps> = ({
-  footerIconButtonClass,
-  iconSizeClass,
-}) => {
-  const { t } = useI18n();
-  const isMobile = useUIStore((state) => state.isMobile);
-  const open = useUIStore((state) => state.mobileSessionPanelOpen);
-  const setOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
-
-  // Ensure the cross-project session list is loaded once, so the panel reflects
-  // every project, not just the active directory.
-  React.useEffect(() => {
-    if (isMobile) {
-      void ensureGlobalSessionsLoaded();
-    }
-  }, [isMobile]);
-
-  if (!isMobile) {
-    return null;
-  }
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        footerIconButtonClass,
-        'rounded-md relative hover:bg-[var(--interactive-hover)]',
-        open && 'text-[var(--primary-base)]'
-      )}
-      style={{ touchAction: 'manipulation' }}
-      onClick={() => setOpen(!open)}
-      title={t('mobile.sessions.search.section.sessions')}
-      aria-label={t('mobile.sessions.search.section.sessions')}
-      aria-expanded={open}
-    >
-      <Icon name="stack" className={cn(iconSizeClass)} />
-    </button>
-  );
-};
 
 export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   onSessionSwitch,

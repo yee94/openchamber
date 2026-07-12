@@ -2,6 +2,8 @@ import React from 'react';
 
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { abortCurrentOperation } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { StatusRow } from './StatusRow';
 
@@ -22,6 +24,11 @@ export const StatusRowContainer: React.FC = React.memo(() => {
     );
     const { working } = useAssistantStatus();
     const currentAgentName = useConfigStore((state) => state.currentAgentName);
+    const isMobile = useUIStore((state) => state.isMobile);
+    const handleAbort = React.useCallback(() => {
+        if (!currentSessionId) return;
+        void abortCurrentOperation(currentSessionId);
+    }, [currentSessionId]);
 
     const wasAborted = Boolean(abortRecord && !abortRecord.acknowledged);
 
@@ -34,6 +41,8 @@ export const StatusRowContainer: React.FC = React.memo(() => {
             wasAborted={wasAborted || working.wasAborted}
             abortActive={wasAborted || working.abortActive}
             retryInfo={working.retryInfo}
+            showAbort={isMobile && working.canAbort}
+            onAbort={handleAbort}
             showAssistantStatus
             showTodos={false}
             agentName={currentAgentName}

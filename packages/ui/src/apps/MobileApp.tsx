@@ -52,7 +52,7 @@ import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { SyncProvider, useSession, useSessionMessages } from '@/sync/sync-context';
+import { SyncProvider, useParentSession, useSession, useSessionMessages } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
 import { MobileChangesSurface } from './MobileChangesSurface';
@@ -2060,7 +2060,8 @@ const MobileHeader: React.FC<{
 const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
   const { t } = useI18n();
   useStreamingHaptics();
-  const [sessionsSheetOpen, setSessionsSheetOpen] = React.useState(false);
+  const mobileSessionPanelOpen = useUIStore((state) => state.mobileSessionPanelOpen);
+  const setMobileSessionPanelOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
   const [filesOpen, setFilesOpen] = React.useState(false);
   const [changesOpen, setChangesOpen] = React.useState(false);
   const [mcpOpen, setMcpOpen] = React.useState(false);
@@ -2180,7 +2181,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     () => ({
       openSessions: () => {
         if (isIPad) setIpadSidebarOpen(true);
-        else setSessionsSheetOpen(true);
+        else setMobileSessionPanelOpen(true);
       },
       openView: (target: 'files' | 'mcp' | 'instances' | 'update') => {
         if (target === 'files') openFilesSurface();
@@ -2197,7 +2198,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         setSettingsOpen(true);
       },
     }),
-    [isIPad, openChangesSurface, openFilesSurface, setSettingsPage],
+    [isIPad, openChangesSurface, openFilesSurface, setMobileSessionPanelOpen, setSettingsPage],
   );
   useDeepLinkHandlers(deepLinkHandlers);
 
@@ -2207,6 +2208,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const chatAnimRef = React.useRef<HTMLDivElement>(null);
   const swipeDirectionRef = React.useRef<'prev' | 'next' | null>(null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+  const parentSession = useParentSession(currentSessionId);
   // Record the swipe direction; the animation itself runs in the layout effect below, once the
   // new session's content has committed — running it inline in the swipe callback raced the
   // re-render and dropped the animation on roughly every other switch.
@@ -2215,11 +2218,11 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, []);
   useEdgeSwipeSessionSwitch(chatMainRef, { onSwitch: recordSwipeDirection });
 
-  // Header-area left-swipe to open sessions sheet (phone only, non-iPad).
+  // A right swipe across more than half the chat opens the session panel.
   // Disabled when any overlay is already open so the gesture doesn't stack
   // sheets or compete with dismiss gestures.
   const headerSwipeDisabled = isIPad
-    || sessionsSheetOpen
+    || mobileSessionPanelOpen
     || filesOpen
     || changesOpen
     || mcpOpen
@@ -2228,10 +2231,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     || updateOpen
     || overflowOpen;
   const handleHeaderSwipeOpen = React.useCallback(() => {
-    setSessionsSheetOpen(true);
-  }, []);
-  const headerRef = React.useRef<HTMLDivElement>(null);
-  useHeaderSwipeToSessions(headerRef, {
+    setMobileSessionPanelOpen(true);
+  }, [setMobileSessionPanelOpen]);
+  useHeaderSwipeToSessions(chatMainRef, {
     onOpen: handleHeaderSwipeOpen,
     disabled: headerSwipeDisabled,
   });
@@ -2258,8 +2260,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       setOverflowOpen(false);
       return true;
     }
-    if (sessionsSheetOpen) {
-      setSessionsSheetOpen(false);
+    if (mobileSessionPanelOpen) {
+      setMobileSessionPanelOpen(false);
       return true;
     }
     if (filesOpen) {
@@ -2286,8 +2288,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       setUpdateOpen(false);
       return true;
     }
+    if (parentSession) {
+      const parentDirectory = (parentSession as typeof parentSession & { directory?: string | null }).directory ?? null;
+      setCurrentSession(parentSession.id, parentDirectory);
+      return true;
+    }
     return false;
-  }, [changesOpen, closeChanges, filesOpen, instancesOpen, mcpOpen, overflowOpen, sessionsSheetOpen, settingsOpen, updateOpen]);
+  }, [changesOpen, closeChanges, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSession, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, updateOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
 
@@ -2469,9 +2476,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         ) : null}
 
         <div className="flex h-full min-w-0 flex-1 flex-col" data-page-scroll-lock="true">
-          <div ref={headerRef}>
+          <div>
             <MobileHeader
-              onOpenSessions={() => (isIPad ? toggleIpadSidebar() : setSessionsSheetOpen(true))}
+              onOpenSessions={() => (isIPad ? toggleIpadSidebar() : setMobileSessionPanelOpen(true))}
               onOpenMenu={() => setOverflowOpen(true)}
               surfaceShortcuts={isIPad ? {
               activePanel: ipadRightPanel,
@@ -2553,10 +2560,6 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
           items={overflowItems}
           rightOffset={isIPad && ipadRightPanel ? rightResize.width : 0}
         />
-
-        {sessionsSheetOpen ? (
-          <MobileSessionsSheet open={sessionsSheetOpen} onOpenChange={setSessionsSheetOpen} />
-        ) : null}
 
         {/* Mounted only while open (like the sessions sheet) so each surface
             computes its safe-area / fixed-position layout fresh on open. Keeping

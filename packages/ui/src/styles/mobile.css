@@ -137,25 +137,45 @@
     pointer-events: auto;
   }
 
-  /* Give touch controls immediate press feedback. Target only the deepest
-     active control so nested action buttons do not also dim their row. */
+  /* Give touch controls immediate, native-feeling press feedback. Target only
+     the deepest active control so nested action buttons do not scale their row. */
   :root.mobile-pointer:not(.desktop-runtime)
     :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]) {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    transition: opacity 80ms ease-out;
+    transform-origin: center;
+    transition: scale 120ms cubic-bezier(0.2, 0.9, 0.25, 1.25);
   }
 
   :root.mobile-pointer:not(.desktop-runtime)
     :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]):active:not(:has(:where(button, [role="button"]):active)) {
-    opacity: 0.72;
+    scale: 1.06;
+    transition-duration: 0ms;
+  }
+
+  /* The composer is a large touch surface, so use a smaller scale that reads
+     immediately without shifting its edges too far across the viewport. */
+  :root.mobile-pointer:not(.desktop-runtime) [data-mobile-composer-surface="true"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transform-origin: center;
+    transition: scale 120ms cubic-bezier(0.2, 0.9, 0.25, 1.2);
+  }
+
+  :root.mobile-pointer:not(.desktop-runtime)
+    [data-mobile-composer-surface="true"]:has(textarea:active),
+  :root.mobile-pointer:not(.desktop-runtime)
+    [data-mobile-composer-surface="true"]:has([data-mobile-composer-trigger="true"]:active) {
+    scale: 1.015;
     transition-duration: 0ms;
   }
 
   @media (prefers-reduced-motion: reduce) {
     :root.mobile-pointer:not(.desktop-runtime)
-      :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]) {
+      :where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):not([data-mobile-press-feedback="none"]),
+    :root.mobile-pointer:not(.desktop-runtime) [data-mobile-composer-surface="true"] {
       transition: none;
+      scale: 1 !important;
     }
   }
 

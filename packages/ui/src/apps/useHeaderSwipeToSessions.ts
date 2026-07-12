@@ -1,10 +1,10 @@
 import React from 'react';
 
 /**
- * Phone-only header right-swipe gesture to open the sessions / project sheet.
+ * Phone-only content right-swipe gesture to open the session panel.
  *
- * A horizontal left-to-right swipe in the MobileHeader area opens the
- * sessions sheet — a natural complement to the header's hamburger button.
+ * A horizontal left-to-right swipe across more than half the viewport opens
+ * the session panel.
  *
  * - Only active on phone (not iPad), gated by the caller via `disabled`.
  * - Disabled when any overlay (sessions sheet, settings, files, etc.) is
@@ -17,7 +17,6 @@ import React from 'react';
  *   never blocks scrolling.
  */
 
-const MIN_DISTANCE = 72; // px of horizontal rightward travel required
 const MAX_OFF_AXIS_RATIO = 0.55; // |dy| must stay below |dx| × this
 
 // ---------------------------------------------------------------------------
@@ -33,6 +32,8 @@ export interface HeaderSwipeInput {
   endX: number;
   /** touchend clientY */
   endY: number;
+  /** current viewport width in CSS pixels */
+  viewportWidth: number;
   /** whether the gesture is disabled (iPad or overlay open) */
   disabled: boolean;
   /** whether the touch started on an interactive / horizontally-scrollable target */
@@ -58,7 +59,7 @@ export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult 
 
   // Must be a horizontal rightward swipe (left-to-right)
   if (dx <= 0) return { open: false };
-  if (Math.abs(dx) < MIN_DISTANCE) return { open: false };
+  if (Math.abs(dx) <= input.viewportWidth / 2) return { open: false };
 
   // Suppress off-axis (vertical) gestures so diagonal scrolls don't open the sheet
   if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return { open: false };
@@ -91,6 +92,7 @@ const INTERACTIVE_SELECTORS = [
 
 const isInteractiveTarget = (element: Element | null): boolean => {
   if (!element) return false;
+  if (element.closest('[data-session-swipe-surface="true"]')) return true;
   return element.matches(INTERACTIVE_SELECTORS)
     || element.closest(INTERACTIVE_SELECTORS) !== null;
 };
@@ -172,6 +174,7 @@ export const useHeaderSwipeToSessions = (
         startY,
         endX: touch.clientX,
         endY: touch.clientY,
+        viewportWidth: window.innerWidth,
         disabled: disabledRef.current,
         startedOnInteractive,
       });

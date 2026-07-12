@@ -12,7 +12,9 @@ import { useTodosPersistStore } from "@/stores/useTodosPersistStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/icon/Icon";
+import { StopIcon } from "@/components/icons/StopIcon";
 import { useI18n } from "@/lib/i18n";
 
 const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "status-row" };
@@ -226,14 +228,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
 
   // Abort button for mobile/vscode
   const abortButton = showAbort && onAbort ? (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
       onClick={onAbort}
-      className="flex items-center justify-center h-[1.2rem] w-[1.2rem] text-[var(--status-error)] transition-opacity hover:opacity-80 focus-visible:outline-none flex-shrink-0"
+      className="size-8 shrink-0 text-[var(--status-error)] hover:text-[var(--status-error)]"
       aria-label={t('chat.statusRow.actions.stopGeneratingAria')}
     >
-      <Icon name="close-circle" aria-hidden="true"/>
-    </button>
+      <StopIcon className="size-5" aria-hidden="true" />
+    </Button>
   ) : null;
 
   // Todo trigger button

@@ -23,7 +23,7 @@ import { bootstrapGlobal, bootstrapDirectory } from "./bootstrap"
 import { retry } from "./retry"
 import { updateStreamingState } from "./streaming"
 import { setActionRefs } from "./session-actions"
-import { setSyncRefs, getAllSyncSessions } from "./sync-refs"
+import { setSyncRefs } from "./sync-refs"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { syncDebug } from "./debug"
 import { getReconnectCandidateSessionIds, getReconnectMaterializationSessionIds } from "./reconnect-recovery"
@@ -2200,17 +2200,25 @@ export function useScopedBlockingQuestions(sessionID: string | null, directory?:
 }
 
 export function useParentSession(sessionID: string | null, directory?: string): Session | null {
-  return useDirectorySync(
-    useCallback((state: State) => {
-      if (!sessionID) return null
-      const current = state.session.find((s) => s.id === sessionID)
-      if (!current?.parentID) return null
-      return state.session.find((s) => s.id === current.parentID)
-        ?? getAllSyncSessions().find((s) => s.id === current.parentID)
-        ?? null
-    }, [sessionID]),
-    directory,
-  )
+  const directoryCurrent = useSession(sessionID, directory)
+  const liveCurrent = useSession(sessionID)
+  const globalCurrent = useGlobalSessionsStore(useCallback((state) => (
+    state.activeSessions.find((session) => session.id === sessionID)
+      ?? state.archivedSessions.find((session) => session.id === sessionID)
+      ?? null
+  ), [sessionID]))
+  const current = directoryCurrent ?? liveCurrent ?? globalCurrent
+  const parentID = current?.parentID ?? null
+
+  const directoryParent = useSession(parentID, directory)
+  const liveParent = useSession(parentID)
+  const globalParent = useGlobalSessionsStore(useCallback((state) => (
+    state.activeSessions.find((session) => session.id === parentID)
+      ?? state.archivedSessions.find((session) => session.id === parentID)
+      ?? null
+  ), [parentID]))
+
+  return directoryParent ?? liveParent ?? globalParent
 }
 
 /** Get one session by id for a directory */
