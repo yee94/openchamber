@@ -1719,6 +1719,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       renderExtras?: SessionNodeRenderExtras,
     ): React.ReactNode => (
       <SessionNodeItem
+        key={`${renderContext}:${projectId ?? ''}:${node.session.id}`}
         node={node}
         depth={depth}
         groupDirectory={groupDirectory}
