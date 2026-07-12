@@ -1062,6 +1062,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             {shouldShowHeader && (
                                 <MessageHeader
                                     isUser={isUser}
+                                    isMobile={isMobile}
                                     providerID={headerProviderID}
                                     modelID={headerModelID}
                                     agentName={headerAgentName}

@@ -93,6 +93,7 @@ export const dict: Record<I18nKey, string> = {
   'mobile.header.metadata.branch': '브랜치',
   'mobile.header.metadata.usage': '사용량',
   'mobile.menu.titleAria': '작업 공간 도구',
+  'mobile.menu.newSession': '새 세션',
   'mobile.menu.files': '파일',
   'mobile.menu.changes': '변경사항',
   'mobile.menu.mcp': 'MCP',

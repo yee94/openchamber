@@ -526,6 +526,7 @@ type ComposerAttachmentControlsProps = {
     footerIconButtonClass: string;
     iconSizeClass: string;
     handlePickLocalFiles: () => void;
+    handlePickLocalImages: () => void;
     openIssuePicker: () => void;
     openPrPicker: () => void;
     onOpenSettings?: () => void;
@@ -542,6 +543,7 @@ const ComposerAttachmentControls = React.memo(function ComposerAttachmentControl
         footerIconButtonClass,
         iconSizeClass,
         handlePickLocalFiles,
+        handlePickLocalImages,
         openIssuePicker,
         openPrPicker,
         onOpenSettings,
@@ -550,12 +552,13 @@ const ComposerAttachmentControls = React.memo(function ComposerAttachmentControl
 
     const isMobileAttach = Boolean(props.onOpenMobileSheet);
     const attachLabel = t('chat.chatInput.actions.attachFiles');
+    const handlePick = isMobileAttach ? handlePickLocalImages : handlePickLocalFiles;
 
     const attachButton = (
         <button
             type="button"
             className={footerIconButtonClass}
-            onClick={handlePickLocalFiles}
+            onClick={handlePick}
             // Keep the tap from dismissing the keyboard. On Android's
             // resizes-content viewport the keyboard-close relayout
             // moves this button mid-tap and the click never lands.
@@ -1032,7 +1035,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
-    const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject);
     const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId);
     const clearAbortPrompt = useSessionUIStore((s) => s.clearAbortPrompt);
@@ -3658,6 +3660,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     };
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const imageInputRef = React.useRef<HTMLInputElement>(null);
 
     const attachFiles = React.useCallback(async (files: FileList | File[]) => {
         const list = Array.isArray(files) ? files : Array.from(files);
@@ -3724,6 +3727,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return;
         }
         fileInputRef.current?.click();
+    }, [handleVSCodePickFiles]);
+
+    const handlePickLocalImages = React.useCallback(() => {
+        if (isVSCodeRuntime()) {
+            void handleVSCodePickFiles();
+            return;
+        }
+        imageInputRef.current?.click();
     }, [handleVSCodePickFiles]);
 
     const handleLocalFileSelect = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -4039,12 +4050,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             requestAnimationFrame(() => textareaRef.current?.focus());
         }
     }, [expandMobileComposer, isMobile, mobileComposerExpanded]);
-
-
-    const handleMobileNewSession = React.useCallback(() => {
-        if (newSessionDraftOpen) return;
-        openNewSessionDraft(currentDirectory ? { directoryOverride: currentDirectory } : undefined);
-    }, [newSessionDraftOpen, openNewSessionDraft, currentDirectory]);
 
     const openMobileAttachSheet = React.useCallback(() => {
         // Same order as handleOpenMobilePanel: mark the sheet open BEFORE the
@@ -4439,9 +4444,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // Memoized so the always-mounted dictation instance's memo stays effective.
     const mobileComposerHandle = React.useMemo(() => isMobile ? (
         <div
-            // Generous hit area (~28px tall, full width); the visible bar stays
-            // slim inside it.
-            className="relative z-10 flex touch-none items-center justify-center py-2"
+            // Hit area stays tappable; tight Y so handle sits closer to the model row.
+            className="relative z-10 flex touch-none items-center justify-center pt-1.5 pb-0.5"
             onTouchStart={handleComposerHandleTouchStart}
             onTouchMove={handleComposerHandleTouchMove}
             onTouchEnd={handleComposerHandleTouchEnd}
@@ -4513,7 +4517,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             className={cn(
                 "relative w-full pt-0 pb-4",
                 isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
-                isMobileExpanded && 'flex h-full min-h-0 flex-col pt-2',
+                isMobileExpanded && 'flex h-full min-h-0 flex-col pt-1',
                 isMobile && 'bottom-safe-area oc-mobile-composer'
             )}
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
@@ -4891,63 +4895,42 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         onApply={applyAssistSuggestion}
                         className="mb-1.5"
                     />
-                    <div className="flex items-center gap-2">
-                        <div
-                            className="flex h-11 min-w-0 flex-1 items-center gap-x-0.5 rounded-full border border-border/80 pl-2 pr-1"
-                            style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
+                    <div
+                        className="flex h-11 min-w-0 w-full items-center gap-x-0.5 rounded-full border border-border/80 pl-2 pr-1"
+                        style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
+                    >
+                        <MobileSessionPanelTrigger
+                            footerIconButtonClass={footerIconButtonClass}
+                            iconSizeClass={iconSizeClass}
+                        />
+                        <ComposerAttachmentControls
+                            isVSCode={isVSCode}
+                            footerIconButtonClass={footerIconButtonClass}
+                            iconSizeClass={iconSizeClass}
+                            handlePickLocalFiles={handlePickLocalFiles}
+                            handlePickLocalImages={handlePickLocalImages}
+                            openIssuePicker={openIssuePicker}
+                            openPrPicker={openPrPicker}
+                            onOpenMobileSheet={openMobileAttachSheet}
+                        />
+                        <button
+                            type="button"
+                            className="flex h-full min-w-0 flex-1 cursor-text items-center px-1.5 text-left"
+                            onClick={() => expandMobileComposer('focus')}
                         >
-                            <MobileSessionPanelTrigger
-                                footerIconButtonClass={footerIconButtonClass}
-                                iconSizeClass={iconSizeClass}
-                            />
-                            <ComposerAttachmentControls
-                                isVSCode={isVSCode}
-                                footerIconButtonClass={footerIconButtonClass}
-                                iconSizeClass={iconSizeClass}
-                                handlePickLocalFiles={handlePickLocalFiles}
-                                openIssuePicker={openIssuePicker}
-                                openPrPicker={openPrPicker}
-                                onOpenMobileSheet={openMobileAttachSheet}
-                            />
-                            <button
-                                type="button"
-                                className="flex h-full min-w-0 flex-1 cursor-text items-center px-1.5 text-left"
-                                onClick={() => expandMobileComposer('focus')}
+                            <span
+                                className={cn(
+                                    'truncate typography-ui-label',
+                                    message.trim() ? 'text-foreground' : 'text-muted-foreground',
+                                )}
                             >
-                                <span
-                                    className={cn(
-                                        'truncate typography-ui-label',
-                                        message.trim() ? 'text-foreground' : 'text-muted-foreground',
-                                    )}
-                                >
-                                    {message.trim()
-                                        ? message
-                                        : currentSessionId || newSessionDraftOpen
-                                            ? t('chat.chatInput.placeholder.chatCompact')
-                                            : t('chat.chatInput.placeholder.selectSession')}
-                                </span>
-                            </button>
-                        </div>
-                        {/* New-session button: fades/shrinks away when the draft is
-                            already open, letting the pill expand into its place. */}
-                        <div
-                            className={cn(
-                                'flex-shrink-0 overflow-hidden transition-all duration-200 ease-out',
-                                newSessionDraftOpen ? 'w-0 opacity-0' : 'w-11 opacity-100',
-                            )}
-                        >
-                            <button
-                                type="button"
-                                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border/80 text-foreground"
-                                style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
-                                onClick={handleMobileNewSession}
-                                disabled={newSessionDraftOpen}
-                                title={t('mobile.sessions.newChat')}
-                                aria-label={t('mobile.sessions.newChat')}
-                            >
-                                <Icon name="add" className="h-5 w-5 text-current" />
-                            </button>
-                        </div>
+                                {message.trim()
+                                    ? message
+                                    : currentSessionId || newSessionDraftOpen
+                                        ? t('chat.chatInput.placeholder.chatCompact')
+                                        : t('chat.chatInput.placeholder.selectSession')}
+                            </span>
+                        </button>
                     </div>
                     </div>
                 ) : (
@@ -5095,7 +5078,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         {mobileComposerHandle}
                         {isMobile ? (
-                            <div className="scrollbar-none relative z-10 flex items-center gap-x-2 overflow-x-auto px-3 pb-0.5 pt-1.5">
+                            <div className="scrollbar-none relative z-10 flex items-center gap-x-2 overflow-x-auto px-3 pb-0.5 pt-0.5">
                                 <MemoMobileAgentButton
                                     onOpenAgentPanel={handleOpenAgentPanel}
                                     onCycleAgent={handleCycleAgent}
@@ -5298,6 +5281,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             footerIconButtonClass={footerIconButtonClass}
                                             iconSizeClass={iconSizeClass}
                                             handlePickLocalFiles={handlePickLocalFiles}
+                                            handlePickLocalImages={handlePickLocalImages}
                                             openIssuePicker={openIssuePicker}
                                             openPrPicker={openPrPicker}
                                             onOpenSettings={onOpenSettings}
@@ -5337,6 +5321,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         footerIconButtonClass={footerIconButtonClass}
                                         iconSizeClass={iconSizeClass}
                                         handlePickLocalFiles={handlePickLocalFiles}
+                                        handlePickLocalImages={handlePickLocalImages}
                                         openIssuePicker={openIssuePicker}
                                         openPrPicker={openPrPicker}
                                         onOpenSettings={onOpenSettings}
@@ -5463,7 +5448,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             isMobile={isMobile}
         />
 
-        {/* Single always-mounted picker input. It must NOT live inside
+        {/* Always-mounted picker inputs. They must NOT live inside
             ComposerAttachmentControls: that component mounts once per composer
             variant (pill / expanded footer), so a shared ref got nulled when a
             variant unmounted, and a variant swap while the OS file picker was
@@ -5476,6 +5461,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             className="hidden"
             onChange={handleLocalFileSelect}
             accept="*/*"
+        />
+        <input
+            ref={imageInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleLocalFileSelect}
+            accept="image/*"
         />
 
         {/* Mobile attachment sheet: kept for ATTACHMENT_EXPANSION_MENU_ENABLED.

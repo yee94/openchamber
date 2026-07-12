@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.8] - 2026-07-12
+
+- **Mobile (new layout):** overflow menu leads with New session; the composer-side `+` new-chat button is removed. Attach uses a paperclip icon, and the expanded composer top handle spacing is tighter.
+- **Chat chrome:** mobile info/status chips align icon stroke and meta type with tool rows; assistant header badges use slightly tighter mobile type.
+
 ## [1.15.7] - 2026-07-12
 
 - **Android updates:** the Capacitor client now checks `yee94/openchamber` GitHub Releases directly, reads the latest stable release version and notes, and uses the uploaded APK asset as its update download URL.

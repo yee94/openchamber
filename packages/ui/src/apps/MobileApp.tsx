@@ -657,7 +657,7 @@ const getProjectLabel = (path: string): string => {
 };
 
 type OverflowItem = {
-  key: 'files' | 'changes' | 'mcp' | 'instances' | 'update' | 'settings';
+  key: 'new-session' | 'files' | 'changes' | 'mcp' | 'instances' | 'update' | 'settings';
   icon?: IconName;
   iconNode?: React.ReactNode;
   label: string;
@@ -2315,9 +2315,19 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     ]).finally(() => setIsMcpRefreshing(false));
   }, [currentDirectory, isMcpRefreshing, loadMcpConfigs, refreshMcpStatus]);
 
+  const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
+
   const overflowItems: OverflowItem[] = React.useMemo(
     () => {
-      const items: OverflowItem[] = [];
+      const items: OverflowItem[] = [
+        // 新版移动端：右上角菜单首项改为新增会话（承接原 + 入口）
+        {
+          key: 'new-session',
+          icon: 'chat-new',
+          label: t('mobile.menu.newSession'),
+          onSelect: () => openNewSessionDraft(),
+        },
+      ];
       // iPad exposes Files/Changes as header shortcuts instead of menu items.
       if (!isIPad) {
         items.push(
@@ -2369,7 +2379,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       });
       return items;
     },
-    [dirtyChangeCount, isIPad, openChangesSurface, openFilesSurface, showCapacitorOnlyFeatures, showUpdateItem, t],
+    [dirtyChangeCount, isIPad, openChangesSurface, openFilesSurface, openNewSessionDraft, showCapacitorOnlyFeatures, showUpdateItem, t],
   );
 
   return (
