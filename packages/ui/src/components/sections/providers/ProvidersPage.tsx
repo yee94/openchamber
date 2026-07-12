@@ -24,6 +24,7 @@ import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { opencodeClient } from '@/lib/opencode/client';
 import { shouldLoadAvailableProviders } from './providerAvailability';
+import { OpenCodeGoCredentials } from './OpenCodeGoCredentials';
 
 const formatCompactNumber = (value: number) => new Intl.NumberFormat(getCurrentIntlLocale(), {
   notation: 'compact',
@@ -945,6 +946,8 @@ export const ProvidersPage: React.FC = () => {
             )}
           </section>
         </div>
+
+        {(selectedProvider.id === 'opencode' || selectedProvider.id === 'opencode-go') && <OpenCodeGoCredentials />}
 
         {/* Connection Details */}
         <div data-settings-item="providers.connection-details" className="mb-8">

@@ -1041,6 +1041,18 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     }
   }
 
+  if (pathname === '/api/quota/credentials/opencode-go' || pathname === '/api/quota/credentials/opencode-go/validate') {
+    try {
+      const body = method === 'PUT' ? await extractJsonBody(input, init, method) : undefined;
+      const bridgeMethod = pathname.endsWith('/validate') ? 'VALIDATE' : method;
+      const data = await sendBridgeMessage('api:quota:opencode-go-credentials', { method: bridgeMethod, credential: body });
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   const quotaMatch = pathname.match(/^\/api\/quota\/([^/]+)$/);
   if (quotaMatch && method === 'GET') {
     const providerId = decodeURIComponent(quotaMatch[1]);

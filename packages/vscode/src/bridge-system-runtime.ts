@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { removeProviderConfig, getProviderSources } from './opencodeConfig';
 import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
 import { fetchQuotaForProvider, listConfiguredQuotaProviders } from './quotaProviders';
+import { deleteOpenCodeGoCredential, fetchOpenCodeGoUsage, getOpenCodeGoCredentialStatus, normalizeOpenCodeGoCredential, readOpenCodeGoCredential, writeOpenCodeGoCredential } from './opencodeGoQuota';
 import { getSessionActivitySnapshot } from './sessionActivityWatcher';
 import type { BridgeContext, BridgeResponse } from './bridge';
 
@@ -478,6 +479,29 @@ export async function handleSystemBridgeMessage(
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         return { id, type, success: false, error: errorMessage };
+      }
+    }
+
+    case 'api:quota:opencode-go-credentials': {
+      const { method, credential: input } = (payload || {}) as { method?: string; credential?: unknown };
+      try {
+        if (method === 'GET') return { id, type, success: true, data: getOpenCodeGoCredentialStatus() };
+        if (method === 'DELETE') { deleteOpenCodeGoCredential(); return { id, type, success: true, data: { configured: false } }; }
+        if (method === 'PUT') {
+          const credential = normalizeOpenCodeGoCredential(input);
+          if (!credential) return { id, type, success: false, error: 'Workspace ID and auth cookie are required' };
+          await fetchOpenCodeGoUsage(credential);
+          return { id, type, success: true, data: writeOpenCodeGoCredential(credential) };
+        }
+        if (method === 'VALIDATE') {
+          const credential = readOpenCodeGoCredential();
+          if (!credential) return { id, type, success: false, error: 'Not configured' };
+          await fetchOpenCodeGoUsage(credential);
+          return { id, type, success: true, data: { valid: true } };
+        }
+        return { id, type, success: false, error: 'Unsupported method' };
+      } catch (error) {
+        return { id, type, success: false, error: error instanceof Error ? error.message : String(error) };
       }
     }
 
