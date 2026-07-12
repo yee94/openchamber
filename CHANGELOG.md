@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.23] - 2026-07-13
+
+- **Project icon styling:** use the project icon itself across chat, mobile, scheduled tasks, multi-run, project settings, and sidebar surfaces, with a cleaner shared visual treatment.
+- **Session sidebar focus:** preserve keyboard focus after selecting a session row, remount rows correctly when they move between sidebar contexts, and select the full session title when rename begins.
+- **macOS ARM64 app build:** produce a directly runnable Apple Silicon `OpenChamber.app` bundle for local desktop use.
+
 ## [1.15.22] - 2026-07-12
 
 - **Sidebar pinned sessions:** replace the central "Activity" section with per-directory pinned sessions that persist across restarts, reducing session list noise and keeping important conversations visible.
