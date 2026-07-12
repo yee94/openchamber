@@ -35,6 +35,7 @@ local-dev*
 *.sln
 *.sw?
 .opencode/plans/*
+.opencode/images/
 .hive
 docs/personal/*
 SECURITY_HARDENING_IMPLEMENTATION_PLAN.md
