@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.21] - 2026-07-12
+
+- **Tool row layout:** each tool and reasoning block use a stable flow-root wrapper with padding that works consistently in grouped and sequential tool rows, replacing fragile margin collapsing on mobile and desktop.
+- **Smart-title reliability:** sidebar requests set a pending flag and persist errors to session metadata; the server immediately arms generation on explicit requests and clears transient state on failure.
+- **Small-model introspection:** the settings picker verifies provider API availability before listing candidates, and `/api/small-model` returns an async provider list.
+- **Router deeplink resilience:** deep-linked sessions wait for the global startup index; missing or unresolvable sessions redirect home after a timeout.
+- **Assistant status i18n:** add full Polish, Portuguese, and Ukrainian translations for async status messages.
+
 ## [1.15.20] - 2026-07-12
 
 - **Tool output styling:** align file and Git path labels with the shared secondary tool-description color across progressive and completed tool rows.
