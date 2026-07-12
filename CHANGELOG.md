@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.11] - 2026-07-12
+
+- **Release:** fix version bump and changelog to trigger desktop + Android build pipeline.
+
+## [1.15.10] - 2026-07-12
+
+- **Mobile i18n:** unify all mobile "new session" copy to "New Chat" across 10 locales.
+- **Sidebar i18n:** capitalize section titles "recent" → "Recent", "projects" → "Projects", "syncing sessions" → "Syncing sessions…".
+
 ## [1.15.9] - 2026-07-12
 
 - **Desktop updates:** macOS checks `yee94/openchamber` Releases directly, detects newer versions correctly, and opens the matching Release for manual installation instead of incorrectly reporting that the app is up to date.
