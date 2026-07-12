@@ -3,7 +3,7 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionWorktreeStore } from './session-worktree-store';
-import { routeMessage, useSessionUIStore } from './session-ui-store';
+import { routeMessage, useSessionUIStore, materializeOpenDraftSession } from './session-ui-store';
 import { setActionRefs, setOptimisticRefs } from './session-actions';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
@@ -427,5 +427,291 @@ describe('routeMessage skill invocation', () => {
 
     expect(sendMessageCalls).toHaveLength(1);
     expect(sendCommandCalls).toHaveLength(0);
+  });
+});
+
+describe('materializeOpenDraftSession atomic lifecycle', () => {
+  const projectA = { id: 'proj-a', path: '/projects/alpha', label: 'Alpha' };
+
+  let originalCreateSession;
+  let createSessionDeferred;
+  let createSessionCalls;
+
+  beforeEach(() => {
+    // Set up child stores so createSessionAction dir() works
+    const childStore = {
+      getState: () => ({ session_status: {}, message: {}, session: [], part: {} }),
+      setState: () => {},
+    };
+    const childStores = {
+      children: new Map(),
+      ensureChild: () => childStore,
+      getChild: () => childStore,
+    };
+    setActionRefs(opencodeClient, childStores, () => projectA.path);
+    setOptimisticRefs(() => {}, () => {});
+
+    createSessionCalls = [];
+    createSessionDeferred = null;
+    originalCreateSession = opencodeClient.createSession;
+    opencodeClient.createSession = (...args) => {
+      createSessionCalls.push(args);
+      if (!createSessionDeferred) {
+        // Default: immediate success
+        return Promise.resolve({
+          id: 'ses-mocked-001',
+          directory: createSessionCalls[createSessionCalls.length - 1]?.[1] ?? null,
+        });
+      }
+      return createSessionDeferred.promise;
+    };
+
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false, submissionToken: 0 },
+      availableWorktreesByProject: new Map(),
+    });
+    useProjectsStore.setState({
+      projects: [projectA],
+      activeProjectId: projectA.id,
+    });
+    useDirectoryStore.setState({ currentDirectory: projectA.path });
+  });
+
+  afterEach(() => {
+    opencodeClient.createSession = originalCreateSession;
+  });
+
+  test('sets draftSubmitting synchronously before createSession resolves', () => {
+    // Use a deferred promise so materializeOpenDraftSession hangs on the await
+    let resolveCreate;
+    createSessionDeferred = {
+      promise: new Promise((resolve) => { resolveCreate = resolve; }),
+    };
+
+    useSessionUIStore.getState().openNewSessionDraft();
+
+    // Start materialization — this will set draftSubmitting then await
+    const materializePromise = materializeOpenDraftSession({
+      providerID: 'p',
+      modelID: 'm',
+    });
+
+    // draftSubmitting must be true synchronously (before promise resolves)
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    expect(draft.open).toBe(true);
+    expect(draft.draftSubmitting).toBe(true);
+
+    // Now resolve the pending createSession
+    resolveCreate({
+      id: 'ses-mocked-001',
+    });
+
+    return materializePromise.then((result) => {
+      expect(result).not.toBeNull();
+      expect(result.sessionId).toBe('ses-mocked-001');
+      // After success, draft should be closed (setCurrentSession → closeNewSessionDraft)
+      expect(useSessionUIStore.getState().newSessionDraft.open).toBe(false);
+      expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(false);
+    });
+  });
+
+  test('concurrent calls: second one returns null after first claims draft', () => {
+    let resolveCreate;
+    createSessionDeferred = {
+      promise: new Promise((resolve) => { resolveCreate = resolve; }),
+    };
+
+    useSessionUIStore.getState().openNewSessionDraft();
+
+    const first = materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+    const second = materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+
+    // Second call should return null immediately (draft already claimed)
+    expect(second).resolves.toBeNull();
+
+    resolveCreate({
+      id: 'ses-mocked-001',
+    });
+
+    return first.then((result) => {
+      expect(result).not.toBeNull();
+      expect(createSessionCalls.length).toBe(1); // Only one createSession call
+    });
+  });
+
+  test('failure clears draftSubmitting and leaves draft retryable (same token)', async () => {
+    let rejectCreate;
+    createSessionDeferred = {
+      promise: new Promise((_, reject) => { rejectCreate = reject; }),
+    };
+
+    useSessionUIStore.getState().openNewSessionDraft();
+
+    const materializePromise = materializeOpenDraftSession({
+      providerID: 'p',
+      modelID: 'm',
+    });
+
+    // draftSubmitting must be set synchronously
+    expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(true);
+
+    // Fail the create
+    rejectCreate(new Error('network error'));
+
+    const result = await materializePromise;
+    expect(result).toBeNull();
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    expect(draft.open).toBe(true);
+    expect(draft.draftSubmitting).toBe(false);
+  });
+
+  test('failure does not reopen closed draft (user navigated away)', async () => {
+    let rejectCreate;
+    createSessionDeferred = {
+      promise: new Promise((_, reject) => { rejectCreate = reject; }),
+    };
+
+    useSessionUIStore.getState().openNewSessionDraft();
+
+    const materializePromise = materializeOpenDraftSession({
+      providerID: 'p',
+      modelID: 'm',
+    });
+
+    // While createSession is pending, user opens a new draft (closing the old)
+    useSessionUIStore.getState().closeNewSessionDraft();
+    useSessionUIStore.getState().openNewSessionDraft();
+
+    // Now fail the original createSession
+    rejectCreate(new Error('create failed'));
+
+    const result = await materializePromise;
+    expect(result).toBeNull();
+
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    // The new draft should still be open and NOT have submitting set
+    expect(draft.open).toBe(true);
+    expect(draft.draftSubmitting).toBe(false);
+  });
+
+  test('materializeOpenDraftSession returns null when draft is not open', async () => {
+    const result = await materializeOpenDraftSession({
+      providerID: 'p',
+      modelID: 'm',
+    });
+    expect(result).toBeNull();
+  });
+});
+
+describe('createSession preserves pure semantics (no draftSubmitting pollution)', () => {
+  const projectA = { id: 'proj-a', path: '/projects/alpha', label: 'Alpha' };
+
+  let originalCreateSession;
+  let createSessionCalls;
+
+  beforeEach(() => {
+    // Set up child stores so createSessionAction dir() works
+    const childStore = {
+      getState: () => ({ session_status: {}, message: {}, session: [], part: {} }),
+      setState: () => {},
+    };
+    const childStores = {
+      children: new Map(),
+      ensureChild: () => childStore,
+      getChild: () => childStore,
+    };
+    setActionRefs(opencodeClient, childStores, () => projectA.path);
+    setOptimisticRefs(() => {}, () => {});
+
+    createSessionCalls = [];
+    originalCreateSession = opencodeClient.createSession;
+    opencodeClient.createSession = (...args) => {
+      createSessionCalls.push(args);
+      return Promise.resolve({ id: 'ses-pure-001', directory: args[1] ?? null });
+    };
+
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false, submissionToken: 0 },
+      availableWorktreesByProject: new Map(),
+    });
+    useProjectsStore.setState({
+      projects: [projectA],
+      activeProjectId: projectA.id,
+    });
+    useDirectoryStore.setState({ currentDirectory: projectA.path });
+  });
+
+  afterEach(() => {
+    opencodeClient.createSession = originalCreateSession;
+  });
+
+  test('createSession closes draft and does not set draftSubmitting', async () => {
+    // Open a draft, then directly call createSession
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(useSessionUIStore.getState().newSessionDraft.open).toBe(true);
+
+    const session = await useSessionUIStore.getState().createSession('test', null, null);
+
+    expect(session).not.toBeNull();
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    // Draft should be closed (closeNewSessionDraft was called)
+    expect(draft.open).toBe(false);
+    // draftSubmitting should never have been touched by createSession
+    expect(draft.draftSubmitting).toBe(false);
+  });
+
+  test('createSession restores draft on failure when no new draft opened', async () => {
+    // Simulate a transient failure by rejecting createSession
+    opencodeClient.createSession = () => Promise.reject(new Error('network error'));
+
+    useSessionUIStore.getState().openNewSessionDraft();
+    const originalDraft = useSessionUIStore.getState().newSessionDraft;
+    expect(originalDraft.open).toBe(true);
+    expect(originalDraft.directoryOverride).toBe('/projects/alpha');
+
+    const session = await useSessionUIStore.getState().createSession('test', null, null);
+
+    expect(session).toBeNull();
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    // Draft should be restored — user can retry
+    expect(draft.open).toBe(true);
+    expect(draft.directoryOverride).toBe('/projects/alpha');
+    expect(draft.draftSubmitting).toBe(false);
+  });
+
+  test('createSession does not restore draft when user opened new draft during failure', async () => {
+    let rejectCreate;
+    opencodeClient.createSession = () => new Promise((_, reject) => { rejectCreate = reject; });
+
+    useSessionUIStore.getState().openNewSessionDraft();
+
+    const createPromise = useSessionUIStore.getState().createSession('test', null, null);
+
+    // User opens a new draft while createSession is pending
+    useSessionUIStore.getState().closeNewSessionDraft();
+    useSessionUIStore.getState().openNewSessionDraft({ title: 'Newer draft' });
+
+    rejectCreate(new Error('create failed'));
+    const session = await createPromise;
+
+    expect(session).toBeNull();
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    // The user's newer draft should be preserved, not overwritten
+    expect(draft.open).toBe(true);
+    expect(draft.title).toBe('Newer draft');
+    expect(draft.draftSubmitting).toBe(false);
+  });
+
+  test('createSession can be called without an open draft', async () => {
+    const session = await useSessionUIStore.getState().createSession('no-draft', null, null);
+    expect(session).not.toBeNull();
+    // Should not throw or pollute draft state
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    expect(draft.open).toBe(false);
+    expect(draft.draftSubmitting).toBe(false);
   });
 });

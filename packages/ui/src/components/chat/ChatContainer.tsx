@@ -48,6 +48,7 @@ import { getSessionMaterializationStatus } from '@/sync/materialization';
 import { sessionLoadDebug } from '@/sync/session-load-debug';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { useI18n } from '@/lib/i18n';
+import { BusyDots } from './message/parts/BusyDots';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useShallow } from 'zustand/react/shallow';
@@ -440,6 +441,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
+    const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
     const projects = useProjectsStore((s) => s.projects);
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
 
@@ -882,6 +884,13 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 	}
 
 	if (!currentSessionId && draftOpen) {
+		// When the draft is being materialized into a real session (createSession
+		// is awaiting), show localized establishment feedback instead of the
+		// normal draft title + chips, while keeping the ChatInput structure
+		// intact. This avoids the blank render gap previously caused by
+		// closeNewSessionDraft firing before createSessionAction resolved.
+		const isEstablishing = draftSubmitting;
+
 		return (
 			// No transform on this root: it would become the containing block for
 			// the fullscreen composer's position:fixed visual-viewport pinning in
@@ -889,18 +898,48 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 			<div className="relative flex h-full flex-col bg-background">
 				{useCompactDraftLayout && !isDesktopExpandedInput ? (
 					<div className="oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-						<h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
-							{renderDraftTitle(
-								draftProjectLabel
-									? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
-									: t('chat.emptyState.draftTitle'),
-								draftProjectLabel,
-							)}
-						</h1>
-						<DraftPresetChips
-							onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
-							className="oc-draft-starters mt-8 max-w-md"
-						/>
+						{isEstablishing ? (
+							<div
+								className="flex flex-col items-center gap-3"
+								role="status"
+								aria-live="polite"
+								aria-label={t('chat.emptyState.establishingConversation')}
+							>
+								<span className="typography-ui-header text-muted-foreground">
+									<span className="animate-text-shimmer">{t('chat.emptyState.establishingConversation')}</span>
+									<BusyDots />
+								</span>
+							</div>
+						) : (
+							<>
+								<h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
+									{renderDraftTitle(
+										draftProjectLabel
+											? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
+											: t('chat.emptyState.draftTitle'),
+										draftProjectLabel,
+									)}
+								</h1>
+								<DraftPresetChips
+									onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
+									className="oc-draft-starters mt-8 max-w-md"
+								/>
+							</>
+						)}
+					</div>
+				) : null}
+				{/* Desktop (non-compact) establishing status: light banner above ChatInput */}
+				{isEstablishing && !useCompactDraftLayout && !isDesktopExpandedInput ? (
+					<div
+						className="flex items-center justify-center pt-6 pb-2"
+						role="status"
+						aria-live="polite"
+						aria-label={t('chat.emptyState.establishingConversation')}
+					>
+						<span className="typography-ui-header text-muted-foreground">
+							<span className="animate-text-shimmer">{t('chat.emptyState.establishingConversation')}</span>
+							<BusyDots />
+						</span>
 					</div>
 				) : null}
 				<div

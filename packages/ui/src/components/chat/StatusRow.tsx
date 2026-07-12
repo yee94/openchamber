@@ -60,9 +60,11 @@ const priorityLabelKey: Record<TodoPriority, string> = {
 
 interface TodoItemRowProps {
   todo: TodoItem;
+  isActive: boolean;
+  activeRef?: React.Ref<HTMLDivElement>;
 }
 
-const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo }) => {
+const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) => {
   const { t } = useI18n();
   const config = statusConfig[todo.status] || statusConfig.pending;
   const statusKey = statusLabelKey[todo.status] ?? statusLabelKey.pending;
@@ -78,28 +80,37 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo }) => {
     );
 
   return (
-    <div className="flex items-center min-w-0 py-0.5 gap-2">
+    <div
+      ref={activeRef}
+      tabIndex={isActive ? 0 : -1}
+      aria-current={isActive ? "step" : undefined}
+      className={cn(
+        "group flex min-w-0 items-start gap-2.5 px-3 py-2.5 outline-none transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--interactive-focus-ring)]",
+        isActive && "bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]",
+      )}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="flex-shrink-0">{statusIcon}</span>
+          <span className="mt-0.5 flex size-4 flex-shrink-0 items-center justify-center">{statusIcon}</span>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
           {t(statusKey as never)}
         </TooltipContent>
       </Tooltip>
-      <span
-        className={cn(
-          "flex-1 typography-ui-label",
-          config.textClassName
-        )}
-      >
-        {todo.content}
+      <span className="min-w-0 flex-1">
+        <span className={cn("block text-xs leading-4", config.textClassName)}>{todo.content}</span>
+        <span className="mt-1 flex items-center gap-1.5 typography-meta text-muted-foreground">
+          <span className={cn(isActive && "text-[var(--status-info)]")}>{t(statusKey as never)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{t(priorityKey as never)}</span>
+        </span>
       </span>
       <Tooltip>
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "typography-meta flex items-center justify-center flex-shrink-0 leading-none",
+              "mt-0.5 flex size-4 items-center justify-center flex-shrink-0 leading-none",
               priorityClassName[todo.priority] ?? priorityClassName.medium
             )}
           >
@@ -192,6 +203,10 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       null
     );
   }, [visibleTodos]);
+  const focusedTodo = React.useMemo(
+    () => visibleTodos.find((todo) => todo.status === "in_progress") ?? null,
+    [visibleTodos],
+  );
 
   // Calculate progress
   const progress = React.useMemo(() => {
@@ -220,6 +235,14 @@ export const StatusRow: React.FC<StatusRowProps> = ({
 
   // Close popover when clicking outside
   const popoverRef = React.useRef<HTMLDivElement>(null);
+  const activeTodoRef = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    if (!isExpanded || !activeTodoRef.current) return;
+
+    activeTodoRef.current.focus({ preventScroll: true });
+    activeTodoRef.current.scrollIntoView({ block: "nearest" });
+  }, [isExpanded]);
+
   React.useEffect(() => {
     if (!isExpanded) return;
 
@@ -334,7 +357,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               }}
               className={cn(
                 "absolute right-0 bottom-full mb-1 z-50",
-                "w-max min-w-[200px] rounded-xl p-1",
+                "w-[min(30rem,calc(100cqw-1rem))] min-w-[280px] overflow-hidden rounded-xl",
                 "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.8),inset_0_0_0_1px_rgba(0,0,0,0.04),0_0_0_1px_rgba(0,0,0,0.10),0_1px_2px_-0.5px_rgba(0,0,0,0.08),0_4px_8px_-2px_rgba(0,0,0,0.08),0_12px_20px_-4px_rgba(0,0,0,0.08)]",
                 "dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20),0_6px_6px_-3px_rgba(0,0,0,0.16)]",
                 "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
@@ -342,17 +365,22 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               )}
             >
               {/* Header */}
-              <div className="flex items-center gap-1.5 px-2 py-1 typography-ui-label font-medium text-muted-foreground">
-                <span>{t('chat.statusRow.tasksTitle')}</span>
-                <span className="typography-meta tabular-nums">
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--surface-subtle)] px-3 py-2.5">
+                <span className="typography-ui-label font-medium text-foreground">{t('chat.statusRow.tasksTitle')}</span>
+                <span className="typography-meta tabular-nums text-muted-foreground">
                   {progress.completed}/{progress.total}
                 </span>
               </div>
 
               {/* Todo list */}
-              <div className="px-1 max-h-[200px] overflow-y-auto">
+              <div className="max-h-[min(22rem,50vh)] divide-y divide-[var(--surface-subtle)] overflow-y-auto">
                 {visibleTodos.map((todo, index) => (
-                  <TodoItemRow key={todo.id ?? `todo-${index}`} todo={todo} />
+                  <TodoItemRow
+                    key={todo.id ?? `todo-${index}`}
+                    todo={todo}
+                    isActive={todo === focusedTodo}
+                    activeRef={todo === focusedTodo ? activeTodoRef : undefined}
+                  />
                 ))}
               </div>
             </div>

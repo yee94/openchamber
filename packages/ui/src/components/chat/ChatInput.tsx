@@ -724,6 +724,7 @@ type ComposerActionButtonsProps = {
     hasContent: boolean;
     currentSessionId: string | null;
     newSessionDraftOpen: boolean;
+    draftSubmitting?: boolean;
     onPrimaryAction: () => void;
     onQueueMessage: () => void;
     onAbort: () => void;
@@ -740,6 +741,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
         hasContent,
         currentSessionId,
         newSessionDraftOpen,
+        draftSubmitting,
         onPrimaryAction,
         onQueueMessage,
         onAbort,
@@ -749,7 +751,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
     const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
-            disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
+            disabled={!canSend || (!currentSessionId && !newSessionDraftOpen) || draftSubmitting}
             onClick={(event) => {
                 if (!isMobile) {
                     return;
@@ -819,6 +821,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
     && prev.hasContent === next.hasContent
     && prev.currentSessionId === next.currentSessionId
     && prev.newSessionDraftOpen === next.newSessionDraftOpen
+    && prev.draftSubmitting === next.draftSubmitting
     && prev.onPrimaryAction === next.onPrimaryAction
     && prev.onQueueMessage === next.onQueueMessage
     && prev.onAbort === next.onAbort
@@ -1034,6 +1037,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     );
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
+    const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject);
     const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId);
@@ -1830,6 +1834,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         } else if ((!inputSnapshot.hasContent && !hasQueuedMessages) || (!currentSessionId && !newSessionDraftOpen)) {
             return;
         }
+
+        // Prevent double-submit while a draft session is being materialized.
+        // The store's materializeOpenDraftSession also guards against concurrent
+        // calls, but this early return avoids the full async preamble and
+        // prevents the UI from looking like it accepted a second send.
+        if (!currentSessionId && draftSubmitting) return;
 
         const capturedSendConfig = queuedOnly ? queuedMessagesToSend[0]?.sendConfig : undefined;
         const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
@@ -5229,7 +5239,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         ? t('chat.chatInput.placeholder.shell')
                                         : t(useCompactChatPlaceholder ? 'chat.chatInput.placeholder.chatCompact' : 'chat.chatInput.placeholder.chat')
                                     : t('chat.chatInput.placeholder.selectSession')}
-                                disabled={!currentSessionId && !newSessionDraftOpen}
+                                disabled={(!currentSessionId && !newSessionDraftOpen) || draftSubmitting}
                                 autoCorrect={isMobile ? "on" : "off"}
                                 autoCapitalize={isMobile ? "sentences" : "off"}
                                 spellCheck={isMobile || inputSpellcheckEnabled}
@@ -5300,6 +5310,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                 hasContent={!!hasContent}
                                                 currentSessionId={currentSessionId}
                                                 newSessionDraftOpen={newSessionDraftOpen}
+                                                draftSubmitting={draftSubmitting}
                                                 onPrimaryAction={handlePrimaryAction}
                                                 onQueueMessage={handleQueueMessage}
                                                 onAbort={handleAbort}
@@ -5363,6 +5374,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         hasContent={!!hasContent}
                                         currentSessionId={currentSessionId}
                                         newSessionDraftOpen={newSessionDraftOpen}
+                                        draftSubmitting={draftSubmitting}
                                         onPrimaryAction={handlePrimaryAction}
                                         onQueueMessage={handleQueueMessage}
                                         onAbort={handleAbort}

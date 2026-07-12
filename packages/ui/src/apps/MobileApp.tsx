@@ -68,6 +68,7 @@ import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
 import { useEdgeSwipeSessionSwitch } from './useEdgeSwipeSessionSwitch';
+import { useContentSwipeToSessions } from './useContentSwipeToSessions';
 import { useNativePushRegistration } from './useNativePushRegistration';
 
 const MOBILE_SETTINGS_PAGES = [
@@ -2211,6 +2212,26 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     swipeDirectionRef.current = direction;
   }, []);
   useEdgeSwipeSessionSwitch(chatMainRef, { onSwitch: recordSwipeDirection });
+
+  // Content-area left-swipe to open sessions sheet (phone only, non-iPad).
+  // Disabled when any overlay is already open so the gesture doesn't stack
+  // sheets or compete with dismiss gestures.
+  const contentSwipeDisabled = isIPad
+    || sessionsSheetOpen
+    || filesOpen
+    || changesOpen
+    || mcpOpen
+    || instancesOpen
+    || settingsOpen
+    || updateOpen
+    || overflowOpen;
+  const handleContentSwipeOpen = React.useCallback(() => {
+    setSessionsSheetOpen(true);
+  }, []);
+  useContentSwipeToSessions(chatMainRef, {
+    onOpen: handleContentSwipeOpen,
+    disabled: contentSwipeDisabled,
+  });
 
   React.useLayoutEffect(() => {
     const direction = swipeDirectionRef.current;

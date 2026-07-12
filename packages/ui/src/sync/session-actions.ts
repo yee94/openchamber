@@ -137,7 +137,7 @@ function dirStore() {
   return _childStores.ensureChild(d)
 }
 
-function dirStoreForDirectory(directory: string) {
+export function dirStoreForDirectory(directory: string) {
   if (!_childStores) throw new Error("Child stores not initialized")
   if (!directory) throw new Error("No directory")
   return _childStores.ensureChild(directory)
@@ -445,6 +445,9 @@ export async function createSession(
       metadata,
     }, directoryOverride ?? dir())
 
+    // Point of no return: session exists server-side. Post-processing
+    // failures below (routing, selection, upsert) must not be treated as
+    // create failures — the session is real and will arrive via SSE.
     const sessionDirectory = (session as { directory?: string | null }).directory ?? null
     // Pre-populate routing index so SSE events arriving before session.created
     // can be routed to the correct child store
@@ -661,39 +664,7 @@ export async function unshareSession(sessionId: string): Promise<Session | null>
 // Optimistic message send — insert user message before API call, rollback on error
 // ---------------------------------------------------------------------------
 
-// ID generator matching OpenCode's Identifier.ascending format.
-// Uses BigInt(timestamp) * 0x1000 + counter, encoded as 6 hex bytes + random base62.
-// This ensures client-generated IDs sort correctly with server-generated ones.
-let lastIdTimestamp = 0
-let idCounter = 0
-
-function ascendingId(prefix: string): string {
-  const now = Date.now()
-  if (now !== lastIdTimestamp) {
-    lastIdTimestamp = now
-    idCounter = 0
-  }
-  idCounter += 1
-
-  const value = BigInt(now) * BigInt(0x1000) + BigInt(idCounter)
-  const bytes = new Uint8Array(6)
-  for (let i = 0; i < 6; i++) {
-    bytes[i] = Number((value >> BigInt(40 - 8 * i)) & BigInt(0xff))
-  }
-
-  let hex = ""
-  for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, "0")
-  }
-
-  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  let rand = ""
-  for (let i = 0; i < 14; i++) {
-    rand += chars[Math.floor(Math.random() * 62)]
-  }
-
-  return `${prefix}_${hex}${rand}`
-}
+import { ascendingId } from "./message-id"
 
 /**
  * Wraps an async send operation with optimistic user-message insertion.
@@ -709,6 +680,8 @@ export async function optimisticSend(input: {
   agent?: string
   directory?: string | null
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+  /** Pre-generated messageID — if omitted, one is generated via ascendingId */
+  messageID?: string
   onOptimisticInsert?: () => void
   onMessageID?: (messageID: string) => void
   beforeOptimisticInsert?: () => void
@@ -723,51 +696,20 @@ export async function optimisticSend(input: {
   input.beforeOptimisticInsert?.()
 
   const targetDirectory = input.directory ?? dir()
-  const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
-  const messageID = ascendingId("msg")
+  const messageID = input.messageID ?? ascendingId("msg")
   input.onMessageID?.(messageID)
-  const textPartId = ascendingId("prt")
 
-  const optimisticParts: Part[] = [
-    { id: textPartId, type: "text", text: input.content } as Part,
-  ]
-  if (input.files) {
-    for (const f of input.files) {
-      optimisticParts.push({ id: ascendingId("prt"), type: "file", mime: f.mime, url: f.url, filename: f.filename } as Part)
-    }
-  }
-
-  const optimisticMessage = {
-    id: messageID,
-    role: "user" as const,
-    sessionID: input.sessionId,
-    parentID: "",
-    modelID: input.modelID,
+  optimisticInsertUserMessage({
+    sessionId: input.sessionId,
+    messageID,
+    content: input.content,
     providerID: input.providerID,
-    system: "",
-    agent: input.agent ?? "",
-    model: `${input.providerID}/${input.modelID}`,
-    metadata: {} as Record<string, unknown>,
-    time: { created: Date.now(), completed: 0 },
-  } as unknown as Message
-
-  // Insert into store + register in shadow Map (for mergeOptimisticPage cleanup)
-  _optimisticAdd({
-    sessionID: input.sessionId,
+    modelID: input.modelID,
+    agent: input.agent,
     directory: targetDirectory,
-    message: optimisticMessage,
-    parts: optimisticParts,
+    files: input.files,
   })
   input.onOptimisticInsert?.()
-
-  // Set busy status
-  const current = store.getState()
-  store.setState({
-    session_status: {
-      ...current.session_status,
-      [input.sessionId]: { type: "busy" as const },
-    },
-  })
 
   try {
     await input.send(messageID)
@@ -777,6 +719,7 @@ export async function optimisticSend(input: {
       : null
 
     if (acceptedRecords) {
+      const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
       materializeConfirmedSendRecords(store, input.sessionId, messageID, acceptedRecords)
       _optimisticConfirm?.({
         sessionID: input.sessionId,
@@ -792,6 +735,7 @@ export async function optimisticSend(input: {
       directory: targetDirectory,
       messageID,
     })
+    const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
     const s = store.getState()
     store.setState({
       session_status: {
@@ -803,7 +747,82 @@ export async function optimisticSend(input: {
   }
 }
 
-async function fetchRecentSendConfirmationRecords(
+/**
+ * Pure optimistic insertion helper — inserts a user message into the child
+ * store and shadow Map without waiting for connection or calling send.
+ * Used by the combined createWithPrompt flow where the server has already
+ * accepted the message before this materialization point.
+ *
+ * Respects the shadow Map protocol: registers with real sessionID + provided
+ * messageID so mergeOptimisticPage can deduplicate. If SSE has already
+ * delivered the message (found in child store), skips insertion.
+ */
+export function optimisticInsertUserMessage(input: {
+  sessionId: string
+  messageID: string
+  content: string
+  providerID: string
+  modelID: string
+  agent?: string
+  directory?: string | null
+  files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+}): boolean {
+  if (!_optimisticAdd) return false
+
+  const targetDirectory = input.directory ?? dir()
+  const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
+
+  // If SSE already materialized this message, skip insertion
+  const state = store.getState()
+  const existingMessages = state.message?.[input.sessionId]
+  if (existingMessages?.some((m) => m.id === input.messageID)) {
+    return false
+  }
+
+  const textPartId = ascendingId("prt")
+  const optimisticParts: Part[] = [
+    { id: textPartId, type: "text", text: input.content } as Part,
+  ]
+  if (input.files) {
+    for (const f of input.files) {
+      optimisticParts.push({ id: ascendingId("prt"), type: "file", mime: f.mime, url: f.url, filename: f.filename } as Part)
+    }
+  }
+
+  const optimisticMessage = {
+    id: input.messageID,
+    role: "user" as const,
+    sessionID: input.sessionId,
+    parentID: "",
+    modelID: input.modelID,
+    providerID: input.providerID,
+    system: "",
+    agent: input.agent ?? "",
+    model: `${input.providerID}/${input.modelID}`,
+    metadata: {} as Record<string, unknown>,
+    time: { created: Date.now(), completed: 0 },
+  } as unknown as Message
+
+  _optimisticAdd({
+    sessionID: input.sessionId,
+    directory: targetDirectory,
+    message: optimisticMessage,
+    parts: optimisticParts,
+  })
+
+  // Set busy status
+  const current = store.getState()
+  store.setState({
+    session_status: {
+      ...current.session_status,
+      [input.sessionId]: { type: "busy" as const },
+    },
+  })
+
+  return true
+}
+
+export async function fetchRecentSendConfirmationRecords(
   sessionId: string,
   messageID: string,
   directory?: string | null,
@@ -828,7 +847,7 @@ async function fetchRecentSendConfirmationRecords(
   return null
 }
 
-function materializeConfirmedSendRecords(
+export function materializeConfirmedSendRecords(
   store: DirectoryStoreApi,
   sessionId: string,
   messageID: string,

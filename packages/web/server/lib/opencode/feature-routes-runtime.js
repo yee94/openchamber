@@ -9,6 +9,7 @@ import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
+import { registerConversationRoutes } from '../conversations/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerPluginRoutes } from './plugin-routes.js';
 import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
@@ -95,6 +96,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       buildAugmentedPath,
       projectConfigRuntime,
       scheduledTasksRuntime,
+      markUserMessageSent,
+      waitForOpenCodeReady,
       getOpenChamberEventClients,
       writeSseEvent,
     } = routeDependencies;
@@ -143,6 +146,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTasksRuntime,
       getOpenChamberEventClients,
       writeSseEvent,
+    });
+
+    registerConversationRoutes(app, {
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+      markUserMessageSent,
+      waitForOpenCodeReady,
     });
 
     registerConfigEntityRoutes(app, {
