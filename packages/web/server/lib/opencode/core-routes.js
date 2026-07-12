@@ -981,10 +981,12 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
         return res.status(413).json({ error: 'Content exceeds maximum size of 1048576 bytes' });
       }
       express.json({ limit: '1mb' })(req, res, next);
-    } else if (req.path.startsWith('/api/openchamber/session-index')) {
-      // Electron's bounded session-summary index is an OpenChamber-owned API,
-      // not an OpenCode proxy route. Without an explicit parser its PUT/POST
-      // writes reach the route with an empty body and silently never cache.
+    } else if (
+      req.path.startsWith('/api/openchamber/session-index') ||
+      req.path.startsWith('/api/openchamber/conversations')
+    ) {
+      // These OpenChamber-owned routes need parsed JSON before their handlers;
+      // the generic OpenCode proxy intentionally owns the remaining /api paths.
       express.json({ limit: '256kb' })(req, res, next);
     } else if (
       req.path.startsWith('/api/config/agents') ||

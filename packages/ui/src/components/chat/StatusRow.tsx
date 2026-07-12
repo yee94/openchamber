@@ -7,7 +7,6 @@ import type { Todo } from "@opencode-ai/sdk/v2/client";
 // Compat aliases for old TodoItem shape
 type TodoItem = Todo & { id?: string };
 type TodoStatus = string;
-type TodoPriority = string;
 import { useUIStore } from "@/stores/useUIStore";
 import { useTodosPersistStore } from "@/stores/useTodosPersistStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
@@ -33,18 +32,6 @@ const statusConfig: Record<TodoStatus, { textClassName: string }> = {
   },
 };
 
-const priorityClassName: Record<TodoPriority, string> = {
-  high: "text-[var(--status-warning)]",
-  medium: "text-muted-foreground",
-  low: "text-muted-foreground/70",
-};
-
-const priorityIcon: Record<TodoPriority, React.ReactNode> = {
-  high: <Icon name="arrow-up-double" className="h-3.5 w-3.5"  aria-hidden="true"/>,
-  medium: <Icon name="arrow-up-s" className="h-3.5 w-3.5"  aria-hidden="true"/>,
-  low: <Icon name="arrow-down-s" className="h-3.5 w-3.5"  aria-hidden="true"/>,
-};
-
 const statusLabelKey: Record<TodoStatus, string> = {
   in_progress: "chat.statusRow.todo.status.inProgress",
   pending: "chat.statusRow.todo.status.pending",
@@ -52,23 +39,16 @@ const statusLabelKey: Record<TodoStatus, string> = {
   cancelled: "chat.statusRow.todo.status.cancelled",
 };
 
-const priorityLabelKey: Record<TodoPriority, string> = {
-  high: "chat.statusRow.todo.priority.high",
-  medium: "chat.statusRow.todo.priority.medium",
-  low: "chat.statusRow.todo.priority.low",
-};
-
 interface TodoItemRowProps {
   todo: TodoItem;
   isActive: boolean;
-  activeRef?: React.Ref<HTMLDivElement>;
+  activeRef?: React.Ref<HTMLLIElement>;
 }
 
 const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) => {
   const { t } = useI18n();
   const config = statusConfig[todo.status] || statusConfig.pending;
   const statusKey = statusLabelKey[todo.status] ?? statusLabelKey.pending;
-  const priorityKey = priorityLabelKey[todo.priority] ?? priorityLabelKey.medium;
 
   const statusIcon =
     todo.status === "in_progress" ? (
@@ -80,19 +60,17 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) 
     );
 
   return (
-    <div
+    <li
       ref={activeRef}
-      tabIndex={isActive ? 0 : -1}
       aria-current={isActive ? "step" : undefined}
       className={cn(
-        "group flex min-w-0 items-start gap-2.5 px-3 py-2.5 outline-none transition-colors",
-        "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--interactive-focus-ring)]",
-        isActive && "bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]",
+        "group relative grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-2.5",
+        isActive && "bg-[var(--surface-muted)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-[var(--status-info)]",
       )}
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="mt-0.5 flex size-4 flex-shrink-0 items-center justify-center">{statusIcon}</span>
+          <span className="flex size-4 items-center justify-center">{statusIcon}</span>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
           {t(statusKey as never)}
@@ -100,28 +78,8 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) 
       </Tooltip>
       <span className="min-w-0 flex-1">
         <span className={cn("block text-xs leading-4", config.textClassName)}>{todo.content}</span>
-        <span className="mt-1 flex items-center gap-1.5 typography-meta text-muted-foreground">
-          <span className={cn(isActive && "text-[var(--status-info)]")}>{t(statusKey as never)}</span>
-          <span aria-hidden="true">·</span>
-          <span>{t(priorityKey as never)}</span>
-        </span>
       </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className={cn(
-              "mt-0.5 flex size-4 items-center justify-center flex-shrink-0 leading-none",
-              priorityClassName[todo.priority] ?? priorityClassName.medium
-            )}
-          >
-            {priorityIcon[todo.priority] ?? priorityIcon.medium}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={6}>
-          {t(priorityKey as never)}
-        </TooltipContent>
-      </Tooltip>
-    </div>
+    </li>
   );
 };
 
@@ -235,12 +193,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
 
   // Close popover when clicking outside
   const popoverRef = React.useRef<HTMLDivElement>(null);
-  const activeTodoRef = React.useRef<HTMLDivElement>(null);
+  const todoListRef = React.useRef<HTMLUListElement>(null);
+  const activeTodoRef = React.useRef<HTMLLIElement>(null);
   React.useLayoutEffect(() => {
-    if (!isExpanded || !activeTodoRef.current) return;
+    const list = todoListRef.current;
+    const activeItem = activeTodoRef.current;
+    if (!isExpanded || !list || !activeItem) return;
 
-    activeTodoRef.current.focus({ preventScroll: true });
-    activeTodoRef.current.scrollIntoView({ block: "nearest" });
+    const centeredScrollTop = activeItem.offsetTop - list.offsetTop - (list.clientHeight - activeItem.offsetHeight) / 2;
+    const maxScrollTop = list.scrollHeight - list.clientHeight;
+    list.scrollTop = Math.min(maxScrollTop, Math.max(0, centeredScrollTop));
   }, [isExpanded]);
 
   React.useEffect(() => {
@@ -373,7 +335,10 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               </div>
 
               {/* Todo list */}
-              <div className="max-h-[min(22rem,50vh)] divide-y divide-[var(--surface-subtle)] overflow-y-auto">
+              <ul
+                ref={todoListRef}
+                className="m-0 max-h-[min(22rem,50vh)] list-none divide-y divide-[var(--surface-subtle)] overflow-y-auto p-0"
+              >
                 {visibleTodos.map((todo, index) => (
                   <TodoItemRow
                     key={todo.id ?? `todo-${index}`}
@@ -382,7 +347,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
                     activeRef={todo === focusedTodo ? activeTodoRef : undefined}
                   />
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
