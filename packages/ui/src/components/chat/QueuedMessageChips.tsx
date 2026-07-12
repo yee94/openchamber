@@ -52,7 +52,7 @@ const QueuedMessageChip = memo(({ message, sessionId, onEdit, onSend }: QueuedMe
             ref={setNodeRef}
             // Translate only (no scaleX/scaleY) so the lifted row keeps its size.
             style={{ transform: CSS.Translate.toString(transform), transition }}
-            className={cn('flex min-w-0 items-center gap-2 py-1', isDragging && 'z-10 opacity-60')}
+            className={cn('flex min-w-0 items-center gap-1.5 py-0.5 md:gap-2 md:py-1', isDragging && 'z-10 opacity-60')}
         >
             <button
                 type="button"
@@ -61,9 +61,9 @@ const QueuedMessageChip = memo(({ message, sessionId, onEdit, onSend }: QueuedMe
                 className="flex flex-shrink-0 cursor-grab touch-none select-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
                 aria-label={t('chat.queuedMessage.reorderAria')}
             >
-                <Icon name="draggable" className="h-4 w-4" aria-hidden="true" />
+                <Icon name="draggable" className="size-3.5 md:size-4" aria-hidden="true" />
             </button>
-            <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">
+            <span className="min-w-0 flex-1 truncate typography-micro leading-4 text-foreground md:typography-ui-label">
                 {firstLine || t('chat.queuedMessage.empty')}
                 {attachmentCount > 0 && (
                     <span className="ml-1 text-muted-foreground">{t('chat.queuedMessage.attachments', { count: attachmentCount })}</span>
@@ -158,13 +158,13 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
     }
 
     return (
-        <div className="pb-2 w-full px-1">
-            <div className="rounded-xl border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm overflow-hidden">
-                <div className="flex w-full items-center gap-2 px-3 py-2 text-left">
-                    <span className="typography-ui-label font-medium text-foreground flex-shrink-0">
+        <div className="w-full px-0.5 pb-1.5 md:px-1 md:pb-2">
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm md:rounded-xl">
+                <div className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left md:gap-2 md:px-3 md:py-2">
+                    <span className="flex-shrink-0 typography-micro font-medium leading-4 text-foreground md:typography-ui-label">
                         {t('chat.queuedMessage.title')} {queuedMessages.length}
                     </span>
-                    <Icon name="time" className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <Icon name="time" className="ml-auto size-3.5 text-muted-foreground md:size-4" aria-hidden="true" />
                 </div>
                 <DndContext
                     sensors={sensors}
@@ -175,7 +175,7 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                         items={queuedMessages.map((m) => m.id)}
                         strategy={verticalListSortingStrategy}
                     >
-                        <div className="px-3 pb-3 flex flex-col gap-1.5 max-h-[10.5rem] overflow-y-auto">
+                        <div className="flex max-h-[8rem] flex-col gap-1 overflow-y-auto px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3">
                             {queuedMessages.map((message) => (
                                 <QueuedMessageChip
                                     key={message.id}

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.17] - 2026-07-12
+
+- **Mobile message queue:** refine the queued-message card with tighter padding, smaller type and icons, denser rows, a shorter scroll region, and compact corners while preserving the established desktop layout.
+
 ## [1.15.16] - 2026-07-12
 
 - **Mobile session picker:** consolidate phone session selection into the slide-up panel. The existing top-left folders button and session deep links open it, while a right swipe across more than half the conversation provides a gesture shortcut.
