@@ -16,6 +16,7 @@ import { QuestionCard } from './QuestionCard';
 import { StatusRowContainer } from './StatusRowContainer';
 import { SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
 import ScrollToBottomButton from './components/ScrollToBottomButton';
+import { PromptNavigatorRail } from './components/PromptNavigatorRail';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { useChatAutoFollow, type AnimationHandlers, type ContentChangeReason } from '@/hooks/useChatAutoFollow';
 import { useChatTimelineController } from './hooks/useChatTimelineController';
@@ -162,6 +163,13 @@ type ChatViewportProps = {
     isProgrammaticFollowActive: boolean;
     showLoadOlderButton: boolean;
     onLoadOlder: () => void;
+    turnIds: string[];
+    activeTurnId: string | null;
+    onSelectTurn: (turnId: string) => void;
+    showPromptNavigator: boolean;
+    canLoadEarlierPrompts: boolean;
+    isLoadingOlderPrompts: boolean;
+    onLoadEarlierPrompts: () => void;
 };
 
 const ChatViewport = React.memo(({
@@ -188,8 +196,40 @@ const ChatViewport = React.memo(({
     isProgrammaticFollowActive,
     showLoadOlderButton,
     onLoadOlder,
+    turnIds,
+    activeTurnId,
+    onSelectTurn,
+    showPromptNavigator,
+    canLoadEarlierPrompts,
+    isLoadingOlderPrompts,
+    onLoadEarlierPrompts,
 }: ChatViewportProps) => {
     const { t } = useI18n();
+    const promptPreviewsByTurnIdRef = React.useRef<Map<string, Part[]>>(new Map());
+    const promptPreviewsByTurnId = React.useMemo(() => {
+        const next = new Map<string, Part[]>();
+        for (const message of renderedMessages) {
+            if (message.info.role !== 'user') {
+                continue;
+            }
+            next.set(message.info.id, message.parts);
+        }
+        const prev = promptPreviewsByTurnIdRef.current;
+        if (prev.size === next.size) {
+            let unchanged = true;
+            for (const [id, parts] of next) {
+                if (prev.get(id) !== parts) {
+                    unchanged = false;
+                    break;
+                }
+            }
+            if (unchanged) {
+                return prev;
+            }
+        }
+        promptPreviewsByTurnIdRef.current = next;
+        return next;
+    }, [renderedMessages]);
     const focusScrollContainer = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
         if (event.defaultPrevented || shouldIgnoreChatNavigationTarget(event.target)) {
             return;
@@ -278,6 +318,17 @@ const ChatViewport = React.memo(({
                     </div>
                 </ScrollShadow>
                 <OverlayScrollbar containerRef={scrollRef} suppressVisibility={isProgrammaticFollowActive} userIntentOnly observeMutations={false} />
+                {showPromptNavigator ? (
+                    <PromptNavigatorRail
+                        turnIds={turnIds}
+                        previewsByTurnId={promptPreviewsByTurnId}
+                        activeTurnId={activeTurnId}
+                        onSelectTurn={onSelectTurn}
+                        canLoadEarlier={canLoadEarlierPrompts}
+                        isLoadingOlder={isLoadingOlderPrompts}
+                        onLoadEarlier={onLoadEarlierPrompts}
+                    />
+                ) : null}
             </div>
         </div>
     );
@@ -304,7 +355,14 @@ const ChatViewport = React.memo(({
         && prev.sessionPermissions === next.sessionPermissions
         && prev.isProgrammaticFollowActive === next.isProgrammaticFollowActive
         && prev.showLoadOlderButton === next.showLoadOlderButton
-        && prev.onLoadOlder === next.onLoadOlder;
+        && prev.onLoadOlder === next.onLoadOlder
+        && prev.turnIds === next.turnIds
+        && prev.activeTurnId === next.activeTurnId
+        && prev.onSelectTurn === next.onSelectTurn
+        && prev.showPromptNavigator === next.showPromptNavigator
+        && prev.canLoadEarlierPrompts === next.canLoadEarlierPrompts
+        && prev.isLoadingOlderPrompts === next.isLoadingOlderPrompts
+        && prev.onLoadEarlierPrompts === next.onLoadEarlierPrompts;
 });
 
 ChatViewport.displayName = 'ChatViewport';
@@ -405,6 +463,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     // UI store
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
     const stickyUserHeader = useUIStore((state) => state.stickyUserHeader);
+    const promptNavigatorEnabled = useUIStore((state) => state.promptNavigatorEnabled);
     const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
     const isTimelineDialogOpen = useUIStore((s) => s.isTimelineDialogOpen);
     const setTimelineDialogOpen = useUIStore((s) => s.setTimelineDialogOpen);
@@ -706,6 +765,21 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
         scrollToMessage: timelineController.scrollToMessage,
         resumeToBottom: timelineController.resumeToBottomInstant,
     });
+    const handlePromptNavigatorSelect = React.useCallback((turnId: string) => {
+        void navigation.scrollToTurnId(turnId, { behavior: 'smooth' });
+    }, [navigation]);
+    const canLoadEarlierPrompts = timelineController.historySignals.canLoadEarlier;
+    const showPromptNavigator = !isMobile
+        && !isVSCode
+        && !isDesktopExpandedInput
+        && promptNavigatorEnabled
+        && timelineController.turnIds.length >= 2;
+
+    React.useEffect(() => {
+        if (!showPromptNavigator) {
+            useUIStore.getState().setPromptNavigatorPanelOpen(false);
+        }
+    }, [showPromptNavigator]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || !currentSessionId) return;
@@ -1012,6 +1086,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
                 isProgrammaticFollowActive={isFollowingProgrammatically}
                 showLoadOlderButton={showLoadOlderButton}
                 onLoadOlder={handleLoadOlderClick}
+                turnIds={timelineController.turnIds}
+                activeTurnId={timelineController.activeTurnId}
+                onSelectTurn={handlePromptNavigatorSelect}
+                showPromptNavigator={showPromptNavigator}
+                canLoadEarlierPrompts={canLoadEarlierPrompts}
+                isLoadingOlderPrompts={timelineController.isLoadingOlder}
+                onLoadEarlierPrompts={handleLoadOlderClick}
             />
 
             <div
