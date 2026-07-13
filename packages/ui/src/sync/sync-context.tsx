@@ -109,7 +109,11 @@ function getLiveStates(childStores: ChildStoreManager): State[] {
   return Array.from(childStores.children.values(), (store) => store.getState())
 }
 
-function useLiveSyncSelector<T>(selector: (states: State[]) => T, isEqual: (left: T, right: T) => boolean = Object.is): T {
+function useLiveSyncSelector<T>(
+  selector: (states: State[]) => T,
+  isEqual: (left: T, right: T) => boolean = Object.is,
+  subscribe?: (childStores: ChildStoreManager, notify: () => void) => () => void,
+): T {
   const { childStores } = useSyncSystem()
   const cacheRef = useRef<T | undefined>(undefined)
   const initializedRef = useRef(false)
@@ -126,7 +130,10 @@ function useLiveSyncSelector<T>(selector: (states: State[]) => T, isEqual: (left
   }, [childStores, isEqual, selector])
 
   return React.useSyncExternalStore(
-    useCallback((notify) => childStores.subscribeAll(notify), [childStores]),
+    useCallback(
+      (notify) => subscribe ? subscribe(childStores, notify) : childStores.subscribeAll(notify),
+      [childStores, subscribe],
+    ),
     getSnapshot,
     getSnapshot,
   )
@@ -142,6 +149,14 @@ function useLiveSyncSelector<T>(selector: (states: State[]) => T, isEqual: (left
 export function useGlobalSessionStatus(sessionId: string): SessionStatus | undefined {
   return useLiveSyncSelector(
     useCallback((states) => findLiveSessionStatus(states, sessionId), [sessionId]),
+    Object.is,
+    useCallback(
+      (childStores: ChildStoreManager, notify: () => void) => childStores.subscribeAllSelected(
+        (state: State) => state.session_status?.[sessionId],
+        notify,
+      ),
+      [sessionId],
+    ),
   )
 }
 
@@ -150,6 +165,13 @@ export function useAllSessionStatuses(): Record<string, SessionStatus> {
   return useLiveSyncSelector(
     useCallback((states) => aggregateLiveSessionStatuses(states), []),
     areStatusMapsEquivalent,
+    useCallback(
+      (childStores: ChildStoreManager, notify: () => void) => childStores.subscribeAllSelected(
+        (state: State) => state.session_status,
+        notify,
+      ),
+      [],
+    ),
   )
 }
 
@@ -157,6 +179,13 @@ export function useAllLiveSessions(): Session[] {
   return useLiveSyncSelector(
     useCallback((states) => aggregateLiveSessions(states), []),
     areSessionListsEquivalent,
+    useCallback(
+      (childStores: ChildStoreManager, notify: () => void) => childStores.subscribeAllSelected(
+        (state: State) => state.session,
+        notify,
+      ),
+      [],
+    ),
   )
 }
 

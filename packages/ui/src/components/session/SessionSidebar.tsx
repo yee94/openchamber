@@ -31,6 +31,7 @@ import { useSidebarPersistence } from './sidebar/hooks/useSidebarPersistence';
 import { useProjectRepoStatus } from './sidebar/hooks/useProjectRepoStatus';
 import { useProjectSessionLists } from './sidebar/hooks/useProjectSessionLists';
 import { useSessionFolderCleanup } from './sidebar/hooks/useSessionFolderCleanup';
+import { createSessionOwnershipIndex } from './sidebar/sessionOwnership';
 import { useStickyProjectHeaders } from './sidebar/hooks/useStickyProjectHeaders';
 import { getGitHubPrStatusKey, usePrVisualSummaryByKeys, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
@@ -319,7 +320,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const sync = useSync();
   const liveSessions = useAllLiveSessions();
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-  const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded);
   const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
@@ -418,6 +418,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       .join('|'),
     [projects],
   );
+  const [resolvedWorktreeTopologyKey, setResolvedWorktreeTopologyKey] = React.useState<string | null>(
+    isVSCode ? projectWorktreeDiscoveryKey : null,
+  );
+  const isWorktreeTopologyLoading = !isVSCode && resolvedWorktreeTopologyKey !== projectWorktreeDiscoveryKey;
+  const [unresolvedWorktreeProjectPaths, setUnresolvedWorktreeProjectPaths] = React.useState<ReadonlySet<string>>(new Set());
 
   const initialGlobalSessionsRefreshStartedRef = React.useRef(false);
   React.useEffect(() => {
@@ -428,19 +433,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     void refreshGlobalSessions(syncSessionsSnapshotRef.current);
   }, []);
 
-  // Tracks the last project list we already kicked off discovery for.
-  // A re-mount with the same project set shouldn't fan out another
-  // burst of `checkIsGitRepository` / `listProjectWorktrees` calls.
-  const discoveredProjectsRef = React.useRef<string>('');
   React.useEffect(() => {
     let cancelled = false;
 
     const discoverWorktrees = async () => {
       const projectEntries = useProjectsStore.getState().projects;
-      if (projectEntries.length === 0) return;
+      if (projectEntries.length === 0 || isVSCode) {
+        if (!cancelled) {
+          setUnresolvedWorktreeProjectPaths(new Set());
+          setResolvedWorktreeTopologyKey(projectWorktreeDiscoveryKey);
+        }
+        return;
+      }
 
-      const worktreesByProject = new Map<string, WorktreeMetadata[]>();
-      const allWorktrees: WorktreeMetadata[] = [];
+      const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
+      const worktreesByProject = new Map(currentByProject);
+      const unresolvedProjectPaths = new Set<string>();
 
       // Constrain fanout: previously `Promise.all(projects.map(...))` could
       // spawn dozens of concurrent `git worktree list` and
@@ -464,13 +472,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             // PR/render paths downstream can read isGitRepo for free.
             const cachedIsGitRepo = useGitStore.getState().directories.get(projectPath)?.isGitRepo;
             const isGitRepo = cachedIsGitRepo ?? await checkIsGitRepository(projectPath);
-            if (!isGitRepo) continue;
+            if (!isGitRepo) {
+              worktreesByProject.delete(projectPath);
+              continue;
+            }
             const worktrees = await listProjectWorktrees({ id: project.id, path: projectPath });
-            if (cancelled || worktrees.length === 0) continue;
-            worktreesByProject.set(projectPath, worktrees);
-            allWorktrees.push(...worktrees);
+            if (cancelled) return;
+            if (worktrees.length === 0) {
+              worktreesByProject.delete(projectPath);
+            } else {
+              worktreesByProject.set(projectPath, worktrees);
+            }
           } catch {
-            // ignore discovery errors
+            // Keep last-known worktrees when a project is temporarily unavailable.
+            unresolvedProjectPaths.add(projectPath);
           }
         }
       });
@@ -478,27 +493,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       if (cancelled) return;
 
+      const activeProjectPaths = new Set(projectEntries.map((project) => normalizePath(project.path)).filter(Boolean));
+      for (const projectPath of worktreesByProject.keys()) {
+        if (!activeProjectPaths.has(projectPath)) {
+          worktreesByProject.delete(projectPath);
+        }
+      }
+      const allWorktrees = [...worktreesByProject.values()].flat();
+
       // Skip update if nothing changed — see worktreeMapsEqual JSDoc.
-      const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
       if (!worktreeMapsEqual(worktreesByProject, currentByProject)) {
         useSessionUIStore.setState({
           availableWorktrees: allWorktrees,
           availableWorktreesByProject: worktreesByProject,
         });
       }
+      setUnresolvedWorktreeProjectPaths(unresolvedProjectPaths);
+      setResolvedWorktreeTopologyKey(projectWorktreeDiscoveryKey);
     };
 
-    // Skip if we already discovered worktrees for this exact project set.
-    if (discoveredProjectsRef.current === projectWorktreeDiscoveryKey) {
-      return;
-    }
-    discoveredProjectsRef.current = projectWorktreeDiscoveryKey;
     void discoverWorktrees();
 
     return () => {
       cancelled = true;
     };
-  }, [projectWorktreeDiscoveryKey]);
+  }, [isVSCode, projectWorktreeDiscoveryKey]);
 
   React.useEffect(() => {
     let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -943,18 +962,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const projectSessionDirectories = React.useMemo(() => {
-    const directories = new Set<string>();
-    normalizedProjects.forEach((project) => {
-      if (project.normalizedPath) directories.add(project.normalizedPath);
-      if (isVSCode) {
-        return;
+    const directories = new Set(normalizedProjects.map((project) => project.normalizedPath));
+    if (!isVSCode) {
+      for (const worktrees of availableWorktreesByProject.values()) {
+        for (const worktree of worktrees) {
+          const directory = normalizePath(worktree.path);
+          if (directory) directories.add(directory);
+        }
       }
-      const worktrees = availableWorktreesByProject.get(project.normalizedPath) ?? [];
-      worktrees.forEach((worktree) => {
-        const directory = normalizePath(worktree.path);
-        if (directory) directories.add(directory);
-      });
-    });
+    }
     return [...directories].sort();
   }, [availableWorktreesByProject, isVSCode, normalizedProjects]);
 
@@ -994,32 +1010,32 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const isSessionsLoading = useSessionUIStore((state) => state.isLoading);
+  const sessionOwnership = React.useMemo(
+    () => createSessionOwnershipIndex(sessions, normalizedProjects, availableWorktreesByProject, isVSCode, archivedSessions),
+    [archivedSessions, availableWorktreesByProject, isVSCode, normalizedProjects, sessions],
+  );
   useSessionFolderCleanup({
     isSessionsLoading,
-    hasLoadedGlobalSessions,
-    sessions,
-    archivedSessions,
+    hasAuthoritativeGlobalSessions,
+    isWorktreeTopologyLoading,
     normalizedProjects,
-    isVSCode,
+    ownership: sessionOwnership,
     availableWorktreesByProject,
+    unresolvedWorktreeProjectPaths,
     cleanupSessions,
   });
 
   const { getSessionsForProject, getArchivedSessionsForProject } = useProjectSessionLists({
-    isVSCode,
-    sessions,
-    archivedSessions,
-    availableWorktreesByProject,
-    normalizedProjects,
+    ownership: sessionOwnership,
   });
 
   useArchivedAutoFolders({
     normalizedProjects,
-    sessions,
-    archivedSessions,
-    availableWorktreesByProject,
-    isVSCode,
+    ownership: sessionOwnership,
     isSessionsLoading,
+    hasAuthoritativeGlobalSessions,
+    isWorktreeTopologyLoading,
+    unresolvedWorktreeProjectPaths,
     foldersMap,
     createFolder,
     addSessionToFolder,
