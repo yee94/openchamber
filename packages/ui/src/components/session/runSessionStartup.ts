@@ -13,3 +13,12 @@ export const runSessionStartup = async (
     releaseSessionStartupBarrier();
   }
 };
+
+export const runSessionStartupAfterSettingsHydration = async (
+  settingsHydration: Promise<unknown> | null,
+  getDirectories: () => string[],
+  start = startGlobalSessionIndexStartup,
+): Promise<void> => {
+  await settingsHydration;
+  await runSessionStartup(getDirectories(), start);
+};

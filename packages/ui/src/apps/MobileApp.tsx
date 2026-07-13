@@ -23,7 +23,6 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { preloadProviderLogos } from '@/hooks/useProviderLogo';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useRouter } from '@/hooks/useRouter';
-import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { opencodeClient } from '@/lib/opencode/client';
 import type { ProjectEntry, RuntimeAPIs } from '@/lib/api/types';
@@ -3012,7 +3011,6 @@ export function MobileApp({ apis }: MobileAppProps) {
 
   useAppFontEffects();
   usePushVisibilityBeacon({ enabled: true });
-  useUpdatePolling();
   useWindowTitle();
   useRouter();
   // APNs is the only notification channel on the native app (background-capable,

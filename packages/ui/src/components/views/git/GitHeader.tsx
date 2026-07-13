@@ -23,33 +23,6 @@ import { useI18n } from '@/lib/i18n';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 
-interface GitHeaderProps {
-  status: GitStatus | null;
-  localBranches: string[];
-  remoteBranches: string[];
-  branchInfo: Record<string, { ahead?: number; behind?: number }> | undefined;
-  syncAction: SyncAction;
-  remotes: GitRemote[];
-  onFetch: (remote: GitRemote) => void;
-  onSync: (remote: GitRemote) => void;
-  onRemoveRemote: (remote: GitRemote) => void;
-  removingRemoteName: string | null;
-  onCheckoutBranch: (branch: string) => void;
-  onCreateBranch: (name: string, remote?: GitRemote) => Promise<void>;
-  onRenameBranch?: (oldName: string, newName: string) => Promise<void>;
-  activeIdentityProfile: GitIdentityProfile | null;
-  availableIdentities: GitIdentityProfile[];
-  onSelectIdentity: (profile: GitIdentityProfile) => void;
-  isApplyingIdentity: boolean;
-  isWorktreeMode: boolean;
-  onOpenHistory?: () => void;
-  onOpenGraph?: () => void;
-  onOpenStashes?: () => void;
-  actionTabItems?: SortableTabsStripItem[];
-  activeActionTab?: string;
-  onSelectActionTab?: (tabID: string) => void;
-}
-
 const IDENTITY_ICON_MAP: Record<string, IconName> = {
   branch: 'git-branch',
   briefcase: 'briefcase',
@@ -72,28 +45,8 @@ const IDENTITY_COLOR_MAP: Record<string, string> = {
 };
 
 function getIdentityColor(token?: string | null) {
-  if (!token) {
-    return 'var(--primary)';
-  }
-  return IDENTITY_COLOR_MAP[token] || 'var(--primary)';
+  return token ? IDENTITY_COLOR_MAP[token] || 'var(--primary)' : 'var(--primary)';
 }
-
-interface IdentityIconProps {
-  icon?: string | null;
-  className?: string;
-  colorToken?: string | null;
-}
-
-const IdentityIcon: React.FC<IdentityIconProps> = ({ icon, className, colorToken }) => {
-  const iconName = IDENTITY_ICON_MAP[icon ?? 'branch'] ?? 'user-3';
-  return (
-    <Icon
-      name={iconName}
-      className={className}
-      style={{ color: getIdentityColor(colorToken) }}
-    />
-  );
-};
 
 interface IdentityDropdownProps {
   activeProfile: GitIdentityProfile | null;
@@ -111,7 +64,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   iconOnly = false,
 }) => {
   const { t } = useI18n();
-  const isDisabled = isApplying || identities.length === 0;
+  const iconName = IDENTITY_ICON_MAP[activeProfile?.icon ?? 'branch'] ?? 'user-3';
 
   return (
     <DropdownMenu>
@@ -123,22 +76,14 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
               size="sm"
               className="h-8 min-w-0 max-w-[15rem] justify-start gap-1.5 px-2 py-1 typography-ui-label"
               style={{ color: getIdentityColor(activeProfile?.color) }}
-              disabled={isDisabled}
+              disabled={isApplying || identities.length === 0}
             >
-              {isApplying ? (
-                <Icon name="loader-4" className="size-4 animate-spin" />
-              ) : (
-                <IdentityIcon
-                  icon={activeProfile?.icon}
-                  colorToken={activeProfile?.color}
-                  className="size-4"
-                />
-              )}
-              {!iconOnly && (
+              <Icon name={isApplying ? 'loader-4' : iconName} className={isApplying ? 'size-4 animate-spin' : 'size-4'} />
+              {!iconOnly ? (
                 <span className="git-identity-label min-w-0 flex-1 truncate text-left">
                   {activeProfile?.name || t('gitView.header.noIdentity')}
                 </span>
-              )}
+              ) : null}
               <Icon name="arrow-down-s" className="size-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
@@ -146,43 +91,42 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         <TooltipContent sideOffset={8}>{t('gitView.header.identityTooltip')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-64">
-        {identities.length === 0 ? (
-          <div className="px-2 py-1.5">
-            <p className="typography-meta text-muted-foreground">
-              {t('gitView.header.noProfiles')}
-            </p>
-          </div>
-        ) : (
-          identities.map((profile) => {
-            const isSelected = activeProfile?.id === profile.id;
-            return (
-              <DropdownMenuItem key={profile.id} onSelect={() => onSelect(profile)}>
-                <span className="flex items-center gap-2">
-                  <IdentityIcon
-                    icon={profile.icon}
-                    colorToken={profile.color}
-                    className="size-4"
-                  />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">
-                      {profile.name}
-                    </span>
-                    <span className="typography-meta text-muted-foreground">
-                      {profile.userEmail}
-                    </span>
-                  </span>
-                  {isSelected ? (
-                    <Icon name="check" className="ml-auto size-4 text-foreground" />
-                  ) : null}
-                </span>
-              </DropdownMenuItem>
-            );
-          })
-        )}
+        {identities.map((profile) => (
+          <DropdownMenuItem key={profile.id} onSelect={() => onSelect(profile)}>
+            <span className="flex min-w-0 flex-col">
+              <span className="typography-ui-label text-foreground">{profile.name}</span>
+              <span className="typography-meta text-muted-foreground">{profile.userEmail}</span>
+            </span>
+            {activeProfile?.id === profile.id ? <Icon name="check" className="ml-auto size-4 text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 };
+
+interface GitHeaderProps {
+  status: GitStatus | null;
+  localBranches: string[];
+  remoteBranches: string[];
+  branchInfo: Record<string, { ahead?: number; behind?: number }> | undefined;
+  syncAction: SyncAction;
+  remotes: GitRemote[];
+  onFetch: (remote: GitRemote) => void;
+  onSync: (remote: GitRemote) => void;
+  onRemoveRemote: (remote: GitRemote) => void;
+  removingRemoteName: string | null;
+  onCheckoutBranch: (branch: string) => void;
+  onCreateBranch: (name: string, remote?: GitRemote) => Promise<void>;
+  onRenameBranch?: (oldName: string, newName: string) => Promise<void>;
+  isWorktreeMode: boolean;
+  onOpenHistory?: () => void;
+  onOpenGraph?: () => void;
+  onOpenStashes?: () => void;
+  actionTabItems?: SortableTabsStripItem[];
+  activeActionTab?: string;
+  onSelectActionTab?: (tabID: string) => void;
+}
 
 interface UpstreamStatusPillProps {
   comparison: GitRemoteComparison;
@@ -241,10 +185,6 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onCheckoutBranch,
   onCreateBranch,
   onRenameBranch,
-  activeIdentityProfile,
-  availableIdentities,
-  onSelectIdentity,
-  isApplyingIdentity,
   isWorktreeMode,
   onOpenHistory,
   onOpenGraph,
@@ -328,16 +268,6 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
     />
   ) : null;
 
-  const identityControl = (
-    <IdentityDropdown
-      activeProfile={activeIdentityProfile}
-      identities={availableIdentities}
-      onSelect={onSelectIdentity}
-      isApplying={isApplyingIdentity}
-      iconOnly={true}
-    />
-  );
-
   return (
     <header className="@container/git-header px-3 py-2 bg-transparent">
       <div className="flex items-center justify-between gap-2 min-w-0">
@@ -361,7 +291,6 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {managementButtons}
-          {identityControl}
         </div>
       </div>
 
@@ -375,6 +304,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
               layoutMode="fit"
               variant="active-pill"
               iconOnlyActiveTab={true}
+              activePillLowercase={false}
               activePillButtonClassName="h-7"
               className="h-full"
             />

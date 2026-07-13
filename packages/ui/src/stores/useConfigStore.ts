@@ -969,6 +969,8 @@ interface ConfigStore {
 
     activeDirectoryKey: string;
     directoryScoped: Record<string, DirectoryScopedConfig>;
+    providerConfigLoadingByDirectory: Record<string, boolean>;
+    agentConfigLoadingByDirectory: Record<string, boolean>;
 
     providers: ProviderWithModelList[];
     agents: Agent[];
@@ -1114,6 +1116,8 @@ export const useConfigStore = create<ConfigStore>()(
 
                 activeDirectoryKey: resolveInitialDirectoryKey(),
                 directoryScoped: {},
+                providerConfigLoadingByDirectory: {},
+                agentConfigLoadingByDirectory: {},
 
                 providers: [],
                 agents: [],
@@ -1376,6 +1380,8 @@ export const useConfigStore = create<ConfigStore>()(
 
                     set((state) => {
                         const snapshot = state.directoryScoped[directoryKey];
+                        const shouldLoadProviders = state.isConnected && !snapshot?.providers.length;
+                        const shouldLoadAgents = state.isConnected && !snapshot?.agents.length;
                         if (snapshot) {
                             snapshotHadProviders = snapshot.providers.length > 0;
                             snapshotHadAgents = snapshot.agents.length > 0;
@@ -1393,6 +1399,14 @@ export const useConfigStore = create<ConfigStore>()(
                                 opencodeDefaultAgent: snapshot.opencodeDefaultAgent,
                                 opencodeDefaultModel: snapshot.opencodeDefaultModel,
                                 selectionSource: snapshot.selectionSource ?? "auto",
+                                providerConfigLoadingByDirectory: {
+                                    ...state.providerConfigLoadingByDirectory,
+                                    [directoryKey]: shouldLoadProviders,
+                                },
+                                agentConfigLoadingByDirectory: {
+                                    ...state.agentConfigLoadingByDirectory,
+                                    [directoryKey]: shouldLoadAgents,
+                                },
                             };
                         }
 
@@ -1409,6 +1423,14 @@ export const useConfigStore = create<ConfigStore>()(
                             opencodeDefaultAgent: undefined,
                             opencodeDefaultModel: undefined,
                             selectionSource: "auto",
+                            providerConfigLoadingByDirectory: {
+                                ...state.providerConfigLoadingByDirectory,
+                                [directoryKey]: shouldLoadProviders,
+                            },
+                            agentConfigLoadingByDirectory: {
+                                ...state.agentConfigLoadingByDirectory,
+                                [directoryKey]: shouldLoadAgents,
+                            },
                         };
                     });
 
@@ -1513,6 +1535,20 @@ export const useConfigStore = create<ConfigStore>()(
                     if (existing) {
                         markStartupTrace('loadProviders:deduped', { directoryKey, source, requestedDirectory, effectiveDirectory });
                         return existing;
+                    }
+
+                    const currentProviderSnapshot = get().directoryScoped[directoryKey];
+                    const hasProviderData = Boolean(
+                        currentProviderSnapshot?.providers.length
+                        || (get().activeDirectoryKey === directoryKey && get().providers.length > 0)
+                    );
+                    if (!hasProviderData) {
+                        set((state) => ({
+                            providerConfigLoadingByDirectory: {
+                                ...state.providerConfigLoadingByDirectory,
+                                [directoryKey]: true,
+                            },
+                        }));
                     }
 
                     const promise = (async () => {
@@ -1705,7 +1741,15 @@ export const useConfigStore = create<ConfigStore>()(
 
                         return nextState;
                     });
-                    })().finally(() => _inFlightProviders.delete(directoryKey));
+                    })().finally(() => {
+                        _inFlightProviders.delete(directoryKey);
+                        set((state) => ({
+                            providerConfigLoadingByDirectory: {
+                                ...state.providerConfigLoadingByDirectory,
+                                [directoryKey]: false,
+                            },
+                        }));
+                    });
 
                     _inFlightProviders.set(directoryKey, promise);
                     return promise;
@@ -1946,6 +1990,20 @@ export const useConfigStore = create<ConfigStore>()(
                     if (existing) {
                         markStartupTrace('loadAgents:deduped', { directoryKey, source, requestedDirectory, effectiveDirectory });
                         return existing;
+                    }
+
+                    const currentAgentSnapshot = get().directoryScoped[directoryKey];
+                    const hasAgentData = Boolean(
+                        currentAgentSnapshot?.agents.length
+                        || (get().activeDirectoryKey === directoryKey && get().agents.length > 0)
+                    );
+                    if (!hasAgentData) {
+                        set((state) => ({
+                            agentConfigLoadingByDirectory: {
+                                ...state.agentConfigLoadingByDirectory,
+                                [directoryKey]: true,
+                            },
+                        }));
                     }
 
                     const promise = (async (): Promise<boolean> => {
@@ -2336,7 +2394,15 @@ export const useConfigStore = create<ConfigStore>()(
                     });
 
                     return false;
-                    })().finally(() => _inFlightAgents.delete(directoryKey));
+                    })().finally(() => {
+                        _inFlightAgents.delete(directoryKey);
+                        set((state) => ({
+                            agentConfigLoadingByDirectory: {
+                                ...state.agentConfigLoadingByDirectory,
+                                [directoryKey]: false,
+                            },
+                        }));
+                    });
 
                     _inFlightAgents.set(directoryKey, promise);
                     return promise;

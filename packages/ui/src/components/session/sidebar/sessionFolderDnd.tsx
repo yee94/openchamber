@@ -6,10 +6,11 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-  useDraggable,
   useDroppable,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Icon } from "@/components/icon/Icon";
 
 export const DraggableSessionRow: React.FC<{
@@ -18,7 +19,7 @@ export const DraggableSessionRow: React.FC<{
   sessionTitle: string;
   children: React.ReactNode;
 }> = ({ sessionId, sessionDirectory, sessionTitle, children }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `session-drag:${sessionId}`,
     data: { type: 'session', sessionId, sessionDirectory, sessionTitle },
   });
@@ -38,6 +39,7 @@ export const DraggableSessionRow: React.FC<{
       ref={setNodeRef}
       {...attributes}
       onPointerDown={handlePointerDown}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
       className={isDragging ? 'opacity-30' : undefined}
     >
       {children}
@@ -61,10 +63,11 @@ export const DroppableFolderWrapper: React.FC<{
 
 export const SessionFolderDndScope: React.FC<{
   scopeKey: string | null;
-  hasFolders: boolean;
   onSessionDroppedOnFolder: (sessionId: string, folderId: string) => void;
+  sessionIds: string[];
+  onSessionsReordered: (activeSessionId: string, overSessionId: string) => void;
   children: React.ReactNode;
-}> = ({ scopeKey, hasFolders, onSessionDroppedOnFolder, children }) => {
+}> = ({ scopeKey, onSessionDroppedOnFolder, sessionIds, onSessionsReordered, children }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
@@ -87,6 +90,10 @@ export const SessionFolderDndScope: React.FC<{
     const overData = over.data.current as { type?: string; folderId?: string } | undefined;
     if (activeData?.type === 'session' && activeData.sessionId && overData?.type === 'folder' && overData.folderId) {
       onSessionDroppedOnFolder(activeData.sessionId, overData.folderId);
+      return;
+    }
+    if (activeData?.type === 'session' && activeData.sessionId && overData?.type === 'session' && typeof over.id === 'string') {
+      onSessionsReordered(activeData.sessionId, over.id.replace(/^session-drag:/, ''));
     }
   };
 
@@ -112,9 +119,11 @@ export const SessionFolderDndScope: React.FC<{
       }}
       onDragEnd={handleDragEnd}
     >
-      {children}
+      <SortableContext items={sessionIds.map((sessionId) => `session-drag:${sessionId}`)} strategy={verticalListSortingStrategy}>
+        {children}
+      </SortableContext>
       <DragOverlay>
-        {activeDragId && hasFolders ? (
+        {activeDragId ? (
           <div
             style={{
               width: activeDragWidth ? `${activeDragWidth}px` : 'auto',

@@ -16,10 +16,12 @@ export interface SessionFolder {
 }
 
 export type SessionFoldersMap = Record<string, SessionFolder[]>;
+export type SessionOrderMap = Record<string, string[]>;
 
 interface SessionFoldersState {
   foldersMap: SessionFoldersMap;
   collapsedFolderIds: Set<string>;
+  sessionOrderByScope: SessionOrderMap;
 }
 
 interface SessionFoldersActions {
@@ -34,6 +36,7 @@ interface SessionFoldersActions {
   toggleFolderCollapse: (folderId: string) => void;
   cleanupSessions: (scopeKey: string, existingSessionIds: Set<string>) => void;
   getSessionFolderId: (scopeKey: string, sessionId: string) => string | null;
+  reorderSessions: (scopeKey: string, sessionIds: string[], activeSessionId: string, overSessionId: string) => void;
 }
 
 type SessionFoldersStore = SessionFoldersState & SessionFoldersActions;
@@ -42,6 +45,7 @@ type SessionFoldersStore = SessionFoldersState & SessionFoldersActions;
 
 const FOLDERS_STORAGE_KEY = 'oc.sessions.folders';
 const COLLAPSED_STORAGE_KEY = 'oc.sessions.folderCollapse';
+const SESSION_ORDER_STORAGE_KEY = 'oc.sessions.order';
 const SESSION_FOLDERS_API_PATH = '/api/session-folders';
 const DISK_WRITE_DEBOUNCE_MS = 250;
 const ARCHIVED_SCOPE_PREFIX = '__archived__:';
@@ -154,6 +158,24 @@ const readPersistedCollapsed = (): Set<string> => {
   }
 };
 
+const readPersistedSessionOrder = (): SessionOrderMap => {
+  try {
+    const raw = safeStorage.getItem(SESSION_ORDER_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([scopeKey, value]) => {
+        if (!Array.isArray(value)) return [];
+        const sessionIds = value.filter((id): id is string => typeof id === 'string' && id.length > 0);
+        return sessionIds.length > 0 ? [[scopeKey, sessionIds]] : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
+};
+
 const persistFolders = (foldersMap: SessionFoldersMap): void => {
   pendingFoldersMap = foldersMap;
   clearTimeout(persistFoldersTimer);
@@ -247,6 +269,7 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
     (set, get) => ({
       foldersMap: readPersistedFolders(),
       collapsedFolderIds: readPersistedCollapsed(),
+      sessionOrderByScope: readPersistedSessionOrder(),
 
       getFoldersForScope: (scopeKey: string): SessionFolder[] => {
         if (!scopeKey) return [];
@@ -519,6 +542,34 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
           }
         }
         return null;
+      },
+
+      reorderSessions: (scopeKey, sessionIds, activeSessionId, overSessionId): void => {
+        if (!scopeKey || activeSessionId === overSessionId) return;
+        const visibleIds = Array.from(new Set(sessionIds));
+        const activeIndex = visibleIds.indexOf(activeSessionId);
+        const overIndex = visibleIds.indexOf(overSessionId);
+        if (activeIndex === -1 || overIndex === -1) return;
+
+        const currentOrder = get().sessionOrderByScope[scopeKey] ?? [];
+        const orderedVisibleIds = [
+          ...currentOrder.filter((id) => visibleIds.includes(id)),
+          ...visibleIds.filter((id) => !currentOrder.includes(id)),
+        ];
+        const fromIndex = orderedVisibleIds.indexOf(activeSessionId);
+        const toIndex = orderedVisibleIds.indexOf(overSessionId);
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+
+        const nextOrder = [...orderedVisibleIds];
+        nextOrder.splice(fromIndex, 1);
+        nextOrder.splice(toIndex, 0, activeSessionId);
+        const nextSessionOrderByScope = { ...get().sessionOrderByScope, [scopeKey]: nextOrder };
+        set({ sessionOrderByScope: nextSessionOrderByScope });
+        try {
+          safeStorage.setItem(SESSION_ORDER_STORAGE_KEY, JSON.stringify(nextSessionOrderByScope));
+        } catch {
+          // Storage can be unavailable in restricted browser contexts.
+        }
       },
     }),
     { name: 'session-folders-store' },

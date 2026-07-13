@@ -5,6 +5,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
+import { Icon } from '@/components/icon/Icon';
+import { ShortcutKbd } from '@/components/ui/kbd';
 
 export interface InlineCommentInputProps {
   initialText?: string;
@@ -16,6 +18,7 @@ export interface InlineCommentInputProps {
   isEditing?: boolean;
   className?: string;
   maxWidth?: number;
+  onAddToChat?: (range: { start: number; end: number; side?: 'additions' | 'deletions' }) => void;
 }
 
 export function InlineCommentInput({
@@ -28,6 +31,7 @@ export function InlineCommentInput({
   isEditing = false,
   className,
   maxWidth,
+  onAddToChat,
 }: InlineCommentInputProps) {
   const { t } = useI18n();
   const themeContext = useOptionalThemeSystem();
@@ -160,6 +164,19 @@ export function InlineCommentInput({
         />
         
         <div className="flex items-center justify-end gap-2 mt-3">
+          {displayRange && onAddToChat ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onAddToChat(displayRange)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="mr-auto h-8 gap-1.5"
+            >
+              <Icon name="add" className="size-4" />
+              {t('chat.textSelection.actions.addToChat')}
+              <ShortcutKbd shortcut="⌘+I" />
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"

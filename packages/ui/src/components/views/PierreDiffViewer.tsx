@@ -19,6 +19,7 @@ import {
   PierreDiffCommentOverlays,
   toPierreAnnotationId,
   useInlineCommentController,
+  CodeSelectionActionBubble,
 } from '@/components/comments';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
@@ -29,6 +30,8 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
+import { useInputStore } from '@/sync/input-store';
+import { useUIStore } from '@/stores/useUIStore';
 
 
 // Threshold (bytes) above which syntax highlighting is degraded for performance
@@ -44,6 +47,7 @@ interface PierreDiffViewerProps {
   wrapLines?: boolean;
   layout?: 'fill' | 'inline';
   enableComments?: boolean;
+  enableSelectionActions?: boolean;
 }
 
 /**
@@ -470,6 +474,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   wrapLines,
   layout = 'fill',
   enableComments = true,
+  enableSelectionActions = true,
 }) => {
   const themeContext = useOptionalThemeSystem();
 
@@ -478,6 +483,13 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const darkTheme = themeContext?.availableThemes.find(t => t.metadata.id === themeContext.darkThemeId) ?? getDefaultTheme(true);
 
   const { isMobile } = useDeviceInfo();
+  const addCodeSelectionAttachment = useInputStore((state) => state.addCodeSelectionAttachment);
+  const setPendingInputText = useInputStore((state) => state.setPendingInputText);
+  const [selectionAction, setSelectionAction] = React.useState<{
+    range: SelectedLineRange;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const diffCommentController = useInlineCommentController<SelectedLineRange>({
     source: 'diff',
@@ -581,6 +593,41 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const handleSaveComment = useCallback((textToSave: string, rangeOverride?: SelectedLineRange) => {
     saveComment(textToSave, rangeOverride ?? selection ?? undefined);
   }, [saveComment, selection]);
+
+  const handleAddSelectionToChat = useCallback((range: SelectedLineRange) => {
+    if (!fileName) return;
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    const lineRange = start === end ? `${start}` : `${start}-${end}`;
+    const code = extractSelectedCode(original, modified, fileDiff, range);
+    if (!code) return;
+
+    const displayFileName = fileName.replace(/\\/g, '/').split('/').pop() || fileName;
+    const attachmentLabel = `${displayFileName}:${lineRange}`;
+    void addCodeSelectionAttachment(fileName, attachmentLabel, code);
+    setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
+    useUIStore.getState().setActiveMainTab('chat');
+  }, [addCodeSelectionAttachment, fileDiff, fileName, modified, original, setPendingInputText]);
+
+  useEffect(() => {
+    if (!enableSelectionActions) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'i') {
+        return;
+      }
+      const currentSelection = selectionAction?.range ?? selectionRef.current;
+      if (!currentSelection) return;
+      event.preventDefault();
+      handleAddSelectionToChat(currentSelection);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [enableSelectionActions, handleAddSelectionToChat, selectionAction]);
+
+  useEffect(() => {
+    setSelectionAction(null);
+  }, [fileName, fileDiff, original, modified]);
 
 
   const applySelection = useCallback((range: SelectedLineRange) => {
@@ -1002,14 +1049,94 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
           end: lineNumber,
           side,
         });
+        if (enableSelectionActions) {
+          const rect = numberCell.getBoundingClientRect();
+          const lineType = numberCell.closest('[data-line-type]')?.getAttribute('data-line-type');
+          const codeLine = Array.from(shadowRoot.querySelectorAll<HTMLElement>(`[data-line="${lineNumber}"]`))
+            .find((line) => !lineType || line.getAttribute('data-line-type') === lineType);
+          setSelectionAction({
+            range: { start: lineNumber, end: lineNumber, side },
+            x: Math.min(window.innerWidth - 240, Math.max(8, codeLine?.getBoundingClientRect().left ?? rect.right + 12)),
+            y: rect.top - 8,
+          });
+        }
 
         event.preventDefault();
         event.stopPropagation();
       };
 
+      const resolveSelectionEndpoint = (node: Node, x: number) => {
+        const element = node instanceof Element ? node : node.parentElement;
+        const row = element?.closest('[data-line]');
+        if (!(row instanceof HTMLElement)) return null;
+
+        const rowLineNumber = Number.parseInt(row.getAttribute('data-line') ?? '', 10);
+        if (Number.isFinite(rowLineNumber)) {
+          return {
+            lineNumber: rowLineNumber,
+            side: resolveClickedSide(row),
+            lineStartX: row.getBoundingClientRect().left,
+          };
+        }
+
+        const cells = Array.from(row.querySelectorAll<HTMLElement>('[data-column-number]'));
+        if (cells.length === 0) return null;
+        const numberCell = cells.reduce((closest, candidate) => {
+          const closestDistance = Math.abs(closest.getBoundingClientRect().right - x);
+          const candidateDistance = Math.abs(candidate.getBoundingClientRect().right - x);
+          return candidateDistance < closestDistance ? candidate : closest;
+        });
+        const lineNumber = Number.parseInt(numberCell.getAttribute('data-column-number') ?? '', 10);
+        if (!Number.isFinite(lineNumber)) return null;
+        return {
+          lineNumber,
+          side: resolveClickedSide(numberCell),
+          lineStartX: numberCell.getBoundingClientRect().right + 12,
+        };
+      };
+
+      const onPointerUp = () => {
+        if (!enableSelectionActions) return;
+        window.requestAnimationFrame(() => {
+          const shadowSelection = (shadowRoot as ShadowRoot & { getSelection?: () => Selection | null }).getSelection?.();
+          const selection = shadowSelection?.rangeCount ? shadowSelection : window.getSelection();
+          if (!selection) return;
+          const composed = selection.getComposedRanges?.({ shadowRoots: [shadowRoot] })[0];
+          const range = document.createRange();
+          if (composed) {
+            range.setStart(composed.startContainer, composed.startOffset);
+            range.setEnd(composed.endContainer, composed.endOffset);
+          } else if (selection.rangeCount > 0) {
+            const selectedRange = selection.getRangeAt(0);
+            range.setStart(selectedRange.startContainer, selectedRange.startOffset);
+            range.setEnd(selectedRange.endContainer, selectedRange.endOffset);
+          } else {
+            return;
+          }
+          if (!range.toString().trim()) return;
+          const rect = range.getBoundingClientRect();
+          const start = resolveSelectionEndpoint(range.startContainer, rect.left);
+          const end = resolveSelectionEndpoint(range.endContainer, rect.right);
+          if (!start || !end || start.side !== end.side) return;
+          setSelectionAction({
+            range: {
+              start: start.lineNumber,
+              end: end.lineNumber,
+              side: start.side,
+            },
+            x: Math.min(window.innerWidth - 240, Math.max(8, start.lineStartX)),
+            y: Math.max(8, rect.top - 8),
+          });
+        });
+      };
+
       shadowRoot.addEventListener('click', onClickCapture, true);
+      shadowRoot.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointerup', onPointerUp, true);
       cleanup = () => {
         shadowRoot.removeEventListener('click', onClickCapture, true);
+        shadowRoot.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointerup', onPointerUp, true);
       };
     };
 
@@ -1021,7 +1148,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       }
       cleanup();
     };
-  }, [diffThemeKey, enableComments, fileName, handleSelectionChange, resolveClickedSide]);
+  }, [diffThemeKey, enableComments, enableSelectionActions, fileName, handleSelectionChange, resolveClickedSide]);
 
   // MutationObserver to trigger re-renders when annotation DOM nodes are added/removed
   useEffect(() => {
@@ -1084,6 +1211,18 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         startEdit(draft);
       }}
       onDelete={deleteDraft}
+      onAddToChat={enableSelectionActions ? handleAddSelectionToChat : undefined}
+    />
+  ) : null;
+
+  const selectionActionBubble = enableSelectionActions && selectionAction ? (
+    <CodeSelectionActionBubble
+      position={selectionAction}
+      onAddToChat={() => {
+        handleAddSelectionToChat(selectionAction.range);
+        setSelectionAction(null);
+        window.getSelection()?.removeAllRanges();
+      }}
     />
   ) : null;
 
@@ -1102,6 +1241,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             </div>
           </ScrollableOverlay>
           {commentOverlays}
+          {selectionActionBubble}
         </div>
       </div>
     );
@@ -1111,9 +1251,10 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   return (
     <div className={cn("relative", "w-full")}>
       <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible relative">
-      <div ref={diffContainerRef} className="w-full" />
+        <div ref={diffContainerRef} className="w-full" />
     </div>
     {commentOverlays}
+    {selectionActionBubble}
   </div>
   );
 };

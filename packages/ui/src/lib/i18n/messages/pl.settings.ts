@@ -1,4 +1,11 @@
 export const settingsDict = {
+  'settings.globalConfig.title': 'Konfiguracja globalna',
+  'settings.globalConfig.description': 'Edytuj aktywne pliki konfiguracji w ~/.config/opencode.',
+  'settings.globalConfig.actions.reload': 'Wczytaj plik ponownie',
+  'settings.globalConfig.restartHint': 'Uruchom ponownie OpenCode po zapisaniu, aby zastosowac zmiany.',
+  'settings.globalConfig.toast.loadFailed': 'Nie udalo sie wczytac pliku konfiguracji',
+  'settings.globalConfig.toast.saveFailed': 'Nie udalo sie zapisac pliku konfiguracji',
+  'settings.globalConfig.toast.saved': 'Konfiguracja zapisana. Uruchom ponownie OpenCode, aby ja zastosowac.',
   'settings.appearance.language.label': 'Język',
   'settings.appearance.language.description': 'Wybierz język interfejsu.',
   'settings.agents.modelSelector.actions.addToFavorites': 'Dodaj do ulubionych',
@@ -935,6 +942,7 @@ export const settingsDict = {
   'settings.openchamber.visual.actions.restarting': 'Ponowne uruchamianie…',
   'settings.openchamber.visual.actions.reloadingThemes': 'Przeładowywanie motywów...',
   'settings.openchamber.visual.actions.resetCodeFontAria': 'Zresetuj czcionkę kodu',
+  'settings.openchamber.visual.actions.resetCodeFontSizeAria': 'Zresetuj rozmiar czcionki kodu',
   'settings.openchamber.visual.actions.resetFontSizeAria': 'Zresetuj rozmiar czcionki',
   'settings.openchamber.visual.actions.resetInputBarOffsetAria': 'Zresetuj przesunięcie paska wpisywania',
   'settings.openchamber.visual.actions.resetInstallAppNameAria': 'Zresetuj nazwę aplikacji instalacyjnej',
@@ -945,6 +953,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.activityDefaultModeAria': 'Domyślny tryb aktywności: {option}',
   'settings.openchamber.visual.field.bash': 'Bash',
   'settings.openchamber.visual.field.codeFont': 'Czcionka kodu',
+  'settings.openchamber.visual.field.codeFontSize': 'Rozmiar czcionki kodu',
+  'settings.openchamber.visual.field.codeFontSizePercentageAria': 'Procentowy rozmiar czcionki kodu',
   'settings.openchamber.visual.field.darkTheme': 'Ciemny motyw',
   'settings.openchamber.visual.field.diffLayoutAria': 'Układ diffa: {option}',
 

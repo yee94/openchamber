@@ -12,6 +12,7 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { useDeviceInfo } from '@/lib/device';
+import { isCodeSelectionFilePart } from './attachmentCitations';
 
 import type { ToolPopupContent } from './message/types';
 
@@ -367,7 +368,7 @@ export const AttachedVSCodeFileChips = memo(({ onShowPopup }: AttachedFilesListP
   const attachedFiles = useInputStore((state) => state.attachedFiles);
   const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
 
-  const vscodeFiles = attachedFiles.filter((file) => file.source === 'vscode');
+  const vscodeFiles = attachedFiles.filter((file) => file.source === 'vscode' && file.vscodeSource === 'file');
 
   if (vscodeFiles.length === 0) return null;
 
@@ -453,6 +454,7 @@ export const ActiveEditorFileSuggestion = memo(() => {
   const attachedFiles = useInputStore((s) => s.attachedFiles)
   const addVSCodeFileAttachment = useInputStore((s) => s.addVSCodeFileAttachment)
   const addVSCodeSelectionAttachment = useInputStore((s) => s.addVSCodeSelectionAttachment)
+  const setPendingInputText = useInputStore((s) => s.setPendingInputText)
   const isVSCodeRuntime = useRuntimeAPIs().runtime.isVSCode;
 
   if (!isVSCodeRuntime || !activeEditorFile) return null;
@@ -485,6 +487,7 @@ export const ActiveEditorFileSuggestion = memo(() => {
 
   const handleAddFile = () => {
     addVSCodeFileAttachment(filePath, fileName, fileSize);
+    setPendingInputText(`[${fileName}]`, 'append-inline');
   };
 
   const handlePinSelection = async () => {
@@ -492,6 +495,7 @@ export const ActiveEditorFileSuggestion = memo(() => {
     const blob = new Blob([selection.text], { type: 'text/plain' });
     const file = new File([blob], selectionLabel, { type: 'text/plain' });
     await addVSCodeSelectionAttachment(filePath, file);
+    setPendingInputText(`[${selectionLabel}]`, 'append-inline');
   };
 
   // If there is a selection, prefer showing the pin-selection UI only.
@@ -577,7 +581,11 @@ interface MessageFilesDisplayProps {
 export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }: MessageFilesDisplayProps) => {
   const { t } = useI18n();
 
-  const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
+  const fileItems = files.filter(f => (
+    f.type === 'file'
+    && (f.mime || f.url)
+    && !isCodeSelectionFilePart(f)
+  ));
 
   const extractFilename = (path?: string): string => {
     if (!path) return 'Unnamed file';

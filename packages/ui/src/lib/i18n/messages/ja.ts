@@ -1836,6 +1836,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.initDescription': 'AGENTS.mdファイルを作成/更新',
   'chat.commandAutocomplete.command.undoDescription': '最後のメッセージを元に戻す',
   'chat.commandAutocomplete.command.redoDescription': '元に戻したメッセージをやり直す',
+  'chat.commandAutocomplete.command.forkDescription': '現在の会話状態から新しいセッションをフォークする',
   'chat.commandAutocomplete.command.timelineDescription': '会話タイムラインを開く',
   'chat.commandAutocomplete.command.modelDescription': 'モデルセレクターを開く',
   'chat.commandAutocomplete.command.compactDescription': 'AIを使用してセッション履歴を圧縮しコンテキストサイズを削減',

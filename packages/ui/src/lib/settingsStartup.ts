@@ -8,17 +8,23 @@ type SettingsStartupDependencies = {
 
 const hydrationByRuntime = new Map<string, Promise<boolean>>();
 
+export const getSettingsHydrationPromise = (runtimeKey: string): Promise<boolean> | null => {
+  return hydrationByRuntime.get(runtimeKey) ?? null;
+};
+
 export const ensureSettingsHydrated = ({
   runtimeKey,
   initializeAppearance,
   syncSettings,
   applyDirectory,
   onError,
-}: SettingsStartupDependencies): Promise<boolean> => {
+}: SettingsStartupDependencies, options: { force?: boolean } = {}): Promise<boolean> => {
   const existing = hydrationByRuntime.get(runtimeKey);
-  if (existing) return existing;
+  if (existing && !options.force) return existing;
 
   const hydration = (async () => {
+    if (existing) await existing;
+
     try {
       await initializeAppearance();
     } catch (error) {

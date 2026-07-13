@@ -89,6 +89,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   const { t } = useI18n();
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
+  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
   const isTreeView = gitChangesViewMode === 'tree';
 
   const visibleGroups = React.useMemo(() => groups.filter((group) => group.entries.length > 0), [groups]);
@@ -103,15 +104,23 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     [visibleGroups]
   );
 
-  // Auto-expand every top-level directory the first time it appears (mirrors prior
-  // ChangesSection behavior) while preserving user-collapsed nested directories.
-  const topLevelDirectoryKeys = React.useMemo(() => {
-    const keys: string[] = [];
+  const directoryKeysByGroup = React.useMemo(() => {
+    const keys = new Map<string, string[]>();
+
     visibleGroups.forEach((group, index) => {
-      Array.from(trees[index]?.children.values() ?? []).forEach((directory) => {
-        keys.push(expandedKey(group.id, directory.path));
-      });
+      const groupKeys: string[] = [];
+      const collect = (directory: ChangesTreeDirectoryNode) => {
+        directory.children.forEach((child) => {
+          groupKeys.push(expandedKey(group.id, child.path));
+          collect(child);
+        });
+      };
+
+      const tree = trees[index];
+      if (tree) collect(tree);
+      keys.set(group.id, groupKeys);
     });
+
     return keys;
   }, [trees, visibleGroups]);
 
@@ -120,18 +129,17 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       return;
     }
     setExpandedDirectories((previous) => {
+      const allDirectoryKeys = new Set(Array.from(directoryKeysByGroup.values()).flat());
       const next = new Set<string>();
-      const topLevel = new Set(topLevelDirectoryKeys);
       previous.forEach((key) => {
-        const path = key.slice(key.indexOf(' ') + 1);
-        if (path.includes('/') || topLevel.has(key)) {
+        if (allDirectoryKeys.has(key)) {
           next.add(key);
         }
       });
-      topLevelDirectoryKeys.forEach((key) => next.add(key));
+      allDirectoryKeys.forEach((key) => next.add(key));
       return next;
     });
-  }, [isTreeView, topLevelDirectoryKeys]);
+  }, [directoryKeysByGroup, isTreeView]);
 
   const rows = React.useMemo<PanelRow[]>(() => {
     const result: PanelRow[] = [];
@@ -278,6 +286,24 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     });
   }, []);
 
+  const expandAllDirectories = React.useCallback((groupId: string) => {
+    const directoryKeys = directoryKeysByGroup.get(groupId) ?? [];
+    setExpandedDirectories((previous) => {
+      const next = new Set(previous);
+      directoryKeys.forEach((key) => next.add(key));
+      return next;
+    });
+  }, [directoryKeysByGroup]);
+
+  const collapseAllDirectories = React.useCallback((groupId: string) => {
+    const directoryKeys = directoryKeysByGroup.get(groupId) ?? [];
+    setExpandedDirectories((previous) => {
+      const next = new Set(previous);
+      directoryKeys.forEach((key) => next.delete(key));
+      return next;
+    });
+  }, [directoryKeysByGroup]);
+
   // Every distinct changed path across groups (a partially-staged file appears in
   // both, so dedupe). One revert-all discards all working-tree changes at once.
   const allChangePaths = React.useMemo(() => {
@@ -310,10 +336,19 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     (group: ChangesGroupConfig, isFirst: boolean) => {
       const collapsed = collapsedGroups.has(group.id);
       const count = group.entries.length;
+      const groupDirectoryKeys = directoryKeysByGroup.get(group.id) ?? [];
+      const allDirectoriesExpanded = groupDirectoryKeys.length > 0
+        && groupDirectoryKeys.every((key) => expandedDirectories.has(key));
+      const toggleAllLabel = allDirectoriesExpanded
+        ? t('diffView.actions.collapseAll')
+        : t('diffView.actions.expandAll');
+      const toggleViewLabel = isTreeView
+        ? t('settings.openchamber.git.option.flatList')
+        : t('settings.openchamber.git.option.treeView');
       return (
         <div
           className={cn(
-            'sticky top-0 z-10 flex items-center gap-2 py-2',
+            'sticky top-0 z-10 flex items-center gap-1.5 py-1.5',
             headerBackgroundClassName,
             ROW_PADDING_CLASSNAME,
             !isFirst && 'mt-1 border-t border-border/40'
@@ -321,34 +356,68 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
         >
           <button
             type="button"
-            onClick={() => group.onActionAll(group.entries.map((entry) => entry.path))}
-            className="flex size-5 shrink-0 items-center justify-center rounded typography-micro font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
-            aria-label={group.actionAllLabel}
-            title={group.actionAllLabel}
-          >
-            {group.actionSymbol}
-          </button>
-
-          <button
-            type="button"
             onClick={() => toggleGroupCollapsed(group.id)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
             aria-expanded={!collapsed}
           >
-            <h3 className="truncate typography-ui-header font-semibold text-foreground">{group.title}</h3>
-            <span className="typography-meta text-muted-foreground">{count}</span>
+            <h3 className="truncate typography-ui-label font-semibold text-foreground">{group.title}</h3>
+            <span className="typography-code text-muted-foreground">{count}</span>
             <Icon
               name="arrow-down-s"
               className={cn(
-                'size-3.5 shrink-0 text-muted-foreground transition-transform',
+                'size-3 shrink-0 text-muted-foreground transition-transform',
                 collapsed && '-rotate-90'
               )}
             />
           </button>
+          {isTreeView ? (
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  if (allDirectoriesExpanded) {
+                    collapseAllDirectories(group.id);
+                    return;
+                  }
+                  expandAllDirectories(group.id);
+                }}
+                className="h-6 gap-1 px-1.5 typography-code text-muted-foreground hover:text-foreground"
+                aria-label={toggleAllLabel}
+                title={toggleAllLabel}
+              >
+                <Icon name="expand-up-down" className="size-3" />
+                {toggleAllLabel}
+              </Button>
+            </div>
+          ) : null}
+          <div className="flex shrink-0 items-center" role="group" aria-label={t('settings.openchamber.git.changesViewAria')}>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setGitChangesViewMode(isTreeView ? 'flat' : 'tree')}
+              aria-label={toggleViewLabel}
+              title={toggleViewLabel}
+              aria-pressed={isTreeView}
+              className="size-6 bg-transparent p-0 text-muted-foreground hover:text-foreground"
+            >
+              <Icon name={isTreeView ? 'node-tree' : 'list-unordered'} className="size-3.5" />
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => group.onActionAll(group.entries.map((entry) => entry.path))}
+            className="size-6 bg-transparent p-0 typography-code font-semibold text-muted-foreground hover:text-foreground"
+            aria-label={group.actionAllLabel}
+            title={group.actionAllLabel}
+          >
+            {group.actionSymbol}
+          </Button>
         </div>
       );
     },
-    [collapsedGroups, headerBackgroundClassName, toggleGroupCollapsed]
+    [collapseAllDirectories, collapsedGroups, directoryKeysByGroup, expandAllDirectories, expandedDirectories, headerBackgroundClassName, isTreeView, setGitChangesViewMode, t, toggleGroupCollapsed]
   );
 
   const renderDirectory = React.useCallback(
@@ -358,13 +427,13 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       const isDirectoryReverting = isRevertingAll || directoryPaths.some((path) => revertingPaths.has(path));
       return (
         <div
-          className={cn('group flex items-center gap-2 py-1.5', ROW_PADDING_CLASSNAME)}
+          className={cn('group flex items-center gap-1.5 py-1', ROW_PADDING_CLASSNAME)}
           style={{ paddingLeft: `${depth * TREE_INDENT_PX}px` }}
         >
           <button
             type="button"
             onClick={() => toggleDirectoryExpanded(group.id, directory.path)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={
               isExpanded
                 ? t('gitView.changes.collapseDirectoryAria', { path: directory.path })
@@ -372,14 +441,14 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
             }
           >
             {isExpanded ? (
-              <Icon name="folder-open-fill" className="h-4 w-4 flex-shrink-0 text-primary/60" />
+              <Icon name="folder-open-fill" className="h-3.5 w-3.5 flex-shrink-0 text-primary/60" />
             ) : (
-              <Icon name="folder-3-fill" className="h-4 w-4 flex-shrink-0 text-primary/60" />
+              <Icon name="folder-3-fill" className="h-3.5 w-3.5 flex-shrink-0 text-primary/60" />
             )}
-            <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground" title={directory.path}>
+            <span className="min-w-0 flex-1 truncate typography-code text-foreground" title={directory.path}>
               {directory.name}
             </span>
-            <span className="ml-auto shrink-0 typography-micro text-muted-foreground">{directory.files.length}</span>
+            <span className="ml-auto shrink-0 typography-code text-muted-foreground">{directory.files.length}</span>
           </button>
           {group.showRevertActions !== false && onRevertDirectory ? (
             <button
@@ -400,7 +469,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
           <button
             type="button"
             onClick={() => group.onActionAll(directory.files.map((file) => file.path))}
-            className="flex size-5 shrink-0 items-center justify-center rounded typography-micro font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+            className="flex size-4 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
             aria-label={t(
               group.actionSymbol === '+' ? 'gitView.changes.stageDirectoryAria' : 'gitView.changes.unstageDirectoryAria',
               { path: directory.path }
@@ -461,12 +530,12 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
           isReverting={revertingPaths.has(file.path) || isRevertingAll}
           rowPaddingClassName={ROW_PADDING_CLASSNAME}
           indentPx={row.depth * TREE_INDENT_PX}
-          actionAtStart={!isTreeView}
+          actionAtStart={false}
           showRevert={group.showRevertActions !== false}
         />
       );
     },
-    [diffStats, isRevertingAll, isTreeView, renderDirectory, renderHeader, revertingPaths, t, visibleGroups]
+    [diffStats, isRevertingAll, renderDirectory, renderHeader, revertingPaths, t, visibleGroups]
   );
 
   // A divider is drawn above a file/directory row only when the row directly above

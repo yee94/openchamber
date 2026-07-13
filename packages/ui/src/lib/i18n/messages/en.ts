@@ -1840,6 +1840,7 @@ export const dict = {
   'chat.commandAutocomplete.command.initDescription': 'Create/update AGENTS.md file',
   'chat.commandAutocomplete.command.undoDescription': 'Undo the last message',
   'chat.commandAutocomplete.command.redoDescription': 'Redo previously undone messages',
+  'chat.commandAutocomplete.command.forkDescription': 'Fork the current conversation state into a new session',
   'chat.commandAutocomplete.command.timelineDescription': 'Open the conversation timeline',
   'chat.commandAutocomplete.command.modelDescription': 'Open the model selector',
   'chat.commandAutocomplete.command.compactDescription': 'Compress session history using AI to reduce context size',

@@ -309,6 +309,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const { t } = useI18n();
     const { isReady, isUnavailable } = useOpenCodeReadiness();
     const readinessLabel = isUnavailable ? t('common.unavailable') : t('common.loading');
+    const isProviderConfigLoading = useConfigStore((state) => (
+        state.providerConfigLoadingByDirectory[state.activeDirectoryKey] === true
+    ));
+    const isAgentConfigLoading = useConfigStore((state) => (
+        state.agentConfigLoadingByDirectory[state.activeDirectoryKey] === true
+    ));
+    const isModelControlReady = isReady && !isProviderConfigLoading;
+    const isAgentControlReady = isReady && !isAgentConfigLoading;
+    const areModelControlsReady = isModelControlReady && isAgentControlReady;
     const providers = useConfigStore((state) => state.providers);
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
     const currentModelId = useConfigStore((state) => state.currentModelId);
@@ -333,7 +342,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const tracedReadyRef = React.useRef(false);
 
     React.useEffect(() => {
-        if (tracedReadyRef.current || !isReady) return;
+        if (tracedReadyRef.current || !areModelControlsReady) return;
         tracedReadyRef.current = true;
         markStartupTrace('ModelControls:ready', {
             providers: providers.length,
@@ -342,7 +351,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             currentModelId,
             currentAgentName,
         });
-    }, [agents.length, currentAgentName, currentModelId, currentProviderId, isReady, providers.length]);
+    }, [agents.length, areModelControlsReady, currentAgentName, currentModelId, currentProviderId, providers.length]);
 
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
@@ -2299,7 +2308,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return (
             <Tooltip open={agentMenuOpen ? false : modelTooltipOpen} onOpenChange={handleModelTooltipOpenChange} delayDuration={600}>
                 {!isCompact ? (
-                    <DropdownMenu open={isReady && agentMenuOpen} onOpenChange={isReady ? handleModelMenuOpenChange : undefined}>
+                    <DropdownMenu open={isModelControlReady && agentMenuOpen} onOpenChange={isModelControlReady ? handleModelMenuOpenChange : undefined}>
                         <TooltipTrigger asChild>
                             <DropdownMenuTrigger asChild>
                                 <div
@@ -2308,7 +2317,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         COMPOSER_TRIGGER_CHROME_CLASS,
                                     )}
                                 >
-                                    {!isReady ? (
+                                    {!isModelControlReady ? (
                                         <>
                                             <Icon name="loader-4" className={cn(controlIconSize, 'animate-spin text-muted-foreground flex-shrink-0')} />
                                             <span className={cn(
@@ -2331,7 +2340,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     ) : (
                                         <Icon name="pencil-ai" className={cn(controlIconSize, 'text-muted-foreground')} />
                                     )}
-                                    {isReady && (
+                                    {isModelControlReady && (
                                         <span
                                             ref={modelLabelRef}
                                             key={`${currentProviderId}-${currentModelId}`}
@@ -2418,17 +2427,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 ) : (
                     <button
                         type="button"
-                        onClick={isReady ? () => setActiveMobilePanel('model') : undefined}
-                        onTouchStart={isReady ? () => handleLongPressStart('model') : undefined}
-                        onTouchEnd={isReady ? handleLongPressEnd : undefined}
-                        onTouchCancel={isReady ? handleLongPressEnd : undefined}
-                        disabled={!isReady}
+                        onClick={isModelControlReady ? () => setActiveMobilePanel('model') : undefined}
+                        onTouchStart={isModelControlReady ? () => handleLongPressStart('model') : undefined}
+                        onTouchEnd={isModelControlReady ? handleLongPressEnd : undefined}
+                        onTouchCancel={isModelControlReady ? handleLongPressEnd : undefined}
+                        disabled={!isModelControlReady}
                         className={cn(
                             'model-controls__model-trigger min-w-0 focus:outline-none',
-                            isReady ? cn('cursor-pointer', COMPOSER_TRIGGER_CHROME_CLASS) : 'opacity-60 cursor-not-allowed',
+                            isModelControlReady ? cn('cursor-pointer', COMPOSER_TRIGGER_CHROME_CLASS) : 'opacity-60 cursor-not-allowed',
                         )}
                     >
-                        {!isReady ? (
+                        {!isModelControlReady ? (
                             <>
                                 <Icon name="loader-4" className={cn(controlIconSize, 'animate-spin text-muted-foreground flex-shrink-0')} />
                                 <span className="typography-micro font-medium text-muted-foreground min-w-0">
@@ -2594,7 +2603,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     };
 
     const renderVariantSelector = () => {
-        if (!isReady || !hasVariants) {
+        if (!isModelControlReady || !hasVariants) {
             return null;
         }
 
@@ -2695,7 +2704,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return (
                 <div className="flex items-center gap-2 min-w-0">
                     <Tooltip delayDuration={600}>
-                        <DropdownMenu open={isReady && isAgentSelectorOpen} onOpenChange={isReady ? setAgentSelectorOpen : undefined}>
+                        <DropdownMenu open={isAgentControlReady && isAgentSelectorOpen} onOpenChange={isAgentControlReady ? setAgentSelectorOpen : undefined}>
                             <TooltipTrigger asChild>
                                 <DropdownMenuTrigger asChild>
                                     <div
@@ -2705,7 +2714,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             COMPOSER_ICON_HOVER_CLASS,
                                         )}
                                     >
-                                        {!isReady ? (
+                                        {!isAgentControlReady ? (
                                             <span className={cn('inline-flex items-center justify-center', agentIconButtonClass)}>
                                                 <Icon name="loader-4"
                                                     className={cn(
@@ -2806,18 +2815,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return (
             <button
                 type="button"
-                onClick={isReady ? () => setActiveMobilePanel('agent') : undefined}
-                onTouchStart={isReady ? () => handleLongPressStart('agent') : undefined}
-                onTouchEnd={isReady ? handleLongPressEnd : undefined}
-                onTouchCancel={isReady ? handleLongPressEnd : undefined}
-                disabled={!isReady}
+                onClick={isAgentControlReady ? () => setActiveMobilePanel('agent') : undefined}
+                onTouchStart={isAgentControlReady ? () => handleLongPressStart('agent') : undefined}
+                onTouchEnd={isAgentControlReady ? handleLongPressEnd : undefined}
+                onTouchCancel={isAgentControlReady ? handleLongPressEnd : undefined}
+                disabled={!isAgentControlReady}
                 className={cn(
                     'model-controls__agent-trigger inline-flex items-center flex-shrink-0 min-w-0 focus:outline-none',
                     COMPOSER_ICON_HOVER_CLASS,
-                    isReady ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed',
+                    isAgentControlReady ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed',
                 )}
             >
-                {!isReady ? (
+                {!isAgentControlReady ? (
                     <span className={cn('inline-flex items-center justify-center', agentIconButtonClass)}>
                         <Icon name="loader-4"
                             className={cn(

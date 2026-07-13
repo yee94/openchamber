@@ -157,6 +157,7 @@ const getModeLabel = (
   if (mode === 'chat') return t('contextPanel.mode.chat');
   if (mode === 'file') return t('contextPanel.mode.files');
   if (mode === 'diff') return t('contextPanel.mode.diff');
+  if (mode === 'file-diff') return t('contextPanel.mode.diff');
   if (mode === 'plan') return t('contextPanel.mode.plan');
   if (mode === 'preview') return t('contextPanel.mode.preview');
   if (mode === 'browser') return t('contextPanel.mode.browser');
@@ -228,6 +229,10 @@ const getTabLabel = (
     return t('contextPanel.mode.diff');
   }
 
+  if (tab.mode === 'file-diff') {
+    return getFileNameFromPath(tab.targetPath) || t('contextPanel.mode.diff');
+  }
+
   return getModeLabel(tab.mode, t);
 };
 
@@ -238,7 +243,7 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
       : undefined;
   }
 
-  if (tab.mode === 'diff') {
+  if (tab.mode === 'diff' || tab.mode === 'file-diff') {
     return <Icon name="arrow-left-right" className="h-3.5 w-3.5" />;
   }
 
@@ -2311,12 +2316,12 @@ export const ContextPanel: React.FC = () => {
   }, [tabs]);
 
   const handleDiffScopeChange = React.useCallback((nextScope: PendingDiffScope) => {
-    if (!directoryKey || activeTab?.mode !== 'diff') {
+    if (!directoryKey || (activeTab?.mode !== 'diff' && activeTab?.mode !== 'file-diff')) {
       return;
     }
 
     openContextPanelTab(directoryKey, {
-      mode: 'diff',
+      mode: activeTab.mode,
       targetPath: activeTab.targetPath,
       stagedDiff: nextScope === 'staged',
       diffScope: nextScope,
@@ -2485,7 +2490,7 @@ export const ContextPanel: React.FC = () => {
     [tabs],
   );
   const diffTabs = React.useMemo(
-    () => tabs.filter((tab) => tab.mode === 'diff'),
+    () => tabs.filter((tab) => tab.mode === 'diff' || tab.mode === 'file-diff'),
     [tabs],
   );
   const BrowserPane = isElectronBrowserRuntime() ? DesktopBrowserPane : IframeBrowserPane;
@@ -2675,10 +2680,12 @@ export const ContextPanel: React.FC = () => {
               onDiffScopeChange={handleDiffScopeChange}
               targetFilePath={tab.targetPath}
               flushContent
+              singleFileView={tab.mode === 'file-diff'}
+              preloadFullFiles={tab.mode === 'file-diff'}
             />
           </div>
         ))}
-        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' && activeTab?.mode !== 'diff' ? activeNonChatContent : null}
+        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' && activeTab?.mode !== 'diff' && activeTab?.mode !== 'file-diff' ? activeNonChatContent : null}
       </div>
     </aside>
   );

@@ -15,6 +15,7 @@ import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
+import { ShortcutKbd } from '@/components/ui/kbd';
 
 interface TextSelectionMenuProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -54,6 +55,49 @@ const BLOCK_TAGS = new Set([
 const normalizeLineBreaks = (value: string): string => value.replace(/\r\n?/g, '\n');
 
 const trimSelectionValue = (value: string): string => normalizeLineBreaks(value).trim();
+
+const isSelectionNodeWithinContainer = (container: HTMLElement, node: Node): boolean => {
+  if (container.contains(node)) {
+    return true;
+  }
+
+  const root = node instanceof ShadowRoot ? node : node.getRootNode();
+  return root instanceof ShadowRoot && container.contains(root.host);
+};
+
+const getOpenShadowRoots = (container: HTMLElement): ShadowRoot[] => {
+  const roots: ShadowRoot[] = [];
+  const visit = (root: ParentNode) => {
+    for (const element of root.querySelectorAll('*')) {
+      if (element.shadowRoot) {
+        roots.push(element.shadowRoot);
+        visit(element.shadowRoot);
+      }
+    }
+  };
+  visit(container);
+  return roots;
+};
+
+const getSelectionRangeWithinContainer = (selection: Selection, container: HTMLElement): Range | null => {
+  const shadowRoots = getOpenShadowRoots(container);
+  const composedRange = selection.getComposedRanges?.({ shadowRoots })[0];
+  if (composedRange) {
+    const range = document.createRange();
+    range.setStart(composedRange.startContainer, composedRange.startOffset);
+    range.setEnd(composedRange.endContainer, composedRange.endOffset);
+    if (isSelectionNodeWithinContainer(container, range.commonAncestorContainer)) {
+      return range;
+    }
+  }
+
+  if (selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  return isSelectionNodeWithinContainer(container, range.commonAncestorContainer) ? range : null;
+};
 
 const textToMarkdownInline = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
@@ -371,10 +415,8 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
       return;
     }
 
-    // Check if selection is within the container
-    const range = selection.getRangeAt(0);
-    
-    if (!container.contains(range.commonAncestorContainer)) {
+    const range = getSelectionRangeWithinContainer(selection, container);
+    if (!range) {
       if (!isDraggingRef.current) {
         hideMenu();
       }
@@ -410,25 +452,31 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     // Track when dragging stops
     const handleMouseUp = () => {
       isDraggingRef.current = false;
-      // Check if we have a pending selection to show
-      if (pendingSelectionRef.current) {
-        if (mouseUpTimeoutRef.current !== null) {
-          window.clearTimeout(mouseUpTimeoutRef.current);
-        }
-        // Small delay to ensure selection is finalized
-        mouseUpTimeoutRef.current = window.setTimeout(() => {
-          mouseUpTimeoutRef.current = null;
-          const selection = window.getSelection();
-          if (selection && selection.toString().trim()) {
-            showMenu();
-          } else {
-            hideMenu();
-          }
-        }, 10);
+      if (mouseUpTimeoutRef.current !== null) {
+        window.clearTimeout(mouseUpTimeoutRef.current);
+      }
+      // Read the finalized selection directly. Shadow-root selectionchange may
+      // finish after the document-level mouseup event.
+      mouseUpTimeoutRef.current = window.setTimeout(() => {
+        mouseUpTimeoutRef.current = null;
+        handleSelectionChange();
+      }, 10);
+    };
+
+    const shadowRoots = new Set<ShadowRoot>();
+    const bindShadowRootListeners = () => {
+      for (const root of getOpenShadowRoots(container)) {
+        if (shadowRoots.has(root)) continue;
+        shadowRoots.add(root);
+        root.addEventListener('selectionchange', handleSelectionChange);
       }
     };
 
-    // Listen for selection changes during drag
+    bindShadowRootListeners();
+    const shadowRootObserver = new MutationObserver(bindShadowRootListeners);
+    shadowRootObserver.observe(container, { childList: true, subtree: true });
+
+    // Listen on both the document and embedded diff shadow roots.
     document.addEventListener('selectionchange', handleSelectionChange);
     
     container.addEventListener('mousedown', handleMouseDown);
@@ -452,6 +500,10 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         window.clearTimeout(mouseUpTimeoutRef.current);
         mouseUpTimeoutRef.current = null;
       }
+      shadowRootObserver.disconnect();
+      for (const root of shadowRoots) {
+        root.removeEventListener('selectionchange', handleSelectionChange);
+      }
       document.removeEventListener('selectionchange', handleSelectionChange);
       container.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -459,17 +511,44 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     };
   }, [containerRef, handleSelectionChange, hideMenu, showMenu]);
 
-  const handleAddToChat = React.useCallback(() => {
-    if (!selectedTextMarkdown) return;
+  const addSelectionToChat = React.useCallback((markdownText: string) => {
+    if (!markdownText) return;
 
-    const markdownBlock = `\`\`\`md\n${selectedTextMarkdown}\n\`\`\``;
+    const markdownBlock = `\`\`\`md\n${markdownText}\n\`\`\``;
     setPendingInputText(markdownBlock, 'append');
-    
+
     hideMenu();
-    
-    // Clear selection
     window.getSelection()?.removeAllRanges();
-  }, [selectedTextMarkdown, setPendingInputText, hideMenu]);
+  }, [setPendingInputText, hideMenu]);
+
+  const handleAddToChat = React.useCallback(() => {
+    addSelectionToChat(selectedTextMarkdown);
+  }, [addSelectionToChat, selectedTextMarkdown]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'i') {
+        return;
+      }
+
+      const selection = window.getSelection();
+      const container = containerRef.current;
+      if (!selection || !container || !selection.toString().trim()) {
+        return;
+      }
+
+      const range = getSelectionRangeWithinContainer(selection, container);
+      if (!range) {
+        return;
+      }
+
+      event.preventDefault();
+      addSelectionToChat(rangeToMarkdown(range, selection.toString()));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addSelectionToChat, containerRef]);
 
   const handleCreateNewSession = React.useCallback(async () => {
     if (!selectedText) return;
@@ -673,6 +752,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         >
           <Icon name="add" className="h-4 w-4" />
           <span className="whitespace-nowrap">{t('chat.textSelection.actions.addToChat')}</span>
+          <ShortcutKbd shortcut="⌘+I" />
         </button>
       
         <div className="w-px h-4 bg-[var(--interactive-border)]" />

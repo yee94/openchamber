@@ -12,7 +12,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files' | 'context' | 'diagram';
 export type PendingDiffScope = 'working' | 'staged' | 'turn';
 export type RightSidebarTab = 'git' | 'files' | 'context';
-export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview' | 'browser';
+export type ContextPanelMode = 'diff' | 'file-diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview' | 'browser';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -201,7 +201,7 @@ const normalizeContextPanelTabDedupeKey = (
   targetPath: string | null,
   dedupeKey: string | null | undefined,
 ): string => {
-  if (mode === 'diff') {
+  if (mode === 'diff' || mode === 'file-diff') {
     return mode;
   }
 
@@ -281,7 +281,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       touchedAt?: unknown;
     };
 
-    if (candidate.mode !== 'diff' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'preview' && candidate.mode !== 'browser') {
+    if (candidate.mode !== 'diff' && candidate.mode !== 'file-diff' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'preview' && candidate.mode !== 'browser') {
       continue;
     }
 
@@ -476,7 +476,7 @@ const sanitizeContextPanelByDirectory = (
     let tabs = sanitizeContextPanelTabs(candidate.tabs);
     let activeTabId = typeof candidate.activeTabId === 'string' ? candidate.activeTabId : null;
 
-    if (tabs.length === 0 && (candidate.mode === 'diff' || candidate.mode === 'file' || candidate.mode === 'context' || candidate.mode === 'plan' || candidate.mode === 'chat')) {
+    if (tabs.length === 0 && (candidate.mode === 'diff' || candidate.mode === 'file-diff' || candidate.mode === 'file' || candidate.mode === 'context' || candidate.mode === 'plan' || candidate.mode === 'chat')) {
       tabs = [createContextPanelTab({
         mode: candidate.mode,
         targetPath: typeof candidate.targetPath === 'string' ? candidate.targetPath : null,
@@ -534,6 +534,7 @@ interface UIStore {
   hasManuallyResizedRightSidebar: boolean;
   rightSidebarTab: RightSidebarTab;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
+  contextPanelsOpenBeforeRightSidebarCollapse: string[];
   isBottomTerminalOpen: boolean;
   isBottomTerminalExpanded: boolean;
   bottomTerminalHeight: number;
@@ -586,6 +587,7 @@ interface UIStore {
   autoDeleteLastRunAt: number | null;
   messageLimit: number;
   fontSize: number;
+  codeFontSize: number;
   // Global draft welcome starters; null = unset (use the default built-in set).
   globalDraftStarters: DraftStarterRef[] | null;
   terminalFontSize: number;
@@ -672,6 +674,7 @@ interface UIStore {
   setRightSidebarTab: (tab: RightSidebarTab) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
+  openContextFileDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
   openContextOverview: (directory: string) => void;
@@ -742,6 +745,7 @@ interface UIStore {
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
   setMessageLimit: (value: number) => void;
   setFontSize: (size: number) => void;
+  setCodeFontSize: (size: number) => void;
   setGlobalDraftStarters: (refs: DraftStarterRef[]) => void;
   setTerminalFontSize: (size: number) => void;
   setUiFont: (font: UiFontOption) => void;
@@ -841,6 +845,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedRightSidebar: false,
         rightSidebarTab: 'git',
         contextPanelByDirectory: {},
+        contextPanelsOpenBeforeRightSidebarCollapse: [],
         isBottomTerminalOpen: false,
         isBottomTerminalExpanded: false,
         bottomTerminalHeight: 300,
@@ -891,6 +896,7 @@ export const useUIStore = create<UIStore>()(
         autoDeleteLastRunAt: null,
         messageLimit: 200,
         fontSize: 100,
+        codeFontSize: 100,
         globalDraftStarters: null,
         terminalFontSize: 13,
         uiFont: DEFAULT_UI_FONT,
@@ -909,7 +915,7 @@ export const useUIStore = create<UIStore>()(
         diffLayoutPreference: 'inline',
         diffFileLayout: {},
         diffWrapLines: false,
-        gitChangesViewMode: 'flat',
+        gitChangesViewMode: 'tree',
         isTimelineDialogOpen: false,
         isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
@@ -1012,13 +1018,46 @@ export const useUIStore = create<UIStore>()(
           set((state) => {
             const newOpen = !state.isRightSidebarOpen;
 
-            if (newOpen && !state.hasManuallyResizedRightSidebar) {
+            if (!newOpen) {
+              const openContextPanelDirectories = Object.entries(state.contextPanelByDirectory)
+                .filter(([, panel]) => panel.isOpen && panel.tabs.length > 0)
+                .map(([directory]) => directory);
+              const contextPanelByDirectory = openContextPanelDirectories.length === 0
+                ? state.contextPanelByDirectory
+                : Object.fromEntries(Object.entries(state.contextPanelByDirectory).map(([directory, panel]) => [
+                  directory,
+                  openContextPanelDirectories.includes(directory) ? { ...panel, isOpen: false } : panel,
+                ]));
+
               return {
-                isRightSidebarOpen: newOpen,
-                rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+                isRightSidebarOpen: false,
+                contextPanelByDirectory,
+                contextPanelsOpenBeforeRightSidebarCollapse: openContextPanelDirectories,
               };
             }
-            return { isRightSidebarOpen: newOpen };
+
+            const contextPanelByDirectory = state.contextPanelsOpenBeforeRightSidebarCollapse.length === 0
+              ? state.contextPanelByDirectory
+              : Object.fromEntries(Object.entries(state.contextPanelByDirectory).map(([directory, panel]) => [
+                directory,
+                state.contextPanelsOpenBeforeRightSidebarCollapse.includes(directory) && panel.tabs.length > 0
+                  ? { ...panel, isOpen: true }
+                  : panel,
+              ]));
+
+            if (!state.hasManuallyResizedRightSidebar) {
+              return {
+                isRightSidebarOpen: true,
+                rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+                contextPanelByDirectory,
+                contextPanelsOpenBeforeRightSidebarCollapse: [],
+              };
+            }
+            return {
+              isRightSidebarOpen: true,
+              contextPanelByDirectory,
+              contextPanelsOpenBeforeRightSidebarCollapse: [],
+            };
           });
         },
 
@@ -1078,6 +1117,22 @@ export const useUIStore = create<UIStore>()(
 
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'diff',
+            targetPath: normalizedFilePath,
+            stagedDiff: diffScope === 'staged',
+            diffScope,
+          });
+        },
+
+        openContextFileDiff: (directory, filePath, staged = false, scope = null) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          const normalizedFilePath = (filePath || '').trim();
+          if (!normalizedDirectory || !normalizedFilePath) {
+            return;
+          }
+
+          const diffScope = normalizePendingDiffScope(scope) ?? (staged ? 'staged' : 'working');
+          get().openContextPanelTab(normalizedDirectory, {
+            mode: 'file-diff',
             targetPath: normalizedFilePath,
             stagedDiff: diffScope === 'staged',
             diffScope,
@@ -1670,6 +1725,12 @@ export const useUIStore = create<UIStore>()(
           get().applyTypography();
         },
 
+        setCodeFontSize: (size) => {
+          const clampedSize = Math.max(50, Math.min(200, size));
+          set({ codeFontSize: clampedSize });
+          get().applyTypography();
+        },
+
         setGlobalDraftStarters: (refs) => {
           set({ globalDraftStarters: refs });
         },
@@ -1700,16 +1761,17 @@ export const useUIStore = create<UIStore>()(
         },
 
         applyTypography: () => {
-          const { fontSize } = get();
+          const { fontSize, codeFontSize } = get();
           const root = document.documentElement;
 
           // 100 = default (1.0x), 50 = half size (0.5x), 200 = double (2.0x)
           const scale = fontSize / 100;
+          const codeScale = codeFontSize / 100;
 
           const entries = Object.entries(SEMANTIC_TYPOGRAPHY) as Array<[SemanticTypographyKey, string]>;
 
           // Default must be SEMANTIC_TYPOGRAPHY (from CSS). Remove overrides.
-          if (scale === 1) {
+          if (scale === 1 && codeScale === 1) {
             for (const [key] of entries) {
               root.style.removeProperty(getTypographyVariable(key));
             }
@@ -1721,7 +1783,12 @@ export const useUIStore = create<UIStore>()(
             if (!Number.isFinite(numericValue)) {
               continue;
             }
-            root.style.setProperty(getTypographyVariable(key), `${numericValue * scale}rem`);
+            const typographyScale = key === 'code' ? codeScale : scale;
+            if (typographyScale === 1) {
+              root.style.removeProperty(getTypographyVariable(key));
+              continue;
+            }
+            root.style.setProperty(getTypographyVariable(key), `${numericValue * typographyScale}rem`);
           }
         },
 
@@ -2281,7 +2348,7 @@ export const useUIStore = create<UIStore>()(
 
           if (version < 8) {
             if (state.gitChangesViewMode !== 'flat' && state.gitChangesViewMode !== 'tree') {
-              state.gitChangesViewMode = 'flat';
+              state.gitChangesViewMode = 'tree';
             }
           }
 
@@ -2325,6 +2392,7 @@ export const useUIStore = create<UIStore>()(
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,
           messageLimit: state.messageLimit,
           fontSize: state.fontSize,
+          codeFontSize: state.codeFontSize,
           globalDraftStarters: state.globalDraftStarters,
           terminalFontSize: state.terminalFontSize,
           uiFont: state.uiFont,

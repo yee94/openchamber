@@ -108,6 +108,11 @@ const providerResponse = (id: string, modelId = `${id}-model`, variants?: Record
   },
 });
 
+let getProvidersForConfigImpl: ((directory?: string | null) => Promise<{
+  providers: ReturnType<typeof providerResponse>[];
+  default: Record<string, string>;
+}>) | null = null;
+
 const testAgent = (name: string, options?: Partial<TestAgent>): Agent => ({
   name,
   mode: options?.mode ?? 'primary',
@@ -182,6 +187,9 @@ mock.module('@/lib/opencode/client', () => ({
     }),
     getProvidersForConfig: mock(async (directory?: string | null) => {
       getProvidersCalls += 1;
+      if (getProvidersForConfigImpl) {
+        return getProvidersForConfigImpl(directory);
+      }
       const id = liveProviderIdsByDirectory.get(directory ?? '') ?? liveProviderId;
       return { providers: [providerResponse(id, `${id}-model`, liveProviderVariants)], default: { default: id } };
     }),
@@ -206,6 +214,7 @@ mock.module('@/lib/runtime-fetch', () => ({
   runtimeFetch: mock(async () => new Response(JSON.stringify({}), {
     headers: { 'Content-Type': 'application/json' },
   })),
+  setRuntimeInteractiveSessionRequestId: mock(() => undefined),
 }));
 
 mock.module('@/lib/persistence', () => ({
@@ -245,6 +254,7 @@ describe('useConfigStore provider persistence', () => {
     liveProviderId = 'live';
     liveProviderIdsByDirectory = new Map<string, string>();
     liveProviderVariants = undefined;
+    getProvidersForConfigImpl = null;
     getProvidersCalls = 0;
     getConfigCalls = 0;
     listAgentsCalls = 0;
@@ -263,6 +273,8 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       directoryScoped: {},
+      providerConfigLoadingByDirectory: {},
+      agentConfigLoadingByDirectory: {},
       providers: [],
       defaultProviders: {},
       currentProviderId: '',
@@ -904,6 +916,66 @@ describe('useConfigStore provider persistence', () => {
     expect(state.selectionSource).toBe('auto');
     expect(state.opencodeDefaultAgent).toBe('other-default');
     expect(state.opencodeDefaultModel).toBe('other/model');
+  });
+
+  test('directory activation exposes uncached provider and agent loading independently', async () => {
+    const pendingProviders = deferred<{ providers: ReturnType<typeof providerResponse>[]; default: Record<string, string> }>();
+    const pendingAgents = deferred<TestAgent[]>();
+    getProvidersForConfigImpl = () => pendingProviders.promise;
+    listAgentsImpl = () => pendingAgents.promise;
+
+    const activation = useConfigStore.getState().activateDirectory(OTHER_DIRECTORY);
+
+    expect(useConfigStore.getState().providerConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(true);
+    expect(useConfigStore.getState().agentConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(true);
+
+    const providerLoad = useConfigStore.getState().loadProviders({
+      directory: OTHER_DIRECTORY,
+      source: 'test:joinProviderLoad',
+    });
+    pendingProviders.resolve({ providers: [providerResponse('other')], default: {} });
+    await providerLoad;
+
+    expect(useConfigStore.getState().providerConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(false);
+    expect(useConfigStore.getState().agentConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(true);
+
+    const agentLoad = useConfigStore.getState().loadAgents({
+      directory: OTHER_DIRECTORY,
+      source: 'test:joinAgentLoad',
+    });
+    pendingAgents.resolve([testAgent('build')]);
+    await Promise.all([agentLoad, activation]);
+
+    expect(useConfigStore.getState().agentConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(false);
+  });
+
+  test('directory activation keeps cached provider and agent controls ready during refresh', async () => {
+    const pendingProviders = deferred<{ providers: ReturnType<typeof providerResponse>[]; default: Record<string, string> }>();
+    const pendingAgents = deferred<TestAgent[]>();
+    getProvidersForConfigImpl = () => pendingProviders.promise;
+    listAgentsImpl = () => pendingAgents.promise;
+    useConfigStore.setState({
+      directoryScoped: {
+        [OTHER_DIRECTORY]: {
+          providers: [provider('cached')],
+          agents: [testAgent('build')],
+          currentProviderId: 'cached',
+          currentModelId: 'cached-model',
+          currentAgentName: 'build',
+          selectedProviderId: 'cached',
+          agentModelSelections: {},
+          defaultProviders: {},
+        },
+      },
+    });
+
+    await useConfigStore.getState().activateDirectory(OTHER_DIRECTORY);
+
+    expect(useConfigStore.getState().providerConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(false);
+    expect(useConfigStore.getState().agentConfigLoadingByDirectory[OTHER_DIRECTORY]).toBe(false);
+
+    pendingProviders.resolve({ providers: [providerResponse('fresh')], default: {} });
+    pendingAgents.resolve([testAgent('review')]);
   });
 
   test('sync config without defaults clears stored OpenCode defaults without changing manual selection', () => {

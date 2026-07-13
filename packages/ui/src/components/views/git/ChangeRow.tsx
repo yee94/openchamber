@@ -108,7 +108,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
     <button
       type="button"
       onClick={handleActionClick}
-      className="flex size-5 shrink-0 items-center justify-center rounded typography-micro font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+      className="flex size-4 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
       aria-label={actionLabel}
       title={actionLabel}
     >
@@ -118,7 +118,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
 
   return (
     <div
-      className={`group flex items-center gap-2 py-1.5 cursor-pointer ${rowPaddingClassName ?? 'px-3'}`}
+      className={`group flex items-center gap-1.5 py-1 cursor-pointer ${rowPaddingClassName ?? 'px-3'}`}
       role="button"
       tabIndex={0}
       onClick={onViewDiff}
@@ -127,20 +127,20 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
     >
         {actionAtStart ? actionButton : null}
         <span
-          className="typography-micro font-semibold w-4 text-center uppercase"
+          className="typography-code font-semibold w-3.5 text-center uppercase"
           style={{ color: descriptor.color }}
           title={indicatorLabel}
           aria-label={indicatorLabel}
         >
           {descriptor.code}
         </span>
-        <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 shrink-0" />
+        <FileTypeIcon filePath={file.path} className="size-3 shrink-0" />
         {(() => {
           const lastSlash = file.path.lastIndexOf('/');
           if (lastSlash === -1) {
             return (
               <span
-                className="flex-1 min-w-0 truncate typography-ui-label text-foreground"
+                className="flex-1 min-w-0 truncate typography-code text-foreground"
                 style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
                 title={file.path}
               >
@@ -153,16 +153,16 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
           return (
             <span className="flex-1 min-w-0 flex items-baseline overflow-hidden" title={file.path}>
               <span
-                className="min-w-0 truncate typography-ui-label text-muted-foreground"
+                className="min-w-0 truncate typography-code text-muted-foreground"
                   style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
               >
                 {dir}
               </span>
-              <span className="flex-shrink-0 typography-ui-label"><span className="text-muted-foreground">/</span><span className="text-foreground">{name.slice(1)}</span></span>
+              <span className="flex-shrink-0 typography-code"><span className="text-muted-foreground">/</span><span className="text-foreground">{name.slice(1)}</span></span>
             </span>
           );
         })()}
-        <span className="shrink-0 typography-micro">
+        <span className="shrink-0 typography-code">
           <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>
           <span className="text-muted-foreground mx-0.5">/</span>
           <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>
@@ -174,13 +174,13 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
                 type="button"
                 onClick={handleRevertClick}
                 disabled={isReverting}
-                className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={t('gitView.changes.revertFileAria', { path: file.path })}
               >
                 {isReverting ? (
-                  <Icon name="loader-4" className="size-3.5 animate-spin" />
+                  <Icon name="loader-4" className="size-3 animate-spin" />
                 ) : (
-                  <Icon name="arrow-go-back" className="size-3.5" />
+                  <Icon name="arrow-go-back" className="size-3" />
                 )}
               </button>
             </TooltipTrigger>
