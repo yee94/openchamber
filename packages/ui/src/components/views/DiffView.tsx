@@ -214,7 +214,7 @@ const formatDiffTotals = (
     return (
         <span
             className={cn(
-                'typography-meta flex items-center gap-1 text-xs whitespace-nowrap',
+                'typography-code flex items-center gap-1 whitespace-nowrap',
                 options?.shrink ? 'min-w-0 overflow-hidden' : 'flex-shrink-0',
                 options?.className,
             )}
@@ -254,7 +254,7 @@ const ChangeScopeSelector = React.memo<ChangeScopeSelectorProps>(({
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
-                    className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md px-2 typography-ui-label font-semibold text-foreground outline-none hover:bg-interactive-hover focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md px-2 typography-code font-semibold text-foreground outline-none hover:bg-interactive-hover focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={t('diffView.scope.selectorAria')}
                 >
                     <span className="whitespace-nowrap">
@@ -324,15 +324,15 @@ const FileList = React.memo<FileListProps>(({
                                 type="button"
                                 onClick={() => onSelectFile(file.path)}
                                 className={cn(
-                                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+                                    'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors',
                                     isActive
                                         ? 'bg-interactive-selection text-interactive-selection-foreground'
                                         : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
                                 )}
                             >
-                                <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0" />
+                                <FileTypeIcon filePath={file.path} className="size-3 flex-shrink-0" />
                                 <span
-                                    className="typography-micro font-semibold w-4 text-center uppercase"
+                                    className="typography-code font-semibold w-3.5 text-center uppercase"
                                     style={{ color: descriptor.color }}
                                     title={t(descriptor.descriptionKey)}
                                     aria-label={t(descriptor.descriptionKey)}
@@ -340,7 +340,7 @@ const FileList = React.memo<FileListProps>(({
                                     {descriptor.code}
                                 </span>
                                 <span
-                                    className="min-w-0 flex-1 truncate typography-meta"
+                                    className="min-w-0 flex-1 truncate typography-code"
                                     style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
                                     title={file.path}
                                 >
@@ -455,6 +455,7 @@ const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
         renderSideBySide={renderSideBySide}
         wrapLines={wrapLines}
         layout="inline"
+        enableSelectionActions
       />
     </div>
   );
@@ -668,7 +669,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
         let cancelled = false;
         const contextLines = loadFullFiles ? FULL_CONTEXT_DIFF_LINES : DEFAULT_CONTEXT_DIFF_LINES;
-        const fetchPromise = isImageFile(file.path)
+        const fetchPromise = isImageFile(file.path) || loadFullFiles
             ? git.getGitFileDiff(directory, { path: file.path, staged })
             : git.getGitDiff(directory, { path: file.path, staged, contextLines });
         const timeoutMs = DIFF_REQUEST_TIMEOUT_MS;
@@ -766,23 +767,23 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                     }}
                     className={cn(
                         'cursor-pointer',
-                        'group/header relative grid min-h-9 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden px-3 py-2',
+                        'group/header relative grid min-h-8 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 overflow-hidden px-2 py-1',
                         'bg-transparent',
                         'text-muted-foreground hover:text-foreground',
                         isSelected ? 'bg-[var(--interactive-selection)]/35' : null
                     )}
                 >
                     <div className="absolute inset-0 pointer-events-none group-hover/header:bg-[var(--interactive-hover)]/50" />
-                    <div className="relative flex min-w-0 flex-1 items-center gap-2">
-                        <span className="flex size-5 items-center justify-center opacity-70 group-hover/header:opacity-100">
+                    <div className="relative flex min-w-0 flex-1 items-center gap-1.5">
+                        <span className="flex size-4 items-center justify-center opacity-70 group-hover/header:opacity-100">
                             {isExpanded ? (
-                                <Icon name="arrow-down-s" className="size-4" />
+                                <Icon name="arrow-down-s" className="size-3.5" />
                             ) : (
-                                <Icon name="arrow-right-s" className="size-4" />
+                                <Icon name="arrow-right-s" className="size-3.5" />
                             )}
                         </span>
                         <span
-                            className="typography-micro font-semibold leading-none w-4 text-center uppercase"
+                            className="typography-code font-semibold leading-none w-3.5 text-center uppercase"
                             style={{ color: descriptor.color }}
                             title={t(descriptor.descriptionKey)}
                             aria-label={t(descriptor.descriptionKey)}
@@ -790,17 +791,17 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                             {descriptor.code}
                         </span>
                         <span
-                            className="min-w-0 flex-1 overflow-hidden typography-ui-label"
+                            className="min-w-0 flex-1 overflow-hidden typography-code"
                             title={file.path}
                         >
-                            <span className="flex min-w-0 items-center gap-2">
-                                <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0 align-middle" />
+                            <span className="flex min-w-0 items-center gap-1.5">
+                                <FileTypeIcon filePath={file.path} className="size-3 flex-shrink-0 align-middle" />
                                 {(() => {
                                     const lastSlash = file.path.lastIndexOf('/');
                                     if (lastSlash === -1) {
                                         return (
                                             <span
-                                                className="block min-w-0 truncate typography-ui-label text-foreground"
+                                                className="block min-w-0 truncate typography-code text-foreground"
                                                 style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
                                             >
                                                 {file.path}
@@ -814,12 +815,12 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                                     return (
                                         <span className="flex min-w-0 items-baseline overflow-hidden">
                                             <span
-                                                className="min-w-0 truncate typography-ui-label text-muted-foreground"
+                                                className="min-w-0 truncate typography-code text-muted-foreground"
                                                 style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
                                             >
                                                 {dir}
                                             </span>
-                                            <span className="flex-shrink-0 typography-ui-label">
+                                            <span className="flex-shrink-0 typography-code">
                                                 <span className="text-muted-foreground">/</span>
                                                 <span className="text-foreground">{name}</span>
                                             </span>
@@ -829,7 +830,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                             </span>
                         </span>
                     </div>
-                    <div className="relative flex shrink-0 items-center justify-self-end gap-2">
+                    <div className="relative flex shrink-0 items-center justify-self-end gap-1.5">
                         {formatDiffTotals(file.insertions, file.deletions)}
                         {showOpenInEditorAction && onOpenInEditor ? (
                             <Button
@@ -944,6 +945,10 @@ interface DiffViewProps {
     targetFilePath?: string | null;
     /** Render diff content flush with the container edges (no outer padding). */
     flushContent?: boolean;
+    /** Render only the file selected by the surrounding context panel. */
+    singleFileView?: boolean;
+    /** Load complete file context when this view opens. */
+    preloadFullFiles?: boolean;
 }
 
 export const DiffView: React.FC<DiffViewProps> = ({
@@ -955,6 +960,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
     onDiffScopeChange,
     targetFilePath = null,
     flushContent = false,
+    singleFileView = false,
+    preloadFullFiles = false,
 }) => {
     const { t } = useI18n();
     const { git, files } = useRuntimeAPIs();
@@ -973,7 +980,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const [pinnedStackedTarget, setPinnedStackedTarget] = React.useState<string | null>(null);
     const [expandedFiles, setExpandedFiles] = React.useState<Set<string>>(() => new Set());
     const [mountedStackedFiles, setMountedStackedFiles] = React.useState<Set<string>>(() => new Set());
-    const [loadFullFiles, setLoadFullFiles] = React.useState(false);
+    const [loadFullFiles, setLoadFullFiles] = React.useState(preloadFullFiles);
     const [scrollRequestNonce, setScrollRequestNonce] = React.useState(0);
     const [reviewDialogOpen, setReviewDialogOpen] = React.useState(false);
     const [reviewFlowSubmitting, setReviewFlowSubmitting] = React.useState(false);
@@ -1108,6 +1115,19 @@ export const DiffView: React.FC<DiffViewProps> = ({
         [changedFiles],
     );
 
+    const visibleDiffFiles = React.useMemo(() => {
+        if (!singleFileView) {
+            return changedFiles;
+        }
+
+        const selectedPath = targetFilePath?.trim() || displayFile;
+        if (!selectedPath) {
+            return [];
+        }
+
+        return changedFiles.filter((file) => file.path === selectedPath);
+    }, [changedFiles, displayFile, singleFileView, targetFilePath]);
+
     React.useEffect(() => {
         const paths = changedFilePathsKey ? changedFilePathsKey.split('\0') : [];
         const pathSet = new Set(paths);
@@ -1227,11 +1247,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }, [diffFileLayout, diffLayoutPreference, screenWidth]);
 
     const currentLayoutForAllFiles = React.useMemo<'inline' | 'side-by-side' | null>(() => {
-        if (changedFiles.length === 0) return null;
-        return changedFiles.every((file) => getLayoutForFile(file) === 'side-by-side')
+        if (visibleDiffFiles.length === 0) return null;
+        return visibleDiffFiles.every((file) => getLayoutForFile(file) === 'side-by-side')
             ? 'side-by-side'
             : 'inline';
-    }, [changedFiles, getLayoutForFile]);
+    }, [getLayoutForFile, visibleDiffFiles]);
 
     // Ensure git status on mount
     React.useEffect(() => {
@@ -1481,10 +1501,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
         const nextLayout: 'inline' | 'side-by-side' =
             mode === 'side-by-side' ? 'side-by-side' : 'inline';
 
-        changedFiles.forEach((file) => {
+        visibleDiffFiles.forEach((file) => {
             setDiffFileLayout(file.path, nextLayout);
         });
-    }, [changedFiles, setDiffFileLayout]);
+    }, [setDiffFileLayout, visibleDiffFiles]);
 
     const [openingEditorFilePath, setOpeningEditorFilePath] = React.useState<string | null>(null);
 
@@ -1566,8 +1586,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 {showFileSidebar && (
                     <section className="hidden lg:flex w-72 flex-col rounded-xl border border-border/60 bg-background/70 overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40">
-                            <span className="typography-ui-header font-semibold text-foreground">{t('diffView.section.files')}</span>
-                            <span className="typography-meta text-muted-foreground">{changedFiles.length}</span>
+                            <span className="typography-code font-semibold text-foreground">{t('diffView.section.files')}</span>
+                            <span className="typography-code text-muted-foreground">{changedFiles.length}</span>
                         </div>
                         <FileList
                             changedFiles={changedFiles}
@@ -1587,7 +1607,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         data-diff-virtual-root
                     >
                         <div className="flex flex-col [overflow-anchor:none]" data-diff-virtual-content>
-                            {changedFiles.map((file) => (
+                            {visibleDiffFiles.map((file) => (
                                 <MultiFileDiffEntry
                                     key={file.path}
                                     directory={effectiveDirectory}
@@ -1644,7 +1664,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             );
         }
 
-        if (changedFiles.length === 0) {
+        if (visibleDiffFiles.length === 0) {
             return (
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                     {activeDiffScope === 'turn' ? t('diffView.state.noLastTurnChanges') : t('diffView.state.cleanWorkingTree')}
@@ -1657,7 +1677,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background">
-            <div className="@container/diff-toolbar flex min-w-0 items-center gap-2 px-3 py-2 bg-background">
+            {!singleFileView ? <div className="@container/diff-toolbar flex min-w-0 items-center gap-1.5 px-2 py-1.5 bg-background">
                 {!isMobile && (
                     activeDiffScope === 'working' || activeDiffScope === 'staged' || activeDiffScope === 'turn' ? (
                         <ChangeScopeSelector
@@ -1672,17 +1692,17 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         />
                     ) : (
                         <div className="flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground shrink-0">
-                            <span className="typography-ui-label font-semibold text-foreground">
+                            <span className="typography-code font-semibold text-foreground">
                                 {isLoadingStatus && !status
                                     ? t('diffView.state.loadingChanges')
-                                    : (changedFiles.length === 1
-                                        ? t('diffView.summary.changedFilesSingle', { count: changedFiles.length })
-                                        : t('diffView.summary.changedFilesPlural', { count: changedFiles.length }))}
+                                    : (visibleDiffFiles.length === 1
+                                        ? t('diffView.summary.changedFilesSingle', { count: visibleDiffFiles.length })
+                                        : t('diffView.summary.changedFilesPlural', { count: visibleDiffFiles.length }))}
                             </span>
                         </div>
                     )
                 )}
-                {changedFiles.length > 0 && (
+                {!singleFileView && changedFiles.length > 0 && (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -1697,7 +1717,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                             name="expand-up-down"
                             className="size-4"
                         />
-                        <span className="diff-toolbar__expand-label typography-ui-label">
+                        <span className="diff-toolbar__expand-label typography-code">
                             {expandedFiles.size > 0 ? t('diffView.actions.collapseAll') : t('diffView.actions.expandAll')}
                         </span>
                     </Button>
@@ -1716,7 +1736,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         ) : (
                             <Icon name="search-eye" className="size-4" />
                         )}
-                        <span className="diff-toolbar__review-label typography-ui-label">
+                        <span className="diff-toolbar__review-label typography-code">
                             {t('diffView.actions.review')}
                         </span>
                     </Button>
@@ -1763,7 +1783,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         onModeChange={handleHeaderLayoutChange}
                     />
                 )}
-            </div>
+            </div> : null}
 
             <ReviewFlowDialog
                 open={reviewDialogOpen}

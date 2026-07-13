@@ -1,3 +1,39 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { parse as parseJsonc } from 'jsonc-parser';
+
+const MAX_GLOBAL_CONFIG_SIZE = 2 * 1024 * 1024;
+const GLOBAL_CONFIG_FILES = {
+  opencode: 'opencode.jsonc',
+  'oh-my-opencode-slim': 'oh-my-opencode-slim.json',
+  'oh-my-openagent': 'oh-my-openagent.jsonc',
+};
+
+function resolveGlobalConfigPath(target, configDirectory) {
+  const fileName = GLOBAL_CONFIG_FILES[target];
+  if (!fileName) {
+    return null;
+  }
+  return { fileName, filePath: path.join(configDirectory, fileName) };
+}
+
+function validateGlobalConfigContent(content) {
+  if (typeof content !== 'string') {
+    return 'Configuration content must be a string';
+  }
+  if (Buffer.byteLength(content, 'utf8') > MAX_GLOBAL_CONFIG_SIZE) {
+    return `Configuration content exceeds ${MAX_GLOBAL_CONFIG_SIZE} bytes`;
+  }
+
+  const errors = [];
+  const parsed = parseJsonc(content, errors, { allowTrailingComma: true, disallowComments: false });
+  if (errors.length > 0 || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return 'Invalid JSONC configuration';
+  }
+  return null;
+}
+
 export const registerConfigEntityRoutes = (app, dependencies) => {
   const {
     resolveProjectDirectory,
@@ -24,7 +60,55 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
     updateSnippet,
     deleteSnippet,
     expandSnippets,
+    configDirectory = path.join(os.homedir(), '.config', 'opencode'),
   } = dependencies;
+
+  app.get('/api/config/global/:target', async (req, res) => {
+    const target = resolveGlobalConfigPath(req.params.target, configDirectory);
+    if (!target) {
+      return res.status(404).json({ error: 'Unknown global configuration target' });
+    }
+
+    try {
+      const content = await fs.readFile(target.filePath, 'utf8');
+      return res.json({ target: req.params.target, fileName: target.fileName, content });
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        return res.status(404).json({ error: `${target.fileName} does not exist` });
+      }
+      console.error('Failed to read global configuration:', error);
+      return res.status(500).json({ error: 'Failed to read global configuration' });
+    }
+  });
+
+  app.put('/api/config/global/:target', async (req, res) => {
+    const target = resolveGlobalConfigPath(req.params.target, configDirectory);
+    if (!target) {
+      return res.status(404).json({ error: 'Unknown global configuration target' });
+    }
+
+    const content = req.body?.content;
+    const validationError = validateGlobalConfigContent(content);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+
+    try {
+      await fs.mkdir(configDirectory, { recursive: true });
+      const temporaryPath = `${target.filePath}.${process.pid}.${Date.now()}.tmp`;
+      await fs.writeFile(temporaryPath, content, 'utf8');
+      await fs.rename(temporaryPath, target.filePath);
+      return res.json({
+        target: req.params.target,
+        fileName: target.fileName,
+        content,
+        requiresManualRestart: true,
+      });
+    } catch (error) {
+      console.error('Failed to write global configuration:', error);
+      return res.status(500).json({ error: 'Failed to write global configuration' });
+    }
+  });
 
   // Build the response for a config mutation based on whether OpenCode actually
   // reloaded the change. When connected to an external OpenCode server that

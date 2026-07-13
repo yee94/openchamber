@@ -45,6 +45,7 @@ describe('useSessionFoldersStore folder assignments', () => {
     useSessionFoldersStore.setState({
       foldersMap: {},
       collapsedFolderIds: new Set<string>(),
+      sessionOrderByScope: {},
     });
   });
 
@@ -76,5 +77,29 @@ describe('useSessionFoldersStore folder assignments', () => {
 
     expect(useSessionFoldersStore.getState().foldersMap).toBe(before);
     expect(storageSetCount).toBe(0);
+  });
+
+  test('cleanup trims stale session order ids for its scope', () => {
+    useSessionFoldersStore.setState({ sessionOrderByScope: { '/workspace/project': ['keep', 'stale'] } });
+
+    useSessionFoldersStore.getState().cleanupSessions('/workspace/project', new Set(['keep']));
+
+    expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['keep']);
+  });
+
+  test('reorders folder rows by the scope-local visual ids', () => {
+    useSessionFoldersStore.setState({ sessionOrderByScope: { '/workspace/project': ['first', 'second'] } });
+
+    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['first', 'second'], 'second', 'first');
+
+    expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['second', 'first']);
+  });
+
+  test('preserves hidden session ranks outside the visible sortable slice', () => {
+    useSessionFoldersStore.setState({ sessionOrderByScope: { '/workspace/project': ['first', 'second', 'hidden'] } });
+
+    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['first', 'second'], 'second', 'first');
+
+    expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['second', 'first', 'hidden']);
   });
 });

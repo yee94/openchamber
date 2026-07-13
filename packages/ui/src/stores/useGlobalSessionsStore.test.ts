@@ -9,6 +9,8 @@ import {
 } from './useGlobalSessionsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { resetOpenCodeReadiness } from '@/lib/runtime-readiness';
+import { useSessionFoldersStore } from './useSessionFoldersStore';
+import { prunePinnedSessionIdsByKnownIds } from '@/components/session/sidebar/hooks/pinnedSessionCleanup';
 
 type SessionExtra = Partial<Session> & {
   directory?: string | null;
@@ -47,6 +49,8 @@ describe('useGlobalSessionsStore', () => {
       hasCachedSessionIndex: false,
       sessionIndexSyncByDirectory: new Map(),
       hasLoadedFullCatalog: false,
+      fullCatalogSessionIds: new Set(),
+      fullCatalogGeneration: 0,
       hasLoaded: false,
       status: 'idle',
       startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 },
@@ -298,6 +302,116 @@ describe('useGlobalSessionsStore', () => {
     }
   });
 
+  test('keeps first-run cache provenance stable while the server writes its first directory', async () => {
+    const originalWindow = globalThis.window;
+    const originalFetch = globalThis.fetch;
+    const firstSession = buildSession('https://share.example/first-run', { directory: '/repo/a' });
+    let releaseFinalPoll: (() => void) | undefined;
+    let finished = false;
+    const emptySnapshot = {
+      revision: 0,
+      sync: {
+        active: false,
+        completed: 0,
+        total: 0,
+        pendingDirectories: [],
+        completedDirectories: [],
+        failedDirectories: [],
+      },
+      directories: [],
+    };
+    const initialSync = {
+      ...emptySnapshot,
+      revision: 1,
+      sync: {
+        ...emptySnapshot.sync,
+        active: true,
+        total: 2,
+        pendingDirectories: ['/repo/a', '/repo/b'],
+      },
+    };
+    const partialSync = {
+      revision: 2,
+      sync: {
+        active: true,
+        completed: 1,
+        total: 2,
+        pendingDirectories: ['/repo/b'],
+        completedDirectories: ['/repo/a'],
+        failedDirectories: [],
+      },
+      directories: [{
+        directory: '/repo/a',
+        cursor: 2,
+        hasMore: false,
+        lastSyncedAt: 1000,
+        lastFullSyncedAt: 1000,
+        lastAccessedAt: 1000,
+        sessions: [firstSession],
+      }],
+    };
+    const completedSync = {
+      ...partialSync,
+      revision: 3,
+      sync: {
+        ...partialSync.sync,
+        active: false,
+        completed: 2,
+        pendingDirectories: [],
+        completedDirectories: ['/repo/a', '/repo/b'],
+      },
+    };
+
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
+      });
+      let requestCount = 0;
+      globalThis.fetch = async () => {
+        requestCount += 1;
+        if (requestCount === 1) {
+          return new Response(JSON.stringify({ available: true, ...emptySnapshot }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (requestCount === 2) {
+          return new Response(JSON.stringify(initialSync), {
+            status: 202,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (requestCount === 3) {
+          return new Response(JSON.stringify(partialSync), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        await new Promise<void>((resolve) => { releaseFinalPoll = resolve; });
+        return new Response(JSON.stringify(completedSync), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      };
+
+      const startup = useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/a', '/repo/b'])
+        .then(() => { finished = true; });
+      while (!releaseFinalPoll) await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(useGlobalSessionsStore.getState().hasCachedSessionIndex).toBe(false);
+      expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/a')).toEqual([firstSession]);
+      expect(finished).toBe(false);
+
+      releaseFinalPoll();
+      await startup;
+      expect(finished).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test('coalesces overlapping active refreshes by directory and keeps a cached snapshot visible', async () => {
     type ListResult = { data?: Session[]; error?: { message: string }; response: Response };
     let resolveList: (value: ListResult) => void = () => undefined;
@@ -340,6 +454,42 @@ describe('useGlobalSessionsStore', () => {
     expect(calls.length).toBe(1);
     expect(useGlobalSessionsStore.getState().activeSessions[0]?.title).toBe('Fresh session');
     expect(useGlobalSessionsStore.getState().refreshingDirectories.has('/repo/app')).toBe(false);
+  });
+
+  test('preserves the complete cleanup catalog through a bounded directory refresh', async () => {
+    const complete = Array.from({ length: 25 }, (_, index) => buildSession(`https://share.example/${index}`, {
+      id: `ses_${index + 1}`,
+      directory: '/repo/app',
+      time: { created: index, updated: index },
+    }));
+    const list = async (input: Record<string, unknown>) => {
+      if (input.directory) {
+        return { data: complete.slice(0, 20), error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: input.archived ? [] : complete, error: undefined, response: new Response(null, { status: 200 }) };
+    };
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+
+    await useGlobalSessionsStore.getState().loadSessions();
+    const completeIds = useGlobalSessionsStore.getState().fullCatalogSessionIds;
+    const generation = useGlobalSessionsStore.getState().fullCatalogGeneration;
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo/app']);
+
+    expect(useGlobalSessionsStore.getState().activeSessions).toHaveLength(20);
+    expect(useGlobalSessionsStore.getState().fullCatalogSessionIds).toBe(completeIds);
+    expect(useGlobalSessionsStore.getState().fullCatalogGeneration).toBe(generation);
+    expect(prunePinnedSessionIdsByKnownIds(completeIds, new Set(['ses_1', 'ses_25']))).toEqual(new Set(['ses_1', 'ses_25']));
+
+    useSessionFoldersStore.setState({
+      foldersMap: { '/repo/app': [{ id: 'folder', name: 'Folder', sessionIds: ['ses_25'], createdAt: 1 }] },
+      sessionOrderByScope: { '/repo/app': ['ses_25'] },
+    });
+    useSessionFoldersStore.getState().cleanupSessions('/repo/app', completeIds);
+    expect(useSessionFoldersStore.getState().foldersMap['/repo/app']?.[0]?.sessionIds).toEqual(['ses_25']);
+    expect(useSessionFoldersStore.getState().sessionOrderByScope['/repo/app']).toEqual(['ses_25']);
   });
 
   test('merges an incremental start-window response without erasing cached sessions', async () => {

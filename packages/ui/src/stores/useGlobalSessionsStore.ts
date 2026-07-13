@@ -16,6 +16,7 @@ import {
   startSessionIndexBackgroundSync,
   type SessionIndexSnapshot,
 } from '@/lib/session-index-api';
+import { normalizePath } from '@/lib/pathNormalization';
 
 type GlobalSessionsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -62,11 +63,15 @@ type GlobalSessionsState = {
   cachedDirectories: Set<string>;
   /** True after the Electron session-index read has completed or deterministically declined. */
   hasHydratedSessionIndex: boolean;
-  /** True when SQLite supplied at least one known directory for this runtime. */
+  /** True when the initial SQLite restore supplied a known directory for this runtime. */
   hasCachedSessionIndex: boolean;
   sessionIndexSyncByDirectory: Map<string, SessionIndexSyncMetadata>;
   /** True only after the unfiltered catalog used by retention has loaded successfully. */
   hasLoadedFullCatalog: boolean;
+  /** IDs from the last complete active+archived catalog result. Bounded directory refreshes never replace this set. */
+  fullCatalogSessionIds: Set<string>;
+  /** Increments only when a complete catalog result replaces `fullCatalogSessionIds`. */
+  fullCatalogGeneration: number;
   hasLoaded: boolean;
   status: GlobalSessionsStatus;
   /** Blocking session-index cold-start refresh progress for persisted directories. */
@@ -164,21 +169,6 @@ const scheduleDirectoryTask = <T>(task: () => Promise<T>): Promise<T> => new Pro
   });
   drainDirectoryTaskQueue();
 });
-
-const normalizePath = (value?: string | null): string | null => {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const replaced = trimmed.replace(/\\/g, '/');
-  if (replaced === '/') {
-    return '/';
-  }
-  return replaced.length > 1 ? replaced.replace(/\/+$/, '') : replaced;
-};
 
 export const resolveGlobalSessionDirectory = (session: Session): string | null => {
   const record = session as Session & {
@@ -409,7 +399,6 @@ const applySessionIndexSnapshotState = (
     sessionsByDirectory: buildSessionsByDirectory(activeSessions),
     reviewTransferBySessionId: buildReviewTransferMap(activeSessions),
     cachedDirectories: snapshotDirectories,
-    hasCachedSessionIndex: snapshot.directories.length > 0,
     sessionIndexSyncByDirectory: nextSyncMetadata,
     activePaginationByDirectory: nextPagination,
     loadedDirectories: nextLoaded,
@@ -636,6 +625,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   hasCachedSessionIndex: false,
   sessionIndexSyncByDirectory: new Map(),
   hasLoadedFullCatalog: false,
+  fullCatalogSessionIds: new Set(),
+  fullCatalogGeneration: 0,
   hasLoaded: false,
   status: 'idle',
   startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 },
@@ -673,6 +664,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       hasCachedSessionIndex: false,
       sessionIndexSyncByDirectory: new Map(),
       hasLoadedFullCatalog: false,
+      fullCatalogSessionIds: new Set(),
+      fullCatalogGeneration: 0,
       hasLoaded: false,
       status: 'idle',
       startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 },
@@ -683,7 +676,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     try {
       const snapshot = await loadSessionIndexSnapshot();
       if (!snapshot) return;
-      set((state) => applySessionIndexSnapshotState(state, snapshot, false));
+      set((state) => ({
+        ...applySessionIndexSnapshotState(state, snapshot, false),
+        hasCachedSessionIndex: snapshot.directories.length > 0,
+      }));
     } catch (error) {
       // The index is an acceleration cache. A failed read must not block the
       // authoritative OpenCode session flow.
@@ -831,9 +827,24 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           return { activeSessions: [], archivedSessions: [] };
         }
         set((state) => {
-          const snapshot = applySnapshot(state, nextActiveSessions, nextArchivedSessions, 'ready');
+          const status = activeResult.status === 'fulfilled' && archivedResult.status === 'fulfilled'
+            ? 'ready'
+            : 'error';
+          const snapshot = applySnapshot(state, nextActiveSessions, nextArchivedSessions, status);
           const hasLoadedFullCatalog = activeResult.status === 'fulfilled' && archivedResult.status === 'fulfilled';
-          return snapshot === state ? { hasLoadedFullCatalog } : { ...snapshot, hasLoadedFullCatalog };
+          if (!hasLoadedFullCatalog) {
+            return snapshot === state ? state : snapshot;
+          }
+          const fullCatalogSessionIds = new Set([
+            ...activeResult.value.map((session) => session.id),
+            ...archivedResult.value.map((session) => session.id),
+          ]);
+          return {
+            ...snapshot,
+            hasLoadedFullCatalog: true,
+            fullCatalogSessionIds,
+            fullCatalogGeneration: state.fullCatalogGeneration + 1,
+          };
         });
         return { activeSessions: nextActiveSessions, archivedSessions: nextArchivedSessions };
       } catch (error) {

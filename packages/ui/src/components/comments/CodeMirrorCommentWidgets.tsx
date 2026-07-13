@@ -24,6 +24,7 @@ interface CodeMirrorCommentWidgetsOptions {
   onCancel: () => void;
   onEdit: (draft: InlineCommentDraft) => void;
   onDelete: (draft: InlineCommentDraft) => void;
+  onAddToChat?: (range: LineRange) => void;
 }
 
 export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsOptions): BlockWidgetDef[] {
@@ -41,6 +42,7 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
     onCancel,
     onEdit,
     onDelete,
+    onAddToChat,
   } = options;
 
   const widgets: BlockWidgetDef[] = [];
@@ -61,6 +63,7 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
             isEditing={true}
             onSave={onSave}
             onCancel={onCancel}
+            onAddToChat={onAddToChat}
           />
         ),
       });
@@ -101,6 +104,7 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
           isEditing={false}
           onSave={onSave}
           onCancel={onCancel}
+          onAddToChat={onAddToChat}
         />
       ),
     });

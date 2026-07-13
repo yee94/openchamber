@@ -77,6 +77,7 @@ import { createSessionTitleRuntime } from './lib/session-title/runtime.js';
 import { createSessionIndexService } from './lib/session-index/service.js';
 import { createSessionIndexSyncRuntime } from './lib/session-index/sync-runtime.js';
 import { resolveSessionIndexDbPath } from './lib/session-index/resolve-db-path.js';
+import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/opencode/tunnel-wiring-runtime.js';
@@ -88,6 +89,7 @@ import { createNotificationTriggerRuntime } from './lib/notifications/runtime.js
 import { createPushRuntime } from './lib/notifications/push-runtime.js';
 import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
+import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/runtime.js';
 import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
@@ -96,6 +98,7 @@ import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
 import { createPreviewProxyRuntime } from './lib/preview/proxy-runtime.js';
 import { attachRealtimeProxy } from './lib/realtime-proxy.js';
 import { createRelayService } from './lib/relay/service.js';
+import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createProxyMiddleware, responseInterceptor } from 'http-proxy-middleware';
 import webPush from 'web-push';
 
@@ -368,6 +371,7 @@ const settingsRuntime = createSettingsRuntime({
 
 const readSettingsFromDiskMigrated = (...args) => settingsRuntime.readSettingsFromDiskMigrated(...args);
 const readSettingsFromDisk = (...args) => settingsRuntime.readSettingsFromDisk(...args);
+const readSettingsFromDiskStrict = (...args) => settingsRuntime.readSettingsFromDiskStrict(...args);
 const writeSettingsToDisk = (...args) => settingsRuntime.writeSettingsToDisk(...args);
 const persistSettings = (...args) => settingsRuntime.persistSettings(...args);
 
@@ -412,6 +416,7 @@ const apnsRuntime = createApnsRuntime({
   APNS_TOKENS_FILE_PATH,
   readSettingsFromDiskMigrated,
   writeSettingsToDisk,
+  readSettingsStrict: readSettingsFromDiskStrict,
 });
 
 const addOrUpdateApnsToken = (...args) => apnsRuntime.addOrUpdateApnsToken(...args);
@@ -720,7 +725,7 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
 });
 
 const maybeSendPushForTrigger = (...args) => notificationTriggerRuntime.maybeSendPushForTrigger(...args);
-const setAutoAcceptSession = (...args) => notificationTriggerRuntime.setAutoAcceptSession(...args);
+const setAutoAcceptSession = (sessionId, enabled) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled);
 clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
 
 const sessionAssistRuntime = createSessionAssistRuntime({
@@ -735,11 +740,64 @@ const sessionTitleRuntime = createSessionTitleRuntime({
   getSmallModelService: async () => import('./lib/small-model/index.js'),
 });
 
+const sessionGoalRuntime = createSessionGoalRuntime({
+  buildOpenCodeUrl,
+  getOpenCodeAuthHeaders,
+  getSmallModelService: async () => import('./lib/small-model/index.js'),
+  emitGoalNotification: async ({ sessionId, directory, status, goal }) => {
+    // The goal settle notification replaces the per-turn ready notifications
+    // (suppressed while the goal is active) — so it obeys the same toggle.
+    const settings = await readSettingsFromDisk();
+    if (settings.notifyOnCompletion === false) {
+      return;
+    }
+    const title = status === 'complete'
+      ? 'Goal complete'
+      : (status === 'budgetLimited' ? 'Goal reached its token budget' : 'Goal blocked');
+    const detail = goal?.statusReason && goal.statusReason !== 'verified by audit' && goal.statusReason !== 'reported by agent'
+      ? goal.statusReason
+      : (goal?.note || '');
+    const objective = typeof goal?.objective === 'string' ? goal.objective.slice(0, 140) : '';
+    const notificationPayload = {
+      title,
+      body: [objective, detail].filter(Boolean).join(' — ').slice(0, 240),
+      tag: `goal-${sessionId}`,
+      kind: 'goal',
+      sessionId,
+      directory,
+    };
+    const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
+    broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });
+    void notificationTriggerRuntime.sendGoalSettlePush({
+      sessionId,
+      directory,
+      status,
+      title,
+      body: notificationPayload.body,
+    }).catch((error) => {
+      console.warn('[session-goal] push fanout failed:', error?.message || error);
+    });
+  },
+});
+
 const globalMessageStreamHub = createGlobalMessageStreamHub({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
   upstreamStallTimeoutMs: getUpstreamStallTimeoutMs,
 });
+
+const permissionAutoAcceptRuntime = createPermissionAutoAcceptRuntime({
+  globalEventHub: globalMessageStreamHub,
+  buildOpenCodeUrl,
+  getOpenCodeAuthHeaders,
+  readSettingsFromDiskMigrated,
+  persistSettings,
+  broadcastGlobalUiEvent,
+});
+permissionAutoAcceptRuntime.start();
+notificationTriggerRuntime.setGetIsSessionAutoAccepting(
+  (sessionId, directory) => permissionAutoAcceptRuntime.isSessionAutoAccepting(sessionId, directory),
+);
 
 const openCodeWatcherRuntime = createOpenCodeWatcherRuntime({
   waitForOpenCodePort: (...args) => waitForOpenCodePort(...args),
@@ -754,10 +812,11 @@ const openCodeWatcherRuntime = createOpenCodeWatcherRuntime({
   },
 });
 
-// Session-assist + session-title subscribe to the hub directly: they need the
+// Session-assist, session-title, and session-goal subscribe to the hub directly: they need the
 // envelope's directory to route their own OpenCode calls to the right instance.
 console.log('[session-assist] listening for session events');
 console.log('[session-title] listening for session events');
+console.log('[session-goal] listening for session events');
 globalMessageStreamHub.subscribeEvent((event) => {
   const raw = event?.payload;
   const payload = raw?.payload && typeof raw.payload === 'object' ? raw.payload : raw;
@@ -767,6 +826,7 @@ globalMessageStreamHub.subscribeEvent((event) => {
     : '';
   sessionAssistRuntime.processPayload(payload, directory);
   sessionTitleRuntime.processPayload(payload, directory);
+  sessionGoalRuntime.processPayload(payload, directory);
 });
 
 const processForwardedEventPayload = (payload, emitSyntheticEvent) => {
@@ -1084,6 +1144,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   openCodeWatcherRuntime,
   sessionAssistRuntime,
   sessionTitleRuntime,
+  sessionGoalRuntime,
   sessionRuntime,
   getHealthCheckInterval: () => healthCheckInterval,
   clearHealthCheckInterval: (value) => clearInterval(value),
@@ -1170,6 +1231,37 @@ async function main(options = {}) {
     }
     const lan = lanHost ? `http://${lanHost.includes(':') ? `[${lanHost}]` : lanHost}:${activePort}` : null;
     return { local, lan, relayAvailable: true };
+  };
+  // ALL direct LAN URLs this server is currently reachable on, for the
+  // candidates-refresh endpoint: the address the requesting client already
+  // reached us on first (guaranteed routable from its network — over the relay
+  // tunnel this is loopback and yields nothing), then every non-internal IPv4
+  // interface. A client that paired while the machine had a different DHCP
+  // lease uses this to replace its stale LAN candidate.
+  const resolveDirectLanUrls = (req) => {
+    const activePort = tunnelRuntimeContext.getActivePort() || port;
+    const urls = [];
+    const push = (host) => {
+      if (typeof host !== 'string' || !host) return;
+      const url = `http://${host.includes(':') ? `[${host}]` : host}:${activePort}`;
+      if (!urls.includes(url)) urls.push(url);
+    };
+    if (isNetworkExposedBindHost(effectiveBindHost)) {
+      push(requestReachedLanAddress(req));
+      try {
+        for (const list of Object.values(os.networkInterfaces())) {
+          for (const entry of (list || [])) {
+            if (entry.family === 'IPv4' && !entry.internal) push(entry.address);
+          }
+        }
+      } catch {
+        // interface scan failure → whatever we already collected
+      }
+    } else {
+      const h = String(effectiveBindHost || '').toLowerCase();
+      if (h && h !== '127.0.0.1' && h !== 'localhost' && h !== '::1') push(effectiveBindHost);
+    }
+    return urls;
   };
   const uiPassword = typeof options.uiPassword === 'string'
     ? options.uiPassword
@@ -1342,6 +1434,10 @@ async function main(options = {}) {
     // redeemed device can flip relay demand on or off).
     reconcileRelay: () => (relayServiceInstance ? relayServiceInstance.reconcile() : Promise.resolve()),
     getPairingTransports: resolvePairingTransports,
+    getDirectCandidateUrls: resolveDirectLanUrls,
+    // Stable server identity for client-side verification of learned addresses.
+    // Lazily resolved: the relay service is constructed after these routes.
+    getServerId: () => (relayServiceInstance ? relayServiceInstance.getServerId() : Promise.resolve(null)),
     // The display name a paired device shows for THIS server. Devices name the
     // connection by the issuing machine's hostname, not the per-device pairing
     // label typed by the operator.
@@ -1406,8 +1502,17 @@ async function main(options = {}) {
     os,
     readSettingsFromDiskMigrated,
     writeSettingsToDisk,
+    readSettingsStrict: readSettingsFromDiskStrict,
     remoteClientAuthRuntime,
     getLocalPort: () => tunnelRuntimeContext.getActivePort(),
+    // One relay host per machine: every instance sharing this data dir shares
+    // the relay identity (serverId), so concurrent hosts evict each other at
+    // the relay worker and devices land on a random local instance.
+    hostLock: createRelayHostLock({
+      lockFilePath: path.join(OPENCHAMBER_DATA_DIR, 'relay-host.lock'),
+      fs,
+      process,
+    }),
     // Relay demand = any paired device or pending pairing session that uses the
     // relay transport. Drives the auto on/off lifecycle.
     hasRelayDemand: async () => {
@@ -1456,6 +1561,7 @@ async function main(options = {}) {
     waitForOpenCodeReady,
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
+    permissionAutoAcceptRuntime,
   });
 
   const previewProxyRuntime = createPreviewProxyRuntime({

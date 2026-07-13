@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 import { registerConfigEntityRoutes } from './config-entity-routes.js';
 
-const createDependencies = (getCommandSources) => ({
+const createDependencies = (getCommandSources, configDirectory) => ({
   resolveProjectDirectory: async () => ({ directory: '/repo' }),
   resolveOptionalProjectDirectory: async () => ({ directory: '/repo' }),
   refreshOpenCodeAfterConfigChange: vi.fn(async () => ({})),
@@ -29,6 +32,7 @@ const createDependencies = (getCommandSources) => ({
   updateSnippet: vi.fn(),
   deleteSnippet: vi.fn(),
   expandSnippets: vi.fn(),
+  configDirectory,
 });
 
 describe('config entity command metadata route', () => {
@@ -54,5 +58,51 @@ describe('config entity command metadata route', () => {
         'built-in': { scope: null, isBuiltIn: true },
       },
     });
+  });
+});
+
+describe('global raw configuration routes', () => {
+  it('reads and validates the configured OpenCode and oh-my-opencode files', async () => {
+    const app = express();
+    app.use(express.json());
+    const configDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-global-config-'));
+    await fs.writeFile(path.join(configDirectory, 'opencode.jsonc'), `{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "imate/deepseek-v4-pro",
+  "plugin": ["oh-my-opencode-slim"],
+  // Existing comments must round-trip unchanged.
+}`, 'utf8');
+    await fs.writeFile(path.join(configDirectory, 'oh-my-opencode-slim.json'), JSON.stringify({
+      scoringEngineVersion: 'v2',
+      disabled_agents: ['observer'],
+      agents: { fixer: { model: ['openai/gpt-5.6-terra'] } },
+    }, null, 2), 'utf8');
+
+    registerConfigEntityRoutes(app, createDependencies(vi.fn(), configDirectory));
+
+    const openCode = await request(app).get('/api/config/global/opencode').expect(200);
+    expect(openCode.body).toMatchObject({
+      target: 'opencode',
+      fileName: 'opencode.jsonc',
+      content: expect.stringContaining('// Existing comments must round-trip unchanged.'),
+    });
+
+    const slim = await request(app).get('/api/config/global/oh-my-opencode-slim').expect(200);
+    expect(slim.body.content).toContain('"disabled_agents"');
+
+    const invalid = await request(app)
+      .put('/api/config/global/opencode')
+      .send({ content: '{ "model": }' })
+      .expect(400);
+    expect(invalid.body.error).toContain('Invalid JSONC');
+
+    const saved = await request(app)
+      .put('/api/config/global/opencode')
+      .send({ content: '{\n  "model": "imate/deepseek-v4-pro",\n  // preserved JSONC syntax\n}' })
+      .expect(200);
+    expect(saved.body.content).toContain('// preserved JSONC syntax');
+    expect(await fs.readFile(path.join(configDirectory, 'opencode.jsonc'), 'utf8')).toBe(saved.body.content);
+
+    await fs.rm(configDirectory, { recursive: true, force: true });
   });
 });

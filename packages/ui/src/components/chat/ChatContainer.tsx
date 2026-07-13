@@ -462,6 +462,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     // UI store
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
     const stickyUserHeader = useUIStore((state) => state.stickyUserHeader);
+    const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
     const isTimelineDialogOpen = useUIStore((s) => s.isTimelineDialogOpen);
     const setTimelineDialogOpen = useUIStore((s) => s.setTimelineDialogOpen);
 
@@ -650,7 +651,40 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
             {t('chat.container.returnToParent.label')}
         </Button>
     ) : null;
-    const promptReadOnly = readOnly || Boolean(parentSession);
+    const promptReadOnly = parentSession ? !allowPromptingSubagentSessions : readOnly;
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || window.parent === window) {
+            return;
+        }
+
+        const applySetting = (value: boolean) => {
+            useUIStore.getState().setAllowPromptingSubagentSessions(value);
+        };
+        const scopedWindow = window as typeof window & {
+            __openchamberApplyChatSettingsSync?: (payload: { allowPromptingSubagentSessions: boolean }) => void;
+        };
+        const applySync = (payload: { allowPromptingSubagentSessions: boolean }) => {
+            applySetting(payload.allowPromptingSubagentSessions);
+        };
+        const handleMessage = (event: MessageEvent) => {
+            if (event.source !== window.parent || event.origin !== window.location.origin) return;
+            const data = event.data as { type?: unknown; payload?: { allowPromptingSubagentSessions?: unknown } };
+            if (data?.type !== 'openchamber:chat-settings-sync'
+                || typeof data.payload?.allowPromptingSubagentSessions !== 'boolean') return;
+            applySetting(data.payload.allowPromptingSubagentSessions);
+        };
+
+        scopedWindow.__openchamberApplyChatSettingsSync = applySync;
+        window.addEventListener('message', handleMessage);
+        window.parent.postMessage({ type: 'openchamber:chat-settings-request' }, window.location.origin);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+            if (scopedWindow.__openchamberApplyChatSettingsSync === applySync) {
+                delete scopedWindow.__openchamberApplyChatSettingsSync;
+            }
+        };
+    }, []);
 
     React.useEffect(() => {
         if (autoOpenDraft && !currentSessionId && !draftOpen) {
@@ -970,7 +1004,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 								: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
 				>
-						{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                        {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
 			</div>
         );
@@ -1030,7 +1064,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
-					{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                    {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
             </div>
         );
@@ -1065,7 +1099,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
-					{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                    {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
             </div>
         );

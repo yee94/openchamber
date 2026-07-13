@@ -17,6 +17,7 @@ import { SIDEBAR_ROW_HOVER_CLASS } from './utils';
 
 export interface SortableProjectItemProps {
   id: string;
+  disabled?: boolean;
   projectLabel: string;
   projectDescription: string;
   projectIcon?: string;
@@ -53,6 +54,7 @@ export type SortableDragHandleProps = {
 
 export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   id,
+  disabled = false,
   projectLabel,
   projectDescription,
   projectIcon,
@@ -87,7 +89,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id, disabled: !reorderEnabled });
+  } = useSortable({ id, disabled: disabled || !reorderEnabled });
 
   const suppressNextToggleRef = React.useRef(false);
   const menuInstanceKey = `project:${id}`;

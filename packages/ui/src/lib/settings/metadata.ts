@@ -11,6 +11,7 @@ export type SettingsPageSlug =
   | 'commands'
   | 'mcp'
   | 'plugins'
+  | 'global-config'
   | 'skills.installed'
   | 'skills.catalog'
   | 'git'
@@ -124,6 +125,13 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'opencode',
     kind: 'split',
     keywords: ['plugin', 'plugins', 'extensions', 'addons', 'npm', 'opencode-wakatime'],
+  },
+  {
+    slug: 'global-config',
+    title: 'Global Configuration',
+    group: 'opencode',
+    kind: 'single',
+    keywords: ['global', 'configuration', 'opencode.jsonc', 'oh-my-opencode', 'oh-my-openagent'],
   },
   {
     slug: 'skills.installed',

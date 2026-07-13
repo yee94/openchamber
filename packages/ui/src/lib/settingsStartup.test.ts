@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { ensureSettingsHydrated, runSettingsStartup } from './settingsStartup';
+import { ensureSettingsHydrated, getSettingsHydrationPromise, runSettingsStartup } from './settingsStartup';
 
 describe('runSettingsStartup', () => {
   test('starts autosave watchers only after every hydration step settles', async () => {
@@ -56,5 +56,39 @@ describe('runSettingsStartup', () => {
 
     expect(appearanceCalls).toBe(1);
     expect(syncCalls).toBe(1);
+  });
+
+  test('exposes the registered hydration promise to startup coordinators', async () => {
+    let releaseSync: (() => void) | undefined;
+    const syncReady = new Promise<void>((resolve) => { releaseSync = resolve; });
+    const runtimeKey = 'session-startup-order';
+    const hydration = ensureSettingsHydrated({
+      runtimeKey,
+      initializeAppearance: async () => undefined,
+      syncSettings: async () => syncReady,
+      applyDirectory: async () => undefined,
+      onError: () => undefined,
+    });
+
+    expect(getSettingsHydrationPromise(runtimeKey)).toBe(hydration);
+    releaseSync?.();
+    await hydration;
+  });
+
+  test('runs a fresh hydration after authentication when startup already settled', async () => {
+    let syncCalls = 0;
+    const runtimeKey = 'authenticated-settings-retry';
+    const dependencies = {
+      runtimeKey,
+      initializeAppearance: async () => undefined,
+      syncSettings: async () => { syncCalls += 1; },
+      applyDirectory: async () => undefined,
+      onError: () => undefined,
+    };
+
+    await ensureSettingsHydrated(dependencies);
+    await ensureSettingsHydrated(dependencies, { force: true });
+
+    expect(syncCalls).toBe(2);
   });
 });

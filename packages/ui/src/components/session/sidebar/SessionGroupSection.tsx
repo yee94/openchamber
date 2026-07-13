@@ -29,8 +29,9 @@ import {
   nodeContainsSessionId,
   resolveMenuOpenSessionId,
 } from './sessionNodeItemUtils';
+import { buildVisibleSortableSessionOrder } from './sessionSortableOrder';
 import type { SessionNodeRenderExtras } from './sessionNodeItemUtils';
-import type { SessionFolder } from '@/stores/useSessionFoldersStore';
+import type { SessionFolder, SessionOrderMap } from '@/stores/useSessionFoldersStore';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -96,7 +97,8 @@ type Props = {
   setRenamingFolderId: React.Dispatch<React.SetStateAction<string | null>>;
   pinnedSessionIds: Set<string>;
   expandedParents: Set<string>;
-  sessionOrderIndex: Map<string, number>;
+  sessionOrderByScope: SessionOrderMap;
+  onReorderSessions: (sessionIds: string[], activeSessionId: string, overSessionId: string) => void;
   currentSessionId: string | null;
   shortcutTargetSessionId?: string | null;
   shortcutTargetVisibleIndex?: number | null;
@@ -159,12 +161,15 @@ const groupHasPinnedMembershipChange = (
 
 const groupHasSessionOrderChange = (
   group: SessionGroup,
-  prevSessionOrderIndex: Map<string, number>,
-  nextSessionOrderIndex: Map<string, number>,
+  prevSessionOrderByScope: SessionOrderMap,
+  nextSessionOrderByScope: SessionOrderMap,
 ): boolean => {
   const visit = (node: SessionNode): boolean => {
     const sessionId = node.session.id;
-    if (prevSessionOrderIndex.get(sessionId) !== nextSessionOrderIndex.get(sessionId)) return true;
+    const scopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
+    const prevIndex = scopeKey ? prevSessionOrderByScope[scopeKey]?.indexOf(sessionId) : -1;
+    const nextIndex = scopeKey ? nextSessionOrderByScope[scopeKey]?.indexOf(sessionId) : -1;
+    if (prevIndex !== nextIndex) return true;
     return node.children.some(visit);
   };
   return group.sessions.some(visit);
@@ -239,8 +244,8 @@ const areGroupPropsEqual = (prev: Props, next: Props): boolean => {
     return false;
   }
 
-  if (prev.sessionOrderIndex !== next.sessionOrderIndex
-    && groupHasSessionOrderChange(next.group, prev.sessionOrderIndex, next.sessionOrderIndex)) {
+  if (prev.sessionOrderByScope !== next.sessionOrderByScope
+    && groupHasSessionOrderChange(next.group, prev.sessionOrderByScope, next.sessionOrderByScope)) {
     return false;
   }
 
@@ -360,7 +365,8 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     setRenamingFolderId,
     pinnedSessionIds,
     expandedParents,
-    sessionOrderIndex,
+    sessionOrderByScope,
+    onReorderSessions,
     currentSessionId,
     shortcutTargetSessionId = null,
     shortcutTargetVisibleIndex = null,
@@ -373,6 +379,11 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     scrollContainerRef,
   } = props;
 
+  const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
+  const sessionOrderIndex = React.useMemo(
+    () => new Map((folderScopeKey ? sessionOrderByScope[folderScopeKey] : [])?.map((id, index) => [id, index])),
+    [folderScopeKey, sessionOrderByScope],
+  );
   const compareSessionNodes = React.useCallback((a: SessionNode, b: SessionNode) => {
     const aIndex = sessionOrderIndex.get(a.session.id);
     const bIndex = sessionOrderIndex.get(b.session.id);
@@ -403,7 +414,6 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
       .sort(compareSessionNodes),
     [compareSessionNodes, group.sessions, searchData?.filteredNodes, shouldFilterGroupContents],
   );
-  const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
   const scopeFolders = React.useMemo(
     () => folderScopeKey ? (foldersMap[folderScopeKey] ?? []) : [],
     [folderScopeKey, foldersMap]
@@ -567,6 +577,12 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
       ? ungroupedSessions
       : ungroupedSessions.slice(0, nonArchivedVisibleCount);
   const remainingCount = totalSessions - visibleSessions.length;
+  const visibleSortableSessionOrder = React.useMemo(() => buildVisibleSortableSessionOrder({
+    folders: allFoldersForGroup,
+    visibleUngroupedNodes: visibleSessions,
+    collapsedFolderIds,
+    hasSessionSearchQuery,
+  }), [allFoldersForGroup, collapsedFolderIds, hasSessionSearchQuery, visibleSessions]);
   const hasRemoteSessions = sessionPagination?.hasMore === true;
   const isLoadingRemoteSessions = sessionPagination?.loadingMore === true;
   const canShowLess = !group.isArchivedBucket
@@ -993,9 +1009,13 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   const body = (
     <SessionFolderDndScope
       scopeKey={folderScopeKey}
-      hasFolders={allFoldersForGroup.length > 0}
+      sessionIds={visibleSortableSessionOrder.sessionIds}
+      folderIdBySessionId={visibleSortableSessionOrder.folderIdBySessionId}
       onSessionDroppedOnFolder={(sessionId, folderId) => {
         if (folderScopeKey) addSessionToFolder(folderScopeKey, folderId, sessionId);
+      }}
+      onSessionsReordered={(activeSessionId, overSessionId) => {
+        onReorderSessions(visibleSortableSessionOrder.sessionIds, activeSessionId, overSessionId);
       }}
     >
       {renderFolderItems()}

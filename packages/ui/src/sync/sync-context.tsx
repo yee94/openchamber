@@ -25,6 +25,7 @@ import { updateStreamingState } from "./streaming"
 import { setActionRefs } from "./session-actions"
 import { setSyncRefs } from "./sync-refs"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
+import { applySessionEventToGlobalSessions } from "./session-event-router"
 import { syncDebug } from "./debug"
 import { getReconnectCandidateSessionIds, getReconnectMaterializationSessionIds } from "./reconnect-recovery"
 import { opencodeClient } from "@/lib/opencode/client"
@@ -41,6 +42,7 @@ import type { QuestionRequest } from "@/types/question"
 import * as sessionActions from "./session-actions"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
 import { openSessionFromToast } from "./session-opener"
+import { getPermissionToastKey, showPermissionNeededToast } from "./permission-toast"
 import { getRuntimeLiveStatusSeed, LIVE_STATUS_TTL_MS } from "./runtime-live-memory"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
@@ -315,11 +317,6 @@ const pendingQuestionToastIds = new Set<string>()
 const pendingPermissionToastIds = new Set<string>()
 
 const getQuestionToastKey = (sessionID?: string, requestID?: string) => {
-  if (!sessionID || !requestID) return null
-  return `${sessionID}:${requestID}`
-}
-
-const getPermissionToastKey = (sessionID?: string, requestID?: string) => {
   if (!sessionID || !requestID) return null
   return `${sessionID}:${requestID}`
 }
@@ -656,46 +653,6 @@ const getSessionIdFromPayload = (event: Event): string | null => {
   }
 
   return null
-}
-
-const getSessionInfoFromPayload = (event: Event): Session | null => {
-  if (event.type !== "session.created" && event.type !== "session.updated" && event.type !== "session.deleted") {
-    return null
-  }
-
-  const properties = (event as { properties?: unknown }).properties
-  if (!properties || typeof properties !== "object") {
-    return null
-  }
-
-  const info = (properties as { info?: unknown }).info
-  if (!info || typeof info !== "object") {
-    return null
-  }
-
-  const session = info as Partial<Session>
-  if (typeof session.id !== "string" || !session.time) {
-    return null
-  }
-
-  return stripSessionDiffSnapshots(session as Session)
-}
-
-const applySessionEventToGlobalSessions = (payload: Event) => {
-  if (payload.type === "session.created" || payload.type === "session.updated") {
-    const session = getSessionInfoFromPayload(payload)
-    if (session) {
-      useGlobalSessionsStore.getState().upsertSession(session)
-    }
-    return
-  }
-
-  if (payload.type === "session.deleted") {
-    const sessionID = getSessionIdFromPayload(payload) ?? getSessionInfoFromPayload(payload)?.id
-    if (sessionID) {
-      useGlobalSessionsStore.getState().removeSessions([sessionID])
-    }
-  }
 }
 
 const getMessageIdFromPayload = (event: Event): string | null => {
@@ -1174,17 +1131,47 @@ export async function resyncBlockingRequestsForDirectory(
     }
 
     const permissionStore = usePermissionStore.getState()
-    const autoAcceptingSessionIds = Object.keys(grouped).filter((sessionId) => permissionStore.isSessionAutoAccepting(sessionId))
+    const autoAcceptingSessionIds = isVSCodeRuntime()
+      ? Object.keys(grouped).filter((sessionId) => permissionStore.isSessionAutoAccepting(sessionId))
+      : []
 
     if (autoAcceptingSessionIds.length > 0) {
       const acceptedIdsBySession = new Map<string, Set<string>>()
+      // Track server-confirmed resolved permissions separately so we can
+      // remove them from `grouped` below — the V1 listPendingPermissions
+      // snapshot can still contain entries the server has already answered,
+      // and leaving them in place produces a spurious "Permission needed"
+      // toast for a permission the user has already resolved.
+      const resolvedIdsBySession = new Map<string, Set<string>>()
       await Promise.all(autoAcceptingSessionIds.flatMap((sessionId) =>
         (grouped[sessionId] ?? []).map(async (permission) => {
           try {
-            await sessionActions.respondToPermission(permission.sessionID, permission.id, "once")
-            const accepted = acceptedIdsBySession.get(sessionId) ?? new Set<string>()
-            accepted.add(permission.id)
-            acceptedIdsBySession.set(sessionId, accepted)
+            // Verify the permission is still pending before auto-accepting.
+            // - state: "ok"        → still pending, safe to auto-accept
+            // - state: "resolved"  → server returned 404, drop from grouped
+            // - state: "unknown"   → network error / pre-1.17.12 server,
+            //                        keep in grouped for the user to act on
+            //
+            // On a pre-v1.17.12 server without the V2 endpoint, every call
+            // returns "unknown". This permanently disables auto-accept
+            // (acknowledged scope tradeoff — project requires SDK 1.17.12)
+            // but does not falsely report permissions as resolved.
+            const outcome = await opencodeClient.fetchPermission(
+              permission.sessionID,
+              permission.id,
+            )
+            if (outcome.state === "ok") {
+              await sessionActions.respondToPermission(permission.sessionID, permission.id, "once")
+              const accepted = acceptedIdsBySession.get(sessionId) ?? new Set<string>()
+              accepted.add(permission.id)
+              acceptedIdsBySession.set(sessionId, accepted)
+            } else if (outcome.state === "resolved") {
+              const resolved = resolvedIdsBySession.get(sessionId) ?? new Set<string>()
+              resolved.add(permission.id)
+              resolvedIdsBySession.set(sessionId, resolved)
+            }
+            // state: "unknown" → keep the permission in grouped; user can
+            // answer manually.
           } catch {
             // Keep failed auto-accept permissions in UI state so the user can act.
           }
@@ -1193,8 +1180,11 @@ export async function resyncBlockingRequestsForDirectory(
 
       for (const sessionId of autoAcceptingSessionIds) {
         const acceptedIds = acceptedIdsBySession.get(sessionId)
-        if (!acceptedIds) continue
-        const remaining = (grouped[sessionId] ?? []).filter((permission) => !acceptedIds.has(permission.id))
+        const resolvedIds = resolvedIdsBySession.get(sessionId)
+        if (!acceptedIds && !resolvedIds) continue
+        const drop = (id: string) =>
+          acceptedIds?.has(id) || resolvedIds?.has(id) || false
+        const remaining = (grouped[sessionId] ?? []).filter((permission) => !drop(permission.id))
         if (remaining.length > 0) grouped[sessionId] = remaining
         else delete grouped[sessionId]
       }
@@ -1206,19 +1196,13 @@ export async function resyncBlockingRequestsForDirectory(
       if (isViewed) continue
       for (const permission of permissions) {
         if (knownIds.has(permission.id)) continue
-        const toastKey = getPermissionToastKey(sessionId, permission.id)
-        if (!toastKey || pendingPermissionToastIds.has(toastKey)) continue
-        pendingPermissionToastIds.add(toastKey)
-        const description = typeof permission.permission === "string" && permission.permission.trim().length > 0
-          ? permission.permission
-          : "Agent needs your approval"
-        toast.info("Permission needed", {
-          id: `permission-${toastKey}`,
-          description,
-          action: {
-            label: "Open session",
-            onClick: () => openSessionFromToast(sessionId, directory),
-          },
+        showPermissionNeededToast({
+          permission,
+          directory,
+          isViewed,
+          pendingIds: pendingPermissionToastIds,
+          show: (title, options) => toast.info(title, options),
+          openSession: openSessionFromToast,
         })
       }
     }
@@ -1350,6 +1334,19 @@ function handleEvent(
   childStores: ChildStoreManager,
   routingIndex: EventRoutingIndex,
 ) {
+  if ((payload as { type?: unknown }).type === "openchamber:permission-auto-accept.updated") {
+    const properties = (payload as unknown as { properties?: unknown }).properties
+    if (properties && typeof properties === "object") {
+      const snapshot = properties as { sessions?: unknown }
+      if (snapshot.sessions && typeof snapshot.sessions === "object") {
+        usePermissionStore.getState().applySnapshot({
+          sessions: snapshot.sessions as Record<string, boolean>,
+        })
+      }
+    }
+    return
+  }
+
   const directory = resolveDirectoryFromRoutingIndex(routingIndex, rawDirectory, payload, childStores)
 
   if (handleUiNotificationEvent(payload, directory)) {
@@ -1435,26 +1432,21 @@ function handleEvent(
     const permissionStore = usePermissionStore.getState()
     if (permissionStore.isSessionAutoAccepting(permission.sessionID)) {
       updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
-      void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
+      if (isVSCodeRuntime()) {
+        void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
+      }
       return
     }
 
-    const toastKey = getPermissionToastKey(permission.sessionID, permission.id)
     const isViewed = isViewedInCurrentSession(resolvedDirectory, permission.sessionID)
-    if (!isViewed && toastKey && !pendingPermissionToastIds.has(toastKey)) {
-      pendingPermissionToastIds.add(toastKey)
-      const description = typeof permission.permission === "string" && permission.permission.trim().length > 0
-        ? permission.permission
-        : "Agent needs your approval"
-      toast.info("Permission needed", {
-        id: `permission-${toastKey}`,
-        description,
-        action: {
-          label: "Open session",
-          onClick: () => openSessionFromToast(permission.sessionID, resolvedDirectory),
-        },
-      })
-    }
+    showPermissionNeededToast({
+      permission,
+      directory: resolvedDirectory,
+      isViewed,
+      pendingIds: pendingPermissionToastIds,
+      show: (title, options) => toast.info(title, options),
+      openSession: openSessionFromToast,
+    })
   }
 
   if (payload.type === "permission.replied") {
@@ -1761,6 +1753,11 @@ export function SyncProvider(props: {
   }, [childStores, routingIndex])
 
   // Configure child store manager
+  useEffect(() => {
+    if (isVSCodeRuntime()) return
+    void usePermissionStore.getState().hydrate().catch(() => undefined)
+  }, [props.sdk])
+
   useEffect(() => {
     const bootingDirs = new Set<string>()
 

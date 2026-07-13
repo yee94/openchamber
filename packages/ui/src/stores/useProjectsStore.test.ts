@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { useProjectsStore } from './useProjectsStore';
+import { reorderProjectEntriesById, useProjectsStore } from './useProjectsStore';
 
 describe('useProjectsStore moveProjectToTop', () => {
   beforeEach(() => {
@@ -32,5 +32,19 @@ describe('useProjectsStore moveProjectToTop', () => {
 
     useProjectsStore.getState().moveProjectToTop('missing');
     expect(useProjectsStore.getState().projects).toBe(initial);
+  });
+});
+
+describe('reorderProjectEntriesById', () => {
+  test('moves registry entries by their ids when visual order differs from store order', () => {
+    const projects = [
+      { id: 'alpha', path: '/workspace/alpha' },
+      { id: 'beta', path: '/workspace/beta' },
+      { id: 'gamma', path: '/workspace/gamma' },
+    ];
+
+    expect(reorderProjectEntriesById(projects, 'gamma', 'alpha').map((project) => project.id)).toEqual([
+      'gamma', 'alpha', 'beta',
+    ]);
   });
 });

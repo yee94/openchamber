@@ -6,7 +6,7 @@ import {
   releaseSessionStartupBarrier,
 } from '@/lib/session-startup-barrier';
 
-import { runSessionStartup } from './runSessionStartup';
+import { runSessionStartup, runSessionStartupAfterSettingsHydration } from './runSessionStartup';
 
 describe('runSessionStartup', () => {
   afterEach(() => {
@@ -23,6 +23,28 @@ describe('runSessionStartup', () => {
     await runSessionStartup(['/repo/a', '/repo/b'], start);
 
     expect(calls).toEqual([['/repo/a', '/repo/b']]);
+  });
+
+  test('reads project directories after settings hydration completes', async () => {
+    let releaseSettings: (() => void) | undefined;
+    const settingsHydration = new Promise<void>((resolve) => { releaseSettings = resolve; });
+    let directories = [] as string[];
+    const calls: string[][] = [];
+    const startup = runSessionStartupAfterSettingsHydration(
+      settingsHydration,
+      () => directories,
+      async (nextDirectories) => {
+        calls.push([...nextDirectories]);
+        return { activeSessions: [], archivedSessions: [] };
+      },
+    );
+
+    directories = ['/repo/restored'];
+    expect(calls).toEqual([]);
+    releaseSettings?.();
+    await startup;
+
+    expect(calls).toEqual([['/repo/restored']]);
   });
 
   test('releases the startup barrier after success', async () => {

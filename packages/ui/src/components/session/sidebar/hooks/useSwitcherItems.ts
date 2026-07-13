@@ -4,7 +4,7 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
-import { useGitAllBranches } from '@/stores/useGitStore';
+import { useGitStore } from '@/stores/useGitStore';
 import type { SessionNode } from '../types';
 import { compareSessionsByPinnedAndTime, isPathWithinProject } from '../utils';
 
@@ -42,7 +42,6 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const projects = useProjectsStore((state) => state.projects);
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
-  const branchesByDirectory = useGitAllBranches();
 
   const normalizedProjects = React.useMemo(
     () => projects
@@ -61,6 +60,40 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
     },
     [normalizedProjects],
   );
+
+  const visibleDirectories = React.useMemo(() => {
+    if (!enabled) return [];
+    return Array.from(new Set(activeSessions
+      .filter((session) => !session.time?.archived)
+      .filter((session) => !(session as Session & { parentID?: string | null }).parentID)
+      .filter((session) => {
+        if (!scopeProjectId) return true;
+        return findProjectForDirectory(resolveGlobalSessionDirectory(session))?.id === scopeProjectId;
+      })
+      .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds))
+      .slice(0, MAX_PARENT_SESSIONS)
+      .map((session) => resolveGlobalSessionDirectory(session))
+      .filter((directory): directory is string => Boolean(directory))));
+  }, [activeSessions, enabled, findProjectForDirectory, pinnedSessionIds, scopeProjectId]);
+
+  const branchesCacheRef = React.useRef<Map<string, string | null>>(new Map());
+  const branchesByDirectory = useGitStore((state) => {
+    const previous = branchesCacheRef.current;
+    let same = previous.size === visibleDirectories.length;
+    if (same) {
+      for (const directory of visibleDirectories) {
+        if (previous.get(directory) !== (state.directories.get(directory)?.status?.current ?? null)) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same) return previous;
+    const next = new Map<string, string | null>();
+    visibleDirectories.forEach((directory) => next.set(directory, state.directories.get(directory)?.status?.current ?? null));
+    branchesCacheRef.current = next;
+    return next;
+  });
 
   const items = React.useMemo<SwitcherItem[]>(() => {
     if (!enabled) return [];
