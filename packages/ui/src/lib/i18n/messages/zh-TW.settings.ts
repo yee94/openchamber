@@ -8,7 +8,7 @@
   'settings.providers.page.openCodeGo.replace': '取代',
   'settings.providers.page.openCodeGo.validate': '驗證',
   'settings.providers.page.openCodeGo.delete': '刪除',
-  'settings.providers.page.openCodeGo.saved': '已儲存 OpenCode Go 憑證。',
+  'settings.providers.page.quotaCredentials.saved': '已儲存 {provider} 憑證。',
   'settings.providers.page.openCodeGo.saveFailed': '無法驗證 OpenCode Go 憑證。',
   'settings.providers.page.openCodeGo.valid': 'OpenCode Go 憑證有效。',
   'settings.providers.page.openCodeGo.invalid': 'OpenCode Go 憑證無效或已過期。',

@@ -8,7 +8,7 @@ export const settingsDict = {
   'settings.providers.page.openCodeGo.replace': '교체',
   'settings.providers.page.openCodeGo.validate': '검증',
   'settings.providers.page.openCodeGo.delete': '삭제',
-  'settings.providers.page.openCodeGo.saved': 'OpenCode Go 인증 정보를 저장했습니다.',
+  'settings.providers.page.quotaCredentials.saved': '{provider} 인증 정보를 저장했습니다.',
   'settings.providers.page.openCodeGo.saveFailed': 'OpenCode Go 인증 정보를 검증할 수 없습니다.',
   'settings.providers.page.openCodeGo.valid': 'OpenCode Go 인증 정보가 유효합니다.',
   'settings.providers.page.openCodeGo.invalid': 'OpenCode Go 인증 정보가 유효하지 않거나 만료되었습니다.',

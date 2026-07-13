@@ -8,7 +8,7 @@ export const settingsDict = {
   'settings.providers.page.openCodeGo.replace': '置換',
   'settings.providers.page.openCodeGo.validate': '検証',
   'settings.providers.page.openCodeGo.delete': '削除',
-  'settings.providers.page.openCodeGo.saved': 'OpenCode Go の認証情報を保存しました。',
+  'settings.providers.page.quotaCredentials.saved': '{provider} の認証情報を保存しました。',
   'settings.providers.page.openCodeGo.saveFailed': 'OpenCode Go の認証情報を検証できませんでした。',
   'settings.providers.page.openCodeGo.valid': 'OpenCode Go の認証情報は有効です。',
   'settings.providers.page.openCodeGo.invalid': 'OpenCode Go の認証情報が無効または期限切れです。',

@@ -8,7 +8,7 @@ export const settingsDict = {
   'settings.providers.page.openCodeGo.replace': '替换',
   'settings.providers.page.openCodeGo.validate': '验证',
   'settings.providers.page.openCodeGo.delete': '删除',
-  'settings.providers.page.openCodeGo.saved': '已保存 OpenCode Go 凭据。',
+  'settings.providers.page.quotaCredentials.saved': '已保存 {provider} 凭据。',
   'settings.providers.page.openCodeGo.saveFailed': '无法验证 OpenCode Go 凭据。',
   'settings.providers.page.openCodeGo.valid': 'OpenCode Go 凭据有效。',
   'settings.providers.page.openCodeGo.invalid': 'OpenCode Go 凭据无效或已过期。',

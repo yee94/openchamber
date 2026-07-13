@@ -8,7 +8,7 @@ export const settingsDict = {
   'settings.providers.page.openCodeGo.replace': 'Remplacer',
   'settings.providers.page.openCodeGo.validate': 'Valider',
   'settings.providers.page.openCodeGo.delete': 'Supprimer',
-  'settings.providers.page.openCodeGo.saved': 'Identifiants OpenCode Go enregistrés.',
+  'settings.providers.page.quotaCredentials.saved': 'Identifiants de {provider} enregistrés.',
   'settings.providers.page.openCodeGo.saveFailed': 'Impossible de valider les identifiants OpenCode Go.',
   'settings.providers.page.openCodeGo.valid': 'Les identifiants OpenCode Go sont valides.',
   'settings.providers.page.openCodeGo.invalid': 'Les identifiants OpenCode Go sont invalides ou expirés.',

@@ -8,7 +8,7 @@ export const settingsDict = {
   'settings.providers.page.openCodeGo.replace': 'Замінити',
   'settings.providers.page.openCodeGo.validate': 'Перевірити',
   'settings.providers.page.openCodeGo.delete': 'Видалити',
-  'settings.providers.page.openCodeGo.saved': 'Дані OpenCode Go збережено.',
+  'settings.providers.page.quotaCredentials.saved': 'Облікові дані {provider} збережено.',
   'settings.providers.page.openCodeGo.saveFailed': 'Не вдалося перевірити дані OpenCode Go.',
   'settings.providers.page.openCodeGo.valid': 'Дані OpenCode Go дійсні.',
   'settings.providers.page.openCodeGo.invalid': 'Дані OpenCode Go недійсні або протерміновані.',

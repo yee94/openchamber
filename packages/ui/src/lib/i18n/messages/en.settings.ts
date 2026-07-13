@@ -8,7 +8,7 @@ export const settingsDict = {
   'settings.providers.page.openCodeGo.replace': 'Replace',
   'settings.providers.page.openCodeGo.validate': 'Validate',
   'settings.providers.page.openCodeGo.delete': 'Delete',
-  'settings.providers.page.openCodeGo.saved': 'OpenCode Go credentials saved.',
+  'settings.providers.page.quotaCredentials.saved': '{provider} credentials saved.',
   'settings.providers.page.openCodeGo.saveFailed': 'Could not validate OpenCode Go credentials.',
   'settings.providers.page.openCodeGo.valid': 'OpenCode Go credentials are valid.',
   'settings.providers.page.openCodeGo.invalid': 'OpenCode Go credentials are invalid or expired.',
