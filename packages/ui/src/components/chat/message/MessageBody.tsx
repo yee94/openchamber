@@ -1839,7 +1839,7 @@ const AssistantMessageBody = React.memo(({
                 }
 
                 const activity = activityByPart.get(part);
-                if (activity?.kind === 'tool' && (shouldRenderActivityGroup || !isStandaloneTool(toolName))) {
+                if (activity?.kind === 'tool' && !isStandaloneTool(toolName)) {
                     i += 1;
                     continue;
                 }
