@@ -658,7 +658,7 @@ const getSessionIdFromPayload = (event: Event): string | null => {
   return null
 }
 
-const getSessionInfoFromPayload = (event: Event): Session | null => {
+export const getSessionInfoFromPayload = (event: Event, fallbackDirectory?: string | null): Session | null => {
   if (event.type !== "session.created" && event.type !== "session.updated" && event.type !== "session.deleted") {
     return null
   }
@@ -678,12 +678,21 @@ const getSessionInfoFromPayload = (event: Event): Session | null => {
     return null
   }
 
-  return stripSessionDiffSnapshots(session as Session)
+  const sanitized = stripSessionDiffSnapshots(session as Session)
+  const directory = typeof fallbackDirectory === "string" && fallbackDirectory !== "global"
+    ? fallbackDirectory.trim()
+    : ""
+  const sessionDirectory = (sanitized as Session & { directory?: unknown }).directory
+  if (!directory || (typeof sessionDirectory === "string" && sessionDirectory.trim())) {
+    return sanitized
+  }
+
+  return { ...sanitized, directory } as Session
 }
 
-const applySessionEventToGlobalSessions = (payload: Event) => {
+const applySessionEventToGlobalSessions = (payload: Event, directory?: string | null) => {
   if (payload.type === "session.created" || payload.type === "session.updated") {
-    const session = getSessionInfoFromPayload(payload)
+    const session = getSessionInfoFromPayload(payload, directory)
     if (session) {
       useGlobalSessionsStore.getState().upsertSession(session)
     }
@@ -1356,7 +1365,7 @@ function handleEvent(
     return
   }
 
-  applySessionEventToGlobalSessions(payload)
+  applySessionEventToGlobalSessions(payload, directory)
   // Keep the cross-project status map current for ALL directories (mirrors the
   // global-session handling above). Child stores remain the primary source for
   // synced directories; this map covers sessions a child store doesn't list
