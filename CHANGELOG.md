@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Desktop/Linux:** official AppImage releases for x86_64 and arm64, with in-app window controls (position follows OS defaults or Settings → Sessions), writable-AppImage auto-update, and clearer updater errors when the AppImage is missing or read-only. Linux does not yet include system tray or launch-at-login.
+
 ## [1.16.0] - 2026-07-13
 
 - **Session goals:** arm the new target button in the composer and your next prompt becomes a [goal](https://docs.openchamber.dev/session-goals/) — the session keeps working toward it on its own, with an independent small-model audit checking each finished turn, until the objective is verifiably complete, blocked, or over its optional token budget. The loop runs on the server, so it continues with the app closed and survives restarts. A goal strip above the composer shows progress with pause/resume; goals can also start from the plan-implement dialog, from scheduled tasks ("Run as goal"), or with the new "Craft a Goal" starter and `/craft-goal` command. While a goal runs, per-turn "ready" notifications are replaced by a single notification when it settles.

@@ -7,7 +7,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/btriapitsyn/openchamber.git"
+    "url": "https://github.com/openchamber/openchamber.git"
   },
   "qna": "https://discord.gg/ZYRSdnwwKA",
   "license": "MIT",

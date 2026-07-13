@@ -20,6 +20,7 @@ export type ActivityRenderMode = 'collapsed' | 'summary';
 export type SessionRetentionAction = 'archive' | 'delete';
 export type TimeFormatPreference = 'auto' | '12h' | '24h';
 export type WeekStartPreference = 'auto' | 'sunday' | 'monday';
+export type DesktopWindowControlsPosition = 'auto' | 'left' | 'right';
 export type FileEditorKeymap = 'default' | 'vim';
 
 function normalizeFileEditorKeymap(value: unknown): FileEditorKeymap {
@@ -649,6 +650,7 @@ interface UIStore {
   showExpandedEditTools: boolean;
   timeFormatPreference: TimeFormatPreference;
   weekStartPreference: WeekStartPreference;
+  desktopWindowControlsPosition: DesktopWindowControlsPosition;
   mermaidRenderingMode: MermaidRenderingMode;
   userMessageRenderingMode: UserMessageRenderingMode;
   collapsibleUserMessages: boolean;
@@ -803,6 +805,7 @@ interface UIStore {
   setShowExpandedEditTools: (value: boolean) => void;
   setTimeFormatPreference: (value: TimeFormatPreference) => void;
   setWeekStartPreference: (value: WeekStartPreference) => void;
+  setDesktopWindowControlsPosition: (value: DesktopWindowControlsPosition) => void;
   setMermaidRenderingMode: (value: MermaidRenderingMode) => void;
   setUserMessageRenderingMode: (value: UserMessageRenderingMode) => void;
   setCollapsibleUserMessages: (value: boolean) => void;
@@ -950,6 +953,7 @@ export const useUIStore = create<UIStore>()(
         showExpandedEditTools: false,
         timeFormatPreference: 'auto',
         weekStartPreference: 'auto',
+        desktopWindowControlsPosition: 'auto',
         mermaidRenderingMode: 'svg',
         userMessageRenderingMode: 'markdown',
         collapsibleUserMessages: true,
@@ -2100,6 +2104,9 @@ export const useUIStore = create<UIStore>()(
         setWeekStartPreference: (value) => {
           set({ weekStartPreference: value });
         },
+        setDesktopWindowControlsPosition: (value) => {
+          set({ desktopWindowControlsPosition: value });
+        },
         setMermaidRenderingMode: (value) => {
           set({ mermaidRenderingMode: value });
         },
@@ -2357,6 +2364,7 @@ export const useUIStore = create<UIStore>()(
           showExpandedEditTools: state.showExpandedEditTools,
           timeFormatPreference: state.timeFormatPreference,
           weekStartPreference: state.weekStartPreference,
+          desktopWindowControlsPosition: state.desktopWindowControlsPosition,
           mermaidRenderingMode: state.mermaidRenderingMode,
           userMessageRenderingMode: state.userMessageRenderingMode,
           collapsibleUserMessages: state.collapsibleUserMessages,
