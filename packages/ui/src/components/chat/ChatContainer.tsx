@@ -51,6 +51,9 @@ import { useI18n } from '@/lib/i18n';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getEmbeddedSessionChatOriginSessionId } from '@/components/layout/contextPanelEmbeddedChat';
+import { isFullySyntheticMessage } from '@/lib/messages/synthetic';
+import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
+import { findShellCommandForMessage, isUserShellMarkerMessage } from './lib/shellBridge';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
@@ -206,13 +209,46 @@ const ChatViewport = React.memo(({
 }: ChatViewportProps) => {
     const { t } = useI18n();
     const promptPreviewsByTurnIdRef = React.useRef<Map<string, Part[]>>(new Map());
+    // Cache normalized parts per source array so unchanged messages keep the
+    // same reference and the memo below can bail out to the previous map.
+    const normalizedPromptPartsCache = React.useRef(new WeakMap<Part[], Part[]>());
+    // Shell-mode prompts show their extracted command; cache by message id so
+    // the parts array reference is stable while the command is unchanged.
+    const shellPreviewCache = React.useRef(new Map<string, { command: string; parts: Part[] }>());
     const promptPreviewsByTurnId = React.useMemo(() => {
         const next = new Map<string, Part[]>();
-        for (const message of renderedMessages) {
+        for (let index = 0; index < renderedMessages.length; index += 1) {
+            const message = renderedMessages[index];
             if (message.info.role !== 'user') {
                 continue;
             }
-            next.set(message.info.id, message.parts);
+            if (isUserShellMarkerMessage(message)) {
+                const command = findShellCommandForMessage(renderedMessages, index) ?? '';
+                const cached = shellPreviewCache.current.get(message.info.id);
+                if (cached && cached.command === command) {
+                    next.set(message.info.id, cached.parts);
+                } else {
+                    const parts = [{ type: 'text', text: command ? `$ ${command}` : '/shell' } as Part];
+                    shellPreviewCache.current.set(message.info.id, { command, parts });
+                    next.set(message.info.id, parts);
+                }
+                continue;
+            }
+            // Other fully synthetic user messages (loop continuations,
+            // plan-mode injections) are not prompts the user typed — keep
+            // them out of the navigator entirely.
+            if (isFullySyntheticMessage(message.parts)) {
+                continue;
+            }
+            let displayParts = normalizedPromptPartsCache.current.get(message.parts);
+            if (!displayParts) {
+                displayParts = normalizeUserDisplayParts(message.parts);
+                normalizedPromptPartsCache.current.set(message.parts, displayParts);
+            }
+            if (displayParts.length === 0) {
+                continue;
+            }
+            next.set(message.info.id, displayParts);
         }
         const prev = promptPreviewsByTurnIdRef.current;
         if (prev.size === next.size) {
@@ -230,6 +266,27 @@ const ChatViewport = React.memo(({
         promptPreviewsByTurnIdRef.current = next;
         return next;
     }, [renderedMessages]);
+    // Only real (non-synthetic) prompts become rail entries; selection still
+    // targets the same turn anchors as the timeline.
+    const promptTurnIds = React.useMemo(
+        () => turnIds.filter((id) => promptPreviewsByTurnId.has(id)),
+        [promptPreviewsByTurnId, turnIds],
+    );
+    // If the viewport sits in a filtered-out (synthetic) turn, treat the
+    // nearest preceding real prompt as active so the rail doesn't jump.
+    const railActiveTurnId = React.useMemo(() => {
+        if (!activeTurnId || promptPreviewsByTurnId.has(activeTurnId)) {
+            return activeTurnId;
+        }
+        const activeIndex = turnIds.indexOf(activeTurnId);
+        for (let index = activeIndex - 1; index >= 0; index -= 1) {
+            const turnId = turnIds[index];
+            if (promptPreviewsByTurnId.has(turnId)) {
+                return turnId;
+            }
+        }
+        return null;
+    }, [activeTurnId, promptPreviewsByTurnId, turnIds]);
     const focusScrollContainer = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
         if (event.defaultPrevented || shouldIgnoreChatNavigationTarget(event.target)) {
             return;
@@ -318,11 +375,11 @@ const ChatViewport = React.memo(({
                     </div>
                 </ScrollShadow>
                 <OverlayScrollbar containerRef={scrollRef} suppressVisibility={isProgrammaticFollowActive} userIntentOnly observeMutations={false} />
-                {showPromptNavigator ? (
+                {showPromptNavigator && promptTurnIds.length >= 2 ? (
                     <PromptNavigatorRail
-                        turnIds={turnIds}
+                        turnIds={promptTurnIds}
                         previewsByTurnId={promptPreviewsByTurnId}
-                        activeTurnId={activeTurnId}
+                        activeTurnId={railActiveTurnId}
                         onSelectTurn={onSelectTurn}
                         canLoadEarlier={canLoadEarlierPrompts}
                         isLoadingOlder={isLoadingOlderPrompts}

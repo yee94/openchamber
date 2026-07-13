@@ -11,6 +11,7 @@ import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
 import type { TurnChangedFile, TurnGroupingContext } from '../lib/turns/types';
 import { cn } from '@/lib/utils';
+import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
@@ -278,6 +279,8 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     );
 };
 
+const SHELL_CODE_TAG_STYLE: React.CSSProperties = { background: 'transparent', backgroundColor: 'transparent' };
+
 const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) => {
     const [expanded, setExpanded] = React.useState(false);
     const [copiedOutput, setCopiedOutput] = React.useState(false);
@@ -335,9 +338,14 @@ const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) 
             </div>
 
             {command ? (
-                <pre className="typography-meta mt-1.5 overflow-x-auto whitespace-pre-wrap break-words text-foreground/90 font-mono">
-                    {command}
-                </pre>
+                <div className="typography-meta mt-1.5 overflow-x-auto font-mono">
+                    <WorkerHighlightedCode
+                        language="bash"
+                        code={command}
+                        codeStyle={SHELL_CODE_TAG_STYLE}
+                        wrap
+                    />
+                </div>
             ) : null}
 
             {hasOutput ? (
@@ -363,9 +371,14 @@ const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) 
                         </button>
                     </div>
                     {expanded ? (
-                        <pre className="typography-meta mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap break-words text-foreground/85 font-mono">
-                            {output}
-                        </pre>
+                        <div className="typography-meta mt-1.5 max-h-56 overflow-auto font-mono text-foreground/85">
+                            <WorkerHighlightedCode
+                                language="bash"
+                                code={output}
+                                codeStyle={SHELL_CODE_TAG_STYLE}
+                                wrap
+                            />
+                        </div>
                     ) : null}
                 </div>
             ) : null}

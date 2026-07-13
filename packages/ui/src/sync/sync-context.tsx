@@ -2512,11 +2512,37 @@ export function dropCachedSessionMessageRecordsSnapshots(
   }
 }
 
+// Shell-mode bridge messages (single bash tool part parented to a synthetic
+// shell-marker user message) are hidden from the timeline and rendered inside
+// the user row, so they never go through the live streaming-tail path. Their
+// part updates (output chunks, running→completed) must not be suspended, or
+// the shell card freezes until the next full snapshot rebuild.
+const USER_SHELL_MARKER = "The following tool was executed by the user"
+
+const isSuspendExemptShellBridge = (state: State, info: Message, parts: Part[] | undefined): boolean => {
+  if (!parts || parts.length !== 1) return false
+  const part = parts[0] as { type?: unknown; tool?: unknown }
+  if (part?.type !== "tool" || typeof part.tool !== "string" || part.tool.toLowerCase() !== "bash") return false
+  const parentID = (info as { parentID?: unknown }).parentID
+  if (typeof parentID !== "string" || parentID.length === 0) return false
+  const parentParts = state.part[parentID]
+  if (!parentParts) return false
+  return parentParts.some((parentPart) => {
+    if (parentPart?.type !== "text") return false
+    if ((parentPart as { synthetic?: boolean }).synthetic !== true) return false
+    const text = (parentPart as { text?: unknown }).text
+    return typeof text === "string" && text.trim().startsWith(USER_SHELL_MARKER)
+  })
+}
+
 const snapshotPartsMatchState = (snapshot: SessionMessageRecordsSnapshot, state: State): boolean => {
   for (const record of snapshot.list) {
     if (snapshot.suspendPartUpdates) {
       const suspendedID = snapshot.suspendedPartUpdatesMessageID
-      if (!suspendedID || record.info.id === suspendedID) {
+      if (
+        (!suspendedID || record.info.id === suspendedID)
+        && !isSuspendExemptShellBridge(state, record.info, state.part[record.info.id])
+      ) {
         continue
       }
     }
@@ -2594,6 +2620,7 @@ export function buildSessionMessageRecordsSnapshot(
     const shouldSuspendParts = suspendPartUpdates
       && previousRecord
       && (!suspendedPartUpdatesMessageID || message.id === suspendedPartUpdatesMessageID)
+      && !isSuspendExemptShellBridge(state, message, state.part[message.id])
     const parts = shouldSuspendParts
       ? previousRecord.parts
       : (state.part[message.id] ?? EMPTY_PARTS)
