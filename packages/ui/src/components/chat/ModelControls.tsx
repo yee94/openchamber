@@ -1055,6 +1055,56 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             return;
                         }
 
+                        // Prefer session memory, then last user manual pick for this agent,
+                        // then the agent's configured pin. OpenCode agent defaults must not
+                        // clobber a model the user previously chose for this agent.
+                        const persistedChoice = getAgentModelForSession(currentSessionId, currentAgentName);
+                        if (persistedChoice) {
+                            const result = tryApplyModelSelection(
+                                persistedChoice.providerId,
+                                persistedChoice.modelId,
+                                currentAgentName,
+                            );
+                            if (result === 'applied' || result === 'provider-missing') {
+                                return;
+                            }
+                        }
+
+                        const rememberedChoice = useConfigStore.getState().getAgentModelSelection(currentAgentName);
+                        if (rememberedChoice) {
+                            const result = tryApplyModelSelection(
+                                rememberedChoice.providerId,
+                                rememberedChoice.modelId,
+                                currentAgentName,
+                            );
+                            if (result === 'applied' || result === 'provider-missing') {
+                                if (result === 'applied') {
+                                    saveSessionModelSelection(
+                                        currentSessionId,
+                                        rememberedChoice.providerId,
+                                        rememberedChoice.modelId,
+                                    );
+                                    saveAgentModelForSession(
+                                        currentSessionId,
+                                        currentAgentName,
+                                        rememberedChoice.providerId,
+                                        rememberedChoice.modelId,
+                                    );
+                                    if (rememberedChoice.variant !== undefined) {
+                                        saveAgentModelVariantForSession(
+                                            currentSessionId,
+                                            currentAgentName,
+                                            rememberedChoice.providerId,
+                                            rememberedChoice.modelId,
+                                            rememberedChoice.variant,
+                                        );
+                                        setCurrentVariant(rememberedChoice.variant);
+                                    }
+                                }
+                                return;
+                            }
+                        }
+
                         const selectedAgent = shouldPreferAgentModel
                             ? agents.find((agent) => agent.name === currentAgentName)
                             : undefined;
@@ -1081,19 +1131,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 return;
                             }
                         }
-
-                        const persistedChoice = getAgentModelForSession(currentSessionId, currentAgentName);
-
-                        if (persistedChoice) {
-                            const result = tryApplyModelSelection(
-                                persistedChoice.providerId,
-                                persistedChoice.modelId,
-                                currentAgentName,
-                            );
-                            if (result === 'applied' || result === 'provider-missing') {
-                                return;
-                            }
-                        }
                     }
                 }
             } catch (error) {
@@ -1112,7 +1149,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionId,
         getAgentModelForSession,
         saveAgentModelForSession,
+        saveAgentModelVariantForSession,
         saveSessionModelSelection,
+        setCurrentVariant,
         tryApplyModelSelection,
         contextHydrated,
     ]);
@@ -1188,8 +1227,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const handleVariantSelect = React.useCallback((variant: string | undefined) => {
         if (currentProviderId && currentModelId) {
             commitVariantSelectionForModel(currentProviderId, currentModelId, variant);
+            const agentName = resolveLiveAgentName();
+            if (agentName) {
+                useConfigStore.getState().saveAgentModelSelection(
+                    agentName,
+                    currentProviderId,
+                    currentModelId,
+                    variant,
+                );
+            }
         }
-    }, [commitVariantSelectionForModel, currentModelId, currentProviderId]);
+    }, [commitVariantSelectionForModel, currentModelId, currentProviderId, resolveLiveAgentName]);
 
     const handleAgentChange = React.useCallback((agentName: string, options?: { closeModelSelector?: boolean }) => {
         try {
@@ -1254,6 +1302,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         handleCycleAgentFromModelPicker(cycleAgentDirection);
     }, [getCycleAgentDirectionFromEvent, handleCycleAgentFromModelPicker]);
 
+    const persistAgentModelPreference = React.useCallback((
+        agentName: string | undefined | null,
+        providerId: string,
+        modelId: string,
+        variant?: string,
+    ) => {
+        if (!agentName || !providerId || !modelId) {
+            return;
+        }
+        useConfigStore.getState().saveAgentModelSelection(agentName, providerId, modelId, variant);
+    }, []);
+
     const handleProviderAndModelChange = (
         providerId: string,
         modelId: string,
@@ -1272,6 +1332,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 }
                 return;
             }
+            persistAgentModelPreference(
+                effectiveAgentName,
+                providerId,
+                modelId,
+                options?.applyVariant ? options.variant : useConfigStore.getState().currentVariant,
+            );
             if (!options?.applyVariant) {
                 // Add to recent models on successful selection.
                 addRecentModel(providerId, modelId);
@@ -1640,6 +1706,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return;
             }
 
+            persistAgentModelPreference(resolveLiveAgentName(), providerId, modelId, variant);
             setExpandedMobileModelKey(null);
             closeMobilePanel();
             focusMobileComposer();
@@ -1977,6 +2044,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return;
             }
 
+            persistAgentModelPreference(resolveLiveAgentName(), targetProviderId, targetModelId, variant);
             closeMobilePanel();
             requestAnimationFrame(() => {
                 const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
