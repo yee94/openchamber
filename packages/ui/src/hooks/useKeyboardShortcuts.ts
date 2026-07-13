@@ -416,6 +416,9 @@ export const useKeyboardShortcuts = () => {
       if (sessionId && agentName && providerId && modelId) {
         useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, nextVariant);
       }
+      if (agentName && providerId && modelId) {
+        useConfigStore.getState().saveAgentModelSelection(agentName, providerId, modelId, nextVariant);
+      }
 
       return true;
     };

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.25] - 2026-07-13
+
+- **Per-agent model memory:** when OpenChamber settings do not override the default session model, new sessions and agent switches restore each agent's last user-selected model and variant instead of falling back to OpenCode defaults.
+
 ## [1.15.24] - 2026-07-13
 
 - **Global configuration:** add a dedicated editor for OpenCode, oh-my-opencode-slim, and oh-my-openagent configuration, with safe save and restart flows across web, desktop, and VS Code runtimes.
