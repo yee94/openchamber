@@ -1,5 +1,4 @@
 import React, { useMemo, useRef, useCallback, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
   areFilesEqual,
   areOptionsEqual,
@@ -20,6 +19,7 @@ import {
   PierreDiffCommentOverlays,
   toPierreAnnotationId,
   useInlineCommentController,
+  CodeSelectionActionBubble,
 } from '@/components/comments';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
@@ -32,10 +32,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
-import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/icon/Icon';
-import { useI18n } from '@/lib/i18n';
-import { ShortcutKbd } from '@/components/ui/kbd';
 
 
 // Threshold (bytes) above which syntax highlighting is degraded for performance
@@ -480,7 +476,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   enableComments = true,
   enableSelectionActions = true,
 }) => {
-  const { t } = useI18n();
   const themeContext = useOptionalThemeSystem();
 
   const isDark = themeContext?.currentTheme.metadata.variant === 'dark';
@@ -1056,9 +1051,12 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         });
         if (enableSelectionActions) {
           const rect = numberCell.getBoundingClientRect();
+          const lineType = numberCell.closest('[data-line-type]')?.getAttribute('data-line-type');
+          const codeLine = Array.from(shadowRoot.querySelectorAll<HTMLElement>(`[data-line="${lineNumber}"]`))
+            .find((line) => !lineType || line.getAttribute('data-line-type') === lineType);
           setSelectionAction({
             range: { start: lineNumber, end: lineNumber, side },
-            x: rect.right + 12,
+            x: Math.min(window.innerWidth - 240, Math.max(8, codeLine?.getBoundingClientRect().left ?? rect.right + 12)),
             y: rect.top - 8,
           });
         }
@@ -1071,6 +1069,14 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         const element = node instanceof Element ? node : node.parentElement;
         const row = element?.closest('[data-line]');
         if (!(row instanceof HTMLElement)) return null;
+        const rowLineNumber = Number.parseInt(row.getAttribute('data-line') ?? '', 10);
+        if (Number.isFinite(rowLineNumber)) {
+          return {
+            lineNumber: rowLineNumber,
+            side: resolveClickedSide(row),
+            lineStartX: row.getBoundingClientRect().left,
+          };
+        }
         const cells = Array.from(row.querySelectorAll<HTMLElement>('[data-column-number]'));
         if (cells.length === 0) return null;
         const numberCell = cells.reduce((closest, candidate) => {
@@ -1080,7 +1086,11 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         });
         const lineNumber = Number.parseInt(numberCell.getAttribute('data-column-number') ?? '', 10);
         if (!Number.isFinite(lineNumber)) return null;
-        return { lineNumber, side: resolveClickedSide(numberCell) };
+        return {
+          lineNumber,
+          side: resolveClickedSide(numberCell),
+          lineStartX: numberCell.getBoundingClientRect().right + 12,
+        };
       };
 
       const onPointerUp = () => {
@@ -1112,7 +1122,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
               end: end.lineNumber,
               side: start.side,
             },
-            x: Math.min(window.innerWidth - 120, Math.max(120, rect.left + rect.width / 2)),
+            x: Math.min(window.innerWidth - 240, Math.max(8, start.lineStartX)),
             y: Math.max(8, rect.top - 8),
           });
         });
@@ -1203,29 +1213,15 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     />
   ) : null;
 
-  const selectionActionBubble = enableSelectionActions && selectionAction ? createPortal(
-    <div
-      data-code-selection-action="true"
-      className="fixed z-[100] -translate-x-1/2 -translate-y-full rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-1 shadow-lg"
-      style={{ left: selectionAction.x, top: selectionAction.y }}
-      onPointerDown={(event) => event.preventDefault()}
-    >
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 gap-1.5 px-2"
-        onClick={() => {
-          handleAddSelectionToChat(selectionAction.range);
-          setSelectionAction(null);
-          window.getSelection()?.removeAllRanges();
-        }}
-      >
-        <Icon name="add" className="size-4" />
-        {t('chat.textSelection.actions.addToChat')}
-        <ShortcutKbd shortcut="⌘+I" />
-      </Button>
-    </div>,
-    document.body,
+  const selectionActionBubble = enableSelectionActions && selectionAction ? (
+    <CodeSelectionActionBubble
+      position={selectionAction}
+      onAddToChat={() => {
+        handleAddSelectionToChat(selectionAction.range);
+        setSelectionAction(null);
+        window.getSelection()?.removeAllRanges();
+      }}
+    />
   ) : null;
 
   if (layout === 'fill') {
