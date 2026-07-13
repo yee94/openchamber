@@ -17,7 +17,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -340,10 +339,7 @@ export function ScheduledTasksDialog() {
     setMutatingTaskID(task.id);
     try {
       await runScheduledTaskNow(selectedProjectID, task.id);
-      await Promise.all([
-        reloadTasks(selectedProjectID, { silent: true }),
-        refreshGlobalSessions(),
-      ]);
+      await reloadTasks(selectedProjectID, { silent: true });
       toast.success(t('sessions.scheduledTasks.dialog.toast.started'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.runFailed'));

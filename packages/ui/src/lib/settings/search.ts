@@ -28,6 +28,13 @@ interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
 
 const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
+    id: 'global-config.editor',
+    page: 'global-config',
+    titleKey: 'settings.globalConfig.title',
+    descriptionKey: 'settings.globalConfig.description',
+    keywords: ['opencode.jsonc', 'oh-my-opencode-slim', 'oh-my-openagent', 'jsonc'],
+  },
+  {
     id: 'appearance.language',
     page: 'appearance',
     titleKey: 'settings.appearance.language.label',
@@ -118,10 +125,23 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
+    id: 'appearance.code-font-size',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.codeFontSize',
+    keywords: ['code', 'font', 'text size', 'diff'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
     id: 'appearance.terminal-font-size',
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.terminalFontSize',
     keywords: ['terminal', 'font', 'text size'],
+  },
+  {
+    id: 'appearance.editor-font-size',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.editorFontSize',
+    keywords: ['editor', 'font', 'text size', 'code'],
   },
   {
     id: 'appearance.spacing-density',
@@ -182,6 +202,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['recap', 'assist', 'small model', 'summary'],
   },
   {
+    id: 'chat.session-assistance',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.sessionAssistance',
+    keywords: ['recap', 'suggestion', 'subagent'],
+  },
+  {
     id: 'chat.session-suggestion',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.sessionSuggestion',
@@ -194,10 +220,30 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['title', 'rename', 'refresh', 'throttle', 'small model', 'summary'],
   },
   {
+    id: 'chat.session-goal',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.sessionGoal',
+    keywords: ['goal', 'objective', 'auto continue', 'small model'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'chat.session-goal-budget',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.goal.budgetLabel',
+    keywords: ['goal', 'budget', 'tokens', 'limit'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'chat.reasoning-traces',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showReasoningTraces',
     keywords: ['thinking', 'reasoning'],
+  },
+  {
+    id: 'chat.reasoning',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.reasoning',
+    keywords: ['thinking', 'traces'],
   },
   {
     id: 'chat.sticky-user-header',
@@ -218,6 +264,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['layout', 'wide', 'messages'],
   },
   {
+    id: 'chat.message-appearance',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.messageAppearance',
+    keywords: ['layout', 'messages', 'appearance'],
+  },
+  {
     id: 'chat.code-block-line-wrap',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.codeBlockLineWrap',
@@ -231,10 +283,22 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['copy', 'read aloud'],
   },
   {
+    id: 'chat.subagent-read-only-banner',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.allowPromptingSubagentSessions',
+    keywords: ['subagent', 'read only', 'prompt', 'banner'],
+  },
+  {
     id: 'chat.tool-file-icons',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showToolFileIcons',
     keywords: ['tools', 'files', 'icons'],
+  },
+  {
+    id: 'chat.tools-and-files',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.toolsAndFiles',
+    keywords: ['tools', 'files', 'dotfiles'],
   },
   {
     id: 'chat.changed-files',
@@ -261,6 +325,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.persistDraftMessages',
     keywords: ['draft', 'message'],
+  },
+  {
+    id: 'chat.composer',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.composer',
+    keywords: ['input', 'draft', 'spellcheck'],
   },
   {
     id: 'chat.spellcheck',

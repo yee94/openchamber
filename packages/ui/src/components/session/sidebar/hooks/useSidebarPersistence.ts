@@ -1,7 +1,7 @@
 import React from 'react';
-import type { Session } from '@opencode-ai/sdk/v2';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { prunePinnedSessionIdsByKnownIds } from './pinnedSessionCleanup';
 
 type SafeStorageLike = {
   getItem: (key: string) => string | null;
@@ -32,10 +32,10 @@ const LEGACY_EXPANSION_CONTEXT_PREFIXES = [
 
 type Args = {
   isVSCode: boolean;
-  hasLoadedGlobalSessions: boolean;
+  fullCatalogSessionIds: Set<string>;
+  fullCatalogGeneration: number;
   safeStorage: SafeStorageLike;
   keys: Keys;
-  sessions: Session[];
   pinnedSessionIds: Set<string>;
   setPinnedSessionIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   groupOrderByProject: Map<string, string[]>;
@@ -48,10 +48,10 @@ type Args = {
 export const useSidebarPersistence = (args: Args) => {
   const {
     isVSCode,
-    hasLoadedGlobalSessions,
+    fullCatalogSessionIds,
+    fullCatalogGeneration,
     safeStorage,
     keys,
-    sessions,
     setPinnedSessionIds,
     groupOrderByProject,
     activeSessionByProject,
@@ -153,28 +153,14 @@ export const useSidebarPersistence = (args: Args) => {
   }, [keys.projectCollapse, keys.sessionExpanded, keys.sessionExpandedLegacy, safeStorage, setCollapsedProjects, setExpandedParents]);
 
   React.useEffect(() => {
-    if (!hasLoadedGlobalSessions) {
+    if (fullCatalogGeneration === 0) {
       return;
     }
 
-    if (sessions.length === 0) {
-      return;
-    }
-
-    const existingSessionIds = new Set(sessions.map((session) => session.id));
     setPinnedSessionIds((prev) => {
-      let changed = false;
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (existingSessionIds.has(id)) {
-          next.add(id);
-        } else {
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
+      return prunePinnedSessionIdsByKnownIds(fullCatalogSessionIds, prev);
     });
-  }, [hasLoadedGlobalSessions, sessions, setPinnedSessionIds]);
+  }, [fullCatalogGeneration, fullCatalogSessionIds, setPinnedSessionIds]);
 
   React.useEffect(() => {
     try {

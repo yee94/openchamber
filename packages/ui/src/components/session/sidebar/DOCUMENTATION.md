@@ -32,9 +32,12 @@
   most once per 24 hours to remove sessions deleted or archived while the app
   was closed.
 - `SessionStartupCoordinator` owns that pass before `SessionSidebar` mounts its
-  normal orchestration. After starting the server job, the UI observes SQLite
+  normal orchestration. It waits for registered settings hydration and then reads
+  the latest persisted project paths so an initially empty renderer store cannot
+  release the startup barrier early. After starting the server job, the UI observes SQLite
   revisions through one low-priority long poll. When SQLite has rows the startup
-  logo releases immediately and validation continues with cached rows visible.
+  logo releases immediately only when those rows existed in the initial restore;
+  validation then continues with cached rows visible.
   A first run with an empty index stays in the global loading state until the
   server job completes; sidebar code must not start another hydrate or list cycle.
 - Project collapse state controls presentation only; Electron session-summary
@@ -75,7 +78,7 @@
   on Enter. Keyboard or programmatic focus does not arm this shortcut, and blur
   clears the mouse-focus authorization.
 - Compact relative times use `common.relative.*Compact` i18n keys.
-- Row action icons (archive, menu) use title-matched `h-3.5` glyphs with `gap-1` spacing; the title
+- Row action icons (pin, menu) use title-matched `h-3.5` glyphs with `gap-1` spacing; the title
   reserves right padding on hover so icons own their space — no fade veil behind them.
 - Session busy/unread status is a trailing shrink-0 marker on the right of the title
   (ContextUsage-style track+arc ring while busy, info-colored unread dot when
@@ -135,6 +138,9 @@
 - `hooks/useProjectRepoStatus.ts`: Tracks per-project git-repo state and root branch metadata.
 - `hooks/useProjectSessionLists.ts`: Builds live and archived session lists for a given project (including worktrees + dedupe).
 - `hooks/useSessionFolderCleanup.ts`: Cleans stale folder session IDs by reconciling known sessions/archived scopes.
+- Persistent pinned, folder, and session-order cleanup consumes the store's complete-catalog ID snapshot (`fullCatalogSessionIds` + generation). Bounded directory snapshots only drive visible rows.
+- Session order is keyed by each group's `folderScopeKey`; root rows, folder rows, navigation, and sortable items consume the same scope-local order.
+- `sessionSortableOrder.ts` derives the visible sortable IDs from the rendered folder tree, collapsed/search state, and Show-more slice. Reordering stays within one folder or the ungrouped scope; folder drops own cross-folder moves.
 - `hooks/useStickyProjectHeaders.ts`: Tracks which project headers are sticky/stuck via `IntersectionObserver`.
 
 ### Types and utilities

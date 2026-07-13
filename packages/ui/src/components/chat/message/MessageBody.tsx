@@ -456,9 +456,10 @@ const writeRevealedToolIds = (messageId: string, value: Set<string>): void => {
     revealedToolIdsByMessage.set(messageId, new Set(value));
 };
 
-const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
+const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
     messageId: string;
     parts: Part[];
+    messageCreatedAt?: number | null;
     isMobile: boolean;
     alwaysShowActions?: boolean;
     hasTouchInput?: boolean;
@@ -472,8 +473,9 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
     userActionsMode?: 'inline' | 'external-content' | 'external-actions';
     stickyUserHeaderEnabled?: boolean;
 }) => {
-    const { t } = useI18n();
+    const { locale, t } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
+    const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
 
@@ -549,6 +551,12 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
 
     const effectiveOnFork = chatSurfaceMode === 'mini-chat' ? undefined : onFork;
     // 移动端：尺寸/间距与桌面一致；左对齐由底栏 -ml 处理
+    const timestamp = React.useMemo(() => {
+        void locale;
+        if (typeof messageCreatedAt !== 'number' || messageCreatedAt <= 0) return null;
+        const formatted = formatTimestampForDisplay(messageCreatedAt, timeFormatPreference);
+        return formatted.length > 0 ? formatted : null;
+    }, [locale, messageCreatedAt, timeFormatPreference]);
     const actionsBlock = ((canCopyMessage && hasCopyableText) || onRevert || effectiveOnFork) && showUserActions ? (
         <div className={cn(
             'group/user-actions',
@@ -574,6 +582,20 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
                 )}
                 data-message-action-group="true"
             >
+                {timestamp ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span
+                                className="mr-1 flex items-center gap-1 text-sm tabular-nums text-muted-foreground/60"
+                                aria-label={`Message time: ${timestamp}`}
+                            >
+                                <Icon name="time" className="h-3.5 w-3.5" />
+                                <span className="message-footer__label">{timestamp}</span>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{timestamp}</TooltipContent>
+                    </Tooltip>
+                ) : null}
                 {onRevert && (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -2028,6 +2050,7 @@ const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
             <UserMessageBody
                 messageId={props.messageId}
                 parts={props.parts}
+                messageCreatedAt={props.messageCreatedAt}
                 isMobile={props.isMobile}
                 alwaysShowActions={props.alwaysShowActions}
                 hasTouchInput={props.hasTouchInput}

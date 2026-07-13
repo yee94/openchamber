@@ -53,11 +53,10 @@ describe('buildProjectNavigationTargets', () => {
       },
       getOrderedGroups: (_projectId, groups) => groups,
       pinnedSessionIds: new Set(),
-      sessionOrderIndex: new Map([
-        ['nested', 0],
-        ['root-b', 1],
-        ['root-a', 2],
-      ]),
+      sessionOrderByScope: {
+        '/project': ['root-b', 'root-a'],
+        '/project/worktree': ['nested'],
+      },
     });
 
     expect(targets.map((target) => target.sessionId)).toEqual(['root-b', 'root-a', 'nested']);
@@ -81,10 +80,31 @@ describe('buildProjectNavigationTargets', () => {
       foldersMap: {},
       getOrderedGroups: (_projectId, groups) => groups,
       pinnedSessionIds: new Set(),
-      sessionOrderIndex: new Map(),
+      sessionOrderByScope: {},
     });
 
     expect(targets.map((target) => target.sessionId)).toEqual(['parent']);
+  });
+
+  test('keeps manual session order local to each folder scope', () => {
+    const targets = buildProjectNavigationTargets({
+      sections: [{
+        project: { id: 'project-a' },
+        groups: [
+          group('root', [node('root-a', 100), node('root-b', 200)], { main: true }),
+          group('worktree', [node('worktree-a', 100, '/project/worktree'), node('worktree-b', 200, '/project/worktree')], { directory: '/project/worktree' }),
+        ],
+      }],
+      foldersMap: {},
+      getOrderedGroups: (_projectId, groups) => groups,
+      pinnedSessionIds: new Set(),
+      sessionOrderByScope: {
+        '/project': ['root-a', 'root-b'],
+        '/project/worktree': ['worktree-b', 'worktree-a'],
+      },
+    });
+
+    expect(targets.map((target) => target.sessionId)).toEqual(['root-a', 'root-b', 'worktree-b', 'worktree-a']);
   });
 
   test('resolves a validated group-virtualizer index without clamping an unavailable target', () => {

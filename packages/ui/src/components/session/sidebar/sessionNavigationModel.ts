@@ -1,6 +1,6 @@
 import type { Session } from '@opencode-ai/sdk/v2';
 
-import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
+import type { SessionFoldersMap, SessionOrderMap } from '@/stores/useSessionFoldersStore';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { SessionNavigationTarget } from '@/sync/session-navigation';
 
@@ -17,7 +17,7 @@ type BuildProjectNavigationTargetsArgs = {
   foldersMap: SessionFoldersMap;
   getOrderedGroups: (projectId: string, groups: SessionGroup[]) => SessionGroup[];
   pinnedSessionIds: Set<string>;
-  sessionOrderIndex: Map<string, number>;
+  sessionOrderByScope: SessionOrderMap;
 };
 
 type FilterVisibleProjectNavigationTargetsArgs = {
@@ -123,20 +123,9 @@ export const buildProjectNavigationTargets = ({
   foldersMap,
   getOrderedGroups,
   pinnedSessionIds,
-  sessionOrderIndex,
+  sessionOrderByScope,
 }: BuildProjectNavigationTargetsArgs): SessionNavigationTarget[] => {
   const targets: SessionNavigationTarget[] = [];
-
-  const compareNodes = (a: SessionNode, b: SessionNode): number => {
-    const aIndex = sessionOrderIndex.get(a.session.id);
-    const bIndex = sessionOrderIndex.get(b.session.id);
-    if (aIndex !== undefined || bIndex !== undefined) {
-      if (aIndex === undefined) return 1;
-      if (bIndex === undefined) return -1;
-      if (aIndex !== bIndex) return aIndex - bIndex;
-    }
-    return compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds);
-  };
 
   sections.forEach((section) => {
     const orderedGroups = getOrderedGroups(section.project.id, section.groups);
@@ -149,11 +138,22 @@ export const buildProjectNavigationTargets = ({
       if (group.isArchivedBucket) return;
 
       const groupKey = `${section.project.id}:${group.id}`;
+      const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
+      const sessionOrderIndex = new Map((folderScopeKey ? sessionOrderByScope[folderScopeKey] : [])?.map((id, index) => [id, index]));
+      const compareNodes = (a: SessionNode, b: SessionNode): number => {
+        const aIndex = sessionOrderIndex.get(a.session.id);
+        const bIndex = sessionOrderIndex.get(b.session.id);
+        if (aIndex !== undefined || bIndex !== undefined) {
+          if (aIndex === undefined) return 1;
+          if (bIndex === undefined) return -1;
+          if (aIndex !== bIndex) return aIndex - bIndex;
+        }
+        return compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds);
+      };
       const sourceNodes = [...group.sessions]
         .filter((node) => !node.session.time?.archived && !isSubtaskSession(node.session))
         .sort(compareNodes);
       const nodesById = new Map(sourceNodes.map((node) => [node.session.id, node]));
-      const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
       const folders = folderScopeKey ? (foldersMap[folderScopeKey] ?? []) : [];
       const foldersByParent = new Map<string | null, typeof folders>();
       folders.forEach((folder) => {

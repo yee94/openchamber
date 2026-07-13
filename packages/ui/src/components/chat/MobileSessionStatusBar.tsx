@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllSessionStatuses, useAllLiveSessions } from '@/sync/sync-context';
-import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
+import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore, refreshGlobalSessionsForDirectories } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
@@ -448,15 +448,20 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     }
   }, [filterProjectId, hasPinnedSessions, setFilterProjectId]);
 
-  // Refresh the cross-project session list when the panel opens (mirrors the
-  // dedicated MobileSessionsSheet). The active-directory sync only upserts the
-  // current project's sessions, so other projects need this global load.
+  const visibleSessionDirectories = React.useMemo(() => {
+    if (filterProjectId && filterProjectId !== PINNED_SESSION_FILTER_ID) {
+      const project = projects.find((candidate) => candidate.id === filterProjectId);
+      return project ? [project.path] : [];
+    }
+    return projects.map((project) => project.path);
+  }, [filterProjectId, projects]);
+
+  // The panel requests bounded snapshots for the project roots it renders.
   React.useEffect(() => {
     if (open) {
-      void refreshGlobalSessions(sessions);
+      void refreshGlobalSessionsForDirectories(visibleSessionDirectories);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, visibleSessionDirectories]);
 
   const formatProjectLabel = React.useCallback((project: ProjectEntry): string => {
     return formatDirectoryName(project.path) || project.path;

@@ -2,8 +2,7 @@ import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
-import type { GitIdentityProfile, CommitFileEntry, GitStatus } from '@/lib/api/types';
-import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
+import type { CommitFileEntry, GitStatus } from '@/lib/api/types';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useGitmojiList } from '@/hooks/useGitmojiList';
@@ -13,7 +12,6 @@ import {
   useGitStatus,
   useGitBranches,
   useGitLog,
-  useGitIdentity,
   useIsGitRepo,
   useGitLoadingStatus,
   useGitLoadingLog,
@@ -242,16 +240,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return undefined;
   }, [currentSessionId, inferredWorktreeMetadata, newSessionDraft?.open, worktreeMap]);
 
-  const { profiles, globalIdentity, defaultGitIdentityId, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId } =
-    useGitIdentitiesStore(useShallow((s) => ({
-      profiles: s.profiles,
-      globalIdentity: s.globalIdentity,
-      defaultGitIdentityId: s.defaultGitIdentityId,
-      loadProfiles: s.loadProfiles,
-      loadGlobalIdentity: s.loadGlobalIdentity,
-      loadDefaultGitIdentityId: s.loadDefaultGitIdentityId,
-    })));
-
   const isGitRepo = useIsGitRepo(currentDirectory ?? null);
   const status = useGitStatus(currentDirectory ?? null);
 
@@ -270,7 +258,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const worktreeMetadata = useDetectedWorktreeMetadata(currentDirectory, storeWorktreeMetadata, status?.current ?? undefined);
   const branches = useGitBranches(currentDirectory ?? null);
   const log = useGitLog(currentDirectory ?? null);
-  const currentIdentity = useGitIdentity(currentDirectory ?? null);
   const isLoading = useGitLoadingStatus(currentDirectory ?? null);
   const isLogLoading = useGitLoadingLog(currentDirectory ?? null);
   const {
@@ -281,7 +268,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     fetchBranches,
     fetchLog,
     setLogMaxCount,
-    fetchIdentity,
     prefetchDiffs,
     moveStatusPathsOptimistically,
     restoreStatus,
@@ -294,14 +280,13 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     fetchBranches: state.fetchBranches,
     fetchLog: state.fetchLog,
     setLogMaxCount: state.setLogMaxCount,
-    fetchIdentity: state.fetchIdentity,
     prefetchDiffs: state.prefetchDiffs,
     moveStatusPathsOptimistically: state.moveStatusPathsOptimistically,
     restoreStatus: state.restoreStatus,
     bumpIndexRevision: state.bumpIndexRevision,
   })));
   const isMobile = useUIStore((state) => state.isMobile);
-  const openContextDiff = useUIStore((state) => state.openContextDiff);
+  const openContextFileDiff = useUIStore((state) => state.openContextFileDiff);
   const navigateToDiff = useUIStore((state) => state.navigateToDiff);
   const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen);
 
@@ -527,25 +512,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const [isStashesDialogOpen, setIsStashesDialogOpen] = React.useState(false);
   const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
   const [logMaxCountLocal, setLogMaxCountLocal] = React.useState<number>(25);
-  const [isSettingIdentity, setIsSettingIdentity] = React.useState(false);
   const { triggerFireworks } = useFireworksCelebration();
-
-  const autoAppliedDefaultRef = React.useRef<Map<string, string>>(new Map());
-  const identityApplyCountRef = React.useRef(0);
-
-  const beginIdentityApply = React.useCallback(() => {
-    identityApplyCountRef.current += 1;
-    if (mountedRef.current) {
-      setIsSettingIdentity(true);
-    }
-  }, []);
-
-  const endIdentityApply = React.useCallback(() => {
-    identityApplyCountRef.current = Math.max(0, identityApplyCountRef.current - 1);
-    if (mountedRef.current && identityApplyCountRef.current === 0) {
-      setIsSettingIdentity(false);
-    }
-  }, []);
 
   const [revertingPaths, setRevertingPaths] = React.useState<Set<string>>(new Set());
   const [movingChangePaths, setMovingChangePaths] = React.useState<Set<string>>(new Set());
@@ -816,13 +783,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
   React.useEffect(() => {
     if (!isActive) return;
-    loadProfiles();
-    loadGlobalIdentity();
-    loadDefaultGitIdentityId();
-  }, [isActive, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId]);
-
-  React.useEffect(() => {
-    if (!isActive) return;
     if (!currentDirectory || !git?.getRemoteUrl) {
       setRemoteUrl(null);
       return;
@@ -903,51 +863,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     if (!currentDirectory) return;
     await fetchLog(currentDirectory, git, logMaxCountLocal);
   }, [currentDirectory, git, fetchLog, logMaxCountLocal]);
-
-  const refreshIdentity = React.useCallback(async () => {
-    if (!currentDirectory) return;
-    await fetchIdentity(currentDirectory, git);
-  }, [currentDirectory, git, fetchIdentity]);
-
-  React.useEffect(() => {
-    if (!isActive) return;
-    if (!currentDirectory) return;
-    if (!git?.hasLocalIdentity) return;
-    if (isGitRepo !== true) return;
-
-    const defaultId = typeof defaultGitIdentityId === 'string' ? defaultGitIdentityId.trim() : '';
-    if (!defaultId || defaultId === 'global') return;
-
-    const previousAttempt = autoAppliedDefaultRef.current.get(currentDirectory);
-    if (previousAttempt === defaultId) return;
-
-    let cancelled = false;
-
-    const run = async () => {
-      try {
-        const hasLocal = await git.hasLocalIdentity?.(currentDirectory);
-        if (cancelled) return;
-        if (hasLocal === true) return;
-
-        beginIdentityApply();
-        await git.setGitIdentity(currentDirectory, defaultId);
-        autoAppliedDefaultRef.current.set(currentDirectory, defaultId);
-        await refreshIdentity();
-      } catch (error) {
-        console.warn('Failed to auto-apply default git identity:', error);
-      } finally {
-        if (!cancelled) {
-          endIdentityApply();
-        }
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isActive, beginIdentityApply, currentDirectory, defaultGitIdentityId, endIdentityApply, git, isGitRepo, refreshIdentity]);
 
   const changeEntries = React.useMemo(() => {
     if (!status) return [];
@@ -1366,22 +1281,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     }
   };
 
-  const handleApplyIdentity = async (profile: GitIdentityProfile) => {
-    if (!currentDirectory) return;
-    beginIdentityApply();
-
-    try {
-      await git.setGitIdentity(currentDirectory, profile.id);
-      toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
-      await refreshIdentity();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : t('gitView.toast.applyIdentityFailed');
-      toast.error(message);
-    } finally {
-      endIdentityApply();
-    }
-  };
-
   const localBranches = React.useMemo(() => {
     if (!branches?.all) return [];
     return branches.all
@@ -1485,85 +1384,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     const remoteCandidates = remoteNames.map((remote) => `${remote}/${baseBranch}`);
     return remoteCandidates.find((candidate) => remoteBranches.includes(candidate)) ?? baseBranch;
   }, [baseBranch, effectiveRemotes, remoteBranches]);
-
-  const availableIdentities = React.useMemo(() => {
-    const unique = new Map<string, GitIdentityProfile>();
-    if (globalIdentity) {
-      unique.set(globalIdentity.id, globalIdentity);
-    }
-
-    let repoHostPath: string | null = null;
-    if (remoteUrl) {
-      try {
-        let normalized = remoteUrl.trim();
-        if (normalized.startsWith('git@')) {
-          normalized = `https://${normalized.slice(4).replace(':', '/')}`;
-        }
-        if (normalized.endsWith('.git')) {
-          normalized = normalized.slice(0, -4);
-        }
-        const url = new URL(normalized);
-        repoHostPath = url.hostname + url.pathname;
-      } catch { /* ignore */ }
-    }
-
-    for (const profile of profiles) {
-      if (profile.authType !== 'token') {
-        unique.set(profile.id, profile);
-        continue;
-      }
-
-      const profileHost = profile.host;
-      if (!profileHost) {
-        unique.set(profile.id, profile);
-        continue;
-      }
-
-      if (!profileHost.includes('/')) {
-        unique.set(profile.id, profile);
-        continue;
-      }
-
-      if (repoHostPath && repoHostPath === profileHost) {
-        unique.set(profile.id, profile);
-      }
-    }
-    return Array.from(unique.values());
-  }, [profiles, globalIdentity, remoteUrl]);
-
-  const activeIdentityProfile = React.useMemo((): GitIdentityProfile | null => {
-    if (currentIdentity?.userName && currentIdentity?.userEmail) {
-      const match = profiles.find(
-        (profile) =>
-          profile.userName === currentIdentity.userName &&
-          profile.userEmail === currentIdentity.userEmail
-      );
-
-      if (match) {
-        return match;
-      }
-
-      if (
-        globalIdentity &&
-        globalIdentity.userName === currentIdentity.userName &&
-        globalIdentity.userEmail === currentIdentity.userEmail
-      ) {
-        return globalIdentity;
-      }
-
-      return {
-        id: 'local-config',
-        name: currentIdentity.userName,
-        userName: currentIdentity.userName,
-        userEmail: currentIdentity.userEmail,
-        sshKey: currentIdentity.sshCommand?.replace('ssh -i ', '') ?? null,
-        color: 'info',
-        icon: 'user',
-      };
-    }
-
-    return globalIdentity ?? null;
-  }, [currentIdentity, profiles, globalIdentity]);
 
   const stagedCount = stagedChangeEntries.length;
   const isBusy = isLoading || syncAction !== null || commitAction !== null;
@@ -1822,14 +1642,14 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
   const handleViewChangeDiff = React.useCallback((path: string, staged: boolean) => {
     if (currentDirectory && !isMobile) {
-      openContextDiff(currentDirectory, path, staged);
+      openContextFileDiff(currentDirectory, path, staged);
       return;
     }
     navigateToDiff(path, staged);
     if (isMobile) {
       setRightSidebarOpen(false);
     }
-  }, [currentDirectory, isMobile, navigateToDiff, openContextDiff, setRightSidebarOpen]);
+  }, [currentDirectory, isMobile, navigateToDiff, openContextFileDiff, setRightSidebarOpen]);
 
   const openStashes = React.useCallback(() => setIsStashesDialogOpen(true), []);
 
@@ -2398,10 +2218,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         onCheckoutBranch={handleCheckoutBranch}
         onCreateBranch={handleCreateBranch}
         onRenameBranch={handleRenameBranch}
-        activeIdentityProfile={activeIdentityProfile}
-        availableIdentities={availableIdentities}
-        onSelectIdentity={handleApplyIdentity}
-        isApplyingIdentity={isSettingIdentity}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}
             onOpenGraph={() => setGitLogDialogMode('graph')}

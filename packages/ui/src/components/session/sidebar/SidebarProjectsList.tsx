@@ -18,6 +18,7 @@ import { SIDEBAR_MUTED_HINT_CLASS, getSidebarRowPaddingLeft } from './utils';
 import { useI18n } from '@/lib/i18n';
 import type { MainTab } from '@/stores/useUIStore';
 import { SidebarSectionHeader } from './SidebarSectionHeader';
+import type { ProjectSortOrder } from '@/stores/useSessionDisplayStore';
 
 type ProjectSection = {
   project: {
@@ -71,7 +72,8 @@ type Props = {
   removeProject: (id: string) => void;
   projectHeaderSentinelRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
   projectReorderEnabled?: boolean;
-  reorderProjects: (fromIndex: number, toIndex: number) => void;
+  reorderProjects: (activeId: string, overId: string) => void;
+  projectSortOrder: ProjectSortOrder;
   getOrderedGroups: (projectId: string, groups: SessionGroup[]) => SessionGroup[];
   setGroupOrderByProject: React.Dispatch<React.SetStateAction<Map<string, string[]>>>;
   openSidebarMenuKey: string | null;
@@ -206,13 +208,12 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
             sensors={projectSensors}
             collisionDetection={closestCenter}
             onDragEnd={(event) => {
-              if (!props.projectReorderEnabled || props.isInlineEditing) return;
+              if (props.isInlineEditing) return;
+              // Drag only allowed in manual sort mode.
+              if (props.projectSortOrder !== 'manual') return;
               const { active, over } = event;
               if (!over || active.id === over.id) return;
-              const oldIndex = props.sectionsForRender.findIndex((section) => section.project.id === active.id);
-              const newIndex = props.sectionsForRender.findIndex((section) => section.project.id === over.id);
-              if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
-              props.reorderProjects(oldIndex, newIndex);
+              props.reorderProjects(String(active.id), String(over.id));
             }}
           >
             <SortableContext items={props.sectionsForRender.map((section) => section.project.id)} strategy={verticalListSortingStrategy}>
@@ -236,6 +237,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                   <SortableProjectItem
                     key={projectKey}
                     id={projectKey}
+                    disabled={props.projectSortOrder !== 'manual'}
                     projectLabel={projectLabel}
                     projectDescription={projectDescription}
                     projectIcon={project.icon}

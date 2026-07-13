@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 import { toast } from '@/components/ui';
@@ -64,6 +65,7 @@ import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useInputStore } from '@/sync/input-store';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
@@ -73,6 +75,7 @@ import { openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useI18n } from '@/lib/i18n';
+import { ShortcutKbd } from '@/components/ui/kbd';
 
 type FileNode = {
   name: string;
@@ -957,6 +960,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
   const [isGoToLineOpen, setIsGoToLineOpen] = React.useState(false);
+  const [hasEditorSelection, setHasEditorSelection] = React.useState(false);
+  const [editorSelectionPosition, setEditorSelectionPosition] = React.useState<{ x: number; y: number } | null>(null);
+  const addCodeSelectionAttachment = useInputStore((state) => state.addCodeSelectionAttachment);
+  const setPendingInputText = useInputStore((state) => state.setPendingInputText);
 
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
@@ -2317,6 +2324,58 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return getDisplayPath(root, selectedFilePath);
   }, [selectedFilePath, root]);
 
+  const syncEditorSelection = React.useCallback((view: EditorView) => {
+    const hasSelection = !view.state.selection.main.empty;
+    setHasEditorSelection((previous) => previous === hasSelection ? previous : hasSelection);
+    if (!hasSelection) {
+      setEditorSelectionPosition((previous) => previous === null ? previous : null);
+      return;
+    }
+
+    const headRect = view.coordsAtPos(view.state.selection.main.head);
+    if (!headRect) return;
+    const nextPosition = {
+      x: Math.min(window.innerWidth - 120, Math.max(120, headRect.left)),
+      y: Math.max(8, headRect.top - 8),
+    };
+    setEditorSelectionPosition((previous) => (
+      previous?.x === nextPosition.x && previous.y === nextPosition.y ? previous : nextPosition
+    ));
+  }, []);
+
+  const addEditorSelectionToChat = React.useCallback(() => {
+    const view = editorViewRef.current;
+    const selection = view?.state.selection.main;
+    if (!view || !selection || selection.empty || !selectedFile) {
+      return;
+    }
+
+    const selectedText = view.state.sliceDoc(selection.from, selection.to);
+    const startLine = view.state.doc.lineAt(selection.from).number;
+    const endLine = view.state.doc.lineAt(Math.max(selection.from, selection.to - 1)).number;
+    const lineRange = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+    const attachmentLabel = `${selectedFile.name}:${lineRange}`;
+
+    void addCodeSelectionAttachment(selectedFile.path, attachmentLabel, selectedText);
+    setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
+    setEditorSelectionPosition(null);
+    useUIStore.getState().setActiveMainTab('chat');
+  }, [addCodeSelectionAttachment, selectedFile, setPendingInputText]);
+
+  const addLineSelectionToChat = React.useCallback((range: SelectedLineRange) => {
+    if (!selectedFile) return;
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    const selectedText = draftContent.split('\n').slice(start - 1, end).join('\n');
+    if (!selectedText) return;
+    const lineRange = start === end ? `${start}` : `${start}-${end}`;
+    const attachmentLabel = `${selectedFile.name}:${lineRange}`;
+
+    void addCodeSelectionAttachment(selectedFile.path, attachmentLabel, selectedText);
+    setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
+    useUIStore.getState().setActiveMainTab('chat');
+  }, [addCodeSelectionAttachment, draftContent, selectedFile, setPendingInputText]);
+
   const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && !isSelectedPdf && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
   const canEdit = Boolean(selectedFile && !selectedFileIsOutsideWorkspace && !isSelectedImage && !isSelectedPdf && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
@@ -2326,6 +2385,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const isDrawio = Boolean(selectedFile?.path && isDrawioFile(selectedFile.path));
   const isTextFile = Boolean(selectedFile && !isSelectedImage && !isSelectedPdf);
   const canUseShikiFileView = isTextFile && !isMarkdown && !isDrawio && !(isHtml && htmlViewMode === 'preview');
+  const isEditingFile = (isMarkdown && mdViewMode === 'edit')
+    || (isHtml && htmlViewMode === 'edit')
+    || (isJson && jsonViewMode === 'text')
+    || (!isMarkdown && !isHtml && !isJson && textViewMode === 'edit');
   const staticLanguageExtension = React.useMemo(
     () => (selectedFilePath ? languageByExtension(selectedFilePath) : null),
     [selectedFilePath],
@@ -2369,8 +2432,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    const defaultMode: TextViewMode = settingsDefaultFileViewerPreview ? 'view' : 'edit';
-    setTextViewMode(textViewModeByPathRef.current[selectedPath] ?? defaultMode);
+    setTextViewMode(textViewModeByPathRef.current[selectedPath] ?? 'edit');
 
     // Respect per-type localStorage preference when available,
     // falling back to the setting-derived default when nothing is stored.
@@ -2395,7 +2457,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       // Ignore localStorage errors
     }
     setHtmlViewMode(htmlViewModeByPathRef.current[selectedPath] ?? htmlDefault);
-    setDrawioViewMode(drawioViewModeByPathRef.current[selectedPath] ?? 'preview');
+    setDrawioViewMode(drawioViewModeByPathRef.current[selectedPath] ?? (settingsDefaultFileViewerPreview ? 'preview' : 'edit'));
 
     let jsonDefault: 'tree' | 'text' = settingsDefaultFileViewerPreview ? 'tree' : 'text';
     try {
@@ -2560,23 +2622,26 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   React.useEffect(() => {
     const applyDefaultFileViewerMode = (enabled: boolean) => {
-      const textMode: TextViewMode = enabled ? 'view' : 'edit';
       const previewMode: PreviewViewMode = enabled ? 'preview' : 'edit';
       const nextJsonMode: 'tree' | 'text' = enabled ? 'tree' : 'text';
 
       for (const path of openPaths) {
-        textViewModeByPathRef.current[path] = textMode;
+        textViewModeByPathRef.current[path] = 'edit';
         if (isMarkdownFile(path)) {
           mdViewModeByPathRef.current[path] = previewMode;
         }
         if (isHtmlFile(path)) {
           htmlViewModeByPathRef.current[path] = previewMode;
         }
+        if (isDrawioFile(path)) {
+          drawioViewModeByPathRef.current[path] = previewMode;
+        }
       }
 
-      setTextViewMode(textMode);
+      setTextViewMode('edit');
       setMdViewMode(previewMode);
       setHtmlViewMode(previewMode);
+      setDrawioViewMode(previewMode);
       setJsonViewMode(nextJsonMode);
 
       try {
@@ -2849,7 +2914,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   React.useEffect(() => {
-    if (!canEdit || textViewMode !== 'edit' || isMobile) {
+    if (textViewMode !== 'edit' || isMobile) {
       return;
     }
 
@@ -2878,24 +2943,35 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       if (eventMatchesShortcut(event, goToLineCombo)) {
         event.preventDefault();
         setIsGoToLineOpen(true);
+        return;
+      }
+
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'i') {
+        const selection = editorViewRef.current?.state.selection.main;
+        if (selection && !selection.empty) {
+          event.preventDefault();
+          addEditorSelectionToChat();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canEdit, isMobile, shortcutOverrides, textViewMode]);
+  }, [addEditorSelectionToChat, isMobile, shortcutOverrides, textViewMode]);
+
+  const editorFontSize = useUIStore((state) => state.editorFontSize);
 
   const editorExtensions = React.useMemo(() => {
     if (!selectedFile?.path) {
-      return [createFlexokiCodeMirrorTheme(currentTheme)];
+      return [createFlexokiCodeMirrorTheme(currentTheme, { fontSize: editorFontSize })];
     }
 
     // Shiki token colors (worker-backed) match the Shiki file view exactly.
     // Same language resolver as the view, so both agree on the language. When
     // Shiki is the color source, drop the lezer token colors to avoid a
-    // competing highlighter (keep the lezer language for indentation/folding).
+    // competing highlighter (Keep the lezer language for indentation/folding).
     const shikiLanguage = getLanguageFromExtension(selectedFile.path);
-    const extensions = [createFlexokiCodeMirrorTheme(currentTheme, shikiLanguage ? { syntaxColors: false } : undefined)];
+    const extensions = [createFlexokiCodeMirrorTheme(currentTheme, shikiLanguage ? { syntaxColors: false, fontSize: editorFontSize } : { fontSize: editorFontSize })];
     const language = staticLanguageExtension ?? dynamicLanguageExtension;
     if (language) {
       extensions.push(language);
@@ -2910,8 +2986,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     if (wrapLines) {
       extensions.push(EditorView.lineWrapping);
     }
-    if (isMobile) {
-      extensions.push(EditorView.updateListener.of((update) => {
+    extensions.push(EditorView.updateListener.of((update) => {
+      if (update.selectionSet) {
+        syncEditorSelection(update.view);
+      }
+      if (isMobile) {
         if (!update.view.hasFocus) {
           return;
         }
@@ -2922,10 +3001,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         window.requestAnimationFrame(() => {
           nudgeEditorSelectionAboveKeyboard(update.view);
         });
-      }));
-    }
+      }
+    }));
     return extensions;
-  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
+  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard, editorFontSize, syncEditorSelection]);
 
   const pierreTheme = React.useMemo(
     () => ({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id }),
@@ -3099,8 +3178,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         setLineSelection({ start: draft.startLine, end: draft.endLine });
       },
       onDelete: deleteDraft,
+      onAddToChat: addLineSelectionToChat,
     });
-  }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
+  }, [addLineSelectionToChat, cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
 
   const renderShikiFileView = React.useCallback((file: FileNode, content: string) => {
     return (
@@ -3150,7 +3230,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     return (
       <div className={wrapperCls}>
-        {canEdit && textViewMode === 'edit' && (
+        {canEdit && isEditingFile && (
           <>
             {isSaving ? (
               <span className="flex items-center gap-1 px-1 text-muted-foreground typography-meta">
@@ -3191,6 +3271,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             )}
           </>
         )}
+
+        {isTextFile && hasEditorSelection ? withTooltip(
+          `${t('chat.textSelection.title.addToCurrentChat')} (⌘I)`,
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={addEditorSelectionToChat}
+            className="h-6 gap-1 px-1 text-muted-foreground opacity-80 hover:bg-transparent hover:opacity-100 focus-visible:bg-transparent active:bg-transparent"
+            title={`${t('chat.textSelection.title.addToCurrentChat')} (⌘I)`}
+            aria-label={`${t('chat.textSelection.title.addToCurrentChat')} (⌘I)`}
+          >
+            <Icon name="chat-new" className="size-4" />
+            <span>{t('chat.textSelection.actions.addToChat')}</span>
+            <ShortcutKbd shortcut="⌘+I" />
+          </Button>,
+        ) : null}
 
         <DropdownMenu onOpenChange={handleToolbarDropdownOpenChange}>
           <Tooltip>
@@ -3300,15 +3396,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           />
         )}
 
-        {(isMarkdown || isHtmlFile(selectedFile?.path ?? '')) && (
+        {isMarkdown && (
+          withTooltip(
+            t(getMdViewMode() === 'preview' ? 'filesView.editor.switchToEditMode' : 'filesView.editor.switchToPreviewMode'),
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
+              className={cn(
+                'size-6 p-0 transition-colors hover:bg-[var(--interactive-hover)] focus-visible:bg-[var(--interactive-hover)] active:bg-[var(--interactive-hover)]',
+                getMdViewMode() === 'preview'
+                  ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)] hover:bg-[var(--interactive-selection)] focus-visible:bg-[var(--interactive-selection)] active:bg-[var(--interactive-selection)]'
+                  : 'text-muted-foreground opacity-65 hover:opacity-100'
+              )}
+              title={t(getMdViewMode() === 'preview' ? 'filesView.editor.switchToEditMode' : 'filesView.editor.switchToPreviewMode')}
+              aria-label={t(getMdViewMode() === 'preview' ? 'filesView.editor.switchToEditMode' : 'filesView.editor.switchToPreviewMode')}
+            >
+              <Icon name={getMdViewMode() === 'preview' ? 'eye' : 'eye-off'} className="size-4" />
+            </Button>
+          )
+        )}
+
+        {isHtmlFile(selectedFile?.path ?? '') && (
           <PreviewToggleButton
-            currentMode={isMarkdown ? getMdViewMode() : getHtmlViewMode()}
+            currentMode={getHtmlViewMode()}
             onToggle={() => {
-              if (isHtmlFile(selectedFile?.path ?? '')) {
-                saveHtmlViewMode(getHtmlViewMode() === 'preview' ? 'edit' : 'preview');
-              } else {
-                saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview');
-              }
+              saveHtmlViewMode(getHtmlViewMode() === 'preview' ? 'edit' : 'preview');
             }}
           />
         )}
@@ -3714,7 +3827,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           <div
             ref={floatingToolbarRef}
             className="absolute right-3 top-3 z-30"
-            onMouseEnter={() => setIsFloatingToolbarOpen(true)}
             onMouseLeave={() => {
               if (toolbarDropdownOpenCountRef.current > 0) return;
               setIsFloatingToolbarOpen(false);
@@ -3723,23 +3835,54 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             {isFloatingToolbarOpen ? (
               renderFloatingFileControls()
             ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsFloatingToolbarOpen(true)}
-                      className="size-8 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-0 text-muted-foreground shadow-sm hover:text-foreground"
-                      aria-label={t('filesView.editor.showControlsAria')}
-                      title={t('filesView.editor.controlsTitle')}
+              <div className="flex items-center gap-1">
+                {isMarkdown ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
+                          className={cn(
+                            'size-8 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-0 shadow-sm transition-colors',
+                            getMdViewMode() === 'preview'
+                              ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)] hover:bg-[var(--interactive-selection)]'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                          aria-label={t(getMdViewMode() === 'preview' ? 'filesView.editor.switchToEditMode' : 'filesView.editor.switchToPreviewMode')}
+                          title={t(getMdViewMode() === 'preview' ? 'filesView.editor.switchToEditMode' : 'filesView.editor.switchToPreviewMode')}
+                        >
+                          <Icon name={getMdViewMode() === 'preview' ? 'eye' : 'eye-off'} className="size-4" />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {t(getMdViewMode() === 'preview' ? 'filesView.editor.switchToEditMode' : 'filesView.editor.switchToPreviewMode')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="inline-flex"
+                      onMouseEnter={() => setIsFloatingToolbarOpen(true)}
                     >
-                      <Icon name="more-2-fill" className="size-4" />
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>{t('filesView.editor.controlsTitle')}</TooltipContent>
-              </Tooltip>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsFloatingToolbarOpen(true)}
+                        className="size-8 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-0 text-muted-foreground shadow-sm hover:text-foreground"
+                        aria-label={t('filesView.editor.showControlsAria')}
+                        title={t('filesView.editor.controlsTitle')}
+                      >
+                        <Icon name="more-2-fill" className="size-4" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>{t('filesView.editor.controlsTitle')}</TooltipContent>
+                </Tooltip>
+              </div>
             )}
           </div>
         )}
@@ -3863,6 +4006,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   blockWidgets={blockWidgets}
                   onViewReady={(view) => {
                     editorViewRef.current = view;
+                    syncEditorSelection(view);
                     setEditorViewReadyNonce((value) => value + 1);
                     window.requestAnimationFrame(() => {
                       nudgeEditorSelectionAboveKeyboard(view);
@@ -3872,6 +4016,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                     if (editorViewRef.current) {
                       editorViewRef.current = null;
                     }
+                    setHasEditorSelection(false);
+                    setEditorSelectionPosition(null);
                     setEditorViewReadyNonce((value) => value + 1);
                   }}
                   enableSearch
@@ -4178,6 +4324,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 className="h-full"
                 onViewReady={(view) => {
                   editorViewRef.current = view;
+                  syncEditorSelection(view);
                   window.requestAnimationFrame(() => {
                     nudgeEditorSelectionAboveKeyboard(view);
                   });
@@ -4186,6 +4333,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   if (editorViewRef.current) {
                     editorViewRef.current = null;
                   }
+                  setHasEditorSelection(false);
+                  setEditorSelectionPosition(null);
                 }}
               />
               </div>
@@ -4204,6 +4353,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     </div>
   );
 
+  const editorSelectionBubble = editorSelectionPosition ? createPortal(
+    <div
+      data-code-selection-action="true"
+      className="fixed z-[100] -translate-x-1/2 -translate-y-full rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-1 shadow-lg"
+      style={{ left: editorSelectionPosition.x, top: editorSelectionPosition.y }}
+      onPointerDown={(event) => event.preventDefault()}
+    >
+      <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" onClick={addEditorSelectionToChat}>
+        <Icon name="add" className="size-4" />
+        {t('chat.textSelection.actions.addToChat')}
+        <ShortcutKbd shortcut="⌘+I" />
+      </Button>
+    </div>,
+    document.body,
+  ) : null;
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-background relative">
       <Dialogs
@@ -4217,6 +4382,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         inputRef={dialogInputRef}
       />
       {fullscreenViewer}
+      {editorSelectionBubble}
       {isMobile ? (
         showMobilePageContent ? (
           fileViewer

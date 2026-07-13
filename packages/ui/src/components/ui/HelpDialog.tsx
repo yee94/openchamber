@@ -16,6 +16,7 @@ import {
 } from "@/lib/shortcuts";
 import { useI18n, type I18nKey } from "@/lib/i18n";
 import type { IconName } from "@/components/icon/icons";
+import { ShortcutKbd } from "@/components/ui/kbd";
 
 type ShortcutItem = {
   id?: string;
@@ -319,9 +320,7 @@ export const HelpDialog: React.FC = () => {
                                   {t('helpDialog.keyCombiner.or')}
                                 </span>
                               )}
-                              <kbd className="inline-flex items-center gap-1 px-1.5 py-0.5 typography-meta font-mono bg-muted rounded border border-border/20">
-                                {keyCombo}
-                              </kbd>
+                              <ShortcutKbd shortcut={keyCombo} />
                             </React.Fragment>
                           ))}
                         </div>

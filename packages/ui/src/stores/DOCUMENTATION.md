@@ -46,6 +46,11 @@ Examples:
 
 These stores coordinate visible app state, navigation, selected tabs, dialogs, and lightweight feature flags.
 
+`useConfigStore.ts` keeps provider and agent snapshots project-scoped. Its transient
+provider/agent loading maps are keyed by the active config directory so a deeplink
+into an uncached project can show explicit composer loading controls while cached
+projects continue to render immediately during background refresh.
+
 ### Session / project coordination stores
 
 Examples:
@@ -65,9 +70,11 @@ session data.
 
 `useGlobalSessionsStore.ts` distinguishes bounded display snapshots from the full
 retention catalog. Sidebar active/archived loads are directory-keyed, capped, and
-deduplicated; `hasLoadedFullCatalog` is the only success signal for retention work.
-Initial loading and background refreshing are separate sets so an in-flight refresh
-never hides an existing session snapshot.
+deduplicated. `fullCatalogSessionIds` and `fullCatalogGeneration` update only after
+one complete active+archived catalog result; retention cleanup consumes that snapshot.
+Directory refreshes preserve it, failed catalog loads preserve the prior snapshot,
+and runtime switches clear it. Initial loading and background refreshing are separate
+sets so an in-flight refresh never hides an existing session snapshot.
 
 Electron cache refresh uses two timestamps per directory. Recent restarts query
 the Electron Web Server, which performs `session.list(start=lastSyncedAt)` and

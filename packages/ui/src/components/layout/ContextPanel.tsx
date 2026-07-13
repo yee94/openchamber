@@ -157,6 +157,7 @@ const getModeLabel = (
   if (mode === 'chat') return t('contextPanel.mode.chat');
   if (mode === 'file') return t('contextPanel.mode.files');
   if (mode === 'diff') return t('contextPanel.mode.diff');
+  if (mode === 'file-diff') return t('contextPanel.mode.diff');
   if (mode === 'plan') return t('contextPanel.mode.plan');
   if (mode === 'preview') return t('contextPanel.mode.preview');
   if (mode === 'browser') return t('contextPanel.mode.browser');
@@ -228,6 +229,10 @@ const getTabLabel = (
     return t('contextPanel.mode.diff');
   }
 
+  if (tab.mode === 'file-diff') {
+    return getFileNameFromPath(tab.targetPath) || t('contextPanel.mode.diff');
+  }
+
   return getModeLabel(tab.mode, t);
 };
 
@@ -238,7 +243,7 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
       : undefined;
   }
 
-  if (tab.mode === 'diff') {
+  if (tab.mode === 'diff' || tab.mode === 'file-diff') {
     return <Icon name="arrow-left-right" className="h-3.5 w-3.5" />;
   }
 
@@ -2075,6 +2080,7 @@ export const ContextPanel: React.FC = () => {
   const reorderContextPanelTabs = useUIStore((state) => state.reorderContextPanelTabs);
   const setSelectedFilePath = useFilesViewTabsStore((state) => state.setSelectedPath);
   const openContextPreview = useUIStore((state) => state.openContextPreview);
+  const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
   const { themeMode, setThemeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem();
 
   const tabs = React.useMemo(() => panelState?.tabs ?? [], [panelState?.tabs]);
@@ -2311,12 +2317,12 @@ export const ContextPanel: React.FC = () => {
   }, [tabs]);
 
   const handleDiffScopeChange = React.useCallback((nextScope: PendingDiffScope) => {
-    if (!directoryKey || activeTab?.mode !== 'diff') {
+    if (!directoryKey || (activeTab?.mode !== 'diff' && activeTab?.mode !== 'file-diff')) {
       return;
     }
 
     openContextPanelTab(directoryKey, {
-      mode: 'diff',
+      mode: activeTab.mode,
       targetPath: activeTab.targetPath,
       stagedDiff: nextScope === 'staged',
       diffScope: nextScope,
@@ -2363,6 +2369,30 @@ export const ContextPanel: React.FC = () => {
       );
     }
   }, [currentTheme, darkThemeId, lightThemeId, themeMode]);
+
+  const postChatSettingsSyncToEmbeddedChat = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    const payload = { allowPromptingSubagentSessions };
+    for (const frame of chatFrameRefs.current.values()) {
+      const frameWindow = frame.contentWindow;
+      if (!frameWindow) continue;
+
+      const directSync = (frameWindow as unknown as {
+        __openchamberApplyChatSettingsSync?: (settings: typeof payload) => void;
+      }).__openchamberApplyChatSettingsSync;
+      if (typeof directSync === 'function') {
+        try {
+          directSync(payload);
+          continue;
+        } catch {
+          // fallback to postMessage below
+        }
+      }
+
+      frameWindow.postMessage({ type: 'openchamber:chat-settings-sync', payload }, window.location.origin);
+    }
+  }, [allowPromptingSubagentSessions]);
 
   const postEmbeddedVisibilityToChats = React.useCallback(() => {
     if (typeof window === 'undefined') {
@@ -2425,6 +2455,10 @@ export const ContextPanel: React.FC = () => {
         return;
       }
 
+      if (data?.type === 'openchamber:chat-settings-request') {
+        postChatSettingsSyncToEmbeddedChat();
+        return;
+      }
       if (data?.type !== 'openchamber:cycle-theme-request') {
         return;
       }
@@ -2437,7 +2471,7 @@ export const ContextPanel: React.FC = () => {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [closeContextPanelTab, directoryKey, setThemeMode, themeMode]);
+  }, [closeContextPanelTab, directoryKey, postChatSettingsSyncToEmbeddedChat, setThemeMode, themeMode]);
 
   React.useLayoutEffect(() => {
     const hasAnyChatTab = tabs.some((tab) => tab.mode === 'chat');
@@ -2446,8 +2480,9 @@ export const ContextPanel: React.FC = () => {
     }
 
     postThemeSyncToEmbeddedChat();
+    postChatSettingsSyncToEmbeddedChat();
     postEmbeddedVisibilityToChats();
-  }, [darkThemeId, lightThemeId, postEmbeddedVisibilityToChats, postThemeSyncToEmbeddedChat, tabs, themeMode]);
+  }, [darkThemeId, lightThemeId, postChatSettingsSyncToEmbeddedChat, postEmbeddedVisibilityToChats, postThemeSyncToEmbeddedChat, tabs, themeMode]);
 
   const tabItems = React.useMemo(() => tabs.map((tab) => {
     const rawLabel = getTabLabel(tab, sessionTitleById, t);
@@ -2485,7 +2520,7 @@ export const ContextPanel: React.FC = () => {
     [tabs],
   );
   const diffTabs = React.useMemo(
-    () => tabs.filter((tab) => tab.mode === 'diff'),
+    () => tabs.filter((tab) => tab.mode === 'diff' || tab.mode === 'file-diff'),
     [tabs],
   );
   const BrowserPane = isElectronBrowserRuntime() ? DesktopBrowserPane : IframeBrowserPane;
@@ -2642,6 +2677,7 @@ export const ContextPanel: React.FC = () => {
               )}
               onLoad={() => {
                 postThemeSyncToEmbeddedChat();
+                postChatSettingsSyncToEmbeddedChat();
                 postEmbeddedVisibilityToChats();
               }}
             />
@@ -2675,10 +2711,12 @@ export const ContextPanel: React.FC = () => {
               onDiffScopeChange={handleDiffScopeChange}
               targetFilePath={tab.targetPath}
               flushContent
+              singleFileView={tab.mode === 'file-diff'}
+              preloadFullFiles={tab.mode === 'file-diff'}
             />
           </div>
         ))}
-        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' && activeTab?.mode !== 'diff' ? activeNonChatContent : null}
+        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' && activeTab?.mode !== 'diff' && activeTab?.mode !== 'file-diff' ? activeNonChatContent : null}
       </div>
     </aside>
   );

@@ -122,13 +122,18 @@ The runtime session index (SQLite-backed) provides one durable session-summary
 source. The legacy per-directory `localStorage` session list is removed
 on child-store creation and must not be reintroduced. `main.tsx` establishes a
 startup barrier before React effects; `SessionStartupCoordinator` starts the
-session-index flow at mount, restores the SQLite snapshot,
+session-index flow after registered settings hydration, restores the SQLite snapshot,
 refreshes each known root/worktree directory through the bounded scheduler,
 writes one transaction batch, then releases normal global and directory
 bootstrap. A runtime that reports the capability as unsupported uses the
 existing bounded SDK-backed path. A successful
 empty root page replaces stale index rows; a failed page preserves its last
 good cache.
+
+Password-gated runtimes force a fresh settings hydration after authentication
+and keep the app tree behind the auth gate until persisted project paths have
+been applied. This prevents a pre-authenticated `401` settings request from
+becoming the cached startup result consumed by the session coordinator.
 
 ## Session message loading
 

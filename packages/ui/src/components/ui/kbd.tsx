@@ -15,7 +15,7 @@ export function Kbd({
       className={cn(
         'pointer-events-none inline-flex h-5 min-w-5 shrink-0 select-none items-center justify-center',
         'rounded-md border border-[var(--interactive-border)] bg-[var(--surface-muted)]',
-        'px-1.5 font-mono typography-micro font-medium leading-none',
+        'px-1.5 font-mono typography-micro font-medium leading-none normal-case',
         'text-[var(--surface-muted-foreground)] whitespace-nowrap',
         'shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.12)]',
         'dark:shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.08)]',
@@ -51,12 +51,12 @@ export function ShortcutKbd({ shortcut, className, tone = 'default' }: ShortcutK
   return (
     <span
       data-slot="shortcut-kbd"
-      className={cn('inline-flex items-center gap-0.5 whitespace-nowrap', className)}
+      className={cn('inline-flex items-center gap-1 whitespace-nowrap normal-case', className)}
     >
       {tokens.map((token, index) => (
         <React.Fragment key={`${token}-${index}`}>
           {index > 0 ? (
-            <span className="px-0.5 typography-micro text-[var(--surface-muted-foreground)] opacity-70">
+            <span className="typography-micro font-semibold text-[var(--surface-muted-foreground)]">
               +
             </span>
           ) : null}
@@ -66,7 +66,7 @@ export function ShortcutKbd({ shortcut, className, tone = 'default' }: ShortcutK
                 'border-[var(--interactive-selection)] bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]',
             )}
           >
-            {token}
+            {/^[a-z]$/i.test(token) ? token.toUpperCase() : token}
           </Kbd>
         </React.Fragment>
       ))}

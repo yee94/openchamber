@@ -184,6 +184,18 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.desktopMinimizeToTrayEnabled === 'boolean') {
       result.desktopMinimizeToTrayEnabled = candidate.desktopMinimizeToTrayEnabled;
     }
+    if (candidate.permissionAutoAccept && typeof candidate.permissionAutoAccept === 'object' && !Array.isArray(candidate.permissionAutoAccept)) {
+      const sessions = {};
+      const sourceSessions = candidate.permissionAutoAccept.sessions;
+      if (sourceSessions && typeof sourceSessions === 'object' && !Array.isArray(sourceSessions)) {
+        for (const [sessionId, enabled] of Object.entries(sourceSessions)) {
+          if (sessionId && typeof enabled === 'boolean') sessions[sessionId] = enabled;
+        }
+      }
+      result.permissionAutoAccept = {
+        sessions,
+      };
+    }
     if (typeof candidate.desktopUiPassword === 'string') {
       result.desktopUiPassword = candidate.desktopUiPassword.trim();
     }
@@ -256,6 +268,15 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sessionTitleRefreshEnabled === 'boolean') {
       result.sessionTitleRefreshEnabled = candidate.sessionTitleRefreshEnabled;
+    }
+    if (typeof candidate.sessionGoalEnabled === 'boolean') {
+      result.sessionGoalEnabled = candidate.sessionGoalEnabled;
+    }
+    if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
+      result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
+    }
+    if (typeof candidate.sessionGoalDefaultBudget === 'number' && Number.isFinite(candidate.sessionGoalDefaultBudget) && candidate.sessionGoalDefaultBudget > 0) {
+      result.sessionGoalDefaultBudget = Math.floor(candidate.sessionGoalDefaultBudget);
     }
     if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
       result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;

@@ -72,6 +72,29 @@ function getForkedSessionTitle(title: string): string {
   return `${match[1]} (fork #${Number.parseInt(match[2], 10) + 1})`
 }
 
+async function markForkSessionAsLatest(session: Session, directory: string): Promise<Session> {
+  const metadata = getSessionMetadata(session)
+  const openchamber = metadata.openchamber && typeof metadata.openchamber === "object"
+    ? metadata.openchamber as Record<string, unknown>
+    : {}
+  const titleRefresh = openchamber.titleRefresh && typeof openchamber.titleRefresh === "object"
+    ? openchamber.titleRefresh as Record<string, unknown>
+    : {}
+
+  return opencodeClient.updateSession(session.id, {
+    metadata: {
+      ...metadata,
+      openchamber: {
+        ...openchamber,
+        titleRefresh: {
+          ...titleRefresh,
+          activityUpdatedAt: Date.now(),
+        },
+      },
+    },
+  }, directory)
+}
+
 export function shouldSuppressForkCopyEvent(directory: string, sessionID?: string, messageID?: string): boolean {
   if (
     activeForkCopy
@@ -229,9 +252,9 @@ export function getSessionLastAssistantModel(sessionId: string): { providerID: s
   }
 }
 
-function updateLiveSession(session: Session, directory?: string): void {
+function updateLiveSession(session: Session, directory?: string): boolean {
   const stores = _childStores
-  if (!stores) return
+  if (!stores) return false
 
   const candidates = directory
     ? [[directory, stores.getChild(directory)] as const]
@@ -246,8 +269,17 @@ function updateLiveSession(session: Session, directory?: string): void {
     const next = [...current]
     next[index] = mergeSessionDirectoryMetadata(session, current[index])
     store.setState({ session: next })
+    return true
+  }
+
+  return false
+}
+
+export function mirrorSessionIntoLiveStores(session: Session, directory?: string): void {
+  if (directory && updateLiveSession(session, directory)) {
     return
   }
+  updateLiveSession(session)
 }
 
 function dir() {
@@ -716,6 +748,7 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
     },
   }, sessionDirectory)
   useGlobalSessionsStore.getState().upsertSession(session)
+  mirrorSessionIntoLiveStores(session, sessionDirectory)
 }
 
 export async function shareSession(sessionId: string): Promise<Session | null> {
@@ -1313,14 +1346,14 @@ export async function unrevertSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Fork from a user message.
+ * Fork from a message or the latest conversation state.
  *
  * 1. Extract text from the message for input restoration
  * 2. Call the runtime fork endpoint
  * 3. Insert the new session into the child store (so sidebar updates immediately)
  * 4. Switch to new session and set pending input text
  */
-export async function forkFromMessage(sessionId: string, messageId: string, operationId: number): Promise<boolean> {
+export async function forkSession(sessionId: string, operationId: number, messageId?: string): Promise<boolean> {
   const forkRuntimeKey = getRuntimeKey()
   const { store, directory } = dirStoreForSession(sessionId)
   if (!directory) throw new Error("Fork session directory is unavailable")
@@ -1332,7 +1365,7 @@ export async function forkFromMessage(sessionId: string, messageId: string, oper
   // Only non-synthetic text parts — the server adds file content as synthetic
   // text parts that should not be restored. File parts (images, pasted
   // screenshots) are user-originated and must be restored.
-  const parts = state.part[messageId] ?? []
+  const parts = messageId ? state.part[messageId] ?? [] : []
   let messageText = ""
   const textParts = parts.filter((p) => p.type === "text" && !isSyntheticPart(p))
   messageText = textParts
@@ -1360,6 +1393,11 @@ export async function forkFromMessage(sessionId: string, messageId: string, oper
     if (getRuntimeKey() !== forkRuntimeKey) {
       if (activeForkCopy?.operationId === operationId) activeForkCopy = null
       return false
+    }
+    try {
+      forkedSession = await markForkSessionAsLatest(forkedSession, directory)
+    } catch (error) {
+      console.warn("[session-actions] failed to promote forked session", error)
     }
     useSessionUIStore.setState((state) => ({
       forkTransition: state.forkTransition?.operationId === operationId

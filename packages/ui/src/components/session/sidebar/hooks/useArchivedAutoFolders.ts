@@ -1,7 +1,13 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { dedupeSessionsById, getArchivedScopeKey, isSessionRelatedToProject, normalizePath, resolveArchivedFolderName } from '../utils';
+import {
+  dedupeSessionsById,
+  getArchivedScopeKey,
+  isSessionRelatedToProject,
+  normalizePath,
+  resolveArchivedFolderName,
+} from '../utils';
 
 type ProjectForArchivedFolders = {
   normalizedPath: string;
@@ -20,6 +26,9 @@ type Args = {
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
   isVSCode: boolean;
   isSessionsLoading: boolean;
+  fullCatalogSessionIds: Set<string>;
+  fullCatalogGeneration: number;
+  knownProjectDirectories: Set<string>;
   foldersMap: Record<string, FolderEntry[]>;
   createFolder: (scopeKey: string, name: string, parentId?: string | null) => FolderEntry;
   addSessionToFolder: (scopeKey: string, folderId: string, sessionId: string) => void;
@@ -28,7 +37,9 @@ type Args = {
 
 const getArchivedSessionsForProject = (
   project: ProjectForArchivedFolders,
-  params: Pick<Args, 'sessions' | 'archivedSessions' | 'availableWorktreesByProject' | 'isVSCode'>,
+  params: Pick<Args, 'sessions' | 'archivedSessions' | 'availableWorktreesByProject' | 'isVSCode'> & {
+    knownProjectDirectories: Set<string>;
+  },
 ): Session[] => {
   const worktreesForProject = params.isVSCode ? [] : (params.availableWorktreesByProject.get(project.normalizedPath) ?? []);
   const validDirectories = new Set<string>([
@@ -39,7 +50,7 @@ const getArchivedSessionsForProject = (
   ]);
 
   const collect = (input: Session[]): Session[] => input.filter((session) =>
-    isSessionRelatedToProject(session, project.normalizedPath, validDirectories),
+    isSessionRelatedToProject(session, project.normalizedPath, validDirectories, params.knownProjectDirectories),
   );
 
   const archived = collect(params.archivedSessions);
@@ -51,7 +62,7 @@ const getArchivedSessionsForProject = (
     if (sessionDirectory) {
       return false;
     }
-    return isSessionRelatedToProject(session, project.normalizedPath, validDirectories);
+    return isSessionRelatedToProject(session, project.normalizedPath, validDirectories, params.knownProjectDirectories);
   });
 
   return dedupeSessionsById([...archived, ...unassignedLive]);
@@ -65,6 +76,9 @@ export const useArchivedAutoFolders = (args: Args): void => {
     availableWorktreesByProject,
     isVSCode,
     isSessionsLoading,
+    fullCatalogSessionIds,
+    fullCatalogGeneration,
+    knownProjectDirectories,
     foldersMap,
     createFolder,
     addSessionToFolder,
@@ -83,9 +97,8 @@ export const useArchivedAutoFolders = (args: Args): void => {
         archivedSessions,
         availableWorktreesByProject,
         isVSCode,
+        knownProjectDirectories,
       });
-      const sessionIds = new Set(projectArchivedSessions.map((session) => session.id));
-
       const existingFolders = foldersMap[scopeKey] ?? [];
       const folderByName = new Map(existingFolders.map((folder) => [folder.name.toLowerCase(), folder]));
 
@@ -103,15 +116,20 @@ export const useArchivedAutoFolders = (args: Args): void => {
         }
       });
 
-      cleanupSessions(scopeKey, sessionIds);
+      if (fullCatalogGeneration > 0) {
+        cleanupSessions(scopeKey, fullCatalogSessionIds);
+      }
     });
   }, [
     normalizedProjects,
     sessions,
     archivedSessions,
     availableWorktreesByProject,
+    knownProjectDirectories,
     isVSCode,
     isSessionsLoading,
+    fullCatalogGeneration,
+    fullCatalogSessionIds,
     foldersMap,
     createFolder,
     addSessionToFolder,

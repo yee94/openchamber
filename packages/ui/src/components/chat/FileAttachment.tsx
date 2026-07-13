@@ -453,6 +453,7 @@ export const ActiveEditorFileSuggestion = memo(() => {
   const attachedFiles = useInputStore((s) => s.attachedFiles)
   const addVSCodeFileAttachment = useInputStore((s) => s.addVSCodeFileAttachment)
   const addVSCodeSelectionAttachment = useInputStore((s) => s.addVSCodeSelectionAttachment)
+  const setPendingInputText = useInputStore((s) => s.setPendingInputText)
   const isVSCodeRuntime = useRuntimeAPIs().runtime.isVSCode;
 
   if (!isVSCodeRuntime || !activeEditorFile) return null;
@@ -485,6 +486,7 @@ export const ActiveEditorFileSuggestion = memo(() => {
 
   const handleAddFile = () => {
     addVSCodeFileAttachment(filePath, fileName, fileSize);
+    setPendingInputText(`[${fileName}]`, 'append-inline');
   };
 
   const handlePinSelection = async () => {
@@ -492,6 +494,7 @@ export const ActiveEditorFileSuggestion = memo(() => {
     const blob = new Blob([selection.text], { type: 'text/plain' });
     const file = new File([blob], selectionLabel, { type: 'text/plain' });
     await addVSCodeSelectionAttachment(filePath, file);
+    setPendingInputText(`[${selectionLabel}]`, 'append-inline');
   };
 
   // If there is a selection, prefer showing the pin-selection UI only.
