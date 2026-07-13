@@ -4,6 +4,7 @@ import { isValidElement } from "react"
 import { toast as sonnerToast } from "sonner"
 import type { ExternalToast } from "sonner"
 import { copyTextToClipboard } from '@/lib/clipboard'
+import { triggerMobileHaptic } from '@/hooks/streamingHaptics'
 
 const copyToClipboard = async (text: string) => {
   const result = await copyTextToClipboard(text)
@@ -12,7 +13,7 @@ const copyToClipboard = async (text: string) => {
   }
 }
 
-const reactNodeToText = (value: React.ReactNode): string => {
+const reactNodeToText = (value: unknown): string => {
   if (value == null || typeof value === "boolean") {
     return ""
   }
@@ -36,7 +37,7 @@ const resolveToastDescription = (description: ExternalToast["description"]): Rea
   return description
 }
 
-const getToastCopyText = (message: string | React.ReactNode, data?: ExternalToast): string => {
+const getToastCopyText = (message: Parameters<typeof sonnerToast.error>[0], data?: ExternalToast): string => {
   const descriptionText = reactNodeToText(resolveToastDescription(data?.description))
   if (descriptionText.length > 0) {
     return descriptionText
@@ -45,9 +46,16 @@ const getToastCopyText = (message: string | React.ReactNode, data?: ExternalToas
 }
 
 // Wrapper to automatically add OK button to success and info toasts, Copy button to error and warning toasts
-export const toast = {
+export const toast: typeof sonnerToast = Object.assign(
+  (...args: Parameters<typeof sonnerToast>) => {
+    triggerMobileHaptic()
+    return sonnerToast(...args)
+  },
+  {
   ...sonnerToast,
-  success: (message: string | React.ReactNode, data?: ExternalToast) => {
+  success: (...args: Parameters<typeof sonnerToast.success>) => {
+    const [message, data] = args
+    triggerMobileHaptic()
     return sonnerToast.success(message, {
       ...data,
       action: data?.action || {
@@ -56,7 +64,9 @@ export const toast = {
       },
     })
   },
-  info: (message: string | React.ReactNode, data?: ExternalToast) => {
+  info: (...args: Parameters<typeof sonnerToast.info>) => {
+    const [message, data] = args
+    triggerMobileHaptic()
     return sonnerToast.info(message, {
       ...data,
       action: data?.action || {
@@ -65,7 +75,9 @@ export const toast = {
       },
     })
   },
-  error: (message: string | React.ReactNode, data?: ExternalToast) => {
+  error: (...args: Parameters<typeof sonnerToast.error>) => {
+    const [message, data] = args
+    triggerMobileHaptic()
     return sonnerToast.error(message, {
       ...data,
       action: data?.action || {
@@ -74,7 +86,9 @@ export const toast = {
       },
     })
   },
-  warning: (message: string | React.ReactNode, data?: ExternalToast) => {
+  warning: (...args: Parameters<typeof sonnerToast.warning>) => {
+    const [message, data] = args
+    triggerMobileHaptic()
     return sonnerToast.warning(message, {
       ...data,
       action: data?.action || {
@@ -83,4 +97,17 @@ export const toast = {
       },
     })
   },
-}
+  loading: (...args: Parameters<typeof sonnerToast.loading>) => {
+    triggerMobileHaptic()
+    return sonnerToast.loading(...args)
+  },
+  custom: (...args: Parameters<typeof sonnerToast.custom>) => {
+    triggerMobileHaptic()
+    return sonnerToast.custom(...args)
+  },
+  promise: <ToastData,>(...args: Parameters<typeof sonnerToast.promise<ToastData>>) => {
+    triggerMobileHaptic()
+    return sonnerToast.promise<ToastData>(...args)
+  },
+  },
+)

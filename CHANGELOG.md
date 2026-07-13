@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.27] - 2026-07-13
+
+- **Mobile haptics:** refresh visible streaming text every 20ms, provide matching light haptic feedback, and trigger the same feedback whenever an in-app toast appears.
+
 ## [1.15.26] - 2026-07-13
 
 - **Command autocomplete:** pressing Enter on a skill only inserts it into the composer so arguments or context can be added first; system and OpenCode commands still run immediately.
