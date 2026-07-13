@@ -1,5 +1,4 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 import { toast } from '@/components/ui';
@@ -59,7 +58,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus } from '@/stores/useGitStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
+import { buildCodeMirrorCommentWidgets, CodeSelectionActionBubble, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -2328,19 +2327,18 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     const hasSelection = !view.state.selection.main.empty;
     setHasEditorSelection((previous) => previous === hasSelection ? previous : hasSelection);
     if (!hasSelection) {
-      setEditorSelectionPosition((previous) => previous === null ? previous : null);
+      setEditorSelectionPosition(null);
       return;
     }
 
-    const headRect = view.coordsAtPos(view.state.selection.main.head);
-    if (!headRect) return;
-    const nextPosition = {
-      x: Math.min(window.innerWidth - 120, Math.max(120, headRect.left)),
-      y: Math.max(8, headRect.top - 8),
-    };
-    setEditorSelectionPosition((previous) => (
-      previous?.x === nextPosition.x && previous.y === nextPosition.y ? previous : nextPosition
-    ));
+    const selection = view.state.selection.main;
+    const lineStart = view.state.doc.lineAt(selection.from).from;
+    const lineStartRect = view.coordsAtPos(lineStart);
+    if (!lineStartRect) return;
+    setEditorSelectionPosition({
+      x: Math.min(window.innerWidth - 240, Math.max(8, lineStartRect.left)),
+      y: Math.max(8, lineStartRect.top - 8),
+    });
   }, []);
 
   const addEditorSelectionToChat = React.useCallback(() => {
@@ -2355,7 +2353,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     const endLine = view.state.doc.lineAt(Math.max(selection.from, selection.to - 1)).number;
     const lineRange = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
     const attachmentLabel = `${selectedFile.name}:${lineRange}`;
-
     void addCodeSelectionAttachment(selectedFile.path, attachmentLabel, selectedText);
     setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
     setEditorSelectionPosition(null);
@@ -2370,7 +2367,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     if (!selectedText) return;
     const lineRange = start === end ? `${start}` : `${start}-${end}`;
     const attachmentLabel = `${selectedFile.name}:${lineRange}`;
-
     void addCodeSelectionAttachment(selectedFile.path, attachmentLabel, selectedText);
     setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
     useUIStore.getState().setActiveMainTab('chat');
@@ -2958,7 +2954,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [addEditorSelectionToChat, isMobile, shortcutOverrides, textViewMode]);
-
   const editorFontSize = useUIStore((state) => state.editorFontSize);
 
   const editorExtensions = React.useMemo(() => {
@@ -2987,10 +2982,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       extensions.push(EditorView.lineWrapping);
     }
     extensions.push(EditorView.updateListener.of((update) => {
-      if (update.selectionSet) {
+      if (update.selectionSet || update.docChanged) {
         syncEditorSelection(update.view);
       }
-      if (isMobile) {
+    }));
+    if (isMobile) {
+      extensions.push(EditorView.updateListener.of((update) => {
         if (!update.view.hasFocus) {
           return;
         }
@@ -3001,8 +2998,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         window.requestAnimationFrame(() => {
           nudgeEditorSelectionAboveKeyboard(update.view);
         });
-      }
-    }));
+      }));
+    }
     return extensions;
   }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard, editorFontSize, syncEditorSelection]);
 
@@ -3230,7 +3227,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     return (
       <div className={wrapperCls}>
-        {canEdit && isEditingFile && (
+      {canEdit && isEditingFile && (
           <>
             {isSaving ? (
               <span className="flex items-center gap-1 px-1 text-muted-foreground typography-meta">
@@ -4353,20 +4350,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     </div>
   );
 
-  const editorSelectionBubble = editorSelectionPosition ? createPortal(
-    <div
-      data-code-selection-action="true"
-      className="fixed z-[100] -translate-x-1/2 -translate-y-full rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-1 shadow-lg"
-      style={{ left: editorSelectionPosition.x, top: editorSelectionPosition.y }}
-      onPointerDown={(event) => event.preventDefault()}
-    >
-      <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" onClick={addEditorSelectionToChat}>
-        <Icon name="add" className="size-4" />
-        {t('chat.textSelection.actions.addToChat')}
-        <ShortcutKbd shortcut="⌘+I" />
-      </Button>
-    </div>,
-    document.body,
+  const editorSelectionBubble = editorSelectionPosition ? (
+    <CodeSelectionActionBubble
+      position={editorSelectionPosition}
+      onAddToChat={addEditorSelectionToChat}
+    />
   ) : null;
 
   return (

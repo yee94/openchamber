@@ -1,8 +1,12 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Icon } from '@/components/icon/Icon';
-import { useI18n } from '@/lib/i18n';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Icon } from "@/components/icon/Icon";
+import { useI18n } from "@/lib/i18n";
 
 type Props = {
   onOpenSettings: () => void;
@@ -12,7 +16,8 @@ type Props = {
   showUpdateButton?: boolean;
 };
 
-const iconButtonClassName = 'size-8 text-muted-foreground hover:bg-[var(--interactive-hover)]/50 hover:text-foreground';
+const footerIconButtonClassName =
+  "size-8 text-muted-foreground hover:bg-[var(--interactive-hover)]/50 hover:text-foreground";
 
 export function SidebarFooter({
   onOpenSettings,
@@ -24,7 +29,7 @@ export function SidebarFooter({
   const { t } = useI18n();
 
   return (
-    <div className="flex shrink-0 items-center gap-1 px-2.5 py-2">
+    <div className="flex shrink-0 items-center justify-start gap-1 px-2.5 py-2">
       {showRuntimeButtons ? (
         <>
           <Tooltip>
@@ -33,14 +38,16 @@ export function SidebarFooter({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={iconButtonClassName}
+                className={footerIconButtonClassName}
                 onClick={onOpenSettings}
-                aria-label={t('sessions.sidebar.footer.actions.settings')}
+                aria-label={t("sessions.sidebar.footer.actions.settings")}
               >
                 <Icon name="settings-3" className="size-4.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>{t('sessions.sidebar.footer.actions.settings')}</TooltipContent>
+            <TooltipContent side="top" sideOffset={4}>
+              {t("sessions.sidebar.footer.actions.settings")}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -48,27 +55,37 @@ export function SidebarFooter({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={iconButtonClassName}
+                className={footerIconButtonClassName}
                 onClick={onOpenShortcuts}
-                aria-label={t('sessions.sidebar.footer.actions.shortcuts')}
+                aria-label={t("sessions.sidebar.footer.actions.shortcuts")}
               >
                 <Icon name="question" className="size-4.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>{t('sessions.sidebar.footer.actions.shortcuts')}</TooltipContent>
+            <TooltipContent side="top" sideOffset={4}>
+              {t("sessions.sidebar.footer.actions.shortcuts")}
+            </TooltipContent>
           </Tooltip>
         </>
       ) : null}
       {showUpdateButton && onOpenUpdate ? (
-        <Button
-          type="button"
-          variant="default"
-          size="xs"
-          className="ml-auto"
-          onClick={onOpenUpdate}
-        >
-          {t('sessions.sidebar.footer.actions.update')}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="default"
+              size="icon"
+              className="ml-auto size-8 rounded-full border-[var(--primary-base)] bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] hover:text-[var(--primary-foreground)]"
+              onClick={onOpenUpdate}
+              aria-label={t("sessions.sidebar.footer.actions.update")}
+            >
+              <Icon name="download" className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            <p>{t("sessions.sidebar.footer.actions.update")}</p>
+          </TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   );

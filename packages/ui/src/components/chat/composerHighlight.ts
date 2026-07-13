@@ -42,6 +42,8 @@ export interface HighlightRange {
     className?: string;
     /** Optional explicit priority; falls back to STYLE_PRIORITY[style]. */
     priority?: number;
+    /** Filename rendered as an inline attachment tag with its file-type icon. */
+    attachmentName?: string;
 }
 
 export interface MentionRange {
@@ -53,6 +55,7 @@ export interface MentionRange {
 export interface HighlightPart {
     text: string;
     className: string;
+    attachmentName?: string;
 }
 
 type AnyStyle = HighlightRange['style'];
@@ -309,11 +312,12 @@ export function buildHighlightParts(
             ? (bestRange.className ?? STYLE_CLASS[bestRange.style])
             : DEFAULT_CLASS;
         const segText = text.slice(segStart, segEnd);
+        const attachmentName = bestRange?.attachmentName;
         const last = parts[parts.length - 1];
-        if (last && last.className === className) {
+        if (last && last.className === className && last.attachmentName === attachmentName) {
             last.text += segText;
         } else {
-            parts.push({ text: segText, className });
+            parts.push({ text: segText, className, attachmentName });
         }
     }
 

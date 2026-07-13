@@ -21,10 +21,10 @@ import { appendInlineComments } from '@/lib/messages/inlineComments';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
-import { AttachedFilesList, AttachedVSCodeFileChips, ActiveEditorFileSuggestion } from './FileAttachment';
-import ToolOutputDialog from './message/ToolOutputDialog';
-import type { ToolPopupContent } from './message/types';
+import { ActiveEditorFileSuggestion, AttachedFilesList, AttachedVSCodeFileChips } from './FileAttachment';
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { mergeFailedAttachments, mergeFailedComposerText } from './chat-input-recovery';
 import { AutoReviewBanner } from './AutoReviewBanner';
@@ -39,6 +39,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { PendingChangesBar } from './PendingChangesBar';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
+import type { ToolPopupContent } from './message/types';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
 import { MobileSessionStatusBar } from './MobileSessionStatusBar';
@@ -101,7 +102,11 @@ import { highlightFencedCode } from './composerCodeHighlight';
 import {
     assignImageAttachmentFilenames,
     buildAttachmentCitationText,
+    expandCodeSelectionCitations,
     findAttachmentCitationRanges,
+    getAttachmentCitationIconPath,
+    isInlineAttachmentCitation,
+    resolveAttachmentCitationDeletion,
 } from './attachmentCitations';
 import { getFileMentionAutocompleteQuery, type FileMentionAutocompleteInputSource } from './fileMentionAutocompleteState';
 import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
@@ -110,6 +115,7 @@ import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/cha
 import type { Part } from '@opencode-ai/sdk/v2/client';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
+const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 const EMPTY_QUEUE: QueuedMessage[] = [];
 const FILE_MENTION_TOKEN = /^@[^\s]+$/;
 // Single-line URL pasted over a selection becomes a markdown link.
@@ -135,14 +141,6 @@ const renameFileForAttachmentCitation = (file: File, filename: string): File => 
         type: file.type,
         lastModified: file.lastModified,
     });
-};
-
-const buildImagePasteInsertion = (pastedText: string, citationText: string): string => {
-    const text = pastedText;
-    if (!text) {
-        return citationText;
-    }
-    return `${text}${/\s$/.test(text) ? '' : ' '}${citationText}`;
 };
 
 const getInsertedTextFromChange = (previousValue: string, nextValue: string): string => {
@@ -1018,6 +1016,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
         return draft;
     });
+    const [attachmentPopup, setAttachmentPopup] = React.useState<ToolPopupContent>({
+        open: false,
+        title: '',
+        content: '',
+    });
     // Restore confirmed mentions from localStorage on mount
     const confirmedMentionsRef = React.useRef<Set<string>>(loadConfirmedMentions(initialSessionIdRef.current));
     // Helper: check if a mention path looks like a file/folder (has path separators, extension, or was explicitly confirmed)
@@ -1156,8 +1159,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
     const agents = getVisibleAgents();
     const isMobile = useUIStore((state) => state.isMobile);
-    const isLeaderKeyPending = useLeaderKeyStore((state) => state.pending);
     const setImagePreviewOpen = useUIStore((state) => state.setImagePreviewOpen);
+    const handleShowAttachmentPopup = React.useCallback((content: ToolPopupContent) => {
+        if (!content.image) return;
+        setAttachmentPopup(content);
+        setImagePreviewOpen(true);
+    }, [setImagePreviewOpen]);
+    const handleAttachmentPopupChange = React.useCallback((open: boolean) => {
+        setAttachmentPopup((current) => ({ ...current, open }));
+        setImagePreviewOpen(open);
+    }, [setImagePreviewOpen]);
+    const isLeaderKeyPending = useLeaderKeyStore((state) => state.pending);
     const inputBarOffset = useUIStore((state) => state.inputBarOffset);
     const persistChatDraft = useUIStore((state) => state.persistChatDraft);
     const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
@@ -1185,23 +1197,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const isAgentSelectorOpen = useUIStore((state) => state.isAgentSelectorOpen);
     const isModelSelectorOpen = useUIStore((state) => state.isModelSelectorOpen);
     const [isNarrowComposer, setIsNarrowComposer] = React.useState(false);
-    const [attachmentPreview, setAttachmentPreview] = React.useState<ToolPopupContent>({
-        open: false,
-        title: '',
-        content: '',
-    });
-
-    const handleShowAttachmentPreview = React.useCallback((content: ToolPopupContent) => {
-        if (!content.image) return;
-        setAttachmentPreview(content);
-        setImagePreviewOpen(true);
-    }, [setImagePreviewOpen]);
-
-    const handleAttachmentPreviewOpenChange = React.useCallback((open: boolean) => {
-        setAttachmentPreview((prev) => ({ ...prev, open }));
-        setImagePreviewOpen(open);
-    }, [setImagePreviewOpen]);
-
     React.useEffect(() => {
         if (!currentDirectory || !runtimeGit) return;
         void ensureGitStatus(currentDirectory, runtimeGit);
@@ -1385,29 +1380,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         return findAttachmentCitationRanges(
             message,
-            sendableAttachedFiles.map((file) => file.filename),
-        ).flatMap((range) => [
-            {
-                ...range,
-                style: 'mentionFile' as const,
-                className: 'bg-[var(--surface-muted)] text-[var(--surface-foreground)]',
-                priority: 101,
-            },
-            {
-                start: range.start,
-                end: range.start + 1,
-                style: 'mentionFile' as const,
-                className: 'rounded-l-[4px] bg-[var(--surface-muted)] text-transparent',
-                priority: 102,
-            },
-            {
-                start: range.end - 1,
-                end: range.end,
-                style: 'mentionFile' as const,
-                className: 'rounded-r-[4px] bg-[var(--surface-muted)] text-transparent',
-                priority: 102,
-            },
-        ]);
+            sendableAttachedFiles
+                .filter(isInlineAttachmentCitation)
+                .map((file) => file.filename),
+        ).flatMap((range) => {
+            const attachmentName = message.slice(range.start + 1, range.end - 1);
+            return [
+                {
+                    ...range,
+                    style: 'mentionFile' as const,
+                    className: 'relative inline-block h-5 max-w-full whitespace-nowrap rounded-md bg-[var(--status-info-background)] align-middle text-[var(--status-info)]',
+                    priority: 101,
+                    attachmentName,
+                },
+            ];
+        });
     }, [inputMode, message, sendableAttachedFiles]);
 
     // Combined source-mode highlight: markdown syntax + @mentions. Returns null
@@ -2003,7 +1990,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const queuedMsg = queuedMessagesToSend[i];
             const { sanitizedText, mention } = parseAgentMentions(queuedMsg.content, agents);
             const { sanitizedText: queuedText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
-            addMentionedSkills(queuedText);
+            const expandedQueuedText = expandCodeSelectionCitations(queuedText, queuedMsg.attachments);
+            addMentionedSkills(expandedQueuedText);
 
             // Use agent mention from first message that has one
             if (!agentMentionName && mention?.name) {
@@ -2012,7 +2000,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
             if (i === 0) {
                 // First queued message becomes primary
-                primaryText = queuedText;
+                primaryText = expandedQueuedText;
                 primaryAttachments = [
                     ...sanitizeAttachmentsForSend(queuedMsg.attachments),
                     ...mentionAttachments,
@@ -2021,7 +2009,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 // Subsequent queued messages become additional parts
                 const queuedAttachments = sanitizeAttachmentsForSend(queuedMsg.attachments);
                 additionalParts.push({
-                    text: queuedText,
+                    text: expandedQueuedText,
                     attachments: [...queuedAttachments, ...mentionAttachments],
                 });
             }
@@ -2033,7 +2021,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const { sanitizedText, mention } = parseAgentMentions(messageToSend, agents);
             const { sanitizedText: messageText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
             const attachmentsToSend = sanitizeAttachmentsForSend(sendableAttachedFiles);
-            addMentionedSkills(messageText);
+            const expandedMessageText = expandCodeSelectionCitations(messageText, sendableAttachedFiles);
+            addMentionedSkills(expandedMessageText);
 
             if (!agentMentionName && mention?.name) {
                 agentMentionName = mention.name;
@@ -2041,12 +2030,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
             if (queuedMessagesToSend.length === 0) {
                 // No queue - current input is primary
-                primaryText = messageText;
+                primaryText = expandedMessageText;
                 primaryAttachments = [...attachmentsToSend, ...mentionAttachments];
             } else {
                 // Has queue - current input is additional part
                 additionalParts.push({
-                    text: messageText,
+                    text: expandedMessageText,
                     attachments: [...attachmentsToSend, ...mentionAttachments],
                 });
             }
@@ -2633,13 +2622,41 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return;
         }
 
-        if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey) {
             const textarea = textareaRef.current;
             const selectionStart = textarea?.selectionStart ?? message.length;
             const selectionEnd = textarea?.selectionEnd ?? message.length;
+            const citationDeletion = resolveAttachmentCitationDeletion(
+                message,
+                attachedFiles
+                    .filter(isInlineAttachmentCitation)
+                    .map((file) => file.filename),
+                { key: e.key, selectionStart, selectionEnd, altKey: e.altKey },
+            );
+
+            if (citationDeletion) {
+                const removedFilenames = new Set(citationDeletion.removedFilenames.map((filename) => filename.toLowerCase()));
+                e.preventDefault();
+                for (const attachment of attachedFiles) {
+                    if (removedFilenames.has(attachment.filename.toLowerCase())) {
+                        removeAttachedFile(attachment.id);
+                    }
+                }
+                setMessage(citationDeletion.text);
+                requestAnimationFrame(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.selectionStart = citationDeletion.caret;
+                        textareaRef.current.selectionEnd = citationDeletion.caret;
+                    }
+                    adjustTextareaHeight();
+                });
+                updateAutocompleteState(citationDeletion.text, citationDeletion.caret);
+                return;
+            }
+
             const hasCollapsedSelection = selectionStart === selectionEnd;
 
-            if (hasCollapsedSelection) {
+            if (hasCollapsedSelection && !e.altKey) {
                 const probeIndex = e.key === 'Backspace' ? selectionStart - 1 : selectionStart;
                 if (probeIndex >= 0 && probeIndex < message.length) {
                     const citationRange = findAttachmentCitationRanges(
@@ -3429,12 +3446,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const textarea = textareaRef.current;
         const selectionStart = textarea?.selectionStart ?? message.length;
         const selectionEnd = textarea?.selectionEnd ?? message.length;
+        const insertionContent = pastedText
+            ? `${pastedText}${/\s$/.test(pastedText) ? '' : ' '}${citationText}`
+            : citationText;
         const insertionText = withInlineInsertionBoundaries(
-            buildImagePasteInsertion(pastedText, citationText),
+            insertionContent,
             message.slice(0, selectionStart),
             message.slice(selectionEnd),
         );
-
         insertTextAtSelection(insertionText, getFileMentionInputSourceForInsertedText(insertionText));
 
         for (let index = 0; index < imageFiles.length; index += 1) {
@@ -4847,7 +4866,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 </div>
             ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
-                <AttachedFilesList onShowPopup={handleShowAttachmentPreview} />
+                <AttachedFilesList onShowPopup={handleShowAttachmentPopup} />
                 <QueuedMessageChips
                     onEditMessage={handleQueuedMessageEdit}
                     onSendMessage={handleQueuedMessageSend}
@@ -5445,7 +5464,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             </div>
                         ) : null}
                         <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
-                            <AttachedVSCodeFileChips onShowPopup={handleShowAttachmentPreview} />
+                            <AttachedVSCodeFileChips onShowPopup={handleShowAttachmentPopup} />
                             <ActiveEditorFileSuggestion />
                         </div>
                         <div className={cn("relative overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
@@ -5472,7 +5491,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             key={`${index}-${part.text.length}`}
                                             className={part.className}
                                         >
-                                            {part.text}
+                                            {part.attachmentName ? (
+                                                <>
+                                                    <span className="invisible">{part.text}</span>
+                                                    <span className="absolute inset-0 flex min-w-0 items-center gap-1 overflow-hidden px-1 text-[0.875em]">
+                                                        <FileTypeIcon filePath={getAttachmentCitationIconPath(part.attachmentName)} className="size-3.5 shrink-0" />
+                                                        <span className="min-w-0 truncate">{part.attachmentName}</span>
+                                                    </span>
+                                                </>
+                                            ) : part.text}
                                         </span>
                                     ))}
                                 </div>
@@ -5802,6 +5829,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 <DraftPresetChips onSubmit={submitPresetPrompt} className="chat-input-column mt-4" />
             ) : null}
         </form>
+        {attachmentPopup.open ? (
+            <React.Suspense fallback={null}>
+                <ToolOutputDialog
+                    popup={attachmentPopup}
+                    onOpenChange={handleAttachmentPopupChange}
+                    isMobile={isMobile}
+                />
+            </React.Suspense>
+        ) : null}
 
         {/* Issue Picker Dialog */}
         <GitHubIssuePickerDialog
@@ -5828,12 +5864,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             submitting={reviewFlowSubmitting}
             onConfirm={handleStartReviewFlow}
         />
-        <ToolOutputDialog
-            popup={attachmentPreview}
-            onOpenChange={handleAttachmentPreviewOpenChange}
-            isMobile={isMobile}
-        />
-
         {/* Always-mounted picker inputs. They must NOT live inside
             ComposerAttachmentControls: that component mounts once per composer
             variant (pill / expanded footer), so a shared ref got nulled when a

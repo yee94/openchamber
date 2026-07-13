@@ -27,6 +27,14 @@ All notable changes to this project will be documented in this file.
 - Mobile: on Android 15 the app no longer draws under the status bar.
 - Security: requests that spoof local host headers to look like same-machine traffic are rejected.
 
+## [1.15.24] - 2026-07-13
+
+- **Global configuration:** add a dedicated editor for OpenCode, oh-my-opencode-slim, and oh-my-openagent configuration, with safe save and restart flows across web, desktop, and VS Code runtimes.
+- **Session and project navigation:** refine sidebar grouping, bulk actions, folder controls, session focus, project controls, and startup state for a faster, more consistent workspace experience.
+- **Files, diffs, and comments:** improve change-list controls, file and diff navigation, inline-comment actions, and code-selection affordances.
+- **Composer attachments:** render attachment citations consistently and remove their corresponding files whenever citation text is deleted with character, selection, or word deletion.
+- **Visual polish:** refresh settings, controls, typography, keyboard hints, authentication, and mobile layout details across the application.
+
 ## [1.15.23] - 2026-07-13
 
 - **Project icon styling:** use the project icon itself across chat, mobile, scheduled tasks, multi-run, project settings, and sidebar surfaces, with a cleaner shared visual treatment.

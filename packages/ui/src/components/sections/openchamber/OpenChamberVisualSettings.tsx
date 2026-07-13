@@ -1197,36 +1197,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </div>
                             )}
 
-                            {shouldShow('codeFontSize') && !isMobile && (
-                                <div data-settings-item="appearance.code-font-size" className="flex items-center gap-8 py-1">
-                                    <div className="flex min-w-0 flex-col w-56 shrink-0">
-                                        <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.codeFontSize')}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 w-fit">
-                                        <NumberInput
-                                            value={codeFontSize}
-                                            onValueChange={setCodeFontSize}
-                                            min={50}
-                                            max={200}
-                                            step={5}
-                                            aria-label={t('settings.openchamber.visual.field.codeFontSizePercentageAria')}
-                                            className="w-16"
-                                        />
-                                        <Button size="sm"
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => setCodeFontSize(100)}
-                                            disabled={codeFontSize === 100}
-                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
-                                            aria-label={t('settings.openchamber.visual.actions.resetCodeFontSizeAria')}
-                                            title={t('settings.common.actions.reset')}
-                                        >
-                                            <Icon name="restart" className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
                             {shouldShow('terminalFontSize') && (
                                 <div className={cn("py-1", isMobile ? "flex flex-col gap-3" : "flex items-center gap-8")}>
                                     <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-56 shrink-0")}>
@@ -1282,6 +1252,36 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             disabled={fontSize === 100}
                                             className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
                                             aria-label={t('settings.openchamber.visual.actions.resetFontSizeAria')}
+                                            title={t('settings.common.actions.reset')}
+                                        >
+                                            <Icon name="restart" className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {shouldShow('codeFontSize') && !isMobile && (
+                                <div data-settings-item="appearance.code-font-size" className="flex items-center gap-8 py-1">
+                                    <div className="flex min-w-0 flex-col w-56 shrink-0">
+                                        <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.codeFontSize')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-fit">
+                                        <NumberInput
+                                            value={codeFontSize}
+                                            onValueChange={setCodeFontSize}
+                                            min={50}
+                                            max={200}
+                                            step={5}
+                                            aria-label={t('settings.openchamber.visual.field.codeFontSizePercentageAria')}
+                                            className="w-16"
+                                        />
+                                        <Button size="sm"
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => setCodeFontSize(100)}
+                                            disabled={codeFontSize === 100}
+                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
+                                            aria-label={t('settings.openchamber.visual.actions.resetCodeFontSizeAria')}
                                             title={t('settings.common.actions.reset')}
                                         >
                                             <Icon name="restart" className="h-3.5 w-3.5" />
