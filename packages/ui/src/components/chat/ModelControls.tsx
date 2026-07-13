@@ -464,6 +464,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const [pendingThinkingVariants, setPendingThinkingVariants] = React.useState<Map<string, string | undefined>>(new Map());
     const [adjustedThinkingModels, setAdjustedThinkingModels] = React.useState<Set<string>>(new Set());
     const [modelPickerRenderVersion, setModelPickerRenderVersion] = React.useState(0);
+    const restoreComposerFocus = React.useCallback(() => {
+        // Dropdown focus restoration runs during close. Wait until it completes before
+        // returning keyboard input to the composer.
+        window.setTimeout(() => {
+            requestAnimationFrame(() => {
+                const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
+                textarea?.focus({ preventScroll: true });
+            });
+        }, 0);
+    }, []);
 
     React.useEffect(() => {
         if (activeMobilePanel === 'model') {
@@ -510,27 +520,24 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (wasOpen && !isCompact) {
                 setModelTooltipOpen(false);
                 suppressModelTooltipUntilRef.current = performance.now() + 200;
-                requestAnimationFrame(() => {
-                    const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                    textarea?.focus();
-                });
+                restoreComposerFocus();
             }
         }
-    }, [isModelSelectorOpen, isCompact]);
+    }, [isModelSelectorOpen, isCompact, restoreComposerFocus]);
 
     // Handle agent selector close behavior
     const [agentSearchQuery, setAgentSearchQuery] = React.useState('');
+    const prevAgentSelectorOpenRef = React.useRef(isAgentSelectorOpen);
     React.useEffect(() => {
+        const wasOpen = prevAgentSelectorOpenRef.current;
+        prevAgentSelectorOpenRef.current = isAgentSelectorOpen;
         if (!isAgentSelectorOpen) {
             setAgentSearchQuery('');
-            if (!isCompact) {
-                requestAnimationFrame(() => {
-                    const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                    textarea?.focus();
-                });
+            if (wasOpen && !isCompact) {
+                restoreComposerFocus();
             }
         }
-    }, [isAgentSelectorOpen, isCompact]);
+    }, [isAgentSelectorOpen, isCompact, restoreComposerFocus]);
 
     const selectableDesktopAgents = React.useMemo(() => {
         return agents.filter((agent) => isPrimaryMode(agent.mode));
@@ -1346,11 +1353,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (isCompact) {
                 closeMobilePanel();
             }
-            // Restore focus to chat input after model selection.
-            requestAnimationFrame(() => {
-                const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                textarea?.focus();
-            });
         } catch (error) {
             console.error('[ModelControls] Handle model change error:', error);
         }
