@@ -10,6 +10,8 @@ import React from 'react';
 import { subscribeToStreamingHapticEvents } from '@/sync/streaming-haptic-events';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
+export const HAPTIC_MIN_INTERVAL_MS = 20;
+
 // ---------------------------------------------------------------------------
 // Pure logic – tested without Capacitor or React
 // ---------------------------------------------------------------------------
@@ -98,6 +100,10 @@ export function evaluateHaptics(input: HapticsInput): HapticsDecision {
   };
 }
 
+export function shouldTriggerHaptic(lastTriggeredAt: number, now: number): boolean {
+  return now - lastTriggeredAt >= HAPTIC_MIN_INTERVAL_MS;
+}
+
 // ---------------------------------------------------------------------------
 // Dynamic import cache – prevents repeated imports of the Capacitor plugin
 // ---------------------------------------------------------------------------
@@ -113,6 +119,7 @@ function getHapticsModule(): Promise<typeof import('@capacitor/haptics')> {
 
 let hapticsModuleCache: typeof import('@capacitor/haptics') | null = null;
 let hapticsModuleCacheValid = false;
+let lastHapticAt = Number.NEGATIVE_INFINITY;
 
 async function getHapticsModuleCached(): Promise<typeof import('@capacitor/haptics') | null> {
   if (hapticsModuleCacheValid) return hapticsModuleCache;
@@ -124,6 +131,21 @@ async function getHapticsModuleCached(): Promise<typeof import('@capacitor/hapti
     hapticsModuleCacheValid = true; // don't retry after failure
     return null;
   }
+}
+
+/** Fires one light haptic while the Capacitor mobile app is visible and active. */
+export function triggerMobileHaptic(): void {
+  if (!isCapacitorMobileNative()) return;
+  if (document.visibilityState !== 'visible' || !document.documentElement.classList.contains('oc-native-app-active')) return;
+
+  const now = Date.now();
+  if (!shouldTriggerHaptic(lastHapticAt, now)) return;
+  lastHapticAt = now;
+
+  void getHapticsModuleCached().then((mod) => {
+    if (!mod) return;
+    return mod.Haptics.impact({ style: mod.ImpactStyle.Light }).catch(() => undefined);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -141,12 +163,6 @@ export function useStreamingHaptics(): void {
     if (!isCapacitorMobileNative()) return;
 
     let disposed = false;
-    const fireHaptic = () => {
-      void getHapticsModuleCached().then((mod) => {
-        if (!mod || disposed) return;
-        return mod.Haptics.impact({ style: mod.ImpactStyle.Light }).catch(() => undefined);
-      });
-    };
 
     const unsubscribe = subscribeToStreamingHapticEvents((event) => {
       if (disposed) return;
@@ -162,7 +178,7 @@ export function useStreamingHaptics(): void {
       });
 
       if (decision.shouldTrigger) {
-        fireHaptic();
+        triggerMobileHaptic();
       }
     });
 
