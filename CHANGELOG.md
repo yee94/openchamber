@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.26] - 2026-07-13
+
+- **Command autocomplete:** pressing Enter on a skill only inserts it into the composer so arguments or context can be added first; system and OpenCode commands still run immediately.
+
 ## [1.15.25] - 2026-07-13
 
 - **Per-agent model memory:** when OpenChamber settings do not override the default session model, new sessions and agent switches restore each agent's last user-selected model and variant instead of falling back to OpenCode defaults.

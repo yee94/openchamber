@@ -325,7 +325,11 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         const safeIndex = ((selectedIndexRef.current % total) + total) % total;
         const command = commands[safeIndex];
         if (command) {
-          onCommandSelect(command, key === 'Enter');
+          // Enter immediately runs system/opencode commands (e.g. /new, /fork,
+          // /model). Skills only get inserted — they usually need arguments or
+          // surrounding context before the user actually sends.
+          const shouldSubmit = key === 'Enter' && !command.isSkill;
+          onCommandSelect(command, shouldSubmit);
         }
       }
     }
