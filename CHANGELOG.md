@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.28] - 2026-07-13
+
+- **Mobile haptics:** mark a newly opened native app as foreground immediately so streaming and toast feedback work from the first launch after installation.
+
 ## [1.15.27] - 2026-07-13
 
 - **Mobile haptics:** refresh visible streaming text every 20ms, provide matching light haptic feedback, and trigger the same feedback whenever an in-app toast appears.
