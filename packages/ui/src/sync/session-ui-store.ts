@@ -59,7 +59,7 @@ import {
   refetchSessionMessages,
   revertToMessage as revertToMessageAction,
   unrevertSession as unrevertSessionAction,
-  forkFromMessage as forkFromMessageAction,
+  forkSession as forkSessionAction,
   fetchMessagesForSession,
   fetchRecentSendConfirmationRecords,
   materializeConfirmedSendRecords,
@@ -321,6 +321,7 @@ export type SessionUIState = {
   unshareSession: (sessionId: string) => Promise<Session | null>
   revertToMessage: (sessionId: string, messageId: string, options?: { skipRedoPush?: boolean }) => Promise<void>
   forkFromMessage: (sessionId: string, messageId: string) => Promise<void>
+  forkCurrentSession: (sessionId: string) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
   handleSlashRedo: (sessionId: string, options?: { fullUnrevert?: boolean }) => Promise<void>
   createSessionFromAssistantMessage: (sourceMessageId: string, execution: AssistantMessageSessionExecution) => Promise<void>
@@ -1599,7 +1600,44 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         },
       })
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
-      const completed = await forkFromMessageAction(sessionId, messageId, operationId)
+      const completed = await forkSessionAction(sessionId, operationId, messageId)
+      if (!completed) return
+
+      const { toast } = await import("sonner")
+      toast.success(`Forked from ${existingSession.title}`)
+    } catch (error) {
+      console.error("Failed to fork session:", error)
+      const { toast } = await import("sonner")
+      toast.error("Failed to fork session")
+    } finally {
+      set((state) => state.forkTransition?.operationId === operationId
+        ? { forkTransition: null }
+        : state)
+    }
+  },
+
+  forkCurrentSession: async (sessionId) => {
+    if (get().forkTransition) return
+    const sessions = getSyncSessions()
+    const existingSession = sessions.find((s) => s.id === sessionId)
+    if (!existingSession) return
+    const operationId = ++nextForkOperationId
+
+    try {
+      const directory = resolveSessionDirectory(
+        sessionId,
+        (sid) => get().worktreeMetadata.get(sid),
+      ) ?? opencodeClient.getDirectory() ?? ""
+      set({
+        forkTransition: {
+          operationId,
+          sourceSessionId: sessionId,
+          directory,
+          stage: "preparing",
+        },
+      })
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      const completed = await forkSessionAction(sessionId, operationId)
       if (!completed) return
 
       const { toast } = await import("sonner")

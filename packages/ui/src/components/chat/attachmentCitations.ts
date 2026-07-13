@@ -8,6 +8,35 @@ export interface CitationRange {
     end: number;
 }
 
+export interface AttachmentCitationDeletionIntent {
+    key: 'Backspace' | 'Delete';
+    selectionStart: number;
+    selectionEnd: number;
+    altKey?: boolean;
+}
+
+export interface AttachmentCitationDeletionResult {
+    text: string;
+    caret: number;
+    removedFilenames: string[];
+}
+
+export interface AttachmentCitationCandidate {
+    source: 'local' | 'server' | 'vscode';
+    vscodeSource?: 'file' | 'selection';
+    mimeType?: string;
+}
+
+export interface CodeSelectionCitationCandidate extends AttachmentCitationCandidate {
+    filename: string;
+    vscodePath?: string;
+}
+
+export interface DisplayFilePartCandidate {
+    filename?: string;
+    mime?: string;
+}
+
 const GENERIC_IMAGE_BASENAMES = new Set([
     'image',
     'screenshot',
@@ -148,6 +177,39 @@ export const buildAttachmentCitationText = (filenames: string[]): string => (
     filenames.map((filename) => `[${filename}]`).join(' ')
 );
 
+export const getAttachmentCitationIconPath = (filename: string): string => (
+    filename.replace(/:\d+(?:-\d+)?$/, '')
+);
+
+export const isInlineAttachmentCitation = (attachment: AttachmentCitationCandidate): boolean => (
+    (attachment.source === 'vscode' && attachment.vscodeSource === 'selection')
+    || attachment.mimeType?.startsWith('image/') === true
+);
+
+export const expandCodeSelectionCitations = (
+    text: string,
+    attachments: CodeSelectionCitationCandidate[] | undefined,
+): string => {
+    let expanded = text;
+    for (const attachment of attachments ?? []) {
+        if (attachment.source !== 'vscode' || attachment.vscodeSource !== 'selection' || !attachment.vscodePath) {
+            continue;
+        }
+        const lineRange = attachment.filename.match(/:(\d+(?:-\d+)?)$/)?.[1];
+        if (!lineRange) continue;
+        expanded = expanded
+            .split(`[${attachment.filename}]`)
+            .join(`[${attachment.vscodePath}:${lineRange}]`);
+    }
+    return expanded;
+};
+
+export const isCodeSelectionFilePart = (part: DisplayFilePartCandidate): boolean => (
+    part.mime === 'text/plain'
+    && typeof part.filename === 'string'
+    && /:\d+(?:-\d+)?$/.test(part.filename)
+);
+
 export const findAttachmentCitationRanges = (text: string, filenames: string[]): CitationRange[] => {
     if (!text || !text.includes('[') || filenames.length === 0) {
         return [];
@@ -181,4 +243,64 @@ export const findAttachmentCitationRanges = (text: string, filenames: string[]):
     }
 
     return ranges;
+};
+
+const getWordDeletionRange = (
+    text: string,
+    key: AttachmentCitationDeletionIntent['key'],
+    cursor: number,
+): CitationRange => {
+    if (key === 'Backspace') {
+        let start = cursor;
+        while (start > 0 && /\s/.test(text[start - 1])) start -= 1;
+        while (start > 0 && !/\s/.test(text[start - 1])) start -= 1;
+        return { start, end: cursor };
+    }
+
+    let end = cursor;
+    while (end < text.length && /\s/.test(text[end])) end += 1;
+    while (end < text.length && !/\s/.test(text[end])) end += 1;
+    return { start: cursor, end };
+};
+
+export const resolveAttachmentCitationDeletion = (
+    text: string,
+    filenames: string[],
+    intent: AttachmentCitationDeletionIntent,
+): AttachmentCitationDeletionResult | null => {
+    const selectionStart = Math.max(0, Math.min(intent.selectionStart, text.length));
+    const selectionEnd = Math.max(selectionStart, Math.min(intent.selectionEnd, text.length));
+    let deletionRange: CitationRange;
+
+    if (selectionStart !== selectionEnd) {
+        deletionRange = { start: selectionStart, end: selectionEnd };
+    } else if (intent.altKey) {
+        deletionRange = getWordDeletionRange(text, intent.key, selectionStart);
+    } else if (intent.key === 'Backspace') {
+        deletionRange = { start: Math.max(0, selectionStart - 1), end: selectionStart };
+    } else {
+        deletionRange = { start: selectionStart, end: Math.min(text.length, selectionStart + 1) };
+    }
+
+    if (deletionRange.start === deletionRange.end) return null;
+
+    const intersected = findAttachmentCitationRanges(text, filenames).filter((range) => (
+        range.start < deletionRange.end && range.end > deletionRange.start
+    ));
+    if (intersected.length === 0) return null;
+
+    let start = Math.min(deletionRange.start, ...intersected.map((range) => range.start));
+    let end = Math.max(deletionRange.end, ...intersected.map((range) => range.end));
+
+    if (end < text.length && /\s/.test(text[end]) && (start === 0 || /\s/.test(text[start - 1]))) {
+        end += 1;
+    } else if (end === text.length && start > 0 && /\s/.test(text[start - 1])) {
+        start -= 1;
+    }
+
+    return {
+        text: `${text.slice(0, start)}${text.slice(end)}`,
+        caret: start,
+        removedFilenames: intersected.map((range) => text.slice(range.start + 1, range.end - 1)),
+    };
 };

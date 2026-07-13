@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { useUIStore } from './useUIStore';
 
 beforeEach(() => {
-  useUIStore.setState({ contextPanelByDirectory: {} });
+  useUIStore.setState({
+    contextPanelByDirectory: {},
+    contextPanelsOpenBeforeRightSidebarCollapse: [],
+    isRightSidebarOpen: false,
+  });
 });
 
 describe('useUIStore context panel tabs', () => {
@@ -53,5 +57,27 @@ describe('useUIStore context panel tabs', () => {
     expect(after?.isOpen).toBe(false);
 
     expect(useUIStore.getState().closeActiveContextPanelTab(directory)).toBe(false);
+  });
+
+  test('toggles open context panels with the right sidebar and restores them', () => {
+    const firstDirectory = '/repo-one';
+    const secondDirectory = '/repo-two';
+    const store = useUIStore.getState();
+
+    store.openContextPanelTab(firstDirectory, { mode: 'context' });
+    store.openContextPanelTab(secondDirectory, { mode: 'plan' });
+    store.toggleRightSidebar();
+
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(true);
+    store.toggleRightSidebar();
+
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(false);
+    expect(useUIStore.getState().contextPanelByDirectory[firstDirectory]?.isOpen).toBe(false);
+    expect(useUIStore.getState().contextPanelByDirectory[secondDirectory]?.isOpen).toBe(false);
+
+    store.toggleRightSidebar();
+
+    expect(useUIStore.getState().contextPanelByDirectory[firstDirectory]?.isOpen).toBe(true);
+    expect(useUIStore.getState().contextPanelByDirectory[secondDirectory]?.isOpen).toBe(true);
   });
 });

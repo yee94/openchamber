@@ -28,6 +28,13 @@ interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
 
 const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
+    id: 'global-config.editor',
+    page: 'global-config',
+    titleKey: 'settings.globalConfig.title',
+    descriptionKey: 'settings.globalConfig.description',
+    keywords: ['opencode.jsonc', 'oh-my-opencode-slim', 'oh-my-openagent', 'jsonc'],
+  },
+  {
     id: 'appearance.language',
     page: 'appearance',
     titleKey: 'settings.appearance.language.label',
@@ -115,6 +122,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.interfaceFontSize',
     keywords: ['font', 'text size', 'ui scale'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
+    id: 'appearance.code-font-size',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.codeFontSize',
+    keywords: ['code', 'font', 'text size', 'diff'],
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {

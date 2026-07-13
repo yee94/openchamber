@@ -18,6 +18,7 @@ interface PierreDiffCommentOverlaysProps {
   onCancel: () => void;
   onEdit: (draft: InlineCommentDraft) => void;
   onDelete: (draft: InlineCommentDraft) => void;
+  onAddToChat?: (range: SelectedLineRange) => void;
 }
 
 function parseCssWidth(value: string): number | null {
@@ -55,6 +56,7 @@ export function PierreDiffCommentOverlays(props: PierreDiffCommentOverlaysProps)
     onCancel,
     onEdit,
     onDelete,
+    onAddToChat,
   } = props;
 
   const [retryTick, setRetryTick] = React.useState(0);
@@ -190,6 +192,7 @@ export function PierreDiffCommentOverlays(props: PierreDiffCommentOverlaysProps)
               isEditing={true}
               onSave={onSave}
               onCancel={onCancel}
+              onAddToChat={onAddToChat}
               maxWidth={targetMaxWidth}
             />,
             target,
@@ -223,6 +226,7 @@ export function PierreDiffCommentOverlays(props: PierreDiffCommentOverlaysProps)
             isEditing={false}
             onSave={onSave}
             onCancel={onCancel}
+            onAddToChat={onAddToChat}
             maxWidth={targetMaxWidth}
           />,
           target,

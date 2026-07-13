@@ -747,6 +747,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.initDescription': 'Utwórz/zaktualizuj plik AGENTS.md',
   'chat.commandAutocomplete.command.undoDescription': 'Cofnij ostatnią wiadomość',
   'chat.commandAutocomplete.command.redoDescription': 'Ponów poprzednio cofnięte wiadomości',
+  'chat.commandAutocomplete.command.forkDescription': 'Utwórz nową sesję na podstawie bieżącego stanu rozmowy',
   'chat.commandAutocomplete.command.compactDescription': 'Skompresuj historię sesji używając AI aby zredukować rozmiar kontekstu',
   'chat.commandAutocomplete.command.summaryDescription': 'Niedestrukcyjne podsumowanie sesji. Opcjonalna wskazówka tematu po poleceniu.',
   'chat.commandAutocomplete.command.workspaceReviewDescription': 'Sprawdź diff obszaru roboczego pod kątem zamiaru, poprawności i adekwatności — ze znaleziskami według wagi.',

@@ -1,7 +1,7 @@
 export const SEMANTIC_TYPOGRAPHY = {
   // Codex App chat body: --text-base / --codex-chat-font-size default = 14px
   markdown: '0.875rem',
-  code: '0.8125rem',
+  code: '0.75rem',
   uiHeader: '0.9375rem',
   uiLabel: '0.8750rem',
   meta: '0.875rem',

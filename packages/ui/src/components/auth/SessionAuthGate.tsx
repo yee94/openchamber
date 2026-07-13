@@ -320,6 +320,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   const [isPasskeyBusy, setIsPasskeyBusy] = React.useState(false);
   const [trustDevice, setTrustDevice] = React.useState<boolean>(() => readStoredTrustDevice());
   const [activePasskeyAction, setActivePasskeyAction] = React.useState<'auth' | 'register' | null>(null);
+  const [settingsReady, setSettingsReady] = React.useState(skipAuth);
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
   const hasResyncedRef = React.useRef(skipAuth);
 
@@ -480,6 +481,8 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
       setErrorMessage('');
       setRetryAfter(undefined);
       setIsTunnelLocked(false);
+      setSettingsReady(false);
+      hasResyncedRef.current = false;
       setState('pending');
       void checkStatus();
     });
@@ -493,6 +496,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   React.useEffect(() => {
     if (!skipAuth && state === 'locked') {
       hasResyncedRef.current = false;
+      setSettingsReady(false);
     }
   }, [skipAuth, state]);
 
@@ -509,6 +513,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
     }
     if (state === 'authenticated' && !hasResyncedRef.current) {
       hasResyncedRef.current = true;
+      let cancelled = false;
       void ensureSettingsHydrated({
         runtimeKey: getRuntimeKey(),
         initializeAppearance: initializeAppearancePreferences,
@@ -517,8 +522,14 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
         onError: (stage, error) => {
           console.error(`[SessionAuthGate] ${stage} settings hydration failed:`, error);
         },
+      }, { force: true }).then(() => {
+        if (!cancelled) setSettingsReady(true);
       });
+      return () => {
+        cancelled = true;
+      };
     }
+    return undefined;
   }, [skipAuth, state]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -751,7 +762,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   const canOfferPasskeySetup = supportsPasskeys && passkeyStatus.enabled;
   const canUsePasskey = canOfferPasskeySetup && passkeyStatus.hasPasskeys;
 
-  if (state === 'pending') {
+  if (state === 'pending' || (state === 'authenticated' && !settingsReady)) {
     return <LoadingScreen />;
   }
 

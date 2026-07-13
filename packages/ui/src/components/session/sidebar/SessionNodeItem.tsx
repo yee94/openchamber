@@ -43,6 +43,7 @@ import { parseMultiRunSessionTitle } from '@/lib/multirun/title';
 import { MultiRunFusionDialog } from '@/components/multirun/MultiRunFusionDialog';
 import { FusionIcon } from '@/components/icons/FusionIcon';
 import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
+import { Kbd } from '@/components/ui/kbd';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { notifySidebarVisualSelectionCommitted, useSidebarVisualSelectionStore } from './sidebarVisualSelection';
 import {
@@ -158,37 +159,37 @@ type Props = {
 };
 
 type QuickSessionActionProps = {
-  archiveLabel: string;
+  pinLabel: string;
   deleteLabel: string;
   buttonSizeClass: string;
   iconSizeClass: string;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onMouseDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onArchive: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onPin: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
 // Extracted so only this small button re-renders when Shift is pressed/released,
 // instead of every mounted session row.
 const QuickSessionAction = React.memo(function QuickSessionAction({
-  archiveLabel,
+  pinLabel,
   deleteLabel,
   buttonSizeClass,
   iconSizeClass,
   onPointerDown,
   onMouseDown,
-  onArchive,
+  onPin,
   onDelete,
 }: QuickSessionActionProps): React.ReactNode {
   const shiftHeld = useShiftKeyHeld();
-  const label = shiftHeld ? deleteLabel : archiveLabel;
+  const label = shiftHeld ? deleteLabel : pinLabel;
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (shiftHeld || event.shiftKey) {
       onDelete(event);
       return;
     }
-    onArchive(event);
+    onPin(event);
   };
 
   return (
@@ -209,7 +210,10 @@ const QuickSessionAction = React.memo(function QuickSessionAction({
           onClick={handleClick}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          <Icon name={shiftHeld ? 'delete-bin' : 'archive'} className={iconSizeClass} />
+          <Icon
+            name={shiftHeld ? 'delete-bin' : 'pushpin-2'}
+            className={cn(iconSizeClass, !shiftHeld && 'rotate-45')}
+          />
         </button>
       </TooltipTrigger>
       <TooltipContent side="left" sideOffset={8}>
@@ -228,17 +232,13 @@ const SessionShortcutHint = React.memo(function SessionShortcutHint({
   if (!visible) return null;
 
   return (
-    <kbd
+    <Kbd
       data-sidebar-shortcut-number={number}
-      className="pointer-events-none absolute right-0 top-1/2 z-20 inline-flex h-4 min-w-0 -translate-y-1/2 select-none items-center justify-center rounded-full bg-[var(--surface-subtle)] px-1.5 font-normal leading-none text-muted-foreground"
-      style={{
-        fontFamily: 'inherit',
-        fontSize: 'calc(var(--text-ui-label) * 0.78)',
-      }}
+      className="absolute right-0 top-1/2 z-20 h-4 min-w-0 -translate-y-1/2 rounded-full px-1.5 font-sans font-normal shadow-none"
       aria-hidden="true"
     >
       {isMacOS() ? `⌘${number}` : `Ctrl+${number}`}
-    </kbd>
+    </Kbd>
   );
 });
 
@@ -307,11 +307,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     : 'group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto';
   const showOpenInEditorAction = isVSCode;
   const showQuickUnpinAction = renderContext === 'pinned';
-  const showQuickArchiveAction = !showQuickUnpinAction && !archivedBucket && !mobileVariant;
+  const showQuickPinAction = !showQuickUnpinAction && !archivedBucket && !mobileVariant;
   // Match typography-ui-label (~14px) so action icons align with the title text.
   const actionButtonSizeClass = 'h-5 w-5';
   const actionIconSizeClass = 'h-3.5 w-3.5';
-  const hoverActionCount = (showQuickArchiveAction || showQuickUnpinAction ? 1 : 0)
+  const hoverActionCount = (showQuickPinAction || showQuickUnpinAction ? 1 : 0)
     + (showOpenInEditorAction ? 1 : 0)
     + 1; // overflow menu
   const hoverActionPadClass = hoverActionCount >= 3
@@ -324,7 +324,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         // VS Code minimal rows reveal actions on hover. Open-in-editor is always
         // present in VS Code.
         ? hoverActionPadClass
-        // Time lives in the hover card now — reserve space for archive + menu.
+        // Time lives in the hover card now — reserve space for pin + menu.
         : hoverActionPadClass)
     : hoverActionPadClass;
   const alwaysActionPaddingClass = hoverActionCount >= 2 ? 'pr-12' : 'pr-8';
@@ -822,21 +822,21 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     event.stopPropagation();
   };
 
-  const handleQuickArchivePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleQuickPinPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
   };
 
-  const handleQuickArchiveMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleQuickPinMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
   };
 
-  const handleQuickArchiveClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleQuickPinClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setOpenSidebarMenuKey(null);
-    handleDeleteSession(session, { archivedBucket });
+    togglePinnedSession(session.id);
   };
 
   const handleQuickDeleteClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1299,15 +1299,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 : cn('opacity-0', revealOnHoverClass),
           )}>
             {/* No fade veil — title button reserves pr on hover so icons own their space. */}
-            {showQuickArchiveAction ? (
+            {showQuickPinAction ? (
               <QuickSessionAction
-                archiveLabel={t('sessions.sidebar.bulkActions.archive')}
+                pinLabel={t('sessions.sidebar.session.menu.pin')}
                 deleteLabel={t('sessions.sidebar.bulkActions.delete')}
                 buttonSizeClass={actionButtonSizeClass}
                 iconSizeClass={actionIconSizeClass}
-                onPointerDown={handleQuickArchivePointerDown}
-                onMouseDown={handleQuickArchiveMouseDown}
-                onArchive={handleQuickArchiveClick}
+                onPointerDown={handleQuickPinPointerDown}
+                onMouseDown={handleQuickPinMouseDown}
+                onPin={handleQuickPinClick}
                 onDelete={handleQuickDeleteClick}
               />
             ) : null}
@@ -1321,8 +1321,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       actionButtonSizeClass,
                     )}
                     aria-label={t('sessions.sidebar.session.actions.pinned')}
-                    onPointerDown={handleQuickArchivePointerDown}
-                    onMouseDown={handleQuickArchiveMouseDown}
+                    onPointerDown={handleQuickPinPointerDown}
+                    onMouseDown={handleQuickPinMouseDown}
                     onClick={handleQuickUnpinClick}
                     onKeyDown={(event) => event.stopPropagation()}
                   >

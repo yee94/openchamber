@@ -62,7 +62,7 @@ type GlobalSessionsState = {
   cachedDirectories: Set<string>;
   /** True after the Electron session-index read has completed or deterministically declined. */
   hasHydratedSessionIndex: boolean;
-  /** True when SQLite supplied at least one known directory for this runtime. */
+  /** True when the initial SQLite restore supplied a known directory for this runtime. */
   hasCachedSessionIndex: boolean;
   sessionIndexSyncByDirectory: Map<string, SessionIndexSyncMetadata>;
   /** True only after the unfiltered catalog used by retention has loaded successfully. */
@@ -409,7 +409,6 @@ const applySessionIndexSnapshotState = (
     sessionsByDirectory: buildSessionsByDirectory(activeSessions),
     reviewTransferBySessionId: buildReviewTransferMap(activeSessions),
     cachedDirectories: snapshotDirectories,
-    hasCachedSessionIndex: snapshot.directories.length > 0,
     sessionIndexSyncByDirectory: nextSyncMetadata,
     activePaginationByDirectory: nextPagination,
     loadedDirectories: nextLoaded,
@@ -683,7 +682,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     try {
       const snapshot = await loadSessionIndexSnapshot();
       if (!snapshot) return;
-      set((state) => applySessionIndexSnapshotState(state, snapshot, false));
+      set((state) => ({
+        ...applySessionIndexSnapshotState(state, snapshot, false),
+        hasCachedSessionIndex: snapshot.directories.length > 0,
+      }));
     } catch (error) {
       // The index is an acceleration cache. A failed read must not block the
       // authoritative OpenCode session flow.

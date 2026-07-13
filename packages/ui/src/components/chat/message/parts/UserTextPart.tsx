@@ -211,7 +211,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
                     "break-words font-sans typography-markdown-body",
                     isExpanded && "pb-3",
                     normalizedRenderingMode === 'plain' && 'whitespace-pre-wrap',
-                    isCollapsed && "line-clamp-2",
+                    isCollapsed && "line-clamp-10",
                     collapsibleUserMessages && isTruncated && !isExpanded && "cursor-pointer"
                 )}
                 ref={textRef}

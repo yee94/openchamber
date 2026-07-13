@@ -133,6 +133,7 @@ const VisualSectionContent: React.FC = () => {
         'timeFormat',
         ...(!isVSCode ? ['weekStart' as const] : []),
         'fontSize',
+        'codeFontSize',
         'terminalFontSize',
         'fileEditorKeymap',
         'spacing',

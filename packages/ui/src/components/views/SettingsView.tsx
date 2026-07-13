@@ -19,6 +19,7 @@ import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpSidebar } from '@/components/sections/mcp/McpSidebar';
 import { McpPage } from '@/components/sections/mcp/McpPage';
 import { PluginsSidebar, PluginsPage } from '@/components/sections/plugins';
+import { GlobalConfigPage } from '@/components/sections/global-config/GlobalConfigPage';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
@@ -97,6 +98,7 @@ const pageOrder: SettingsPageSlug[] = [
   'commands',
   'mcp',
   'plugins',
+  'global-config',
   'providers',
   'usage',
   'skills.installed',
@@ -198,6 +200,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return null;
     case 'plugins':
       return 'code-box';
+    case 'global-config':
+      return 'settings-3';
 
     case 'skills.installed':
       return 'book-open';
@@ -505,6 +509,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return t('settings.page.mcp.title');
       case 'plugins':
         return t('settings.page.plugins.title');
+      case 'global-config':
+        return t('settings.globalConfig.title');
       case 'skills.installed':
         return t('settings.page.skills.title');
       case 'skills.catalog':
@@ -796,6 +802,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <McpPage />;
       case 'plugins':
         return <PluginsPage />;
+      case 'global-config':
+        return <GlobalConfigPage />;
       case 'skills.installed':
         return <SkillsPage view="installed" />;
       case 'skills.catalog':

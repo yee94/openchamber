@@ -109,6 +109,7 @@ export type InputState = {
   clearAttachedFiles: () => void
   addVSCodeFileAttachment: (path: string, name: string, fileSize: number | null) => void
   addVSCodeSelectionAttachment: (path: string, file: File) => Promise<void>
+  addCodeSelectionAttachment: (path: string, label: string, text: string) => Promise<void>
   setActiveEditorFile: (file: VSCodeActiveEditorFile | null) => void
   /** Add attachments restored from a reverted message (file already on server) */
   addRestoredAttachment: (file: { url: string; mimeType: string; filename: string }) => void
@@ -240,6 +241,11 @@ export const useInputStore = create<InputState>()((set, get) => ({
       vscodeSource: 'selection',
     }
     set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+  },
+
+  addCodeSelectionAttachment: async (path, label, text) => {
+    const file = new File([text], label, { type: 'text/plain' })
+    await get().addVSCodeSelectionAttachment(path, file)
   },
 
   setActiveEditorFile: (file) => {

@@ -1643,6 +1643,7 @@ export const dict = {
   'chat.commandAutocomplete.command.initDescription': 'Créer/mettre à jour le fichier AGENTS.md',
   'chat.commandAutocomplete.command.undoDescription': 'Annuler le dernier message',
   'chat.commandAutocomplete.command.redoDescription': 'Refaire les messages précédemment annulés',
+  'chat.commandAutocomplete.command.forkDescription': 'Créer une session à partir de l’état actuel de la conversation',
   'chat.commandAutocomplete.command.timelineDescription': 'Ouvrir la chronologie de la conversation',
   'chat.commandAutocomplete.command.modelDescription': 'Ouvrir le sélecteur de modèle',
   'chat.commandAutocomplete.command.compactDescription': 'Compresser l\'historique des sessions à l\'aide de l\'IA pour réduire la taille du contexte',

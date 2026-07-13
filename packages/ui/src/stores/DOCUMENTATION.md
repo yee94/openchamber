@@ -46,6 +46,11 @@ Examples:
 
 These stores coordinate visible app state, navigation, selected tabs, dialogs, and lightweight feature flags.
 
+`useConfigStore.ts` keeps provider and agent snapshots project-scoped. Its transient
+provider/agent loading maps are keyed by the active config directory so a deeplink
+into an uncached project can show explicit composer loading controls while cached
+projects continue to render immediately during background refresh.
+
 ### Session / project coordination stores
 
 Examples:

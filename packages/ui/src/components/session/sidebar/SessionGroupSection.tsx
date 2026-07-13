@@ -97,6 +97,7 @@ type Props = {
   pinnedSessionIds: Set<string>;
   expandedParents: Set<string>;
   sessionOrderIndex: Map<string, number>;
+  onReorderSessions: (activeSessionId: string, overSessionId: string) => void;
   currentSessionId: string | null;
   shortcutTargetSessionId?: string | null;
   shortcutTargetVisibleIndex?: number | null;
@@ -361,6 +362,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     pinnedSessionIds,
     expandedParents,
     sessionOrderIndex,
+    onReorderSessions,
     currentSessionId,
     shortcutTargetSessionId = null,
     shortcutTargetVisibleIndex = null,
@@ -426,10 +428,9 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   const allFoldersForGroupBase = React.useMemo(() => scopeFolders.map((folder) => {
     const nodes = folder.sessionIds
       .map((sid) => nodeBySessionId.get(sid))
-      .filter((n): n is SessionNode => Boolean(n))
-      .sort(compareSessionNodes);
+      .filter((n): n is SessionNode => Boolean(n));
     return { folder, nodes };
-  }), [scopeFolders, nodeBySessionId, compareSessionNodes]);
+  }), [scopeFolders, nodeBySessionId]);
 
   const allFoldersForGroup = React.useMemo(() => {
     const folderMapById = new Map(allFoldersForGroupBase.map((entry) => [entry.folder.id, entry]));
@@ -993,10 +994,11 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   const body = (
     <SessionFolderDndScope
       scopeKey={folderScopeKey}
-      hasFolders={allFoldersForGroup.length > 0}
+      sessionIds={sourceGroupNodes.map((node) => node.session.id)}
       onSessionDroppedOnFolder={(sessionId, folderId) => {
         if (folderScopeKey) addSessionToFolder(folderScopeKey, folderId, sessionId);
       }}
+      onSessionsReordered={onReorderSessions}
     >
       {renderFolderItems()}
       {shouldVirtualize ? (

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { parse as parseJsonc } from 'jsonc-parser';
 import {
   createAgent,
   createCommand,
@@ -77,6 +78,31 @@ type ConfigRuntimeDeps = {
 
 const AGENTS_MD_PATH = path.join(os.homedir(), '.config', 'opencode', 'AGENTS.md');
 const MAX_BEHAVIOR_PROMPT_SIZE = 1024 * 1024;
+const MAX_GLOBAL_CONFIG_SIZE = 2 * 1024 * 1024;
+const GLOBAL_CONFIG_FILES: Record<string, string> = {
+  opencode: 'opencode.jsonc',
+  'oh-my-opencode-slim': 'oh-my-opencode-slim.json',
+  'oh-my-openagent': 'oh-my-openagent.jsonc',
+};
+
+const resolveGlobalConfigPath = (target: unknown) => {
+  if (typeof target !== 'string') return null;
+  const fileName = GLOBAL_CONFIG_FILES[target];
+  if (!fileName) return null;
+  return { fileName, filePath: path.join(os.homedir(), '.config', 'opencode', fileName) };
+};
+
+const validateGlobalConfigContent = (content: unknown): string | null => {
+  if (typeof content !== 'string') return 'Configuration content must be a string';
+  if (Buffer.byteLength(content, 'utf8') > MAX_GLOBAL_CONFIG_SIZE) {
+    return `Configuration content exceeds ${MAX_GLOBAL_CONFIG_SIZE} bytes`;
+  }
+  const errors: { error: number; offset: number; length: number }[] = [];
+  const parsed = parseJsonc(content, errors, { allowTrailingComma: true, disallowComments: false });
+  return errors.length === 0 && parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? null
+    : 'Invalid JSONC configuration';
+};
 
 const resolveWorkingDirectory = (ctx: BridgeContext | undefined, directory?: string): string | undefined => (
   (typeof directory === 'string' && directory.trim())
@@ -154,6 +180,34 @@ export async function handleConfigBridgeMessage(
   const { id, type, payload } = message;
 
   switch (type) {
+    case 'api:config/global:get': {
+      const target = resolveGlobalConfigPath((payload as { target?: unknown } | undefined)?.target);
+      if (!target) return { id, type, success: false, error: 'Unknown global configuration target' };
+      try {
+        const content = await fs.promises.readFile(target.filePath, 'utf8');
+        return { id, type, success: true, data: { fileName: target.fileName, content } };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+          return { id, type, success: false, error: `${target.fileName} does not exist` };
+        }
+        throw error;
+      }
+    }
+
+    case 'api:config/global:save': {
+      const request = (payload || {}) as { target?: unknown; content?: unknown };
+      const target = resolveGlobalConfigPath(request.target);
+      if (!target) return { id, type, success: false, error: 'Unknown global configuration target' };
+      if (typeof request.content !== 'string') return { id, type, success: false, error: 'Configuration content must be a string' };
+      const validationError = validateGlobalConfigContent(request.content);
+      if (validationError) return { id, type, success: false, error: validationError };
+      await fs.promises.mkdir(path.dirname(target.filePath), { recursive: true });
+      const temporaryPath = `${target.filePath}.${process.pid}.${Date.now()}.tmp`;
+      await fs.promises.writeFile(temporaryPath, request.content, 'utf8');
+      await fs.promises.rename(temporaryPath, target.filePath);
+      return { id, type, success: true, data: { fileName: target.fileName, content: request.content, requiresManualRestart: true } };
+    }
+
     case 'api:config/opencode-resolution:get': {
       const debugInfo = ctx?.manager?.getDebugInfo();
       const configuredFromWorkspace = vscode.workspace.getConfiguration('openchamber').get<string>('opencodeBinary');

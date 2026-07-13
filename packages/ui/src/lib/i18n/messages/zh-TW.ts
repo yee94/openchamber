@@ -1810,6 +1810,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.commandAutocomplete.command.initDescription': '建立/更新 AGENTS.md 檔案',
   'chat.commandAutocomplete.command.undoDescription': '復原上一條訊息',
   'chat.commandAutocomplete.command.redoDescription': '重做之前復原的訊息',
+  'chat.commandAutocomplete.command.forkDescription': '根據目前對話狀態建立新工作階段',
   'chat.commandAutocomplete.command.timelineDescription': '開啟對話時間線',
   'chat.commandAutocomplete.command.modelDescription': '開啟模型選擇器',
   'chat.commandAutocomplete.command.compactDescription': '使用 AI 壓縮會話歷史以減少上下文大小',

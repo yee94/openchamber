@@ -58,12 +58,13 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus } from '@/stores/useGitStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
+import { buildCodeMirrorCommentWidgets, CodeSelectionActionBubble, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useInputStore } from '@/sync/input-store';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
@@ -73,6 +74,7 @@ import { openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useI18n } from '@/lib/i18n';
+import { ShortcutKbd } from '@/components/ui/kbd';
 
 type FileNode = {
   name: string;
@@ -957,6 +959,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
   const [isGoToLineOpen, setIsGoToLineOpen] = React.useState(false);
+  const [hasEditorSelection, setHasEditorSelection] = React.useState(false);
+  const [editorSelectionPosition, setEditorSelectionPosition] = React.useState<{ x: number; y: number } | null>(null);
+  const addCodeSelectionAttachment = useInputStore((state) => state.addCodeSelectionAttachment);
+  const setPendingInputText = useInputStore((state) => state.setPendingInputText);
 
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
@@ -2317,6 +2323,59 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return getDisplayPath(root, selectedFilePath);
   }, [selectedFilePath, root]);
 
+  const syncEditorSelection = React.useCallback((view: EditorView) => {
+    const hasSelection = !view.state.selection.main.empty;
+    setHasEditorSelection((previous) => previous === hasSelection ? previous : hasSelection);
+    if (!hasSelection) {
+      setEditorSelectionPosition(null);
+      return;
+    }
+
+    const selection = view.state.selection.main;
+    const lineStart = view.state.doc.lineAt(selection.from).from;
+    const lineStartRect = view.coordsAtPos(lineStart);
+    if (!lineStartRect) return;
+    setEditorSelectionPosition({
+      x: Math.min(window.innerWidth - 240, Math.max(8, lineStartRect.left)),
+      y: Math.max(8, lineStartRect.top - 8),
+    });
+  }, []);
+
+  const addEditorSelectionToChat = React.useCallback(() => {
+    const view = editorViewRef.current;
+    const selection = view?.state.selection.main;
+    if (!view || !selection || selection.empty || !selectedFile) {
+      return;
+    }
+
+    const selectedText = view.state.sliceDoc(selection.from, selection.to);
+    const startLine = view.state.doc.lineAt(selection.from).number;
+    const endLine = view.state.doc.lineAt(Math.max(selection.from, selection.to - 1)).number;
+    const lineRange = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+    const fileLabel = selectedFile.name;
+
+    const attachmentLabel = `${fileLabel}:${lineRange}`;
+    void addCodeSelectionAttachment(selectedFile.path, attachmentLabel, selectedText);
+    setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
+    setEditorSelectionPosition(null);
+    useUIStore.getState().setActiveMainTab('chat');
+  }, [addCodeSelectionAttachment, selectedFile, setPendingInputText]);
+
+  const addLineSelectionToChat = React.useCallback((range: SelectedLineRange) => {
+    if (!selectedFile) return;
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    const selectedText = draftContent.split('\n').slice(start - 1, end).join('\n');
+    if (!selectedText) return;
+    const lineRange = start === end ? `${start}` : `${start}-${end}`;
+    const fileLabel = selectedFile.name;
+
+    const attachmentLabel = `${fileLabel}:${lineRange}`;
+    void addCodeSelectionAttachment(selectedFile.path, attachmentLabel, selectedText);
+    setPendingInputText(`[${attachmentLabel}]`, 'append-inline');
+    useUIStore.getState().setActiveMainTab('chat');
+  }, [addCodeSelectionAttachment, draftContent, selectedFile, setPendingInputText]);
+
   const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && !isSelectedPdf && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
   const canEdit = Boolean(selectedFile && !selectedFileIsOutsideWorkspace && !isSelectedImage && !isSelectedPdf && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
@@ -2849,7 +2908,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   React.useEffect(() => {
-    if (!canEdit || textViewMode !== 'edit' || isMobile) {
+    if (textViewMode !== 'edit' || isMobile) {
       return;
     }
 
@@ -2878,12 +2937,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       if (eventMatchesShortcut(event, goToLineCombo)) {
         event.preventDefault();
         setIsGoToLineOpen(true);
+        return;
+      }
+
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'i') {
+        const selection = editorViewRef.current?.state.selection.main;
+        if (selection && !selection.empty) {
+          event.preventDefault();
+          addEditorSelectionToChat();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canEdit, isMobile, shortcutOverrides, textViewMode]);
+  }, [addEditorSelectionToChat, isMobile, shortcutOverrides, textViewMode]);
 
   const editorExtensions = React.useMemo(() => {
     if (!selectedFile?.path) {
@@ -2910,6 +2978,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     if (wrapLines) {
       extensions.push(EditorView.lineWrapping);
     }
+    extensions.push(EditorView.updateListener.of((update) => {
+      if (update.selectionSet || update.docChanged) {
+        syncEditorSelection(update.view);
+      }
+    }));
     if (isMobile) {
       extensions.push(EditorView.updateListener.of((update) => {
         if (!update.view.hasFocus) {
@@ -2925,7 +2998,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       }));
     }
     return extensions;
-  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
+  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard, syncEditorSelection]);
 
   const pierreTheme = React.useMemo(
     () => ({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id }),
@@ -3099,8 +3172,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         setLineSelection({ start: draft.startLine, end: draft.endLine });
       },
       onDelete: deleteDraft,
+      onAddToChat: addLineSelectionToChat,
     });
-  }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
+  }, [addLineSelectionToChat, cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
 
   const renderShikiFileView = React.useCallback((file: FileNode, content: string) => {
     return (
@@ -3191,6 +3265,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             )}
           </>
         )}
+
+        {isTextFile && hasEditorSelection ? withTooltip(
+          `${t('chat.textSelection.title.addToCurrentChat')} (⌘I)`,
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={addEditorSelectionToChat}
+            className="h-6 gap-1 px-1 text-muted-foreground opacity-80 hover:bg-transparent hover:opacity-100 focus-visible:bg-transparent active:bg-transparent"
+            title={`${t('chat.textSelection.title.addToCurrentChat')} (⌘I)`}
+            aria-label={`${t('chat.textSelection.title.addToCurrentChat')} (⌘I)`}
+          >
+            <Icon name="chat-new" className="size-4" />
+            <span>{t('chat.textSelection.actions.addToChat')}</span>
+            <ShortcutKbd shortcut="⌘+I" />
+          </Button>,
+        ) : null}
 
         <DropdownMenu onOpenChange={handleToolbarDropdownOpenChange}>
           <Tooltip>
@@ -3863,6 +3953,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   blockWidgets={blockWidgets}
                   onViewReady={(view) => {
                     editorViewRef.current = view;
+                    syncEditorSelection(view);
                     setEditorViewReadyNonce((value) => value + 1);
                     window.requestAnimationFrame(() => {
                       nudgeEditorSelectionAboveKeyboard(view);
@@ -3872,6 +3963,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                     if (editorViewRef.current) {
                       editorViewRef.current = null;
                     }
+                    setHasEditorSelection(false);
                     setEditorViewReadyNonce((value) => value + 1);
                   }}
                   enableSearch
@@ -4178,6 +4270,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 className="h-full"
                 onViewReady={(view) => {
                   editorViewRef.current = view;
+                  syncEditorSelection(view);
                   window.requestAnimationFrame(() => {
                     nudgeEditorSelectionAboveKeyboard(view);
                   });
@@ -4186,6 +4279,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   if (editorViewRef.current) {
                     editorViewRef.current = null;
                   }
+                  setHasEditorSelection(false);
                 }}
               />
               </div>
@@ -4204,6 +4298,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     </div>
   );
 
+  const editorSelectionBubble = editorSelectionPosition ? (
+    <CodeSelectionActionBubble
+      position={editorSelectionPosition}
+      onAddToChat={addEditorSelectionToChat}
+    />
+  ) : null;
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-background relative">
       <Dialogs
@@ -4217,6 +4318,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         inputRef={dialogInputRef}
       />
       {fullscreenViewer}
+      {editorSelectionBubble}
       {isMobile ? (
         showMobilePageContent ? (
           fileViewer

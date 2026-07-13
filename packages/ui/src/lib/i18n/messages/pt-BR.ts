@@ -1818,6 +1818,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.commandAutocomplete.command.initDescription": "Criar/atualizar o arquivo AGENTS.md",
   "chat.commandAutocomplete.command.undoDescription": "Desfazer a última mensagem",
   "chat.commandAutocomplete.command.redoDescription": "Refazer mensagens desfeitas anteriormente",
+  "chat.commandAutocomplete.command.forkDescription": "Criar uma nova sessão a partir do estado atual da conversa",
   "chat.commandAutocomplete.command.timelineDescription": "Abrir a linha do tempo da conversa",
   "chat.commandAutocomplete.command.modelDescription": "Abrir o seletor de modelos",
   "chat.commandAutocomplete.command.compactDescription": "Comprimir o histórico da sessão usando IA para reduzir o tamanho do contexto",
