@@ -19,8 +19,8 @@ import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./
 import { retry } from "./retry"
 import { sessionLoadDebug } from "./session-load-debug"
 import { getRuntimeKey } from "@/lib/runtime-switch"
-import { loadSessionMessagePage } from "./session-message-loader"
-import { setSessionPrefetch } from "./session-prefetch-cache"
+import { loadSessionMessage, loadSessionMessagePage, recoverAssistantTailBoundary } from "./session-message-loader"
+import { beginSessionMessageLoad, failSessionMessageLoad, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { sessionEvents } from "@/lib/sessionEvents"
 import {
@@ -1473,7 +1473,8 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
   const resolvedDir = directory ?? dir()
   if (!resolvedDir) return
 
-  const loadingKey = `${resolvedDir}:${sessionID}`
+  const runtimeKey = getRuntimeKey()
+  const loadingKey = `${runtimeKey}:${resolvedDir}:${sessionID}`
   if (!_sdk || !_childStores) {
     PENDING_MESSAGE_FETCHES.set(loadingKey, { sessionID, directory: resolvedDir })
     sessionLoadDebug("imperative-queued", { sessionID, directory: resolvedDir })
@@ -1485,7 +1486,7 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
     return existingRequest
   }
 
-  const request = fetchMessagesForSessionInternal(sessionID, resolvedDir)
+  const request = fetchMessagesForSessionInternal(sessionID, resolvedDir, runtimeKey)
   const trackedRequest = request.finally(() => {
     FETCH_MESSAGES_LOADING.delete(loadingKey)
   })
@@ -1493,7 +1494,7 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
   return trackedRequest
 }
 
-async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: string): Promise<void> {
+async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: string, runtimeKey: string): Promise<void> {
   const startedAt = performance.now()
   const limit = getFetchPageSize()
   sessionLoadDebug("imperative-start", { sessionID, directory: resolvedDir, limit })
@@ -1502,15 +1503,21 @@ async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: s
     const s = sdk()
     const store = dirStoreForDirectory(resolvedDir)
 
-    if (getSessionMaterializationStatus(store.getState(), sessionID).renderable) {
+    const cachedMessages = store.getState().message[sessionID]
+    const cachedComplete = getSessionPrefetch(resolvedDir, sessionID)?.complete === true
+    const hasUserBoundary = cachedMessages?.some((message) => message.role === "user" || (message as Message & { clientRole?: string }).clientRole === "user")
+    if (getSessionMaterializationStatus(store.getState(), sessionID).renderable && (hasUserBoundary || cachedComplete)) {
       sessionLoadDebug("imperative-cache-hit", { sessionID, directory: resolvedDir })
       return
     }
 
+    beginSessionMessageLoad(resolvedDir, sessionID, runtimeKey)
+
     const result = await loadSessionMessagePage({
-      runtimeKey: getRuntimeKey(),
+      runtimeKey,
       directory: resolvedDir,
       sessionID,
+      limit,
       request: () => retry(async () => {
         const response = await s.session.messages({
           sessionID,
@@ -1531,20 +1538,46 @@ async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: s
       records: records.length,
       durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
     })
-    if (records.length === 0) return
+    const cursor = result.response?.headers?.get?.("x-next-cursor") ?? undefined
+    const recovered = await recoverAssistantTailBoundary({
+      records: records.map((record: { info: Message; parts?: Part[] }) => ({
+        info: stripMessageDiffSnapshots(record.info),
+        parts: record.parts ?? [],
+      })),
+      complete: !cursor,
+      requestMessage: async (messageID) => {
+        const response = await loadSessionMessage({
+          runtimeKey,
+          directory: resolvedDir,
+          sessionID,
+          messageID,
+          request: async () => {
+            const result = await s.session.message({ sessionID, messageID, directory: resolvedDir })
+            assertSdkSuccess(result, "session.message")
+            return result
+          },
+        })
+        const record = assertSdkSuccess(response, "session.message")
+        if (!record?.info?.id) throw new Error("session.message failed: empty response")
+        return { info: stripMessageDiffSnapshots(record.info), parts: record.parts ?? [] }
+      },
+    })
+    const completeRecords = recovered.records
 
     // Staleness guard: a rapid session switch may have moved the user off this
     // session while the fetch was in flight. Skip the write so a slow fetch
     // can't repopulate (and un-evict) a session already navigated away from.
     if (useSessionUIStore.getState().currentSessionId !== sessionID) {
       sessionLoadDebug("imperative-stale", { sessionID, directory: resolvedDir })
+      setSessionPrefetch({ directory: resolvedDir, sessionID, runtimeKey, limit: completeRecords.length, cursor, complete: !cursor })
       return
     }
 
     const latestState = store.getState()
     const latestStatus = getSessionMaterializationStatus(latestState, sessionID)
-    if (latestStatus.renderable && (latestState.message[sessionID]?.length ?? 0) >= records.length) {
+    if (latestStatus.renderable && (latestState.message[sessionID]?.length ?? 0) >= completeRecords.length) {
       sessionLoadDebug("imperative-superseded", { sessionID, directory: resolvedDir })
+      setSessionPrefetch({ directory: resolvedDir, sessionID, runtimeKey, limit: completeRecords.length, cursor, complete: !cursor })
       return
     }
 
@@ -1552,20 +1585,17 @@ async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: s
       const materialized = materializeSessionSnapshots(
         state,
         sessionID,
-        records.map((record: { info: Message; parts?: Part[] }) => ({
-          info: stripMessageDiffSnapshots(record.info),
-          parts: record.parts ?? [],
-        })),
+        completeRecords,
         { skipPartTypes: MESSAGE_REFETCH_SKIP_PARTS },
       )
       if (!materialized.messagesChanged && !materialized.partsChanged) return state
       return { message: materialized.message, part: materialized.part }
     })
-    const cursor = result.response?.headers?.get?.("x-next-cursor") ?? undefined
     setSessionPrefetch({
       directory: resolvedDir,
       sessionID,
-      limit: records.length,
+      runtimeKey,
+      limit: completeRecords.length,
       cursor,
       complete: !cursor,
     })
@@ -1582,5 +1612,6 @@ async function fetchMessagesForSessionInternal(sessionID: string, resolvedDir: s
       error: error instanceof Error ? error.message : String(error),
     })
     // Transient failure — the reactive path in ChatContainer will retry
+    failSessionMessageLoad(resolvedDir, sessionID, formatSdkError(error), runtimeKey)
   }
 }

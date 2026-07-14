@@ -18,10 +18,12 @@ import {
   getSessionPrefetch,
   setSessionPrefetch,
   clearSessionPrefetch,
+  beginSessionMessageLoad,
+  failSessionMessageLoad,
 } from "./session-prefetch-cache"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
 import { sessionLoadDebug } from "./session-load-debug"
-import { loadSessionMessagePage } from "./session-message-loader"
+import { loadSessionMessage, loadSessionMessagePage, recoverAssistantTailBoundary } from "./session-message-loader"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { sessionSyncCoordinator } from "./session-sync-coordinator"
 import { loadSessionChildrenOnDemand, mergeSessionChildren } from "./session-children"
@@ -120,6 +122,10 @@ function isUserMessage(message: Message): boolean {
 
 export function hasUserMessage(messages: Message[] | undefined): boolean {
   return Boolean(messages?.some(isUserMessage))
+}
+
+export function hasSessionMessageBoundary(messages: Message[] | undefined, complete: boolean): boolean {
+  return complete || hasUserMessage(messages)
 }
 
 export function shouldFetchSessionForRenderableSync(input: {
@@ -313,13 +319,14 @@ export function useSync() {
 
   // Fetch messages from API
   const fetchMessages = useCallback(
-    async (sessionID: string, limit: number, before?: string) => {
+    async (sessionID: string, limit: number, before?: string, runtimeKey = getRuntimeKey()) => {
       const startedAt = performance.now()
       sessionLoadDebug("reactive-request-start", { sessionID, directory, limit, before: before ?? null })
       const result = await loadSessionMessagePage({
-        runtimeKey: getRuntimeKey(),
+        runtimeKey,
         directory,
         sessionID,
+        limit,
         before,
         request: () => retry(async () => {
           const response = await sdk.session.messages({ sessionID, directory, limit, before })
@@ -359,6 +366,8 @@ export function useSync() {
         return
       }
       setMetaFor(sessionID, { loading: true })
+      const runtimeKey = getRuntimeKey()
+      beginSessionMessageLoad(directory, sessionID, runtimeKey)
       const startedAt = performance.now()
 
       try {
@@ -415,11 +424,52 @@ export function useSync() {
         // "older" cursor for history that is already on screen.
         const storeMessageCount = store.getState().message[sessionID]?.length ?? 0
         const limit = options?.before ? HISTORY_MESSAGE_PAGE_SIZE : Math.max(m.limit, storeMessageCount)
-        const page = await fetchMessages(sessionID, limit, options?.before)
-        const committed = commitMessagesToStore(page, options?.mode, options?.isStale)
+        const page = await fetchMessages(sessionID, limit, options?.before, runtimeKey)
+        const recovered = options?.before || page.complete
+          ? page
+          : await recoverAssistantTailBoundary({
+              records: page.session.map((info) => ({
+                info,
+                parts: page.part.find((item) => item.id === info.id)?.part ?? [],
+              })),
+              complete: page.complete,
+              requestMessage: async (messageID) => {
+                const response = await loadSessionMessage({
+                  runtimeKey,
+                  directory,
+                  sessionID,
+                  messageID,
+                  request: async () => {
+                    const result = await sdk.session.message({ sessionID, messageID, directory })
+                    assertSdkSuccess(result, "session.message")
+                    return result
+                  },
+                })
+                const record = response.data
+                if (!record?.info?.id) throw new Error("session.message failed: empty response")
+                return { info: stripMessageDiffSnapshots(record.info), parts: sortParts(record.parts ?? []) }
+              },
+            })
+        const resolvedPage = "records" in recovered
+          ? {
+              session: recovered.records.map((record) => record.info),
+              part: recovered.records.map((record) => ({ id: record.info.id, part: record.parts })),
+              cursor: page.cursor,
+              complete: page.complete,
+            }
+          : recovered
+        const committed = commitMessagesToStore(resolvedPage, options?.mode, options?.isStale)
 
         if (options?.isStale?.()) {
           setMetaFor(sessionID, { loading: false })
+          setSessionPrefetch({
+            directory,
+            sessionID,
+            runtimeKey,
+            limit: resolvedPage.session.length,
+            cursor: resolvedPage.cursor,
+            complete: resolvedPage.complete,
+          })
           return
         }
 
@@ -439,6 +489,7 @@ export function useSync() {
         setSessionPrefetch({
           directory,
           sessionID,
+          runtimeKey,
           limit: committed.messages.length,
           cursor: committed.cursor,
           complete: committed.complete,
@@ -451,9 +502,10 @@ export function useSync() {
           error: error instanceof Error ? error.message : String(error),
         })
         setMetaFor(sessionID, { loading: false })
+        failSessionMessageLoad(directory, sessionID, formatSdkError(error), runtimeKey)
       }
     },
-    [store, fetchMessages, getMetaFor, setMetaFor, getOptimistic, clearOptimistic, directory],
+    [store, sdk, fetchMessages, getMetaFor, setMetaFor, getOptimistic, clearOptimistic, directory],
   )
 
   // Sync a session (load if not cached)
@@ -470,8 +522,8 @@ export function useSync() {
           const m = getMetaFor(sessionID)
           const materialization = getSessionMaterializationStatus(current, sessionID)
           const cached = materialization.hasMessages && materialization.renderable && m.limit > 0
+          const cachedReady = cached && hasSessionMessageBoundary(current.message[sessionID], m.complete)
           const prefetchInfo = !force ? getSessionPrefetch(directory, sessionID) : undefined
-          const cachedReady = cached
           const hasSession = Binary.search(current.session, sessionID, (s) => s.id).found
           if (cachedReady && hasSession && !force) return
 

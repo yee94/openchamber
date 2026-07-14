@@ -97,4 +97,19 @@ describe('session-title helpers', () => {
     expect(result.languageSample).toBe('提交推送');
     expect(result.lastAssistantId).toBe('a3');
   });
+
+  it('uses the latest real user text as the language sample', () => {
+    const messages = [
+      {
+        info: { id: 'u1', role: 'user' },
+        parts: [{ type: 'text', text: '修复会话标题语言' }],
+      },
+      {
+        info: { id: 'a1', role: 'assistant' },
+        parts: [{ type: 'text', text: 'I updated the title prompt in English.' }],
+      },
+    ];
+    const result = buildLatestTitleTranscript(messages, { maxTurns: 1 });
+    expect(result.languageSample).toBe('修复会话标题语言');
+  });
 });

@@ -622,6 +622,13 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         suspendPartUpdatesForMessageId: streamingMessageId,
     });
     const sessionMessages = currentSessionId ? sessionMessageRecords : EMPTY_MESSAGES;
+    const hasUserBoundary = React.useMemo(
+        () => sessionMessages.some(({ info }) => (
+            info.role === 'user'
+            || (info as Message & { clientRole?: string }).clientRole === 'user'
+        )),
+        [sessionMessages],
+    );
     const sessionPrefetchInfo = React.useSyncExternalStore(
         React.useCallback(
             (notify) => currentSessionId
@@ -1023,7 +1030,13 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 
     const isSessionHydrating =
         Boolean(currentSessionId)
-        && !hasRenderableSessionSnapshot;
+        && (
+            !hasRenderableSessionSnapshot
+            || (sessionPrefetchInfo?.status === 'loading' && !hasUserBoundary)
+        );
+    const hasSessionHistoryLoadError =
+        sessionPrefetchInfo?.status === 'error'
+        && (!hasUserBoundary || !hasRenderableSessionSnapshot);
 
     React.useEffect(() => {
         if (!currentSessionId) return;
@@ -1177,7 +1190,62 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         return null;
     }
 
-	if (isSessionHydrating && sessionMessages.length === 0 && !sessionIsWorking) {
+	if (hasSessionHistoryLoadError) {
+		return (
+			<div className="relative flex h-full flex-col bg-background">
+				{returnToParentButton}
+				<div
+					className={cn(
+						'relative min-h-0',
+						isDesktopExpandedInput
+							? 'absolute inset-0 opacity-0 pointer-events-none'
+							: 'flex-1',
+					)}
+					aria-hidden={isDesktopExpandedInput}
+				>
+					{!isDesktopExpandedInput ? (
+						<div className="absolute inset-0 flex items-center justify-center px-6">
+							<div
+								className="flex max-w-sm flex-col items-center text-center"
+								role="alert"
+								aria-live="polite"
+							>
+								<div className="mb-4 flex size-10 items-center justify-center rounded-full bg-[var(--status-error-background)] text-[var(--status-error-foreground)]">
+									<Icon name="error-warning" className="size-5" aria-hidden="true" />
+								</div>
+								<h2 className="typography-ui-header text-foreground">
+									{t('chat.history.loadFailedTitle')}
+								</h2>
+								<p className="mt-2 text-sm text-muted-foreground">
+									{t('chat.history.loadFailedDescription')}
+								</p>
+								<Button
+									type="button"
+									className="mt-5"
+									onClick={() => void sync.syncSession(currentSessionId, true)}
+								>
+									<Icon name="refresh" className="size-4" aria-hidden="true" />
+									{t('chat.history.retry')}
+								</Button>
+							</div>
+						</div>
+					) : null}
+				</div>
+				<div
+					className={cn(
+						'relative z-10',
+						isDesktopExpandedInput
+							? 'flex-1 min-h-0 bg-background'
+							: 'bg-background',
+					)}
+				>
+					{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+				</div>
+			</div>
+		);
+	}
+
+	if (isSessionHydrating) {
 		return (
 			<div className="relative flex flex-col h-full bg-background">
 				{returnToParentButton}

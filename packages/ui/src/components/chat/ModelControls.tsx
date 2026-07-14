@@ -59,6 +59,7 @@ type MobileVariantTarget = { providerId: string; modelId: string };
 
 const buildModelRefKey = (providerID: string, modelID: string) => `${providerID}:${modelID}`;
 const MAX_INLINE_MOBILE_VARIANT_OPTIONS = 6;
+const INSTANT_DROPDOWN_CLASS = 'transition-none animate-none data-[starting-style]:!opacity-100 data-[starting-style]:!scale-100 data-[ending-style]:!opacity-100 data-[ending-style]:!scale-100';
 
 const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
     if (!Array.isArray(value)) {
@@ -401,6 +402,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const setModelSelectorOpen = useUIStore((state) => state.setModelSelectorOpen);
     const isAgentSelectorOpen = useUIStore((state) => state.isAgentSelectorOpen);
     const setAgentSelectorOpen = useUIStore((state) => state.setAgentSelectorOpen);
+    const isModelSelectorInstant = useUIStore((state) => state.isModelSelectorInstant);
+    const isAgentSelectorInstant = useUIStore((state) => state.isAgentSelectorInstant);
     const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
     const setSettingsPage = useUIStore((state) => state.setSettingsPage);
     const hiddenModels = useUIStore((state) => state.hiddenModels);
@@ -467,12 +470,30 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const restoreComposerFocus = React.useCallback(() => {
         // Dropdown focus restoration runs during close. Wait until it completes before
         // returning keyboard input to the composer.
+        // duration-150 exit keeps the popup mounted with restoreFocus; focusing the
+        // composer too early loses the race and can leave activeElement on <body>.
+        const focusComposer = () => {
+            const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
+            if (textarea && document.activeElement !== textarea) {
+                textarea.focus({ preventScroll: true });
+            }
+        };
         window.setTimeout(() => {
             requestAnimationFrame(() => {
-                const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                textarea?.focus({ preventScroll: true });
+                focusComposer();
+                // Retry on the next frame after the popup unmounts in WebKit.
+                requestAnimationFrame(focusComposer);
             });
-        }, 0);
+        }, 180);
+    }, []);
+
+    const restoreComposerFocusImmediately = React.useCallback(() => {
+        requestAnimationFrame(() => {
+            const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
+            if (textarea && document.activeElement !== textarea) {
+                textarea.focus({ preventScroll: true });
+            }
+        });
     }, []);
 
     // Base UI Menu returns focus to the trigger by default; hand it the composer
@@ -526,10 +547,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (wasOpen && !isCompact) {
                 setModelTooltipOpen(false);
                 suppressModelTooltipUntilRef.current = performance.now() + 200;
-                restoreComposerFocus();
+                if (isModelSelectorInstant) {
+                    restoreComposerFocusImmediately();
+                    requestAnimationFrame(() => setModelSelectorOpen(false, { instant: false }));
+                } else {
+                    restoreComposerFocus();
+                }
+            } else if (wasOpen && isModelSelectorInstant) {
+                requestAnimationFrame(() => setModelSelectorOpen(false, { instant: false }));
             }
         }
-    }, [isModelSelectorOpen, isCompact, restoreComposerFocus]);
+    }, [isModelSelectorOpen, isModelSelectorInstant, isCompact, restoreComposerFocus, restoreComposerFocusImmediately, setModelSelectorOpen]);
 
     // Handle agent selector close behavior
     const [agentSearchQuery, setAgentSearchQuery] = React.useState('');
@@ -539,11 +567,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         prevAgentSelectorOpenRef.current = isAgentSelectorOpen;
         if (!isAgentSelectorOpen) {
             setAgentSearchQuery('');
-            if (wasOpen && !isCompact) {
+            if (wasOpen && isAgentSelectorInstant) {
+                if (!isCompact) {
+                    restoreComposerFocusImmediately();
+                }
+                requestAnimationFrame(() => setAgentSelectorOpen(false, { instant: false }));
+            } else if (wasOpen && !isCompact) {
                 restoreComposerFocus();
             }
         }
-    }, [isAgentSelectorOpen, isCompact, restoreComposerFocus]);
+    }, [isAgentSelectorOpen, isAgentSelectorInstant, isCompact, restoreComposerFocus, restoreComposerFocusImmediately, setAgentSelectorOpen]);
 
     const selectableDesktopAgents = React.useMemo(() => {
         return agents.filter((agent) => isPrimaryMode(agent.mode));
@@ -2436,7 +2469,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             </DropdownMenuTrigger>
                         </TooltipTrigger>
                         <DropdownMenuContent
-                            className="w-[min(380px,calc(100vw-2rem))] p-0 flex flex-col"
+                            className={cn(
+                                'w-[min(380px,calc(100vw-2rem))] p-0 flex flex-col',
+                                isModelSelectorInstant && INSTANT_DROPDOWN_CLASS,
+                            )}
                             align="end"
                             alignOffset={-40}
                             onKeyDownCapture={handleModelShortcutKeyDownCapture}
@@ -2781,7 +2817,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return (
                 <div className="flex items-center gap-2 min-w-0">
                     <Tooltip delayDuration={600}>
-                        <DropdownMenu open={isAgentControlReady && isAgentSelectorOpen} onOpenChange={isAgentControlReady ? setAgentSelectorOpen : undefined}>
+                        <DropdownMenu
+                            open={isAgentControlReady && isAgentSelectorOpen}
+                            onOpenChange={isAgentControlReady ? (open) => setAgentSelectorOpen(open) : undefined}
+                        >
                             <TooltipTrigger asChild>
                                 <DropdownMenuTrigger asChild>
                                     <div
@@ -2816,7 +2855,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             <DropdownMenuContent
                                 align={relocateAgent ? 'start' : 'end'}
                                 alignOffset={relocateAgent ? 0 : -40}
-                                className="w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col"
+                                className={cn(
+                                    'w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col',
+                                    isAgentSelectorInstant && INSTANT_DROPDOWN_CLASS,
+                                )}
                                 onKeyDownCapture={handleAgentCycleShortcut}
                                 finalFocus={resolveComposerFinalFocus}
                             >
@@ -2829,6 +2871,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             value={agentSearchQuery}
                                             onChange={(e) => setAgentSearchQuery(e.target.value)}
                                             onKeyDown={(e) => {
+                                                if (e.key === 'Escape') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setAgentSelectorOpen(false);
+                                                    return;
+                                                }
                                                 e.stopPropagation();
                                             }}
                                             className="pl-8 h-8 typography-meta"

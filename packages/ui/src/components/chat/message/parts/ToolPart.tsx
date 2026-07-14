@@ -1933,6 +1933,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     // Settings → Visual：「显示子智能体工作详情」；默认关闭，保持紧凑单行
     const showSubagentTaskDetails = useUIStore((s) => s.showSubagentTaskDetails);
     const openContextPanelTab = useUIStore((s) => s.openContextPanelTab);
+    const navigateToDiff = useUIStore((s) => s.navigateToDiff);
     const currentDirectory = useEffectiveDirectory() ?? '';
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
 
@@ -2303,6 +2304,23 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 pendingOpenTaskSessionRef.current = true;
             }
             return;
+        }
+
+        if (part.tool === 'apply_patch' && currentDirectory && !runtime?.runtime.isVSCode) {
+            e.stopPropagation();
+            const files = Array.isArray(metadata?.files) ? metadata.files : [];
+            const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined;
+            const targetPath = firstFile?.relativePath || firstFile?.filePath;
+
+            if (isMobile && targetPath) {
+                navigateToDiff(targetPath, false, 'turn');
+                return;
+            }
+
+            if (!isMobile) {
+                openContextPanelTab(currentDirectory, { mode: 'diff', diffScope: 'turn' });
+                return;
+            }
         }
 
         let filePath: unknown;

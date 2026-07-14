@@ -114,7 +114,8 @@ const buildTitleSystemPrompt = () => [
   'Only switch the title subject when the user clearly started a different topic or feature.',
   'Your output must be: a single line, ≤50 characters, no explanations.',
   'Rules:',
-  '- you MUST use the same language as the latest user messages',
+  '- Use the language of the user\'s actual messages for the title',
+  '- Treat assistant text, tool output, and transcript labels only as work context; they do not determine the title language',
   '- Title must be grammatically correct and read naturally - no word salad',
   '- Never include tool names in the title (e.g. "read tool", "bash tool", "edit tool")',
   '- Prefer the durable subject someone would search for later, not the last mechanical step',
@@ -534,7 +535,7 @@ export const createSessionTitleRuntime = ({
         // session's own provider unless the user explicitly picked a small
         // model (settings override / opencode config).
         restrictToPreferredProvider: true,
-        prompt: `Conversation turns for title generation (name the MAIN SUBJECT of the work, not the last wrap-up step):\n\n${transcript}${currentSubjectHint}\n\nWrite the title in the SAME language as this sample: "${languageSample}"`,
+        prompt: `Conversation turns for title generation (name the MAIN SUBJECT of the work, not the last wrap-up step):\n\n${transcript}${currentSubjectHint}\n\nWrite the title in the user's language. Use this actual user-message sample as the language source: "${languageSample}"`,
         system: buildTitleSystemPrompt(),
         maxOutputTokens: 64,
         directory,

@@ -14,6 +14,7 @@ import { eventMatchesShortcut, eventMatchesZoomShortcut, getEffectiveShortcutCom
 import { readEmbeddedThemeSearchParams } from '@/contexts/theme-embedded-bootstrap';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useTerminalStore } from '@/stores/useTerminalStore';
 import { getCycledPrimaryAgentName } from '@/components/chat/mobileControlsUtils';
 import { navigateAdjacentSession } from '@/sync/session-navigation';
 import { resetWebviewZoom, zoomWebviewIn, zoomWebviewOut } from '@/lib/webviewZoom';
@@ -290,7 +291,7 @@ export const useKeyboardShortcuts = () => {
           // let the chord's trailing "m" become its first query character.
           // Open after the current keyboard event has fully finished instead.
           window.requestAnimationFrame(() => {
-            setModelSelectorOpen(!isModelSelectorOpen);
+            setModelSelectorOpen(!isModelSelectorOpen, { instant: true });
           });
           return;
         }
@@ -301,7 +302,7 @@ export const useKeyboardShortcuts = () => {
           e.stopImmediatePropagation();
           consumeLeaderTextInput();
           clearLeaderKey();
-          setAgentSelectorOpen(!isAgentSelectorOpen);
+          setAgentSelectorOpen(!isAgentSelectorOpen, { instant: true });
           return;
         }
 
@@ -378,6 +379,22 @@ export const useKeyboardShortcuts = () => {
 
     const handleTerminalShortcutCapture = (e: KeyboardEvent) => {
       if (!isTerminalEventTarget(e.target)) {
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('close_context_panel_tab'))) {
+        const directory = resolveEffectiveDirectory();
+        const activeTabId = directory
+          ? useTerminalStore.getState().getDirectoryState(directory)?.activeTabId
+          : null;
+
+        if (!directory || !activeTabId) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        void useTerminalStore.getState().closeTab(directory, activeTabId);
         return;
       }
 
@@ -458,8 +475,7 @@ export const useKeyboardShortcuts = () => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl+W must run even when the terminal is focused: otherwise disabling
-      // Electron's native Close accelerator would leave the shortcut dead in the PTY.
+      // The terminal capture handler owns Cmd/Ctrl+W before Ghostty consumes it.
       if (eventMatchesShortcut(e, combo('close_context_panel_tab'))) {
         if (requestEmbeddedSessionChatTabClose() || handleCloseContextPanelTabOrWindow()) {
           e.preventDefault();
@@ -836,7 +852,7 @@ export const useKeyboardShortcuts = () => {
         }
 
         e.preventDefault();
-        setModelSelectorOpen(!isModelSelectorOpen);
+        setModelSelectorOpen(!isModelSelectorOpen, { instant: true });
         return;
       }
 

@@ -15,6 +15,7 @@ export type RightSidebarTab = 'git' | 'files' | 'context';
 export type ContextPanelMode = 'diff' | 'file-diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview' | 'browser';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
+type SelectorOpenOptions = { instant?: boolean };
 export type ChatRenderMode = 'sorted' | 'live';
 export type ActivityRenderMode = 'collapsed' | 'summary';
 export type SessionRetentionAction = 'archive' | 'delete';
@@ -565,6 +566,8 @@ interface UIStore {
   isNewWorktreeDialogOpen: boolean;
   isModelSelectorOpen: boolean;
   isAgentSelectorOpen: boolean;
+  isModelSelectorInstant: boolean;
+  isAgentSelectorInstant: boolean;
   sidebarSection: SidebarSection;
 
   // Settings IA (new shell)
@@ -732,8 +735,8 @@ interface UIStore {
   setScheduledTasksDialogOpen: (open: boolean) => void;
   setSettingsDialogOpen: (open: boolean) => void;
   setNewWorktreeDialogOpen: (open: boolean) => void;
-  setModelSelectorOpen: (open: boolean) => void;
-  setAgentSelectorOpen: (open: boolean) => void;
+  setModelSelectorOpen: (open: boolean, options?: SelectorOpenOptions) => void;
+  setAgentSelectorOpen: (open: boolean, options?: SelectorOpenOptions) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setSettingsPage: (slug: string) => void;
@@ -893,6 +896,8 @@ export const useUIStore = create<UIStore>()(
         isNewWorktreeDialogOpen: false,
         isModelSelectorOpen: false,
         isAgentSelectorOpen: false,
+        isModelSelectorInstant: false,
+        isAgentSelectorInstant: false,
         sidebarSection: 'sessions',
         settingsPage: 'home',
         settingsHasOpenedOnce: false,
@@ -1653,18 +1658,34 @@ export const useUIStore = create<UIStore>()(
           set({ isNewWorktreeDialogOpen: open });
         },
 
-        setModelSelectorOpen: (open) => {
+        setModelSelectorOpen: (open, options) => {
           // Opening the model picker closes the agent picker so only one stays open.
-          set(open
-            ? { isModelSelectorOpen: true, isAgentSelectorOpen: false }
-            : { isModelSelectorOpen: false });
+          set((state) => (open
+            ? {
+              isModelSelectorOpen: true,
+              isAgentSelectorOpen: false,
+              isModelSelectorInstant: options?.instant === true,
+            }
+            : {
+              isModelSelectorOpen: false,
+              // Preserve the source through the closing render; ModelControls clears it on rAF.
+              isModelSelectorInstant: options?.instant === false ? false : state.isModelSelectorInstant,
+            }));
         },
 
-        setAgentSelectorOpen: (open) => {
+        setAgentSelectorOpen: (open, options) => {
           // Opening the agent picker closes the model picker so only one stays open.
-          set(open
-            ? { isAgentSelectorOpen: true, isModelSelectorOpen: false }
-            : { isAgentSelectorOpen: false });
+          set((state) => (open
+            ? {
+              isAgentSelectorOpen: true,
+              isModelSelectorOpen: false,
+              isAgentSelectorInstant: options?.instant === true,
+            }
+            : {
+              isAgentSelectorOpen: false,
+              // Preserve the source through the closing render; ModelControls clears it on rAF.
+              isAgentSelectorInstant: options?.instant === false ? false : state.isAgentSelectorInstant,
+            }));
         },
 
         setSidebarSection: (section) => {
