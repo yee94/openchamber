@@ -79,17 +79,40 @@ type ConfigRuntimeDeps = {
 const AGENTS_MD_PATH = path.join(os.homedir(), '.config', 'opencode', 'AGENTS.md');
 const MAX_BEHAVIOR_PROMPT_SIZE = 1024 * 1024;
 const MAX_GLOBAL_CONFIG_SIZE = 2 * 1024 * 1024;
-const GLOBAL_CONFIG_FILES: Record<string, string> = {
-  opencode: 'opencode.jsonc',
-  'oh-my-opencode-slim': 'oh-my-opencode-slim.json',
-  'oh-my-openagent': 'oh-my-openagent.jsonc',
+const GLOBAL_CONFIG_FILES: Record<string, string[]> = {
+  opencode: ['opencode.json', 'opencode.jsonc'],
+  'oh-my-opencode-slim': ['oh-my-opencode-slim.json', 'oh-my-opencode-slim.jsonc'],
+  'oh-my-openagent': ['oh-my-openagent.json', 'oh-my-openagent.jsonc'],
 };
 
 const resolveGlobalConfigPath = (target: unknown) => {
   if (typeof target !== 'string') return null;
-  const fileName = GLOBAL_CONFIG_FILES[target];
-  if (!fileName) return null;
-  return { fileName, filePath: path.join(os.homedir(), '.config', 'opencode', fileName) };
+  const fileNames = GLOBAL_CONFIG_FILES[target];
+  if (!fileNames) return null;
+  return {
+    target,
+    fileNames,
+    fileName: fileNames[0],
+    filePath: path.join(os.homedir(), '.config', 'opencode', fileNames[0]),
+  };
+};
+
+const findGlobalConfigPath = async (target: unknown) => {
+  const configPath = resolveGlobalConfigPath(target);
+  if (!configPath) return null;
+
+  for (const fileName of configPath.fileNames) {
+    const filePath = path.join(path.dirname(configPath.filePath), fileName);
+    try {
+      if ((await fs.promises.stat(filePath)).isFile()) {
+        return { ...configPath, fileName, filePath };
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
+    }
+  }
+
+  return null;
 };
 
 const validateGlobalConfigContent = (content: unknown): string | null => {
@@ -180,8 +203,15 @@ export async function handleConfigBridgeMessage(
   const { id, type, payload } = message;
 
   switch (type) {
+    case 'api:config/global:list': {
+      const targets = (await Promise.all(Object.keys(GLOBAL_CONFIG_FILES).map((target) => findGlobalConfigPath(target))))
+        .filter((target): target is NonNullable<typeof target> => target !== null)
+        .map(({ target, fileName }) => ({ target, fileName }));
+      return { id, type, success: true, data: { targets } };
+    }
+
     case 'api:config/global:get': {
-      const target = resolveGlobalConfigPath((payload as { target?: unknown } | undefined)?.target);
+      const target = await findGlobalConfigPath((payload as { target?: unknown } | undefined)?.target);
       if (!target) return { id, type, success: false, error: 'Unknown global configuration target' };
       try {
         const content = await fs.promises.readFile(target.filePath, 'utf8');
@@ -196,8 +226,9 @@ export async function handleConfigBridgeMessage(
 
     case 'api:config/global:save': {
       const request = (payload || {}) as { target?: unknown; content?: unknown };
-      const target = resolveGlobalConfigPath(request.target);
-      if (!target) return { id, type, success: false, error: 'Unknown global configuration target' };
+      const configuredTarget = resolveGlobalConfigPath(request.target);
+      if (!configuredTarget) return { id, type, success: false, error: 'Unknown global configuration target' };
+      const target = (await findGlobalConfigPath(request.target)) || configuredTarget;
       if (typeof request.content !== 'string') return { id, type, success: false, error: 'Configuration content must be a string' };
       const validationError = validateGlobalConfigContent(request.content);
       if (validationError) return { id, type, success: false, error: validationError };

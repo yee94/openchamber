@@ -129,6 +129,14 @@ export type DesktopSettings = {
   sessionGoalDefaultBudgetEnabled?: boolean;
   sessionGoalDefaultBudget?: number;
   smallModelOverride?: string; // format: "provider/model"
+  summaryModelMode?: 'provider' | 'custom';
+  summaryProviderID?: string;
+  summaryModelID?: string;
+  summaryCustomBaseURL?: string;
+  summaryCustomAPIToken?: string;
+  hasSummaryCustomAPIToken?: boolean;
+  summaryCommitPrompt?: string;
+  summarySessionTitlePrompt?: string;
   defaultGitIdentityId?: string; // ''/undefined = unset, 'global' or profile id
   openInAppId?: string;
   autoCreateWorktree?: boolean;

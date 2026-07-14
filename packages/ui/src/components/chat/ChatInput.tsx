@@ -948,6 +948,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const [mobileDraftPicker, setMobileDraftPicker] = React.useState<'project' | 'branch' | null>(null);
     const [mobileDraftPickerQuery, setMobileDraftPickerQuery] = React.useState('');
     const [desktopDraftProjectQuery, setDesktopDraftProjectQuery] = React.useState('');
+    const [desktopDraftProjectPickerOpen, setDesktopDraftProjectPickerOpen] = React.useState(false);
     // True while ANY MobileOverlayPanel is open (sessions sheet, model/agent
     // panels, pickers...). Opening one closes the keyboard, which must not
     // collapse the composer into the pill under the overlay.
@@ -4916,8 +4917,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         {selectedDraftProject ? (
                             <Select
                                 value={selectedDraftProject.id}
+                                open={desktopDraftProjectPickerOpen}
                                 onValueChange={handleDraftProjectChange}
                                 onOpenChange={(open) => {
+                                    setDesktopDraftProjectPickerOpen(open);
                                     if (!open) {
                                         setDesktopDraftProjectQuery('');
                                     }
@@ -4960,7 +4963,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         onClick={(event) => {
                                             event.preventDefault();
                                             event.stopPropagation();
-                                            sessionEvents.requestDirectoryDialog();
+                                            setDesktopDraftProjectPickerOpen(false);
+                                            requestAnimationFrame(() => sessionEvents.requestDirectoryDialog());
                                         }}
                                     >
                                         <Icon name="folder-add" className="h-4 w-4 shrink-0 text-muted-foreground" />

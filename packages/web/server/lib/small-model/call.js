@@ -308,8 +308,19 @@ const readProviderConfig = (workingDirectory, providerID) => {
 // Dispatch
 // ---------------------------------------------------------------------------
 
-export async function callSmallModel({ auth, catalog, workingDirectory, providerID, modelID, prompt, system, maxOutputTokens }) {
+export async function callSmallModel({ auth, catalog, workingDirectory, providerID, modelID, prompt, system, maxOutputTokens, custom }) {
   const tokens = Number(maxOutputTokens) > 0 ? Number(maxOutputTokens) : DEFAULT_MAX_OUTPUT_TOKENS;
+  if (custom) {
+    return callOpenaiCompatible({
+      baseURL: custom.baseURL,
+      headers: { Authorization: `Bearer ${custom.apiToken}` },
+      modelID,
+      prompt,
+      system,
+      maxOutputTokens: tokens,
+      providerLabel: 'Custom summary API',
+    });
+  }
   const providerConfig = readProviderConfig(workingDirectory, providerID);
   // Match OpenCode's resolveSDK precedence:
   // config provider.<id>.options.apiKey (providerConfig.auth) wins; the

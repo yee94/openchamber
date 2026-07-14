@@ -62,6 +62,10 @@ and other session updates keep the existing ordering timestamp unchanged.
 default on) controls background title refreshes. Explicit smart-title actions
 still run when background refresh is disabled.
 
+Settings → Sessions → Summary AI controls the title model and the optional
+`summarySessionTitlePrompt` override. The configured custom API receives the
+title transcript only after the user explicitly selects that source.
+
 ## Manual rename contract
 
 After this module writes a title, further auto-refreshes only proceed while

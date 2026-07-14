@@ -213,7 +213,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `registerConfigEntityRoutes(app, dependencies)`: registers configuration entity routes:
   - Agents: `/api/config/agents/:name` and `/api/config/agents/:name/config`
   - Commands: batched metadata via `POST /api/config/commands/metadata`, plus CRUD at `/api/config/commands/:name`
-  - Global raw configs: `GET/PUT /api/config/global/:target` for `opencode`, `oh-my-opencode-slim`, and `oh-my-openagent`
+  - Global raw configs: `GET /api/config/global` discovers existing config targets; `GET/PUT /api/config/global/:target` reads and writes `opencode`, `oh-my-opencode-slim`, and `oh-my-openagent` JSON or JSONC files
   - MCP servers: `/api/config/mcp` and `/api/config/mcp/:name`
   - Snippets: `/api/config/snippets`, `/api/config/snippets/:name`, and `/api/config/snippets/expand`
 
@@ -363,7 +363,7 @@ This module provides OpenCode server integration utilities for the web server ru
   requests preempt its current list request. The renderer must not fan out cold
   start session lists. This code never reads or writes OpenCode's own SQLite.
 - Provider auth: `~/.local/share/opencode/auth.json`.
-- User config: `~/.config/opencode/opencode.json`.
+- User config: `~/.config/opencode/opencode.json` or `~/.config/opencode/opencode.jsonc`.
 - Project config: `<workingDirectory>/.opencode/opencode.json` or `opencode.json`.
 - Custom config: `OPENCODE_CONFIG` env var path.
 - Rate limit config: `OPENCHAMBER_RATE_LIMIT_MAX_ATTEMPTS`, `OPENCHAMBER_RATE_LIMIT_NO_IP_MAX_ATTEMPTS` env vars.

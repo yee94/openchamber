@@ -14,8 +14,11 @@ import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/pro
 export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onItemSelect }) => {
   const { t } = useI18n();
   const projects = useProjectsStore((state) => state.projects);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const selectedId = useUIStore((state) => state.settingsProjectsSelectedId);
   const setSelectedId = useUIStore((state) => state.setSettingsProjectsSelectedId);
+  const knownProjectIdsRef = React.useRef<Set<string> | null>(null);
+  const pendingAddedProjectIdsRef = React.useRef(new Set<string>());
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
@@ -24,6 +27,22 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
   }, []);
 
   React.useEffect(() => {
+    const projectIds = new Set(projects.map((project) => project.id));
+    const knownProjectIds = knownProjectIdsRef.current;
+    if (knownProjectIds) {
+      for (const projectId of projectIds) {
+        if (!knownProjectIds.has(projectId)) {
+          pendingAddedProjectIdsRef.current.add(projectId);
+        }
+      }
+    }
+    knownProjectIdsRef.current = projectIds;
+
+    if (activeProjectId && pendingAddedProjectIdsRef.current.delete(activeProjectId)) {
+      setSelectedId(activeProjectId);
+      return;
+    }
+
     if (projects.length === 0) {
       if (selectedId !== null) {
         setSelectedId(null);
@@ -34,7 +53,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
       return;
     }
     setSelectedId(projects[0].id);
-  }, [projects, selectedId, setSelectedId]);
+  }, [activeProjectId, projects, selectedId, setSelectedId]);
 
   return (
     <SettingsSidebarLayout

@@ -14,6 +14,33 @@ const OPENCHAMBER_SETTINGS_FILE = path.join(
   'settings.json',
 );
 
+const SUMMARY_PURPOSES = new Set(['commit', 'session-title']);
+
+const readSummarySettings = () => {
+  try {
+    const raw = fs.readFileSync(OPENCHAMBER_SETTINGS_FILE, 'utf8');
+    const settings = JSON.parse(raw);
+    if (!settings || typeof settings !== 'object') return null;
+    const mode = settings.summaryModelMode === 'custom' ? 'custom' : 'provider';
+    const providerID = typeof settings.summaryProviderID === 'string' ? settings.summaryProviderID.trim() : '';
+    const modelID = typeof settings.summaryModelID === 'string' ? settings.summaryModelID.trim() : '';
+    const baseURL = typeof settings.summaryCustomBaseURL === 'string' ? settings.summaryCustomBaseURL.trim() : '';
+    const apiToken = typeof settings.summaryCustomAPIToken === 'string' ? settings.summaryCustomAPIToken.trim() : '';
+    return {
+      mode,
+      providerID,
+      modelID,
+      custom: baseURL && apiToken && modelID ? { baseURL, apiToken, modelID } : null,
+      prompts: {
+        commit: typeof settings.summaryCommitPrompt === 'string' ? settings.summaryCommitPrompt.trim() : '',
+        'session-title': typeof settings.summarySessionTitlePrompt === 'string' ? settings.summarySessionTitlePrompt.trim() : '',
+      },
+    };
+  } catch {
+    return null;
+  }
+};
+
 // OpenChamber's own settings: when the user unchecks "use default small model"
 // their explicit override outranks every other resolution step.
 const readSmallModelSettingsOverride = () => {
@@ -61,25 +88,48 @@ const readConfiguredSmallModel = (workingDirectory) => {
  * Generates text with the user's small model, resolved and authenticated
  * entirely server-side from the OpenCode config and auth store.
  */
-export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, directory, preferredProviderID, preferredModelID, restrictToPreferredProvider = false }) {
+export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, directory, preferredProviderID, preferredModelID, restrictToPreferredProvider = false, purpose }) {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
   }
 
   const auth = readAuthFile();
   const catalog = await getModelCatalog().catch(() => ({}));
+  const summarySettings = SUMMARY_PURPOSES.has(purpose) ? readSummarySettings() : null;
+  const summaryPrompt = summarySettings?.prompts?.[purpose];
+  const defaultSummaryProviderID = SUMMARY_PURPOSES.has(purpose) && isUsableAuthEntry(getAuthEntryForProvider(auth, 'openai'))
+    ? 'openai'
+    : '';
 
   const explicit = parseModelRef(model);
-  const resolved = explicit
-    ? { ...explicit, source: 'request' }
-    : resolveSmallModel({
-      auth,
-      catalog,
-      settingsSmallModel: readSmallModelSettingsOverride(),
-      configSmallModel: readConfiguredSmallModel(directory),
-      preferredProviderID,
-      preferredModelID,
-    });
+  const summaryProvider = summarySettings?.mode === 'provider' && summarySettings.providerID && summarySettings.modelID
+    ? {
+        providerID: summarySettings.providerID,
+        modelID: summarySettings.modelID,
+        source: 'summary-provider',
+      }
+    : null;
+  const summaryCustom = summarySettings?.mode === 'custom' ? summarySettings.custom : null;
+  if (summarySettings?.mode === 'custom' && !summaryCustom) {
+    throw Object.assign(
+      new Error('Custom summary API requires a Base URL, model ID, and API token'),
+      { statusCode: 400 },
+    );
+  }
+  const resolved = summaryCustom
+    ? { providerID: 'custom', modelID: summaryCustom.modelID, source: 'summary-custom' }
+    : summaryProvider
+      ? summaryProvider
+      : explicit
+        ? { ...explicit, source: 'request' }
+        : resolveSmallModel({
+          auth,
+          catalog,
+          settingsSmallModel: readSmallModelSettingsOverride(),
+          configSmallModel: readConfiguredSmallModel(directory),
+          preferredProviderID: summarySettings?.providerID || defaultSummaryProviderID || preferredProviderID,
+          preferredModelID,
+        });
 
   if (!resolved) {
     throw Object.assign(
@@ -93,7 +143,7 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   // model) is always allowed, anything else must stay on the session's
   // provider.
   if (restrictToPreferredProvider
-    && !['settings', 'config', 'request'].includes(resolved.source)
+    && !['settings', 'config', 'request', 'summary-provider', 'summary-custom'].includes(resolved.source)
     && resolved.providerID !== preferredProviderID) {
     throw Object.assign(
       new Error('No small model available within the session provider'),
@@ -115,8 +165,9 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
     providerID: resolved.providerID,
     modelID: resolved.modelID,
     prompt: clamped.prompt,
-    system: typeof system === 'string' && system.trim() ? system.trim() : undefined,
+    system: summaryPrompt || (typeof system === 'string' && system.trim() ? system.trim() : undefined),
     maxOutputTokens,
+    custom: summaryCustom,
   });
 
   return {

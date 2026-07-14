@@ -58,6 +58,35 @@ const createTestHelpersWithRealSanitizers = () => {
 };
 
 describe('settings helpers', () => {
+  it('persists summary AI configuration while withholding its API token from responses', () => {
+    const helpers = createTestHelpers();
+    const settings = helpers.sanitizeSettingsUpdate({
+      summaryModelMode: 'custom',
+      summaryCustomBaseURL: 'https://summary.example.test/v1/',
+      summaryModelID: 'summary-model',
+      summaryCustomAPIToken: 'summary-token',
+      summaryCommitPrompt: 'Return commit JSON.',
+      summarySessionTitlePrompt: 'Return a short title.',
+    });
+
+    expect(settings).toMatchObject({
+      summaryModelMode: 'custom',
+      summaryCustomBaseURL: 'https://summary.example.test/v1',
+      summaryModelID: 'summary-model',
+      summaryCustomAPIToken: 'summary-token',
+      summaryCommitPrompt: 'Return commit JSON.',
+      summarySessionTitlePrompt: 'Return a short title.',
+    });
+    const response = helpers.formatSettingsResponse(settings);
+    expect(response).toMatchObject({
+      summaryModelMode: 'custom',
+      summaryCustomBaseURL: 'https://summary.example.test/v1',
+      summaryModelID: 'summary-model',
+      hasSummaryCustomAPIToken: true,
+    });
+    expect(response).not.toHaveProperty('summaryCustomAPIToken');
+  });
+
   it('accepts messageStreamTransport as a persisted shared setting', () => {
     const helpers = createTestHelpers();
 
