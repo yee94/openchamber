@@ -36,6 +36,7 @@ export interface SortableProjectItemProps {
   onToggle: () => void;
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
+  onSyncSessions: () => void;
   onRenameStart: () => void;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
@@ -71,6 +72,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onToggle,
   onNewSession,
   onNewWorktreeSession,
+  onSyncSessions,
   onRenameStart,
   onClose,
   sentinelRef,
@@ -112,6 +114,10 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
           {t('sessions.sidebar.project.actions.newSession')}
         </Item>
       )}
+      <Item onClick={onSyncSessions}>
+        <Icon name="refresh" className="mr-1.5 h-4 w-4" />
+        {t('sessions.sidebar.project.actions.syncSessions')}
+      </Item>
       <Item onClick={onRenameStart}>
         <Icon name="pencil-ai" className="mr-1.5 h-4 w-4" />
         {t('sessions.sidebar.project.actions.edit')}

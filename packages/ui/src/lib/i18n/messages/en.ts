@@ -452,6 +452,7 @@ export const dict = {
   'sessions.sidebar.project.actions.newWorktree': 'New worktree',
   'sessions.sidebar.project.actions.newWorktreeEllipsis': 'New worktree...',
   'sessions.sidebar.project.actions.projectMenu': 'Project menu',
+  'sessions.sidebar.project.actions.syncSessions': 'Sync sessions',
   'sessions.sidebar.project.actions.newSession': 'New session',
   'sessions.sidebar.project.actions.edit': 'Edit',
   'sessions.sidebar.project.actions.closeProject': 'Close project',

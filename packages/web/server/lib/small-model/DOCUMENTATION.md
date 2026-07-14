@@ -56,6 +56,8 @@ other runtime API.
 - `routes.js` — `GET /api/small-model` (resolution preview) and
   `POST /api/small-model/generate` (`{ prompt, system?, maxOutputTokens?,
   model?, directory? }` → `{ text, providerID, modelID, source }`).
+  The preview response includes `callableModels`, the Provider/model allowlist
+  consumed by Settings → Summary AI.
 
 ## Registration
 
@@ -65,8 +67,8 @@ module is imported on first request, not at server startup.
 ## Summary AI settings
 
 Commit-message generation and session-title refresh pass `purpose: 'commit'`
-or `purpose: 'session-title'` to `generateSmallModelText`. Their dedicated
-settings can select an authenticated OpenCode provider/model or a custom
+or `purpose: 'session-title'` to `generateSmallModelText`. Settings → Summary
+AI can select an authenticated OpenCode provider/model or a custom
 OpenAI-compatible `baseURL`, model ID, and API token. A custom token stays in
 the server settings file; settings read responses expose only
 `hasSummaryCustomAPIToken`.
@@ -75,6 +77,14 @@ the server settings file; settings read responses expose only
 call's system prompt when non-empty. With no provider choice, summary calls
 prefer an authenticated OpenAI provider and then use the standard small-model
 resolution chain.
+
+Provider mode uses direct provider APIs from the server rather than sending a
+chat request through the active OpenCode session. The dispatcher has dedicated
+wire formats for GitHub Copilot, OpenAI OAuth, Anthropic API keys, and Google
+API keys. Catalog providers with an OpenAI-compatible chat-completions endpoint
+use the generic dispatcher. Provider plugins that require a region, resource
+name, browser session, or another provider-specific credential chain require a
+dedicated adapter. Custom mode is an explicit OpenAI-compatible API client.
 
 ## Known limitations
 

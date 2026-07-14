@@ -258,6 +258,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.newWorktree': 'Nowe drzewo pracy',
   'sessions.sidebar.project.actions.newWorktreeEllipsis': 'Nowe drzewo pracy...',
   'sessions.sidebar.project.actions.projectMenu': 'Menu projektu',
+  'sessions.sidebar.project.actions.syncSessions': 'Synchronizuj sesje',
   'sessions.sidebar.project.actions.newSession': 'Nowa sesja',
   'sessions.sidebar.project.actions.closeProject': 'Zamknij projekt',
   'sessions.sidebar.project.actions.edit': 'Edytuj',

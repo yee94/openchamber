@@ -17,7 +17,7 @@ import {
   areSessionListsEquivalent,
   areStatusMapsEquivalent,
   findLiveSession,
-  findLiveSessionStatus,
+  findLiveSessionStatusSnapshot,
 } from "./live-aggregate"
 import { bootstrapGlobal, bootstrapDirectory } from "./bootstrap"
 import { retry } from "./retry"
@@ -152,9 +152,14 @@ function useLiveSyncSelector<T>(
 
 /** Read status for a session across all directories */
 export function useGlobalSessionStatus(sessionId: string): SessionStatus | undefined {
-  const liveStatus = useLiveSyncSelector(
-    useCallback((states) => findLiveSessionStatus(states, sessionId), [sessionId]),
-    Object.is,
+  const liveSnapshot = useLiveSyncSelector(
+    useCallback((states) => findLiveSessionStatusSnapshot(states, sessionId), [sessionId]),
+    useCallback((
+      left: { status: SessionStatus; observedAt: number } | undefined,
+      right: { status: SessionStatus; observedAt: number } | undefined,
+    ) => (
+      left?.status === right?.status && left?.observedAt === right?.observedAt
+    ), []),
     useCallback(
       (childStores: ChildStoreManager, notify: () => void) => childStores.subscribeAllSelected(
         (state: State) => state.session_status?.[sessionId],
@@ -163,16 +168,28 @@ export function useGlobalSessionStatus(sessionId: string): SessionStatus | undef
       [sessionId],
     ),
   )
-  const fallbackStatus = useGlobalSessionStatusStore(
-    useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId]),
+  const fallbackEntry = useGlobalSessionStatusStore(
+    useCallback((state) => state.statusById.get(sessionId), [sessionId]),
   )
-  return resolveGlobalSessionStatus(liveStatus, fallbackStatus)
+  return resolveGlobalSessionStatus(
+    liveSnapshot?.status,
+    fallbackEntry?.status,
+    liveSnapshot?.observedAt,
+    fallbackEntry?.observedAt,
+  )
 }
 
 export function resolveGlobalSessionStatus(
   liveStatus: SessionStatus | undefined,
   fallbackStatus: "busy" | "retry" | undefined,
+  liveObservedAt = 0,
+  fallbackObservedAt = 0,
 ): SessionStatus | undefined {
+  if (fallbackStatus && fallbackObservedAt > liveObservedAt) {
+    return fallbackStatus === "busy"
+      ? { type: "busy" }
+      : { type: "retry", attempt: 0, message: "", next: 0 }
+  }
   if (liveStatus) {
     return liveStatus
   }

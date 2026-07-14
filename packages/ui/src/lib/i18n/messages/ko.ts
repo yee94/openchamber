@@ -453,6 +453,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.newWorktree': '새 워크트리',
   'sessions.sidebar.project.actions.newWorktreeEllipsis': '새 워크트리…',
   'sessions.sidebar.project.actions.projectMenu': '프로젝트 메뉴',
+  'sessions.sidebar.project.actions.syncSessions': '세션 동기화',
   'sessions.sidebar.project.actions.newSession': '새 세션',
   'sessions.sidebar.project.actions.closeProject': '프로젝트 닫기',
   'sessions.sidebar.project.actions.edit': '편집',

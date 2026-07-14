@@ -43,6 +43,9 @@
 - Project collapse state controls presentation only; Electron session-summary
   refresh targets come from the persisted project index, so no collapse/re-expand
   gesture is required to make a project appear.
+- Each project menu provides a session-sync action. It refreshes the project's
+  root and known worktree directories through the Electron server-owned index
+  queue, while Web and VS Code use the bounded SDK refresh fallback.
 - The native tray consumes the sidebar/global cache and lightweight global status; it does not trigger a delayed all-project session-list fanout.
 - Mounting active or archived session rows creates only lightweight child-store
   subscriptions (`bootstrap: false`). Routed live status/permission events still

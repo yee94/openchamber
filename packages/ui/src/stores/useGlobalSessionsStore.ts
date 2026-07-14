@@ -86,12 +86,18 @@ type GlobalSessionsState = {
       onDirectoryResult?: (directory: string, success: boolean) => void;
     },
   ) => Promise<LoadResult>;
+  /** Queue a server-owned index refresh when available, with the SDK path as a runtime fallback. */
+  syncSessionsForDirectories: (
+    directories: Iterable<string>,
+    fallbackActive?: Session[],
+  ) => Promise<LoadResult>;
   refreshArchivedSessionsForDirectories: (directories: Iterable<string>) => Promise<LoadResult>;
   loadMoreSessionsForDirectory: (directory: string) => Promise<LoadResult>;
   hydrateSessionIndex: () => Promise<void>;
   startSessionIndexStartup: (directories: Iterable<string>) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   upsertSession: (session: Session) => void;
+  touchSessionActivity: (sessionId: string, observedAt: number) => void;
   removeSessions: (ids: Iterable<string>) => void;
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void;
   /** Drop every session from the previous runtime instance and go back to the
@@ -225,6 +231,31 @@ export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Sess
   const existingHasChildren = (existingRecord as { hasChildren?: unknown }).hasChildren;
   if (typeof incomingHasChildren !== 'boolean' && typeof existingHasChildren === 'boolean') {
     (next as typeof next & { hasChildren?: boolean }).hasChildren = existingHasChildren;
+    changed = true;
+  }
+
+  const existingActivityUpdatedAt = getSessionActivityUpdatedAt(existing);
+  const incomingActivityUpdatedAt = getSessionActivityUpdatedAt(incoming);
+  if (existingActivityUpdatedAt > incomingActivityUpdatedAt) {
+    const incomingMetadata = incomingRecord.metadata && typeof incomingRecord.metadata === 'object'
+      ? incomingRecord.metadata as Record<string, unknown>
+      : {};
+    const incomingOpenChamber = incomingMetadata.openchamber && typeof incomingMetadata.openchamber === 'object'
+      ? incomingMetadata.openchamber as Record<string, unknown>
+      : {};
+    const incomingTitleRefresh = incomingOpenChamber.titleRefresh && typeof incomingOpenChamber.titleRefresh === 'object'
+      ? incomingOpenChamber.titleRefresh as Record<string, unknown>
+      : {};
+    next.metadata = {
+      ...incomingMetadata,
+      openchamber: {
+        ...incomingOpenChamber,
+        titleRefresh: {
+          ...incomingTitleRefresh,
+          activityUpdatedAt: existingActivityUpdatedAt,
+        },
+      },
+    };
     changed = true;
   }
 
@@ -1001,6 +1032,47 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
   },
 
+  syncSessionsForDirectories: async (directories, fallbackActive) => {
+    const directorySet = normalizeDirectorySet(directories);
+    if (directorySet.size === 0) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+    }
+
+    let snapshot: SessionIndexSnapshot | null = null;
+    try {
+      snapshot = await startSessionIndexBackgroundSync([...directorySet]);
+    } catch (error) {
+      console.warn('[GlobalSessions] Failed to start server-side session index sync:', error);
+    }
+
+    if (!snapshot) {
+      return get().refreshSessionsForDirectories(directorySet, fallbackActive);
+    }
+
+    const generation = loadGeneration;
+    const controller = new AbortController();
+    directoryAbortControllers.add(controller);
+    try {
+      let current = snapshot;
+      while (!controller.signal.aborted && generation === loadGeneration) {
+        set((state) => applySessionIndexSnapshotState(state, current, true));
+        if (!current.sync.active) break;
+        const next = await pollSessionIndexChanges(current.revision, controller.signal);
+        if (!next) break;
+        current = next;
+      }
+    } catch (error) {
+      if (!controller.signal.aborted && generation === loadGeneration) {
+        console.warn('[GlobalSessions] Session index sync failed:', error);
+      }
+    } finally {
+      directoryAbortControllers.delete(controller);
+    }
+
+    return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
+  },
+
   loadMoreSessionsForDirectory: async (directoryInput) => {
     const directory = normalizePath(directoryInput);
     if (!directory) {
@@ -1217,6 +1289,44 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     }
   },
 
+  touchSessionActivity: (sessionId, observedAt) => {
+    if (!Number.isFinite(observedAt)) return;
+    set((state) => {
+      const index = state.activeSessions.findIndex((session) => session.id === sessionId);
+      if (index < 0) return state;
+      const current = state.activeSessions[index];
+      if (getSessionActivityUpdatedAt(current) >= observedAt) return state;
+
+      const record = current as Session & { metadata?: Record<string, unknown> };
+      const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+      const openchamber = metadata.openchamber && typeof metadata.openchamber === 'object'
+        ? metadata.openchamber as Record<string, unknown>
+        : {};
+      const titleRefresh = openchamber.titleRefresh && typeof openchamber.titleRefresh === 'object'
+        ? openchamber.titleRefresh as Record<string, unknown>
+        : {};
+      const updated = {
+        ...record,
+        metadata: {
+          ...metadata,
+          openchamber: {
+            ...openchamber,
+            titleRefresh: {
+              ...titleRefresh,
+              activityUpdatedAt: observedAt,
+            },
+          },
+        },
+      } as Session;
+      const activeSessions = [...state.activeSessions];
+      activeSessions[index] = updated;
+      return {
+        activeSessions,
+        sessionsByDirectory: buildSessionsByDirectory(activeSessions),
+      };
+    });
+  },
+
   removeSessions: (ids) => {
     const idSet = ids instanceof Set ? ids : new Set(ids);
     if (idSet.size === 0) {
@@ -1311,6 +1421,13 @@ export const refreshGlobalSessionsForDirectories = async (
   fallbackActive?: Session[],
 ): Promise<LoadResult> => {
   return useGlobalSessionsStore.getState().refreshSessionsForDirectories(directories, fallbackActive);
+};
+
+export const syncGlobalSessionsForDirectories = async (
+  directories: Iterable<string>,
+  fallbackActive?: Session[],
+): Promise<LoadResult> => {
+  return useGlobalSessionsStore.getState().syncSessionsForDirectories(directories, fallbackActive);
 };
 
 /**

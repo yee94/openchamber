@@ -466,6 +466,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.newWorktree': '新增 worktree',
   'sessions.sidebar.project.actions.newWorktreeEllipsis': '新增 worktree...',
   'sessions.sidebar.project.actions.projectMenu': '專案選單',
+  'sessions.sidebar.project.actions.syncSessions': '同步會話',
   'sessions.sidebar.project.actions.newSession': '新增會話',
   'sessions.sidebar.project.actions.closeProject': '關閉專案',
   'sessions.sidebar.project.actions.edit': '編輯',

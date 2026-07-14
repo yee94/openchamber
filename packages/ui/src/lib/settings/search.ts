@@ -371,8 +371,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['delete', 'confirmation'],
   },
   {
-    id: 'sessions.summary-ai',
-    page: 'sessions',
+    id: 'summary-ai.configuration',
+    page: 'summary-ai',
     titleKey: 'settings.openchamber.defaults.summary.title',
     descriptionKey: 'settings.openchamber.defaults.summary.description',
     keywords: ['summary', 'commit', 'session title', 'prompt', 'provider', 'custom api', 'base url', 'api token'],

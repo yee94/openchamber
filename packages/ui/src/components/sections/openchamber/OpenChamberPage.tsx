@@ -4,6 +4,7 @@ import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { PasskeySettings } from './PasskeySettings';
 import { DefaultsSettings } from './DefaultsSettings';
+import { SummarySettings } from './SummarySettings';
 import { GitSettings } from './GitSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { GitHubSettings } from './GitHubSettings';
@@ -51,7 +52,10 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 <div className="openchamber-page-body mx-auto max-w-3xl space-y-3 p-3 sm:space-y-6 sm:p-6 sm:pt-8">
                     <OpenChamberVisualSettings />
                     <div className="border-t border-border/40 pt-6">
-                        <DefaultsSettings />
+                      <DefaultsSettings />
+                    </div>
+                    <div className="border-t border-border/40 pt-6">
+                        <SummarySettings />
                     </div>
                     {showDesktopNetworkSettings && (
                         <div className="border-t border-border/40 pt-6">
@@ -88,6 +92,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <ChatSectionContent />;
             case 'sessions':
                 return <SessionsSectionContent />;
+            case 'summary-ai':
+                return <SummarySettings />;
             case 'shortcuts':
                 return <ShortcutsSectionContent />;
             case 'git':

@@ -453,6 +453,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.newWorktree': '新建工作树',
   'sessions.sidebar.project.actions.newWorktreeEllipsis': '新建工作树...',
   'sessions.sidebar.project.actions.projectMenu': '项目菜单',
+  'sessions.sidebar.project.actions.syncSessions': '同步会话',
   'sessions.sidebar.project.actions.newSession': '新建会话',
   'sessions.sidebar.project.actions.closeProject': '关闭项目',
   'sessions.sidebar.project.actions.edit': '编辑',

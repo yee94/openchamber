@@ -19,6 +19,7 @@ export type SettingsPageSlug =
   | 'chat'
   | 'shortcuts'
   | 'sessions'
+  | 'summary-ai'
   | 'magic-prompts'
   | 'snippets'
   | 'notifications'
@@ -26,15 +27,47 @@ export type SettingsPageSlug =
   | 'tunnel'
   | 'about';
 
-type SettingsPageGroup =
-  | 'appearance'
-  | 'projects'
-  | 'general'
+export type SettingsPageGroup =
+  | 'personalization'
+  | 'workspace'
   | 'opencode'
-  | 'git'
-  | 'skills'
-  | 'usage'
-  | 'advanced';
+  | 'content'
+  | 'system';
+
+export const SETTINGS_PAGE_GROUP_ORDER: readonly SettingsPageGroup[] = [
+  'personalization',
+  'workspace',
+  'opencode',
+  'content',
+  'system',
+] as const;
+
+const SETTINGS_PAGE_ORDER: readonly SettingsPageSlug[] = [
+  'appearance',
+  'chat',
+  'notifications',
+  'sessions',
+  'summary-ai',
+  'shortcuts',
+  'projects',
+  'git',
+  'remote-instances',
+  'providers',
+  'agents',
+  'behavior',
+  'commands',
+  'mcp',
+  'plugins',
+  'global-config',
+  'magic-prompts',
+  'snippets',
+  'skills.installed',
+  'skills.catalog',
+  'usage',
+  'voice',
+  'tunnel',
+  'about',
+] as const;
 
 export interface SettingsRuntimeContext {
   isVSCode: boolean;
@@ -57,7 +90,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'home',
     title: 'Settings',
-    group: 'general',
+    group: 'personalization',
     kind: 'single',
     description: 'Search and jump to common pages.',
     keywords: ['search', 'settings'],
@@ -65,14 +98,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'projects',
     title: 'Projects',
-    group: 'projects',
+    group: 'workspace',
     kind: 'split',
     keywords: ['project', 'projects', 'worktree', 'worktrees', 'repo', 'repository', 'directory'],
   },
   {
     slug: 'remote-instances',
     title: 'Remote Instances',
-    group: 'projects',
+    group: 'workspace',
     kind: 'single',
     keywords: ['ssh', 'remote', 'instances', 'tunnels', 'forwarding', 'connection'],
     isAvailable: (ctx) => !ctx.isVSCode,
@@ -87,7 +120,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'usage',
     title: 'Usage',
-    group: 'usage',
+    group: 'system',
     kind: 'split',
     keywords: ['quota', 'billing', 'tokens', 'usage', 'limits'],
   },
@@ -136,21 +169,21 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'skills.installed',
     title: 'Skills',
-    group: 'skills',
+    group: 'content',
     kind: 'split',
     keywords: ['skill', 'skills', 'instructions', 'install', 'catalog'],
   },
   {
     slug: 'skills.catalog',
     title: 'Skills Catalog',
-    group: 'skills',
+    group: 'content',
     kind: 'single',
     keywords: ['install', 'catalog', 'external', 'repository', 'skills catalog'],
   },
   {
     slug: 'git',
     title: 'Git',
-    group: 'git',
+    group: 'workspace',
     kind: 'single',
     keywords: ['git', 'github', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji', 'oauth', 'prs', 'issues'],
     isAvailable: (ctx) => !ctx.isVSCode,
@@ -158,21 +191,21 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'appearance',
     title: 'Appearance',
-    group: 'appearance',
+    group: 'personalization',
     kind: 'single',
     keywords: ['theme', 'font', 'spacing', 'padding', 'corner radius', 'radius', 'input bar', 'keyboard', 'viewport', 'mobile', 'terminal', 'pwa', 'install name', 'app shortcuts'],
   },
   {
     slug: 'chat',
     title: 'Chat',
-    group: 'general',
+    group: 'personalization',
     kind: 'single',
     keywords: ['tools', 'diff', 'reasoning', 'dotfiles', 'draft', 'queue', 'output', 'copy', 'image', 'split messages', 'message actions'],
   },
   {
     slug: 'shortcuts',
     title: 'Shortcuts',
-    group: 'general',
+    group: 'personalization',
     kind: 'single',
     keywords: ['keyboard', 'hotkeys', 'shortcuts', 'bindings'],
     isAvailable: (ctx) => !ctx.isVSCode,
@@ -180,14 +213,21 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'sessions',
     title: 'Sessions',
-    group: 'general',
+    group: 'personalization',
     kind: 'single',
     keywords: ['defaults', 'default agent', 'default model', 'retention', 'memory', 'limits', 'zen'],
   },
   {
+    slug: 'summary-ai',
+    title: 'Summary AI',
+    group: 'personalization',
+    kind: 'single',
+    keywords: ['summary', 'commit', 'session title', 'prompt', 'provider', 'custom api', 'base url', 'api token'],
+  },
+  {
     slug: 'magic-prompts',
     title: 'Magic Prompts',
-    group: 'general',
+    group: 'content',
     kind: 'split',
     keywords: ['prompts', 'templates', 'git', 'github', 'review', 'commit', 'pull request'],
     isAvailable: (ctx) => !ctx.isVSCode,
@@ -195,16 +235,41 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'snippets',
     title: 'Snippets',
-    group: 'general',
+    group: 'content',
     kind: 'split',
     keywords: ['prompt', 'templates', 'multi-run', 'strategy', 'approach'],
   },
 
-  { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
-  { slug: 'voice', title: 'Voice', group: 'advanced', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
-  { slug: 'tunnel', title: 'Remote Tunnel', group: 'advanced', kind: 'single', keywords: ['tunnel', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode },
-  { slug: 'about', title: 'About', group: 'advanced', kind: 'single', keywords: ['about', 'version', 'updates', 'release', 'changelog'], isAvailable: (ctx) => ctx.isMobile },
+  { slug: 'notifications', title: 'Notifications', group: 'personalization', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
+  { slug: 'voice', title: 'Voice', group: 'system', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
+  { slug: 'tunnel', title: 'Remote Tunnel', group: 'system', kind: 'single', keywords: ['tunnel', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode },
+  { slug: 'about', title: 'About', group: 'system', kind: 'single', keywords: ['about', 'version', 'updates', 'release', 'changelog'], isAvailable: (ctx) => ctx.isMobile },
 ] as const;
+
+export function groupSettingsPages(pages: readonly SettingsPageMeta[]): Array<{
+  group: SettingsPageGroup;
+  pages: SettingsPageMeta[];
+}> {
+  const rank = new Map<SettingsPageSlug, number>(SETTINGS_PAGE_ORDER.map((slug, index) => [slug, index]));
+  const pagesByGroup = new Map<SettingsPageGroup, SettingsPageMeta[]>();
+
+  for (const page of pages) {
+    const groupPages = pagesByGroup.get(page.group) ?? [];
+    groupPages.push(page);
+    pagesByGroup.set(page.group, groupPages);
+  }
+
+  return SETTINGS_PAGE_GROUP_ORDER.flatMap((group) => {
+    const groupPages = pagesByGroup.get(group);
+    if (!groupPages?.length) {
+      return [];
+    }
+    return [{
+      group,
+      pages: groupPages.sort((a, b) => (rank.get(a.slug) ?? 999) - (rank.get(b.slug) ?? 999)),
+    }];
+  });
+}
 
 const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, SettingsPageSlug> = {
   sessions: 'sessions',

@@ -11,6 +11,7 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { resetOpenCodeReadiness } from '@/lib/runtime-readiness';
 import { useSessionFoldersStore } from './useSessionFoldersStore';
 import { prunePinnedSessionIdsByKnownIds } from '@/components/session/sidebar/hooks/pinnedSessionCleanup';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 
 type SessionExtra = Partial<Session> & {
   directory?: string | null;
@@ -90,6 +91,22 @@ describe('useGlobalSessionsStore', () => {
     releaseHealth(true);
     await refresh;
     expect(listCalls).toHaveLength(2);
+  });
+
+  test('preserves a newer local activity time across an older session summary', () => {
+    const session = buildSession('https://share.example/activity', {
+      directory: '/repo/app',
+      time: { created: 1, updated: 10 },
+    });
+    useGlobalSessionsStore.setState({ activeSessions: [session] });
+    useGlobalSessionsStore.getState().touchSessionActivity(session.id, 100);
+
+    useGlobalSessionsStore.getState().upsertSession(buildSession('https://share.example/activity', {
+      directory: '/repo/app',
+      time: { created: 1, updated: 20 },
+    }));
+
+    expect(getSessionActivityUpdatedAt(useGlobalSessionsStore.getState().activeSessions[0])).toBe(100);
   });
 
   test('starts no more than seven cold directory summaries at once', async () => {
@@ -295,6 +312,65 @@ describe('useGlobalSessionsStore', () => {
         '/api/openchamber/session-index/sync',
       ]);
       expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/server')).toEqual([cached]);
+    } finally {
+      opencodeClient.getSdkClient = originalGetSdkClient;
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('syncs selected directories through the Electron session index', async () => {
+    const originalWindow = globalThis.window;
+    const originalFetch = globalThis.fetch;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    let sdkListCalls = 0;
+    const requests: string[] = [];
+    const synced = buildSession('https://share.example/manual-sync', { directory: '/repo/manual-sync' });
+    const snapshot = {
+      revision: 1,
+      sync: {
+        active: false,
+        completed: 1,
+        total: 1,
+        pendingDirectories: [],
+        completedDirectories: ['/repo/manual-sync'],
+        failedDirectories: [],
+      },
+      directories: [{
+        directory: '/repo/manual-sync',
+        cursor: 2,
+        hasMore: false,
+        lastSyncedAt: 1000,
+        lastFullSyncedAt: 1000,
+        lastAccessedAt: 1000,
+        sessions: [synced],
+      }],
+    };
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
+      });
+      globalThis.fetch = async (input) => {
+        const url = input instanceof Request ? input.url : String(input);
+        requests.push(new URL(url, 'http://localhost').pathname);
+        return new Response(JSON.stringify(snapshot), {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      };
+      opencodeClient.getSdkClient = () => ({
+        experimental: { session: { list: async () => {
+          sdkListCalls += 1;
+          return { data: [], error: undefined, response: new Response(null, { status: 200 }) };
+        } } },
+      } as unknown as OpencodeClient);
+
+      await useGlobalSessionsStore.getState().syncSessionsForDirectories(['/repo/manual-sync']);
+
+      expect(sdkListCalls).toBe(0);
+      expect(requests).toEqual(['/api/openchamber/session-index/sync']);
+      expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/manual-sync')).toEqual([synced]);
     } finally {
       opencodeClient.getSdkClient = originalGetSdkClient;
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });

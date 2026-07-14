@@ -68,6 +68,7 @@ type Props = {
   setSessionSwitcherOpen: (open: boolean) => void;
   openNewSessionDraft: (options?: { directoryOverride?: string | null }) => void;
   openNewWorktreeDialog: () => void;
+  syncProjectSessions: (id: string) => void;
   openProjectEditDialog: (id: string) => void;
   removeProject: (id: string) => void;
   projectHeaderSentinelRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
@@ -264,6 +265,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                       props.setActiveMainTab('chat');
                       props.openNewWorktreeDialog();
                     }}
+                    onSyncSessions={() => props.syncProjectSessions(projectKey)}
                     onRenameStart={() => props.openProjectEditDialog(projectKey)}
                     onClose={() => props.removeProject(projectKey)}
                     sentinelRef={(el) => { props.projectHeaderSentinelRefs.current.set(projectKey, el); }}
