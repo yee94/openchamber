@@ -1268,6 +1268,7 @@ export const dict = {
   'chat.goal.action.resume': 'Reprendre',
   'chat.goal.action.markComplete': 'Marquer comme terminé',
   'chat.goal.action.clear': 'Supprimer l\'objectif',
+  'chat.goal.chip.label': 'Objectif',
   'chat.goal.action.cancel': 'Annuler',
   'chat.goal.action.save': 'Enregistrer l\'objectif',
   'chat.goal.action.start': 'Lancer l\'objectif',

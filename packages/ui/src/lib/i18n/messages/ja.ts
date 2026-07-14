@@ -1448,6 +1448,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.goal.action.resume': '再開',
   'chat.goal.action.markComplete': '完了にする',
   'chat.goal.action.clear': 'ゴールを削除',
+  'chat.goal.chip.label': '目標',
   'chat.goal.action.cancel': 'キャンセル',
   'chat.goal.action.save': 'ゴールを保存',
   'chat.goal.action.start': 'ゴールを開始',

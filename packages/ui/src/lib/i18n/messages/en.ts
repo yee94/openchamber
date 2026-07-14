@@ -1452,6 +1452,7 @@ export const dict = {
   'chat.goal.action.resume': 'Resume',
   'chat.goal.action.markComplete': 'Mark complete',
   'chat.goal.action.clear': 'Remove goal',
+  'chat.goal.chip.label': 'Goal',
   'chat.goal.action.cancel': 'Cancel',
   'chat.goal.action.save': 'Save goal',
   'chat.goal.action.start': 'Start goal',

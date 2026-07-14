@@ -1430,6 +1430,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.goal.action.resume": "Reanudar",
   "chat.goal.action.markComplete": "Marcar como completado",
   "chat.goal.action.clear": "Eliminar objetivo",
+  "chat.goal.chip.label": "Objetivo",
   "chat.goal.action.cancel": "Cancelar",
   "chat.goal.action.save": "Guardar objetivo",
   "chat.goal.action.start": "Iniciar objetivo",

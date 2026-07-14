@@ -32,7 +32,7 @@ import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAu
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from './CommandAutocomplete';
 import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomplete';
 import { SnippetAutocomplete, type SnippetAutocompleteHandle } from './SnippetAutocomplete';
-import { cn, formatDirectoryName, isMacOS } from '@/lib/utils';
+import { cn, formatDirectoryName } from '@/lib/utils';
 import { ModelControls } from './ModelControls';
 import { LeaderKeyHint } from './LeaderKeyHint';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
@@ -80,8 +80,6 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
-import { usePermissionStore } from '@/stores/permissionStore';
-import { togglePermissionAutoAccept } from './permissionAutoAccept';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -112,6 +110,7 @@ import { getFileMentionAutocompleteQuery, type FileMentionAutocompleteInputSourc
 import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
 import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
+import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import type { Part } from '@opencode-ai/sdk/v2/client';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
@@ -673,121 +672,6 @@ const ComposerAttachmentControls = React.memo(function ComposerAttachmentControl
     && prev.withTooltip === next.withTooltip
 ));
 
-type PermissionAutoAcceptButtonProps = {
-    footerIconButtonClass: string;
-    iconSizeClass: string;
-    isInteractive: boolean;
-    permissionAutoAcceptEnabled: boolean;
-    handlePermissionAutoAcceptToggle: () => void;
-    withTooltip?: boolean;
-};
-
-const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButton(props: PermissionAutoAcceptButtonProps) {
-    const { t } = useI18n();
-    const {
-        footerIconButtonClass,
-        iconSizeClass,
-        isInteractive,
-        permissionAutoAcceptEnabled,
-        handlePermissionAutoAcceptToggle,
-        withTooltip = false,
-    } = props;
-
-    const ariaLabel = permissionAutoAcceptEnabled
-        ? t('chat.chatInput.permissionAutoAccept.disable')
-        : t('chat.chatInput.permissionAutoAccept.enable');
-    const tooltipLabel = permissionAutoAcceptEnabled
-        ? t('chat.chatInput.permissionAutoAccept.on')
-        : t('chat.chatInput.permissionAutoAccept.off');
-
-    const button = (
-        <button
-            type="button"
-            onClick={handlePermissionAutoAcceptToggle}
-            className={cn(
-                footerIconButtonClass,
-                'rounded-md hover:bg-transparent',
-                !isInteractive && 'opacity-30',
-            )}
-            onMouseDown={(event) => {
-                event.preventDefault();
-            }}
-            onPointerDownCapture={(event) => {
-                if (event.pointerType === 'touch') {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-            }}
-            aria-pressed={permissionAutoAcceptEnabled}
-            aria-label={ariaLabel}
-            title={ariaLabel}
-        >
-            {permissionAutoAcceptEnabled ? (
-                <Icon name="shield-check" className={cn(iconSizeClass)} style={{ color: 'var(--status-info)' }} />
-            ) : (
-                <Icon name="shield-user" className={cn(iconSizeClass)} />
-            )}
-        </button>
-    );
-
-    if (!withTooltip) {
-        return button;
-    }
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                {button}
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={8}>
-                {tooltipLabel}
-            </TooltipContent>
-        </Tooltip>
-    );
-});
-
-type FocusModeButtonProps = {
-    footerIconButtonClass: string;
-    iconSizeClass: string;
-    isExpandedInput: boolean;
-    onToggle: () => void;
-};
-
-const FocusModeButton = React.memo(function FocusModeButton(props: FocusModeButtonProps) {
-    const { footerIconButtonClass, iconSizeClass, isExpandedInput, onToggle } = props;
-    const { t } = useI18n();
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <button
-                    type="button"
-                    className={cn(
-                        footerIconButtonClass,
-                        isExpandedInput && 'text-primary',
-                    )}
-                    onMouseDown={(event) => {
-                        event.preventDefault();
-                    }}
-                    onClick={onToggle}
-                    aria-label={t('chat.chatInput.focusMode.toggleAria')}
-                    aria-pressed={isExpandedInput}
-                >
-                    <Icon name="fullscreen" className={cn(iconSizeClass)} />
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={8}>
-                <div className="flex flex-col gap-0.5 text-center">
-                    <span>{t('chat.chatInput.focusMode.label')}</span>
-                    <span className="font-mono opacity-60">
-                        {isMacOS() ? '⌘⇧E' : 'Ctrl+Shift+E'}
-                    </span>
-                </div>
-            </TooltipContent>
-        </Tooltip>
-    );
-});
-
 type ComposerActionButtonsProps = {
     isMobile: boolean;
     footerIconButtonClass: string;
@@ -1120,10 +1004,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
-    const draftPermissionAutoAcceptEnabled = useSessionUIStore((s) => (
-        s.newSessionDraft?.open ? s.newSessionDraft.permissionAutoAcceptEnabled === true : false
-    ));
-    const setDraftPermissionAutoAcceptEnabled = useSessionUIStore((s) => s.setDraftPermissionAutoAcceptEnabled);
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject);
@@ -1144,7 +1024,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         (sessionIdOverride?: string) => sessionActions.abortCurrentOperation(sessionIdOverride ?? currentSessionId ?? ''),
         [currentSessionId],
     );
-    const currentManagementSessionId = currentSessionId;
     const projects = useProjectsStore((state) => state.projects);
     const activeProjectId = useProjectsStore((state) => state.activeProjectId);
     const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
@@ -1190,7 +1069,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const ensureGitStatus = useGitStore((state) => state.ensureStatus);
     const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
-    const setSessionAutoAccept = usePermissionStore((state) => state.setSessionAutoAccept);
     const composerHighlightRef = React.useRef<HTMLDivElement | null>(null);
     const [agentPortalContainer, setAgentPortalContainer] = React.useState<HTMLDivElement | null>(null);
     const [desktopComposerFocused, setDesktopComposerFocused] = React.useState(false);
@@ -1287,7 +1165,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const availableSkills = useSkillsStore((s) => s.skills);
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
-            'init', 'review', 'undo', 'redo', 'fork', 'timeline', 'model', 'compact', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'catch-up', 'debug', 'weigh', 'explore',
+            'init', 'review', 'undo', 'redo', 'fork', 'timeline', 'model', 'compact', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'goal', 'catch-up', 'debug', 'weigh', 'explore',
         ]);
         if (!isMobile && !isVSCodeRuntime()) names.add('handoff-review');
         for (const command of availableCommands) names.add(command.name.toLowerCase());
@@ -1873,10 +1751,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         setMobileControlsPanel('agent');
     }, []);
 
-    const handleToggleExpandedInput = React.useCallback(() => {
-        setExpandedInput(!isExpandedInput);
-    }, [isExpandedInput, setExpandedInput]);
-
     const openIssuePicker = React.useCallback(() => {
         setIssuePickerOpen(true);
     }, []);
@@ -2323,6 +2197,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.planFeatureFailed'));
                 }
+                return;
+            }
+            else if (commandName === 'goal' && (currentSessionId || newSessionDraftOpen)) {
+                useSessionGoalArmStore.getState().setArmed(true);
                 return;
             }
             else if (commandName === 'craft-goal' && (currentSessionId || newSessionDraftOpen)) {
@@ -4784,36 +4662,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const composerChromeOpacityClass = composerChromeEmphasized
         ? 'opacity-100'
         : 'opacity-45 hover:opacity-100 focus-within:opacity-100';
-    const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId;
-    const permissionAutoAcceptEnabled = usePermissionStore((state) => {
-        if (!permissionScopeSessionId) {
-            return draftPermissionAutoAcceptEnabled;
-        }
-        return state.isSessionAutoAccepting(permissionScopeSessionId);
-    });
-    const isPermissionAutoAcceptInteractive = Boolean(permissionScopeSessionId || newSessionDraftOpen);
-
-    const handlePermissionAutoAcceptToggle = React.useCallback(() => {
-        togglePermissionAutoAccept({
-            permissionScopeSessionId,
-            newSessionDraftOpen,
-            draftPermissionAutoAcceptEnabled,
-            permissionAutoAcceptEnabled,
-            setDraftPermissionAutoAcceptEnabled,
-            setSessionAutoAccept,
-            onOpenSessionFirst: () => toast.error(t('chat.chatInput.toast.openSessionFirst')),
-            onToggleFailed: () => toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed')),
-        });
-    }, [
-        draftPermissionAutoAcceptEnabled,
-        newSessionDraftOpen,
-        permissionAutoAcceptEnabled,
-        permissionScopeSessionId,
-        setDraftPermissionAutoAcceptEnabled,
-        setSessionAutoAccept,
-        t,
-    ]);
-
     React.useEffect(() => {
         const pendingAbortBanner = Boolean(abortPromptSessionId) && abortPromptSessionId === currentSessionId;
         if (!prevWasAbortedRef.current && pendingAbortBanner && !showAbortStatus) {
@@ -5668,19 +5516,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             onOpenSettings={onOpenSettings}
                                             onOpenMobileSheet={openMobileAttachSheet}
                                         />
-                                        <PermissionAutoAcceptButton
-                                            footerIconButtonClass={footerIconButtonClass}
-                                            iconSizeClass={iconSizeClass}
-                                            isInteractive={isPermissionAutoAcceptInteractive}
-                                            permissionAutoAcceptEnabled={permissionAutoAcceptEnabled}
-                                            handlePermissionAutoAcceptToggle={handlePermissionAutoAcceptToggle}
-                                        />
                                         <SessionGoalButton
                                             sessionId={currentSessionId}
                                             directory={currentSessionDirectoryForSync ?? currentDirectory}
                                             draftOpen={newSessionDraftOpen}
-                                            footerIconButtonClass={footerIconButtonClass}
-                                            iconSizeClass={iconSizeClass}
                                         />
                                         <SessionGoalObjectiveCounter length={message.length} />
                                     </div>
@@ -5724,28 +5563,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         onOpenSettings={onOpenSettings}
                                         withTooltip
                                     />
-                                    <FocusModeButton
-                                        footerIconButtonClass={footerIconButtonClass}
-                                        iconSizeClass={iconSizeClass}
-                                        isExpandedInput={isExpandedInput}
-                                        onToggle={handleToggleExpandedInput}
-                                    />
                                     <div ref={setAgentPortalContainer} className="flex items-center" />
-                                    <PermissionAutoAcceptButton
-                                        footerIconButtonClass={footerIconButtonClass}
-                                        iconSizeClass={iconSizeClass}
-                                        isInteractive={isPermissionAutoAcceptInteractive}
-                                        permissionAutoAcceptEnabled={permissionAutoAcceptEnabled}
-                                        handlePermissionAutoAcceptToggle={handlePermissionAutoAcceptToggle}
-                                        withTooltip
-                                    />
                                     <SessionGoalButton
                                         sessionId={currentSessionId}
                                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                                         draftOpen={newSessionDraftOpen}
-                                        footerIconButtonClass={footerIconButtonClass}
-                                        iconSizeClass={iconSizeClass}
-                                        withTooltip
                                     />
                                     <SessionGoalObjectiveCounter length={message.length} />
                                 </div>

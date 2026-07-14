@@ -1454,6 +1454,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.goal.action.resume': '재개',
   'chat.goal.action.markComplete': '완료로 표시',
   'chat.goal.action.clear': '목표 제거',
+  'chat.goal.chip.label': '목표',
   'chat.goal.action.cancel': '취소',
   'chat.goal.action.save': '목표 저장',
   'chat.goal.action.start': '목표 시작',
