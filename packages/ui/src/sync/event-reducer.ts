@@ -156,7 +156,6 @@ export type SessionMaterializationReason =
   | "missing-owning-message"
   | "orphan-delta"
   | "missing-delta-part"
-  | "empty-assistant-message"
   | "child-session-idle"
   | "child-session-discovered"
   | "ensure-session-messages"
@@ -327,6 +326,12 @@ export function applyDirectoryEvent(
     case "message.updated": {
       const info = (event.properties as { info: Message }).info
       const messages = draft.message[info.sessionID]
+      const sessionWasRenderable = Boolean(messages) && messages.every(
+        (message) => message.role !== "assistant" || draft.part[message.id] !== undefined,
+      )
+      if (info.role === "assistant" && sessionWasRenderable && draft.part[info.id] === undefined) {
+        draft.part[info.id] = []
+      }
       if (!messages) {
         draft.message[info.sessionID] = [info]
         return true

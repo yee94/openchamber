@@ -40,12 +40,30 @@ const getGlobalSessionSnapshot = (sessionId: string): Session | null => {
   return [...global.activeSessions, ...global.archivedSessions].find((session) => session.id === sessionId) ?? null
 }
 
+const getVisibleSessionSignature = (session: Session): string => {
+  const record = session as Session & {
+    directory?: string | null
+    parentID?: string | null
+    hasChildren?: boolean
+  }
+  return JSON.stringify([
+    session.title ?? "",
+    session.time?.archived ?? 0,
+    session.share?.url ?? "",
+    record.directory ?? "",
+    record.parentID ?? "",
+    record.hasChildren ?? false,
+  ])
+}
+
 export const applySessionEventToGlobalSessions = (payload: Event, directory?: string | null): void => {
   if (payload.type === "session.created" || payload.type === "session.updated") {
     const session = getSessionInfoFromPayload(payload, directory)
     if (session) {
       const currentSession = getGlobalSessionSnapshot(session.id)
-      if (!shouldSkipStaleSessionEvent(currentSession, session)) {
+      const hasVisibleChange = !currentSession
+        || getVisibleSessionSignature(currentSession) !== getVisibleSessionSignature(session)
+      if (hasVisibleChange && !shouldSkipStaleSessionEvent(currentSession, session)) {
         useGlobalSessionsStore.getState().upsertSession(session)
       }
     }

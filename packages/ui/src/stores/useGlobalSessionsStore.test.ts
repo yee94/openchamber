@@ -11,7 +11,6 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { resetOpenCodeReadiness } from '@/lib/runtime-readiness';
 import { useSessionFoldersStore } from './useSessionFoldersStore';
 import { prunePinnedSessionIdsByKnownIds } from '@/components/session/sidebar/hooks/pinnedSessionCleanup';
-import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 
 type SessionExtra = Partial<Session> & {
   directory?: string | null;
@@ -59,6 +58,7 @@ describe('useGlobalSessionsStore', () => {
   });
 
   afterEach(() => {
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
     restoreGetSdkClient?.();
     restoreGetSdkClient = null;
     restoreCheckHealth?.();
@@ -91,22 +91,6 @@ describe('useGlobalSessionsStore', () => {
     releaseHealth(true);
     await refresh;
     expect(listCalls).toHaveLength(2);
-  });
-
-  test('preserves a newer local activity time across an older session summary', () => {
-    const session = buildSession('https://share.example/activity', {
-      directory: '/repo/app',
-      time: { created: 1, updated: 10 },
-    });
-    useGlobalSessionsStore.setState({ activeSessions: [session] });
-    useGlobalSessionsStore.getState().touchSessionActivity(session.id, 100);
-
-    useGlobalSessionsStore.getState().upsertSession(buildSession('https://share.example/activity', {
-      directory: '/repo/app',
-      time: { created: 1, updated: 20 },
-    }));
-
-    expect(getSessionActivityUpdatedAt(useGlobalSessionsStore.getState().activeSessions[0])).toBe(100);
   });
 
   test('starts no more than seven cold directory summaries at once', async () => {
@@ -288,14 +272,20 @@ describe('useGlobalSessionsStore', () => {
         configurable: true,
         value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
       });
-      globalThis.fetch = async (input) => {
+      globalThis.fetch = (input, init) => {
         const url = input instanceof Request ? input.url : String(input);
-        requests.push(new URL(url, 'http://localhost').pathname);
+        const pathname = new URL(url, 'http://localhost').pathname;
+        requests.push(pathname);
+        if (pathname === '/api/openchamber/session-index/changes') {
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+          });
+        }
         const isSnapshot = requests.length === 1;
-        return new Response(JSON.stringify(isSnapshot ? { available: true, ...snapshot } : snapshot), {
+        return Promise.resolve(new Response(JSON.stringify(isSnapshot ? { available: true, ...snapshot } : snapshot), {
           status: isSnapshot ? 200 : 202,
           headers: { 'Content-Type': 'application/json' },
-        });
+        }));
       };
       opencodeClient.getSdkClient = () => ({
         experimental: { session: { list: async () => {
@@ -305,15 +295,113 @@ describe('useGlobalSessionsStore', () => {
       } as unknown as OpencodeClient);
 
       await useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/server']);
+      while (requests.length < 3) await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(sdkListCalls).toBe(0);
       expect(requests).toEqual([
         '/api/openchamber/session-index',
         '/api/openchamber/session-index/sync',
+        '/api/openchamber/session-index/changes',
       ]);
       expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/server')).toEqual([cached]);
     } finally {
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch();
       opencodeClient.getSdkClient = originalGetSdkClient;
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('keeps observing the session index and promotes a session after user activity', async () => {
+    const originalWindow = globalThis.window;
+    const originalFetch = globalThis.fetch;
+    const older = buildSession('https://share.example/older', {
+      id: 'ses_older',
+      directory: '/repo/activity',
+      time: { created: 1, updated: 10 },
+    });
+    const newer = buildSession('https://share.example/newer', {
+      id: 'ses_newer',
+      directory: '/repo/activity',
+      time: { created: 2, updated: 20 },
+    });
+    const sync = {
+      active: false,
+      completed: 1,
+      total: 1,
+      pendingDirectories: [],
+      completedDirectories: ['/repo/activity'],
+      failedDirectories: [],
+    };
+    const initialSnapshot = {
+      revision: 1,
+      sync,
+      directories: [{
+        directory: '/repo/activity',
+        cursor: null,
+        hasMore: false,
+        lastSyncedAt: 1000,
+        lastFullSyncedAt: 1000,
+        lastAccessedAt: 1000,
+        sessions: [newer, older],
+      }],
+    };
+    const activitySnapshot = {
+      ...initialSnapshot,
+      revision: 2,
+      directories: [{
+        ...initialSnapshot.directories[0],
+        sessions: [{
+          ...older,
+          metadata: {
+            openchamber: {
+              titleRefresh: { activityUpdatedAt: 30 },
+            },
+          },
+        }, newer],
+      }],
+    };
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
+      });
+      let requestCount = 0;
+      globalThis.fetch = (input, init) => {
+        requestCount += 1;
+        if (requestCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ available: true, ...initialSnapshot }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }));
+        }
+        if (requestCount === 2) {
+          return Promise.resolve(new Response(JSON.stringify(initialSnapshot), {
+            status: 202,
+            headers: { 'Content-Type': 'application/json' },
+          }));
+        }
+        if (requestCount === 3) {
+          return Promise.resolve(new Response(JSON.stringify(activitySnapshot), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }));
+        }
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+        });
+      };
+
+      await useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/activity']);
+      while (useGlobalSessionsStore.getState().activeSessions[0]?.id !== 'ses_older') {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/activity')?.map((session) => session.id))
+        .toEqual(['ses_older', 'ses_newer']);
+      expect(requestCount).toBeGreaterThanOrEqual(4);
+    } finally {
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch();
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
       globalThis.fetch = originalFetch;
     }
@@ -483,6 +571,7 @@ describe('useGlobalSessionsStore', () => {
       await startup;
       expect(finished).toBe(true);
     } finally {
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch();
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
       globalThis.fetch = originalFetch;
     }

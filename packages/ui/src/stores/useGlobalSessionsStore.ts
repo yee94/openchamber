@@ -11,8 +11,6 @@ import {
   pollSessionIndexChanges,
   persistSessionIndexDirectory,
   persistSessionIndexDirectories,
-  persistSessionIndexSession,
-  removeSessionIndexSession,
   startSessionIndexBackgroundSync,
   type SessionIndexSnapshot,
 } from '@/lib/session-index-api';
@@ -97,7 +95,6 @@ type GlobalSessionsState = {
   startSessionIndexStartup: (directories: Iterable<string>) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   upsertSession: (session: Session) => void;
-  touchSessionActivity: (sessionId: string, observedAt: number) => void;
   removeSessions: (ids: Iterable<string>) => void;
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void;
   /** Drop every session from the previous runtime instance and go back to the
@@ -786,7 +783,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             : state.startupSyncProgress,
         }));
         if (!current.sync.active) settleRootSync();
-        if (!current.sync.active && !current.sync.enriching) break;
         const next = await pollSessionIndexChanges(current.revision, controller.signal);
         if (!next) break;
         current = next;
@@ -1249,13 +1245,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 
   upsertSession: (session) => {
-    let persistedSession: Session | null = null;
     set((state) => {
       const existingSession = state.activeSessions.find((candidate) => candidate.id === session.id)
         ?? state.archivedSessions.find((candidate) => candidate.id === session.id)
         ?? null;
       const sessionWithMetadata = mergeSessionDirectoryMetadata(session, existingSession);
-      persistedSession = sessionWithMetadata;
       const isArchived = Boolean(sessionWithMetadata.time?.archived);
       const nextActiveSessions = isArchived
         ? state.activeSessions.filter((candidate) => candidate.id !== session.id)
@@ -1280,49 +1274,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         reviewTransferBySessionId: nextActiveSessions === state.activeSessions
           ? state.reviewTransferBySessionId
           : buildReviewTransferMap(nextActiveSessions),
-      };
-    });
-    if (persistedSession) {
-      void persistSessionIndexSession(persistedSession).catch((error) => {
-        console.warn(`[GlobalSessions] Failed to persist updated session ${persistedSession?.id}:`, error);
-      });
-    }
-  },
-
-  touchSessionActivity: (sessionId, observedAt) => {
-    if (!Number.isFinite(observedAt)) return;
-    set((state) => {
-      const index = state.activeSessions.findIndex((session) => session.id === sessionId);
-      if (index < 0) return state;
-      const current = state.activeSessions[index];
-      if (getSessionActivityUpdatedAt(current) >= observedAt) return state;
-
-      const record = current as Session & { metadata?: Record<string, unknown> };
-      const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
-      const openchamber = metadata.openchamber && typeof metadata.openchamber === 'object'
-        ? metadata.openchamber as Record<string, unknown>
-        : {};
-      const titleRefresh = openchamber.titleRefresh && typeof openchamber.titleRefresh === 'object'
-        ? openchamber.titleRefresh as Record<string, unknown>
-        : {};
-      const updated = {
-        ...record,
-        metadata: {
-          ...metadata,
-          openchamber: {
-            ...openchamber,
-            titleRefresh: {
-              ...titleRefresh,
-              activityUpdatedAt: observedAt,
-            },
-          },
-        },
-      } as Session;
-      const activeSessions = [...state.activeSessions];
-      activeSessions[index] = updated;
-      return {
-        activeSessions,
-        sessionsByDirectory: buildSessionsByDirectory(activeSessions),
       };
     });
   },
@@ -1351,11 +1302,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         reviewTransferBySessionId: buildReviewTransferMap(nextActiveSessions),
       };
     });
-    for (const id of idSet) {
-      void removeSessionIndexSession(id).catch((error) => {
-        console.warn(`[GlobalSessions] Failed to remove session ${id} from index:`, error);
-      });
-    }
   },
 
   archiveSessions: (ids, archivedAt = Date.now()) => {

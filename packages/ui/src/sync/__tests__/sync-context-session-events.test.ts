@@ -43,4 +43,20 @@ describe("applySessionEventToGlobalSessions", () => {
 
     expect(upsertedSessions).toEqual([])
   })
+
+  test("skips time-only session updates and renderer-side index writes", () => {
+    currentSessions = [buildSession("Same Title", { created: 1, updated: 10 })]
+
+    applySessionEventToGlobalSessions(buildEvent(buildSession("Same Title", { created: 1, updated: 20 })))
+
+    expect(upsertedSessions).toEqual([])
+  })
+
+  test("applies visible session updates", () => {
+    currentSessions = [buildSession("Old Title", { created: 1, updated: 10 })]
+
+    applySessionEventToGlobalSessions(buildEvent(buildSession("New Title", { created: 1, updated: 20 })))
+
+    expect(upsertedSessions).toHaveLength(1)
+  })
 })

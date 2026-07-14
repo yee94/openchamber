@@ -22,7 +22,23 @@ import { beginSessionStartupBarrier } from './lib/session-startup-barrier'
 declare global {
   interface Window {
     __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
+    __OPENCHAMBER_REFRESH_DEBUG_INSTALLED__?: boolean;
   }
+}
+
+if (typeof window !== 'undefined' && !window.__OPENCHAMBER_REFRESH_DEBUG_INSTALLED__) {
+  window.__OPENCHAMBER_REFRESH_DEBUG_INSTALLED__ = true;
+  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  console.warn('[refresh-debug] renderer-entry', {
+    navigationType: navigation?.type ?? 'unknown',
+    protocol: window.location.protocol,
+  });
+  window.addEventListener('beforeunload', () => {
+    console.warn('[refresh-debug] beforeunload', { visibilityState: document.visibilityState });
+  });
+  window.addEventListener('pagehide', (event) => {
+    console.warn('[refresh-debug] pagehide', { persisted: event.persisted });
+  });
 }
 
 const runtimeAPIs = (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTIME_APIS__) || (() => {

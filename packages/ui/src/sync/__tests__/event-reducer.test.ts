@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Session } from "@opencode-ai/sdk/v2"
-import type { Event, Part, PermissionRequest, QuestionRequest, SessionStatus } from "@opencode-ai/sdk/v2/client"
+import type { Event, Message, Part, PermissionRequest, QuestionRequest, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { applyDirectoryEvent } from "../event-reducer"
 import { INITIAL_STATE, type State } from "../types"
 
@@ -64,7 +64,39 @@ function buildSession(title: string, time: Session["time"]): Session {
   } as Session
 }
 
+function messageUpdatedEvent(info: Message): Event {
+  return {
+    type: "message.updated",
+    properties: { info },
+  } as Event
+}
+
 describe("applyDirectoryEvent", () => {
+  test("keeps a loaded session renderable while a new assistant waits for its first part", () => {
+    const user = { id: "msg_1_user", sessionID: "ses_1", role: "user", time: { created: 1 } } as Message
+    const previousAssistant = { id: "msg_2_assistant", sessionID: "ses_1", role: "assistant", time: { created: 2, completed: 3 } } as Message
+    const nextAssistant = { id: "msg_3_assistant", sessionID: "ses_1", role: "assistant", parentID: user.id, time: { created: 4 } } as Message
+    const previousParts = [{ id: "prt_1", messageID: previousAssistant.id, sessionID: "ses_1", type: "text", text: "done" } as Part]
+    const draft = state({
+      message: { ses_1: [user, previousAssistant] },
+      part: { [previousAssistant.id]: previousParts },
+    })
+
+    expect(applyDirectoryEvent(draft, messageUpdatedEvent(nextAssistant))).toBe(true)
+    expect(draft.message.ses_1).toEqual([user, previousAssistant, nextAssistant])
+    expect(draft.part[previousAssistant.id]).toBe(previousParts)
+    expect(draft.part[nextAssistant.id]).toEqual([])
+  })
+
+  test("preserves an incomplete cold snapshot for selection-time recovery", () => {
+    const previousAssistant = { id: "msg_assistant_1", sessionID: "ses_1", role: "assistant", time: { created: 1 } } as Message
+    const nextAssistant = { id: "msg_assistant_2", sessionID: "ses_1", role: "assistant", time: { created: 2 } } as Message
+    const draft = state({ message: { ses_1: [previousAssistant] } })
+
+    expect(applyDirectoryEvent(draft, messageUpdatedEvent(nextAssistant))).toBe(true)
+    expect(draft.part[nextAssistant.id]).toBe(undefined)
+  })
+
   test("returns typed materialization when delta arrives before parts", () => {
     const result = applyDirectoryEvent(state(), deltaEvent())
 

@@ -1030,13 +1030,14 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 
     const isSessionHydrating =
         Boolean(currentSessionId)
+        && !hasUserBoundary
         && (
             !hasRenderableSessionSnapshot
-            || (sessionPrefetchInfo?.status === 'loading' && !hasUserBoundary)
+            || sessionPrefetchInfo?.status === 'loading'
         );
     const hasSessionHistoryLoadError =
         sessionPrefetchInfo?.status === 'error'
-        && (!hasUserBoundary || !hasRenderableSessionSnapshot);
+        && !hasUserBoundary;
 
     React.useEffect(() => {
         if (!currentSessionId) return;

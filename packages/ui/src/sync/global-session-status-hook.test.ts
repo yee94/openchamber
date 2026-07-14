@@ -14,9 +14,4 @@ describe("resolveGlobalSessionStatus", () => {
     expect(resolveGlobalSessionStatus(liveStatus, "busy")).toBe(liveStatus)
   })
 
-  test("uses a newer global busy event over an older directory idle status", () => {
-    const liveStatus = { type: "idle" } as SessionStatus
-
-    expect(resolveGlobalSessionStatus(liveStatus, "busy", 100, 200)).toEqual({ type: "busy" })
-  })
 })

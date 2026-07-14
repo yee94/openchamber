@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { Event } from '@opencode-ai/sdk/v2/client';
 import { normalizeProjectPath } from '@/lib/projectResolution';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 // Live busy/retry status for sessions in directories WITHOUT a synced child
 // store. The global event stream (`/api/global/event/ws`) carries status
@@ -16,7 +15,7 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 type ActiveStatusType = 'busy' | 'retry';
 
-type GlobalSessionStatusEntry = { status: ActiveStatusType; directory: string; observedAt: number };
+type GlobalSessionStatusEntry = { status: ActiveStatusType; directory: string };
 
 type GlobalSessionStatusState = {
   statusById: Map<string, GlobalSessionStatusEntry>;
@@ -39,25 +38,20 @@ const setStatus = (
   sessionId: string,
   directory: string,
   status: ActiveStatusType | 'idle',
-  observedAt: number,
-): boolean => {
-  let changed = false;
+): void => {
   useGlobalSessionStatusStore.setState((state) => {
     const current = state.statusById.get(sessionId);
     if (status === 'idle') {
       if (!current) return state;
-      changed = true;
       const next = new Map(state.statusById);
       next.delete(sessionId);
       return { statusById: next };
     }
     if (current && current.status === status && current.directory === directory) return state;
-    changed = true;
     const next = new Map(state.statusById);
-    next.set(sessionId, { status, directory, observedAt });
+    next.set(sessionId, { status, directory });
     return { statusById: next };
   });
-  return changed;
 };
 
 // Event-driven path: called by the sync dispatcher for status-bearing events
@@ -66,24 +60,20 @@ const setStatus = (
 export const applyGlobalSessionStatusEvent = (
   directory: string,
   payload: Event,
-  observedAt = Date.now(),
 ): void => {
   switch (payload.type) {
     case 'session.status': {
       const props = payload.properties as { sessionID?: string; status?: { type?: string } } | undefined;
       if (typeof props?.sessionID !== 'string' || !props.sessionID) return;
       const status = normalizeStatusType(props.status?.type);
-      const changed = setStatus(props.sessionID, normalizeDirectory(directory), status, observedAt);
-      if (changed && status !== 'idle') {
-        useGlobalSessionsStore.getState().touchSessionActivity(props.sessionID, observedAt);
-      }
+      setStatus(props.sessionID, normalizeDirectory(directory), status);
       return;
     }
     case 'session.idle':
     case 'session.error': {
       const props = payload.properties as { sessionID?: string } | undefined;
       if (typeof props?.sessionID === 'string' && props.sessionID) {
-        setStatus(props.sessionID, normalizeDirectory(directory), 'idle', observedAt);
+        setStatus(props.sessionID, normalizeDirectory(directory), 'idle');
       }
       return;
     }
@@ -103,7 +93,6 @@ export const applyGlobalSessionStatusSnapshot = (
   knownSessionIds?: Iterable<string>,
 ): void => {
   const directory = normalizeDirectory(rawDirectory);
-  const observedAt = Date.now();
   const known = new Set(knownSessionIds ?? []);
   useGlobalSessionStatusStore.setState((state) => {
     let changed = false;
@@ -127,7 +116,7 @@ export const applyGlobalSessionStatusSnapshot = (
         continue;
       }
       if (!current || current.status !== type || current.directory !== directory) {
-        next.set(sessionId, { status: type, directory, observedAt });
+        next.set(sessionId, { status: type, directory });
         changed = true;
       }
     }

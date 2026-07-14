@@ -314,6 +314,11 @@ export const createSessionIndexSyncRuntime = ({
     }
   };
 
+  const publishChange = () => {
+    if (stopped) return;
+    notify();
+  };
+
   const waitForChange = (since, { signal, timeoutMs = LONG_POLL_MAX_MS } = {}) => {
     if (revision > since || stopped || signal?.aborted) return Promise.resolve(snapshot());
     return new Promise((resolve) => {
@@ -343,5 +348,5 @@ export const createSessionIndexSyncRuntime = ({
     notify();
   };
 
-  return { enqueue, noteInteractiveRequest, snapshot, waitForChange, stop };
+  return { enqueue, noteInteractiveRequest, publishChange, snapshot, waitForChange, stop };
 };

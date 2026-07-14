@@ -17,7 +17,7 @@ import {
   areSessionListsEquivalent,
   areStatusMapsEquivalent,
   findLiveSession,
-  findLiveSessionStatusSnapshot,
+  findLiveSessionStatus,
 } from "./live-aggregate"
 import { bootstrapGlobal, bootstrapDirectory } from "./bootstrap"
 import { retry } from "./retry"
@@ -152,14 +152,9 @@ function useLiveSyncSelector<T>(
 
 /** Read status for a session across all directories */
 export function useGlobalSessionStatus(sessionId: string): SessionStatus | undefined {
-  const liveSnapshot = useLiveSyncSelector(
-    useCallback((states) => findLiveSessionStatusSnapshot(states, sessionId), [sessionId]),
-    useCallback((
-      left: { status: SessionStatus; observedAt: number } | undefined,
-      right: { status: SessionStatus; observedAt: number } | undefined,
-    ) => (
-      left?.status === right?.status && left?.observedAt === right?.observedAt
-    ), []),
+  const liveStatus = useLiveSyncSelector(
+    useCallback((states) => findLiveSessionStatus(states, sessionId), [sessionId]),
+    Object.is,
     useCallback(
       (childStores: ChildStoreManager, notify: () => void) => childStores.subscribeAllSelected(
         (state: State) => state.session_status?.[sessionId],
@@ -168,28 +163,16 @@ export function useGlobalSessionStatus(sessionId: string): SessionStatus | undef
       [sessionId],
     ),
   )
-  const fallbackEntry = useGlobalSessionStatusStore(
-    useCallback((state) => state.statusById.get(sessionId), [sessionId]),
+  const fallbackStatus = useGlobalSessionStatusStore(
+    useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId]),
   )
-  return resolveGlobalSessionStatus(
-    liveSnapshot?.status,
-    fallbackEntry?.status,
-    liveSnapshot?.observedAt,
-    fallbackEntry?.observedAt,
-  )
+  return resolveGlobalSessionStatus(liveStatus, fallbackStatus)
 }
 
 export function resolveGlobalSessionStatus(
   liveStatus: SessionStatus | undefined,
   fallbackStatus: "busy" | "retry" | undefined,
-  liveObservedAt = 0,
-  fallbackObservedAt = 0,
 ): SessionStatus | undefined {
-  if (fallbackStatus && fallbackObservedAt > liveObservedAt) {
-    return fallbackStatus === "busy"
-      ? { type: "busy" }
-      : { type: "retry", attempt: 0, message: "", next: 0 }
-  }
   if (liveStatus) {
     return liveStatus
   }
@@ -1663,6 +1646,7 @@ function handleEvent(
       break
     case "message.updated":
       draft.message = { ...current.message }
+      draft.part = { ...current.part }
       break
     case "message.removed":
       draft.message = { ...current.message }
@@ -1706,19 +1690,6 @@ function handleEvent(
     const messageID = getMessageIdFromPayload(payload) ?? undefined
     syncDebug.dispatch.eventApplied(payload.type, sessionID, messageID)
 
-    // Snapshot materialization on message.updated: if the message was inserted or
-    // replaced but draft.part[messageID] is empty, the parts were lost or
-    // never arrived. Recover the session so the UI doesn't render a blank bubble.
-    if (sessionID && messageID && payload.type === "message.updated") {
-      const after = store.getState()
-      const info = (payload.properties as { info: Message }).info
-      if (info.role === "assistant" && (!after.part[messageID] || after.part[messageID].length === 0)) {
-        enqueueSessionMaterialization(resolvedDirectory, sessionID, childStores, {
-          reason: "empty-assistant-message",
-          messageID,
-        })
-      }
-    }
   } else {
     const sessionID = getSessionIdFromPayload(payload) ?? undefined
     const messageID = getMessageIdFromPayload(payload) ?? undefined
@@ -1831,6 +1802,8 @@ export function SyncProvider(props: {
     if (!store) return
     const resyncing = resyncingDirectoriesRef.current
     if (resyncing.has(directory)) return
+
+    console.warn("[refresh-debug] directory-resync", { directory, reason })
 
     lastFullResyncAtByDirectoryRef.current.set(directory, Date.now())
     resyncing.add(directory)
@@ -1952,6 +1925,10 @@ export function SyncProvider(props: {
         handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {
+        console.warn("[refresh-debug] stream-reconnect", {
+          connectedBefore: pipelineHasConnectedRef.current,
+          disconnectedBeforeFirstConnect: pipelineDisconnectedBeforeFirstConnectRef.current,
+        })
         useConfigStore.setState({
           isConnected: true,
           hasEverConnected: true,
@@ -1970,6 +1947,7 @@ export function SyncProvider(props: {
         }
       },
       onDisconnect: (reason) => {
+        console.warn("[refresh-debug] stream-disconnect", { reason })
         if (!pipelineHasConnectedRef.current) {
           pipelineDisconnectedBeforeFirstConnectRef.current = true
         }
@@ -1981,6 +1959,7 @@ export function SyncProvider(props: {
         })
       },
       onTransportSwitch: () => {
+        console.warn("[refresh-debug] stream-transport-switch")
         // Transport changes are gap-prone in real networks. Treat them like a
         // reconnect and refresh active session snapshots from HTTP.
         useConfigStore.setState({

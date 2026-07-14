@@ -107,10 +107,13 @@ This keeps cold/global lists responsive without requiring a refetch after every 
 Live activity/status indicators must not depend on this cache. They must derive from aggregated child-store state.
 
 Cross-directory status aggregation resolves duplicate session entries by the
-latest status observation time. A transition into `busy` or `retry` also
-advances the session's local activity ordering time, so externally started
-OpenCode work becomes visible in the bounded sidebar list without treating
-token/message delta events as new user activity.
+latest live session source. Session-index ordering timestamps and persisted
+status transitions are owned by the OpenChamber server's global event
+subscriber. Renderer session events update visible metadata only; time-only
+session updates, busy/retry transitions, and token/message delta events do not
+replace the global session list or write the SQLite index. The session-index
+long poll remains active after startup so a user message's ordering revision
+promotes that session inside its project immediately.
 
 Sidebar directory refreshes are intentionally bounded snapshots, not full catalogs:
 
@@ -302,7 +305,7 @@ Keep this in sync with `handleDirectoryEvent` in `sync-context.tsx`:
 | `session.diff` | `session_diff` |
 | `session.status` | `session_status` |
 | `todo.updated` | `todo` |
-| `message.updated` | `message` |
+| `message.updated` | `message`, `part` when a loaded session observes a new assistant before its first part |
 | `message.removed` | `message`, `part` |
 | `message.part.updated/removed/delta` | `part` |
 | `vcs.branch.updated` | (none — mutates `draft.vcs` directly) |
