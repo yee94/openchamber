@@ -11,7 +11,7 @@ import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useDirectoryStore, useSessionMessageRecords, useEnsureSessionMessages } from '@/sync/sync-context';
+import { useSessionMessageRecords, useEnsureSessionMessages } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -26,7 +26,6 @@ import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { ensureOutsideFileGrantForDesktop } from '@/lib/outsideFileGrants';
 import { getDirectoryForFilePath, isFilePathWithinDirectory, toAbsoluteFilePath } from '@/lib/path-utils';
-import { resolveFallbackTaskSessionId } from './resolveFallbackTaskSessionId';
 
 import { TOOL_ROW_CHIP_CLASS, TOOL_ROW_INTERACTIVE_CHROME_CLASS } from './toolRowChrome';
 import {
@@ -202,7 +201,6 @@ const normalizeToolName = (toolName: string | undefined | null): string => {
 };
 
 const MAX_DURATION_MS = 5 * 60 * 1000; // 5 minutes cap
-const TASK_TOOL_FALLBACK_RETRY_MS = 3000;
 const GIT_REFRESH_MUTATING_TOOLS = new Set([
     'bash',
     'edit',
@@ -1935,7 +1933,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     const showSubagentTaskDetails = useUIStore((s) => s.showSubagentTaskDetails);
     const openContextPanelTab = useUIStore((s) => s.openContextPanelTab);
     const currentDirectory = useEffectiveDirectory() ?? '';
-    const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
 
     const normalizedPartTool = normalizeToolName(part.tool);
@@ -2073,16 +2070,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         return Math.min(...candidates);
     }, [localStartAt, pinnedTime.start, time?.start]);
 
-    const taskSessionResolutionStart = React.useMemo(() => {
-        if (typeof pinnedTime.start === 'number') {
-            return pinnedTime.start;
-        }
-        if (typeof time?.start === 'number') {
-            return time.start;
-        }
-        return localStartAt;
-    }, [localStartAt, pinnedTime.start, time?.start]);
-
     const taskOutputString = React.useMemo(() => {
         return typeof stateWithData.output === 'string' ? stateWithData.output : undefined;
     }, [stateWithData.output]);
@@ -2090,10 +2077,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     const parsedTaskMetadata = React.useMemo(() => {
         return parseTaskMetadataBlock(taskOutputString);
     }, [taskOutputString]);
-
-    // Track whether fallback session resolution has failed at least once.
-    // When true, resolveFallbackTaskSessionId widens its time window (3s → 8s).
-    const [taskFallbackRetried, setTaskFallbackRetried] = React.useState(false);
 
     const metadataTaskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
         if (!isTaskTool) {
@@ -2136,25 +2119,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         return readTaskSessionIdFromOutput(taskOutputString);
     }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, partMetadata, taskOutputString]);
 
-    const fallbackTaskSessionId = useDirectorySync(
-        React.useCallback((storeState) => {
-            if (explicitTaskSessionId) {
-                return undefined;
-            }
-
-            return resolveFallbackTaskSessionId({
-                isTaskTool,
-                parentSessionId: currentSessionId ?? undefined,
-                taskStartTime: taskSessionResolutionStart,
-                sessions: storeState.session,
-                sessionStatusMap: storeState.session_status,
-                hasRetried: taskFallbackRetried,
-            });
-        }, [explicitTaskSessionId, isTaskTool, currentSessionId, taskSessionResolutionStart, taskFallbackRetried]),
-        currentDirectory,
-    );
-
-    const taskSessionId = explicitTaskSessionId ?? fallbackTaskSessionId;
+    const taskSessionId = explicitTaskSessionId;
     // 关闭详情时不必为竖线摘要拉取子会话消息
     const childSessionLookupId = (!showSubagentTaskDetails || hasFinalMetadataTaskSummary) ? '' : (taskSessionId ?? '');
 
@@ -2170,43 +2135,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         }
         return buildTaskSummaryEntriesFromSession(childSessionMessages);
     }, [childSessionMessages, isTaskTool, taskSessionId]);
-
-    React.useEffect(() => {
-        setTaskFallbackRetried(false);
-    }, [taskSessionId]);
-
-    // Widen fallback resolution window only after a real retry boundary.
-    React.useEffect(() => {
-        if (!isTaskTool || taskFallbackRetried || explicitTaskSessionId != null || taskSessionId != null || isFinalized) {
-            return;
-        }
-
-        const sinceStart =
-            typeof taskSessionResolutionStart === 'number'
-                ? Date.now() - taskSessionResolutionStart
-                : 0;
-        const delay = Math.max(0, TASK_TOOL_FALLBACK_RETRY_MS - sinceStart);
-
-        if (typeof window === 'undefined') {
-            setTaskFallbackRetried(true);
-            return;
-        }
-
-        const timer = window.setTimeout(() => {
-            setTaskFallbackRetried(true);
-        }, delay);
-
-        return () => {
-            window.clearTimeout(timer);
-        };
-    }, [
-        explicitTaskSessionId,
-        isFinalized,
-        isTaskTool,
-        taskFallbackRetried,
-        taskSessionId,
-        taskSessionResolutionStart,
-    ]);
 
     React.useEffect(() => {
         if (typeof time?.end === 'number' || typeof pinnedTime.end === 'number') {
@@ -2305,34 +2233,11 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         return null;
     }, [descriptionPath, normalizedPartTool, stateWithData, input]);
     const runtime = React.useContext(RuntimeAPIContext);
-    const directoryStore = useDirectoryStore(currentDirectory);
     const pendingOpenTaskSessionRef = React.useRef(false);
-
-    /** 解析当前可用的子会话 id（含点击时加宽窗口的 fallback） */
-    const resolveTaskSessionIdNow = React.useCallback((widenFallback: boolean): string | undefined => {
-        if (taskSessionId) {
-            return taskSessionId;
-        }
-        const storeState = directoryStore.getState();
-        return resolveFallbackTaskSessionId({
-            isTaskTool: true,
-            parentSessionId: currentSessionId ?? undefined,
-            taskStartTime: taskSessionResolutionStart,
-            sessions: storeState.session,
-            sessionStatusMap: storeState.session_status,
-            hasRetried: widenFallback || taskFallbackRetried,
-        });
-    }, [
-        currentSessionId,
-        directoryStore,
-        taskFallbackRetried,
-        taskSessionId,
-        taskSessionResolutionStart,
-    ]);
 
     /** 打开子 Agent 会话（context panel / 移动端切会话）；成功返回 true */
     const openTaskSession = React.useCallback((sessionIdOverride?: string): boolean => {
-        const sessionId = sessionIdOverride ?? resolveTaskSessionIdNow(true);
+        const sessionId = sessionIdOverride ?? taskSessionId;
         if (!sessionId || !currentDirectory) {
             return false;
         }
@@ -2352,9 +2257,9 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         currentDirectory,
         isMobile,
         openContextPanelTab,
-        resolveTaskSessionIdNow,
         runtime?.runtime.isVSCode,
         setCurrentSession,
+        taskSessionId,
         taskTitle,
     ]);
 
@@ -2373,9 +2278,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             if (!openTaskSession()) {
                 // 子会话 id 还在路上：记下意图，id 到达后自动打开
                 pendingOpenTaskSessionRef.current = true;
-                if (!taskFallbackRetried) {
-                    setTaskFallbackRetried(true);
-                }
             }
             return;
         }
@@ -2522,9 +2424,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                 }
                                 if (!openTaskSession()) {
                                     pendingOpenTaskSessionRef.current = true;
-                                    if (!taskFallbackRetried) {
-                                        setTaskFallbackRetried(true);
-                                    }
                                 }
                                 return;
                             }
