@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.11] - 2026-07-14
+
+- **Release:** rebuild the current desktop, mobile, and VS Code artifacts from the `1.16.10` codebase.
+
 ## [1.16.10] - 2026-07-14
 
 - **Session index:** persist live activity timestamps and session status, ingest realtime session events, and preserve ordering across refreshes and restarts.

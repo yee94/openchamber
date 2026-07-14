@@ -47,7 +47,7 @@ import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 // useMessageStore removed — messages now come from sync system
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { getElectronPathForFile, isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -107,6 +107,11 @@ import {
     resolveAttachmentCitationDeletion,
 } from './attachmentCitations';
 import { getFileMentionAutocompleteQuery, type FileMentionAutocompleteInputSource } from './fileMentionAutocompleteState';
+import {
+    collectFileDropReferences,
+    isAbsoluteFileDropPath,
+    normalizeFileDropPath,
+} from './fileDropReferences';
 import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
 import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
@@ -122,15 +127,6 @@ const PASTE_LINK_URL_PATTERN = /^(https?:\/\/|mailto:)\S+$/i;
 const INLINE_SKILL_TOKEN_PATTERN = /(^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 500;
 const COMPACT_CHAT_PLACEHOLDER_MAX_WIDTH = 560;
-const VS_CODE_DROP_DATA_TYPES = [
-    'CodeFiles',
-    'codefiles',
-    'application/vnd.code.tree',
-    'application/vnd.code.tree.explorer',
-    'text/uri-list',
-    'text/plain',
-];
-
 const renameFileForAttachmentCitation = (file: File, filename: string): File => {
     if (file.name === filename) {
         return file;
@@ -259,91 +255,19 @@ const toServerFileUrl = (filepath: string): string => {
     return `file://${encodeFilePath(normalized)}`;
 };
 
-const isLikelyAbsolutePath = (value: string): boolean => (
-    value.startsWith('/')
-    || value.startsWith('\\\\')
-    || /^[A-Za-z]:[\\/]/.test(value)
-);
-
-const toLikelyFileDropReference = (value: string): string | null => {
-    const trimmed = value.trim().replace(/^['"]+|['"]+$/g, '');
-    if (!trimmed) {
-        return null;
+const collectFilePathsFromTransfer = (dataTransfer: DataTransfer | null | undefined): string[] => {
+    if (!dataTransfer) {
+        return [];
     }
 
-    if (/[\r\n]/.test(trimmed)) {
-        return null;
-    }
+    const paths = [
+        ...collectFileDropReferences(dataTransfer).map(normalizeFileDropPath),
+        ...Array.from(dataTransfer.files || [])
+            .map((file) => getElectronPathForFile(file))
+            .filter((path): path is string => Boolean(path)),
+    ];
 
-    if (trimmed.toLowerCase().startsWith(FILE_URI_PREFIX)) {
-        return trimmed;
-    }
-
-    if (isLikelyAbsolutePath(trimmed)) {
-        return trimmed;
-    }
-
-    return null;
-};
-
-const collectStringLeaves = (input: unknown, output: Set<string>, depth = 0): void => {
-    if (depth > 6 || input == null) {
-        return;
-    }
-
-    if (typeof input === 'string') {
-        output.add(input);
-        return;
-    }
-
-    if (Array.isArray(input)) {
-        for (const item of input) {
-            collectStringLeaves(item, output, depth + 1);
-        }
-        return;
-    }
-
-    if (typeof input !== 'object') {
-        return;
-    }
-
-    for (const value of Object.values(input)) {
-        collectStringLeaves(value, output, depth + 1);
-    }
-};
-
-const parseDroppedFileReferences = (rawPayload: string): string[] => {
-    const extracted = new Set<string>();
-
-    const addCandidatesFromText = (value: string): void => {
-        const direct = toLikelyFileDropReference(value);
-        if (direct) {
-            extracted.add(direct);
-            return;
-        }
-
-        for (const line of value.split(/\r?\n/)) {
-            const candidate = toLikelyFileDropReference(line);
-            if (candidate) {
-                extracted.add(candidate);
-            }
-        }
-    };
-
-    addCandidatesFromText(rawPayload);
-
-    try {
-        const parsed = JSON.parse(rawPayload) as unknown;
-        const leaves = new Set<string>();
-        collectStringLeaves(parsed, leaves);
-        for (const leaf of leaves) {
-            addCandidatesFromText(leaf);
-        }
-    } catch {
-        // Ignore non-JSON payloads.
-    }
-
-    return Array.from(extracted);
+    return Array.from(new Set(paths.filter(isAbsoluteFileDropPath)));
 };
 
 const normalizePath = (value?: string | null): string | null => {
@@ -1017,7 +941,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const saveSessionAgentSelection = useSelectionStore((s) => s.saveSessionAgentSelection);
     const consumePendingInputText = useInputStore((s) => s.consumePendingInputText);
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
-    const setPendingInputText = useInputStore((s) => s.setPendingInputText);
     const pendingInputText = useInputStore((s) => s.pendingInputText);
     const consumePendingSyntheticParts = useInputStore((s) => s.consumePendingSyntheticParts);
     const acknowledgeSessionAbort = useSessionUIStore((s) => s.acknowledgeSessionAbort);
@@ -3250,7 +3173,36 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         };
     }, [clearDropTextSuppression, clearFileMentionPasteSuppression]);
 
+    const addDroppedPathsAsMentions = React.useCallback((paths: string[]) => {
+        const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+        if (uniquePaths.length === 0) {
+            return;
+        }
+
+        for (const path of uniquePaths) {
+            confirmedMentionsRef.current.add(path);
+        }
+
+        const mentions = uniquePaths.map((path) => `@${path}`).join(' ');
+        const textarea = textareaRef.current;
+        const selectionStart = textarea?.selectionStart ?? message.length;
+        const selectionEnd = textarea?.selectionEnd ?? message.length;
+        insertTextAtSelection(withInlineInsertionBoundaries(
+            mentions,
+            message.slice(0, selectionStart),
+            message.slice(selectionEnd),
+        ), 'paste');
+        toast.success(t('chat.chatInput.toast.addedFileMentions', { count: uniquePaths.length }));
+    }, [insertTextAtSelection, message, t]);
+
     const handlePaste = React.useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        const pastedFilePaths = collectFilePathsFromTransfer(e.clipboardData);
+        if (pastedFilePaths.length > 0 && (currentSessionId || newSessionDraftOpen)) {
+            e.preventDefault();
+            addDroppedPathsAsMentions(pastedFilePaths);
+            return;
+        }
+
         // Pasting a URL over a selection wraps it as a markdown link:
         // [selected text](pasted url).
         if (inputMode === 'normal' && (currentSessionId || newSessionDraftOpen)) {
@@ -3354,7 +3306,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 pendingPastedAttachmentFilenamesRef.current.delete(filename);
             }
         }
-    }, [addAttachedFile, attachedFiles, adjustTextareaHeight, currentSessionId, inputMode, markFileMentionPasteSuppression, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState]);
+    }, [addAttachedFile, addDroppedPathsAsMentions, attachedFiles, adjustTextareaHeight, currentSessionId, inputMode, markFileMentionPasteSuppression, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState]);
 
     const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
 
@@ -3576,16 +3528,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             if (lowerTypes.some((type) => type.includes('vnd.code.tree'))) return true;
         }
 
-        for (const dataType of VS_CODE_DROP_DATA_TYPES) {
-            let payload = '';
-            try {
-                payload = dataTransfer.getData(dataType);
-            } catch {
-                continue;
-            }
-            if (payload && parseDroppedFileReferences(payload).length > 0) {
-                return true;
-            }
+        if (collectFileDropReferences(dataTransfer).length > 0) {
+            return true;
         }
 
         return false;
@@ -3607,52 +3551,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return fromItems;
     }, []);
 
-    const collectDroppedFileUris = React.useCallback((dataTransfer: DataTransfer | null | undefined): string[] => {
-        if (!dataTransfer || typeof dataTransfer.getData !== 'function') return [];
-
-        const extracted = new Set<string>();
-
-        for (const dataType of VS_CODE_DROP_DATA_TYPES) {
-            let rawPayload = '';
-            try {
-                rawPayload = dataTransfer.getData(dataType);
-            } catch {
-                continue;
-            }
-            if (!rawPayload) {
-                continue;
-            }
-
-            for (const candidate of parseDroppedFileReferences(rawPayload)) {
-                extracted.add(candidate);
-            }
-        }
-
-        return Array.from(extracted);
-    }, []);
-
-    const normalizeDroppedPath = React.useCallback((rawPath: string): string => {
-        const input = rawPath.trim();
-        if (!input.toLowerCase().startsWith('file://')) {
-            return input;
-        }
-
-        try {
-            let pathname = decodeURIComponent(new URL(input).pathname || '');
-            if (/^\/[A-Za-z]:\//.test(pathname)) {
-                pathname = pathname.slice(1);
-            }
-            return pathname || input;
-        } catch {
-            const stripped = input.replace(/^file:\/\//i, '');
-            try {
-                return decodeURIComponent(stripped);
-            } catch {
-                return stripped;
-            }
-        }
-    }, []);
-
     const toProjectRelativeMentionPath = React.useCallback((absolutePath: string): string => {
         const normalizedAbsolutePath = absolutePath.replace(/\\/g, '/').trim();
         const normalizedRoot = (chatSearchDirectory || '').replace(/\\/g, '/').replace(/\/+$/, '');
@@ -3668,29 +3566,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
         return normalizedAbsolutePath;
     }, [chatSearchDirectory]);
-
-    const addVSCodeDroppedUrisAsMentions = React.useCallback((uris: string[]) => {
-        if (uris.length === 0) return;
-
-        const paths = uris
-            .map((entry) => normalizeDroppedPath(entry))
-            .map((entry) => toProjectRelativeMentionPath(entry))
-            .map((entry) => entry.trim().replace(/^\.\//, ''))
-            .filter((entry) => entry.length > 0);
-
-        for (const p of paths) {
-            confirmedMentionsRef.current.add(p);
-        }
-
-        const mentions = Array.from(new Set(paths.map((entry) => `@${entry}`)));
-
-        if (mentions.length === 0) {
-            return;
-        }
-
-        setPendingInputText(mentions.join(' '), 'append-inline');
-        toast.success(t('chat.chatInput.toast.addedFileMentions', { count: mentions.length }));
-    }, [normalizeDroppedPath, setPendingInputText, t, toProjectRelativeMentionPath]);
 
     const handleDragEnter = (e: React.DragEvent) => {
         if (!hasDraggedFiles(e.dataTransfer)) {
@@ -3783,21 +3658,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return;
         }
 
-        const files = collectDroppedFiles(e.dataTransfer);
-
-        if (files.length === 0 && isVSCodeRuntime()) {
-            const droppedUris = collectDroppedFileUris(e.dataTransfer);
-            if (droppedUris.length > 0) {
-                pendingDroppedAbsolutePathsRef.current = droppedUris
-                    .map((entry) => normalizeDroppedPath(entry))
-                    .map((entry) => entry.trim())
-                    .filter((entry) => entry.length > 0);
-                addVSCodeDroppedUrisAsMentions(droppedUris);
-            } else {
+        const droppedFilePaths = collectFilePathsFromTransfer(e.dataTransfer);
+        if (droppedFilePaths.length > 0) {
+            if (isVSCodeRuntime()) {
+                pendingDroppedAbsolutePathsRef.current = droppedFilePaths;
+            }
+            addDroppedPathsAsMentions(droppedFilePaths);
+            if (!isVSCodeRuntime()) {
                 clearDropTextSuppression();
             }
             return;
         }
+
+        const files = collectDroppedFiles(e.dataTransfer);
 
         if (files.length > 0) {
             const citationText = buildAttachmentCitationText(files.map((file) => file.name));

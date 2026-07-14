@@ -270,6 +270,25 @@ describe("fetchMessagesForSession startup race", () => {
   })
 })
 
+describe("resolveForkMessageId", () => {
+  const userMessage = { id: "user-latest", role: "user", sessionID: "session-a", time: { created: 2 } } as Message
+  const assistantMessage = { id: "assistant-loading", role: "assistant", sessionID: "session-a", time: { created: 3 } } as Message
+
+  test("uses the latest user message while a response is in progress", async () => {
+    const { resolveForkMessageId } = await import("./session-actions")
+
+    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "busy" })).toBe("user-latest")
+    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "retry", attempt: 1, message: "retrying", next: 0 })).toBe("user-latest")
+  })
+
+  test("preserves explicit and completed-session fork points", async () => {
+    const { resolveForkMessageId } = await import("./session-actions")
+
+    expect(resolveForkMessageId("selected-message", [userMessage, assistantMessage], { type: "busy" })).toBe("selected-message")
+    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "idle" })).toBe(undefined)
+  })
+})
+
 describe("shareSession live state", () => {
   beforeEach(() => {
     replyCalls.length = 0

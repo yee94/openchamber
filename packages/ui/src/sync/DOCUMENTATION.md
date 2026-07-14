@@ -243,6 +243,8 @@ must not materialize that complete copied history into the directory store.
 - Keep a short message-ID cutoff after the response so transport-buffered copy
   events cannot refill the complete history. Newer user/assistant events pass
   through normally.
+- A current-session fork during `busy` or `retry` targets the latest user
+  message. The active assistant message remains outside the forked history.
 
 ### New conversation orchestration
 
