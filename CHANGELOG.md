@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.3] - 2026-07-14
+
+- **Global configuration:** saving OpenCode, oh-my-opencode-slim, and oh-my-openagent raw configuration now parses the JSON request body correctly.
+
 ## [1.16.2] - 2026-07-14
 
 - **Session recovery:** clients now reconcile stale running state after disconnects or OpenCode restarts without letting incomplete historical messages keep the composer loading.
