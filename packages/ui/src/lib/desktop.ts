@@ -222,6 +222,7 @@ type DesktopBridgeGlobal = {
   invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
   openDialog?: (options: Record<string, unknown>) => Promise<unknown>;
   grantFileAccess?: (path: string) => Promise<unknown>;
+  getPathForFile?: (file: File) => string | null;
   openExternal?: (url: string) => Promise<unknown>;
   listen?: (
     event: string,
@@ -246,6 +247,12 @@ const getDesktopBridge = (): DesktopBridgeGlobal | null => {
 };
 
 export const isElectronShell = (): boolean => getElectronRuntime()?.runtime === 'electron';
+
+export const getElectronPathForFile = (file: File): string | null => {
+  if (!isElectronShell()) return null;
+  const path = getDesktopBridge()?.getPathForFile?.(file);
+  return typeof path === 'string' && path.trim() ? path : null;
+};
 
 export const getElectronPlatform = (): string | null => {
   if (typeof window === 'undefined') return null;

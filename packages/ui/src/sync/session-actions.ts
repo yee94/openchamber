@@ -3,7 +3,7 @@
  * Replaces the action methods from the old useSessionStore.
  */
 
-import type { OpencodeClient, Session, Message, Part } from "@opencode-ai/sdk/v2/client"
+import type { OpencodeClient, Session, Message, Part, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
@@ -70,6 +70,18 @@ function getForkedSessionTitle(title: string): string {
   const match = title.match(/^(.+) \(fork #(\d+)\)$/)
   if (!match) return `${title} (fork #1)`
   return `${match[1]} (fork #${Number.parseInt(match[2], 10) + 1})`
+}
+
+export function resolveForkMessageId(
+  messageId: string | undefined,
+  messages: Message[],
+  status: SessionStatus | undefined,
+): string | undefined {
+  if (messageId || !status || status.type === "idle") return messageId
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") return messages[index].id
+  }
+  return undefined
 }
 
 async function markForkSessionAsLatest(session: Session, directory: string): Promise<Session> {
@@ -1346,7 +1358,7 @@ export async function unrevertSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Fork from a message or the latest conversation state.
+ * Fork from a message or the latest stable conversation turn.
  *
  * 1. Extract text from the message for input restoration
  * 2. Call the runtime fork endpoint
@@ -1357,9 +1369,19 @@ export async function forkSession(sessionId: string, operationId: number, messag
   const forkRuntimeKey = getRuntimeKey()
   const { store, directory } = dirStoreForSession(sessionId)
   if (!directory) throw new Error("Fork session directory is unavailable")
-  const state = store.getState()
+  let state = store.getState()
   const sourceSession = state.session.find((session) => session.id === sessionId)
   if (!sourceSession) throw new Error("Fork source session is unavailable")
+
+  let forkMessageId = resolveForkMessageId(messageId, state.message[sessionId] ?? [], state.session_status[sessionId])
+  if (!messageId && state.session_status[sessionId]?.type !== "idle" && !forkMessageId) {
+    await refetchSessionMessages(sessionId)
+    state = store.getState()
+    forkMessageId = resolveForkMessageId(undefined, state.message[sessionId] ?? [], state.session_status[sessionId])
+  }
+  if (!messageId && state.session_status[sessionId]?.type !== "idle" && !forkMessageId) {
+    throw new Error("Fork source user message is unavailable")
+  }
 
   // Extract message text and file attachments for input restoration.
   // Only non-synthetic text parts — the server adds file content as synthetic
@@ -1389,7 +1411,7 @@ export async function forkSession(sessionId: string, operationId: number, messag
 
   let forkedSession: Session
   try {
-    forkedSession = await opencodeClient.forkSession(sessionId, messageId, directory)
+    forkedSession = await opencodeClient.forkSession(sessionId, forkMessageId, directory)
     if (getRuntimeKey() !== forkRuntimeKey) {
       if (activeForkCopy?.operationId === operationId) activeForkCopy = null
       return false
