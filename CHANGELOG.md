@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.2] - 2026-07-14
+
+- **Session recovery:** clients now reconcile stale running state after disconnects or OpenCode restarts without letting incomplete historical messages keep the composer loading.
+- **Subagent recovery:** task cards stop their loading state when authoritative parent or child session status confirms interruption, while preserving the original tool history for diagnostics.
+- **Status polling:** periodic reconciliation follows live busy or retry sessions only, reducing repeated status requests caused by historical incomplete messages.
+
 ## [1.16.1] - 2026-07-14
 
 - **Performance:** large session sidebars stay responsive while chats stream, including setups with many projects, worktrees, and sessions. Opening a long chat after an empty or aborted agent turn also no longer repeatedly loads larger portions of its history.
