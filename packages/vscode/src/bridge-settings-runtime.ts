@@ -268,6 +268,7 @@ const readPersistedSettings = (ctx?: BridgeContext): Record<string, unknown> => 
 
 export const readSettings = (ctx?: BridgeContext): Record<string, unknown> => {
   const persisted = readPersistedSettings(ctx);
+  const { summaryCustomAPIToken, ...visibleSettings } = persisted;
   const persistedOpencodeBinary =
     typeof persisted.opencodeBinary === 'string' ? String(persisted.opencodeBinary).trim() : '';
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
@@ -278,7 +279,8 @@ export const readSettings = (ctx?: BridgeContext): Record<string, unknown> => {
       : 'dark';
 
   return {
-    ...persisted,
+    ...visibleSettings,
+    hasSummaryCustomAPIToken: typeof summaryCustomAPIToken === 'string' && summaryCustomAPIToken.trim().length > 0,
     themeVariant,
     lastDirectory: workspaceFolder,
     opencodeBinary: persistedOpencodeBinary || undefined,
@@ -301,6 +303,21 @@ export const persistSettings = async (changes: Record<string, unknown>, ctx?: Br
 
   if ('smallModelUseDefault' in restChanges && typeof restChanges.smallModelUseDefault !== 'boolean') {
     delete restChanges.smallModelUseDefault;
+  }
+
+  if ('summaryModelMode' in restChanges && restChanges.summaryModelMode !== 'provider' && restChanges.summaryModelMode !== 'custom') {
+    delete restChanges.summaryModelMode;
+  }
+  for (const key of ['summaryProviderID', 'summaryModelID', 'summaryCustomBaseURL', 'summaryCommitPrompt', 'summarySessionTitlePrompt']) {
+    const value = restChanges[key];
+    if (typeof value !== 'string') {
+      delete restChanges[key];
+    } else {
+      restChanges[key] = value.trim();
+    }
+  }
+  if ('summaryCustomAPIToken' in restChanges && typeof restChanges.summaryCustomAPIToken !== 'string') {
+    delete restChanges.summaryCustomAPIToken;
   }
 
   if ('sessionRecapEnabled' in restChanges && typeof restChanges.sessionRecapEnabled !== 'boolean') {
@@ -359,11 +376,13 @@ export const persistSettings = async (changes: Record<string, unknown>, ctx?: Br
   // globalState so older builds can still read recent values if a user
   // downgrades the extension.
   await writeSharedSettingsToDisk(persistable);
-  await ctx?.context?.globalState.update(SETTINGS_KEY, persistable);
+  const { summaryCustomAPIToken, ...settingsForGlobalState } = persistable;
+  await ctx?.context?.globalState.update(SETTINGS_KEY, settingsForGlobalState);
 
   // Return the same shape as readSettings (with derived fields re-applied).
   return {
-    ...persistable,
+    ...settingsForGlobalState,
+    hasSummaryCustomAPIToken: typeof summaryCustomAPIToken === 'string' && summaryCustomAPIToken.trim().length > 0,
     themeVariant: current.themeVariant,
     lastDirectory: current.lastDirectory,
     opencodeBinary:

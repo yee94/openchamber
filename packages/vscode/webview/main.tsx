@@ -800,6 +800,16 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     }
   }
 
+  if (pathname === '/api/config/global' && method === 'GET') {
+    try {
+      const data = await sendBridgeMessage('api:config/global:list');
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   if (pathname.startsWith('/api/config/global/')) {
     const target = decodeURIComponent(pathname.slice('/api/config/global/'.length));
     try {

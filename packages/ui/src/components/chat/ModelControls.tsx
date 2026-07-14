@@ -467,28 +467,24 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const [pendingThinkingVariants, setPendingThinkingVariants] = React.useState<Map<string, string | undefined>>(new Map());
     const [adjustedThinkingModels, setAdjustedThinkingModels] = React.useState<Set<string>>(new Set());
     const [modelPickerRenderVersion, setModelPickerRenderVersion] = React.useState(0);
-    const restoreComposerFocus = React.useCallback(() => {
-        // Dropdown focus restoration runs during close. Wait until it completes before
-        // returning keyboard input to the composer.
-        // duration-150 exit keeps the popup mounted with restoreFocus; focusing the
-        // composer too early loses the race and can leave activeElement on <body>.
-        const focusComposer = () => {
-            const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-            if (textarea && document.activeElement !== textarea) {
-                textarea.focus({ preventScroll: true });
-            }
-        };
-        window.setTimeout(() => {
-            requestAnimationFrame(() => {
-                focusComposer();
-                // Retry on the next frame after the popup unmounts in WebKit.
-                requestAnimationFrame(focusComposer);
-            });
-        }, 180);
-    }, []);
+    const handleSelectorCloseComplete = React.useCallback((selector: 'model' | 'agent') => {
+        const state = useUIStore.getState();
+        const reopened = selector === 'model' ? state.isModelSelectorOpen : state.isAgentSelectorOpen;
+        if (reopened) {
+            return;
+        }
 
-    const restoreComposerFocusImmediately = React.useCallback(() => {
+        useUIStore.setState(selector === 'model'
+            ? { isModelSelectorInstant: false }
+            : { isAgentSelectorInstant: false });
+
+        // Base UI has fully unmounted the popup here. Focus on the next frame so
+        // FloatingFocusManager cleanup cannot pull focus back into the old menu.
         requestAnimationFrame(() => {
+            const latest = useUIStore.getState();
+            if (latest.isModelSelectorOpen || latest.isAgentSelectorOpen) {
+                return;
+            }
             const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
             if (textarea && document.activeElement !== textarea) {
                 textarea.focus({ preventScroll: true });
@@ -498,7 +494,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     // Base UI Menu returns focus to the trigger by default; hand it the composer
     // instead so Esc/Enter leave the caret back in the chat input.
-    const resolveComposerFinalFocus = React.useCallback((): HTMLElement | null => {
+    const resolveComposerFinalFocus = React.useCallback((): HTMLElement | null | false => {
+        const state = useUIStore.getState();
+        if (state.isModelSelectorOpen || state.isAgentSelectorOpen) {
+            return false;
+        }
         return document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
     }, []);
 
@@ -543,40 +543,20 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             setPendingThinkingVariants(new Map());
             setAdjustedThinkingModels(new Set());
 
-            // Restore focus to chat input when model selector closes
             if (wasOpen && !isCompact) {
                 setModelTooltipOpen(false);
                 suppressModelTooltipUntilRef.current = performance.now() + 200;
-                if (isModelSelectorInstant) {
-                    restoreComposerFocusImmediately();
-                    requestAnimationFrame(() => setModelSelectorOpen(false, { instant: false }));
-                } else {
-                    restoreComposerFocus();
-                }
-            } else if (wasOpen && isModelSelectorInstant) {
-                requestAnimationFrame(() => setModelSelectorOpen(false, { instant: false }));
             }
         }
-    }, [isModelSelectorOpen, isModelSelectorInstant, isCompact, restoreComposerFocus, restoreComposerFocusImmediately, setModelSelectorOpen]);
+    }, [isModelSelectorOpen, isCompact]);
 
     // Handle agent selector close behavior
     const [agentSearchQuery, setAgentSearchQuery] = React.useState('');
-    const prevAgentSelectorOpenRef = React.useRef(isAgentSelectorOpen);
     React.useEffect(() => {
-        const wasOpen = prevAgentSelectorOpenRef.current;
-        prevAgentSelectorOpenRef.current = isAgentSelectorOpen;
         if (!isAgentSelectorOpen) {
             setAgentSearchQuery('');
-            if (wasOpen && isAgentSelectorInstant) {
-                if (!isCompact) {
-                    restoreComposerFocusImmediately();
-                }
-                requestAnimationFrame(() => setAgentSelectorOpen(false, { instant: false }));
-            } else if (wasOpen && !isCompact) {
-                restoreComposerFocus();
-            }
         }
-    }, [isAgentSelectorOpen, isAgentSelectorInstant, isCompact, restoreComposerFocus, restoreComposerFocusImmediately, setAgentSelectorOpen]);
+    }, [isAgentSelectorOpen]);
 
     const selectableDesktopAgents = React.useMemo(() => {
         return agents.filter((agent) => isPrimaryMode(agent.mode));
@@ -2417,7 +2397,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return (
             <Tooltip open={agentMenuOpen ? false : modelTooltipOpen} onOpenChange={handleModelTooltipOpenChange} delayDuration={600}>
                 {!isCompact ? (
-                    <DropdownMenu open={isModelControlReady && agentMenuOpen} onOpenChange={isModelControlReady ? handleModelMenuOpenChange : undefined}>
+                    <DropdownMenu
+                        open={isModelControlReady && agentMenuOpen}
+                        onOpenChange={isModelControlReady ? handleModelMenuOpenChange : undefined}
+                        onOpenChangeComplete={(open) => {
+                            if (!open) handleSelectorCloseComplete('model');
+                        }}
+                    >
                         <TooltipTrigger asChild>
                             <DropdownMenuTrigger asChild>
                                 <div
@@ -2820,6 +2806,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         <DropdownMenu
                             open={isAgentControlReady && isAgentSelectorOpen}
                             onOpenChange={isAgentControlReady ? (open) => setAgentSelectorOpen(open) : undefined}
+                            onOpenChangeComplete={(open) => {
+                                if (!open) handleSelectorCloseComplete('agent');
+                            }}
                         >
                             <TooltipTrigger asChild>
                                 <DropdownMenuTrigger asChild>

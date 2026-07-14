@@ -21,6 +21,11 @@ export const createSettingsHelpers = (dependencies) => {
   const STT_SERVER_URL_MAX_LENGTH = 2048;
   const STT_MODEL_MAX_LENGTH = 256;
   const STT_LANGUAGE_MAX_LENGTH = 64;
+  const SUMMARY_PROVIDER_ID_MAX_LENGTH = 128;
+  const SUMMARY_MODEL_ID_MAX_LENGTH = 256;
+  const SUMMARY_API_URL_MAX_LENGTH = 2048;
+  const SUMMARY_API_TOKEN_MAX_LENGTH = 8192;
+  const SUMMARY_PROMPT_MAX_LENGTH = 16000;
   const VERSION_STRING_MAX_LENGTH = 128;
   const SHORTCUT_OVERRIDE_KEY_MAX_LENGTH = 128;
   const SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH = 128;
@@ -419,6 +424,49 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.smallModelOverride === 'string') {
       const trimmed = candidate.smallModelOverride.trim();
       result.smallModelOverride = trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (candidate.summaryModelMode === 'provider' || candidate.summaryModelMode === 'custom') {
+      result.summaryModelMode = candidate.summaryModelMode;
+    }
+    if (typeof candidate.summaryProviderID === 'string') {
+      const trimmed = candidate.summaryProviderID.trim();
+      result.summaryProviderID = trimmed.length > 0
+        ? trimmed.slice(0, SUMMARY_PROVIDER_ID_MAX_LENGTH)
+        : undefined;
+    }
+    if (typeof candidate.summaryModelID === 'string') {
+      const trimmed = candidate.summaryModelID.trim();
+      result.summaryModelID = trimmed.length > 0
+        ? trimmed.slice(0, SUMMARY_MODEL_ID_MAX_LENGTH)
+        : undefined;
+    }
+    if (typeof candidate.summaryCustomBaseURL === 'string') {
+      const trimmed = candidate.summaryCustomBaseURL.trim();
+      if (!trimmed) {
+        result.summaryCustomBaseURL = undefined;
+      } else if (trimmed.length <= SUMMARY_API_URL_MAX_LENGTH) {
+        try {
+          const url = new URL(trimmed);
+          if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) {
+            result.summaryCustomBaseURL = url.toString().replace(/\/+$/, '');
+          }
+        } catch {
+          // Invalid custom API URLs are ignored instead of persisting a value
+          // that the server cannot call safely.
+        }
+      }
+    }
+    if (typeof candidate.summaryCustomAPIToken === 'string') {
+      const trimmed = candidate.summaryCustomAPIToken.trim();
+      result.summaryCustomAPIToken = trimmed.length > 0
+        ? trimmed.slice(0, SUMMARY_API_TOKEN_MAX_LENGTH)
+        : undefined;
+    }
+    if (typeof candidate.summaryCommitPrompt === 'string') {
+      result.summaryCommitPrompt = candidate.summaryCommitPrompt.slice(0, SUMMARY_PROMPT_MAX_LENGTH);
+    }
+    if (typeof candidate.summarySessionTitlePrompt === 'string') {
+      result.summarySessionTitlePrompt = candidate.summarySessionTitlePrompt.slice(0, SUMMARY_PROMPT_MAX_LENGTH);
     }
     if (typeof candidate.defaultGitIdentityId === 'string') {
       const trimmed = candidate.defaultGitIdentityId.trim();
@@ -843,8 +891,10 @@ export const createSettingsHelpers = (dependencies) => {
   const formatSettingsResponse = (settings) => {
     const sanitized = sanitizeSettingsUpdate(settings);
     delete sanitized.managedRemoteTunnelToken;
+    delete sanitized.summaryCustomAPIToken;
     const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
     const hasManagedRemoteTunnelToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
+    const hasSummaryCustomAPIToken = typeof settings?.summaryCustomAPIToken === 'string' && settings.summaryCustomAPIToken.trim().length > 0;
     const pwaAppName = normalizePwaAppName(settings?.pwaAppName, '');
     const pwaOrientation = normalizePwaOrientation(settings?.pwaOrientation, 'system');
     const mobileKeyboardMode = normalizeMobileKeyboardMode(settings?.mobileKeyboardMode, 'native');
@@ -852,6 +902,7 @@ export const createSettingsHelpers = (dependencies) => {
     return {
       ...sanitized,
       hasManagedRemoteTunnelToken,
+      hasSummaryCustomAPIToken,
       ...(pwaAppName ? { pwaAppName } : {}),
       pwaOrientation,
       mobileKeyboardMode,

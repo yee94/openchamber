@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.6] - 2026-07-14
+
+- **AI summaries:** configure provider or custom OpenAI-compatible models, API credentials, and separate prompts for commit messages and session titles.
+- **Global configuration:** discover and edit only configuration files available on the current runtime, including `.json` and `.jsonc` variants.
+- **Projects:** the new-project directory dialog closes its source menu before opening, promotes Add Project to the primary footer action, and keeps already-added folders navigable so their child projects remain accessible.
+- **Cross-runtime settings:** desktop and VS Code persist the current global configuration selection and refresh small-model configuration after changes.
+
 ## [1.16.5] - 2026-07-14
 
 - **Session titles:** auto-refresh now keeps naming the overall feature/subject across follow-ups and wrap-up turns like commit/push, instead of retitling from the last housekeeping message.

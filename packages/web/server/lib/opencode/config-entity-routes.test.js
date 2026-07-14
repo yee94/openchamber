@@ -105,4 +105,35 @@ describe('global raw configuration routes', () => {
 
     await fs.rm(configDirectory, { recursive: true, force: true });
   });
+
+  it('discovers only existing configuration targets and prefers JSON files', async () => {
+    const app = express();
+    app.use(express.json());
+    const configDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-global-config-'));
+    await fs.writeFile(path.join(configDirectory, 'opencode.json'), '{ "model": "json-model" }', 'utf8');
+    await fs.writeFile(path.join(configDirectory, 'opencode.jsonc'), '{ "model": "jsonc-model" }', 'utf8');
+    await fs.writeFile(path.join(configDirectory, 'oh-my-openagent.jsonc'), '{\n  // JSONC configuration\n}', 'utf8');
+
+    registerConfigEntityRoutes(app, createDependencies(vi.fn(), configDirectory));
+
+    const available = await request(app).get('/api/config/global').expect(200);
+    expect(available.body).toEqual({
+      targets: [
+        { target: 'opencode', fileName: 'opencode.json' },
+        { target: 'oh-my-openagent', fileName: 'oh-my-openagent.jsonc' },
+      ],
+    });
+
+    const openCode = await request(app).get('/api/config/global/opencode').expect(200);
+    expect(openCode.body).toMatchObject({ fileName: 'opencode.json', content: '{ "model": "json-model" }' });
+
+    await request(app)
+      .put('/api/config/global/opencode')
+      .send({ content: '{ "model": "updated-json-model" }' })
+      .expect(200);
+    expect(await fs.readFile(path.join(configDirectory, 'opencode.json'), 'utf8')).toContain('updated-json-model');
+    expect(await fs.readFile(path.join(configDirectory, 'opencode.jsonc'), 'utf8')).toContain('jsonc-model');
+
+    await fs.rm(configDirectory, { recursive: true, force: true });
+  });
 });

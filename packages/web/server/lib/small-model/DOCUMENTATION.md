@@ -62,6 +62,20 @@ other runtime API.
 Mounted lazily from `feature-routes-runtime.js` (same pattern as quota): the
 module is imported on first request, not at server startup.
 
+## Summary AI settings
+
+Commit-message generation and session-title refresh pass `purpose: 'commit'`
+or `purpose: 'session-title'` to `generateSmallModelText`. Their dedicated
+settings can select an authenticated OpenCode provider/model or a custom
+OpenAI-compatible `baseURL`, model ID, and API token. A custom token stays in
+the server settings file; settings read responses expose only
+`hasSummaryCustomAPIToken`.
+
+`summaryCommitPrompt` and `summarySessionTitlePrompt` replace the respective
+call's system prompt when non-empty. With no provider choice, summary calls
+prefer an authenticated OpenAI provider and then use the standard small-model
+resolution chain.
+
 ## Known limitations
 
 - OpenCode's free models (`opencode/big-pickle`, `*-free`) work without a

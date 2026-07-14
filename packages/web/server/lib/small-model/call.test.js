@@ -57,6 +57,29 @@ describe('callSmallModel — custom provider config', () => {
   });
 
   describe('config-supplied credentials (no auth.json entry)', () => {
+    it('calls a custom summary API without an OpenCode provider login', async () => {
+      fetchMock.mockResolvedValue(ok('summary'));
+
+      const text = await callSmallModel({
+        auth: {},
+        catalog: {},
+        workingDirectory: '/proj',
+        providerID: 'custom',
+        modelID: 'summary-model',
+        prompt: 'Summarize this diff.',
+        custom: {
+          baseURL: 'https://summary.example.test/v1',
+          apiToken: 'summary-token',
+        },
+      });
+
+      expect(text).toBe('summary');
+      const { url, init } = lastCall(fetchMock);
+      expect(url).toBe('https://summary.example.test/v1/chat/completions');
+      expect(init.headers.Authorization).toBe('Bearer summary-token');
+      expect(JSON.stringify(init.body)).not.toContain('summary-token');
+    });
+
     it('uses apiKey and baseURL from provider config when no auth.json entry exists', async () => {
       readConfig.mockReturnValue({
         provider: {

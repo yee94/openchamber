@@ -915,6 +915,27 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.smallModelOverride === 'string' && candidate.smallModelOverride.length > 0) {
     result.smallModelOverride = candidate.smallModelOverride;
   }
+  if (candidate.summaryModelMode === 'provider' || candidate.summaryModelMode === 'custom') {
+    result.summaryModelMode = candidate.summaryModelMode;
+  }
+  if (typeof candidate.summaryProviderID === 'string' && candidate.summaryProviderID.length > 0) {
+    result.summaryProviderID = candidate.summaryProviderID;
+  }
+  if (typeof candidate.summaryModelID === 'string' && candidate.summaryModelID.length > 0) {
+    result.summaryModelID = candidate.summaryModelID;
+  }
+  if (typeof candidate.summaryCustomBaseURL === 'string') {
+    result.summaryCustomBaseURL = candidate.summaryCustomBaseURL;
+  }
+  if (typeof candidate.hasSummaryCustomAPIToken === 'boolean') {
+    result.hasSummaryCustomAPIToken = candidate.hasSummaryCustomAPIToken;
+  }
+  if (typeof candidate.summaryCommitPrompt === 'string') {
+    result.summaryCommitPrompt = candidate.summaryCommitPrompt;
+  }
+  if (typeof candidate.summarySessionTitlePrompt === 'string') {
+    result.summarySessionTitlePrompt = candidate.summarySessionTitlePrompt;
+  }
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
   }

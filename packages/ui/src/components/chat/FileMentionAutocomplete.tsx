@@ -425,20 +425,20 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       case 'tsx':
       case 'js':
       case 'jsx':
-        return <Icon name="code" className="h-3.5 w-3.5 text-[var(--status-info)]" />;
+        return <Icon name="code" className="h-3.5 w-3.5 text-foreground" />;
       case 'json':
-        return <Icon name="code" className="h-3.5 w-3.5 text-[var(--status-warning)]" />;
+        return <Icon name="code" className="h-3.5 w-3.5 text-foreground" />;
       case 'md':
       case 'mdx':
-        return <Icon name="file" className="h-3.5 w-3.5 text-muted-foreground" />;
+        return <Icon name="file" className="h-3.5 w-3.5 text-foreground" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
       case 'gif':
       case 'svg':
-        return <Icon name="file-image" className="h-3.5 w-3.5 text-[var(--status-success)]" />;
+        return <Icon name="file-image" className="h-3.5 w-3.5 text-foreground" />;
       default:
-        return <Icon name="file-pdf" className="h-3.5 w-3.5 text-muted-foreground" />;
+        return <Icon name="file-pdf" className="h-3.5 w-3.5 text-foreground" />;
     }
   };
 
@@ -502,7 +502,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                   onClick={() => handleFileSelect(dir)}
                   onMouseMove={() => setSelectedIndex(rowIndex)}
                 >
-                  <Icon name="folder-3-fill" className="h-3.5 w-3.5 text-primary/60" />
+                  <Icon name="folder-3-fill" className="h-3.5 w-3.5 text-foreground" />
                   <span className="flex-1 min-w-0 truncate" aria-label={relativePath}>
                     {displayPath}
                   </span>

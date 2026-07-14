@@ -32,7 +32,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'global-config',
     titleKey: 'settings.globalConfig.title',
     descriptionKey: 'settings.globalConfig.description',
-    keywords: ['opencode.jsonc', 'oh-my-opencode-slim', 'oh-my-openagent', 'jsonc'],
+    keywords: ['opencode.json', 'opencode.jsonc', 'oh-my-opencode-slim', 'oh-my-openagent', 'json', 'jsonc'],
   },
   {
     id: 'appearance.language',
@@ -371,11 +371,11 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['delete', 'confirmation'],
   },
   {
-    id: 'sessions.small-model',
+    id: 'sessions.summary-ai',
     page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.smallModel.title',
-    descriptionKey: 'settings.openchamber.defaults.smallModel.description',
-    keywords: ['small model', 'utility', 'summary', 'recap', 'cheap', 'override'],
+    titleKey: 'settings.openchamber.defaults.summary.title',
+    descriptionKey: 'settings.openchamber.defaults.summary.description',
+    keywords: ['summary', 'commit', 'session title', 'prompt', 'provider', 'custom api', 'base url', 'api token'],
   },
   {
     id: 'sessions.auto-cleanup',

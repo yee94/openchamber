@@ -245,6 +245,8 @@ export const ICON_NAME_MAP = {
   "stop": { lucide: "square", fill: false },
   "subtract": { lucide: "minus", fill: false },
   "survey": { lucide: "clipboard-list", fill: false },
+  // Goal chip / row — Lucide stroke rings; Remix fill+system stroke looked too heavy.
+  "target": { lucide: "target", fill: false },
   "task": { lucide: "circle-check-big", fill: false },
   "terminal": { lucide: "terminal", fill: false },
   "terminal-box": { lucide: "terminal", fill: false },

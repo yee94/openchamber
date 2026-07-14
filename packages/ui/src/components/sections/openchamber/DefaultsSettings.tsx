@@ -3,6 +3,10 @@ import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Radio } from '@/components/ui/radio';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -23,6 +27,21 @@ const getDisplayModel = (
   return { providerId: '', modelId: '' };
 };
 
+const DEFAULT_SUMMARY_COMMIT_PROMPT = 'You are generating a Conventional Commits subject line from the diffs of the selected files.';
+
+const DEFAULT_SESSION_TITLE_PROMPT = [
+  'You are a title generator. You output ONLY a thread title. Nothing else.',
+  'Generate a brief title that would help the user find this conversation later.',
+  'Title the MAIN SUBJECT of the work - the overall feature, goal, or problem being done.',
+  'Keep the title on the durable subject across follow-ups, polish, commit, push, tidy, and review turns.',
+  'Switch the subject only when the user clearly starts a different topic or feature.',
+  'Your output must be a single line of 50 characters or fewer with no explanation.',
+  'Use the language of the user messages.',
+  'Keep technical terms, numbers, filenames, and HTTP codes exact.',
+  'Never include tool names, summarizing, or generating in the title.',
+  'Always output a meaningful title.',
+].join('\n');
+
 export const DefaultsSettings: React.FC = () => {
   const { t } = useI18n();
   const setProvider = useConfigStore((state) => state.setProvider);
@@ -39,9 +58,15 @@ export const DefaultsSettings: React.FC = () => {
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
   const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
-  const [smallModelUseDefault, setSmallModelUseDefault] = React.useState(true);
-  const [smallModelOverride, setSmallModelOverride] = React.useState<string | undefined>();
-  const [smallModelProviders, setSmallModelProviders] = React.useState<string[] | undefined>();
+  const [summaryModelMode, setSummaryModelMode] = React.useState<'provider' | 'custom'>('provider');
+  const [summaryProviderID, setSummaryProviderID] = React.useState('');
+  const [summaryModelID, setSummaryModelID] = React.useState('');
+  const [summaryCustomBaseURL, setSummaryCustomBaseURL] = React.useState('');
+  const [summaryCustomAPIToken, setSummaryCustomAPIToken] = React.useState('');
+  const [hasSummaryCustomAPIToken, setHasSummaryCustomAPIToken] = React.useState(false);
+  const [summaryCommitPrompt, setSummaryCommitPrompt] = React.useState('');
+  const [summarySessionTitlePrompt, setSummarySessionTitlePrompt] = React.useState('');
+  const [isSavingSummarySettings, setIsSavingSummarySettings] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const parsedModel = React.useMemo(() => getDisplayModel(defaultModel), [defaultModel]);
@@ -53,8 +78,13 @@ export const DefaultsSettings: React.FC = () => {
           defaultModel?: string;
           defaultVariant?: string;
           defaultAgent?: string;
-          smallModelUseDefault?: boolean;
-          smallModelOverride?: string;
+          summaryModelMode?: 'provider' | 'custom';
+          summaryProviderID?: string;
+          summaryModelID?: string;
+          summaryCustomBaseURL?: string;
+          hasSummaryCustomAPIToken?: boolean;
+          summaryCommitPrompt?: string;
+          summarySessionTitlePrompt?: string;
         } | null = null;
 
         if (!data) {
@@ -72,8 +102,13 @@ export const DefaultsSettings: React.FC = () => {
                       ? (raw.defaultVariant as string)
                       : undefined,
                   defaultAgent: typeof settings.defaultAgent === 'string' ? settings.defaultAgent : undefined,
-                  smallModelUseDefault: typeof raw.smallModelUseDefault === 'boolean' ? raw.smallModelUseDefault : undefined,
-                  smallModelOverride: typeof raw.smallModelOverride === 'string' ? raw.smallModelOverride : undefined,
+                  summaryModelMode: raw.summaryModelMode === 'provider' || raw.summaryModelMode === 'custom' ? raw.summaryModelMode : undefined,
+                  summaryProviderID: typeof raw.summaryProviderID === 'string' ? raw.summaryProviderID : undefined,
+                  summaryModelID: typeof raw.summaryModelID === 'string' ? raw.summaryModelID : undefined,
+                  summaryCustomBaseURL: typeof raw.summaryCustomBaseURL === 'string' ? raw.summaryCustomBaseURL : undefined,
+                  hasSummaryCustomAPIToken: typeof raw.hasSummaryCustomAPIToken === 'boolean' ? raw.hasSummaryCustomAPIToken : undefined,
+                  summaryCommitPrompt: typeof raw.summaryCommitPrompt === 'string' ? raw.summaryCommitPrompt : undefined,
+                  summarySessionTitlePrompt: typeof raw.summarySessionTitlePrompt === 'string' ? raw.summarySessionTitlePrompt : undefined,
                 };
               }
             } catch {
@@ -109,10 +144,16 @@ export const DefaultsSettings: React.FC = () => {
           if (model !== undefined) setDefaultModel(model);
           if (variant !== undefined) setDefaultVariant(variant);
           if (agent !== undefined) setDefaultAgent(agent);
-          if (typeof data.smallModelUseDefault === 'boolean') setSmallModelUseDefault(data.smallModelUseDefault);
-          if (typeof data.smallModelOverride === 'string' && data.smallModelOverride.trim()) {
-            setSmallModelOverride(data.smallModelOverride.trim());
-          }
+          if (data.summaryModelMode) setSummaryModelMode(data.summaryModelMode);
+          if (typeof data.summaryProviderID === 'string') setSummaryProviderID(data.summaryProviderID);
+          if (typeof data.summaryModelID === 'string') setSummaryModelID(data.summaryModelID);
+          if (typeof data.summaryCustomBaseURL === 'string') setSummaryCustomBaseURL(data.summaryCustomBaseURL);
+          if (typeof data.hasSummaryCustomAPIToken === 'boolean') setHasSummaryCustomAPIToken(data.hasSummaryCustomAPIToken);
+          setSummaryCommitPrompt(data.summaryCommitPrompt ?? DEFAULT_SUMMARY_COMMIT_PROMPT);
+          setSummarySessionTitlePrompt(data.summarySessionTitlePrompt ?? DEFAULT_SESSION_TITLE_PROMPT);
+        } else {
+          setSummaryCommitPrompt(DEFAULT_SUMMARY_COMMIT_PROMPT);
+          setSummarySessionTitlePrompt(DEFAULT_SESSION_TITLE_PROMPT);
         }
       } catch (error) {
         console.warn('Failed to load defaults settings:', error);
@@ -201,52 +242,55 @@ export const DefaultsSettings: React.FC = () => {
     [setAgent, setSettingsDefaultAgent]
   );
 
-  const handleSmallModelUseDefaultChange = React.useCallback(
-    async (useDefault: boolean) => {
-      setSmallModelUseDefault(useDefault);
-      try {
-        await updateDesktopSettings({ smallModelUseDefault: useDefault });
-      } catch (error) {
-        console.warn('Failed to save small model preference:', error);
-      }
-    },
-    []
+  const defaultSummaryProvider = React.useMemo(
+    () => providers.find((provider) => provider.id === 'openai') ?? providers[0],
+    [providers],
   );
-
-  const handleSmallModelOverrideChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setSmallModelOverride(newValue);
-      try {
-        await updateDesktopSettings({ smallModelOverride: newValue ?? '' });
-      } catch (error) {
-        console.warn('Failed to save small model override:', error);
-      }
-    },
-    []
-  );
-
-  const parsedSmallModel = React.useMemo(() => getDisplayModel(smallModelOverride), [smallModelOverride]);
 
   React.useEffect(() => {
-    if (smallModelUseDefault || smallModelProviders !== undefined) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await runtimeFetch('/api/small-model', { method: 'GET', headers: { Accept: 'application/json' } });
-        if (!response.ok) return;
-        const payload = await response.json().catch(() => null) as { authenticatedProviders?: unknown } | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setSmallModelProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
-        }
-      } catch {
-        // leave undefined — picker falls back to showing all providers
+    if (!summaryProviderID && defaultSummaryProvider?.id) {
+      setSummaryProviderID(defaultSummaryProvider.id);
+    }
+  }, [defaultSummaryProvider?.id, summaryProviderID]);
+
+  const handleSaveSummarySettings = React.useCallback(async () => {
+    setIsSavingSummarySettings(true);
+    try {
+      const changes: Parameters<typeof updateDesktopSettings>[0] = {
+        summaryModelMode,
+        summaryProviderID: summaryProviderID.trim(),
+        summaryModelID: summaryModelID.trim(),
+        summaryCustomBaseURL,
+        summaryCommitPrompt,
+        summarySessionTitlePrompt,
+      };
+      if (summaryCustomAPIToken.trim()) {
+        changes.summaryCustomAPIToken = summaryCustomAPIToken;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [smallModelUseDefault, smallModelProviders]);
+      await updateDesktopSettings(changes);
+      if (summaryCustomAPIToken.trim()) {
+        setHasSummaryCustomAPIToken(true);
+      }
+      setSummaryCustomAPIToken('');
+    } catch (error) {
+      console.warn('Failed to save summary settings:', error);
+    } finally {
+      setIsSavingSummarySettings(false);
+    }
+  }, [summaryCommitPrompt, summaryCustomAPIToken, summaryCustomBaseURL, summaryModelID, summaryModelMode, summaryProviderID, summarySessionTitlePrompt]);
+
+  const handleClearSummaryToken = React.useCallback(async () => {
+    setIsSavingSummarySettings(true);
+    try {
+      await updateDesktopSettings({ summaryCustomAPIToken: '' });
+      setSummaryCustomAPIToken('');
+      setHasSummaryCustomAPIToken(false);
+    } catch (error) {
+      console.warn('Failed to clear summary API token:', error);
+    } finally {
+      setIsSavingSummarySettings(false);
+    }
+  }, []);
 
   const availableVariants = React.useMemo(() => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];
@@ -366,53 +410,89 @@ export const DefaultsSettings: React.FC = () => {
       </section>
 
       <div className="mt-6 mb-0.5 px-1">
-        <div className="flex items-center gap-2">
-          <h3 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.defaults.smallModel.title')}</h3>
-        </div>
+        <h3 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.defaults.summary.title')}</h3>
       </div>
 
-      <section className="px-2 pb-2 pt-0 space-y-0">
-        <div className="mt-0 mb-1 typography-meta text-muted-foreground">
-          {t('settings.openchamber.defaults.smallModel.description')}
+      <section data-settings-item="sessions.summary-ai" className="space-y-4 px-2 pb-2 pt-0">
+        <div className="typography-meta text-muted-foreground">
+          {t('settings.openchamber.defaults.summary.description')}
         </div>
 
-        <div
-          data-settings-item="sessions.small-model"
-          className="group flex cursor-pointer items-center gap-2 py-1"
-          role="button"
-          tabIndex={0}
-          aria-pressed={smallModelUseDefault}
-          onClick={() => void handleSmallModelUseDefaultChange(!smallModelUseDefault)}
-          onKeyDown={(event) => {
-            if (event.key === ' ' || event.key === 'Enter') {
-              event.preventDefault();
-              void handleSmallModelUseDefaultChange(!smallModelUseDefault);
-            }
-          }}
-        >
-          <Checkbox
-            checked={smallModelUseDefault}
-            onChange={(checked) => void handleSmallModelUseDefaultChange(checked)}
-            ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
-          />
-          <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.smallModel.useDefault')}</span>
-        </div>
-
-        {!smallModelUseDefault ? (
-          <div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:gap-8">
-            <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
-              <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.smallModel.overrideModel')}</span>
-            </div>
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
-              <ModelSelector
-                providerId={parsedSmallModel.providerId}
-                modelId={parsedSmallModel.modelId}
-                onChange={handleSmallModelOverrideChange}
-                allowedProviderIds={smallModelProviders}
-              />
-            </div>
+        <div role="radiogroup" aria-label={t('settings.openchamber.defaults.summary.modelSourceAria')} className="space-y-1">
+          <div className="flex items-center gap-2 py-0.5">
+            <Radio
+              checked={summaryModelMode === 'provider'}
+              onChange={() => setSummaryModelMode('provider')}
+              ariaLabel={t('settings.openchamber.defaults.summary.provider')}
+            />
+            <span className={summaryModelMode === 'provider' ? 'typography-ui-label text-foreground' : 'typography-ui-label text-foreground/50'}>
+              {t('settings.openchamber.defaults.summary.provider')}
+            </span>
           </div>
-        ) : null}
+          <div className="flex items-center gap-2 py-0.5">
+            <Radio
+              checked={summaryModelMode === 'custom'}
+              onChange={() => setSummaryModelMode('custom')}
+              ariaLabel={t('settings.openchamber.defaults.summary.custom')}
+            />
+            <span className={summaryModelMode === 'custom' ? 'typography-ui-label text-foreground' : 'typography-ui-label text-foreground/50'}>
+              {t('settings.openchamber.defaults.summary.custom')}
+            </span>
+          </div>
+        </div>
+
+        {summaryModelMode === 'provider' ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-8">
+            <span className="typography-ui-label text-foreground sm:w-56 shrink-0">{t('settings.openchamber.defaults.summary.providerModel')}</span>
+            <ModelSelector
+              providerId={summaryProviderID}
+              modelId={summaryModelID}
+              onChange={(providerID, modelID) => {
+                setSummaryProviderID(providerID);
+                setSummaryModelID(modelID);
+              }}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
+            <label className="space-y-1">
+              <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.summary.baseUrl')}</span>
+              <Input value={summaryCustomBaseURL} onChange={(event) => setSummaryCustomBaseURL(event.target.value)} placeholder={t('settings.openchamber.defaults.summary.baseUrlPlaceholder')} />
+            </label>
+            <label className="space-y-1">
+              <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.summary.modelId')}</span>
+              <Input value={summaryModelID} onChange={(event) => setSummaryModelID(event.target.value)} placeholder={t('settings.openchamber.defaults.summary.modelIdPlaceholder')} />
+            </label>
+            <label className="space-y-1 md:col-span-2">
+              <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.summary.apiToken')}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input type="password" value={summaryCustomAPIToken} onChange={(event) => setSummaryCustomAPIToken(event.target.value)} placeholder={hasSummaryCustomAPIToken ? t('settings.openchamber.defaults.summary.apiTokenStored') : t('settings.openchamber.defaults.summary.apiTokenPlaceholder')} className="max-w-xl" />
+                {hasSummaryCustomAPIToken ? (
+                  <Button variant="outline" size="sm" onClick={() => void handleClearSummaryToken()} disabled={isSavingSummarySettings}>
+                    {t('settings.openchamber.defaults.summary.clearToken')}
+                  </Button>
+                ) : null}
+              </div>
+            </label>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-3">
+          <label className="space-y-1">
+            <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.summary.commitPrompt')}</span>
+            <Textarea value={summaryCommitPrompt} onChange={(event) => setSummaryCommitPrompt(event.target.value)} placeholder={t('settings.openchamber.defaults.summary.commitPromptPlaceholder')} className="min-h-36 font-mono text-sm" />
+          </label>
+          <label className="space-y-1">
+            <span className="typography-ui-label text-foreground">{t('settings.openchamber.defaults.summary.sessionTitlePrompt')}</span>
+            <Textarea value={summarySessionTitlePrompt} onChange={(event) => setSummarySessionTitlePrompt(event.target.value)} placeholder={t('settings.openchamber.defaults.summary.sessionTitlePromptPlaceholder')} className="min-h-36 font-mono text-sm" />
+          </label>
+        </div>
+
+        <div className="flex items-center justify-end">
+          <Button size="sm" onClick={() => void handleSaveSummarySettings()} disabled={isSavingSummarySettings}>
+            {isSavingSummarySettings ? t('settings.common.actions.saving') : t('settings.openchamber.defaults.summary.save')}
+          </Button>
+        </div>
       </section>
     </div>
   );

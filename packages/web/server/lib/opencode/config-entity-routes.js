@@ -5,17 +5,44 @@ import { parse as parseJsonc } from 'jsonc-parser';
 
 const MAX_GLOBAL_CONFIG_SIZE = 2 * 1024 * 1024;
 const GLOBAL_CONFIG_FILES = {
-  opencode: 'opencode.jsonc',
-  'oh-my-opencode-slim': 'oh-my-opencode-slim.json',
-  'oh-my-openagent': 'oh-my-openagent.jsonc',
+  opencode: ['opencode.json', 'opencode.jsonc'],
+  'oh-my-opencode-slim': ['oh-my-opencode-slim.json', 'oh-my-opencode-slim.jsonc'],
+  'oh-my-openagent': ['oh-my-openagent.json', 'oh-my-openagent.jsonc'],
 };
 
 function resolveGlobalConfigPath(target, configDirectory) {
-  const fileName = GLOBAL_CONFIG_FILES[target];
-  if (!fileName) {
+  const fileNames = GLOBAL_CONFIG_FILES[target];
+  if (!fileNames) {
     return null;
   }
-  return { fileName, filePath: path.join(configDirectory, fileName) };
+  return {
+    target,
+    fileNames,
+    fileName: fileNames[0],
+    filePath: path.join(configDirectory, fileNames[0]),
+  };
+}
+
+async function findGlobalConfigPath(target, configDirectory) {
+  const configPath = resolveGlobalConfigPath(target, configDirectory);
+  if (!configPath) {
+    return null;
+  }
+
+  for (const fileName of configPath.fileNames) {
+    const filePath = path.join(configDirectory, fileName);
+    try {
+      if ((await fs.stat(filePath)).isFile()) {
+        return { ...configPath, fileName, filePath };
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  return null;
 }
 
 function validateGlobalConfigContent(content) {
@@ -63,10 +90,22 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
     configDirectory = path.join(os.homedir(), '.config', 'opencode'),
   } = dependencies;
 
+  app.get('/api/config/global', async (_req, res) => {
+    try {
+      const targets = (await Promise.all(Object.keys(GLOBAL_CONFIG_FILES).map(async (target) => (
+        findGlobalConfigPath(target, configDirectory)
+      )))).filter(Boolean).map(({ target, fileName }) => ({ target, fileName }));
+      return res.json({ targets });
+    } catch (error) {
+      console.error('Failed to discover global configuration files:', error);
+      return res.status(500).json({ error: 'Failed to discover global configuration files' });
+    }
+  });
+
   app.get('/api/config/global/:target', async (req, res) => {
-    const target = resolveGlobalConfigPath(req.params.target, configDirectory);
+    const target = await findGlobalConfigPath(req.params.target, configDirectory);
     if (!target) {
-      return res.status(404).json({ error: 'Unknown global configuration target' });
+      return res.status(404).json({ error: 'Global configuration file does not exist' });
     }
 
     try {
@@ -82,10 +121,12 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
   });
 
   app.put('/api/config/global/:target', async (req, res) => {
-    const target = resolveGlobalConfigPath(req.params.target, configDirectory);
-    if (!target) {
+    const configuredTarget = resolveGlobalConfigPath(req.params.target, configDirectory);
+    if (!configuredTarget) {
       return res.status(404).json({ error: 'Unknown global configuration target' });
     }
+
+    const target = await findGlobalConfigPath(req.params.target, configDirectory) || configuredTarget;
 
     const content = req.body?.content;
     const validationError = validateGlobalConfigContent(content);

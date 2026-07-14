@@ -303,6 +303,7 @@ export async function generateCommitMessage(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        purpose: 'commit',
         system: visiblePrompt,
         prompt: `${hiddenPrompt}\n\nDiffs of the selected files:\n${diffs}`,
         directory,

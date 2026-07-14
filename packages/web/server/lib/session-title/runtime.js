@@ -535,6 +535,7 @@ export const createSessionTitleRuntime = ({
         // session's own provider unless the user explicitly picked a small
         // model (settings override / opencode config).
         restrictToPreferredProvider: true,
+        purpose: 'session-title',
         prompt: `Conversation turns for title generation (name the MAIN SUBJECT of the work, not the last wrap-up step):\n\n${transcript}${currentSubjectHint}\n\nWrite the title in the user's language. Use this actual user-message sample as the language source: "${languageSample}"`,
         system: buildTitleSystemPrompt(),
         maxOutputTokens: 64,
