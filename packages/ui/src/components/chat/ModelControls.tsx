@@ -475,6 +475,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }, 0);
     }, []);
 
+    // Base UI Menu returns focus to the trigger by default; hand it the composer
+    // instead so Esc/Enter leave the caret back in the chat input.
+    const resolveComposerFinalFocus = React.useCallback((): HTMLElement | null => {
+        return document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
+    }, []);
+
     React.useEffect(() => {
         if (activeMobilePanel === 'model') {
             setExpandedMobileProviders(() => {
@@ -2434,6 +2440,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             align="end"
                             alignOffset={-40}
                             onKeyDownCapture={handleModelShortcutKeyDownCapture}
+                            finalFocus={resolveComposerFinalFocus}
                         >
                             <div className="p-1 border-b border-border/40">
                                 <button
@@ -2811,6 +2818,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 alignOffset={relocateAgent ? 0 : -40}
                                 className="w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col"
                                 onKeyDownCapture={handleAgentCycleShortcut}
+                                finalFocus={resolveComposerFinalFocus}
                             >
                                 <div className="p-2 border-b border-border/40">
                                     <div className="relative">

@@ -61,4 +61,40 @@ describe('session-title helpers', () => {
     expect(result.transcript).toContain('add rate limiting');
     expect(result.transcript).toContain('implemented rate limit');
   });
+
+  it('keeps an earlier subject anchor when latest turns are wrap-up only', () => {
+    const messages = [
+      {
+        info: { id: 'u1', role: 'user' },
+        parts: [{ type: 'text', text: '实现会话标题主体性总结' }],
+      },
+      {
+        info: { id: 'a1', role: 'assistant' },
+        parts: [{ type: 'text', text: '开始改提示词和输入上下文' }],
+      },
+      {
+        info: { id: 'u2', role: 'user' },
+        parts: [{ type: 'text', text: '再补一下测试' }],
+      },
+      {
+        info: { id: 'a2', role: 'assistant' },
+        parts: [{ type: 'text', text: '测试已补' }],
+      },
+      {
+        info: { id: 'u3', role: 'user' },
+        parts: [{ type: 'text', text: '提交推送' }],
+      },
+      {
+        info: { id: 'a3', role: 'assistant' },
+        parts: [{ type: 'text', text: '已提交并推送' }],
+      },
+    ];
+    const result = buildLatestTitleTranscript(messages, { maxTurns: 1 });
+    expect(result.subjectAnchor).toBe('实现会话标题主体性总结');
+    expect(result.transcript).toContain('Earlier subject anchor');
+    expect(result.transcript).toContain('实现会话标题主体性总结');
+    expect(result.transcript).toContain('提交推送');
+    expect(result.languageSample).toBe('提交推送');
+    expect(result.lastAssistantId).toBe('a3');
+  });
 });

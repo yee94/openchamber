@@ -218,7 +218,10 @@ export const useKeyboardShortcuts = () => {
     // without inserting characters or triggering Cut.
     const handleLeaderKeyCapture = (e: KeyboardEvent) => {
       const leaderPending = useLeaderKeyStore.getState().pending;
-      if (e.isComposing || e.repeat || (e.defaultPrevented && !leaderPending)) {
+      // While the leader chord is armed, keep consuming keys even if an IME marks
+      // the event as composing — otherwise Chinese/Japanese IMEs leak letters into
+      // the textarea before the chord can claim them.
+      if (e.repeat || (e.isComposing && !leaderPending) || (e.defaultPrevented && !leaderPending)) {
         return;
       }
 
@@ -353,10 +356,24 @@ export const useKeyboardShortcuts = () => {
       armLeaderKey();
     };
 
+    const shouldConsumeLeaderTextInput = () => (
+      useLeaderKeyStore.getState().pending || consumeLeaderTextInputRef.current
+    );
+
+    // beforeinput alone is not enough under IME: insertCompositionText is often
+    // non-cancelable. Cancel compositionstart so chord keys never become compose text.
     const handleLeaderBeforeInputCapture = (event: InputEvent) => {
-      if (useLeaderKeyStore.getState().pending || consumeLeaderTextInputRef.current) {
+      if (shouldConsumeLeaderTextInput()) {
         event.preventDefault();
       }
+    };
+
+    const handleLeaderCompositionCapture = (event: CompositionEvent) => {
+      if (!shouldConsumeLeaderTextInput()) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
     };
 
     const handleTerminalShortcutCapture = (e: KeyboardEvent) => {
@@ -989,12 +1006,18 @@ export const useKeyboardShortcuts = () => {
 
     window.addEventListener('keydown', handleLeaderKeyCapture, true);
     window.addEventListener('beforeinput', handleLeaderBeforeInputCapture, true);
+    window.addEventListener('compositionstart', handleLeaderCompositionCapture, true);
+    window.addEventListener('compositionupdate', handleLeaderCompositionCapture, true);
+    window.addEventListener('compositionend', handleLeaderCompositionCapture, true);
     window.addEventListener('keydown', handleTerminalShortcutCapture, true);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       window.removeEventListener('keydown', handleLeaderKeyCapture, true);
       window.removeEventListener('beforeinput', handleLeaderBeforeInputCapture, true);
+      window.removeEventListener('compositionstart', handleLeaderCompositionCapture, true);
+      window.removeEventListener('compositionupdate', handleLeaderCompositionCapture, true);
+      window.removeEventListener('compositionend', handleLeaderCompositionCapture, true);
       window.removeEventListener('keydown', handleTerminalShortcutCapture, true);
       window.removeEventListener('keydown', handleKeyDown);
     };

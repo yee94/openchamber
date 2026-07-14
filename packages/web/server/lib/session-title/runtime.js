@@ -1,8 +1,10 @@
 // Session title refresh: after a session goes idle, regenerate the sidebar
-// title from the LATEST conversation turns (not the first message). OpenCode
-// only titles once from the first user message; long sessions drift away from
-// that topic. This watcher throttles to at most one refresh per session every
-// TITLE_THROTTLE_MS and never overwrites a user-renamed title.
+// title from the conversation's MAIN SUBJECT (overall feature / goal), not
+// just the last wrap-up utterance. OpenCode only titles once from the first
+// user message; long sessions need refresh, but continuing the same work
+// should keep naming the thing being done — not "commit and push". This
+// watcher throttles to at most one refresh per session every TITLE_THROTTLE_MS
+// and never overwrites a user-renamed title.
 //
 // Purely event-driven: only sessions that transition busy→idle while the
 // server is running ever generate anything. No backfill, no session scans.
@@ -107,13 +109,17 @@ export const remainingTitleThrottleMs = (lastGeneratedAt, now = Date.now(), thro
 const buildTitleSystemPrompt = () => [
   'You are a title generator. You output ONLY a thread title. Nothing else.',
   'Generate a brief title that would help the user find this conversation later.',
-  'Focus on the LATEST topic the user is currently discussing — earlier messages are context only.',
+  'Title the MAIN SUBJECT of the work — the overall feature, goal, or problem being done.',
+  'Judge subject continuity: if later turns are still the same work (follow-ups, polish, commit/push, tidy, review), keep naming that overall subject.',
+  'Only switch the title subject when the user clearly started a different topic or feature.',
   'Your output must be: a single line, ≤50 characters, no explanations.',
   'Rules:',
   '- you MUST use the same language as the latest user messages',
   '- Title must be grammatically correct and read naturally - no word salad',
   '- Never include tool names in the title (e.g. "read tool", "bash tool", "edit tool")',
-  '- Focus on the main topic or question the user needs to retrieve',
+  '- Prefer the durable subject someone would search for later, not the last mechanical step',
+  '- Ignore wrap-up / housekeeping turns when larger work is present (commit, push, PR, rename, cleanup, "LGTM", minor wording tweaks)',
+  '- Example: big feature work ending with "commit and push" → title the feature, NOT the commit/push',
   '- Vary your phrasing - avoid repetitive patterns like always starting with "Analyzing"',
   '- When a file is mentioned, focus on WHAT the user wants to do WITH the file',
   '- Keep exact: technical terms, numbers, filenames, HTTP codes',
@@ -233,9 +239,10 @@ const readTitleRefreshMeta = (session) => {
 };
 
 /**
- * Build a short transcript biased toward the latest turns.
- * Older messages are included as light context; the prompt tells the model
- * to title from the latest topic.
+ * Build a short transcript for title generation.
+ * Latest turns show what just happened; when the window does not already
+ * include the first real user message, prepend that earlier subject anchor
+ * so wrap-up turns (commit/push/etc.) do not erase the feature being done.
  */
 export const buildLatestTitleTranscript = (messages, { maxTurns = 4 } = {}) => {
   const turns = [];
@@ -259,10 +266,33 @@ export const buildLatestTitleTranscript = (messages, { maxTurns = 4 } = {}) => {
     }
   }
 
-  const transcript = turns
+  // First real user turn as subject anchor when it fell outside the latest window.
+  let subjectAnchor = '';
+  const latestIds = new Set(turns.map((turn) => turn.id).filter(Boolean));
+  for (let i = 0; i < messages.length; i += 1) {
+    const message = messages[i];
+    if (!isRealUserMessage(message)) continue;
+    const text = messagePartsToText(message);
+    if (!text) continue;
+    const id = message?.info?.id;
+    if (id && latestIds.has(id)) break;
+    subjectAnchor = text;
+    break;
+  }
+
+  const latestTranscript = turns
     .map((turn) => `${turn.role === 'user' ? 'User' : 'Assistant'}:\n${turn.text}`)
     .join('\n\n');
-  return { transcript, lastAssistantId, realUserCount };
+  const transcript = subjectAnchor
+    ? `Earlier subject anchor:\nUser:\n${subjectAnchor}\n\nLatest turns:\n${latestTranscript}`
+    : latestTranscript;
+  // Language sample from real user text only — transcript wrappers are English labels.
+  const latestUserText = [...turns].reverse().find((turn) => turn.role === 'user')?.text || '';
+  const languageSample = (latestUserText || subjectAnchor || transcript)
+    .slice(0, 200)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { transcript, lastAssistantId, realUserCount, subjectAnchor, languageSample };
 };
 
 export const createSessionTitleRuntime = ({
@@ -447,7 +477,7 @@ export const createSessionTitleRuntime = ({
     const messages = await fetchRecentMessages(sessionId, directory);
     if (!messages || messages.length === 0) return;
 
-    const { transcript, lastAssistantId, realUserCount } = buildLatestTitleTranscript(messages);
+    const { transcript, lastAssistantId, realUserCount, languageSample } = buildLatestTitleTranscript(messages);
     if (!transcript) return;
 
     // Let OpenCode's first-message title land first. We only refresh once the
@@ -471,7 +501,11 @@ export const createSessionTitleRuntime = ({
       }
     }
 
-    const languageSample = transcript.slice(0, 200).replace(/\s+/g, ' ').trim();
+    // Keep a durable subject hint when we already have a non-default auto title.
+    // Helps the model stay on the feature when the latest turns are wrap-up only.
+    const currentSubjectHint = (!isDefaultSessionTitle(currentTitle) && currentTitle)
+      ? `\n\nCurrent title (keep this subject unless the user clearly switched topics): "${currentTitle}"`
+      : '';
     const { generateSmallModelText } = await getSmallModelService();
     let generated;
     await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, {
@@ -500,7 +534,7 @@ export const createSessionTitleRuntime = ({
         // session's own provider unless the user explicitly picked a small
         // model (settings override / opencode config).
         restrictToPreferredProvider: true,
-        prompt: `Latest conversation turns (title from the MOST RECENT topic):\n\n${transcript}\n\nWrite the title in the SAME language as this sample: "${languageSample}"`,
+        prompt: `Conversation turns for title generation (name the MAIN SUBJECT of the work, not the last wrap-up step):\n\n${transcript}${currentSubjectHint}\n\nWrite the title in the SAME language as this sample: "${languageSample}"`,
         system: buildTitleSystemPrompt(),
         maxOutputTokens: 64,
         directory,
