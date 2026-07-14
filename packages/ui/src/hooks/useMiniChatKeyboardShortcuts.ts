@@ -54,7 +54,7 @@ export const useMiniChatKeyboardShortcuts = () => {
       if (eventMatchesShortcut(event, combo('open_model_selector'))) {
         event.preventDefault();
         const { isModelSelectorOpen, setModelSelectorOpen } = useUIStore.getState();
-        setModelSelectorOpen(!isModelSelectorOpen);
+        setModelSelectorOpen(!isModelSelectorOpen, { instant: true });
         return;
       }
 

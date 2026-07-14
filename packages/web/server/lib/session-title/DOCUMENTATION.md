@@ -71,6 +71,9 @@ auto updates for that session.
 
 ## Limitations
 
+Title language follows the user's real message text. Assistant responses, tool
+output, and transcript labels provide context without selecting the title language.
+
 - Lives in the web server, so VS Code (extension-only) does not generate
   refreshes; it still receives `session.updated` title changes produced by a
   web/desktop instance of the same OpenCode server.

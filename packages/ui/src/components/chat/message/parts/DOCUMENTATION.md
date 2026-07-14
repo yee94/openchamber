@@ -74,7 +74,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 ## Current important behavior
 
 - `read` and `skill` are **static navigation tools** and render via `StaticToolRow`.
-- `edit` / `multiedit` / `apply_patch` / `write` stay in `ToolPart` for title + path + diff-stats chrome, but are **non-expandable file navigation**: click opens the file at the first changed line in the right context panel (or VS Code editor). No chevron / expanded diff body.
+- `edit` / `multiedit` / `write` stay in `ToolPart` for title + path + diff-stats chrome, but are **non-expandable file navigation**: click opens the file at the first changed line in the right context panel (or VS Code editor). `apply_patch` opens the Changes panel scoped to the current turn, so every file changed by the patch is available as a diff. No chevron / expanded diff body.
 - Every other tool, including search/fetch, OpenCode built-ins, custom tools, plugins, and MCP tools, is **expandable** and renders through `ToolPart`.
 - `ToolPart` defers expanded content after a user toggle, preventing large tool input/output payloads from mounting during the initial chat render.
 - Virtualized history uses a `MarkdownHydrationProvider` per stable turn entry. The newest visible turns are released first, from bottom to top; upward scrolling additionally preloads only the nearest three mounted turns above the viewport.

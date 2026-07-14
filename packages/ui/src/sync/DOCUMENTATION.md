@@ -142,17 +142,23 @@ becoming the cached startup result consumed by the session coordinator.
 ## Session message loading
 
 - The imperative session-selection path and the reactive `useSync()` path share
-  one app-wide single-flight request keyed by runtime, directory, session, and
-  pagination cursor. They must not issue duplicate tail requests during a React
-  mount or provider remount.
+  one app-wide single-flight request keyed by runtime, directory, session,
+  requested limit, and pagination cursor. They must not issue duplicate tail
+  requests during a React mount or provider remount, and a smaller concurrent
+  request must not satisfy a larger request.
 - Session materialization coalescing is scoped to the owning directory store.
   A remounted `SyncProvider` must start its own commit path even when the
   runtime, directory, and session ids match an old in-flight request; transport
   single-flight can still share the HTTP response, but the new store must not
   reuse a promise that only commits into a detached store.
-- Initial history is a 30-message tail page on every surface. Commit that page
-  immediately; do not expand it to 100/150 messages while searching for a turn
-  boundary.
+- Initial history is a 30-message tail page on every surface. An assistant-only
+  partial tail fetches up to eight missing parent user messages by exact message
+  ID, then commits the merged records; it never expands to a 100/150-message
+  page while searching for a turn boundary. Loading failures are subscribable
+  and preserve the prior ready records for retry.
+- Message loading status is runtime-scoped. Reactive request de-duplication is
+  local to the owning directory-store lifecycle, so a remounted provider still
+  commits a shared transport response into its own store.
 - Older history is user-driven pagination (`loadMore`) only. Desktop and VS Code
   must not automatically prepend a 100-message page after initial render.
 - A rejected shared request is removed from the coordinator so the next
