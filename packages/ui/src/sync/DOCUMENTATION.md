@@ -162,6 +162,14 @@ becoming the cached startup result consumed by the session coordinator.
   but it materializes `session.get + session.messages` only for the currently
   viewed session. Background busy/incomplete sessions wait until selection and
   continue receiving live events without fetching their bodies.
+- A successful directory status snapshot records its conservative request-start
+  time. Historical assistant/tool activity that started before that boundary and
+  is absent from the active-only snapshot resolves as idle. Activity created
+  after the boundary waits for live status, and a failed snapshot preserves the
+  previous unresolved state.
+- The periodic status watchdog polls only sessions with live `busy` or `retry`
+  status. Historical incomplete messages participate in one-shot reconnect
+  recovery without keeping a directory on the five-second polling path.
 - Network session-detail and message-page reads for the current selection use
   high fetch priority; background materialization of other sessions does not.
   Broad

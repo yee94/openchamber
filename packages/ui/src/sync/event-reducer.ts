@@ -215,6 +215,7 @@ export function applyDirectoryEvent(
     onRefresh?: (directory: string) => void
     onLoadLsp?: () => void
     onSetSessionTodo?: (sessionID: string, todos: Todo[] | undefined) => void
+    now?: () => number
   },
 ): DirectoryEventResult {
   switch (event.type) {
@@ -293,8 +294,9 @@ export function applyDirectoryEvent(
 
     case "session.status": {
       const props = event.properties as { sessionID: string; status: SessionStatus }
+      if (callbacks?.now) draft.session_status_observed_at[props.sessionID] = callbacks.now()
       if (areSessionStatusesEqual(draft.session_status[props.sessionID], props.status)) {
-        return false
+        return callbacks?.now ? true : false
       }
       draft.session_status[props.sessionID] = props.status
       return true
@@ -303,8 +305,9 @@ export function applyDirectoryEvent(
     case "session.idle": {
       const props = event.properties as { sessionID: string }
       const status = { type: "idle" } as const
+      if (callbacks?.now) draft.session_status_observed_at[props.sessionID] = callbacks.now()
       if (areSessionStatusesEqual(draft.session_status[props.sessionID], status)) {
-        return false
+        return callbacks?.now ? true : false
       }
       draft.session_status[props.sessionID] = status
       return true
@@ -313,8 +316,9 @@ export function applyDirectoryEvent(
     case "session.error": {
       const props = event.properties as { sessionID: string }
       const status = { type: "idle" } as const
+      if (callbacks?.now) draft.session_status_observed_at[props.sessionID] = callbacks.now()
       if (areSessionStatusesEqual(draft.session_status[props.sessionID], status)) {
-        return false
+        return callbacks?.now ? true : false
       }
       draft.session_status[props.sessionID] = status
       return true

@@ -1,4 +1,4 @@
-import type { OpencodeClient, PermissionRequest, Project, QuestionRequest } from "@opencode-ai/sdk/v2/client"
+import type { OpencodeClient, PermissionRequest, Project, QuestionRequest, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { retry } from "./retry"
 import type { GlobalState, State } from "./types"
 import { runtimeFetch } from "../lib/runtime-fetch"
@@ -52,6 +52,23 @@ function groupBySession<T extends { id: string; sessionID: string }>(input: T[])
     else acc[item.sessionID] = [item]
     return acc
   }, {})
+}
+
+export function mergeSessionStatusSnapshot(
+  before: Record<string, SessionStatus>,
+  current: Record<string, SessionStatus>,
+  snapshot: Record<string, SessionStatus>,
+): Record<string, SessionStatus> {
+  let merged = snapshot
+  const sessionIDs = new Set([...Object.keys(before), ...Object.keys(current)])
+  for (const sessionID of sessionIDs) {
+    const status = current[sessionID]
+    if (status === before[sessionID]) continue
+    if (merged === snapshot) merged = { ...snapshot }
+    if (status) merged[sessionID] = status
+    else delete merged[sessionID]
+  }
+  return merged
 }
 
 function projectID(directory: string, projects: Project[]) {
@@ -162,7 +179,23 @@ export async function bootstrapDirectory(input: {
         if (next) set({ project: next })
       }),
     ),
-    retry(() => sdk.session.status().then((x) => set({ session_status: unwrap(x, "session.status") }))),
+    retry(async () => {
+      const requestedAt = Date.now()
+      const before = getState().session_status
+      const x = await sdk.session.status(directory ? { directory } : undefined)
+      const snapshot = unwrap(x, "session.status")
+      const current = getState().session_status
+      const observedAt = { ...getState().session_status_observed_at }
+      for (const sessionID of Object.keys(snapshot)) {
+        if (current[sessionID] !== before[sessionID]) continue
+        observedAt[sessionID] = requestedAt
+      }
+      set({
+        session_status: mergeSessionStatusSnapshot(before, current, snapshot),
+        session_status_observed_at: observedAt,
+        session_status_snapshot_at: requestedAt,
+      })
+    }),
   ])
 
   const phase1Errors = phase1Results

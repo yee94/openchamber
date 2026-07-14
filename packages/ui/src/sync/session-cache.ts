@@ -10,6 +10,7 @@ import type { FileDiff } from "./types"
 
 type SessionCache = {
   session_status: Record<string, SessionStatus | undefined>
+  session_status_observed_at?: Record<string, number | undefined>
   session_diff: Record<string, FileDiff[] | undefined>
   todo: Record<string, Todo[] | undefined>
   message: Record<string, Message[] | undefined>
@@ -79,6 +80,7 @@ export function dropSessionCaches(store: SessionCache, sessionIDs: Iterable<stri
     delete store.todo[sessionID]
     delete store.session_diff[sessionID]
     delete store.session_status[sessionID]
+    if (store.session_status_observed_at) delete store.session_status_observed_at[sessionID]
     delete store.permission[sessionID]
     delete store.question[sessionID]
   }

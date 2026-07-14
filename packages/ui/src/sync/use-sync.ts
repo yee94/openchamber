@@ -182,6 +182,7 @@ export function useSync() {
         message: { ...current.message },
         part: { ...current.part },
         session_status: { ...current.session_status },
+        session_status_observed_at: { ...current.session_status_observed_at },
         session_diff: { ...current.session_diff },
         todo: { ...current.todo },
         permission: { ...current.permission },

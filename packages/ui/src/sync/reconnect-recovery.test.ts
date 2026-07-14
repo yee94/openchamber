@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { Message, Part, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import type { Session } from "@opencode-ai/sdk/v2"
-import { getReconnectCandidateSessionIds, getReconnectMaterializationSessionIds } from "./reconnect-recovery"
+import {
+  getReconnectCandidateSessionIds,
+  getReconnectMaterializationSessionIds,
+  getStatusWatchdogCandidateSessionIds,
+} from "./reconnect-recovery"
 
 function createSession(id: string, overrides: Partial<Session> = {}): Session {
   return {
@@ -102,5 +106,20 @@ describe("getReconnectMaterializationSessionIds", () => {
       directory: "/repo",
       viewedSession: null,
     })).toEqual([])
+  })
+})
+
+describe("getStatusWatchdogCandidateSessionIds", () => {
+  test("polls only sessions with live active status", () => {
+    expect(getStatusWatchdogCandidateSessionIds({
+      session: [createSession("busy"), createSession("stale-history")],
+      session_status: {
+        busy: { type: "busy" } as SessionStatus,
+        idle: { type: "idle" } as SessionStatus,
+      },
+      message: {
+        "stale-history": [createAssistantMessage("m-1", "stale-history")],
+      },
+    })).toEqual(["busy"])
   })
 })

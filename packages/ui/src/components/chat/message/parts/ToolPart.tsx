@@ -11,7 +11,7 @@ import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionMessageRecords, useEnsureSessionMessages } from '@/sync/sync-context';
+import { useSessionMessageRecords, useEnsureSessionMessages, useSessionStatus, useSessionStatusObservedAt, useSessionStatusSnapshotAt } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -54,6 +54,7 @@ import {
     stripTaskMetadataFromOutput,
     type TaskToolSummaryEntry,
 } from './taskToolModel';
+import { shouldSuppressTaskLoading } from './shouldSuppressTaskLoading';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import { getDiffPatchEntries, getPatchText } from './toolDiffUtils';
@@ -2120,6 +2121,14 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, partMetadata, taskOutputString]);
 
     const taskSessionId = explicitTaskSessionId;
+    const shouldObserveTaskStatus = isTaskTool && !isFinalized && activeLatched;
+    const activeTaskStatusSessionId = shouldObserveTaskStatus ? taskSessionId : undefined;
+    const activeTaskParentSessionId = shouldObserveTaskStatus && !taskSessionId ? currentSessionId : undefined;
+    const observedTaskSessionId = activeTaskStatusSessionId ?? activeTaskParentSessionId;
+    const childSessionStatus = useSessionStatus(activeTaskStatusSessionId ?? '', currentDirectory);
+    const parentSessionStatus = useSessionStatus(activeTaskParentSessionId ?? '', currentDirectory);
+    const statusObservedAt = useSessionStatusObservedAt(observedTaskSessionId ?? '', currentDirectory);
+    const statusSnapshotAt = useSessionStatusSnapshotAt(currentDirectory, shouldObserveTaskStatus);
     // 关闭详情时不必为竖线摘要拉取子会话消息
     const childSessionLookupId = (!showSubagentTaskDetails || hasFinalMetadataTaskSummary) ? '' : (taskSessionId ?? '');
 
@@ -2160,6 +2169,20 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
     const effectiveTimeEnd = isFinalized ? (pinnedTime.end ?? time?.end ?? localFinalizedAt) : undefined;
     const isActive = !isFinalized && activeLatched;
+    const suppressTaskLoading = shouldSuppressTaskLoading({
+        isTaskTool,
+        isFinalized,
+        taskSessionId,
+        childSessionStatus,
+        parentSessionStatus,
+        statusObservedAt,
+        taskStartedAt: effectiveTimeStart,
+        statusSnapshotAt,
+    });
+    const effectiveActive = isActive && !suppressTaskLoading;
+    React.useEffect(() => {
+        if (suppressTaskLoading) setActiveLatched(false);
+    }, [suppressTaskLoading]);
     const shouldTreatAsFinalized = isFinalized;
 
     const taskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
@@ -2375,11 +2398,11 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
     const iconStyle = !isTaskTool && isError ? TOOL_ERROR_ICON_STYLE : TOOL_NORMAL_ICON_STYLE;
     const titleStyle = !isTaskTool && isError ? TOOL_ERROR_TITLE_STYLE : TOOL_NORMAL_TITLE_STYLE;
-    const taskBusy = Boolean(isTaskTool && isActive && !isError);
+    const taskBusy = Boolean(isTaskTool && effectiveActive && !isError);
     const shouldRenderTaskSummary = useDeferredExpandedContent(
         isTaskTool
         && showSubagentTaskDetails
-        && (taskSummaryEntries.length > 0 || isActive || shouldTreatAsFinalized || !!taskSessionId)
+        && (taskSummaryEntries.length > 0 || effectiveActive || shouldTreatAsFinalized || !!taskSessionId)
     );
     const shouldRenderExpandedContent = useDeferredExpandedContent(!isTaskTool && !isFileNavTool && isExpanded);
 
@@ -2475,7 +2498,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     {isMultiFileApplyPatch ? (
                         <>
                             <MinDurationShineText
-                                active={Boolean(isActive && !isError)}
+                                active={Boolean(effectiveActive && !isError)}
                                 minDurationMs={300}
                                 className={cn(TOOL_ROW_TITLE_CLASS, 'flex-shrink-0')}
                                 style={titleStyle}
@@ -2501,7 +2524,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                     </span>
                                 ) : (
                                     <MinDurationShineText
-                                        active={Boolean(isActive && !isError)}
+                                        active={Boolean(effectiveActive && !isError)}
                                         minDurationMs={300}
                                         className={cn(TOOL_ROW_TITLE_CLASS, 'flex-shrink-0')}
                                         style={titleStyle}
@@ -2516,7 +2539,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                     <LiveDuration
                                         start={effectiveTimeStart}
                                         end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
-                                        active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
+                                        active={Boolean(effectiveActive && typeof effectiveTimeEnd !== 'number')}
                                     />
                                 </span>
                             ) : null}
@@ -2590,7 +2613,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     onShowPopup={onShowPopup}
                     input={input}
                     animateTailText={animateTailText}
-                    isActive={isActive}
+                    isActive={effectiveActive}
                 />
             ) : null}
 

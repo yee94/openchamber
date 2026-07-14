@@ -19,6 +19,12 @@ type ReconnectCandidateOptions = {
   viewedSession?: ViewedSessionMaterializationTarget | null
 }
 
+export function getStatusWatchdogCandidateSessionIds(state: ReconnectMaterializationState): string[] {
+  return Object.entries(state.session_status ?? {})
+    .filter(([, status]) => status && status.type !== "idle")
+    .map(([sessionId]) => sessionId)
+}
+
 export function getReconnectMaterializationSessionIds(
   candidateSessionIds: string[],
   options?: ReconnectCandidateOptions,
