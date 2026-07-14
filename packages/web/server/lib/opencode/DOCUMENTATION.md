@@ -213,6 +213,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `registerConfigEntityRoutes(app, dependencies)`: registers configuration entity routes:
   - Agents: `/api/config/agents/:name` and `/api/config/agents/:name/config`
   - Commands: batched metadata via `POST /api/config/commands/metadata`, plus CRUD at `/api/config/commands/:name`
+  - Global raw configs: `GET/PUT /api/config/global/:target` for `opencode`, `oh-my-opencode-slim`, and `oh-my-openagent`
   - MCP servers: `/api/config/mcp` and `/api/config/mcp/:name`
   - Snippets: `/api/config/snippets`, `/api/config/snippets/:name`, and `/api/config/snippets/expand`
 

@@ -128,6 +128,26 @@ describe('core-routes', () => {
     expect(response.body).toEqual({ body: { content: 'Snippet body' } });
   });
 
+  // Global raw config saves send { content: "<jsonc string>" }. Without this
+  // prefix in the JSON middleware allowlist, PUT arrives with an empty body and
+  // the handler rejects with "Configuration content must be a string".
+  it('should parse JSON bodies for global config routes', async () => {
+    const app = express();
+    registerCommonRequestMiddleware(app, { express });
+    app.put('/api/config/global/oh-my-opencode-slim', (req, res) => {
+      res.json({ body: req.body });
+    });
+
+    const response = await request(app)
+      .put('/api/config/global/oh-my-opencode-slim')
+      .send({ content: '{\n  "preset": "openai"\n}' })
+      .expect(200);
+
+    expect(response.body).toEqual({
+      body: { content: '{\n  "preset": "openai"\n}' },
+    });
+  });
+
   it('should parse JSON bodies for Electron session-index writes', async () => {
     const app = express();
     const replaceDirectory = vi.fn();

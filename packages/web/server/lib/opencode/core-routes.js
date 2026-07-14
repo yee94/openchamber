@@ -1062,6 +1062,7 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
     } else if (
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/commands') ||
+      req.path.startsWith('/api/config/global') ||
       req.path.startsWith('/api/config/mcp') ||
       req.path.startsWith('/api/config/snippets') ||
       req.path.startsWith('/api/config/settings') ||
