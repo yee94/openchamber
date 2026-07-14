@@ -187,6 +187,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             : []
           ),
           ...(canStartSessionCommand
+            ? [{ id: 'openchamber:goal', name: 'goal', source: 'openchamber' as const, description: t('chat.goal.button.armAria'), isBuiltIn: true }]
+            : []
+          ),
+          ...(canStartSessionCommand
             ? [{ id: 'openchamber:catch-up', name: 'catch-up', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.catchUpDescription'), isOpenChamber: true }]
             : []
           ),
@@ -255,6 +259,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           ),
           ...(canStartSessionCommand
             ? [{ id: 'openchamber:craft-goal', name: 'craft-goal', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.craftGoalDescription'), isOpenChamber: true }]
+            : []
+          ),
+          ...(canStartSessionCommand
+            ? [{ id: 'openchamber:goal', name: 'goal', source: 'openchamber' as const, description: t('chat.goal.button.armAria'), isBuiltIn: true }]
             : []
           ),
           ...(canStartSessionCommand
@@ -358,6 +366,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         return <Icon name="time" className="h-3.5 w-3.5" />;
       case 'compact':
         return <Icon name="scissors" className="h-3.5 w-3.5 text-purple-500" />;
+      case 'goal':
+        return <Icon name="target" className="h-3.5 w-3.5" />;
       case 'review':
         return <Icon name="search-eye" className="h-3.5 w-3.5 text-blue-500" />;
       case 'test':

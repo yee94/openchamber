@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.4] - 2026-07-14
+
+- **Composer:** streamline the input toolbar and add the `/goal` system command. Active goals now use a compact, removable outline target state.
+
 ## [1.16.3] - 2026-07-14
 
 - **Global configuration:** saving OpenCode, oh-my-opencode-slim, and oh-my-openagent raw configuration now parses the JSON request body correctly.

@@ -2190,6 +2190,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.goal.action.resume': 'Wznów',
   'chat.goal.action.markComplete': 'Oznacz jako ukończony',
   'chat.goal.action.clear': 'Usuń cel',
+  'chat.goal.chip.label': 'Cel',
   'chat.goal.action.cancel': 'Anuluj',
   'chat.goal.action.save': 'Zapisz cel',
   'chat.goal.action.start': 'Rozpocznij cel',
