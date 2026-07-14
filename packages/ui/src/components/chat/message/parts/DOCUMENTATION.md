@@ -34,6 +34,9 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - While a task is active, title + description use `animate-text-shimmer` (same loading highlight as
     thinking traces). Subagent names need not appear in the main agent picker — the identicon only
     seeds from the name string.
+  - A successful session-status snapshot stops stale task loading when the child session is idle
+    or when the task started before the snapshot request. Tasks created after that boundary wait
+    for live status. The original tool part remains unchanged for history and diagnostics.
   - If you want to change expandable tool layout, edit here.
 
 - `taskToolModel.ts`

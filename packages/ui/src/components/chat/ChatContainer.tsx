@@ -39,6 +39,8 @@ import {
     useSyncDirectory,
     useDirectorySync,
     useSessionStatus,
+    useSessionStatusObservedAt,
+    useSessionStatusSnapshotAt,
     useScopedBlockingPermissions,
     useScopedBlockingQuestions,
     useParentSession,
@@ -638,7 +640,10 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     usePlanDetection(currentSessionId ?? '', sessionMessages);
 
     // Session status from sync system
-    const sessionStatusForCurrent = useSessionStatus(currentSessionId ?? '', effectiveSessionDirectory) ?? IDLE_SESSION_STATUS;
+    const resolvedSessionStatus = useSessionStatus(currentSessionId ?? '', effectiveSessionDirectory);
+    const sessionStatusObservedAt = useSessionStatusObservedAt(currentSessionId ?? '', effectiveSessionDirectory);
+    const sessionStatusSnapshotAt = useSessionStatusSnapshotAt(effectiveSessionDirectory);
+    const sessionStatusForCurrent = resolvedSessionStatus ?? IDLE_SESSION_STATUS;
 
     // Scoped blocking requests — only subscribe to permissions/questions for
     // the current session + descendant subagent sessions, not all sessions in
@@ -657,12 +662,29 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         }
 
         const lastMessage = sessionMessages[sessionMessages.length - 1]?.info as Message | undefined;
+        const lastMessageStartedAt = (lastMessage as { time?: { created?: number } } | undefined)?.time?.created;
+        if (
+            resolvedSessionStatus
+            && typeof sessionStatusObservedAt === 'number'
+            && typeof lastMessageStartedAt === 'number'
+            && lastMessageStartedAt <= sessionStatusObservedAt
+        ) {
+            return false;
+        }
+
+        if (
+            typeof sessionStatusSnapshotAt === 'number'
+            && typeof lastMessageStartedAt === 'number'
+            && lastMessageStartedAt <= sessionStatusSnapshotAt
+        ) {
+            return false;
+        }
         return Boolean(
             lastMessage
             && lastMessage.role === 'assistant'
             && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== 'number',
         );
-    }, [currentSessionId, sessionMessages, sessionPermissions.length, sessionQuestions.length, sessionStatusForCurrent.type]);
+    }, [currentSessionId, resolvedSessionStatus, sessionMessages, sessionPermissions.length, sessionQuestions.length, sessionStatusForCurrent.type, sessionStatusObservedAt, sessionStatusSnapshotAt]);
     const activeRetryStatus = React.useMemo(() => {
         if (!currentSessionId || sessionStatusForCurrent.type !== 'retry') {
             return null;

@@ -86,6 +86,16 @@ describe("applySessionStatusSnapshot", () => {
       expect(changed).toBe(true)
       expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
     })
+
+    test("records idle for a fresh client when the successful snapshot omits the candidate", () => {
+      const store = createDirectoryStore({
+        session_status: {},
+        message: { ses_a: streamingMessage() },
+      })
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative")
+      expect(changed).toBe(true)
+      expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
+    })
   })
 })
 

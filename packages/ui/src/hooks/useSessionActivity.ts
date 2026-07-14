@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionStatus, useSessionMessages, useSessionPermissions, useSessionQuestions } from '@/sync/sync-context';
+import { useSessionStatus, useSessionMessages, useSessionPermissions, useSessionQuestions, useSessionStatusObservedAt, useSessionStatusSnapshotAt } from '@/sync/sync-context';
 
 // Mirrors OpenCode SessionStatus: busy|retry|idle.
 type SessionActivityPhase = 'idle' | 'busy' | 'retry';
@@ -29,9 +29,11 @@ const IDLE_RESULT: SessionActivityResult = {
  */
 function useSessionActivity(sessionId: string | null | undefined, directory?: string): SessionActivityResult {
   const status = useSessionStatus(sessionId ?? '', directory);
+  const statusObservedAt = useSessionStatusObservedAt(sessionId ?? '', directory);
   const messages = useSessionMessages(sessionId ?? '', directory);
   const permissions = useSessionPermissions(sessionId ?? '', directory);
   const questions = useSessionQuestions(sessionId ?? '', directory);
+  const statusSnapshotAt = useSessionStatusSnapshotAt(directory);
 
   return React.useMemo<SessionActivityResult>(() => {
     if (!sessionId) return IDLE_RESULT;
@@ -50,12 +52,24 @@ function useSessionActivity(sessionId: string | null | undefined, directory?: st
       && lastMessage.role === 'assistant'
       && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== 'number',
     );
+    const pendingAssistantStartedAt = (lastMessage as { time?: { created?: number } } | undefined)?.time?.created;
+    const pendingAssistantCoveredBySnapshot = Boolean(
+      hasPendingAssistant
+      && typeof statusSnapshotAt === 'number'
+      && typeof pendingAssistantStartedAt === 'number'
+      && pendingAssistantStartedAt <= statusSnapshotAt,
+    );
 
     const hasAuthoritativeStatus = status !== undefined;
     const statusWorking = hasAuthoritativeStatus && phase !== 'idle';
-    const isWorking = statusWorking || hasPendingAssistant;
+    const isWorking = statusWorking || (hasPendingAssistant && !pendingAssistantCoveredBySnapshot);
 
-    if (hasAuthoritativeStatus && !statusWorking) return IDLE_RESULT;
+    const idleCoversPendingAssistant = hasAuthoritativeStatus
+      && !statusWorking
+      && typeof statusObservedAt === 'number'
+      && typeof pendingAssistantStartedAt === 'number'
+      && pendingAssistantStartedAt <= statusObservedAt;
+    if (hasAuthoritativeStatus && !statusWorking && (!hasPendingAssistant || idleCoversPendingAssistant)) return IDLE_RESULT;
 
     if (!isWorking) return IDLE_RESULT;
 
@@ -65,7 +79,7 @@ function useSessionActivity(sessionId: string | null | undefined, directory?: st
       isBusy: phase === 'busy' || (!statusWorking && hasPendingAssistant),
       isCooldown: false,
     };
-  }, [sessionId, status, messages, permissions, questions]);
+  }, [sessionId, status, statusObservedAt, messages, permissions, questions, statusSnapshotAt]);
 }
 
 export function useCurrentSessionActivity(): SessionActivityResult {

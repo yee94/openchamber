@@ -52,6 +52,8 @@ export type State = {
   session: Session[]
   sessionTotal: number
   session_status: Record<string, SessionStatus>
+  session_status_observed_at: Record<string, number>
+  session_status_snapshot_at: number | undefined
   session_diff: Record<string, FileDiff[]>
   todo: Record<string, Todo[]>
   permission: Record<string, PermissionRequest[]>
@@ -122,6 +124,8 @@ export const INITIAL_STATE: State = {
   session: [],
   sessionTotal: 0,
   session_status: {},
+  session_status_observed_at: {},
+  session_status_snapshot_at: undefined,
   session_diff: {},
   todo: {},
   permission: {},

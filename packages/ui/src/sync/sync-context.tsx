@@ -27,7 +27,11 @@ import { setSyncRefs } from "./sync-refs"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { applySessionEventToGlobalSessions } from "./session-event-router"
 import { syncDebug } from "./debug"
-import { getReconnectCandidateSessionIds, getReconnectMaterializationSessionIds } from "./reconnect-recovery"
+import {
+  getReconnectCandidateSessionIds,
+  getReconnectMaterializationSessionIds,
+  getStatusWatchdogCandidateSessionIds,
+} from "./reconnect-recovery"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { useConfigStore } from "@/stores/useConfigStore"
@@ -523,6 +527,7 @@ export function applySessionStatusSnapshot(
   snapshot: DirectorySessionStatusSnapshot,
   candidateSessionIds: string[],
   mode: StatusSnapshotMode,
+  observedAt?: number,
 ): boolean {
   if (candidateSessionIds.length === 0) return false
 
@@ -530,7 +535,14 @@ export function applySessionStatusSnapshot(
   store.setState((state: DirectoryStore) => {
     const current = state.session_status ?? {}
     let next: Record<string, SessionStatus> | undefined
+    let nextObservedAt: Record<string, number> | undefined
     const draft = () => (next ??= { ...current })
+    const observedDraft = () => (nextObservedAt ??= { ...state.session_status_observed_at })
+    const confirmObservedAt = (sessionId: string) => {
+      if (observedAt === undefined || state.session_status_observed_at[sessionId] === observedAt) return
+      observedDraft()[sessionId] = observedAt
+      changed = true
+    }
 
     for (const sessionId of candidateSessionIds) {
       const incoming = toSessionStatus(snapshot[sessionId])
@@ -541,6 +553,7 @@ export function applySessionStatusSnapshot(
           draft()[sessionId] = incoming
           changed = true
         }
+        confirmObservedAt(sessionId)
         continue
       }
 
@@ -549,13 +562,18 @@ export function applySessionStatusSnapshot(
       if (mode === "monotonic") continue
 
       const existing = current[sessionId]
-      if (existing && existing.type !== "idle") {
+      if (!existing || existing.type !== "idle") {
         draft()[sessionId] = { type: "idle" }
         changed = true
       }
+      confirmObservedAt(sessionId)
     }
 
-    return next ? { session_status: next } : state
+    if (!next && !nextObservedAt) return state
+    return {
+      ...(next ? { session_status: next } : {}),
+      ...(nextObservedAt ? { session_status_observed_at: nextObservedAt } : {}),
+    }
   })
 
   return changed
@@ -567,11 +585,15 @@ async function resyncDirectorySessionStatuses(
   candidateSessionIds: string[],
   mode: StatusSnapshotMode,
 ): Promise<DirectorySessionStatusSnapshot | null> {
+  const requestedAt = Date.now()
   const nextStatuses = await opencodeClient.getSessionStatusForDirectory(directory)
   // null = fetch failed; preserve existing state. {} or populated = a snapshot
   // of active sessions — reconciled per `mode` (absence ≠ idle under monotonic).
   if (nextStatuses === null) return null
-  applySessionStatusSnapshot(store, nextStatuses, candidateSessionIds, mode)
+  if (mode === "authoritative") {
+    store.setState({ session_status_snapshot_at: requestedAt })
+  }
+  applySessionStatusSnapshot(store, nextStatuses, candidateSessionIds, mode, requestedAt)
   return nextStatuses
 }
 
@@ -1433,7 +1455,7 @@ function handleEvent(
           const store = childStores.getChild(dir)
           if (store && store.getState().status !== "loading") {
             // Mark as loading to trigger re-bootstrap
-            store.setState({ status: "loading" as const })
+            store.setState({ status: "loading" as const, session_status_snapshot_at: undefined })
             childStores.ensureChild(dir)
           }
         }
@@ -1605,6 +1627,7 @@ function handleEvent(
     case "session.updated":
     case "session.deleted":
       draft.session = [...current.session]
+      draft.session_status_observed_at = { ...current.session_status_observed_at }
       draft.permission = { ...current.permission }
       draft.todo = { ...current.todo }
       draft.part = { ...current.part }
@@ -1616,6 +1639,7 @@ function handleEvent(
     case "session.idle":
     case "session.error":
       draft.session_status = { ...(current.session_status ?? {}) }
+      draft.session_status_observed_at = { ...current.session_status_observed_at }
       break
     case "todo.updated":
       draft.todo = { ...current.todo }
@@ -1654,6 +1678,7 @@ function handleEvent(
     onSetSessionTodo: (sessionID, todos) => {
       useTodosPersistStore.getState().setSessionTodos(sessionID, todos)
     },
+    now: Date.now,
   })
   const reducerChanged = typeof reducerResult === "boolean" ? reducerResult : reducerResult.changed
   const materializationResult = typeof reducerResult === "boolean" ? undefined : reducerResult.materialization
@@ -1996,7 +2021,7 @@ export function SyncProvider(props: {
           const now = Date.now()
           for (const [directory, store] of childStores.children.entries()) {
             const state = store.getState()
-            const candidateSessionIds = getActiveSessionCandidateIds(directory, state)
+            const candidateSessionIds = getStatusWatchdogCandidateSessionIds(state)
             if (candidateSessionIds.length === 0) {
               lastStatusPollAtByDirectoryRef.current.delete(directory)
               lastFullResyncAtByDirectoryRef.current.delete(directory)
@@ -2167,6 +2192,32 @@ export function useSessionStatus(sessionID: string, directory?: string) {
     if (!sessionID) return () => undefined
     return store.subscribe(notify)
   }, [sessionID, store])
+  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export function useSessionStatusObservedAt(sessionID: string, directory?: string) {
+  const store = useDirectoryStore(directory)
+  const getSnapshot = useCallback(() => {
+    if (!sessionID) return undefined
+    return store.getState().session_status_observed_at?.[sessionID]
+  }, [sessionID, store])
+  const subscribe = useCallback((notify: () => void) => {
+    if (!sessionID) return () => undefined
+    return store.subscribe(notify)
+  }, [sessionID, store])
+  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export function useSessionStatusSnapshotAt(directory?: string, enabled = true) {
+  const store = useDirectoryStore(directory)
+  const getSnapshot = useCallback(
+    () => enabled ? store.getState().session_status_snapshot_at : undefined,
+    [enabled, store],
+  )
+  const subscribe = useCallback(
+    (notify: () => void) => enabled ? store.subscribe(notify) : () => undefined,
+    [enabled, store],
+  )
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
