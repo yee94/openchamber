@@ -3182,6 +3182,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [clearDropTextSuppression]);
 
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        // Leader chord owns the keyboard: ignore stray IME/text mutations so
+        // compose letters never land in the controlled composer value.
+        if (isLeaderKeyPending) {
+            return;
+        }
+
         const nativeInputEvent = e.nativeEvent as InputEvent | undefined;
         if (isVSCodeRuntime() && suppressNextFileDropTextInsertRef.current) {
             const candidateAbsolutePaths = pendingDroppedAbsolutePathsRef.current;
@@ -5357,6 +5363,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 ref={textareaRef}
                                 data-chat-input="true"
                                 value={message}
+                                // readOnly while Ctrl+X leader is pending: IME
+                                // insertCompositionText is often non-cancelable,
+                                // so blocking editability is what actually stops
+                                // Chinese/Japanese letters leaking into the box.
+                                readOnly={isLeaderKeyPending}
                                 onChange={handleTextChange}
                                 onBeforeInput={handleBeforeInput}
                                 onKeyDown={handleKeyDown}

@@ -1,13 +1,14 @@
 # Session Title Refresh
 
 Server-side watcher that regenerates a session's sidebar title from the
-**latest** conversation turns with the small model (`lib/small-model`), then
-PATCHes `title` plus `metadata.openchamber.titleRefresh`.
+conversation's **main subject** (overall feature / goal) with the small model
+(`lib/small-model`), then PATCHes `title` plus `metadata.openchamber.titleRefresh`.
 
 OpenCode only auto-titles once from the first user message
-(`SessionPrompt.ensureTitle`). Long sessions often drift to a different topic;
-this module keeps the sidebar title aligned with what the user is currently
-discussing, throttled to at most once per 5 minutes per session.
+(`SessionPrompt.ensureTitle`). Long sessions often need a refresh; this module
+keeps the sidebar title aligned with the durable work being done — not the last
+wrap-up utterance like "commit and push" — throttled to at most once per 5
+minutes per session.
 
 ## Flow
 
@@ -35,9 +36,13 @@ discussing, throttled to at most once per 5 minutes per session.
    - Set `metadata.openchamber.titleRefresh.isGenerating` while the small
      model call is active so connected clients animate the existing sidebar
      title as a loading state.
-   - Call `generateSmallModelText` with the latest few turns, biased toward
-     the most recent topic, restricted to the session's own provider unless
-     the user explicitly configured a small model.
+   - Call `generateSmallModelText` with the latest few turns plus an earlier
+     subject anchor (first real user message when it fell outside the latest
+     window) and the current title as a continuity hint. The prompt asks the
+     model to name the main subject of the work, keep that subject across
+     wrap-up turns, and only switch when the user clearly started a new topic.
+     Restricted to the session's own provider unless the user explicitly
+     configured a small model.
 4. Clean the model output to a single short line, then PATCH `title` and
    `metadata.openchamber.titleRefresh` (`lastAutoTitle`, `forMessageID`,
    `generatedAt`) from a fresh session read so concurrent metadata writes
