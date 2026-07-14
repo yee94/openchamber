@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.7] - 2026-07-14
+
+- **Maintenance release:** align workspace package versions for the new release.
+
 ## [1.16.6] - 2026-07-14
 
 - **AI summaries:** configure provider or custom OpenAI-compatible models, API credentials, and separate prompts for commit messages and session titles.
