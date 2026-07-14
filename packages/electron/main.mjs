@@ -14,6 +14,9 @@ import { ElectronSshManager } from './ssh-manager.mjs';
 import { createTrayController } from './tray.mjs';
 import { resolveManagedOpenCodeCwd } from './opencode-cwd.mjs';
 import { sanitizeRuntimeRequestHeaders } from './runtime-request-headers.mjs';
+import { assertUpdaterCapability } from './updater-capability.mjs';
+import { checkForDesktopUpdate } from './updater-check.mjs';
+import { resolveUpdaterFeed } from './updater-feed.mjs';
 import { mintOutsideFileGrant } from '@openchamber/web/server/lib/fs/routes.js';
 
 const execFileAsync = promisify(execFile);
@@ -60,6 +63,9 @@ const shouldStartInBackground = (loginItemSettings = readLoginItemSettings()) =>
 // Set the product name early so electron-log derives its log directory as
 // ~/Library/Logs/OpenChamber/ (not ~/Library/Logs/@openchamber/electron/).
 app.setName('OpenChamber');
+if (process.platform === 'linux') {
+  app.setDesktopName('openchamber.desktop');
+}
 if (isDev) {
   app.setPath('userData', path.join(app.getPath('appData'), 'OpenChamber Dev'));
 }
@@ -2291,12 +2297,11 @@ const readThemeSource = () => {
 };
 
 const getWindowIconPath = () => {
-  if (process.platform !== 'win32' && process.platform !== 'linux') {
-    return undefined;
-  }
+  if (process.platform !== 'win32' && process.platform !== 'linux') return undefined;
+  const iconFileName = process.platform === 'linux' ? 'icon.png' : 'icon.ico';
   const iconPath = isDev
-    ? path.join(__dirname, 'resources', 'icons', 'icon.ico')
-    : path.join(process.resourcesPath, 'icons', 'icon.ico');
+    ? path.join(__dirname, 'resources', 'icons', iconFileName)
+    : path.join(process.resourcesPath, 'icons', iconFileName);
   return fs.existsSync(iconPath) ? iconPath : undefined;
 };
 
@@ -2318,7 +2323,8 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   const desktopRequestHeaders = rendererRuntimeConfig.requestHeaders || {};
   const desktopHome = os.homedir() || '';
   const desktopMacosMajor = String(macosMajorVersion());
-  const usesCustomTitleBar = process.platform === 'darwin' || process.platform === 'win32';
+  const usesFramelessChrome = process.platform === 'win32' || process.platform === 'linux';
+  const usesCustomTitleBar = process.platform === 'darwin' || usesFramelessChrome;
   // macOS vibrancy, on by default; users can disable it (Appearance settings).
   const useVibrancy = process.platform === 'darwin' && readSettingsRoot().desktopVibrancy !== false;
   const titleBarOverlayEnabled = false;
@@ -2340,7 +2346,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
     // here: setting it in the constructor leaves the material uncomposited on a
     // cold launch until a window event. No `transparent: true` either — vibrancy
     // alone is enough and composites reliably once applied to a live window.
-    frame: process.platform === 'win32' ? false : undefined,
+    frame: usesFramelessChrome ? false : undefined,
     autoHideMenuBar: autoHidesNativeMenuBar,
     // Electron's hiddenInset adds its own extra inset, which leaves the controls
     // visibly lower than the app header. Use a plain hidden title bar instead.
@@ -2741,6 +2747,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   const desktopRequestHeaders = effectiveRuntimeConfig.requestHeaders || {};
   const desktopHome = os.homedir() || '';
   const desktopMacosMajor = String(macosMajorVersion());
+  const usesFramelessChrome = process.platform === 'win32' || process.platform === 'linux';
   // macOS vibrancy, on by default; users can disable it (Appearance settings).
   const useVibrancy = process.platform === 'darwin' && readSettingsRoot().desktopVibrancy !== false;
   const browserWindow = new BrowserWindow({
@@ -2756,9 +2763,9 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     // here: setting it in the constructor leaves the material uncomposited on a
     // cold launch until a window event. No `transparent: true` either — vibrancy
     // alone is enough and composites reliably once applied to a live window.
-    frame: process.platform === 'win32' ? false : undefined,
+    frame: usesFramelessChrome ? false : undefined,
     autoHideMenuBar: process.platform !== 'darwin',
-    titleBarStyle: process.platform === 'darwin' || process.platform === 'win32' ? 'hidden' : 'default',
+    titleBarStyle: process.platform === 'darwin' || usesFramelessChrome ? 'hidden' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 17 } : undefined,
     webPreferences: {
       additionalArguments: [
@@ -2993,7 +3000,6 @@ const checkMacOSReleaseUpdate = async () => {
     manualUpdate: true,
   };
 };
-
 const setupAutoUpdater = () => {
   if (!app.isPackaged) {
     return;
@@ -3005,11 +3011,16 @@ const setupAutoUpdater = () => {
   autoUpdater.disableWebInstaller = false;
   autoUpdater.logger = log;
 
-  const { owner, repo } = parseGithubRepo();
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner,
-    repo,
+  const testBuild = typeof __OPENCHAMBER_UPDATER_E2E_BUILD__ !== 'undefined'
+    && __OPENCHAMBER_UPDATER_E2E_BUILD__ === true;
+  const resolvedFeed = resolveUpdaterFeed({ testBuild });
+  const feed = resolvedFeed.provider === 'github'
+    ? { ...resolvedFeed, ...GITHUB_REPOSITORY }
+    : resolvedFeed;
+  autoUpdater.setFeedURL(feed);
+  log.info('[electron] updater feed configured', {
+    provider: feed.provider,
+    target: feed.provider === 'github' ? `${feed.owner}/${feed.repo}` : feed.url,
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -3969,7 +3980,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         emitToAllWindows('openchamber:installed-apps-updated', apps);
       };
       if (process.platform !== 'darwin' && process.platform !== 'win32') {
-        throw new Error('desktop_get_installed_apps is only supported on macOS and Windows');
+        return { apps: [], hasCache: false, isCacheStale: false, supported: false };
       }
       if (!hasCache || isCacheStale || args.force === true) {
         void refresh();
@@ -4072,22 +4083,22 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_check_for_updates': {
+      assertUpdaterCapability({ packaged: app.isPackaged });
       const currentVersion = APP_VERSION;
       if (process.platform === 'darwin') {
         return checkMacOSReleaseUpdate();
       }
 
-      const updateResult = await autoUpdater.checkForUpdates();
-
-      const updateInfo = updateResult?.updateInfo;
-      const nextVersion =
-        (typeof updateInfo?.version === 'string' && updateInfo.version) ||
-        currentVersion;
-      const available = compareSemver(nextVersion, currentVersion) > 0;
+      const { available, updateInfo, updateResult, nextVersion, pendingUpdate } = await checkForDesktopUpdate({
+        autoUpdater,
+        currentVersion,
+        pendingUpdate: state.pendingUpdate,
+        compareVersions: compareSemver,
+      });
       const body =
         (typeof updateInfo?.releaseNotes === 'string' && updateInfo.releaseNotes.trim() ? updateInfo.releaseNotes : null) ||
         await parseRelevantChangelogNotes(currentVersion, nextVersion);
-      state.pendingUpdate = available ? { version: nextVersion, electronUpdate: updateResult } : null;
+      state.pendingUpdate = pendingUpdate;
       return {
         available,
         currentVersion,
@@ -4100,6 +4111,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_download_and_install_update':
+      assertUpdaterCapability({ packaged: app.isPackaged });
       if (!state.pendingUpdate) {
         throw new Error('No pending update');
       }
@@ -4145,6 +4157,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 
     case 'desktop_restart': {
       const applyUpdate = Boolean(state.pendingUpdate?.downloaded && app.isPackaged);
+      if (applyUpdate) assertUpdaterCapability({ packaged: app.isPackaged });
       log.info(`[electron] desktop_restart applyUpdate=${applyUpdate} packaged=${app.isPackaged}`);
       if (applyUpdate && process.platform === 'darwin' && typeof app.isInApplicationsFolder === 'function') {
         try {

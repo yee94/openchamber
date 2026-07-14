@@ -28,6 +28,7 @@ import { useSidebarPersistence } from './sidebar/hooks/useSidebarPersistence';
 import { useProjectRepoStatus } from './sidebar/hooks/useProjectRepoStatus';
 import { useProjectSessionLists } from './sidebar/hooks/useProjectSessionLists';
 import { useSessionFolderCleanup } from './sidebar/hooks/useSessionFolderCleanup';
+import { createSessionOwnershipIndex } from './sidebar/sessionOwnership';
 import { useStickyProjectHeaders } from './sidebar/hooks/useStickyProjectHeaders';
 import { getGitHubPrStatusKey, usePrVisualSummaryByKeys, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
@@ -67,7 +68,6 @@ import { derivePinnedSessions } from './sidebar/pinnedSessions';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
-  collectKnownProjectDirectories,
   normalizePath,
 } from './sidebar/utils';
 import {
@@ -1214,30 +1214,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }>;
   }, [projects]);
 
-  const knownProjectDirectories = React.useMemo(
-    () => collectKnownProjectDirectories(normalizedProjects, availableWorktreesByProject, isVSCode),
-    [availableWorktreesByProject, isVSCode, normalizedProjects],
-  );
-
   const normalizedProjectPaths = React.useMemo(
     () => normalizedProjects.map((project) => project.normalizedPath),
     [normalizedProjects],
   );
 
   const projectSessionDirectories = React.useMemo(() => {
-    const directories = new Set<string>();
-    normalizedProjects.forEach((project) => {
-      if (project.normalizedPath) directories.add(project.normalizedPath);
-      if (isVSCode) {
-        return;
+    const directories = new Set(normalizedProjects.map((project) => project.normalizedPath));
+    if (!isVSCode) {
+      for (const worktrees of availableWorktreesByProject.values()) {
+        for (const worktree of worktrees) {
+          const directory = normalizePath(worktree.path);
+          if (directory) directories.add(directory);
+        }
       }
-      const worktrees =
-        availableWorktreesByProject.get(project.normalizedPath) ?? [];
-      worktrees.forEach((worktree) => {
-        const directory = normalizePath(worktree.path);
-        if (directory) directories.add(directory);
-      });
-    });
+    }
     return [...directories].sort();
   }, [availableWorktreesByProject, isVSCode, normalizedProjects]);
 
@@ -1329,6 +1320,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const isSessionsLoading = useSessionUIStore((state) => state.isLoading);
+  const sessionOwnership = React.useMemo(
+    () => createSessionOwnershipIndex(sessions, normalizedProjects, availableWorktreesByProject, isVSCode, archivedSessions),
+    [archivedSessions, availableWorktreesByProject, isVSCode, normalizedProjects, sessions],
+  );
   useSessionFolderCleanup({
     isSessionsLoading,
     fullCatalogSessionIds,
@@ -1338,11 +1333,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const { getSessionsForProject, getArchivedSessionsForProject } = useProjectSessionLists({
-    isVSCode,
-    sessions,
-    archivedSessions,
-    availableWorktreesByProject,
-    knownProjectDirectories,
+    ownership: sessionOwnership,
   });
 
   // Per-project loading: a project is loading when any of its directories (root or
@@ -1394,14 +1385,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   useArchivedAutoFolders({
     normalizedProjects,
-    sessions,
-    archivedSessions,
-    availableWorktreesByProject,
-    isVSCode,
+    ownership: sessionOwnership,
     isSessionsLoading,
     fullCatalogSessionIds,
     fullCatalogGeneration,
-    knownProjectDirectories,
     foldersMap,
     createFolder,
     addSessionToFolder,
