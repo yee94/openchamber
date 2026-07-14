@@ -252,6 +252,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['messages', 'header'],
   },
   {
+    id: 'chat.prompt-navigator',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.promptNavigatorEnabled',
+    keywords: ['prompt', 'navigator', 'navigation', 'timeline', 'scroll'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'chat.collapsible-user-messages',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.collapsibleUserMessages',
@@ -396,6 +403,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.openchamber.desktopNetwork.field.launchAtLoginDescription',
     keywords: ['desktop', 'startup', 'login'],
     isAvailable: (ctx) => ctx.isDesktopLocalOrigin,
+  },
+  {
+    id: 'sessions.desktop-window-controls-position',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.desktopNetwork.field.windowControlsPosition',
+    descriptionKey: 'settings.openchamber.desktopNetwork.field.windowControlsPositionDescription',
+    keywords: ['desktop', 'window', 'controls', 'minimize', 'maximize', 'close', 'titlebar', 'linux', 'windows'],
+    isAvailable: (ctx) => ctx.isDesktop && (ctx.isWindows || !ctx.isMac),
   },
   {
     id: 'sessions.desktop-minimize-to-tray',

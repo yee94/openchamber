@@ -88,8 +88,23 @@
 
 > **Prerequisite:** Desktop bundles the matching OpenCode CLI. CLI/Web and VS Code use your installed [OpenCode CLI](https://opencode.ai).
 
-### **Desktop (macOS + Windows)**
+### **Desktop (macOS + Windows + Linux)**
 Download from [Releases](https://github.com/yee94/openchamber/releases).
+
+On Linux, choose the AppImage for your system:
+
+- `linux-x86_64.AppImage` for 64-bit Intel or AMD systems
+- `linux-arm64.AppImage` for ARM64/aarch64 systems
+
+Make the AppImage executable before launching it, for example with `chmod +x <downloaded-appimage>`. Keep the AppImage in a location your user can write to so OpenChamber can download and apply in-app updates.
+
+Linux AppImages need FUSE (`libfuse.so.2`). On Ubuntu/Debian install `libfuse2` (or `fuse` / `libfuse2t64` on newer releases). Run with extraction when FUSE is unavailable:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenChamber-*-linux-*.AppImage
+```
+
+Linux Desktop ships as AppImage with in-app window controls and auto-update when running from a writable AppImage. System tray and launch-at-login are available on macOS and Windows.
 
 ### **VS Code**
 Install from [Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.openchamber) or search "OpenChamber" in Extensions.

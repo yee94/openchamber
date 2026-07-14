@@ -6,6 +6,7 @@ import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import type { RouteState, AppRouteState } from '@/lib/router';
 import type { MainTab } from '@/stores/useUIStore';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
+import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
 
 const SESSION_ROUTE_TIMEOUT_MS = 30_000;
 
@@ -32,9 +33,18 @@ function isVSCodeContext(): boolean {
  * - Web: Full bidirectional sync
  * - Desktop: Full bidirectional sync
  * - VS Code: State-only (no URL updates, reads initial params)
+ * - Embedded session-chat iframe (`?ocPanel=session-chat`): No URL updates.
+ *   The iframe's session identity is fixed at mount (the parent builds the
+ *   src with `sessionId`); in-place subtask navigation must NOT rewrite the
+ *   URL, otherwise `ocPanel` (and `directory`/`readOnly`) get stripped and
+ *   `isEmbeddedSessionChat()` starts returning false, breaking subsequent
+ *   "Open subtask" clicks.
  */
 export function useRouter(): void {
   const isVSCode = React.useMemo(() => isVSCodeContext(), []);
+  // Captured once at mount: the iframe's embedded-ness never changes during
+  // its lifetime (a parent src swap is a full reload).
+  const isEmbeddedChat = React.useMemo(() => isEmbeddedSessionChat(), []);
 
   // Track initialization to avoid duplicate applies
   const initializedRef = React.useRef(false);
@@ -156,14 +166,14 @@ export function useRouter(): void {
    */
   const syncURLFromState = React.useCallback(
     (options: { replace?: boolean } = {}) => {
-      if (isVSCode || isApplyingRouteRef.current) {
+      if (isVSCode || isEmbeddedChat || isApplyingRouteRef.current) {
         return;
       }
 
       const state = getCurrentAppState();
       updateBrowserURL(state, options);
     },
-    [isVSCode, getCurrentAppState]
+    [isVSCode, isEmbeddedChat, getCurrentAppState]
   );
 
   // Initialize: parse URL and apply route on mount
@@ -189,7 +199,7 @@ export function useRouter(): void {
       // Use the parsed route values instead of an immediate store snapshot so
       // deep links do not briefly normalize `?session=...` back to `/` while
       // the session's directory/message bootstrap is still catching up.
-      if (!isVSCode) {
+      if (!isVSCode && !isEmbeddedChat) {
         updateBrowserURL({
           ...getCurrentAppState(),
           sessionId: route.sessionId ?? useSessionUIStore.getState().currentSessionId,
@@ -201,7 +211,7 @@ export function useRouter(): void {
     };
 
     void initializeRoute();
-  }, [applyRoute, getCurrentAppState, isVSCode]);
+  }, [applyRoute, getCurrentAppState, isVSCode, isEmbeddedChat]);
 
   // A deep-linked session can be absent while the startup index is loading.
   // Resolve it from the completed authoritative snapshot, or return home.
@@ -237,7 +247,7 @@ export function useRouter(): void {
 
   // Subscribe to session changes
   React.useEffect(() => {
-    if (isVSCode) {
+    if (isVSCode || isEmbeddedChat) {
       return;
     }
 
@@ -256,11 +266,11 @@ export function useRouter(): void {
     });
 
     return unsubscribe;
-  }, [isVSCode, syncURLFromState]);
+  }, [isVSCode, isEmbeddedChat, syncURLFromState]);
 
   // Subscribe to UI store changes (tab, settings)
   React.useEffect(() => {
-    if (isVSCode) {
+    if (isVSCode || isEmbeddedChat) {
       return;
     }
 
@@ -293,11 +303,11 @@ export function useRouter(): void {
     });
 
     return unsubscribe;
-  }, [isVSCode, syncURLFromState]);
+  }, [isVSCode, isEmbeddedChat, syncURLFromState]);
 
   // Listen for browser back/forward navigation
   React.useEffect(() => {
-    if (typeof window === 'undefined' || isVSCode) {
+    if (typeof window === 'undefined' || isVSCode || isEmbeddedChat) {
       return;
     }
 
@@ -328,5 +338,5 @@ export function useRouter(): void {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [applyRoute, isVSCode, setActiveMainTab, setSettingsDialogOpen]);
+  }, [applyRoute, isVSCode, isEmbeddedChat, setActiveMainTab, setSettingsDialogOpen]);
 }

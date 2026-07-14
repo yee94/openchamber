@@ -36,6 +36,12 @@ Use this doc when you ask an agent to change tool/header/description behavior.
     seeds from the name string.
   - If you want to change expandable tool layout, edit here.
 
+- `taskToolModel.ts`
+  - Owns Task metadata parsing and child-session summary projection.
+  - `part.state.metadata.sessionId` is the only live identity contract between a Task and its child session.
+  - A running Task may briefly have no `sessionId`; render it as waiting until the authoritative part update arrives. Never match parallel children by order, title, timestamp, or status.
+  - Part-level metadata and output parsing exist only for older persisted records and never override state metadata.
+
 - `toolPresentation.tsx`
   - Shared icon mapping for tool names (`getToolIcon`).
   - Used by both `ProgressiveGroup.tsx` and `ToolPart.tsx`.

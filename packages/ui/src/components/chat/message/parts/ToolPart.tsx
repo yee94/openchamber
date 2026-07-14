@@ -24,9 +24,9 @@ import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
 import type { ToolPopupContent } from '../types';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
-import type { MessageRecord } from '@/lib/messageCompletion';
 import { ensureOutsideFileGrantForDesktop } from '@/lib/outsideFileGrants';
 import { getDirectoryForFilePath, isFilePathWithinDirectory, toAbsoluteFilePath } from '@/lib/path-utils';
+import { resolveFallbackTaskSessionId } from './resolveFallbackTaskSessionId';
 
 import { TOOL_ROW_CHIP_CLASS, TOOL_ROW_INTERACTIVE_CHROME_CLASS } from './toolRowChrome';
 import {
@@ -46,14 +46,22 @@ import { MinDurationShineText } from './MinDurationShineText';
 import { ToolRevealOnMount } from './ToolRevealOnMount';
 import { getToolIcon } from './toolPresentation';
 import { useDurationTickerNow } from './useDurationTicker';
-import { resolveFallbackTaskSessionId } from './resolveFallbackTaskSessionId';
-import { readTaskTagSessionIdFromOutput } from './taskSessionIdParser';
+import {
+    buildTaskSummaryEntriesFromSession,
+    normalizeTaskSummaryEntries,
+    parseTaskMetadataBlock,
+    readTaskSessionIdFromOutput,
+    readTaskSessionIdFromRecord,
+    stripTaskMetadataFromOutput,
+    type TaskToolSummaryEntry,
+} from './taskToolModel';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import { getDiffPatchEntries, getPatchText } from './toolDiffUtils';
 import { useDeferredToolHydration } from './deferredToolHydrationContext';
 import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { DualLimitLru } from '@/lib/dualLimitLru';
+import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -1009,94 +1017,6 @@ const ToolScrollableTextOutput: React.FC<{
 
 ToolScrollableTextOutput.displayName = 'ToolScrollableTextOutput';
 
-type TaskToolSummaryEntry = {
-    id?: string;
-    tool?: string;
-    state?: {
-        status?: string;
-        title?: string;
-        input?: Record<string, unknown>;
-    };
-};
-
-type SessionMessageWithParts = MessageRecord;
-
-const normalizeSessionIdCandidate = (value: unknown): string | undefined => {
-    if (typeof value !== 'string') {
-        return undefined;
-    }
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-};
-
-const readTaskSessionIdFromRecord = (value: unknown): string | undefined => {
-    if (!value || typeof value !== 'object') {
-        return undefined;
-    }
-
-    const record = value as Record<string, unknown>;
-    return (
-        normalizeSessionIdCandidate(record.sessionID)
-        ?? normalizeSessionIdCandidate(record.sessionId)
-    );
-};
-
-const readTaskSessionIdFromOutput = (output: string | undefined): string | undefined => {
-    if (typeof output !== 'string' || output.trim().length === 0) {
-        return undefined;
-    }
-    const parsedMetadata = parseTaskMetadataBlock(output);
-    if (parsedMetadata.sessionId) {
-        return parsedMetadata.sessionId;
-    }
-    const taskMatch = output.match(/task_id\s*:\s*([^\s<"']+)/i);
-    const sessionMatch = output.match(/session[_\s-]?id\s*:\s*([^\s<"']+)/i);
-    const candidate = taskMatch?.[1] ?? sessionMatch?.[1];
-    if (candidate) {
-        return normalizeSessionIdCandidate(candidate);
-    }
-
-    // OpenCode tool output may wrap child session id in <task id="ses_xxx">
-    const taskTagSessionId = readTaskTagSessionIdFromOutput(output);
-    if (taskTagSessionId) {
-        return normalizeSessionIdCandidate(taskTagSessionId);
-    }
-    return undefined;
-};
-
-const buildTaskSummaryEntriesFromSession = (messages: SessionMessageWithParts[]): TaskToolSummaryEntry[] => {
-    const entries: TaskToolSummaryEntry[] = [];
-
-    for (const message of messages) {
-        if (message?.info?.role !== 'assistant') {
-            continue;
-        }
-        const parts = Array.isArray(message.parts) ? message.parts : [];
-        for (const part of parts) {
-            if (part?.type !== 'tool') {
-                continue;
-            }
-            const toolName = normalizeToolName(part.tool);
-            if (!toolName || toolName === 'task' || toolName === 'todowrite' || toolName === 'todoread') {
-                continue;
-            }
-            const partState = part.state as { status?: string; title?: string; input?: unknown } | undefined;
-            entries.push({
-                id: part.id,
-                tool: part.tool,
-                state: {
-                    status: partState?.status,
-                    title: partState?.title,
-                    input: partState?.input && typeof partState.input === 'object'
-                        ? (partState.input as Record<string, unknown>)
-                        : undefined,
-                },
-            });
-        }
-    }
-
-    return entries;
-};
 
 const getTaskSummaryLabel = (entry: TaskToolSummaryEntry): string => {
     const title = entry.state?.title;
@@ -1295,105 +1215,6 @@ const TaskSummaryEntriesList = React.memo(({
 
 TaskSummaryEntriesList.displayName = 'TaskSummaryEntriesList';
 
-const stripTaskMetadataFromOutput = (output: string): string => {
-    // Strip only a trailing <task_metadata>...</task_metadata> block.
-    return output.replace(/\n*<task_metadata>[\s\S]*?<\/task_metadata>\s*$/i, '').trimEnd();
-};
-
-const normalizeTaskSummaryEntries = (value: unknown): TaskToolSummaryEntry[] => {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-
-    const normalized: TaskToolSummaryEntry[] = [];
-    for (const entry of value) {
-        if (typeof entry === 'string') {
-            normalized.push({
-                tool: 'tool',
-                state: { status: 'completed', title: entry },
-            });
-            continue;
-        }
-
-        if (!entry || typeof entry !== 'object') {
-            continue;
-        }
-
-        const record = entry as {
-            id?: unknown;
-            tool?: unknown;
-            title?: unknown;
-            status?: unknown;
-            state?: { status?: unknown; title?: unknown; input?: unknown };
-        };
-
-        const stateStatus = typeof record.state?.status === 'string' ? record.state.status : undefined;
-        const stateTitle = typeof record.state?.title === 'string' ? record.state.title : undefined;
-        const status = stateStatus ?? (typeof record.status === 'string' ? record.status : undefined);
-        const title = stateTitle ?? (typeof record.title === 'string' ? record.title : undefined);
-
-        normalized.push({
-            id: typeof record.id === 'string' ? record.id : undefined,
-            tool: typeof record.tool === 'string' ? record.tool : 'tool',
-            state: {
-                status,
-                title,
-                input: record.state?.input && typeof record.state.input === 'object'
-                    ? (record.state.input as Record<string, unknown>)
-                    : undefined,
-            },
-        });
-    }
-
-    return normalized;
-};
-
-const parseTaskMetadataBlock = (output: string | undefined): {
-    sessionId?: string;
-    summaryEntries: TaskToolSummaryEntry[];
-} => {
-    if (typeof output !== 'string' || output.trim().length === 0) {
-        return { summaryEntries: [] };
-    }
-
-    const blockMatch = output.match(/<task_metadata>\s*([\s\S]*?)\s*<\/task_metadata>/i);
-    if (!blockMatch?.[1]) {
-        return { summaryEntries: [] };
-    }
-
-    const raw = blockMatch[1].trim();
-    if (!raw) {
-        return { summaryEntries: [] };
-    }
-
-    try {
-        const parsed = JSON.parse(raw) as {
-            sessionId?: unknown;
-            sessionID?: unknown;
-            summary?: unknown;
-            entries?: unknown;
-            tools?: unknown;
-            calls?: unknown;
-        };
-
-        const summaryEntries = normalizeTaskSummaryEntries(
-            parsed.summary ?? parsed.entries ?? parsed.tools ?? parsed.calls
-        );
-
-        const sessionId =
-            (typeof parsed.sessionId === 'string' && parsed.sessionId.trim().length > 0
-                ? parsed.sessionId.trim()
-                : undefined) ??
-            (typeof parsed.sessionID === 'string' && parsed.sessionID.trim().length > 0
-                ? parsed.sessionID.trim()
-                : undefined);
-
-        return { sessionId, summaryEntries };
-    } catch {
-        return { summaryEntries: [] };
-    }
-};
-
 const TaskToolSummary: React.FC<{
     entries: TaskToolSummaryEntry[];
     isExpanded: boolean;
@@ -1423,7 +1244,10 @@ const TaskToolSummary: React.FC<{
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
         if (sessionId && currentDirectory) {
-            if (isMobile || runtime?.runtime.isVSCode) {
+            // In contexts with no ContextPanel (embedded session-chat iframe)
+            // or single-surface layouts (mobile, VS Code), navigate in place.
+            // Otherwise open a new side-panel tab.
+            if (isEmbeddedSessionChat() || isMobile || runtime?.runtime.isVSCode) {
                 setCurrentSession(sessionId, currentDirectory);
                 return;
             }
@@ -2294,6 +2118,8 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             return undefined;
         }
 
+        // Current OpenCode publishes this authoritative join while the Task is
+        // running. The remaining sources only support older persisted parts.
         const metadataSessionId = readTaskSessionIdFromRecord(metadata);
         if (metadataSessionId) {
             return metadataSessionId;

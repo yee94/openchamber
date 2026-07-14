@@ -543,6 +543,12 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
       store.setWeekStartPreference(settings.weekStartPreference);
     }
   }
+  if (typeof settings.desktopWindowControlsPosition === 'string'
+    && (settings.desktopWindowControlsPosition === 'auto' || settings.desktopWindowControlsPosition === 'left' || settings.desktopWindowControlsPosition === 'right')) {
+    if (settings.desktopWindowControlsPosition !== store.desktopWindowControlsPosition) {
+      store.setDesktopWindowControlsPosition(settings.desktopWindowControlsPosition);
+    }
+  }
   if (typeof settings.chatRenderMode === 'string'
     && (settings.chatRenderMode === 'sorted' || settings.chatRenderMode === 'live')) {
     if (settings.chatRenderMode !== store.chatRenderMode) {
@@ -578,6 +584,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (typeof settings.stickyUserHeader === 'boolean' && settings.stickyUserHeader !== store.stickyUserHeader) {
     store.setStickyUserHeader(settings.stickyUserHeader);
+  }
+  if (typeof settings.promptNavigatorEnabled === 'boolean' && settings.promptNavigatorEnabled !== store.promptNavigatorEnabled) {
+    store.setPromptNavigatorEnabled(settings.promptNavigatorEnabled);
   }
   if (typeof settings.expandedEditorToolbar === 'boolean' && settings.expandedEditorToolbar !== store.expandedEditorToolbar) {
     store.setExpandedEditorToolbar(settings.expandedEditorToolbar);
@@ -1120,6 +1129,10 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     && (candidate.weekStartPreference === 'auto' || candidate.weekStartPreference === 'sunday' || candidate.weekStartPreference === 'monday')) {
     result.weekStartPreference = candidate.weekStartPreference;
   }
+  if (typeof candidate.desktopWindowControlsPosition === 'string'
+    && (candidate.desktopWindowControlsPosition === 'auto' || candidate.desktopWindowControlsPosition === 'left' || candidate.desktopWindowControlsPosition === 'right')) {
+    result.desktopWindowControlsPosition = candidate.desktopWindowControlsPosition;
+  }
   if (typeof candidate.chatRenderMode === 'string'
     && (candidate.chatRenderMode === 'sorted' || candidate.chatRenderMode === 'live')) {
     result.chatRenderMode = candidate.chatRenderMode;
@@ -1145,6 +1158,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.stickyUserHeader === 'boolean') {
     result.stickyUserHeader = candidate.stickyUserHeader;
+  }
+  if (typeof candidate.promptNavigatorEnabled === 'boolean') {
+    result.promptNavigatorEnabled = candidate.promptNavigatorEnabled;
   }
   if (typeof candidate.wideChatLayoutEnabled === 'boolean') {
     result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled;

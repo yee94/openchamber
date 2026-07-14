@@ -20,6 +20,7 @@ export type ActivityRenderMode = 'collapsed' | 'summary';
 export type SessionRetentionAction = 'archive' | 'delete';
 export type TimeFormatPreference = 'auto' | '12h' | '24h';
 export type WeekStartPreference = 'auto' | 'sunday' | 'monday';
+export type DesktopWindowControlsPosition = 'auto' | 'left' | 'right';
 export type FileEditorKeymap = 'default' | 'vim';
 
 function normalizeFileEditorKeymap(value: unknown): FileEditorKeymap {
@@ -615,6 +616,7 @@ interface UIStore {
   diffWrapLines: boolean;
   gitChangesViewMode: 'flat' | 'tree';
   isTimelineDialogOpen: boolean;
+  isPromptNavigatorPanelOpen: boolean;
   isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
@@ -654,10 +656,12 @@ interface UIStore {
   showSubagentTaskDetails: boolean;
   timeFormatPreference: TimeFormatPreference;
   weekStartPreference: WeekStartPreference;
+  desktopWindowControlsPosition: DesktopWindowControlsPosition;
   mermaidRenderingMode: MermaidRenderingMode;
   userMessageRenderingMode: UserMessageRenderingMode;
   collapsibleUserMessages: boolean;
   stickyUserHeader: boolean;
+  promptNavigatorEnabled: boolean;
   expandedEditorToolbar: boolean;
   showSplitAssistantMessageActions: boolean;
   allowPromptingSubagentSessions: boolean;
@@ -790,6 +794,8 @@ interface UIStore {
   setGitChangesViewMode: (mode: 'flat' | 'tree') => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
+  setPromptNavigatorPanelOpen: (open: boolean) => void;
+  togglePromptNavigatorPanel: () => void;
   setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
@@ -815,10 +821,12 @@ interface UIStore {
   setShowSubagentTaskDetails: (value: boolean) => void;
   setTimeFormatPreference: (value: TimeFormatPreference) => void;
   setWeekStartPreference: (value: WeekStartPreference) => void;
+  setDesktopWindowControlsPosition: (value: DesktopWindowControlsPosition) => void;
   setMermaidRenderingMode: (value: MermaidRenderingMode) => void;
   setUserMessageRenderingMode: (value: UserMessageRenderingMode) => void;
   setCollapsibleUserMessages: (value: boolean) => void;
   setStickyUserHeader: (value: boolean) => void;
+  setPromptNavigatorEnabled: (value: boolean) => void;
   setExpandedEditorToolbar: (value: boolean) => void;
   setShowSplitAssistantMessageActions: (value: boolean) => void;
   setAllowPromptingSubagentSessions: (value: boolean) => void;
@@ -931,6 +939,7 @@ export const useUIStore = create<UIStore>()(
         diffWrapLines: false,
         gitChangesViewMode: 'tree',
         isTimelineDialogOpen: false,
+        isPromptNavigatorPanelOpen: false,
         isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
@@ -967,10 +976,12 @@ export const useUIStore = create<UIStore>()(
         showSubagentTaskDetails: false,
         timeFormatPreference: 'auto',
         weekStartPreference: 'auto',
+        desktopWindowControlsPosition: 'auto',
         mermaidRenderingMode: 'svg',
         userMessageRenderingMode: 'markdown',
         collapsibleUserMessages: true,
         stickyUserHeader: false,
+        promptNavigatorEnabled: false,
         expandedEditorToolbar: false,
         showSplitAssistantMessageActions: false,
         allowPromptingSubagentSessions: false,
@@ -2147,6 +2158,14 @@ export const useUIStore = create<UIStore>()(
           set({ isTimelineDialogOpen: open });
         },
 
+        setPromptNavigatorPanelOpen: (open) => {
+          set({ isPromptNavigatorPanelOpen: open });
+        },
+
+        togglePromptNavigatorPanel: () => {
+          set((state) => ({ isPromptNavigatorPanelOpen: !state.isPromptNavigatorPanelOpen }));
+        },
+
         setImagePreviewOpen: (open) => {
           set({ isImagePreviewOpen: open });
         },
@@ -2214,6 +2233,9 @@ export const useUIStore = create<UIStore>()(
         setWeekStartPreference: (value) => {
           set({ weekStartPreference: value });
         },
+        setDesktopWindowControlsPosition: (value) => {
+          set({ desktopWindowControlsPosition: value });
+        },
         setMermaidRenderingMode: (value) => {
           set({ mermaidRenderingMode: value });
         },
@@ -2225,6 +2247,9 @@ export const useUIStore = create<UIStore>()(
         },
         setStickyUserHeader: (value) => {
           set({ stickyUserHeader: value });
+        },
+        setPromptNavigatorEnabled: (value) => {
+          set({ promptNavigatorEnabled: value });
         },
         setExpandedEditorToolbar: (value: boolean) => {
           set({ expandedEditorToolbar: value });
@@ -2473,10 +2498,12 @@ export const useUIStore = create<UIStore>()(
           showSubagentTaskDetails: state.showSubagentTaskDetails,
           timeFormatPreference: state.timeFormatPreference,
           weekStartPreference: state.weekStartPreference,
+          desktopWindowControlsPosition: state.desktopWindowControlsPosition,
           mermaidRenderingMode: state.mermaidRenderingMode,
           userMessageRenderingMode: state.userMessageRenderingMode,
           collapsibleUserMessages: state.collapsibleUserMessages,
           stickyUserHeader: state.stickyUserHeader,
+          promptNavigatorEnabled: state.promptNavigatorEnabled,
           expandedEditorToolbar: state.expandedEditorToolbar,
           showSplitAssistantMessageActions: state.showSplitAssistantMessageActions,
           allowPromptingSubagentSessions: state.allowPromptingSubagentSessions,
