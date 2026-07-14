@@ -453,6 +453,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.project.actions.newWorktree': '新しいワークツリー',
   'sessions.sidebar.project.actions.newWorktreeEllipsis': '新しいワークツリー...',
   'sessions.sidebar.project.actions.projectMenu': 'プロジェクトメニュー',
+  'sessions.sidebar.project.actions.syncSessions': 'セッションを同期',
   'sessions.sidebar.project.actions.newSession': '新しいセッション',
   'sessions.sidebar.project.actions.closeProject': 'プロジェクトを閉じる',
   'sessions.sidebar.project.actions.edit': '編集',

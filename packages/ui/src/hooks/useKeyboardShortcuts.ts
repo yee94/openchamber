@@ -475,6 +475,11 @@ export const useKeyboardShortcuts = () => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Local controls such as CodeMirror get first priority for their own shortcuts.
+      if (e.defaultPrevented) {
+        return;
+      }
+
       // The terminal capture handler owns Cmd/Ctrl+W before Ghostty consumes it.
       if (eventMatchesShortcut(e, combo('close_context_panel_tab'))) {
         if (requestEmbeddedSessionChatTabClose() || handleCloseContextPanelTabOrWindow()) {

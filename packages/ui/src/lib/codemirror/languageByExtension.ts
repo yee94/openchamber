@@ -4,7 +4,7 @@ import type { Extension } from '@codemirror/state';
 // Less common languages are loaded dynamically via loadLanguageByExtension
 // to keep the initial bundle lean.
 import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
+import { json, jsonLanguage } from '@codemirror/lang-json';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
 import { markdown } from '@codemirror/lang-markdown';
@@ -16,6 +16,9 @@ import { tags as t } from '@lezer/highlight';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 
 const shellLanguage = StreamLanguage.define(shell);
+const jsonCommentTokens = jsonLanguage.data.of({
+  commentTokens: { line: '//', block: { open: '/*', close: '*/' } },
+});
 
 export function codeBlockLanguageResolver(info: string): Language | LanguageDescription | null {
   const normalized = info.trim().toLowerCase();
@@ -114,9 +117,10 @@ export function languageByExtension(filePath: string): Extension | null {
       return javascript({ typescript: false, jsx: ext === 'jsx' });
 
     // Web (keep static)
-    case 'json':
     case 'jsonc':
     case 'json5':
+      return [json(), jsonCommentTokens];
+    case 'json':
     case 'jsonl':
     case 'ndjson':
     case 'geojson':

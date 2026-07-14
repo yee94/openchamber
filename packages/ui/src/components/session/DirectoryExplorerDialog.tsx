@@ -22,6 +22,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { opencodeClient } from '@/lib/opencode/client';
 import { useI18n } from '@/lib/i18n';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 
 interface DirectoryExplorerDialogProps {
   open: boolean;
@@ -366,17 +367,28 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     onOpenChange(false);
   }, [onOpenChange]);
 
+  const selectAddedProjectForDraft = React.useCallback((project: { id: string; path: string }) => {
+    const sessionUiState = useSessionUIStore.getState();
+    if (!sessionUiState.newSessionDraft?.open) return;
+    sessionUiState.setNewSessionDraftTarget({
+      projectId: project.id,
+      directoryOverride: project.path,
+    }, { force: true });
+  }, []);
+
   const handleQuickAdd = React.useCallback((event: React.MouseEvent, path: string) => {
     event.stopPropagation();
     const normalized = normalizeDirectoryPath(path);
     if (normalized && addedProjectPaths.has(normalized)) return;
-    const added = addProject(path);
-    if (!added) {
+    const project = addProject(path);
+    if (!project) {
       toast.error(t('directoryExplorerDialog.toast.failedToAddProject'), {
         description: t('directoryExplorerDialog.toast.selectValidDirectoryPath'),
       });
+      return;
     }
-  }, [addProject, addedProjectPaths, t]);
+    selectAddedProjectForDraft(project);
+  }, [addProject, addedProjectPaths, selectAddedProjectForDraft, t]);
 
   const finalizeSelection = React.useCallback(async (target: string) => {
     if (!target || isConfirming) return;
@@ -402,13 +414,14 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       } else if (shouldCreateSelection) {
         await opencodeClient.createDirectory(target);
       }
-      const added = addProject(selectedTarget);
-      if (!added) {
+      const project = addProject(selectedTarget);
+      if (!project) {
         toast.error(t('directoryExplorerDialog.toast.failedToAddProject'), {
           description: t('directoryExplorerDialog.toast.selectValidDirectoryPath'),
         });
         return;
       }
+      selectAddedProjectForDraft(project);
       handleClose();
     } catch (error) {
       toast.error(t('directoryExplorerDialog.toast.failedToSelectDirectory'), {
@@ -417,7 +430,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     } finally {
       setIsConfirming(false);
     }
-  }, [addProject, addedProjectPaths, cloneRemoteUrl, handleClose, isCloneMode, isConfirming, selectedGitIdentity?.id, shouldCreateTarget, targetPath, t]);
+  }, [addProject, addedProjectPaths, cloneRemoteUrl, handleClose, isCloneMode, isConfirming, selectAddedProjectForDraft, selectedGitIdentity?.id, shouldCreateTarget, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));

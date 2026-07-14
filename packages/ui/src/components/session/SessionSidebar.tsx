@@ -76,6 +76,7 @@ import {
   refreshArchivedSessionsForDirectories,
   refreshGlobalSessionsForDirectories,
   resolveGlobalSessionDirectory,
+  syncGlobalSessionsForDirectories,
   useGlobalSessionsStore,
 } from "@/stores/useGlobalSessionsStore";
 import {
@@ -1033,6 +1034,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     },
     [collectDirectoriesForProjectId],
   );
+
+  const syncProjectSessions = React.useCallback((projectId: string) => {
+    const directories = collectDirectoriesForProjectId(projectId);
+    if (directories.length === 0) return;
+    void syncGlobalSessionsForDirectories(
+      directories,
+      syncSessionsSnapshotRef.current,
+    );
+  }, [collectDirectoriesForProjectId]);
 
   // Persisted expanded projects are already open when the sidebar mounts, so
   // they never pass through toggleProject's "expanding" branch. Once collapse
@@ -2459,6 +2469,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setSessionSwitcherOpen={setSessionSwitcherOpen}
         openNewSessionDraft={openNewSessionDraftFromTree}
         openNewWorktreeDialog={openNewWorktreeDialog}
+        syncProjectSessions={syncProjectSessions}
         openProjectEditDialog={setEditingProjectDialogId}
         removeProject={removeProject}
         projectHeaderSentinelRefs={projectHeaderSentinelRefs}

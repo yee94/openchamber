@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.8] - 2026-07-14
+
+- **AI summaries:** add dedicated summary settings for provider, custom OpenAI-compatible models, credentials, and prompts for commit messages and session titles.
+- **Sessions:** surface live cross-project activity in the sidebar and improve project navigation, ordering, and directory exploration.
+- **Settings:** improve metadata, search, defaults, localization, and responsive settings layout across supported languages.
+- **Editor:** expand file-extension language detection and cover the mapping with regression tests.
+
 ## [1.16.6] - 2026-07-14
 
 - **AI summaries:** configure provider or custom OpenAI-compatible models, API credentials, and separate prompts for commit messages and session titles.

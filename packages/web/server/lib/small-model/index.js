@@ -207,6 +207,37 @@ export async function listCallableProviders() {
   }
 }
 
+export async function listCallableModels() {
+  try {
+    const auth = readAuthFile();
+    const catalog = await getModelCatalog().catch(() => ({}));
+    const providers = await listCallableProviders();
+    const result = {};
+
+    for (const providerID of providers) {
+      if (providerID === 'openai' && auth.openai?.type === 'oauth') {
+        result[providerID] = ['gpt-5.4-mini'];
+        continue;
+      }
+      if (providerID === 'github-copilot') {
+        result[providerID] = ['gpt-5.4-nano'];
+        continue;
+      }
+      const provider = getCatalogProvider(catalog, providerID);
+      const modelIDs = Object.values(provider?.models || {})
+        .map((model) => typeof model?.id === 'string' ? model.id : '')
+        .filter(Boolean);
+      if (modelIDs.length > 0) {
+        result[providerID] = modelIDs;
+      }
+    }
+
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 
 /**
  * Reports which model would be used, without calling it.

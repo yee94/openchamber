@@ -106,6 +106,12 @@ This keeps cold/global lists responsive without requiring a refetch after every 
 
 Live activity/status indicators must not depend on this cache. They must derive from aggregated child-store state.
 
+Cross-directory status aggregation resolves duplicate session entries by the
+latest status observation time. A transition into `busy` or `retry` also
+advances the session's local activity ordering time, so externally started
+OpenCode work becomes visible in the bounded sidebar list without treating
+token/message delta events as new user activity.
+
 Sidebar directory refreshes are intentionally bounded snapshots, not full catalogs:
 
 - active and archived requests are independent and capped at 20 rows per directory
