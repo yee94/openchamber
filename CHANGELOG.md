@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.5] - 2026-07-14
+
+- **Session titles:** auto-refresh now keeps naming the overall feature/subject across follow-ups and wrap-up turns like commit/push, instead of retitling from the last housekeeping message.
+- **Keyboard shortcuts:** the Ctrl+X leader chord no longer lets Chinese/Japanese IME composition leak letters into the composer.
+- **Composer:** model/provider menus return focus to the chat input after Esc/Enter.
+
 ## [1.16.4] - 2026-07-14
 
 - **Composer:** streamline the input toolbar and add the `/goal` system command. Active goals now use a compact, removable outline target state.
