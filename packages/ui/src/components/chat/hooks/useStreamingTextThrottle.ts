@@ -7,7 +7,7 @@ interface UseStreamingTextThrottleInput {
     identityKey?: string;
 }
 
-const DEFAULT_STREAMING_TEXT_THROTTLE_MS = 100;
+const DEFAULT_STREAMING_TEXT_THROTTLE_MS = 20;
 
 const computeStreamingThrottleDelay = (lastEmitAt: number, now: number, throttleMs: number): number => {
     const elapsed = now - lastEmitAt;

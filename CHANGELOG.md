@@ -26,6 +26,25 @@ All notable changes to this project will be documented in this file.
 - Mobile: renaming a saved instance no longer breaks its connection — the stored access token was getting lost on edit.
 - Mobile: on Android 15 the app no longer draws under the status bar.
 - Security: requests that spoof local host headers to look like same-machine traffic are rejected.
+## [1.15.29] - 2026-07-13
+
+- **Cross-device session sync:** preserve the event directory for remotely created sessions and surface global busy or retry activity in the session list before a directory store is subscribed.
+
+## [1.15.28] - 2026-07-13
+
+- **Mobile haptics:** mark a newly opened native app as foreground immediately so streaming and toast feedback work from the first launch after installation.
+
+## [1.15.27] - 2026-07-13
+
+- **Mobile haptics:** refresh visible streaming text every 20ms, provide matching light haptic feedback, and trigger the same feedback whenever an in-app toast appears.
+
+## [1.15.26] - 2026-07-13
+
+- **Command autocomplete:** pressing Enter on a skill only inserts it into the composer so arguments or context can be added first; system and OpenCode commands still run immediately.
+
+## [1.15.25] - 2026-07-13
+
+- **Per-agent model memory:** when OpenChamber settings do not override the default session model, new sessions and agent switches restore each agent's last user-selected model and variant instead of falling back to OpenCode defaults.
 
 ## [1.15.24] - 2026-07-13
 

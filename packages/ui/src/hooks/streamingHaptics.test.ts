@@ -3,6 +3,7 @@ import {
   evaluateHaptics,
   isCapacitorMobileNative,
   isCapacitorNativePlatform,
+  shouldTriggerHaptic,
   type HapticsInput,
 } from './streamingHaptics';
 
@@ -38,5 +39,12 @@ describe('evaluateHaptics', () => {
   test('skips updates while backgrounded or hidden', () => {
     expect(evaluateHaptics(baseInput({ isForeground: false })).reason).toBe('background');
     expect(evaluateHaptics(baseInput({ isVisible: false })).reason).toBe('hidden');
+  });
+});
+
+describe('haptic cadence', () => {
+  test('allows haptics every 20ms', () => {
+    expect(shouldTriggerHaptic(100, 119)).toBe(false);
+    expect(shouldTriggerHaptic(100, 120)).toBe(true);
   });
 });
