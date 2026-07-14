@@ -34,7 +34,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
 import { toast } from "@/components/ui"
 import { appendNotification } from "./notification-store"
-import { applyGlobalSessionStatusEvent } from "./global-session-status"
+import { applyGlobalSessionStatusEvent, useGlobalSessionStatusStore } from "./global-session-status"
 import type { State } from "./types"
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
 import type { PermissionRequest } from "@/types/permission"
@@ -141,9 +141,29 @@ function useLiveSyncSelector<T>(selector: (states: State[]) => T, isEqual: (left
 
 /** Read status for a session across all directories */
 export function useGlobalSessionStatus(sessionId: string): SessionStatus | undefined {
-  return useLiveSyncSelector(
+  const liveStatus = useLiveSyncSelector(
     useCallback((states) => findLiveSessionStatus(states, sessionId), [sessionId]),
   )
+  const fallbackStatus = useGlobalSessionStatusStore(
+    useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId]),
+  )
+  return resolveGlobalSessionStatus(liveStatus, fallbackStatus)
+}
+
+export function resolveGlobalSessionStatus(
+  liveStatus: SessionStatus | undefined,
+  fallbackStatus: "busy" | "retry" | undefined,
+): SessionStatus | undefined {
+  if (liveStatus) {
+    return liveStatus
+  }
+  if (fallbackStatus === "busy") {
+    return { type: "busy" }
+  }
+  if (fallbackStatus === "retry") {
+    return { type: "retry", attempt: 0, message: "", next: 0 }
+  }
+  return undefined
 }
 
 /** Read all session statuses (for sidebar) */
@@ -1353,7 +1373,7 @@ function handleEvent(
     return
   }
 
-  applySessionEventToGlobalSessions(payload)
+  applySessionEventToGlobalSessions(payload, directory)
   // Keep the cross-project status map current for ALL directories (mirrors the
   // global-session handling above). Child stores remain the primary source for
   // synced directories; this map covers sessions a child store doesn't list

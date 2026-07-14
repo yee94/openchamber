@@ -174,6 +174,12 @@ export const useKeyboardShortcuts = () => {
       return Array.from(openDropdowns).some((element) => element.getClientRects().length > 0);
     };
 
+    const restoreChatInputFocus = () => {
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]')?.focus({ preventScroll: true });
+      });
+    };
+
     // True when a modal/overlay should suppress leader chords (same gate as model selector).
     const hasBlockingOverlay = () => {
       const {
@@ -209,15 +215,15 @@ export const useKeyboardShortcuts = () => {
     // Capture-phase leader chord handler so Ctrl+X / follow-up keys work inside the chat input
     // without inserting characters or triggering Cut.
     const handleLeaderKeyCapture = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || e.repeat) {
-        return;
-      }
-
-      if (isTerminalEventTarget(e.target)) {
-        return;
-      }
-
       const leaderPending = useLeaderKeyStore.getState().pending;
+      if (e.isComposing || e.repeat || (e.defaultPrevented && !leaderPending)) {
+        return;
+      }
+
+      if (isTerminalEventTarget(e.target) && !leaderPending) {
+        return;
+      }
+
       const leaderCombo = combo('leader_key');
 
       if (leaderPending) {
@@ -232,6 +238,7 @@ export const useKeyboardShortcuts = () => {
         if (leaderCombo && eventMatchesShortcut(e, leaderCombo)) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           armLeaderKey();
           return;
         }
@@ -241,6 +248,7 @@ export const useKeyboardShortcuts = () => {
         if (key === 'escape') {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           clearLeaderKey();
           return;
         }
@@ -254,6 +262,7 @@ export const useKeyboardShortcuts = () => {
         if (e.metaKey || e.ctrlKey || e.altKey) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           consumeLeaderTextInput();
           clearLeaderKey();
           return;
@@ -284,6 +293,7 @@ export const useKeyboardShortcuts = () => {
         if (key === 'a' && canRunChatChord) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           consumeLeaderTextInput();
           clearLeaderKey();
           setAgentSelectorOpen(!isAgentSelectorOpen);
@@ -293,6 +303,7 @@ export const useKeyboardShortcuts = () => {
         if (key === 'n' && canRunChatChord) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           consumeLeaderTextInput();
           clearLeaderKey();
           setActiveMainTab('chat');
@@ -304,17 +315,21 @@ export const useKeyboardShortcuts = () => {
         if (key === 'c' && canRunChatChord) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           consumeLeaderTextInput();
           clearLeaderKey();
           void runLeaderCompact();
+          restoreChatInputFocus();
           return;
         }
 
         // Unknown follow-up: consume the key so it does not land in the input, then exit.
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         consumeLeaderTextInput();
         clearLeaderKey();
+        restoreChatInputFocus();
         return;
       }
 
@@ -415,6 +430,9 @@ export const useKeyboardShortcuts = () => {
 
       if (sessionId && agentName && providerId && modelId) {
         useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, nextVariant);
+      }
+      if (agentName && providerId && modelId) {
+        useConfigStore.getState().saveAgentModelSelection(agentName, providerId, modelId, nextVariant);
       }
 
       return true;

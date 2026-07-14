@@ -219,6 +219,7 @@ const useNativeMobileChrome = (): void => {
   React.useEffect(() => {
     if (!isCapacitorMobileApp()) return;
 
+    document.documentElement.classList.add('oc-native-app-active');
     let disposed = false;
     const cleanup: Array<() => void> = [];
     const root = document.documentElement;
@@ -594,6 +595,7 @@ const useNativeMobileLifecycle = (onResume: () => void): void => {
     return () => {
       disposed = true;
       cleanup.forEach((remove) => remove());
+      document.documentElement.classList.remove('oc-native-app-active');
     };
   }, [onResume]);
 };
