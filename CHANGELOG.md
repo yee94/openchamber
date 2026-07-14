@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.10] - 2026-07-14
+
+- **Session index:** persist live activity timestamps and session status, ingest realtime session events, and preserve ordering across refreshes and restarts.
+- **Session loading:** improve cross-runtime session recovery, runtime endpoint resets, lazy chunk recovery, and Electron refresh diagnostics.
+- **Reliability:** expand session-index, event-reducer, global-session, and sync regression coverage.
+
 ## [1.16.9] - 2026-07-14
 
 - **AI summaries:** restrict Provider/model selection to callable summary models and clarify the behavior controlled by each prompt editor.

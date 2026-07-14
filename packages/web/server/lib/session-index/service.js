@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const MAX_ROOT_SESSIONS = 20;
 
 const normalizeDirectory = (value) => {
@@ -15,6 +15,11 @@ const normalizeDirectory = (value) => {
 const toTimestamp = (value) => (typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0);
 
 const toBooleanInt = (value) => (value ? 1 : 0);
+
+const getActivityUpdatedAt = (session) => {
+  const activityUpdatedAt = session?.metadata?.openchamber?.titleRefresh?.activityUpdatedAt;
+  return Math.max(toTimestamp(activityUpdatedAt), toTimestamp(session?.time?.updated), toTimestamp(session?.time?.created));
+};
 
 const runtimeKeyFor = (runtimeConfig) => {
   const source = typeof runtimeConfig?.apiBaseUrl === 'string' && runtimeConfig.apiBaseUrl.trim()
@@ -33,6 +38,7 @@ const toSummary = (session, fallbackDirectory) => {
     title: typeof session.title === 'string' ? session.title : '',
     createdAt: toTimestamp(session.time?.created),
     updatedAt: toTimestamp(session.time?.updated),
+    activityUpdatedAt: getActivityUpdatedAt(session),
     archivedAt: toTimestamp(session.time?.archived),
     parentID: typeof session.parentID === 'string' ? session.parentID : null,
     hasChildren: typeof session.hasChildren === 'boolean' ? session.hasChildren : null,
@@ -86,7 +92,10 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       title TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
+      activity_updated_at INTEGER NOT NULL,
       archived_at INTEGER NOT NULL DEFAULT 0,
+      status TEXT,
+      status_changed_at INTEGER NOT NULL DEFAULT 0,
       parent_id TEXT,
       has_children INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (runtime_key, directory, session_id),
@@ -101,8 +110,8 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       parent_id TEXT NOT NULL,
       PRIMARY KEY (runtime_key, directory, session_id)
     );
-    CREATE INDEX IF NOT EXISTS session_summary_runtime_updated
-      ON session_summary(runtime_key, directory, updated_at DESC, session_id DESC);
+    CREATE INDEX IF NOT EXISTS session_summary_runtime_activity
+      ON session_summary(runtime_key, directory, activity_updated_at DESC, session_id DESC);
     CREATE INDEX IF NOT EXISTS session_child_parent
       ON session_child(runtime_key, directory, parent_id);
   `);
@@ -130,21 +139,23 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       last_accessed_at = excluded.last_accessed_at
   `);
   const deleteDirectoryRows = db.prepare('DELETE FROM session_summary WHERE runtime_key = ? AND directory = ?');
-  const existingChildrenFlags = db.prepare(`
-    SELECT session_id, has_children AS hasChildren
+  const existingSummaryState = db.prepare(`
+    SELECT session_id, has_children AS hasChildren, activity_updated_at AS activityUpdatedAt,
+      status, status_changed_at AS statusChangedAt
     FROM session_summary WHERE runtime_key = ? AND directory = ?
   `);
   const insertSummary = db.prepare(`
-    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, archived_at, parent_id, has_children)
-    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @archivedAt, @parentID, @hasChildren)
+    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, activity_updated_at, archived_at, status, status_changed_at, parent_id, has_children)
+    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @activityUpdatedAt, @archivedAt, @status, @statusChangedAt, @parentID, @hasChildren)
   `);
   const upsertSummary = db.prepare(`
-    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, archived_at, parent_id, has_children)
-    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @archivedAt, @parentID, @hasChildren)
+    INSERT INTO session_summary(runtime_key, directory, session_id, title, created_at, updated_at, activity_updated_at, archived_at, status, status_changed_at, parent_id, has_children)
+    VALUES (@runtimeKey, @directory, @id, @title, @createdAt, @updatedAt, @activityUpdatedAt, @archivedAt, NULL, 0, @parentID, @hasChildren)
     ON CONFLICT(runtime_key, directory, session_id) DO UPDATE SET
       title = excluded.title,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
+      activity_updated_at = MAX(session_summary.activity_updated_at, excluded.activity_updated_at),
       archived_at = excluded.archived_at,
       parent_id = excluded.parent_id,
       has_children = excluded.has_children
@@ -186,8 +197,8 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     const normalizedDirectory = normalizeDirectory(directory);
     if (!normalizedDirectory) throw new Error('directory is required');
     const key = runtimeKey();
-    const previousHasChildrenByID = new Map(
-      existingChildrenFlags.all(key, normalizedDirectory).map((row) => [row.session_id, Boolean(row.hasChildren)]),
+    const previousStateByID = new Map(
+      existingSummaryState.all(key, normalizedDirectory).map((row) => [row.session_id, row]),
     );
     const summaries = Array.isArray(sessions)
       ? sessions.map((session) => toSummary(session, normalizedDirectory)).filter(Boolean).slice(0, MAX_ROOT_SESSIONS)
@@ -204,9 +215,13 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     });
     deleteDirectoryRows.run(key, normalizedDirectory);
     for (const summary of summaries) {
+      const previous = previousStateByID.get(summary.id);
       insertSummary.run({
         ...summary,
-        hasChildren: toBooleanInt(summary.hasChildren ?? previousHasChildrenByID.get(summary.id) ?? false),
+        activityUpdatedAt: Math.max(summary.activityUpdatedAt, toTimestamp(previous?.activityUpdatedAt)),
+        status: typeof previous?.status === 'string' ? previous.status : null,
+        statusChangedAt: toTimestamp(previous?.statusChangedAt),
+        hasChildren: toBooleanInt(summary.hasChildren ?? Boolean(previous?.hasChildren)),
         runtimeKey: key,
         directory: normalizedDirectory,
       });
@@ -221,7 +236,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     }
   });
 
-  const upsert = db.transaction((session, now = Date.now()) => {
+  const upsert = db.transaction((session, now = Date.now(), options = {}) => {
     const summary = toSummary(session);
     if (!summary) return false;
     const key = runtimeKey();
@@ -250,18 +265,21 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       return true;
     }
     const existing = db.prepare(`
-      SELECT has_children AS hasChildren FROM session_summary
+      SELECT has_children AS hasChildren, activity_updated_at AS activityUpdatedAt FROM session_summary
       WHERE runtime_key = ? AND directory = ? AND session_id = ?
     `).get(key, summary.directory, summary.id);
     upsertSummary.run({
       ...summary,
+      activityUpdatedAt: options.preserveActivity === true && existing
+        ? toTimestamp(existing.activityUpdatedAt)
+        : summary.activityUpdatedAt,
       hasChildren: toBooleanInt(summary.hasChildren ?? Boolean(existing?.hasChildren)),
       runtimeKey: key,
     });
     const extra = db.prepare(`
       SELECT session_id FROM session_summary
       WHERE runtime_key = ? AND directory = ?
-      ORDER BY updated_at DESC, session_id DESC
+      ORDER BY activity_updated_at DESC, session_id DESC
       LIMIT -1 OFFSET ?
     `).all(key, summary.directory, MAX_ROOT_SESSIONS);
     if (extra.length > 0) {
@@ -282,14 +300,22 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       hasMore: Boolean(directory.hasMore),
       sessions: db.prepare(`
         SELECT session_id AS id, title, created_at AS createdAt, updated_at AS updatedAt,
-          archived_at AS archivedAt, parent_id AS parentID, has_children AS hasChildren
+          activity_updated_at AS activityUpdatedAt, archived_at AS archivedAt,
+          status, status_changed_at AS statusChangedAt, parent_id AS parentID,
+          has_children AS hasChildren
         FROM session_summary WHERE runtime_key = ? AND directory = ?
-        ORDER BY updated_at DESC, id DESC
+        ORDER BY activity_updated_at DESC, id DESC
       `).all(key, directory.directory).map((session) => ({
         id: session.id,
         title: session.title,
         directory: directory.directory,
         time: { created: session.createdAt, updated: session.updatedAt, ...(session.archivedAt ? { archived: session.archivedAt } : {}) },
+        metadata: {
+          openchamber: {
+            titleRefresh: { activityUpdatedAt: session.activityUpdatedAt },
+            sessionStatus: { type: session.status ?? 'idle', changedAt: session.statusChangedAt },
+          },
+        },
         ...(session.parentID ? { parentID: session.parentID } : {}),
         ...(session.hasChildren ? { hasChildren: true } : {}),
       })),
@@ -315,6 +341,31 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     return result.changes > 0;
   };
 
+  const touchActivity = (sessionID, observedAt) => {
+    if (typeof sessionID !== 'string' || !sessionID) return false;
+    const timestamp = toTimestamp(observedAt);
+    if (!timestamp) return false;
+    const result = db.prepare(`
+      UPDATE session_summary
+      SET activity_updated_at = MAX(activity_updated_at, ?)
+      WHERE runtime_key = ? AND session_id = ?
+    `).run(timestamp, runtimeKey(), sessionID);
+    return result.changes > 0;
+  };
+
+  const updateStatus = (sessionID, status, observedAt) => {
+    if (typeof sessionID !== 'string' || !sessionID) return false;
+    if (status !== 'busy' && status !== 'retry' && status !== 'idle') return false;
+    const timestamp = toTimestamp(observedAt);
+    if (!timestamp) return false;
+    const result = db.prepare(`
+      UPDATE session_summary
+      SET status = ?, status_changed_at = ?
+      WHERE runtime_key = ? AND session_id = ? AND status_changed_at <= ?
+    `).run(status, timestamp, runtimeKey(), sessionID, timestamp);
+    return result.changes > 0;
+  };
+
   const replaceChildSessions = db.transaction((directory, parentSessionID, children) => {
     const normalizedDirectory = normalizeDirectory(directory);
     if (!normalizedDirectory || typeof parentSessionID !== 'string' || !parentSessionID) return false;
@@ -334,6 +385,8 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
     replaceDirectory,
     replaceDirectories,
     upsert,
+    touchActivity,
+    updateStatus,
     remove,
     replaceChildSessions,
     snapshot,

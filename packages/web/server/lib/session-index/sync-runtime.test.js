@@ -74,6 +74,21 @@ describe('session index background sync runtime', () => {
     expect(runtime.snapshot().sync).toMatchObject({ completed: 2, total: 2, failedDirectories: [] });
   });
 
+  it('publishes session-index writes that happen outside the background queue', async () => {
+    const runtime = createSessionIndexSyncRuntime({
+      sessionIndexService: createService(),
+      buildOpenCodeUrl: (route) => `http://opencode.test${route}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      waitForOpenCodeReady: async () => true,
+    });
+    const initialRevision = runtime.snapshot().revision;
+    const changed = runtime.waitForChange(initialRevision);
+
+    runtime.publishChange();
+
+    await expect(changed).resolves.toMatchObject({ revision: initialRevision + 1 });
+  });
+
   it('uses the persisted watermark for a true incremental merge', async () => {
     const service = createService([{
       directory: '/repo',

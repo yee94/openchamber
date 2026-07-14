@@ -2384,17 +2384,20 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   browserWindow.__ocInitScript = buildInitScript(desktopLocalOrigin, state.bootOutcome, desktopApiBaseUrl, desktopClientToken, desktopRequestHeaders);
   browserWindow.__ocTitleBarOverlayEnabled = titleBarOverlayEnabled;
 
-  if (isDev) {
-    browserWindow.webContents.on('console-message', (_event, ...args) => {
-      const details = args[0];
-      const message = details && typeof details === 'object'
-        ? details.message
-        : args[1];
-      if (typeof message === 'string' && message.includes('[session-load]')) {
-        console.log(`[renderer:${browserWindow.__ocLabel}] ${message}`);
-      }
-    });
-  }
+  browserWindow.webContents.on('console-message', (_event, ...args) => {
+    const details = args[0];
+    const message = details && typeof details === 'object'
+      ? details.message
+      : args[1];
+    if (typeof message !== 'string') return;
+    if (message.includes('[refresh-debug]')) {
+      log.warn(`[renderer:${browserWindow.__ocLabel}] ${message}`);
+      return;
+    }
+    if (isDev && message.includes('[session-load]')) {
+      console.log(`[renderer:${browserWindow.__ocLabel}] ${message}`);
+    }
+  });
 
   if (useSaved && saved.maximized) {
     browserWindow.maximize();
@@ -2550,6 +2553,12 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   });
 
   browserWindow.webContents.on('will-navigate', (event, url) => {
+    log.warn('[refresh-debug] will-navigate', {
+      window: browserWindow.__ocLabel,
+      protocol: (() => {
+        try { return new URL(url).protocol; } catch { return 'invalid'; }
+      })(),
+    });
     if (isAllowedNavigationUrl(url)) return;
     event.preventDefault();
     void shell.openExternal(url).catch(() => {});
@@ -2580,9 +2589,31 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
   });
 
   browserWindow.webContents.on('did-finish-load', () => {
+    log.warn('[refresh-debug] did-finish-load', {
+      window: browserWindow.__ocLabel,
+      url: browserWindow.webContents.getURL(),
+    });
     // Navigation/reload resets Chromium zoom — re-apply the session factor.
     applyWebviewZoomFactor(browserWindow.webContents, state.webviewZoomFactor);
     schedulePendingDeepLinkFlush();
+  });
+  browserWindow.webContents.on('render-process-gone', (_event, details) => {
+    log.error('[refresh-debug] render-process-gone', {
+      window: browserWindow.__ocLabel,
+      reason: details.reason,
+      exitCode: details.exitCode,
+    });
+  });
+  browserWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    log.error('[refresh-debug] did-fail-load', {
+      window: browserWindow.__ocLabel,
+      errorCode,
+      errorDescription,
+      protocol: (() => {
+        try { return new URL(validatedURL).protocol; } catch { return 'invalid'; }
+      })(),
+      isMainFrame,
+    });
   });
 
   browserWindow.once('ready-to-show', () => {
@@ -3828,6 +3859,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return null;
 
     case 'desktop_clear_cache':
+      log.warn('[refresh-debug] desktop-clear-cache');
       await session.defaultSession.clearStorageData();
       for (const browserWindow of BrowserWindow.getAllWindows()) {
         browserWindow.webContents.reload();

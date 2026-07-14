@@ -2,7 +2,7 @@ import type { SessionStatus } from '@opencode-ai/sdk/v2/client'
 import type { Session } from '@opencode-ai/sdk/v2'
 import type { State } from './types'
 
-type LiveStateSlice = Pick<State, 'session' | 'session_status' | 'session_status_observed_at'>
+type LiveStateSlice = Pick<State, 'session' | 'session_status'>
 
 const getSessionUpdatedAt = (session: Session): number => {
   const updatedAt = session.time?.updated
@@ -61,7 +61,6 @@ const areStatusesEquivalent = (left: SessionStatus | undefined, right: SessionSt
 
 type StatusCandidate = {
   status: SessionStatus
-  statusObservedAt: number
   sessionUpdatedAt: number
 }
 
@@ -74,7 +73,6 @@ const getStatusCandidate = (state: LiveStateSlice, sessionId: string): StatusCan
   const session = state.session.find((candidate) => candidate.id === sessionId)
   return {
     status,
-    statusObservedAt: state.session_status_observed_at?.[sessionId] ?? 0,
     sessionUpdatedAt: session ? getSessionUpdatedAt(session) : -1,
   }
 }
@@ -82,10 +80,6 @@ const getStatusCandidate = (state: LiveStateSlice, sessionId: string): StatusCan
 const shouldReplaceStatusCandidate = (current: StatusCandidate | undefined, next: StatusCandidate): boolean => {
   if (!current) {
     return true
-  }
-
-  if (next.statusObservedAt !== current.statusObservedAt) {
-    return next.statusObservedAt > current.statusObservedAt
   }
 
   if (next.sessionUpdatedAt !== current.sessionUpdatedAt) {
@@ -204,10 +198,10 @@ export function findLiveSession(states: Iterable<LiveStateSlice>, sessionID?: st
   return match
 }
 
-export function findLiveSessionStatusSnapshot(
+export function findLiveSessionStatus(
   states: Iterable<LiveStateSlice>,
   sessionID?: string | null,
-): { status: SessionStatus; observedAt: number } | undefined {
+): SessionStatus | undefined {
   if (!sessionID) {
     return undefined
   }
@@ -223,5 +217,5 @@ export function findLiveSessionStatusSnapshot(
     }
   }
 
-  return match ? { status: match.status, observedAt: match.statusObservedAt } : undefined
+  return match?.status
 }

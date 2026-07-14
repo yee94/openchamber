@@ -77,6 +77,7 @@ import { createSessionTitleRuntime } from './lib/session-title/runtime.js';
 import { createSessionIndexService } from './lib/session-index/service.js';
 import { createSessionIndexSyncRuntime } from './lib/session-index/sync-runtime.js';
 import { resolveSessionIndexDbPath } from './lib/session-index/resolve-db-path.js';
+import { applySessionIndexEvent } from './lib/session-index/event-ingest.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
@@ -1322,6 +1323,11 @@ async function main(options = {}) {
     getOpenCodeAuthHeaders,
     waitForOpenCodeReady,
   });
+  const unsubscribeSessionIndexEvents = globalMessageStreamHub.subscribeEvent((event) => {
+    if (applySessionIndexEvent(sessionIndexService, event)) {
+      sessionIndexSyncRuntime?.publishChange();
+    }
+  });
 
   console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
 
@@ -1684,6 +1690,7 @@ async function main(options = {}) {
     },
     stop: (shutdownOptions = {}) => {
       try {
+        unsubscribeSessionIndexEvents();
         sessionIndexSyncRuntime?.stop();
         sessionIndexService?.close();
       } catch {

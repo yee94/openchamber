@@ -95,6 +95,52 @@ describe('Electron session index', () => {
     service.close();
   });
 
+  it('orders by user activity without changing the OpenCode updated time', () => {
+    const runtimeRef = { value: 'http://runtime-a.test' };
+    const service = createService(runtimeRef);
+    service.replaceDirectory({
+      directory: '/repo',
+      sessions: [session('ses_newer', 20), session('ses_active', 10)],
+      cursor: null,
+      hasMore: false,
+    });
+
+    service.touchActivity('ses_active', 30);
+
+    const sessions = service.snapshot().directories[0].sessions;
+    expect(sessions.map((item) => item.id)).toEqual(['ses_active', 'ses_newer']);
+    expect(sessions[0].time.updated).toBe(10);
+    expect(sessions[0].metadata.openchamber.titleRefresh.activityUpdatedAt).toBe(30);
+    service.close();
+  });
+
+  it('keeps event summary updates from advancing user activity ordering', () => {
+    const runtimeRef = { value: 'http://runtime-a.test' };
+    const service = createService(runtimeRef);
+    service.replaceDirectory({ directory: '/repo', sessions: [session('ses_a', 10)], cursor: null, hasMore: false });
+
+    service.upsert(session('ses_a', 20), 20, { preserveActivity: true });
+
+    const stored = service.snapshot().directories[0].sessions[0];
+    expect(stored.time.updated).toBe(20);
+    expect(stored.metadata.openchamber.titleRefresh.activityUpdatedAt).toBe(10);
+    service.close();
+  });
+
+  it('stores the latest session status transition independently from ordering', () => {
+    const runtimeRef = { value: 'http://runtime-a.test' };
+    const service = createService(runtimeRef);
+    service.replaceDirectory({ directory: '/repo', sessions: [session('ses_a', 10)], cursor: null, hasMore: false });
+
+    service.updateStatus('ses_a', 'busy', 20);
+    service.updateStatus('ses_a', 'idle', 10);
+
+    const stored = service.snapshot().directories[0].sessions[0];
+    expect(stored.metadata.openchamber.sessionStatus).toEqual({ type: 'busy', changedAt: 20 });
+    expect(stored.metadata.openchamber.titleRefresh.activityUpdatedAt).toBe(10);
+    service.close();
+  });
+
   it('persists child-session membership and clears the parent flag when the final child is removed', () => {
     const runtimeRef = { value: 'http://runtime-a.test' };
     const service = createService(runtimeRef);

@@ -115,23 +115,3 @@ export const persistSessionIndexDirectories = async (directories: Array<{
   if (response.status === 501) return;
   await ensureOk(response);
 };
-
-export const persistSessionIndexSession = async (session: Session): Promise<void> => {
-  if (typeof window === 'undefined') return;
-  const response = await runtimeFetch('/api/openchamber/session-index/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session }),
-  });
-  if (response.status === 501) return;
-  await ensureOk(response);
-};
-
-export const removeSessionIndexSession = async (sessionID: string): Promise<void> => {
-  if (typeof window === 'undefined') return;
-  const response = await runtimeFetch(`/api/openchamber/session-index/session/${encodeURIComponent(sessionID)}`, {
-    method: 'DELETE',
-  });
-  if (response.status === 501) return;
-  await ensureOk(response);
-};

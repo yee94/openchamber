@@ -71,6 +71,10 @@ function scheduleReloadOnce(error: unknown): void {
     return;
   }
 
+  console.error('[refresh-debug] chunk-import-reload', {
+    error: readErrorText(error).slice(0, 1000),
+  });
+
   window.setTimeout(() => {
     window.location.reload();
   }, 0);
