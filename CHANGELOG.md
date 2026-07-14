@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.9] - 2026-07-14
+
+- **AI summaries:** restrict Provider/model selection to callable summary models and clarify the behavior controlled by each prompt editor.
+- **Custom API:** validate persisted custom OpenAI-compatible settings and cover save-to-call behavior without exposing API tokens.
+
 ## [1.16.8] - 2026-07-14
 
 - **AI summaries:** add dedicated summary settings for provider, custom OpenAI-compatible models, credentials, and prompts for commit messages and session titles.
