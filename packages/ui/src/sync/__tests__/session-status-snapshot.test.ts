@@ -96,6 +96,7 @@ describe("applySessionStatusSnapshot", () => {
       expect(changed).toBe(true)
       expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
     })
+
   })
 })
 

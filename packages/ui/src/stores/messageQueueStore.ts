@@ -3,6 +3,7 @@ import { devtools, persist } from 'zustand/middleware';
 import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import type { AttachedFile } from './types/sessionTypes';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { ascendingId } from '@/sync/message-id';
 
 export type FollowUpBehavior = 'steer' | 'queue';
 export type QueueItemStatus = 'queued' | 'sending' | 'retrying' | 'reconciling' | 'unresolved' | 'failed';
@@ -76,7 +77,8 @@ const migrateItem = (sessionID: string, message: QueuedMessage, scope: QueueScop
   const queueItemID = message.queueItemID ?? (message.id || createID('queued'));
   const unownedAmbiguous = !message.owner && (message.status === 'sending' || message.status === 'reconciling');
   const status = unownedAmbiguous ? 'unresolved' : message.status === 'sending' ? 'reconciling' : message.status === 'retrying' || message.status === 'reconciling' || message.status === 'unresolved' || message.status === 'failed' ? message.status : 'queued';
-  return { ...message, id: queueItemID, queueItemID, operationID: message.operationID ?? createID('operation'), messageID: message.messageID ?? createID('message'), owner: scope, status, attemptCount: Math.max(0, Math.floor(message.attemptCount ?? 0)), ...(message.status === 'sending' || message.status === 'reconciling' ? reconciliationFields(message) : {}), ...(unownedAmbiguous || (status === 'reconciling' && message.status === 'sending') ? { failure: { kind: 'ambiguous-dispatch' as const, recovery: message.failure?.recovery ?? recoveryFor(message) } } : {}) };
+  const messageID = typeof message.messageID === 'string' && message.messageID.startsWith('msg_') ? message.messageID : ascendingId('msg');
+  return { ...message, id: queueItemID, queueItemID, operationID: message.operationID ?? createID('operation'), messageID, owner: scope, status, attemptCount: Math.max(0, Math.floor(message.attemptCount ?? 0)), ...(message.status === 'sending' || message.status === 'reconciling' ? reconciliationFields(message) : {}), ...(unownedAmbiguous || (status === 'reconciling' && message.status === 'sending') ? { failure: { kind: 'ambiguous-dispatch' as const, recovery: message.failure?.recovery ?? recoveryFor(message) } } : {}) };
 };
 
 export const migrateMessageQueueState = (persistedState: unknown): Pick<MessageQueueState, 'queuedMessages' | 'followUpBehavior'> => {
@@ -117,7 +119,7 @@ const update = (set: (fn: (state: Store) => Store | Partial<Store>) => void, sco
 export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) => ({
   queuedMessages: {}, followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
   addToQueue: (scope, message) => {
-    const item: QueueItem = { ...message, id: createID('queued'), queueItemID: '', operationID: createID('operation'), messageID: createID('message'), createdAt: Date.now(), owner: scope, status: 'queued', attemptCount: 0 };
+    const item: QueueItem = { ...message, id: createID('queued'), queueItemID: '', operationID: createID('operation'), messageID: ascendingId('msg'), createdAt: Date.now(), owner: scope, status: 'queued', attemptCount: 0 };
     item.queueItemID = item.id;
     const key = queueScopeKey(scope); set((state) => ({ queuedMessages: { ...state.queuedMessages, [key]: [...(state.queuedMessages[key] ?? []), item] } })); return item;
   },
@@ -171,4 +173,4 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
     };
   }),
   confirmQueueItem: (scope, identity) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => { const operationMatch = identity.operationID ? candidate.operationID === identity.operationID : true; const messageMatch = identity.messageID ? candidate.messageID === identity.messageID : true; const itemMatch = identity.queueItemID ? candidate.queueItemID === identity.queueItemID : true; return operationMatch && messageMatch && itemMatch; }); if (!item || (!identity.operationID && !identity.messageID)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
-}), { name: 'message-queue-store', version: 3, storage: createDeferredSafeJSONStorage(), partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));
+}), { name: 'message-queue-store', version: 4, storage: createDeferredSafeJSONStorage(), partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));
