@@ -35,3 +35,29 @@ describe('ChildStoreManager.subscribeAllSelected', () => {
     manager.disposeAll();
   });
 });
+
+describe('ChildStoreManager captures', () => {
+  test('invalidates captures after dispose and recreation', () => {
+    const manager = new ChildStoreManager();
+    const original = manager.captureChild('/workspace', { bootstrap: false });
+    expect(manager.isCurrentChildCapture(original)).toBe(true);
+
+    expect(manager.disposeDirectory('/workspace')).toBe(true);
+    expect(manager.isCurrentChildCapture(original)).toBe(false);
+
+    const replacement = manager.captureChild('/workspace', { bootstrap: false });
+    expect(replacement.generation).toBeGreaterThan(original.generation);
+    expect(manager.isCurrentChildCapture(replacement)).toBe(true);
+    manager.disposeAll();
+  });
+
+  test('invalidates every capture after disposeAll', () => {
+    const manager = new ChildStoreManager();
+    const first = manager.captureChild('/first', { bootstrap: false });
+    const second = manager.captureChild('/second', { bootstrap: false });
+    manager.disposeAll();
+
+    expect(manager.isCurrentChildCapture(first)).toBe(false);
+    expect(manager.isCurrentChildCapture(second)).toBe(false);
+  });
+});

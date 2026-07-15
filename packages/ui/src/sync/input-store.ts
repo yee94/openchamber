@@ -5,6 +5,11 @@
 
 import { create } from "zustand"
 import type { AttachedFile } from "@/stores/types/sessionTypes"
+import { getRuntimeGeneration, getRuntimeTransportIdentity } from "@/lib/runtime-switch"
+import { createDefaultInputDraftMetadataSink, createInputDraftMetadataPersistenceCoordinator, createInputDraftMetadataRepository, type InputDraftMetadataErrorCode, type InputDraftMetadataMigration, type InputDraftMetadataPersistenceCoordinator, type InputDraftMetadataRepository, type InputDraftMetadataSink, type LegacyInputDraft } from "./input-draft-metadata-store"
+import { createInputDraftBlobStore, type DraftBlobErrorCode, type InputDraftBlobStore } from "./input-draft-blob-store"
+import { createInputDraftDurabilityCoordinator, type InputDraftDurabilityCoordinator, type InputDraftDurabilityResult } from "./input-draft-durability-coordinator"
+import { draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, parseDraftRecord, type DraftAttachmentMetadata, type DraftKey, type DraftMention, type DraftRecord, type DraftSyntheticPart } from "./input-draft-types"
 
 const FILE_URI_PREFIX = "file://"
 const pendingVSCodeSelectionKeys = new Set<string>()
@@ -84,7 +89,74 @@ export type VSCodeActiveEditorFile = {
   selection: { startLine: number; endLine: number; text: string } | null
 }
 
+export type DraftHydrationStatus = "idle" | "loading" | "ready" | "degraded" | "error"
+export type DraftPersistenceStatus = "idle" | "saving" | "saved" | "error"
+export type DraftPersistenceState = { status: DraftPersistenceStatus; revision: number; errorCode?: InputDraftMetadataErrorCode | DraftBlobErrorCode }
+export type DraftAttachmentPersistenceState = DraftPersistenceState
+export type InputDraftRuntimeCapture = { transportIdentity: string; generation: number }
+export type InputDraftServices = {
+  sink?: InputDraftMetadataSink
+  repository?: InputDraftMetadataRepository
+  coordinator?: InputDraftMetadataPersistenceCoordinator
+  blobStore?: InputDraftBlobStore
+  /** Owns every durable blob/reference/metadata transaction. */
+  durability?: InputDraftDurabilityCoordinator
+  /** Supplies independent IDs for attachment identity and blob locators. */
+  createID?: () => string
+  persistenceEnabled?: boolean
+  /** Returns the active transport lifetime identity for stale-work rejection. */
+  runtimeCapture?: () => InputDraftRuntimeCapture
+}
+
+const emptyDraft = (key: DraftKey): DraftRecord => ({ version: 1, key, revision: 1, text: "", attachments: [], syntheticParts: [], mentions: [] })
+const legacyMentions = (text: string, paths: string[]): DraftMention[] => paths.flatMap((path) => {
+  const token = `@${path}`
+  const mentions: DraftMention[] = []
+  let start = text.indexOf(token)
+  while (start >= 0) {
+    mentions.push({ kind: "file", value: path, path, label: path, range: { start, end: start + token.length } })
+    start = text.indexOf(token, start + token.length)
+  }
+  return mentions
+})
+
 export type InputState = {
+  drafts: Record<string, DraftRecord>
+  tombstones: Record<string, number>
+  draftHydration: Record<string, DraftHydrationStatus>
+  draftPersistence: Record<string, DraftPersistenceState>
+  /** Ephemeral File-backed views; DraftRecord remains serializable metadata. */
+  draftAttachmentViews: Record<string, Record<string, AttachedFile>>
+  draftMissingAttachmentRefIDs: Record<string, string[]>
+  draftAttachmentPersistence: Record<string, DraftAttachmentPersistenceState>
+  persistenceEnabled: boolean
+  legacyNewDraft?: LegacyInputDraft
+  legacyDraftEntries: Record<string, LegacyInputDraft>
+  migration: InputDraftMetadataMigration
+  ensureDraft: (key: DraftKey) => DraftRecord
+  getDraft: (key: DraftKey) => DraftRecord | undefined
+  setDraftText: (key: DraftKey, text: string) => DraftRecord
+  replaceDraft: (key: DraftKey, expectedRevision: number, record: Omit<DraftRecord, "key" | "revision" | "version">) => DraftRecord | undefined
+  setDraftMentions: (key: DraftKey, mentions: DraftMention[]) => DraftRecord | undefined
+  addDraftMention: (key: DraftKey, mention: DraftMention) => DraftRecord | undefined
+  removeDraftMention: (key: DraftKey, value: string) => DraftRecord | undefined
+  setDraftSyntheticParts: (key: DraftKey, parts: DraftSyntheticPart[]) => DraftRecord | undefined
+  consumeDraftSyntheticParts: (key: DraftKey) => DraftSyntheticPart[] | null
+  setDraftAttachments: (key: DraftKey, attachments: DraftAttachmentMetadata[]) => DraftRecord | undefined
+  addDraftLocalAttachment: (key: DraftKey, file: File | Blob, options?: { attachmentID?: string; filename?: string; source?: "local" | "vscode"; vscodePath?: string; vscodeSource?: "selection"; partID?: string }) => Promise<DraftAttachmentMetadata | undefined>
+  addDraftDurableAttachment: (key: DraftKey, attachment: Omit<DraftAttachmentMetadata, "attachmentID" | "attachmentRefID" | "locator"> & { attachmentID?: string; url: string; partID?: string }) => DraftAttachmentMetadata | undefined
+  hydrateDraftAttachments: (key: DraftKey) => Promise<void>
+  getDraftAttachmentViews: (key: DraftKey) => AttachedFile[]
+  retryDraftAttachmentPersistence: (key: DraftKey) => Promise<void>
+  removeDraftAttachment: (key: DraftKey, attachmentRefID: string) => Promise<boolean>
+  replaceDraftAttachment: (key: DraftKey, attachmentRefID: string, file: File | Blob, options?: { filename?: string; source?: "local" | "vscode"; vscodePath?: string; vscodeSource?: "selection" }) => Promise<DraftAttachmentMetadata | undefined>
+  deleteDraft: (key: DraftKey, expectedRevision?: number) => boolean
+  moveDraft: (source: DraftKey, destination: DraftKey, expectedRevision?: number) => DraftRecord | undefined
+  moveDraftWithAttachments: (source: DraftKey, destination: DraftKey, expectedRevision?: number) => Promise<DraftRecord | undefined>
+  hydrateDraftMetadata: (transportIdentity: string) => Promise<void>
+  claimLegacyNewDraft: (key: DraftKey) => Promise<DraftRecord | undefined>
+  setDraftPersistenceEnabled: (enabled: boolean) => Promise<void>
+  flushDraftPersistence: () => Promise<void>
   pendingInputText: string | null
   pendingInputMode: "replace" | "append" | "append-inline"
   pendingSyntheticParts: SyntheticContextPart[] | null
@@ -115,7 +187,479 @@ export type InputState = {
   addRestoredAttachment: (file: { url: string; mimeType: string; filename: string }) => void
 }
 
-export const useInputStore = create<InputState>()((set, get) => ({
+export const createInputStore = (services: InputDraftServices = {}) => {
+  const sink = services.sink ?? createDefaultInputDraftMetadataSink()
+  const repository = services.repository ?? createInputDraftMetadataRepository(sink)
+  const coordinator = services.coordinator ?? createInputDraftMetadataPersistenceCoordinator(sink)
+  const blobStore = services.blobStore ?? createInputDraftBlobStore()
+  const durability = services.durability ?? createInputDraftDurabilityCoordinator(blobStore, coordinator, { enabled: services.persistenceEnabled ?? true })
+  const keyEpoch = new Map<string, number>()
+  const hydrateEpoch = new Map<string, number>()
+  const attachmentHydrateEpoch = new Map<string, number>()
+  const attachmentHydrationTasks = new Map<string, Promise<void>>()
+  const pendingPersists = new Set<Promise<InputDraftDurabilityResult>>()
+  let persistenceGeneration = 0
+  let legacyEpoch = 0
+  let legacyNewClaimed = false
+  let seeded = false
+  let seedPromise: Promise<InputDraftDurabilityResult> | undefined
+  const dirtyKeys = new Set<string>()
+  const store = create<InputState>()((set, get) => {
+    const bump = (id: string) => keyEpoch.set(id, (keyEpoch.get(id) ?? 0) + 1)
+    const invalidateAttachmentHydration = (...ids: string[]) => {
+      for (const id of ids) {
+        attachmentHydrateEpoch.set(id, (attachmentHydrateEpoch.get(id) ?? 0) + 1)
+        attachmentHydrationTasks.delete(id)
+      }
+    }
+    const valid = (value: unknown): DraftRecord | undefined => parseDraftRecord(value)
+    const runtimeCapture = (): InputDraftRuntimeCapture => services.runtimeCapture?.() ?? { transportIdentity: getRuntimeTransportIdentity(), generation: getRuntimeGeneration() }
+    const runtimeMatches = (capture: InputDraftRuntimeCapture): boolean => {
+      const active = runtimeCapture()
+      return active.transportIdentity === capture.transportIdentity && active.generation === capture.generation
+    }
+    const attachmentList = (record: DraftRecord) => [...record.attachments, ...record.syntheticParts.flatMap((part) => part.attachments)]
+    const attachmentIDs = (record: DraftRecord): Set<string> => new Set(attachmentList(record).map((attachment) => attachment.attachmentRefID))
+    const pruneAttachmentState = (state: InputState, id: string, record: DraftRecord) => {
+      const live = attachmentIDs(record)
+      return {
+        draftAttachmentViews: { ...state.draftAttachmentViews, [id]: Object.fromEntries(Object.entries(state.draftAttachmentViews[id] ?? {}).filter(([ref]) => live.has(ref))) },
+        draftMissingAttachmentRefIDs: { ...state.draftMissingAttachmentRefIDs, [id]: (state.draftMissingAttachmentRefIDs[id] ?? []).filter((ref) => live.has(ref)) },
+      }
+    }
+    const createID = (): string => services.createID?.() ?? crypto.randomUUID()
+    const makeView = async (attachment: DraftAttachmentMetadata, value: Blob | string): Promise<AttachedFile> => {
+      const file = value instanceof File ? value : new File([value], attachment.filename, { type: attachment.mimeType })
+      return { id: attachment.attachmentID, file, dataUrl: typeof value === "string" ? value : await readFileAsDataUrl(file), mimeType: attachment.mimeType, filename: attachment.filename, size: attachment.size, source: attachment.source, ...(attachment.serverPath ? { serverPath: attachment.serverPath } : {}), ...(attachment.vscodePath ? { vscodePath: attachment.vscodePath } : {}), ...(attachment.vscodeSource ? { vscodeSource: attachment.vscodeSource } : {}) }
+    }
+    const persistenceErrorCode = (result: InputDraftDurabilityResult): InputDraftMetadataErrorCode | DraftBlobErrorCode => {
+      const error = result.errors[0] ?? result.cleanupErrors[0]
+      if (error?.phase === "metadata") return error.error.code
+      return error?.phase === "blob" && ["blob-id-conflict", "database-unavailable", "invalid-value", "missing-blob", "quota-exceeded", "transaction-aborted", "transaction-failed"].includes(error.error.code) ? error.error.code as DraftBlobErrorCode : "unavailable"
+    }
+    const persist = (touchedIDs: Iterable<string>): Promise<InputDraftDurabilityResult> => {
+      const current = get()
+      const generation = persistenceGeneration
+      const runtime = runtimeCapture()
+      const ids = [...new Set(touchedIDs)]
+      if (!current.persistenceEnabled) {
+        ids.forEach((id) => dirtyKeys.add(id))
+        return Promise.resolve({ status: "disabled", keys: ids, errors: [], cleanupErrors: [] })
+      }
+      const epochs = new Map(ids.map((id) => [id, keyEpoch.get(id) ?? 0]))
+      const revisions = new Map(ids.map((id) => [id, current.drafts[id]?.revision ?? current.tombstones[id] ?? 0]))
+      const trackedIDs = ids.filter((id) => current.drafts[id])
+      const saving = Object.fromEntries(trackedIDs.map((id) => [id, current.draftPersistence[id]?.status === "error" ? current.draftPersistence[id] : { status: "saving" as const, revision: revisions.get(id)! }]))
+      const attachmentSaving = Object.fromEntries(trackedIDs.map((id) => [id, current.draftAttachmentPersistence[id]?.status === "error" ? current.draftAttachmentPersistence[id] : { status: "saving" as const, revision: revisions.get(id)! }]))
+      set((state) => ({ draftPersistence: { ...state.draftPersistence, ...saving }, draftAttachmentPersistence: { ...state.draftAttachmentPersistence, ...attachmentSaving } }))
+      if (!seeded) ids.forEach((id) => dirtyKeys.add(id))
+      const run = async () => {
+        const state = get()
+        const result = await durability.commit({
+          drafts: Object.fromEntries(ids.flatMap((id) => state.drafts[id] ? [[id, state.drafts[id]]] : [])),
+          tombstones: Object.fromEntries(ids.flatMap((id) => state.tombstones[id] ? [[id, state.tombstones[id]]] : [])),
+          delete: ids.filter((id) => !state.drafts[id]),
+          migration: state.migration,
+          legacy: { ...(state.legacyNewDraft ? { new: state.legacyNewDraft } : {}), entries: state.legacyDraftEntries },
+          resolveBlobValue: (reference) => {
+            for (const [id, record] of Object.entries(state.drafts)) if (record.key.transportIdentity === reference.transportIdentity && record.key.owner.kind === reference.owner.kind && record.key.owner.ownerID === reference.owner.ownerID) return state.draftAttachmentViews[id]?.[reference.attachmentOccurrenceRefID]?.file
+            return undefined
+          },
+          isCurrent: () => persistenceGeneration === generation && get().persistenceEnabled && runtimeMatches(runtime) && ids.every((id) => (keyEpoch.get(id) ?? 0) === epochs.get(id) && (get().drafts[id]?.revision ?? get().tombstones[id] ?? 0) === revisions.get(id)),
+        })
+        const completionMatches = persistenceGeneration === generation && get().persistenceEnabled && runtimeMatches(runtime)
+        if (!completionMatches || result.status === "unseeded" || result.status === "stale" || result.status === "disabled") ids.forEach((id) => dirtyKeys.add(id))
+        if (!completionMatches) return result
+        set((state) => {
+          const draftPersistence = { ...state.draftPersistence }
+          for (const id of trackedIDs) {
+            if ((keyEpoch.get(id) ?? 0) !== epochs.get(id)) continue
+            const revision = revisions.get(id)!
+            if (result.status === "committed") draftPersistence[id] = { status: "saved", revision }
+            else if (result.status === "unseeded" || result.status === "stale" || result.status === "disabled") continue
+            else draftPersistence[id] = { status: "error", revision, errorCode: persistenceErrorCode(result) }
+          }
+          const attachmentPersistence = { ...state.draftAttachmentPersistence }
+          for (const id of trackedIDs) {
+            if ((keyEpoch.get(id) ?? 0) !== epochs.get(id)) continue
+            const revision = revisions.get(id)!
+            attachmentPersistence[id] = result.status === "committed" && result.cleanupErrors.length === 0
+              ? { status: "saved", revision }
+              : result.status === "failed" || result.cleanupErrors.length > 0
+                ? { status: "error", revision, errorCode: persistenceErrorCode(result) }
+                : attachmentPersistence[id] ?? { status: "idle", revision }
+          }
+          return { draftPersistence, draftAttachmentPersistence: attachmentPersistence }
+        })
+        return result
+      }
+      const task = run()
+      pendingPersists.add(task)
+      void task.then(() => pendingPersists.delete(task), () => pendingPersists.delete(task))
+      return task
+    }
+    const mutate = (key: DraftKey, change: (record: DraftRecord) => DraftRecord, expectedRevision?: number): DraftRecord | undefined => {
+      const id = draftKeyString(key)
+      const existing = get().drafts[id]
+      if (!existing || (expectedRevision !== undefined && existing.revision !== expectedRevision)) return undefined
+      const next = valid(change(existing))
+      if (!next || draftKeyString(next.key) !== id) return undefined
+      bump(id)
+      set((state) => ({ drafts: { ...state.drafts, [id]: next }, ...pruneAttachmentState(state, id, next) }))
+      persist([id])
+      return next
+    }
+    return ({
+  drafts: {},
+  tombstones: {},
+  draftHydration: {},
+  draftPersistence: {},
+  draftAttachmentViews: {},
+  draftMissingAttachmentRefIDs: {},
+  draftAttachmentPersistence: {},
+  persistenceEnabled: services.persistenceEnabled ?? true,
+  legacyDraftEntries: {},
+  migration: { complete: false, claimedTransportIdentity: "" },
+  flushDraftPersistence: async () => {
+    while (pendingPersists.size) await Promise.all([...pendingPersists])
+    await durability.flush()
+  },
+  ensureDraft: (key) => {
+    const id = draftKeyString(key)
+    const existing = get().drafts[id]
+    if (existing) return existing
+    const record = valid({ ...emptyDraft(key), revision: (get().tombstones[id] ?? 0) + 1 })
+    if (!record) throw new Error("Invalid empty draft")
+    bump(id)
+    set((state) => ({ drafts: { ...state.drafts, [id]: record } }))
+    persist([id])
+    return record
+  },
+  getDraft: (key) => get().drafts[draftKeyString(key)],
+  setDraftText: (key, text) => {
+    const current = get().getDraft(key) ?? get().ensureDraft(key)
+    return mutate(key, (record) => ({ ...record, revision: record.revision + 1, text, mentions: record.mentions.filter((mention) => mention.range.end <= text.length && text.slice(mention.range.start, mention.range.end) === `@${mention.value}`) }), current.revision) ?? current
+  },
+  replaceDraft: (key, expectedRevision, record) => mutate(key, (current) => ({ version: 1, key: current.key, revision: current.revision + 1, text: record.text, attachments: record.attachments, syntheticParts: record.syntheticParts, mentions: record.mentions }), expectedRevision),
+  setDraftMentions: (key, mentions) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, mentions })),
+  addDraftMention: (key, mention) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, mentions: [...record.mentions, mention] })),
+  removeDraftMention: (key, value) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, mentions: record.mentions.filter((mention) => mention.value !== value) })),
+  setDraftSyntheticParts: (key, syntheticParts) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, syntheticParts })),
+  consumeDraftSyntheticParts: (key) => {
+    const record = get().getDraft(key)
+    if (!record) return null
+    const parts = record.syntheticParts
+    return mutate(key, (current) => ({ ...current, revision: current.revision + 1, syntheticParts: [] }), record.revision) ? parts : null
+  },
+  setDraftAttachments: (key, attachments) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, attachments })),
+  addDraftLocalAttachment: async (key, file, options = {}) => {
+    const current = get().getDraft(key)
+    if (options.partID && !current?.syntheticParts.some((part) => part.partID === options.partID)) return undefined
+    const id = draftKeyString(key)
+    const startEpoch = keyEpoch.get(id) ?? 0
+    const startTombstone = get().tombstones[id] ?? 0
+    const runtime = runtimeCapture()
+    const fileView = file instanceof File ? file : new File([file], options.filename ?? "attachment", { type: file.type })
+    let dataUrl: string
+    try {
+      dataUrl = await readFileAsDataUrl(fileView)
+    } catch {
+      const latest = get().drafts[id]
+      const sourceValid = runtimeMatches(runtime)
+        && (get().tombstones[id] ?? 0) === startTombstone
+        && (!latest ? (keyEpoch.get(id) ?? 0) === startEpoch : draftKeyString(latest.key) === id)
+        && (!options.partID || latest?.syntheticParts.some((part) => part.partID === options.partID))
+      if (sourceValid) {
+        const revision = latest?.revision ?? get().tombstones[id] ?? 0
+        set((state) => ({ draftAttachmentPersistence: { ...state.draftAttachmentPersistence, [id]: { status: "error", revision, errorCode: "transaction-failed" } } }))
+      }
+      return undefined
+    }
+    if (!runtimeMatches(runtime) || (get().tombstones[id] ?? 0) !== startTombstone) return undefined
+    const latest = get().drafts[id]
+    if (!latest && (keyEpoch.get(id) ?? 0) !== startEpoch) return undefined
+    const record = latest ?? get().ensureDraft(key)
+    if (draftKeyString(record.key) !== id || (options.partID && !record.syntheticParts.some((part) => part.partID === options.partID))) return undefined
+    const attachmentID = options.attachmentID ?? createID()
+    const attachmentRefID = options.partID ? draftSyntheticPartAttachmentOccurrenceRefID(options.partID, attachmentID) : draftRootAttachmentOccurrenceRefID(attachmentID)
+    const blobID = createID()
+    const attachment: DraftAttachmentMetadata = { attachmentID, attachmentRefID, filename: options.filename ?? (file instanceof File ? file.name : "attachment"), mimeType: file.type, size: file.size, locator: { kind: "blob", blobID }, source: options.source ?? "local", ...(options.vscodePath ? { vscodePath: options.vscodePath } : {}), ...(options.vscodeSource ? { vscodeSource: options.vscodeSource } : {}) }
+    const next = options.partID ? { ...record, revision: record.revision + 1, syntheticParts: record.syntheticParts.map((part) => part.partID === options.partID ? { ...part, attachments: [...part.attachments, attachment] } : part) } : { ...record, revision: record.revision + 1, attachments: [...record.attachments, attachment] }
+    const parsed = valid(next); if (!parsed) return undefined
+    bump(id)
+    const view: AttachedFile = { id: attachmentID, file: fileView, dataUrl, mimeType: attachment.mimeType, filename: attachment.filename, size: attachment.size, source: attachment.source, ...(options.vscodePath ? { vscodePath: options.vscodePath } : {}), ...(options.vscodeSource ? { vscodeSource: options.vscodeSource } : {}) }
+    set((state) => ({ drafts: { ...state.drafts, [id]: parsed }, draftAttachmentViews: { ...state.draftAttachmentViews, [id]: { ...state.draftAttachmentViews[id], [attachmentRefID]: view } } }))
+    await persist([id]); return attachment
+  },
+  addDraftDurableAttachment: (key, input) => {
+    const record = get().getDraft(key) ?? get().ensureDraft(key); if (input.partID && !record.syntheticParts.some((part) => part.partID === input.partID)) return undefined; const attachmentID = input.attachmentID ?? createID(); const attachmentRefID = input.partID ? draftSyntheticPartAttachmentOccurrenceRefID(input.partID, attachmentID) : draftRootAttachmentOccurrenceRefID(attachmentID)
+    const attachment: DraftAttachmentMetadata = { attachmentID, attachmentRefID, filename: input.filename, mimeType: input.mimeType, size: input.size, source: input.source, locator: { kind: "url", url: input.url }, ...(input.serverPath ? { serverPath: input.serverPath } : {}), ...(input.vscodePath ? { vscodePath: input.vscodePath } : {}), ...(input.vscodeSource ? { vscodeSource: input.vscodeSource } : {}) }; const next = input.partID ? { ...record, revision: record.revision + 1, syntheticParts: record.syntheticParts.map((part) => part.partID === input.partID ? { ...part, attachments: [...part.attachments, attachment] } : part) } : { ...record, revision: record.revision + 1, attachments: [...record.attachments, attachment] }; const parsed = valid(next); if (!parsed) return undefined
+    const id = draftKeyString(key); bump(id); const view: AttachedFile = { id: attachmentID, file: new File([], attachment.filename, { type: attachment.mimeType }), dataUrl: input.url, mimeType: attachment.mimeType, filename: attachment.filename, size: attachment.size, source: attachment.source, ...(attachment.serverPath ? { serverPath: attachment.serverPath } : {}), ...(attachment.vscodePath ? { vscodePath: attachment.vscodePath } : {}), ...(attachment.vscodeSource ? { vscodeSource: attachment.vscodeSource } : {}) }; set((state) => ({ drafts: { ...state.drafts, [id]: parsed }, draftAttachmentViews: { ...state.draftAttachmentViews, [id]: { ...state.draftAttachmentViews[id], [attachmentRefID]: view } } })); persist([id]); return attachment
+  },
+  getDraftAttachmentViews: (key) => { const id = draftKeyString(key); const record = get().drafts[id]; const views = get().draftAttachmentViews[id] ?? {}; return record ? attachmentList(record).flatMap((attachment) => views[attachment.attachmentRefID] ? [views[attachment.attachmentRefID]] : []) : [] },
+  retryDraftAttachmentPersistence: async (key) => { const id = draftKeyString(key); if (!get().persistenceEnabled || (!get().drafts[id] && !get().tombstones[id])) return; const cleanup = await durability.retryCleanup(); if (cleanup.cleanupErrors.length) set((state) => ({ draftAttachmentPersistence: { ...state.draftAttachmentPersistence, [id]: { status: "error", revision: state.drafts[id]?.revision ?? state.tombstones[id], errorCode: persistenceErrorCode(cleanup) } } })); await persist([id]) },
+  hydrateDraftAttachments: async (key) => {
+    const id = draftKeyString(key)
+    const existing = attachmentHydrationTasks.get(id)
+    if (existing) return existing
+    const record = get().drafts[id]
+    if (!record) return
+    const epoch = (attachmentHydrateEpoch.get(id) ?? 0) + 1
+    attachmentHydrateEpoch.set(id, epoch)
+    const runtime = runtimeCapture()
+    const generation = persistenceGeneration
+    const task = (async () => {
+      set((state) => ({ draftHydration: { ...state.draftHydration, [id]: "loading" } }))
+      const settleStale = () => {
+        if (attachmentHydrateEpoch.get(id) !== epoch) return
+        const state = get()
+        const views = state.draftAttachmentViews[id]
+        const missing = state.draftMissingAttachmentRefIDs[id] ?? []
+        set((current) => ({ draftHydration: { ...current.draftHydration, [id]: missing.length ? "degraded" : Object.keys(views ?? {}).length ? "ready" : "idle" } }))
+      }
+      const views: Record<string, AttachedFile> = {}
+      const missing: string[] = []
+      for (const attachment of attachmentList(record)) {
+        const value = attachment.locator.kind === "url" ? { ok: true as const, value: attachment.locator.url } : await blobStore.read(attachment.locator.blobID)
+        if (!value.ok) {
+          if (value.error.code === "missing-blob") missing.push(attachment.attachmentRefID)
+          else {
+            if (attachmentHydrateEpoch.get(id) === epoch && persistenceGeneration === generation && runtimeMatches(runtime) && get().drafts[id] === record) set((state) => ({ draftHydration: { ...state.draftHydration, [id]: "error" } }))
+            else settleStale()
+            return
+          }
+          continue
+        }
+        try {
+          views[attachment.attachmentRefID] = await makeView(attachment, value.value)
+        } catch {
+          if (attachmentHydrateEpoch.get(id) === epoch && persistenceGeneration === generation && runtimeMatches(runtime) && get().drafts[id] === record) set((state) => ({ draftHydration: { ...state.draftHydration, [id]: "error" } }))
+          else settleStale()
+          return
+        }
+      }
+      const current = get()
+      const currentRecord = current.drafts[id]
+      const currentEpoch = attachmentHydrateEpoch.get(id)
+      const currentRun = currentEpoch === epoch && persistenceGeneration === generation && runtimeMatches(runtime) && currentRecord === record
+      if (currentRun) {
+        set((state) => ({ draftAttachmentViews: { ...state.draftAttachmentViews, [id]: views }, draftMissingAttachmentRefIDs: { ...state.draftMissingAttachmentRefIDs, [id]: missing }, draftHydration: { ...state.draftHydration, [id]: missing.length ? "degraded" : "ready" } }))
+      } else if (currentEpoch === epoch) {
+        const oldViews = current.draftAttachmentViews[id]
+        const oldMissing = current.draftMissingAttachmentRefIDs[id] ?? []
+        set((state) => ({ draftHydration: { ...state.draftHydration, [id]: oldMissing.length ? "degraded" : Object.keys(oldViews ?? {}).length ? "ready" : "idle" } }))
+      }
+    })()
+    attachmentHydrationTasks.set(id, task)
+    try { await task } finally { if (attachmentHydrationTasks.get(id) === task) attachmentHydrationTasks.delete(id) }
+  },
+  removeDraftAttachment: async (key, attachmentRefID) => { const id = draftKeyString(key); const record = get().drafts[id]; const attachment = record && attachmentList(record).find((item) => item.attachmentRefID === attachmentRefID); if (!record || !attachment) return false; const next = valid({ ...record, revision: record.revision + 1, attachments: record.attachments.filter((item) => item.attachmentRefID !== attachmentRefID), syntheticParts: record.syntheticParts.map((part) => ({ ...part, attachments: part.attachments.filter((item) => item.attachmentRefID !== attachmentRefID) })) }); if (!next) return false; bump(id); set((state) => { const views = { ...state.draftAttachmentViews[id] }; delete views[attachmentRefID]; return { drafts: { ...state.drafts, [id]: next }, draftAttachmentViews: { ...state.draftAttachmentViews, [id]: views }, draftMissingAttachmentRefIDs: { ...state.draftMissingAttachmentRefIDs, [id]: (state.draftMissingAttachmentRefIDs[id] ?? []).filter((ref) => ref !== attachmentRefID) } } }); const result = await persist([id]); return result.status === "committed" },
+  replaceDraftAttachment: async (key, attachmentRefID, file, options) => {
+    const id = draftKeyString(key)
+    const record = get().drafts[id]
+    const previous = record && attachmentList(record).find((attachment) => attachment.attachmentRefID === attachmentRefID)
+    if (!record || !previous) return undefined
+    const runtime = runtimeCapture()
+    const tombstone = get().tombstones[id] ?? 0
+    const nextFile = file instanceof File ? file : new File([file], options?.filename ?? "attachment", { type: file.type })
+    let dataUrl: string
+    try { dataUrl = await readFileAsDataUrl(nextFile) } catch {
+      const latest = get().drafts[id]
+      const current = latest && attachmentList(latest).find((attachment) => attachment.attachmentRefID === attachmentRefID)
+      const sourceValid = runtimeMatches(runtime)
+        && (get().tombstones[id] ?? 0) === tombstone
+        && !!latest
+        && current?.attachmentID === previous.attachmentID
+        && current.attachmentRefID === previous.attachmentRefID
+        && draftKeyString(latest.key) === id
+      if (sourceValid) set((state) => ({ draftAttachmentPersistence: { ...state.draftAttachmentPersistence, [id]: { status: "error", revision: latest.revision, errorCode: "transaction-failed" } } }))
+      return undefined
+    }
+    const latest = get().drafts[id]
+    const current = latest && attachmentList(latest).find((attachment) => attachment.attachmentRefID === attachmentRefID)
+    if (!runtimeMatches(runtime) || (get().tombstones[id] ?? 0) !== tombstone || !latest || current?.attachmentID !== previous.attachmentID || current.attachmentRefID !== previous.attachmentRefID || draftKeyString(latest.key) !== id) return undefined
+    const part = latest.syntheticParts.find((item) => item.attachments.some((attachment) => attachment.attachmentRefID === attachmentRefID))
+    const attachmentID = createID()
+    const replacement: DraftAttachmentMetadata = { attachmentID, attachmentRefID: part ? draftSyntheticPartAttachmentOccurrenceRefID(part.partID, attachmentID) : draftRootAttachmentOccurrenceRefID(attachmentID), filename: options?.filename ?? nextFile.name, mimeType: nextFile.type, size: nextFile.size, locator: { kind: "blob", blobID: createID() }, source: options?.source ?? "local", ...(options?.vscodePath ? { vscodePath: options.vscodePath } : {}), ...(options?.vscodeSource ? { vscodeSource: options.vscodeSource } : {}) }
+    const next = valid({ ...latest, revision: latest.revision + 1, attachments: part ? latest.attachments : latest.attachments.map((attachment) => attachment.attachmentRefID === attachmentRefID ? replacement : attachment), syntheticParts: latest.syntheticParts.map((item) => item.partID === part?.partID ? { ...item, attachments: item.attachments.map((attachment) => attachment.attachmentRefID === attachmentRefID ? replacement : attachment) } : item) })
+    if (!next) return undefined
+    bump(id)
+    const view: AttachedFile = { id: attachmentID, file: nextFile, dataUrl, mimeType: replacement.mimeType, filename: replacement.filename, size: replacement.size, source: replacement.source, ...(replacement.vscodePath ? { vscodePath: replacement.vscodePath } : {}), ...(replacement.vscodeSource ? { vscodeSource: replacement.vscodeSource } : {}) }
+    set((state) => {
+      const views = { ...state.draftAttachmentViews[id] }
+      delete views[attachmentRefID]
+      return { drafts: { ...state.drafts, [id]: next }, draftAttachmentViews: { ...state.draftAttachmentViews, [id]: { ...views, [replacement.attachmentRefID]: view } }, draftMissingAttachmentRefIDs: { ...state.draftMissingAttachmentRefIDs, [id]: (state.draftMissingAttachmentRefIDs[id] ?? []).filter((ref) => ref !== attachmentRefID) } }
+    })
+    const result = await persist([id])
+    return result.status === "committed" ? replacement : undefined
+  },
+  deleteDraft: (key, expectedRevision) => {
+    const id = draftKeyString(key)
+    const record = get().drafts[id]
+    if (!record || (expectedRevision !== undefined && record.revision !== expectedRevision)) return false
+    const revision = record.revision + 1
+    bump(id)
+    invalidateAttachmentHydration(id)
+    set((state) => {
+      const drafts = { ...state.drafts }
+      delete drafts[id]
+      const draftHydration = { ...state.draftHydration }; const draftPersistence = { ...state.draftPersistence }; const draftAttachmentViews = { ...state.draftAttachmentViews }; const draftMissingAttachmentRefIDs = { ...state.draftMissingAttachmentRefIDs }; const draftAttachmentPersistence = { ...state.draftAttachmentPersistence }; delete draftHydration[id]; delete draftPersistence[id]; delete draftAttachmentViews[id]; delete draftMissingAttachmentRefIDs[id]; delete draftAttachmentPersistence[id]; return { drafts, tombstones: { ...state.tombstones, [id]: Math.max(state.tombstones[id] ?? 0, revision) }, draftHydration, draftPersistence, draftAttachmentViews, draftMissingAttachmentRefIDs, draftAttachmentPersistence }
+    })
+    persist([id])
+    return true
+  },
+  moveDraft: (source, destination, expectedRevision) => {
+    const sourceID = draftKeyString(source)
+    const destinationID = draftKeyString(destination)
+    const record = get().drafts[sourceID]
+    if (!record || sourceID === destinationID || (expectedRevision !== undefined && record.revision !== expectedRevision) || get().drafts[destinationID] || (get().tombstones[destinationID] ?? 0) >= record.revision + 1) return undefined
+    if ([...record.attachments, ...record.syntheticParts.flatMap((part) => part.attachments)].some((attachment) => attachment.locator.kind === "blob")) return undefined
+    const moved = valid({ ...record, key: destination, revision: record.revision + 1 })
+    if (!moved) return undefined
+    bump(sourceID)
+    bump(destinationID)
+    invalidateAttachmentHydration(sourceID, destinationID)
+    set((state) => {
+      const drafts = { ...state.drafts }
+      delete drafts[sourceID]
+      const tombstones = { ...state.tombstones, [sourceID]: Math.max(state.tombstones[sourceID] ?? 0, moved.revision) }
+      if ((tombstones[destinationID] ?? 0) < moved.revision) delete tombstones[destinationID]
+      const moveState = <T,>(sourceState: Record<string, T>): Record<string, T> => {
+        const next = { ...sourceState }
+        const value = next[sourceID]
+        delete next[sourceID]
+        delete next[destinationID]
+        return value === undefined ? next : { ...next, [destinationID]: value }
+      }
+      return { drafts: { ...drafts, [destinationID]: moved }, tombstones, draftHydration: moveState(state.draftHydration), draftPersistence: moveState(state.draftPersistence), draftAttachmentViews: moveState(state.draftAttachmentViews), draftMissingAttachmentRefIDs: moveState(state.draftMissingAttachmentRefIDs), draftAttachmentPersistence: moveState(state.draftAttachmentPersistence) }
+    })
+    persist([sourceID, destinationID])
+    return moved
+  },
+  moveDraftWithAttachments: async (source, destination, expectedRevision) => {
+    const sourceID = draftKeyString(source); const destinationID = draftKeyString(destination); const record = get().drafts[sourceID]
+    if (!record || sourceID === destinationID || (expectedRevision !== undefined && record.revision !== expectedRevision) || get().drafts[destinationID] || (get().tombstones[destinationID] ?? 0) >= record.revision + 1) return undefined
+    const moved = valid({ ...record, key: destination, revision: record.revision + 1 }); if (!moved) return undefined
+    bump(sourceID); bump(destinationID)
+    invalidateAttachmentHydration(sourceID, destinationID)
+    set((state) => {
+      const drafts = { ...state.drafts }
+      delete drafts[sourceID]
+      const tombstones = { ...state.tombstones, [sourceID]: Math.max(state.tombstones[sourceID] ?? 0, moved.revision) }
+      if ((tombstones[destinationID] ?? 0) < moved.revision) delete tombstones[destinationID]
+      const moveState = <T,>(sourceState: Record<string, T>): Record<string, T> => {
+        const next = { ...sourceState }
+        const value = next[sourceID]
+        delete next[sourceID]
+        delete next[destinationID]
+        return value === undefined ? next : { ...next, [destinationID]: value }
+      }
+      return { drafts: { ...drafts, [destinationID]: moved }, tombstones, draftHydration: moveState(state.draftHydration), draftPersistence: moveState(state.draftPersistence), draftAttachmentViews: moveState(state.draftAttachmentViews), draftMissingAttachmentRefIDs: moveState(state.draftMissingAttachmentRefIDs), draftAttachmentPersistence: moveState(state.draftAttachmentPersistence) }
+    })
+    const result = await persist([sourceID, destinationID])
+    return result.status === "committed" ? moved : undefined
+  },
+  setDraftPersistenceEnabled: async (enabled) => {
+    persistenceGeneration += 1
+    if (!enabled) {
+      set({ persistenceEnabled: false, draftPersistence: {} })
+      await durability.setEnabled(false)
+      await durability.flush()
+      return
+    }
+    set({ persistenceEnabled: true })
+    await durability.setEnabled(true)
+    const runtime = runtimeCapture()
+    if (!seeded) await get().hydrateDraftMetadata(runtime.transportIdentity)
+    const ids = new Set([...Object.keys(get().drafts), ...Object.keys(get().tombstones), ...dirtyKeys])
+    dirtyKeys.clear()
+    await persist(ids)
+    await durability.flush()
+  },
+  hydrateDraftMetadata: async (transportIdentity) => {
+    const request = (hydrateEpoch.get(transportIdentity) ?? 0) + 1
+    hydrateEpoch.set(transportIdentity, request)
+    const runtime = runtimeCapture()
+    if (runtime.transportIdentity !== transportIdentity) return
+    const generation = persistenceGeneration
+    const startEpochs = new Map(keyEpoch)
+    const startLegacyEpoch = legacyEpoch
+    const knownIDs = Object.entries(get().drafts).filter(([, draft]) => draft.key.transportIdentity === transportIdentity).map(([id]) => id)
+    set((state) => ({ draftHydration: { ...state.draftHydration, ...Object.fromEntries(knownIDs.map((id) => [id, "loading" as const])) } }))
+    const enabledAtStart = get().persistenceEnabled
+    const migrated = await repository.migrate(transportIdentity, { persistenceEnabled: enabledAtStart })
+    if (hydrateEpoch.get(transportIdentity) !== request || persistenceGeneration !== generation || !runtimeMatches(runtime)) return
+    if (!migrated.ok) {
+      set((state) => ({ draftHydration: { ...state.draftHydration, ...Object.fromEntries(knownIDs.map((id) => [id, state.drafts[id] ? "degraded" as const : "error" as const])) } }))
+      return
+    }
+    const snapshot = migrated.value
+    if (!seeded) {
+      seedPromise ??= durability.seed(snapshot).finally(() => { seedPromise = undefined })
+      const result = await seedPromise
+      if (hydrateEpoch.get(transportIdentity) !== request || persistenceGeneration !== generation || !runtimeMatches(runtime)) return
+      if (result.status !== "committed" && result.status !== "disabled") {
+        set((state) => ({ draftHydration: { ...state.draftHydration, ...Object.fromEntries(knownIDs.map((id) => [id, "degraded" as const])) } }))
+        return
+      }
+      if (result.status === "committed") seeded = true
+    }
+    const state = get()
+    const drafts = { ...state.drafts }
+    const tombstones = { ...state.tombstones }
+    const touched = new Set<string>()
+    for (const [id, revision] of Object.entries(snapshot.tombstones)) {
+      if ((keyEpoch.get(id) ?? 0) !== (startEpochs.get(id) ?? 0)) continue
+      if (revision >= (tombstones[id] ?? 0)) {
+        tombstones[id] = revision
+        if ((drafts[id]?.revision ?? 0) <= revision) delete drafts[id]
+      }
+      touched.add(id)
+    }
+    for (const [id, incoming] of Object.entries(snapshot.drafts)) {
+      if (incoming.key.transportIdentity !== transportIdentity || (keyEpoch.get(id) ?? 0) !== (startEpochs.get(id) ?? 0)) continue
+      const current = drafts[id]
+      const parsed = valid(incoming)
+      if (parsed && (!current || current.revision < parsed.revision) && (tombstones[id] ?? 0) < parsed.revision) drafts[id] = parsed
+      touched.add(id)
+    }
+    const entries = legacyEpoch === startLegacyEpoch ? { ...snapshot.legacy.entries } : { ...state.legacyDraftEntries }
+    if (snapshot.migration.claimedTransportIdentity === transportIdentity && legacyEpoch === startLegacyEpoch) {
+      for (const [suffix, entry] of Object.entries(entries)) {
+        const key: DraftKey = { transportIdentity, owner: { kind: "session", ownerID: suffix } }
+        const id = draftKeyString(key)
+        const record = valid({ ...emptyDraft(key), text: entry.text, mentions: legacyMentions(entry.text, entry.mentions) })
+        if (record && !drafts[id] && !tombstones[id] && (keyEpoch.get(id) ?? 0) === (startEpochs.get(id) ?? 0)) drafts[id] = record
+        delete entries[suffix]
+        touched.add(id)
+      }
+    }
+    set((current) => ({ drafts, tombstones, legacyNewDraft: legacyEpoch === startLegacyEpoch && !legacyNewClaimed ? snapshot.legacy.new : current.legacyNewDraft, legacyDraftEntries: entries, migration: legacyEpoch === startLegacyEpoch ? snapshot.migration : current.migration, draftHydration: { ...current.draftHydration, ...Object.fromEntries([...touched].map((id) => [id, "ready" as const])) } }))
+    const dirty = [...dirtyKeys]
+    for (const id of dirty) touched.add(id)
+    dirtyKeys.clear()
+    await persist(touched)
+    await durability.flush()
+  },
+  claimLegacyNewDraft: async (key) => {
+    const entry = get().legacyNewDraft
+    if (!entry) return get().getDraft(key)
+    const id = draftKeyString(key)
+    const current = get().drafts[id]
+    legacyEpoch += 1
+    legacyNewClaimed = true
+    if (current || get().tombstones[id]) {
+      set({ legacyNewDraft: undefined })
+      persist([id])
+      return current
+    }
+    const record = valid({ ...emptyDraft(key), text: entry.text, mentions: legacyMentions(entry.text, entry.mentions) })
+    if (!record) return undefined
+    bump(id)
+    set((state) => ({ drafts: { ...state.drafts, [id]: record }, legacyNewDraft: undefined }))
+    persist([id])
+    return record
+  },
   pendingInputText: null,
   pendingInputMode: "replace",
   pendingSyntheticParts: null,
@@ -271,4 +815,9 @@ export const useInputStore = create<InputState>()((set, get) => ({
     }
     set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
   },
-}))
+})
+  })
+  return store
+}
+
+export const useInputStore = createInputStore()

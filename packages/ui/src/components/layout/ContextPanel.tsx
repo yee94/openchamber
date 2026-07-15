@@ -2710,6 +2710,7 @@ export const ContextPanel: React.FC = () => {
               diffScope={tab.diffScope ?? (tab.stagedDiff ? 'staged' : 'working')}
               onDiffScopeChange={handleDiffScopeChange}
               targetFilePath={tab.targetPath}
+              targetLine={tab.diffTargetLine ?? null}
               flushContent
               singleFileView={tab.mode === 'file-diff'}
               preloadFullFiles={tab.mode === 'file-diff'}

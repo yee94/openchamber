@@ -12,7 +12,12 @@ import { MarkdownRenderer } from '../../MarkdownRenderer';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
 import type { StreamPhase } from '../types';
 import { TOOL_ROW_INTERACTIVE_CHROME_CLASS } from './toolRowChrome';
-import { emitStreamingHapticEvent, hasStreamingHapticSubscribers } from '@/sync/streaming-haptic-events';
+import {
+    emitStreamingHapticEvent,
+    evaluateVisiblePartHaptic,
+    hasStreamingHapticSubscribers,
+    type VisiblePartHapticState,
+} from '@/sync/streaming-haptic-events';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -468,15 +473,24 @@ const ReasoningPart = React.memo(({
         isStreaming,
         identityKey: `${messageId}:${part.id ?? 'reasoning'}`,
     });
-    const hapticDisplayLengthRef = React.useRef(throttledText.length);
+    const hapticIdentity = `${messageId}:${part.id ?? 'reasoning'}`;
+    const hapticStateRef = React.useRef<VisiblePartHapticState | null>(null);
     const sessionID = (part as PartWithSession).sessionID;
+    const isHapticActive = canBeStreaming && typeof time?.end !== 'number';
 
     React.useEffect(() => {
-        const previousLength = hapticDisplayLengthRef.current;
-        hapticDisplayLengthRef.current = throttledText.length;
-        if (!isStreaming || !sessionID || throttledText.length <= previousLength || !hasStreamingHapticSubscribers()) return;
+        if (!hasStreamingHapticSubscribers()) return;
+        const decision = evaluateVisiblePartHaptic(hapticStateRef.current, {
+            identity: hapticIdentity,
+            content: throttledText,
+            isActive: isHapticActive,
+            mode: 'appearance',
+        });
+        hapticStateRef.current = decision.nextState;
+
+        if (!decision.shouldEmit || !sessionID) return;
         emitStreamingHapticEvent({ sessionID, messageID: messageId, partID: part.id, kind: 'thinking' });
-    }, [isStreaming, messageId, part.id, sessionID, throttledText]);
+    }, [hapticIdentity, isHapticActive, messageId, part.id, sessionID, throttledText]);
 
     // Show reasoning even if time.end isn't set yet (during streaming)
     // Only hide if there's no text content

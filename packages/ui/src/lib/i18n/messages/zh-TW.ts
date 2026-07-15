@@ -1940,6 +1940,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.addToCurrentChat': '加入目前聊天',
   'chat.textSelection.title.newSessionWithSelection': '使用選取內容建立新會話',
   'chat.textSelection.title.saveInsightToNotes': '將選取文字儲存到筆記',
+  'chat.messageBody.actions.editAria': '編輯訊息並保留變更',
+  'chat.messageBody.actions.edit': '編輯並保留變更',
   'chat.messageBody.actions.revertAria': '收回到這條訊息',
   'chat.messageBody.actions.revert': '從此處收回',
   'chat.messageBody.actions.forkAria': '從這條訊息分支',

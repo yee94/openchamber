@@ -7,10 +7,15 @@
  */
 
 import React from 'react';
-import { subscribeToStreamingHapticEvents } from '@/sync/streaming-haptic-events';
+import {
+  createStreamingHapticEventDeduper,
+  createStreamingHapticEventQueue,
+  subscribeToStreamingHapticEvents,
+} from '@/sync/streaming-haptic-events';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 export const HAPTIC_MIN_INTERVAL_MS = 20;
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 // ---------------------------------------------------------------------------
 // Pure logic – tested without Capacitor or React
@@ -134,18 +139,19 @@ async function getHapticsModuleCached(): Promise<typeof import('@capacitor/hapti
 }
 
 /** Fires one light haptic while the Capacitor mobile app is visible and active. */
-export function triggerMobileHaptic(): void {
-  if (!isCapacitorMobileNative()) return;
-  if (document.visibilityState !== 'visible' || !document.documentElement.classList.contains('oc-native-app-active')) return;
+export function triggerMobileHaptic(): boolean {
+  if (!isCapacitorMobileNative()) return false;
+  if (document.visibilityState !== 'visible' || !document.documentElement.classList.contains('oc-native-app-active')) return false;
 
   const now = Date.now();
-  if (!shouldTriggerHaptic(lastHapticAt, now)) return;
+  if (!shouldTriggerHaptic(lastHapticAt, now)) return false;
   lastHapticAt = now;
 
   void getHapticsModuleCached().then((mod) => {
     if (!mod) return;
     return mod.Haptics.impact({ style: mod.ImpactStyle.Light }).catch(() => undefined);
   });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,16 +162,56 @@ export function triggerMobileHaptic(): void {
  * Fires a light haptic (`ImpactStyle.Light`) when a visible streaming part updates.
  *
  * - Only active on Capacitor iOS / Android native builds.
- * - Visible reasoning and assistant text fire once for each applied text update.
+ * - Visible assistant text changes repeat; reasoning and tool appearances fire once per part.
  */
 export function useStreamingHaptics(): void {
-  React.useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!isCapacitorMobileNative()) return;
 
     let disposed = false;
+    let timer: number | null = null;
+    const shouldProcessEvent = createStreamingHapticEventDeduper();
+    const queue = createStreamingHapticEventQueue();
+
+    const canProcessEvent = (event: Parameters<typeof evaluateHaptics>[0]) => evaluateHaptics(event).shouldTrigger;
+    const clearTimer = () => {
+      if (timer === null) return;
+      window.clearTimeout(timer);
+      timer = null;
+    };
+    const schedule = (delay = 0) => {
+      if (disposed || timer !== null || queue.size() === 0) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        const event = queue.peek();
+        if (!event || disposed) return;
+
+        const currentSessionId = useSessionUIStore.getState().currentSessionId;
+        const isForeground = document.documentElement.classList.contains('oc-native-app-active');
+        if (!canProcessEvent({
+          eventSessionId: event.sessionID,
+          currentSessionId,
+          isForeground,
+          isVisible: document.visibilityState === 'visible',
+        })) {
+          queue.dequeue();
+          schedule();
+          return;
+        }
+
+        if (!triggerMobileHaptic()) {
+          schedule(HAPTIC_MIN_INTERVAL_MS);
+          return;
+        }
+
+        queue.dequeue();
+        schedule(HAPTIC_MIN_INTERVAL_MS);
+      }, delay);
+    };
 
     const unsubscribe = subscribeToStreamingHapticEvents((event) => {
       if (disposed) return;
+      if (!shouldProcessEvent(event)) return;
 
       const currentSessionId = useSessionUIStore.getState().currentSessionId;
       const isForeground = document.documentElement.classList.contains('oc-native-app-active');
@@ -177,13 +223,15 @@ export function useStreamingHaptics(): void {
         isVisible: document.visibilityState === 'visible',
       });
 
-      if (decision.shouldTrigger) {
-        triggerMobileHaptic();
-      }
+      if (!decision.shouldTrigger) return;
+      queue.enqueue(event);
+      schedule();
     });
 
     return () => {
       disposed = true;
+      clearTimer();
+      queue.clear();
       unsubscribe();
     };
   }, []);

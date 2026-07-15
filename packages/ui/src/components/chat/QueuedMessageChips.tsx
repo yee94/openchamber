@@ -14,38 +14,54 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
+import { getQueueForScope, legacyQueueScope, queueScopeKey, useMessageQueueStore, type QueueScope, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useInputStore } from '@/sync/input-store';
 import { useI18n } from '@/lib/i18n';
+import { getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { Icon } from "@/components/icon/Icon";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { mergeQueuedMessageScopes, popQueuedMessageForEdit } from './queuedMessageChipsState';
+
+type BoundQueueScope = Extract<QueueScope, { state: 'bound' }>;
 
 interface QueuedMessageChipProps {
     message: QueuedMessage;
-    sessionId: string;
+    isQueueHead: boolean;
     onEdit: (message: QueuedMessage) => void;
     onSend: (message: QueuedMessage) => void;
 }
 
-const QueuedMessageChip = memo(({ message, sessionId, onEdit, onSend }: QueuedMessageChipProps) => {
+const QueuedMessageChip = memo(({ message, isQueueHead, onEdit, onSend }: QueuedMessageChipProps) => {
     const { t } = useI18n();
     const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: message.id });
+    const status = message.status ?? 'queued';
+    const isReadOnly = status === 'sending' || status === 'reconciling';
+    const isDragDisabled = message.owner?.state === 'unbound-legacy' || isReadOnly;
+    const canSend = isQueueHead && status === 'queued';
+    const queueItemID = message.queueItemID ?? message.id;
+    const recovery = message.failure?.recovery;
+    const visibleContent = recovery?.content ?? message.content;
+    const visibleAttachments = recovery?.attachments ?? message.attachments;
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+        id: queueItemID,
+        disabled: isDragDisabled,
+    });
 
     // Get first line of message, truncated
     const firstLine = React.useMemo(() => {
-        const lines = message.content.split('\n');
+        const lines = visibleContent.split('\n');
         const first = lines[0] || '';
         const maxLength = 100;
         if (first.length > maxLength) {
             return first.substring(0, maxLength) + '...';
         }
         return first + (lines.length > 1 ? '...' : '');
-    }, [message.content]);
+    }, [visibleContent]);
 
-    const attachmentCount = message.attachments?.length ?? 0;
+    const attachmentCount = visibleAttachments?.length ?? 0;
 
     return (
         <div
@@ -58,7 +74,11 @@ const QueuedMessageChip = memo(({ message, sessionId, onEdit, onSend }: QueuedMe
                 type="button"
                 {...attributes}
                 {...listeners}
-                className="flex flex-shrink-0 cursor-grab touch-none select-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                disabled={isDragDisabled}
+                className={cn(
+                    'flex flex-shrink-0 touch-none select-none items-center justify-center text-muted-foreground',
+                    isDragDisabled ? 'cursor-default opacity-50' : 'cursor-grab hover:text-foreground active:cursor-grabbing',
+                )}
                 aria-label={t('chat.queuedMessage.reorderAria')}
             >
                 <Icon name="draggable" className="size-3.5 md:size-4" aria-hidden="true" />
@@ -74,6 +94,7 @@ const QueuedMessageChip = memo(({ message, sessionId, onEdit, onSend }: QueuedMe
                 variant="secondary"
                 size="xs"
                 onClick={() => onEdit(message)}
+                disabled={isReadOnly}
             >
                 <Icon name="edit" className="h-3 w-3" aria-hidden="true" />
                 {t('chat.queuedMessage.edit')}
@@ -83,14 +104,16 @@ const QueuedMessageChip = memo(({ message, sessionId, onEdit, onSend }: QueuedMe
                 variant="secondary"
                 size="xs"
                 onClick={() => onSend(message)}
+                disabled={!canSend}
             >
                 <Icon name="send-plane" className="h-3 w-3" aria-hidden="true" />
                 {t('chat.queuedMessage.send')}
             </Button>
             <button
                 type="button"
-                onClick={() => removeFromQueue(sessionId, message.id)}
-                className="flex items-center justify-center h-6 w-6 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
+                onClick={() => message.owner && removeFromQueue(message.owner, queueItemID, message.operationID)}
+                disabled={isReadOnly}
+                className="flex items-center justify-center h-6 w-6 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50"
                 aria-label={t('chat.queuedMessage.removeAria')}
             >
                 <Icon name="close" className="h-4 w-4 text-muted-foreground" />
@@ -107,21 +130,57 @@ interface QueuedMessageChipsProps {
 }
 
 const EMPTY_QUEUE: QueuedMessage[] = [];
+const subscribeRuntimeTransport = (notify: () => void) => subscribeRuntimeEndpointChanged(() => notify());
 
 export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: QueuedMessageChipsProps) => {
     const { t } = useI18n();
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-    const queuedMessages = useMessageQueueStore(
+    const fallbackDirectory = useEffectiveDirectory();
+    const currentSessionDirectory = useSessionUIStore(
+        React.useCallback(
+            (state) => currentSessionId ? state.getDirectoryForSession(currentSessionId) : null,
+            [currentSessionId],
+        ),
+    );
+    const transportIdentity = React.useSyncExternalStore(
+        subscribeRuntimeTransport,
+        getRuntimeTransportIdentity,
+        getRuntimeTransportIdentity,
+    );
+    const queueScope = React.useMemo<BoundQueueScope | null>(() => {
+        const directory = currentSessionDirectory || fallbackDirectory;
+        if (!currentSessionId || !directory) return null;
+        return {
+            state: 'bound',
+            transportIdentity,
+            directory,
+            sessionID: currentSessionId,
+        };
+    }, [currentSessionDirectory, currentSessionId, fallbackDirectory, transportIdentity]);
+    const legacyScope = React.useMemo(() => currentSessionId ? legacyQueueScope(currentSessionId) : null, [currentSessionId]);
+    const boundQueuedMessages = useMessageQueueStore(
         React.useCallback(
             (state) => {
-                if (!currentSessionId) return EMPTY_QUEUE;
-                return state.queuedMessages[currentSessionId] ?? EMPTY_QUEUE;
+                return queueScope ? getQueueForScope(state, queueScope) : EMPTY_QUEUE;
             },
-            [currentSessionId]
+            [queueScope]
         )
+    );
+    const legacyQueuedMessages = useMessageQueueStore(
+        React.useCallback(
+            (state) => {
+                return legacyScope ? getQueueForScope(state, legacyScope) : EMPTY_QUEUE;
+            },
+            [legacyScope]
+        )
+    );
+    const queuedMessages = React.useMemo(
+        () => mergeQueuedMessageScopes(legacyQueuedMessages, boundQueuedMessages),
+        [boundQueuedMessages, legacyQueuedMessages],
     );
     const popToInput = useMessageQueueStore((state) => state.popToInput);
     const reorderQueue = useMessageQueueStore((state) => state.reorderQueue);
+    const bindLegacyQueue = useMessageQueueStore((state) => state.bindLegacyQueue);
 
     const sensors = useSensors(
         // Desktop: drag after a small move so other clicks still register.
@@ -132,28 +191,39 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
 
     const handleDragEnd = React.useCallback((event: DragEndEvent) => {
         const { active, over } = event;
-        if (!over || active.id === over.id || !currentSessionId) return;
-        reorderQueue(currentSessionId, String(active.id), String(over.id));
-    }, [currentSessionId, reorderQueue]);
+        if (!over || active.id === over.id) return;
+        const activeMessage = queuedMessages.find((message) => (message.queueItemID ?? message.id) === active.id);
+        const overMessage = queuedMessages.find((message) => (message.queueItemID ?? message.id) === over.id);
+        if (!activeMessage || !overMessage) return;
+        const activeScope = activeMessage.owner;
+        const overScope = overMessage.owner;
+        if (activeScope?.state !== 'bound' || overScope?.state !== 'bound' || queueScopeKey(activeScope) !== queueScopeKey(overScope)) return;
+        reorderQueue(activeScope, String(active.id), String(over.id), activeMessage.operationID);
+    }, [queuedMessages, reorderQueue]);
 
     const handleEdit = React.useCallback((message: QueuedMessage) => {
-        if (!currentSessionId) return;
-        
-        const popped = popToInput(currentSessionId, message.id);
+        const popped = popQueuedMessageForEdit(message, popToInput);
         if (popped) {
-            if (popped.attachments && popped.attachments.length > 0) {
+            const recovery = popped.failure?.recovery;
+            const content = recovery?.content ?? popped.content;
+            const attachments = recovery?.attachments ?? popped.attachments;
+            if (attachments && attachments.length > 0) {
                 const currentAttachments = useInputStore.getState().attachedFiles;
-                useInputStore.getState().setAttachedFiles([...currentAttachments, ...popped.attachments]);
+                useInputStore.getState().setAttachedFiles([...currentAttachments, ...attachments]);
             }
-            onEditMessage(popped.content, popped.attachments);
+            onEditMessage(content, attachments);
         }
-    }, [currentSessionId, popToInput, onEditMessage]);
+    }, [popToInput, onEditMessage]);
 
     const handleSend = React.useCallback((message: QueuedMessage) => {
-        onSendMessage(message.id);
-    }, [onSendMessage]);
+        if (message.owner?.state === 'unbound-legacy') {
+            if (!queueScope) return;
+            bindLegacyQueue(message.owner, queueScope);
+        }
+        onSendMessage(message.queueItemID ?? message.id);
+    }, [bindLegacyQueue, onSendMessage, queueScope]);
 
-    if (queuedMessages.length === 0 || !currentSessionId) {
+    if (queuedMessages.length === 0 || !queueScope) {
         return null;
     }
 
@@ -172,15 +242,15 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                     onDragEnd={handleDragEnd}
                 >
                     <SortableContext
-                        items={queuedMessages.map((m) => m.id)}
+                        items={queuedMessages.map((message) => message.queueItemID ?? message.id)}
                         strategy={verticalListSortingStrategy}
                     >
                         <div className="flex max-h-[8rem] flex-col gap-1 overflow-y-auto px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3">
-                            {queuedMessages.map((message) => (
+                            {queuedMessages.map((message, index) => (
                                 <QueuedMessageChip
-                                    key={message.id}
+                                    key={message.queueItemID ?? message.id}
                                     message={message}
-                                    sessionId={currentSessionId}
+                                    isQueueHead={index === 0}
                                     onEdit={handleEdit}
                                     onSend={handleSend}
                                 />

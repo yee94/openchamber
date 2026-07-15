@@ -1966,6 +1966,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.addToCurrentChat': '現在のチャットに追加',
   'chat.textSelection.title.newSessionWithSelection': '選択範囲で新しいセッションを作成',
   'chat.textSelection.title.saveInsightToNotes': '選択テキストをメモに保存',
+  'chat.messageBody.actions.editAria': 'メッセージを編集して変更を保持',
+  'chat.messageBody.actions.edit': '編集して変更を保持',
   'chat.messageBody.actions.revertAria': 'このメッセージに戻す',
   'chat.messageBody.actions.revert': 'ここから元に戻す',
   'chat.messageBody.actions.forkAria': 'このメッセージからフォーク',

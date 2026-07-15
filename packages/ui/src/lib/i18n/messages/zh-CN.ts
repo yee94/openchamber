@@ -1936,6 +1936,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.addToCurrentChat': '添加到当前聊天',
   'chat.textSelection.title.newSessionWithSelection': '使用选中内容创建新会话',
   'chat.textSelection.title.saveInsightToNotes': '将选中文本保存到笔记',
+  'chat.messageBody.actions.editAria': '编辑消息并保留改动',
+  'chat.messageBody.actions.edit': '编辑并保留改动',
   'chat.messageBody.actions.revertAria': '回退到这条消息',
   'chat.messageBody.actions.revert': '从此处回退',
   'chat.messageBody.actions.forkAria': '从这条消息分叉',

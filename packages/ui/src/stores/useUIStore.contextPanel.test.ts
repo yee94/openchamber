@@ -10,6 +10,24 @@ beforeEach(() => {
 });
 
 describe('useUIStore context panel tabs', () => {
+  test('opens a turn-scoped file diff at the requested line', () => {
+    const directory = '/repo';
+
+    useUIStore.getState().openContextDiff(directory, 'src/app.ts', false, 'turn', 42);
+
+    const tab = useUIStore.getState().contextPanelByDirectory[directory]?.tabs[0];
+    expect(tab?.mode).toBe('diff');
+    expect(tab?.targetPath).toBe('src/app.ts');
+    expect(tab?.diffScope).toBe('turn');
+    expect(tab?.diffTargetLine).toBe(42);
+
+    useUIStore.getState().openContextDiff(directory, 'src/app.ts', false, 'turn', 7);
+
+    const reopenedTabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+    expect(reopenedTabs).toHaveLength(1);
+    expect(reopenedTabs[0]?.diffTargetLine).toBe(7);
+  });
+
   test('updates readOnly when an existing chat tab is reopened', () => {
     const directory = '/repo';
 

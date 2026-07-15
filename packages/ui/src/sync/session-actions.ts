@@ -18,7 +18,7 @@ import { isSyntheticPart } from "@/lib/messages/synthetic"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
 import { retry } from "./retry"
 import { sessionLoadDebug } from "./session-load-debug"
-import { getRuntimeKey } from "@/lib/runtime-switch"
+import { getRuntimeGeneration, getRuntimeKey, getRuntimeTransportIdentity } from "@/lib/runtime-switch"
 import { loadSessionMessage, loadSessionMessagePage, recoverAssistantTailBoundary } from "./session-message-loader"
 import { beginSessionMessageLoad, failSessionMessageLoad, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
@@ -316,6 +316,26 @@ function getErrorStatus(error: unknown): number | null {
   return typeof response?.status === "number" ? response.status : null
 }
 
+export type SendFailureKind = "pre-dispatch" | "definitive-rejection" | "ambiguous-dispatched"
+
+class SendDispatchError extends Error {
+  readonly kind: SendFailureKind
+  readonly cause: unknown
+  readonly messageID?: string
+
+  constructor(kind: SendFailureKind, cause: unknown, messageID?: string) {
+    super(cause instanceof Error ? cause.message : String(cause))
+    this.name = "SendDispatchError"
+    this.kind = kind
+    this.cause = cause
+    this.messageID = messageID
+  }
+}
+
+export function getSendFailureKind(error: unknown): SendFailureKind | null {
+  return error instanceof SendDispatchError ? error.kind : null
+}
+
 function isAmbiguousSendFailure(error: unknown): boolean {
   const status = getErrorStatus(error)
   if (status === 503 || status === 504 || status === 408) return true
@@ -336,6 +356,12 @@ function isAmbiguousSendFailure(error: unknown): boolean {
     || message.includes("gateway timeout")
     || message.includes("econnreset")
     || message.includes("socket hang up")
+}
+
+export function classifySendFailure(error: unknown, transportEntered: boolean): SendFailureKind {
+  if (!transportEntered) return "pre-dispatch"
+  if (isAmbiguousSendFailure(error)) return "ambiguous-dispatched"
+  return getErrorStatus(error) === null ? "ambiguous-dispatched" : "definitive-rejection"
 }
 
 // Wait briefly for the pipeline to re-establish connection before failing a
@@ -803,6 +829,10 @@ export async function optimisticSend(input: {
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
   /** Pre-generated messageID — if omitted, one is generated via ascendingId */
   messageID?: string
+  /** Retains optimistic state after an ambiguous dispatched failure for queue reconciliation. */
+  preserveOptimisticOnAmbiguous?: boolean
+  /** Send responses can confirm a queue operation before SSE confirmation is available. */
+  onSendConfirmed?: (messageID: string) => void
   onOptimisticInsert?: () => void
   onMessageID?: (messageID: string) => void
   beforeOptimisticInsert?: () => void
@@ -810,38 +840,58 @@ export async function optimisticSend(input: {
   send: (messageID: string) => Promise<void>
 }): Promise<void> {
   if (!_optimisticAdd || !_optimisticRemove) {
-    throw new Error("Optimistic refs not set — is useSync() mounted?")
+    throw new SendDispatchError("pre-dispatch", new Error("Optimistic refs not set — is useSync() mounted?"))
   }
 
-  await waitForConnectionOrThrow()
-  input.beforeOptimisticInsert?.()
-
   const targetDirectory = input.directory ?? dir()
-  const messageID = input.messageID ?? ascendingId("msg")
-  input.onMessageID?.(messageID)
-
-  optimisticInsertUserMessage({
-    sessionId: input.sessionId,
-    messageID,
-    content: input.content,
-    providerID: input.providerID,
-    modelID: input.modelID,
-    agent: input.agent,
-    directory: targetDirectory,
-    files: input.files,
-  })
-  input.onOptimisticInsert?.()
-
+  const capture = captureSendTarget(targetDirectory)
+  const transport = captureRuntimeTransport()
+  let transportEntered = false
+  let messageID: string | undefined
   try {
+    await waitForConnectionOrThrow()
+    assertCurrentSendTarget(capture, transport)
+    input.beforeOptimisticInsert?.()
+    assertCurrentSendTarget(capture, transport)
+
+    messageID = input.messageID ?? ascendingId("msg")
+    input.onMessageID?.(messageID)
+
+    optimisticInsertUserMessage({
+      sessionId: input.sessionId,
+      messageID,
+      content: input.content,
+      providerID: input.providerID,
+      modelID: input.modelID,
+      agent: input.agent,
+      directory: targetDirectory,
+      files: input.files,
+    })
+    input.onOptimisticInsert?.()
+
+    assertCurrentSendTarget(capture, transport)
+    transportEntered = true
     await input.send(messageID)
+    if (!isCurrentSendTarget(capture, transport)) {
+      throw new SendDispatchError(
+        "ambiguous-dispatched",
+        new Error("Send target changed after transport dispatch"),
+        messageID,
+      )
+    }
+    input.onSendConfirmed?.(messageID)
   } catch (error) {
-    const acceptedRecords = isAmbiguousSendFailure(error)
+    const failureKind = getSendFailureKind(error) ?? classifySendFailure(error, transportEntered)
+    const dispatchError = error instanceof SendDispatchError
+      ? error
+      : new SendDispatchError(failureKind, error, messageID)
+    if (!messageID || !isCurrentSendTarget(capture, transport)) throw dispatchError
+    const acceptedRecords = failureKind === "ambiguous-dispatched" && !input.preserveOptimisticOnAmbiguous
       ? await fetchRecentSendConfirmationRecords(input.sessionId, messageID, targetDirectory)
       : null
 
-    if (acceptedRecords) {
-      const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
-      materializeConfirmedSendRecords(store, input.sessionId, messageID, acceptedRecords)
+    if (acceptedRecords && isCurrentSendTarget(capture, transport)) {
+      materializeConfirmedSendRecords(capture.store, input.sessionId, messageID, acceptedRecords)
       _optimisticConfirm?.({
         sessionID: input.sessionId,
         directory: targetDirectory,
@@ -850,22 +900,62 @@ export async function optimisticSend(input: {
       return
     }
 
+    if (input.preserveOptimisticOnAmbiguous && failureKind === "ambiguous-dispatched") throw dispatchError
     // Rollback via optimistic infrastructure
     _optimisticRemove({
       sessionID: input.sessionId,
       directory: targetDirectory,
       messageID,
     })
-    const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
-    const s = store.getState()
-    store.setState({
+    const s = capture.store.getState()
+    capture.store.setState({
       session_status: {
         ...s.session_status,
         [input.sessionId]: { type: "idle" as const },
       },
     })
-    throw error
+    throw dispatchError
   }
+}
+
+type SendTargetCapture = {
+  store: DirectoryStoreApi
+  isCurrent: () => boolean
+}
+
+type RuntimeTransportCapture = { identity: string; generation: number }
+
+function captureSendTarget(directory?: string | null): SendTargetCapture {
+  const stores = _childStores
+  const targetDirectory = directory ?? _getDirectory()
+  if (!stores || !targetDirectory) {
+    const store = directory ? dirStoreForDirectory(directory) : dirStore()
+    return { store, isCurrent: () => true }
+  }
+  const generationStores = stores as ChildStoreManager & {
+    captureChild?: (value: string) => { store: DirectoryStoreApi }
+    isCurrentChildCapture?: (capture: unknown) => boolean
+  }
+  const childCapture = generationStores.captureChild?.(targetDirectory)
+  if (childCapture && generationStores.isCurrentChildCapture) {
+    return { store: childCapture.store, isCurrent: () => generationStores.isCurrentChildCapture?.(childCapture) === true }
+  }
+  const store = stores.ensureChild(targetDirectory)
+  return { store, isCurrent: () => stores.getChild(targetDirectory) === store }
+}
+
+function captureRuntimeTransport(): RuntimeTransportCapture {
+  return { identity: getRuntimeTransportIdentity(), generation: getRuntimeGeneration() }
+}
+
+function isCurrentSendTarget(target: SendTargetCapture, transport: RuntimeTransportCapture): boolean {
+  return target.isCurrent()
+    && getRuntimeTransportIdentity() === transport.identity
+    && getRuntimeGeneration() === transport.generation
+}
+
+function assertCurrentSendTarget(target: SendTargetCapture, transport: RuntimeTransportCapture): void {
+  if (!isCurrentSendTarget(target, transport)) throw new Error("Send target changed before transport dispatch")
 }
 
 /**
@@ -947,25 +1037,38 @@ export async function fetchRecentSendConfirmationRecords(
   sessionId: string,
   messageID: string,
   directory?: string | null,
+  options?: { signal?: AbortSignal; timeoutMs?: number },
 ): Promise<Array<{ info: Message; parts?: Part[] }> | null> {
-  for (let attempt = 0; attempt < SEND_CONFIRMATION_REFETCH_ATTEMPTS; attempt += 1) {
-    if (attempt > 0) await wait(SEND_CONFIRMATION_REFETCH_RETRY_MS)
-    try {
-      const result = await sdk().session.messages({
-        sessionID: sessionId,
-        directory: directory ?? undefined,
-        limit: SEND_CONFIRMATION_REFETCH_LIMIT,
-      })
-      const records = (assertSdkSuccess(result, "session.messages") ?? [])
-        .filter((record: { info?: { id?: string } }) => !!record?.info?.id) as Array<{ info: Message; parts?: Part[] }>
-      if (records.some((record) => record.info.id === messageID)) {
-        return records
+  const controller = options?.signal || options?.timeoutMs !== undefined ? new AbortController() : null
+  const abortFromSignal = () => controller?.abort()
+  options?.signal?.addEventListener("abort", abortFromSignal, { once: true })
+  if (options?.signal?.aborted) controller?.abort()
+  const timeout = options?.timeoutMs === undefined ? undefined : setTimeout(() => controller?.abort(), Math.max(0, options.timeoutMs))
+  try {
+    for (let attempt = 0; attempt < SEND_CONFIRMATION_REFETCH_ATTEMPTS; attempt += 1) {
+      if (controller?.signal.aborted) return null
+      if (attempt > 0) await wait(SEND_CONFIRMATION_REFETCH_RETRY_MS)
+      try {
+        const result = await sdk().session.messages({
+          sessionID: sessionId,
+          directory: directory ?? undefined,
+          limit: SEND_CONFIRMATION_REFETCH_LIMIT,
+          ...(controller ? { signal: controller.signal } : {}),
+        } as Parameters<ReturnType<typeof sdk>["session"]["messages"]>[0] & { signal?: AbortSignal })
+        const records = (assertSdkSuccess(result, "session.messages") ?? [])
+          .filter((record: { info?: { id?: string } }) => !!record?.info?.id) as Array<{ info: Message; parts?: Part[] }>
+        if (records.some((record) => record.info.id === messageID)) {
+          return records
+        }
+      } catch {
+        // Confirmation is best-effort; if it fails, keep the original send error path.
       }
-    } catch {
-      // Confirmation is best-effort; if it fails, keep the original send error path.
     }
+    return null
+  } finally {
+    if (timeout) clearTimeout(timeout)
+    options?.signal?.removeEventListener("abort", abortFromSignal)
   }
-  return null
 }
 
 export function materializeConfirmedSendRecords(
@@ -1300,6 +1403,83 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
   }
 }
 
+function removeSessionMessageFromStore(store: DirectoryStoreApi, sessionId: string, messageId: string): void {
+  const current = store.getState()
+  const messages = current.message[sessionId]
+  const hasParts = current.part[messageId] !== undefined
+  if (!messages && !hasParts) return
+
+  const message = { ...current.message }
+  if (messages) {
+    const next = [...messages]
+    const result = Binary.search(next, messageId, (item) => item.id)
+    if (result.found) {
+      next.splice(result.index, 1)
+      message[sessionId] = next
+    }
+  }
+
+  const part = { ...current.part }
+  delete part[messageId]
+  store.setState({ message, part })
+}
+
+export function stageMessageEdit(sessionId: string, messageId: string): void {
+  const { store } = dirStoreForSession(sessionId)
+  const state = store.getState()
+
+  const messages = state.message[sessionId] ?? []
+  const targetIndex = messages.findIndex((message) => message.id === messageId)
+  const targetMessage = targetIndex >= 0 ? messages[targetIndex] : undefined
+  if (!targetMessage || targetMessage.role !== "user") {
+    throw new Error("The selected user message is unavailable")
+  }
+
+  const targetParts = state.part[messageId] ?? []
+  const messageText = targetParts
+    .filter((part) => part.type === "text" && !isSyntheticPart(part))
+    .map((part: Record<string, unknown>) => (part as { text?: string }).text || (part as { content?: string }).content || "")
+    .join("\n")
+    .trim()
+  const submittedFileParts = targetParts.filter((part) => part.type === "file" && !isSyntheticPart(part)) as Array<Record<string, unknown>>
+
+  useInputStore.setState({
+    pendingInputText: messageText,
+    pendingInputMode: "replace" as const,
+  })
+  restoreFilePartsToInput(submittedFileParts)
+}
+
+/**
+ * Commit a staged message edit immediately before sending its replacement.
+ * The official delete-message endpoint removes conversation data only, so the
+ * action deletes the target turn and every later message while retaining files.
+ */
+export async function commitMessageEdit(sessionId: string, messageId: string): Promise<void> {
+  const { store, directory } = dirStoreForSession(sessionId)
+  const status = store.getState().session_status[sessionId]
+  if (status && status.type !== "idle") {
+    try {
+      await sdk().session.abort({ sessionID: sessionId, directory })
+    } catch {
+      // ignore abort errors
+    }
+  }
+
+  await refetchSessionMessages(sessionId)
+  const messages = store.getState().message[sessionId] ?? []
+  const targetIndex = messages.findIndex((message) => message.id === messageId)
+  const targetMessage = targetIndex >= 0 ? messages[targetIndex] : undefined
+  if (!targetMessage || targetMessage.role !== "user") {
+    throw new Error("The selected user message is unavailable")
+  }
+
+  for (const message of messages.slice(targetIndex).reverse()) {
+    await opencodeClient.deleteSessionMessage(sessionId, message.id, directory)
+    removeSessionMessageFromStore(store, sessionId, message.id)
+  }
+}
+
 export async function refetchSessionMessages(sessionId: string): Promise<void> {
   const { store, directory } = dirStoreForSession(sessionId)
   const result = await sdk().session.messages({ sessionID: sessionId, directory, limit: MESSAGE_REFETCH_LIMIT })
@@ -1373,15 +1553,42 @@ export async function forkSession(sessionId: string, operationId: number, messag
   const sourceSession = state.session.find((session) => session.id === sessionId)
   if (!sourceSession) throw new Error("Fork source session is unavailable")
 
-  let forkMessageId = resolveForkMessageId(messageId, state.message[sessionId] ?? [], state.session_status[sessionId])
+  let sourceStatus = state.session_status[sessionId]
+  let sourceMessages = state.message[sessionId] ?? []
+  console.info("[session-fork] resolving fork point", {
+    operationId,
+    sessionId,
+    requestedMessageId: messageId ?? null,
+    statusType: sourceStatus?.type ?? "unknown",
+    messageCount: sourceMessages.length,
+  })
+  let forkMessageId = resolveForkMessageId(messageId, sourceMessages, sourceStatus)
   if (!messageId && state.session_status[sessionId]?.type !== "idle" && !forkMessageId) {
+    console.info("[session-fork] refreshing messages to resolve the active fork point", {
+      operationId,
+      sessionId,
+    })
     await refetchSessionMessages(sessionId)
     state = store.getState()
-    forkMessageId = resolveForkMessageId(undefined, state.message[sessionId] ?? [], state.session_status[sessionId])
+    sourceStatus = state.session_status[sessionId]
+    sourceMessages = state.message[sessionId] ?? []
+    forkMessageId = resolveForkMessageId(undefined, sourceMessages, sourceStatus)
   }
   if (!messageId && state.session_status[sessionId]?.type !== "idle" && !forkMessageId) {
+    console.error("[session-fork] active session has no user message fork point", {
+      operationId,
+      sessionId,
+      statusType: state.session_status[sessionId]?.type ?? "unknown",
+      messageCount: state.message[sessionId]?.length ?? 0,
+    })
     throw new Error("Fork source user message is unavailable")
   }
+  console.info("[session-fork] fork point resolved", {
+    operationId,
+    sessionId,
+    forkMessageId: forkMessageId ?? null,
+    statusType: state.session_status[sessionId]?.type ?? "unknown",
+  })
 
   // Extract message text and file attachments for input restoration.
   // Only non-synthetic text parts — the server adds file content as synthetic
@@ -1411,8 +1618,23 @@ export async function forkSession(sessionId: string, operationId: number, messag
 
   let forkedSession: Session
   try {
+    console.info("[session-fork] calling runtime fork endpoint", {
+      operationId,
+      sessionId,
+      forkMessageId: forkMessageId ?? null,
+    })
     forkedSession = await opencodeClient.forkSession(sessionId, forkMessageId, directory)
+    console.info("[session-fork] runtime fork endpoint returned", {
+      operationId,
+      sessionId,
+      forkedSessionId: forkedSession.id,
+    })
     if (getRuntimeKey() !== forkRuntimeKey) {
+      console.warn("[session-fork] runtime changed while fork was in progress", {
+        operationId,
+        sessionId,
+        forkedSessionId: forkedSession.id,
+      })
       if (activeForkCopy?.operationId === operationId) activeForkCopy = null
       return false
     }
@@ -1456,6 +1678,11 @@ export async function forkSession(sessionId: string, operationId: number, messag
     // Switch immediately once OpenCode reveals the real ID, then keep the
     // transition visible until the bounded initial page is available.
     useSessionUIStore.getState().setCurrentSession(forkedSession.id, directory)
+    console.info("[session-fork] loading the forked session", {
+      operationId,
+      sessionId,
+      forkedSessionId: forkedSession.id,
+    })
     await fetchMessagesForSession(forkedSession.id, directory)
     const loadedMessages = store.getState().message[forkedSession.id] ?? []
     const newestLoadedMessageID = loadedMessages.at(-1)?.id
@@ -1478,6 +1705,11 @@ export async function forkSession(sessionId: string, operationId: number, messag
   }
   // Clear existing attachments and restore file parts from the forked message.
   restoreFilePartsToInput(fileParts)
+  console.info("[session-fork] forked session is ready", {
+    operationId,
+    sessionId,
+    forkedSessionId: forkedSession.id,
+  })
   return true
 }
 

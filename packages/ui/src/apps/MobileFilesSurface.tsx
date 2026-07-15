@@ -214,8 +214,7 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
 
   const handleCopyPath = async (path: string) => {
     const result = await copyTextToClipboard(path);
-    if (result.ok) toast.success(t('mobile.files.toast.pathCopied'));
-    else toast.error(t('mobile.files.toast.copyFailed'));
+    if (!result.ok) toast.error(t('mobile.files.toast.copyFailed'));
   };
 
   const handleCopyContent = async () => {

@@ -12,6 +12,7 @@ let questionRejectError: unknown | null = null
 let sessionShareResult: { data?: unknown; error?: unknown; response?: { status?: number } } = {}
 let sessionUpdateResult: { data?: unknown; error?: unknown; response?: { status?: number } } = {}
 let sessionMessagesResult: { data?: unknown; error?: unknown; response?: { status?: number } } = { data: [] }
+let sessionDeleteMessageFailureID: string | null = null
 const globalUpsertedSessions: unknown[] = []
 
 const mockScopedClient = {
@@ -121,6 +122,13 @@ mock.module("@/lib/opencode/client", () => ({
       }
       return Promise.resolve(sessionRevertResult.data)
     }),
+    deleteSessionMessage: mock((sessionId: string, messageId: string, directory?: string | null) => {
+      replyCalls.push({ method: "session.deleteMessage", params: { sessionID: sessionId, messageID: messageId, directory } })
+      if (sessionDeleteMessageFailureID === messageId) {
+        throw new Error("session.deleteMessage failed (500): rejected")
+      }
+      return Promise.resolve(true)
+    }),
     updateSession: mock((sessionId: string, changes: Record<string, unknown>, directory?: string | null) => {
       replyCalls.push({ method: "session.update", params: { sessionID: sessionId, ...changes, directory } })
       return Promise.resolve(sessionUpdateResult.data)
@@ -184,6 +192,8 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
   },
   useGlobalSessionsStore: {
     getState: () => ({
+      activeSessions: [],
+      archivedSessions: [],
       upsertSession: (session: unknown) => {
         globalUpsertedSessions.push(session)
       },
@@ -480,7 +490,7 @@ describe("optimisticSend target directory", () => {
     const { getRuntimeKey, switchRuntimeEndpoint } = await import("../lib/runtime-switch")
     switchRuntimeEndpoint({ apiBaseUrl: "http://runtime-a.test", runtimeKey: "runtime-a" })
 
-    const { optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    const { getSendFailureKind, optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
     setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
     setOptimisticRefs(
       (input) => {
@@ -514,12 +524,12 @@ describe("optimisticSend target directory", () => {
 
     expect(caught).toBeInstanceOf(Error)
     expect((caught as Error).message).toContain("runtime changed")
+    expect(getSendFailureKind(caught)).toBe("ambiguous-dispatched")
 
     expect(optimisticAdd).not.toBeNull()
     expect(finalSendCalled).toBe(false)
-    expect(optimisticRemove).not.toBeNull()
-    expect((optimisticRemove as unknown as OptimisticRemoveCall).sessionID).toBe("session-race")
-    expect(targetStore.getState().session_status["session-race"]?.type).toBe("idle")
+    expect(optimisticRemove).toBeNull()
+    expect(targetStore.getState().session_status["session-race"]?.type).toBe("busy")
   })
 
   test("confirms an ambiguous send failure with a recent message refetch", async () => {
@@ -609,6 +619,145 @@ describe("optimisticSend target directory", () => {
     expect(optimisticConfirm).toBe(null)
     expect(replyCalls.filter((call) => call.method === "session.messages").every((call) => call.params.limit === 30)).toBe(true)
     expect(targetStore.getState().session_status["session-missing"]?.type).toBe("idle")
+  })
+})
+
+describe("send failure classification", () => {
+  test("separates pre-dispatch, authoritative rejection, and ambiguous dispatched failures", async () => {
+    const { classifySendFailure } = await import("./session-actions")
+    expect(classifySendFailure(new Error("connection wait failed"), false)).toBe("pre-dispatch")
+    expect(classifySendFailure(Object.assign(new Error("bad request"), { status: 400 }), true)).toBe("definitive-rejection")
+    expect(classifySendFailure(new Error("transport closed"), true)).toBe("ambiguous-dispatched")
+    for (const failure of [
+      new TypeError("Failed to fetch"),
+      Object.assign(new Error("timeout"), { status: 408 }),
+      Object.assign(new Error("unavailable"), { status: 503 }),
+      Object.assign(new Error("gateway timeout"), { status: 504 }),
+    ]) {
+      expect(classifySendFailure(failure, true)).toBe("ambiguous-dispatched")
+    }
+  })
+
+  test("reports an expired scope before transport entry as pre-dispatch", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    const { switchRuntimeEndpoint } = await import("../lib/runtime-switch")
+    const { getSendFailureKind, optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    switchRuntimeEndpoint({ apiBaseUrl: "http://runtime-a.test", runtimeKey: "runtime-a" })
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(() => {}, () => {})
+
+    let caught: unknown = null
+    try {
+      await optimisticSend({
+        sessionId: "pre-dispatch-session",
+        directory: "/target/project",
+        content: "blocked",
+        providerID: "provider",
+        modelID: "model",
+        beforeOptimisticInsert: () => {
+          switchRuntimeEndpoint({ apiBaseUrl: "http://runtime-b.test", runtimeKey: "runtime-b" })
+        },
+        send: async () => {},
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(getSendFailureKind(caught)).toBe("pre-dispatch")
+  })
+
+  test("preserves queued optimistic state after ambiguous dispatch and reuses its message ID", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let optimisticRemove: OptimisticRemoveCall | null = null
+    let transmittedMessageID = ""
+    const { getSendFailureKind, optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(() => {}, (input) => { optimisticRemove = input })
+
+    let caught: unknown = null
+    try {
+      await optimisticSend({
+        sessionId: "queued-session",
+        directory: "/target/project",
+        content: "queued",
+        providerID: "provider",
+        modelID: "model",
+        messageID: "queued-message-id",
+        preserveOptimisticOnAmbiguous: true,
+        send: async (messageID) => {
+          transmittedMessageID = messageID
+          throw new TypeError("Failed to fetch")
+        },
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(getSendFailureKind(caught)).toBe("ambiguous-dispatched")
+
+    expect(transmittedMessageID).toBe("queued-message-id")
+    expect(optimisticRemove).toBeNull()
+    expect(targetStore.getState().session_status["queued-session"]?.type).toBe("busy")
+  })
+
+  test("cleans up definitive rejections and ignores a late result for a recreated child store", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let removed: OptimisticRemoveCall | null = null
+    const { getSendFailureKind, optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(() => {}, (input) => { removed = input })
+
+    let caught: unknown = null
+    try {
+      await optimisticSend({
+      sessionId: "rejected-session",
+      directory: "/target/project",
+      content: "reject",
+      providerID: "provider",
+      modelID: "model",
+      send: async () => { throw Object.assign(new Error("bad request"), { status: 400 }) },
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect((caught as Error).message).toBe("bad request")
+    expect(getSendFailureKind(caught)).toBe("definitive-rejection")
+    expect((removed as OptimisticRemoveCall | null)?.sessionID).toBe("rejected-session")
+    expect(targetStore.getState().session_status["rejected-session"]?.type).toBe("idle")
+  })
+
+  test("marks a resolved send with an expired runtime capture as ambiguous without confirming", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let confirmed = false
+    const { getRuntimeKey, switchRuntimeEndpoint } = await import("../lib/runtime-switch")
+    const { getSendFailureKind, optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    switchRuntimeEndpoint({ apiBaseUrl: "http://runtime-a.test", runtimeKey: "runtime-a" })
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(() => {}, () => {})
+
+    let caught: unknown = null
+    try {
+      await optimisticSend({
+        sessionId: "expired-session",
+        directory: "/target/project",
+        content: "sent",
+        providerID: "provider",
+        modelID: "model",
+        onSendConfirmed: () => { confirmed = true },
+        send: async () => {
+          switchRuntimeEndpoint({ apiBaseUrl: "http://runtime-b.test", runtimeKey: "runtime-b" })
+        },
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(getRuntimeKey()).toBe("runtime-b")
+    expect(getSendFailureKind(caught)).toBe("ambiguous-dispatched")
+    expect(confirmed).toBe(false)
   })
 })
 
@@ -737,6 +886,110 @@ describe("revertToMessage passes session directory", () => {
     expect((thrown as Error).message).toContain("session.revert failed (500)")
     expect((sessionStore.getState().session[0] as Session & { revert?: { messageID?: string } }).revert).toBe(undefined)
     expect(inputState.pendingInputText).toBe("previous draft")
+  })
+})
+
+describe("message edit staging", () => {
+  beforeEach(() => {
+    replyCalls.length = 0
+    sessionDeleteMessageFailureID = null
+    sessionMessagesResult = { data: [] }
+    Object.assign(inputState, {
+      pendingInputText: "previous draft",
+      pendingInputMode: "normal" as const,
+      attachedFiles: [{ url: "file:///previous.txt", mimeType: "text/plain", filename: "previous.txt" }],
+    })
+  })
+
+  test("restores the user draft without deleting session messages", async () => {
+    const session = { id: "session-a", time: { created: 1 } } as Session
+    const targetMessage = { id: "msg_2", sessionID: "session-a", role: "user", time: { created: 2 } } as Message
+    const assistantMessage = { id: "msg_3", sessionID: "session-a", role: "assistant", time: { created: 3 } } as Message
+    const laterMessage = { id: "msg_4", sessionID: "session-a", role: "user", time: { created: 4 } } as Message
+    const targetParts = [
+      { id: "prt_2", messageID: "msg_2", type: "text", text: "edit this" },
+      { id: "file_2", messageID: "msg_2", type: "file", url: "file:///attached.txt", mime: "text/plain", filename: "attached.txt" },
+    ] as Part[]
+    const sessionStore = createStore({}, {
+      session: [session],
+      message: { "session-a": [targetMessage, assistantMessage, laterMessage] },
+      part: {
+        "msg_2": targetParts,
+        "msg_3": [{ id: "prt_3", messageID: "msg_3", type: "text", text: "answer" } as Part],
+        "msg_4": [{ id: "prt_4", messageID: "msg_4", type: "text", text: "later" } as Part],
+      },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+
+    const { stageMessageEdit, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    stageMessageEdit("session-a", "msg_2")
+
+    expect(replyCalls.filter((call) => call.method === "session.deleteMessage")).toHaveLength(0)
+    expect(sessionStore.getState().message["session-a"].map((message) => message.id)).toEqual(["msg_2", "msg_3", "msg_4"])
+    expect(sessionStore.getState().part["msg_2"]).toEqual(targetParts)
+    expect(inputState.pendingInputText).toBe("edit this")
+    expect(inputState.pendingInputMode).toBe("replace")
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///attached.txt", mimeType: "text/plain", filename: "attached.txt" }])
+  })
+
+  test("commits the selected turn and later messages immediately before replacement send", async () => {
+    const session = { id: "session-a", time: { created: 1 } } as Session
+    const targetMessage = { id: "msg_2", sessionID: "session-a", role: "user", time: { created: 2 } } as Message
+    const assistantMessage = { id: "msg_3", sessionID: "session-a", role: "assistant", time: { created: 3 } } as Message
+    const laterMessage = { id: "msg_4", sessionID: "session-a", role: "user", time: { created: 4 } } as Message
+    const sessionStore = createStore({}, {
+      session: [session],
+      message: { "session-a": [targetMessage, assistantMessage, laterMessage] },
+      part: {
+        "msg_2": [{ id: "prt_2", messageID: "msg_2", type: "text", text: "edit this" } as Part],
+        "msg_3": [{ id: "prt_3", messageID: "msg_3", type: "text", text: "answer" } as Part],
+        "msg_4": [{ id: "prt_4", messageID: "msg_4", type: "text", text: "later" } as Part],
+      },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+
+    const { commitMessageEdit, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    await commitMessageEdit("session-a", "msg_2")
+
+    const deletedIDs = replyCalls
+      .filter((call) => call.method === "session.deleteMessage")
+      .map((call) => call.params.messageID)
+    expect(deletedIDs).toEqual(["msg_4", "msg_3", "msg_2"])
+    expect(replyCalls.filter((call) => call.method === "session.deleteMessage").every((call) => call.params.directory === "/test/project")).toBe(true)
+    expect(sessionStore.getState().message["session-a"]).toEqual([])
+  })
+
+  test("preserves the existing draft when a later-message deletion fails", async () => {
+    const session = { id: "session-a", time: { created: 1 } } as Session
+    const targetMessage = { id: "msg_2", sessionID: "session-a", role: "user", time: { created: 2 } } as Message
+    const laterMessage = { id: "msg_3", sessionID: "session-a", role: "assistant", time: { created: 3 } } as Message
+    const latestMessage = { id: "msg_4", sessionID: "session-a", role: "user", time: { created: 4 } } as Message
+    const sessionStore = createStore({}, {
+      session: [session],
+      message: { "session-a": [targetMessage, laterMessage, latestMessage] },
+      part: {
+        "msg_2": [{ id: "prt_2", messageID: "msg_2", type: "text", text: "edit this" } as Part],
+        "msg_3": [{ id: "prt_3", messageID: "msg_3", type: "text", text: "answer" } as Part],
+        "msg_4": [{ id: "prt_4", messageID: "msg_4", type: "text", text: "later" } as Part],
+      },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    sessionDeleteMessageFailureID = "msg_3"
+
+    const { commitMessageEdit, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    await expect(commitMessageEdit("session-a", "msg_2")).rejects.toThrow("session.deleteMessage failed (500)")
+
+    expect(sessionStore.getState().message["session-a"].map((message) => message.id)).toEqual(["msg_2", "msg_3"])
+    expect(sessionStore.getState().part["msg_4"]).toBe(undefined)
+    expect(inputState.pendingInputText).toBe("previous draft")
+    expect(inputState.pendingInputMode).toBe("normal")
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///previous.txt", mimeType: "text/plain", filename: "previous.txt" }])
   })
 })
 

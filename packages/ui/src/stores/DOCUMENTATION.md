@@ -159,6 +159,55 @@ These rules are important. Breaking them tends to reintroduce idle CPU churn, st
 7. Closed sidebar should not create live PR work.
 8. File tree Git status should update only when the file tree is visible.
 
+## Message queue ledger
+
+`message-queue-ledger.ts` owns the JSON-safe v4 durable queue contract under
+`openchamber_message_queue_ledger_v4`. Its parser accepts only plain DTOs,
+bounded strings and collections, durable URL locators, and blob IDs; runtime
+`File`, `Blob`, bytes, `data:` and `blob:` values remain outside metadata.
+Attachment references and recovery issues carry complete display metadata.
+Local, server, and VS Code sources have mutually exclusive path fields, and
+the parser enforces canonical scope keys plus global queue, operation, and
+message identity uniqueness. Shared limits bound scopes, rows, attachments,
+issues, content, and legacy byte decoding.
+Detailed reads preserve raw metadata, normalized valid rows, parse issues, and
+degraded scope keys. Compatibility reads report partial metadata as corrupt, so
+only a complete snapshot becomes authoritative. Queue, operation, and message
+IDs remain globally unique across scopes. Repository persistence deep-clones
+admitted snapshots, coalesces concurrent flush waiters, and cancels pending work
+when durability is disabled while an active write completes.
+The canonical scope key uses the v3 encoding. Persisted sending work normalizes
+to reconciling during migration/hydration. The ledger sink serializes writes and
+reports unavailable, quota, corrupt, serialization, and cancelled outcomes.
+
+`message-queue-migration.ts` imports the v3 Zustand envelope only while v4 is
+absent. It assigns deterministic IDs, retains bound data-URL bytes before the
+v4 commit, records attachment migration issues, and preserves the legacy payload
+for degraded migrations. Attachment issues take terminal unresolved ownership;
+legacy retry, ambiguous, definitive, and unresolved states map to strict v4
+state shapes. Partial or corrupt v4 metadata enters recovery-required mode and
+performs zero migration mutation. Existing v4 metadata remains authoritative.
+
+The v3 message queue physically partitions entries by
+`transportIdentity + directory + sessionID`. Queue item identity has three
+separate IDs: `queueItemID` identifies the ledger row, `operationID` identifies
+one send operation, and `messageID` identifies the admitted message for server
+confirmation. States progress through queued, sending, reconciling, retrying,
+failed, and confirmed removal; persisted `sending` entries hydrate as
+`reconciling` because delivery status requires confirmation.
+
+Sending and reconciling items remain immutable while dispatch ownership or
+delivery status is unresolved. Queued, failed, and terminal unresolved entries
+remain recoverable through Edit and Remove. Reconciliation persists its check
+count, deadline, and `nextCheckAt`; in-flight requests own no timer, while the
+global scheduler wakes once at the earliest persisted next check. A max-check or
+deadline terminal result becomes unresolved and triggers no POST.
+Legacy migration preserves known bound owners and places unresolved entries in
+an unbound legacy scope until an explicit bulk send bind. Legacy rows remain
+visible in that scope. Queue UI selects one scope or one item at a time; it
+avoids broad ledger subscriptions, cross-scope scans in render paths, and
+selector allocations that amplify queue updates.
+
 ## Selector Rules
 
 Use leaf selectors.

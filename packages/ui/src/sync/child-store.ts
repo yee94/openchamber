@@ -11,6 +11,12 @@ export type DirectoryStore = State & {
   replace: (next: State) => void
 }
 
+export type ChildStoreCapture = {
+  directory: string
+  generation: number
+  store: StoreApi<DirectoryStore>
+}
+
 function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
   // Restore only non-session metadata from localStorage. Session summaries are
   // owned by the Electron SQLite index, not a second per-directory cache.
@@ -42,6 +48,7 @@ export class ChildStoreManager {
   private readonly pins = new Map<string, number>()
   private readonly disposers = new Map<string, () => void>()
   private readonly registrySubscribers = new Set<() => void>()
+  private readonly generations = new Map<string, number>()
 
   private onBootstrap?: (directory: string) => void
   private onDispose?: (directory: string) => void
@@ -100,6 +107,7 @@ export class ChildStoreManager {
     if (!store) {
       store = createDirectoryStore(directory)
       this.children.set(directory, store)
+      this.generations.set(directory, (this.generations.get(directory) ?? 0) + 1)
       this.notifyRegistrySubscribers()
     }
 
@@ -115,6 +123,16 @@ export class ChildStoreManager {
 
   getChild(directory: string): StoreApi<DirectoryStore> | undefined {
     return this.children.get(directory)
+  }
+
+  captureChild(directory: string, options?: { bootstrap?: boolean }): ChildStoreCapture {
+    const store = this.ensureChild(directory, options)
+    return { directory, generation: this.generations.get(directory) ?? 0, store }
+  }
+
+  isCurrentChildCapture(capture: ChildStoreCapture): boolean {
+    return this.children.get(capture.directory) === capture.store
+      && this.generations.get(capture.directory) === capture.generation
   }
 
   disposeDirectory(directory: string): boolean {

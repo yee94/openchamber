@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.12] - 2026-07-15
+
+- **Composer and queue reliability:** persist drafts and attachment blobs across restarts, migrate queued messages to a transport- and directory-scoped ledger, and reconcile queued sends safely after runtime changes.
+- **Message editing and delivery:** preserve the original message when opening it for editing, replace a staged turn together with its later messages on confirmation, classify send failures precisely, and emit sent notifications only after server confirmation.
+- **Attachments:** support large data-URL attachment payloads through OpenChamber session routes and coordinate attachment cleanup across drafts and queued messages.
+- **Chat navigation and feedback:** open changed files at the selected diff line and provide deduplicated streaming haptics for assistant text, reasoning, and tool activity on mobile.
+- **Session behavior:** refresh forked-session titles after their first completed exchange and improve cross-store session lookup and fork diagnostics.
+- **Runtime compatibility:** ensure Node development servers rebuild `better-sqlite3` for the active Node ABI after Electron builds, avoiding native-module load failures.
+
 ## [1.16.11] - 2026-07-14
 
 - **Release:** rebuild the current desktop, mobile, and VS Code artifacts from the `1.16.10` codebase.

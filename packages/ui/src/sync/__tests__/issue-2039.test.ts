@@ -52,6 +52,7 @@ const deferredStorage: Storage = {
 }
 
 mock.module("@/stores/utils/safeStorage", () => ({
+  createDeferredSafeJSONStorage: () => undefined,
   getDeferredSafeStorage: () => deferredStorage,
 }))
 
@@ -107,6 +108,7 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
     getState: () => ({
       activeSessions: [],
       archivedSessions: [],
+      upsertSession: mock(() => undefined),
     }),
   },
   resolveGlobalSessionDirectory: () => null,
@@ -224,6 +226,7 @@ mock.module("../sync-refs", () => ({
   getSyncMessages: () => [],
   getSyncParts: () => [],
   getAllSyncSessions: () => [],
+  registerSessionDirectory: () => undefined,
 }))
 
 mock.module("../session-actions", () => ({
@@ -237,11 +240,19 @@ mock.module("../session-actions", () => ({
   shareSession: mock(async () => undefined),
   unshareSession: mock(async () => undefined),
   optimisticSend: mock(async () => undefined),
+  optimisticInsertUserMessage: mock(() => undefined),
   refetchSessionMessages: mock(async () => undefined),
   revertToMessage: mock(async () => undefined),
   unrevertSession: mock(async () => undefined),
+  forkSession: mock(async () => undefined),
   forkFromMessage: mock(async () => undefined),
   fetchMessagesForSession: mock(async () => undefined),
+  fetchRecentSendConfirmationRecords: mock(async () => []),
+  materializeConfirmedSendRecords: mock(async () => undefined),
+  dirStoreForDirectory: mock(() => undefined),
+  getSessionLastAssistantModel: mock(() => null),
+  abortCurrentOperation: mock(async () => undefined),
+  patchSessionMetadata: mock(async () => undefined),
 }))
 
 const { materializeOpenDraftSession, useSessionUIStore } = await import("../session-ui-store")

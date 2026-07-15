@@ -34,6 +34,7 @@ const CHILD_TITLE_PREFIX = 'Child session - ';
 const DEFAULT_TITLE_RE = new RegExp(
   `^(${PARENT_TITLE_PREFIX}|${CHILD_TITLE_PREFIX})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
 );
+const FORK_TITLE_RE = / \(fork #\d+\)$/;
 const MULTI_RUN_GROUP_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$/;
 const MULTI_RUN_GROUP = /^g[1-9]\d*$/;
 
@@ -54,6 +55,8 @@ export const isDefaultSessionTitle = (title) => {
   if (typeof title !== 'string' || !title) return false;
   return DEFAULT_TITLE_RE.test(title);
 };
+
+export const isForkedSessionTitle = (title) => typeof title === 'string' && FORK_TITLE_RE.test(title);
 
 /**
  * Multi-run / fusion session titles are structural (`slug/provider/model[/n]`).
@@ -172,7 +175,9 @@ const extractCreatedSession = (payload) => {
   const directory = typeof properties.directory === 'string' && properties.directory
     ? properties.directory
     : (typeof info.directory === 'string' ? info.directory : '');
-  return { sessionId, directory };
+  const createdAt = typeof info.time?.created === 'number' ? info.time.created : Date.now();
+  const title = typeof info.title === 'string' ? info.title : '';
+  return { sessionId, directory, createdAt, title };
 };
 
 const extractUserMessage = (payload) => {
@@ -303,12 +308,15 @@ export const createSessionTitleRuntime = ({
   quietMs = TITLE_QUIET_MS,
   throttleMs = TITLE_THROTTLE_MS,
   now = () => Date.now(),
+  isTitleRefreshEnabled = isSessionTitleRefreshEnabled,
 }) => {
   const timers = new Map();
   const inflight = new Set();
   const forcedRefreshes = new Set();
   const initialRefreshes = new Set();
   const newSessions = new Set();
+  const forkFirstSendPending = new Map();
+  const forkFirstRefreshes = new Set();
   /** In-memory throttle timestamps (metadata also persists across restarts). */
   const lastGeneratedAtBySession = new Map();
   let stopped = false;
@@ -445,7 +453,8 @@ export const createSessionTitleRuntime = ({
   const generateTitle = async (sessionId, directory) => {
     const forceRefresh = forcedRefreshes.delete(sessionId);
     const initialRefresh = initialRefreshes.delete(sessionId);
-    if (!forceRefresh && !isSessionTitleRefreshEnabled()) return;
+    const forkFirstRefresh = forkFirstRefreshes.delete(sessionId);
+    if (!forceRefresh && !isTitleRefreshEnabled()) return;
 
     const session = await openCodeFetch(`/session/${encodeURIComponent(sessionId)}`, { directory })
       .catch((error) => {
@@ -460,7 +469,8 @@ export const createSessionTitleRuntime = ({
     if (looksLikeMultiRunSessionTitle(currentTitle)) return;
 
     const meta = readTitleRefreshMeta(session);
-    if (!canAutoRefreshSessionTitle(currentTitle, meta.lastAutoTitle)) {
+    const canRefreshForkTitle = forkFirstRefresh && isForkedSessionTitle(currentTitle);
+    if (!canAutoRefreshSessionTitle(currentTitle, meta.lastAutoTitle) && !canRefreshForkTitle) {
       return;
     }
 
@@ -469,7 +479,7 @@ export const createSessionTitleRuntime = ({
       now(),
       throttleMs,
     );
-    if (throttleLeft > 0 && !forceRefresh && !initialRefresh) {
+    if (throttleLeft > 0 && !forceRefresh && !initialRefresh && !forkFirstRefresh) {
       // Re-arm for when the window opens — do not drop the pending refresh.
       armTimer(sessionId, directory, throttleLeft);
       return;
@@ -484,12 +494,12 @@ export const createSessionTitleRuntime = ({
     // Let OpenCode's first-message title land first. We only refresh once the
     // conversation has moved on (2+ real user turns), unless the title is
     // still the default placeholder.
-    if (!forceRefresh && !initialRefresh && realUserCount < 2 && !isDefaultSessionTitle(currentTitle)) {
+    if (!forceRefresh && !initialRefresh && !forkFirstRefresh && realUserCount < 2 && !isDefaultSessionTitle(currentTitle)) {
       return;
     }
 
     // Same tail as last refresh — nothing new to summarize.
-    if (!forceRefresh && !initialRefresh && lastAssistantId && lastAssistantId === meta.forMessageID && !isDefaultSessionTitle(currentTitle)) {
+    if (!forceRefresh && !initialRefresh && !forkFirstRefresh && lastAssistantId && lastAssistantId === meta.forMessageID && !isDefaultSessionTitle(currentTitle)) {
       return;
     }
 
@@ -571,7 +581,8 @@ export const createSessionTitleRuntime = ({
     if (!freshSession || typeof freshSession !== 'object') return;
     const freshTitle = typeof freshSession.title === 'string' ? freshSession.title : '';
     const freshMeta = readTitleRefreshMeta(freshSession);
-    if (!canAutoRefreshSessionTitle(freshTitle, freshMeta.lastAutoTitle || meta.lastAutoTitle)) {
+    if (!canAutoRefreshSessionTitle(freshTitle, freshMeta.lastAutoTitle || meta.lastAutoTitle)
+      && !(forkFirstRefresh && isForkedSessionTitle(freshTitle))) {
       return;
     }
 
@@ -641,6 +652,14 @@ export const createSessionTitleRuntime = ({
     if (stopped) return;
     const createdSession = extractCreatedSession(payload);
     if (createdSession) {
+      if (isForkedSessionTitle(createdSession.title)) {
+        forkFirstSendPending.set(createdSession.sessionId, {
+          createdAt: createdSession.createdAt,
+          directory: createdSession.directory || directoryHint,
+          hasNewUserMessage: false,
+        });
+        return;
+      }
       newSessions.add(createdSession.sessionId);
       return;
     }
@@ -653,6 +672,15 @@ export const createSessionTitleRuntime = ({
     const status = extractSessionStatus(payload);
     if (status) {
       if (status.type === 'idle') {
+        const pendingFork = forkFirstSendPending.get(status.sessionId);
+        if (pendingFork) {
+          if (pendingFork.hasNewUserMessage) {
+            forkFirstSendPending.delete(status.sessionId);
+            forkFirstRefreshes.add(status.sessionId);
+            armTimer(status.sessionId, status.directory || pendingFork.directory || directoryHint, 0);
+          }
+          return;
+        }
         if (newSessions.delete(status.sessionId)) {
           initialRefreshes.add(status.sessionId);
           armTimer(status.sessionId, status.directory || directoryHint, 0);
@@ -666,6 +694,10 @@ export const createSessionTitleRuntime = ({
     }
     const userMessage = extractUserMessage(payload);
     if (userMessage) {
+      const pendingFork = forkFirstSendPending.get(userMessage.sessionId);
+      if (pendingFork && userMessage.createdAt > pendingFork.createdAt) {
+        pendingFork.hasNewUserMessage = true;
+      }
       void recordUserActivity(
         userMessage.sessionId,
         userMessage.directory || directoryHint,

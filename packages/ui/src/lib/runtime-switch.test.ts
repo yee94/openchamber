@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getRuntimeApiBaseUrl, isRuntimeEndpointIdentityChange, switchRuntimeEndpoint } from './runtime-switch';
+import { getRuntimeApiBaseUrl, getRuntimeGeneration, getRuntimeTransportIdentity, isRuntimeEndpointIdentityChange, switchRuntimeEndpoint } from './runtime-switch';
 import { clearRuntimeUrlAuthToken, setRuntimeExtraHeaders } from './runtime-auth';
 
 describe('runtime endpoint switching', () => {
@@ -150,5 +150,40 @@ describe('runtime endpoint switching', () => {
         Reflect.deleteProperty(globalThis, 'window');
       }
     }
+  });
+
+  test('keeps transport identity and generation across credential and key aliases', () => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://identity.example/api/', clientToken: 'first', runtimeKey: 'first-key' });
+    const identity = getRuntimeTransportIdentity();
+    const generation = getRuntimeGeneration();
+
+    switchRuntimeEndpoint({
+      apiBaseUrl: 'https://identity.example/api',
+      clientToken: 'second',
+      runtimeKey: 'second-key',
+      requestHeaders: { Authorization: 'second', 'X-Workspace': 'two' },
+    });
+
+    expect(getRuntimeTransportIdentity()).toBe(identity);
+    expect(getRuntimeGeneration()).toBe(generation);
+  });
+
+  test('increments generation for direct endpoint and relay descriptor changes', () => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://generation-a.example' });
+    const directGeneration = getRuntimeGeneration();
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://generation-b.example' });
+    expect(getRuntimeGeneration()).toBe(directGeneration + 1);
+
+    switchRuntimeEndpoint({
+      apiBaseUrl: 'openchamber-ui://app',
+      relay: { relayUrl: 'wss://relay.example', serverId: 'server-a', hostEncPubJwk: { kty: 'EC', crv: 'P-256', x: 'axfR8uEsQv8FJfV6gYwVgyNMLawKaV7Rbm6V7RkF7yA', y: 'T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU' } },
+    });
+    const relayGeneration = getRuntimeGeneration();
+    switchRuntimeEndpoint({
+      apiBaseUrl: 'openchamber-ui://app',
+      relay: { relayUrl: 'wss://relay.example', serverId: 'server-b', hostEncPubJwk: { kty: 'EC', crv: 'P-256', x: 'axfR8uEsQv8FJfV6gYwVgyNMLawKaV7Rbm6V7ZAaDe_UfU' } },
+    });
+    expect(getRuntimeGeneration()).toBe(relayGeneration + 1);
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://generation-reset.example' });
   });
 });

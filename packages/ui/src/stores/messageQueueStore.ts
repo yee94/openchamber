@@ -5,218 +5,156 @@ import type { AttachedFile } from './types/sessionTypes';
 import { updateDesktopSettings } from '@/lib/persistence';
 
 export type FollowUpBehavior = 'steer' | 'queue';
+export type QueueItemStatus = 'queued' | 'sending' | 'retrying' | 'reconciling' | 'unresolved' | 'failed';
+type QueueFailureKind = 'pre-dispatch' | 'ambiguous-dispatch' | 'definitive';
+export type QueueScope =
+  | { state: 'bound'; transportIdentity: string; directory: string; sessionID: string }
+  | { state: 'unbound-legacy'; sessionID: string };
+export type QueueOwner = QueueScope;
 
+export const legacyQueueScope = (sessionID: string): QueueScope => ({ state: 'unbound-legacy', sessionID });
+export const queueScopeKey = (scope: QueueScope): string => scope.state === 'bound'
+  ? `bound:${JSON.stringify([scope.transportIdentity, scope.directory, scope.sessionID])}`
+  : `unbound-legacy:${JSON.stringify([scope.sessionID])}`;
+export const getQueueForScope = (state: { queuedMessages: Record<string, QueuedMessage[]> }, scope: QueueScope): QueuedMessage[] => state.queuedMessages[queueScopeKey(scope)] ?? EMPTY_QUEUE;
+const EMPTY_QUEUE: QueuedMessage[] = [];
+
+type QueueRecoveryPayload = { content: string; attachments?: AttachedFile[]; sendConfig?: QueuedMessage['sendConfig'] };
+export type QueueFailure = { kind: QueueFailureKind; recovery: QueueRecoveryPayload };
+const RECONCILIATION_DEADLINE_MS = 30_000;
 export const DEFAULT_FOLLOW_UP_BEHAVIOR: FollowUpBehavior = 'queue';
-
-export const isFollowUpBehavior = (value: unknown): value is FollowUpBehavior => (
-    value === 'steer' || value === 'queue'
-);
-
-export const normalizeFollowUpBehavior = (
-    value: unknown,
-    legacyQueueModeEnabled?: boolean | null,
-): FollowUpBehavior => {
-    // "immediate" was removed: on a busy session it was wire-identical to
-    // "steer" (OpenCode only supports delivery "steer" | "queue", defaulting
-    // to "steer"), so collapse any persisted/legacy "immediate" onto "steer".
-    if (value === 'immediate') {
-        return 'steer';
-    }
-
-    if (isFollowUpBehavior(value)) {
-        return value;
-    }
-
-    if (legacyQueueModeEnabled === false) {
-        return 'steer';
-    }
-
-    if (legacyQueueModeEnabled === true) {
-        return 'queue';
-    }
-
-    return DEFAULT_FOLLOW_UP_BEHAVIOR;
+export const isFollowUpBehavior = (value: unknown): value is FollowUpBehavior => value === 'steer' || value === 'queue';
+export const normalizeFollowUpBehavior = (value: unknown, legacyQueueModeEnabled?: boolean | null): FollowUpBehavior => {
+  if (value === 'immediate') return 'steer';
+  if (isFollowUpBehavior(value)) return value;
+  return legacyQueueModeEnabled === false ? 'steer' : 'queue';
 };
 
 export interface QueuedMessage {
-    id: string;
-    content: string;
-    attachments?: AttachedFile[];
-    createdAt: number;
-    /** Send config captured at queue time — used as-is when auto-sending */
-    sendConfig?: {
-        providerID: string;
-        modelID: string;
-        agent?: string;
-        variant?: string;
-    };
+  id: string; queueItemID?: string; operationID?: string; messageID?: string; content: string; attachments?: AttachedFile[]; createdAt: number;
+  sendConfig?: { providerID: string; modelID: string; agent?: string; variant?: string };
+  owner?: QueueOwner; status?: QueueItemStatus; attemptCount?: number; nextAttemptAt?: number; failure?: QueueFailure;
+  reconciliationStartedAt?: number; reconciliationDeadlineAt?: number; reconciliationChecks?: number; reconciliationNextCheckAt?: number;
 }
+export interface QueueItem extends QueuedMessage { queueItemID: string; operationID: string; messageID: string; owner: QueueOwner; status: QueueItemStatus; attemptCount: number }
+type QueueAdmission = Omit<QueuedMessage, 'id' | 'queueItemID' | 'operationID' | 'messageID' | 'createdAt' | 'owner' | 'status' | 'attemptCount' | 'nextAttemptAt' | 'failure' | 'reconciliationStartedAt' | 'reconciliationDeadlineAt' | 'reconciliationChecks' | 'reconciliationNextCheckAt'>;
+type QueueFailureInput = Omit<QueueFailure, 'recovery'> & { recovery?: QueueRecoveryPayload };
+type Identity = { queueItemID: string; operationID: string; messageID?: string };
 
-interface MessageQueueState {
-    queuedMessages: Record<string, QueuedMessage[]>; // sessionId → queue
-    followUpBehavior: FollowUpBehavior;
-}
-
+interface MessageQueueState { queuedMessages: Record<string, QueuedMessage[]>; followUpBehavior: FollowUpBehavior }
 interface MessageQueueActions {
-    addToQueue: (sessionId: string, message: Omit<QueuedMessage, 'id' | 'createdAt'>) => void;
-    removeFromQueue: (sessionId: string, messageId: string) => void;
-    reorderQueue: (sessionId: string, fromId: string, toId: string) => void;
-    popToInput: (sessionId: string, messageId: string) => QueuedMessage | null;
-    clearQueue: (sessionId: string) => void;
-    clearAllQueues: () => void;
-    setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
-    getQueueForSession: (sessionId: string) => QueuedMessage[];
+  addToQueue: (scope: QueueScope, message: QueueAdmission) => QueueItem;
+  removeFromQueue: (scope: QueueScope, queueItemID: string, operationID: string | undefined) => void;
+  reorderQueue: (scope: QueueScope, fromID: string, toID: string, operationID: string | undefined) => void;
+  popToInput: (scope: QueueScope, queueItemID: string, operationID: string | undefined) => QueuedMessage | null;
+  clearQueue: (scope: QueueScope) => void; clearAllQueues: () => void; setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
+  getQueueForScope: (scope: QueueScope) => QueuedMessage[];
+  bindLegacyQueue: (legacyScope: QueueScope, targetScope: QueueScope) => QueueItem[];
+  markQueueItemSendAttempt: (scope: QueueScope, identity: Identity) => void;
+  markQueueItemPreDispatchRetry: (scope: QueueScope, identity: Identity, nextAttemptAt: number, failure?: QueueFailureInput) => void;
+  markQueueItemReconciling: (scope: QueueScope, identity: Identity, failure?: QueueFailureInput) => void;
+  recordQueueItemReconciliationCheck: (scope: QueueScope, identity: Required<Identity>) => void;
+  resolveQueueItemReconciliation: (scope: QueueScope, identity: Required<Identity>) => void;
+  markQueueItemDefinitiveFailure: (scope: QueueScope, identity: Identity, failure?: QueueFailureInput) => void;
+  confirmQueueItem: (scope: QueueScope, identity: { operationID?: string; messageID?: string; queueItemID?: string }) => void;
 }
+type Store = MessageQueueState & MessageQueueActions;
+type Persisted = { queuedMessages?: Record<string, QueuedMessage[]>; followUpBehavior?: FollowUpBehavior; queueModeEnabled?: boolean };
+const createID = (prefix: string) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+const recoveryFor = (item: QueuedMessage): QueueRecoveryPayload => ({ content: item.content, attachments: item.attachments, sendConfig: item.sendConfig });
+const sameIdentity = (item: QueueItem, identity: Identity) => item.queueItemID === identity.queueItemID && item.operationID === identity.operationID && (!identity.messageID || item.messageID === identity.messageID);
+const locked = (item: QueueItem) => item.status === 'sending' || item.status === 'reconciling';
 
-type MessageQueueStore = MessageQueueState & MessageQueueActions;
+const reconciliationFields = (message: QueuedMessage, now = Date.now()) => ({
+  reconciliationStartedAt: message.reconciliationStartedAt ?? now,
+  reconciliationDeadlineAt: message.reconciliationDeadlineAt ?? (message.reconciliationStartedAt ?? now) + RECONCILIATION_DEADLINE_MS,
+  reconciliationChecks: Math.max(0, Math.floor(message.reconciliationChecks ?? 0)),
+});
 
-type PersistedMessageQueueState = {
-    queuedMessages?: Record<string, QueuedMessage[]>;
-    followUpBehavior?: FollowUpBehavior;
-    queueModeEnabled?: boolean;
+const migrateItem = (sessionID: string, message: QueuedMessage, scope: QueueScope): QueueItem => {
+  const queueItemID = message.queueItemID ?? (message.id || createID('queued'));
+  const unownedAmbiguous = !message.owner && (message.status === 'sending' || message.status === 'reconciling');
+  const status = unownedAmbiguous ? 'unresolved' : message.status === 'sending' ? 'reconciling' : message.status === 'retrying' || message.status === 'reconciling' || message.status === 'unresolved' || message.status === 'failed' ? message.status : 'queued';
+  return { ...message, id: queueItemID, queueItemID, operationID: message.operationID ?? createID('operation'), messageID: message.messageID ?? createID('message'), owner: scope, status, attemptCount: Math.max(0, Math.floor(message.attemptCount ?? 0)), ...(message.status === 'sending' || message.status === 'reconciling' ? reconciliationFields(message) : {}), ...(unownedAmbiguous || (status === 'reconciling' && message.status === 'sending') ? { failure: { kind: 'ambiguous-dispatch' as const, recovery: message.failure?.recovery ?? recoveryFor(message) } } : {}) };
 };
 
-export const useMessageQueueStore = create<MessageQueueStore>()(
-    devtools(
-        persist(
-            (set, get) => ({
-                queuedMessages: {},
-                followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
+export const migrateMessageQueueState = (persistedState: unknown): Pick<MessageQueueState, 'queuedMessages' | 'followUpBehavior'> => {
+  const state = (persistedState ?? {}) as Persisted;
+  const queues: Record<string, QueueItem[]> = {};
+  for (const [key, queue] of Object.entries(state.queuedMessages ?? {})) {
+    if (!Array.isArray(queue)) continue;
+    let scope: QueueScope;
+    if (key.startsWith('bound:') || key.startsWith('unbound-legacy:')) {
+      const first = queue[0];
+      const legacySessionID = key.startsWith('unbound-legacy:')
+        ? (() => { try { const parsed = JSON.parse(key.slice('unbound-legacy:'.length)); return Array.isArray(parsed) && typeof parsed[0] === 'string' ? parsed[0] : key; } catch { return key; } })()
+        : key;
+      scope = first?.owner?.state === 'bound' ? first.owner : legacyQueueScope(first?.owner?.sessionID ?? legacySessionID);
+    } else {
+      scope = legacyQueueScope(key);
+    }
+    for (const item of queue) {
+      const itemScope = item.owner?.state === 'bound' ? item.owner : scope;
+      const itemKey = queueScopeKey(itemScope);
+      (queues[itemKey] ??= []).push(migrateItem(itemScope.sessionID, item, itemScope));
+    }
+  }
+  return { queuedMessages: queues, followUpBehavior: normalizeFollowUpBehavior(state.followUpBehavior, state.queueModeEnabled ?? null) };
+};
 
-                addToQueue: (sessionId, message) => {
-                    const id = `queued-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                    const queuedMessage: QueuedMessage = {
-                        id,
-                        content: message.content,
-                        attachments: message.attachments,
-                        createdAt: Date.now(),
-                        sendConfig: message.sendConfig,
-                    };
+const update = (set: (fn: (state: Store) => Store | Partial<Store>) => void, scope: QueueScope, identity: Identity, fn: (item: QueueItem) => QueueItem) => {
+  const key = queueScopeKey(scope);
+  set((state) => {
+    const queue = state.queuedMessages[key]; const index = queue?.findIndex((item) => queueScopeKey((item as QueueItem).owner) === key && sameIdentity(item as QueueItem, identity)) ?? -1;
+    if (index < 0 || !queue) return state;
+    const next = fn(queue[index] as QueueItem); if (next === queue[index]) return state;
+    const nextQueue = queue.slice(); nextQueue[index] = next;
+    return { queuedMessages: { ...state.queuedMessages, [key]: nextQueue } };
+  });
+};
 
-                    set((state) => {
-                        const currentQueue = state.queuedMessages[sessionId] ?? [];
-                        return {
-                            queuedMessages: {
-                                ...state.queuedMessages,
-                                [sessionId]: [...currentQueue, queuedMessage],
-                            },
-                        };
-                    });
-                },
-
-                removeFromQueue: (sessionId, messageId) => {
-                    set((state) => {
-                        const currentQueue = state.queuedMessages[sessionId] ?? [];
-                        const newQueue = currentQueue.filter((m) => m.id !== messageId);
-                        
-                        if (newQueue.length === 0) {
-                            const { [sessionId]: _removed, ...rest } = state.queuedMessages;
-                            void _removed;
-                            return { queuedMessages: rest };
-                        }
-                        
-                        return {
-                            queuedMessages: {
-                                ...state.queuedMessages,
-                                [sessionId]: newQueue,
-                            },
-                        };
-                    });
-                },
-
-                reorderQueue: (sessionId, fromId, toId) => {
-                    if (fromId === toId) return;
-                    set((state) => {
-                        const currentQueue = state.queuedMessages[sessionId];
-                        if (!currentQueue) return state;
-                        const fromIndex = currentQueue.findIndex((m) => m.id === fromId);
-                        const toIndex = currentQueue.findIndex((m) => m.id === toId);
-                        if (fromIndex === -1 || toIndex === -1) return state;
-
-                        const newQueue = currentQueue.slice();
-                        const [moved] = newQueue.splice(fromIndex, 1);
-                        newQueue.splice(toIndex, 0, moved);
-
-                        return {
-                            queuedMessages: {
-                                ...state.queuedMessages,
-                                [sessionId]: newQueue,
-                            },
-                        };
-                    });
-                },
-
-                popToInput: (sessionId, messageId) => {
-                    const state = get();
-                    const currentQueue = state.queuedMessages[sessionId] ?? [];
-                    const message = currentQueue.find((m) => m.id === messageId);
-                    
-                    if (!message) {
-                        return null;
-                    }
-
-                    // Remove from queue
-                    set((prevState) => {
-                        const queue = prevState.queuedMessages[sessionId] ?? [];
-                        const newQueue = queue.filter((m) => m.id !== messageId);
-                        
-                        if (newQueue.length === 0) {
-                            const { [sessionId]: _removed, ...rest } = prevState.queuedMessages;
-                            void _removed;
-                            return { queuedMessages: rest };
-                        }
-                        
-                        return {
-                            queuedMessages: {
-                                ...prevState.queuedMessages,
-                                [sessionId]: newQueue,
-                            },
-                        };
-                    });
-
-                    return message;
-                },
-
-                clearQueue: (sessionId) => {
-                    set((state) => {
-                        const { [sessionId]: _removed, ...rest } = state.queuedMessages;
-                        void _removed;
-                        return { queuedMessages: rest };
-                    });
-                },
-
-                clearAllQueues: () => {
-                    set({ queuedMessages: {} });
-                },
-
-                setFollowUpBehavior: (behavior) => {
-                    set({ followUpBehavior: behavior });
-                    void updateDesktopSettings({ followUpBehavior: behavior });
-                },
-
-                getQueueForSession: (sessionId) => {
-                    return get().queuedMessages[sessionId] ?? [];
-                },
-            }),
-            {
-                name: 'message-queue-store',
-                version: 1,
-                storage: createDeferredSafeJSONStorage(),
-                partialize: (state) => ({
-                    queuedMessages: state.queuedMessages,
-                    followUpBehavior: state.followUpBehavior,
-                }),
-                migrate: (persistedState) => {
-                    const state = (persistedState ?? {}) as PersistedMessageQueueState;
-                    return {
-                        queuedMessages: state.queuedMessages ?? {},
-                        followUpBehavior: normalizeFollowUpBehavior(state.followUpBehavior, state.queueModeEnabled ?? null),
-                    };
-                },
-            }
-        ),
-        {
-            name: 'message-queue-store',
-        }
-    )
-);
+export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) => ({
+  queuedMessages: {}, followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
+  addToQueue: (scope, message) => {
+    const item: QueueItem = { ...message, id: createID('queued'), queueItemID: '', operationID: createID('operation'), messageID: createID('message'), createdAt: Date.now(), owner: scope, status: 'queued', attemptCount: 0 };
+    item.queueItemID = item.id;
+    const key = queueScopeKey(scope); set((state) => ({ queuedMessages: { ...state.queuedMessages, [key]: [...(state.queuedMessages[key] ?? []), item] } })); return item;
+  },
+  removeFromQueue: (scope, queueItemID, operationID) => { if (!operationID) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => (candidate.queueItemID === queueItemID || candidate.id === queueItemID) && candidate.operationID === operationID && queueScopeKey((candidate as QueueItem).owner) === key) as QueueItem | undefined; if (!item || locked(item)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
+  reorderQueue: (scope, fromID, toID, operationID) => { if (!operationID) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const from = queue?.findIndex((item) => (item.id === fromID || item.queueItemID === fromID) && item.operationID === operationID && queueScopeKey((item as QueueItem).owner) === key) ?? -1; const to = queue?.findIndex((item) => (item.id === toID || item.queueItemID === toID) && queueScopeKey((item as QueueItem).owner) === key) ?? -1; if (!queue || from < 0 || to < 0 || from === to || locked(queue[from] as QueueItem) || locked(queue[to] as QueueItem)) return state; const next = queue.slice(); const [item] = next.splice(from, 1); next.splice(to, 0, item!); return { queuedMessages: { ...state.queuedMessages, [key]: next } }; }); },
+  popToInput: (scope, id, operationID) => { if (!operationID) return null; const item = getQueueForScope(get(), scope).find((candidate) => (candidate.id === id || candidate.queueItemID === id) && candidate.operationID === operationID && queueScopeKey((candidate as QueueItem).owner) === queueScopeKey(scope)) as QueueItem | undefined; if (!item || locked(item)) return null; get().removeFromQueue(scope, item.queueItemID, item.operationID); return item; },
+  clearQueue: (scope) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; if (!queue || queue.some((item) => locked(item as QueueItem))) return state; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
+  clearAllQueues: () => set((state) => {
+    const queuedMessages: Record<string, QueuedMessage[]> = {};
+    let changed = false;
+    for (const [key, queue] of Object.entries(state.queuedMessages)) {
+      const retained = queue.filter((item) => locked(item as QueueItem));
+      if (retained.length) queuedMessages[key] = retained;
+      if (retained.length !== queue.length) changed = true;
+    }
+    return changed ? { queuedMessages } : state;
+  }),
+  setFollowUpBehavior: (behavior) => { set({ followUpBehavior: behavior }); void updateDesktopSettings({ followUpBehavior: behavior }); },
+  getQueueForScope: (scope) => getQueueForScope(get(), scope),
+  bindLegacyQueue: (legacy, target) => {
+    if (legacy.state !== 'unbound-legacy' || target.state !== 'bound' || legacy.sessionID !== target.sessionID) return [];
+    const legacyKey = queueScopeKey(legacy); const targetKey = queueScopeKey(target); let moved: QueueItem[] = [];
+    set((state) => {
+      const source = state.queuedMessages[legacyKey] as QueueItem[] | undefined;
+      if (!source) return state;
+      moved = source.filter((item) => !locked(item));
+      if (moved.length === 0) return state;
+      const remaining = source.filter(locked); const queuedMessages = { ...state.queuedMessages, [targetKey]: [...moved.map((item) => ({ ...item, owner: target })), ...(state.queuedMessages[targetKey] ?? [])] };
+      if (remaining.length) queuedMessages[legacyKey] = remaining; else delete queuedMessages[legacyKey];
+      return { queuedMessages };
+    });
+    return moved.map((item) => ({ ...item, owner: target }));
+  },
+  markQueueItemSendAttempt: (scope, identity) => update(set, scope, identity, (item) => item.status === 'queued' || (item.status === 'retrying' && (item.nextAttemptAt ?? 0) <= Date.now()) ? { ...item, status: 'sending', attemptCount: item.attemptCount + 1, nextAttemptAt: undefined, failure: undefined } : item),
+  markQueueItemPreDispatchRetry: (scope, identity, nextAttemptAt, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'retrying', nextAttemptAt, failure: { kind: 'pre-dispatch', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
+  markQueueItemReconciling: (scope, identity, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'reconciling', nextAttemptAt: undefined, ...reconciliationFields(item), reconciliationNextCheckAt: undefined, failure: { kind: 'ambiguous-dispatch', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
+  recordQueueItemReconciliationCheck: (scope, identity) => update(set, scope, identity, (item) => item.status === 'reconciling' && sameIdentity(item, identity) ? { ...item, reconciliationChecks: (item.reconciliationChecks ?? 0) + 1, reconciliationNextCheckAt: Date.now() + 2000 } : item),
+  resolveQueueItemReconciliation: (scope, identity) => update(set, scope, identity, (item) => item.status === 'reconciling' && sameIdentity(item, identity) ? { ...item, status: 'unresolved', nextAttemptAt: undefined } : item),
+  markQueueItemDefinitiveFailure: (scope, identity, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'failed', nextAttemptAt: undefined, failure: { kind: 'definitive', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
+  confirmQueueItem: (scope, identity) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => { const operationMatch = identity.operationID ? candidate.operationID === identity.operationID : true; const messageMatch = identity.messageID ? candidate.messageID === identity.messageID : true; const itemMatch = identity.queueItemID ? candidate.queueItemID === identity.queueItemID : true; return operationMatch && messageMatch && itemMatch; }); if (!item || (!identity.operationID && !identity.messageID)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
+}), { name: 'message-queue-store', version: 3, storage: createDeferredSafeJSONStorage(), partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));

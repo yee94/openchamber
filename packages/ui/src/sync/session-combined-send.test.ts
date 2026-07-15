@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { opencodeClient } from '@/lib/opencode/client'
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry'
-import { useSessionUIStore } from './session-ui-store'
+import { routeMessage, useSessionUIStore } from './session-ui-store'
 import { setActionRefs, setOptimisticRefs } from './session-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useInputStore } from './input-store'
@@ -78,6 +78,15 @@ function makeCombinedAPI(fn: (input: ConversationCreateWithPromptInput, signal?:
 let originalBuildMessageParts: typeof opencodeClient.buildMessageParts
 let originalGetDirectory: typeof opencodeClient.getDirectory
 let originalCreateSession: typeof opencodeClient.createSession
+let originalSendMessage: typeof opencodeClient.sendMessage
+let originalDeleteSessionMessage: typeof opencodeClient.deleteSessionMessage
+let originalShellSession: typeof opencodeClient.shellSession
+let originalFetch: typeof globalThis.fetch
+let notificationRequests: Array<{ url: string; init?: RequestInit }>
+
+async function flushNotifications() {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
 
 function resetAll() {
   useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null, newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false }, availableWorktreesByProject: new Map(), webUICreatedSessions: new Set<string>() })
@@ -123,6 +132,15 @@ beforeEach(() => {
   originalBuildMessageParts = opencodeClient.buildMessageParts
   originalGetDirectory = opencodeClient.getDirectory
   originalCreateSession = opencodeClient.createSession
+  originalSendMessage = opencodeClient.sendMessage
+  originalDeleteSessionMessage = opencodeClient.deleteSessionMessage
+  originalShellSession = opencodeClient.shellSession
+  originalFetch = globalThis.fetch
+  notificationRequests = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes('/message-sent')) notificationRequests.push({ url: String(input), init })
+    return new Response(null, { status: 200 })
+  }) as typeof globalThis.fetch
 
   opencodeClient.buildMessageParts = async (params: any) => {
     const parts: any[] = []
@@ -148,6 +166,10 @@ afterEach(() => {
   opencodeClient.buildMessageParts = originalBuildMessageParts
   opencodeClient.getDirectory = originalGetDirectory
   opencodeClient.createSession = originalCreateSession
+  opencodeClient.sendMessage = originalSendMessage
+  opencodeClient.deleteSessionMessage = originalDeleteSessionMessage
+  opencodeClient.shellSession = originalShellSession
+  globalThis.fetch = originalFetch
   registerRuntimeAPIs(null)
   setActionRefs(null as any, null as any, () => '')
   setOptimisticRefs(null as any, null as any)
@@ -187,6 +209,10 @@ describe('handleCombinedDraftSend', () => {
     expect(capturedInput!.messageID.startsWith('msg_')).toBe(true)
     expect(capturedInput!.model).toEqual({ providerID: 'openai', modelID: 'gpt-4o' })
     expect(capturedInput!.parts.some((p: any) => p.type === 'text')).toBe(true)
+    await flushNotifications()
+    expect(notificationRequests).toHaveLength(1)
+    expect(new Headers(notificationRequests[0].init?.headers).get('Content-Type')).toBe('application/json')
+    expect(notificationRequests[0].init?.body).toBe(JSON.stringify({ messageID: capturedInput!.messageID }))
 
     const allSessions = [...useGlobalSessionsStore.getState().activeSessions, ...useGlobalSessionsStore.getState().archivedSessions]
     expect(allSessions.some((s: any) => s.id === SESSION_ID)).toBe(true)
@@ -248,6 +274,8 @@ describe('handleCombinedDraftSend', () => {
       expect(useSessionUIStore.getState().newSessionDraft.open).toBe(true)
       expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(false)
       expect(useInputStore.getState().pendingInputText).toBe(phase)
+      await flushNotifications()
+      expect(notificationRequests).toHaveLength(0)
     }
   })
 
@@ -297,6 +325,8 @@ describe('handleCombinedDraftSend', () => {
     const all = [...useGlobalSessionsStore.getState().activeSessions, ...useGlobalSessionsStore.getState().archivedSessions]
     expect(all.some((s: any) => s.id === SESSION_ID)).toBe(true)
     expect(useInputStore.getState().pendingInputText).toBe('perm fail')
+    await flushNotifications()
+    expect(notificationRequests).toHaveLength(0)
   })
 
   test('8) prompt ambiguous found — session selected, resolves', async () => {
@@ -315,6 +345,8 @@ describe('handleCombinedDraftSend', () => {
     expect(error).not.toBeNull()
     expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID)
     expect(useInputStore.getState().pendingInputText).toBe('amb miss')
+    await flushNotifications()
+    expect(notificationRequests).toHaveLength(0)
   })
 
   test('10) stale draft — old response global upsert only, no UI steal', async () => {
@@ -388,5 +420,115 @@ describe('handleCombinedDraftSend', () => {
     expect(parts.some((p: any) => p.type === 'text' && p.text === 'extra' && p.synthetic === true)).toBe(true)
     expect(parts.some((p: any) => p.type === 'text' && p.text === 'synth ctx' && p.synthetic === true)).toBe(true)
     expect(parts.length).toBe(5)
+  })
+
+  test('13) existing send confirms caller and notification once', async () => {
+    let callerConfirmations = 0
+    opencodeClient.sendMessage = (async () => {}) as any
+
+    await routeMessage({
+      sessionId: SESSION_ID,
+      directory: PROJECT.path,
+      content: 'confirmed',
+      providerID: 'openai',
+      modelID: 'gpt-4o',
+      messageID: 'msg_existing_confirmed',
+      onSendConfirmed: () => { callerConfirmations++ },
+    })
+
+    await flushNotifications()
+    expect(callerConfirmations).toBe(1)
+    expect(notificationRequests).toHaveLength(1)
+    expect(notificationRequests[0].init?.body).toBe(JSON.stringify({ messageID: 'msg_existing_confirmed' }))
+  })
+
+  test('14) pre-dispatch and definitive rejection do not notify', async () => {
+    setOptimisticRefs(null as any, null as any)
+    await routeMessage({ sessionId: SESSION_ID, directory: PROJECT.path, content: 'pre-dispatch', providerID: 'openai', modelID: 'gpt-4o' }).catch(() => {})
+    await flushNotifications()
+    expect(notificationRequests).toHaveLength(0)
+
+    setupChildStores()
+    opencodeClient.sendMessage = (async () => { throw new Error('rejected') }) as any
+    await routeMessage({ sessionId: SESSION_ID, directory: PROJECT.path, content: 'rejected', providerID: 'openai', modelID: 'gpt-4o' }).catch(() => {})
+    await flushNotifications()
+    expect(notificationRequests).toHaveLength(0)
+  })
+
+  test('15) shell success confirms once after its response', async () => {
+    let callerConfirmations = 0
+    opencodeClient.shellSession = (async () => {}) as any
+    await routeMessage({
+      sessionId: SESSION_ID,
+      directory: PROJECT.path,
+      content: 'pwd',
+      providerID: 'openai',
+      modelID: 'gpt-4o',
+      inputMode: 'shell',
+      messageID: 'msg_shell_confirmed',
+      onSendConfirmed: () => { callerConfirmations++ },
+    })
+    await flushNotifications()
+    expect(callerConfirmations).toBe(1)
+    expect(notificationRequests).toHaveLength(1)
+  })
+})
+
+describe('staged message edits', () => {
+  test('commit the edit only for a direct composer send', async () => {
+    const messages = {
+      [SESSION_ID]: [
+        { id: 'msg_2', sessionID: SESSION_ID, role: 'user', time: { created: 2 } },
+        { id: 'msg_3', sessionID: SESSION_ID, role: 'assistant', time: { created: 3 } },
+      ],
+    }
+    const parts = {
+      msg_2: [{ id: 'prt_2', messageID: 'msg_2', type: 'text', text: 'original' }],
+      msg_3: [{ id: 'prt_3', messageID: 'msg_3', type: 'text', text: 'answer' }],
+    }
+    const childStore = {
+      getState: () => ({ session: [], message: messages, part: parts, session_status: {} }),
+      setState: (patch: Record<string, unknown>) => {
+        if (patch.message) Object.assign(messages, patch.message)
+        if (patch.part) Object.assign(parts, patch.part)
+      },
+    }
+    const childStores = {
+      children: new Map([[PROJECT.path, childStore]]),
+      ensureChild: () => childStore,
+      getChild: () => childStore,
+    }
+    setActionRefs({
+      session: {
+        messages: async () => ({ data: [] }),
+        abort: async () => ({ data: true }),
+      },
+    } as any, childStores as any, () => PROJECT.path)
+    useSessionUIStore.setState({
+      currentSessionId: SESSION_ID,
+      currentSessionDirectory: PROJECT.path,
+      stagedMessageEdit: { sessionId: SESSION_ID, messageId: 'msg_2' },
+    })
+
+    const sequence: string[] = []
+    opencodeClient.deleteSessionMessage = (async (_sessionId: string, messageId: string) => {
+      sequence.push(`delete:${messageId}`)
+      return true
+    }) as any
+    opencodeClient.sendMessage = (async (params: { text: string }) => {
+      sequence.push(`send:${params.text}`)
+    }) as any
+
+    await useSessionUIStore.getState().sendMessage('programmatic', 'openai', 'gpt-4o')
+
+    expect(sequence).toEqual(['send:programmatic'])
+    expect(useSessionUIStore.getState().stagedMessageEdit).toEqual({ sessionId: SESSION_ID, messageId: 'msg_2' })
+
+    await useSessionUIStore.getState().sendMessage('replacement', 'openai', 'gpt-4o', undefined, undefined, undefined, undefined, undefined, undefined, {
+      commitStagedMessageEdit: true,
+    })
+
+    expect(sequence).toEqual(['send:programmatic', 'delete:msg_3', 'delete:msg_2', 'send:replacement'])
+    expect(useSessionUIStore.getState().stagedMessageEdit).toBe(null)
   })
 })

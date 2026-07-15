@@ -148,6 +148,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const getAgentModelForSession = useSelectionStore((s) => s.getAgentModelForSession);
     const getSessionModelSelection = useSelectionStore((s) => s.getSessionModelSelection);
     const revertToMessage = useSessionUIStore((s) => s.revertToMessage);
+    const editMessagePreservingChanges = useSessionUIStore((s) => s.editMessagePreservingChanges);
     const forkFromMessage = useSessionUIStore((s) => s.forkFromMessage);
 
     streamPerfCount('ui.chat_message.render');
@@ -733,9 +734,24 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         revertToMessage(sessionId, message.info.id);
     }, [sessionId, message.info.id, revertToMessage]);
 
+    const handleEdit = React.useCallback(() => {
+        if (!sessionId || !message.info.id) return;
+        editMessagePreservingChanges(sessionId, message.info.id);
+    }, [editMessagePreservingChanges, message.info.id, sessionId]);
+
     // NEW: Fork handler
     const handleFork = React.useCallback(() => {
-        if (!sessionId || !message.info.id) return;
+        console.info('[session-fork] message action clicked', {
+            sessionId,
+            messageId: message.info.id,
+        });
+        if (!sessionId || !message.info.id) {
+            console.warn('[session-fork] message action is missing identifiers', {
+                hasSessionId: Boolean(sessionId),
+                hasMessageId: Boolean(message.info.id),
+            });
+            return;
+        }
         forkFromMessage(sessionId, message.info.id);
     }, [sessionId, message.info.id, forkFromMessage]);
 
@@ -1013,6 +1029,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 showReasoningTraces={showReasoningTraces}
                                                 onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                                                 agentMention={agentMention}
+                                                onEdit={handleEdit}
                                                 onRevert={handleRevert}
                                                 onFork={isUser ? handleFork : undefined}
                                                 errorMessage={assistantErrorText}
@@ -1047,6 +1064,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 showReasoningTraces={showReasoningTraces}
                                                 onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                                                 agentMention={agentMention}
+                                                onEdit={handleEdit}
                                                 onRevert={handleRevert}
                                                 onFork={isUser ? handleFork : undefined}
                                                 errorMessage={assistantErrorText}

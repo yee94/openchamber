@@ -2,7 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildLatestTitleTranscript,
   canAutoRefreshSessionTitle,
+  createSessionTitleRuntime,
   isDefaultSessionTitle,
+  isForkedSessionTitle,
   looksLikeMultiRunSessionTitle,
   remainingTitleThrottleMs,
   TITLE_THROTTLE_MS,
@@ -13,6 +15,12 @@ describe('session-title helpers', () => {
     expect(isDefaultSessionTitle('New session - 2026-07-10T12:00:00.000Z')).toBe(true);
     expect(isDefaultSessionTitle('Child session - 2026-07-10T12:00:00.000Z')).toBe(true);
     expect(isDefaultSessionTitle('Debugging production 500 errors')).toBe(false);
+  });
+
+  it('detects titles created by session fork', () => {
+    expect(isForkedSessionTitle('Fix fork selection (fork #1)')).toBe(true);
+    expect(isForkedSessionTitle('Fix fork selection (fork #12)')).toBe(true);
+    expect(isForkedSessionTitle('Fix fork selection')).toBe(false);
   });
 
   it('detects multi-run structural titles', () => {
@@ -111,5 +119,88 @@ describe('session-title helpers', () => {
     ];
     const result = buildLatestTitleTranscript(messages, { maxTurns: 1 });
     expect(result.languageSample).toBe('修复会话标题语言');
+  });
+
+  it('refreshes a fork title after its first newly-sent reply completes', async () => {
+    const originalFetch = globalThis.fetch;
+    const session = {
+      id: 'ses-fork',
+      title: 'Original work (fork #1)',
+      metadata: {
+        openchamber: {
+          titleRefresh: {
+            lastAutoTitle: 'Original work',
+            generatedAt: 900,
+            forMessageID: 'assistant-original',
+          },
+        },
+      },
+    };
+    const messages = [
+      { info: { id: 'user-original', role: 'user' }, parts: [{ type: 'text', text: 'Original work' }] },
+      { info: { id: 'assistant-original', role: 'assistant' }, parts: [{ type: 'text', text: 'Original reply' }] },
+      { info: { id: 'user-fork', role: 'user' }, parts: [{ type: 'text', text: 'Take a different implementation path' }] },
+      { info: { id: 'assistant-fork', role: 'assistant', parentID: 'user-fork' }, parts: [{ type: 'text', text: 'Implemented the alternate path' }] },
+    ];
+    let generationCalls = 0;
+
+    globalThis.fetch = async (input, init = {}) => {
+      const url = String(input);
+      if (url.includes('/message')) {
+        return new Response(JSON.stringify(messages), { status: 200 });
+      }
+      if (init.method === 'PATCH') {
+        return new Response(JSON.stringify(session), { status: 200 });
+      }
+      return new Response(JSON.stringify(session), { status: 200 });
+    };
+
+    try {
+      const runtime = createSessionTitleRuntime({
+        buildOpenCodeUrl: (pathname) => `http://opencode${pathname}`,
+        getOpenCodeAuthHeaders: () => ({}),
+        getSmallModelService: async () => ({
+          generateSmallModelText: async () => {
+            generationCalls += 1;
+            return { text: 'Alternate implementation path', providerID: 'test', modelID: 'test' };
+          },
+        }),
+        now: () => 1_000,
+        isTitleRefreshEnabled: () => true,
+      });
+
+      runtime.processPayload({
+        type: 'session.created',
+        properties: {
+          directory: '/repo',
+          info: { id: 'ses-fork', title: session.title, time: { created: 100 } },
+        },
+      });
+      runtime.processPayload({
+        type: 'session.status',
+        properties: { sessionID: 'ses-fork', directory: '/repo', status: { type: 'idle' } },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(generationCalls).toBe(0);
+
+      runtime.processPayload({
+        type: 'message.updated',
+        properties: { directory: '/repo', info: { sessionID: 'ses-fork', role: 'user', time: { created: 200 } } },
+      });
+      runtime.processPayload({
+        type: 'session.status',
+        properties: { sessionID: 'ses-fork', directory: '/repo', status: { type: 'busy' } },
+      });
+      runtime.processPayload({
+        type: 'session.status',
+        properties: { sessionID: 'ses-fork', directory: '/repo', status: { type: 'idle' } },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(generationCalls).toBe(1);
+      runtime.stop();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
