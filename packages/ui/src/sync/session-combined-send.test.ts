@@ -13,6 +13,7 @@ import { routeMessage, useSessionUIStore } from './session-ui-store'
 import { setActionRefs, setOptimisticRefs } from './session-actions'
 import { useConfigStore } from '@/stores/useConfigStore'
 import { useInputStore } from './input-store'
+import { newSessionDraftKey, sessionDraftKey } from './input-draft-types'
 import { useProjectsStore } from '@/stores/useProjectsStore'
 import { useDirectoryStore } from '@/stores/useDirectoryStore'
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore'
@@ -83,13 +84,30 @@ let originalDeleteSessionMessage: typeof opencodeClient.deleteSessionMessage
 let originalShellSession: typeof opencodeClient.shellSession
 let originalFetch: typeof globalThis.fetch
 let notificationRequests: Array<{ url: string; init?: RequestInit }>
+let originalCaptureDraftRuntime: any
+let originalGetDraft: any
+let originalFinalizeDraftOwnership: any
+let ownershipCalls: any[]
+
+function installOwnershipSource(draftID: string, runtime = { transportIdentity: 'runtime-combined', generation: 9 }, revision = 23) {
+  const source = newSessionDraftKey(runtime, draftID)
+  useInputStore.setState({
+    captureDraftRuntime: () => runtime,
+    getDraft: (key) => JSON.stringify(key) === JSON.stringify(source) ? { key: source, revision } as any : undefined,
+    finalizeDraftOwnership: async (input) => {
+      ownershipCalls.push(input)
+      return { status: 'committed', current: true, durable: true } as any
+    },
+  })
+  return { runtime, source, revision }
+}
 
 async function flushNotifications() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function resetAll() {
-  useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null, newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false }, availableWorktreesByProject: new Map(), webUICreatedSessions: new Set<string>() })
+  useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null, newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false }, availableWorktreesByProject: new Map(), webUICreatedSessions: new Set<string>() })
   useInputStore.setState({ pendingInputText: null, pendingInputMode: 'replace', attachedFiles: [] })
   useConfigStore.setState({ isConnected: true, currentAgentName: undefined, currentProviderId: 'openai', currentModelId: 'gpt-4o', agents: [] } as any)
   useProjectsStore.setState({ projects: [PROJECT], activeProjectId: PROJECT.id })
@@ -136,6 +154,10 @@ beforeEach(() => {
   originalDeleteSessionMessage = opencodeClient.deleteSessionMessage
   originalShellSession = opencodeClient.shellSession
   originalFetch = globalThis.fetch
+  originalCaptureDraftRuntime = useInputStore.getState().captureDraftRuntime
+  originalGetDraft = useInputStore.getState().getDraft
+  originalFinalizeDraftOwnership = useInputStore.getState().finalizeDraftOwnership
+  ownershipCalls = []
   notificationRequests = []
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input).includes('/message-sent')) notificationRequests.push({ url: String(input), init })
@@ -170,6 +192,11 @@ afterEach(() => {
   opencodeClient.deleteSessionMessage = originalDeleteSessionMessage
   opencodeClient.shellSession = originalShellSession
   globalThis.fetch = originalFetch
+  useInputStore.setState({
+    captureDraftRuntime: originalCaptureDraftRuntime,
+    getDraft: originalGetDraft,
+    finalizeDraftOwnership: originalFinalizeDraftOwnership,
+  })
   registerRuntimeAPIs(null)
   setActionRefs(null as any, null as any, () => '')
   setOptimisticRefs(null as any, null as any)
@@ -221,6 +248,23 @@ describe('handleCombinedDraftSend', () => {
     expect(useSessionUIStore.getState().newSessionDraft.open).toBe(false)
   })
 
+  test('success consumes the opened source with its exact runtime, key, and revision', async () => {
+    registerRuntimeAPIs(makeCombinedAPI(async () => successResult()))
+    useSessionUIStore.getState().openNewSessionDraft()
+    const draftID = useSessionUIStore.getState().newSessionDraft.draftID!
+    const { runtime, source, revision } = installOwnershipSource(draftID)
+
+    await useSessionUIStore.getState().sendMessage('owned success', 'openai', 'gpt-4o')
+
+    expect(ownershipCalls).toEqual([{
+      source,
+      destination: sessionDraftKey(runtime, SESSION_ID),
+      expectedSourceRevision: revision,
+      disposition: 'consume',
+      runtime,
+    }])
+  })
+
   test('3) SSE-first — pre-place message in child store, response must not duplicate', async () => {
     registerRuntimeAPIs(makeCombinedAPI(async () => {
       // SSE arrives before response: simulate by having optimisticInsertUserMessage
@@ -265,7 +309,7 @@ describe('handleCombinedDraftSend', () => {
     const phases = ['create', 'validate', 'conflict', 'unavailable', 'internal'] as FailPhase[]
     for (const phase of phases) {
       resetAll()
-      useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false } }))
+      useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false } }))
       registerRuntimeAPIs(makeCombinedAPI(async () => failResult(phase)))
       useSessionUIStore.getState().openNewSessionDraft()
       let caught = false
@@ -329,6 +373,138 @@ describe('handleCombinedDraftSend', () => {
     expect(notificationRequests).toHaveLength(0)
   })
 
+  test('prompt permanent and unresolved ambiguous delivery preserve the opened source', async () => {
+    for (const [content, result] of [['permanent owned', promptResult(false)], ['ambiguous owned', promptResult(true)]] as const) {
+      resetAll()
+      ownershipCalls = []
+      registerRuntimeAPIs(makeCombinedAPI(async () => result))
+      useSessionUIStore.getState().openNewSessionDraft()
+      const draftID = useSessionUIStore.getState().newSessionDraft.draftID!
+      const { runtime, source, revision } = installOwnershipSource(draftID)
+
+      await useSessionUIStore.getState().sendMessage(content, 'openai', 'gpt-4o').catch(() => {})
+
+      expect(ownershipCalls).toEqual([{
+        source,
+        destination: sessionDraftKey(runtime, SESSION_ID),
+        expectedSourceRevision: revision,
+        disposition: 'preserve',
+        runtime,
+      }])
+    }
+  })
+
+  test('pre-create failure performs zero ownership finalization', async () => {
+    registerRuntimeAPIs(makeCombinedAPI(async () => failResult('create')))
+    useSessionUIStore.getState().openNewSessionDraft()
+    installOwnershipSource(useSessionUIStore.getState().newSessionDraft.draftID!)
+
+    await useSessionUIStore.getState().sendMessage('create failure', 'openai', 'gpt-4o').catch(() => {})
+
+    expect(ownershipCalls).toHaveLength(0)
+  })
+
+  test('old combined success consumes its old source while retaining the reopened draft and current UI', async () => {
+    let resolveResult!: (value: ConversationCreateWithPromptResult) => void
+    let entered!: () => void
+    const enteredPromise = new Promise<void>((resolve) => { entered = resolve })
+    const response = new Promise<ConversationCreateWithPromptResult>((resolve) => { resolveResult = resolve })
+    registerRuntimeAPIs(makeCombinedAPI(async () => { entered(); return response }))
+    useSessionUIStore.getState().openNewSessionDraft({ title: 'Old title' })
+    const oldDraftID = useSessionUIStore.getState().newSessionDraft.draftID!
+    const { runtime, source, revision } = installOwnershipSource(oldDraftID)
+    const send = useSessionUIStore.getState().sendMessage('old success', 'openai', 'gpt-4o')
+    await enteredPromise
+    useSessionUIStore.getState().closeNewSessionDraft()
+    useSessionUIStore.getState().openNewSessionDraft({ title: 'Current title' })
+    const currentDraftID = useSessionUIStore.getState().newSessionDraft.draftID
+
+    resolveResult(successResult())
+    await send
+
+    expect(ownershipCalls).toEqual([{
+      source,
+      destination: sessionDraftKey(runtime, SESSION_ID),
+      expectedSourceRevision: revision,
+      disposition: 'consume',
+      runtime,
+    }])
+    expect({
+      open: useSessionUIStore.getState().newSessionDraft.open,
+      draftID: useSessionUIStore.getState().newSessionDraft.draftID,
+      title: useSessionUIStore.getState().newSessionDraft.title,
+    }).toEqual({ open: true, draftID: currentDraftID, title: 'Current title' })
+    expect(useSessionUIStore.getState().currentSessionId).toBeNull()
+  })
+
+  test('ownership conflicts retain the confirmed remote session and selection', async () => {
+    registerRuntimeAPIs(makeCombinedAPI(async () => successResult()))
+    useSessionUIStore.getState().openNewSessionDraft()
+    const draftID = useSessionUIStore.getState().newSessionDraft.draftID!
+    installOwnershipSource(draftID)
+    useInputStore.setState({ finalizeDraftOwnership: async (input) => {
+      ownershipCalls.push(input)
+      return { status: 'conflict', current: false, durable: false } as any
+    } })
+
+    await useSessionUIStore.getState().sendMessage('revision advanced', 'openai', 'gpt-4o')
+
+    expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID)
+    expect(useGlobalSessionsStore.getState().activeSessions.some((session: any) => session.id === SESSION_ID)).toBe(true)
+  })
+
+  test('fallback defers ownership until route resolution and preserves it after route rejection', async () => {
+    registerRuntimeAPIs(null)
+    let resolveRoute!: () => void
+    let routeStarted!: () => void
+    const routeStartedPromise = new Promise<void>((resolve) => { routeStarted = resolve })
+    opencodeClient.sendMessage = (() => new Promise<void>((resolve) => { resolveRoute = resolve; routeStarted() })) as any
+    useSessionUIStore.getState().openNewSessionDraft()
+    const first = installOwnershipSource(useSessionUIStore.getState().newSessionDraft.draftID!)
+    const success = useSessionUIStore.getState().sendMessage('fallback success', 'openai', 'gpt-4o')
+    await routeStartedPromise
+    expect(ownershipCalls).toHaveLength(0)
+    resolveRoute()
+    await success
+    expect(ownershipCalls).toHaveLength(1)
+    expect(ownershipCalls[0].source).toEqual(first.source)
+    expect(ownershipCalls[0].disposition).toBe('consume')
+
+    resetAll()
+    ownershipCalls = []
+    registerRuntimeAPIs(null)
+    let rejectRoute!: (error: Error) => void
+    let rejectedRouteStarted!: () => void
+    const rejectedRouteStartedPromise = new Promise<void>((resolve) => { rejectedRouteStarted = resolve })
+    opencodeClient.sendMessage = (() => new Promise<void>((_, reject) => { rejectRoute = reject; rejectedRouteStarted() })) as any
+    useSessionUIStore.getState().openNewSessionDraft()
+    const second = installOwnershipSource(useSessionUIStore.getState().newSessionDraft.draftID!)
+    const failure = useSessionUIStore.getState().sendMessage('fallback rejection', 'openai', 'gpt-4o')
+    await rejectedRouteStartedPromise
+    expect(ownershipCalls).toHaveLength(0)
+    rejectRoute(new Error('route rejected'))
+    await failure.catch(() => {})
+    expect(ownershipCalls).toHaveLength(1)
+    expect(ownershipCalls[0].source).toEqual(second.source)
+    expect(ownershipCalls[0].disposition).toBe('preserve')
+  })
+
+  test('fallback ownership rejection preserves the successful route result', async () => {
+    registerRuntimeAPIs(null)
+    let resolveRoute!: () => void
+    let routeStarted!: () => void
+    const routeStartedPromise = new Promise<void>((resolve) => { routeStarted = resolve })
+    opencodeClient.sendMessage = (() => new Promise<void>((resolve) => { resolveRoute = resolve; routeStarted() })) as any
+    useSessionUIStore.getState().openNewSessionDraft()
+    installOwnershipSource(useSessionUIStore.getState().newSessionDraft.draftID!)
+    useInputStore.setState({ finalizeDraftOwnership: async () => { throw new Error('ownership rejected') } })
+    const send = useSessionUIStore.getState().sendMessage('route stays successful', 'openai', 'gpt-4o')
+    await routeStartedPromise
+    resolveRoute()
+    await send
+    expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID)
+  })
+
   test('8) prompt ambiguous found — session selected, resolves', async () => {
     registerRuntimeAPIs(makeCombinedAPI(async () => promptResult(true)))
     useSessionUIStore.getState().openNewSessionDraft()
@@ -376,20 +552,20 @@ describe('handleCombinedDraftSend', () => {
     registerRuntimeAPIs(makeCombinedAPI(async () => { count++; return successResult() }))
 
     // whitespace slash
-    resetAll(); useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false } }))
+    resetAll(); useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false } }))
     useSessionUIStore.getState().openNewSessionDraft()
     try { await useSessionUIStore.getState().sendMessage("  /cmd", 'openai', 'gpt-4o') } catch { /* expected */ }
     expect(count).toBe(0)
 
     // shell mode
-    resetAll(); useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false } }))
+    resetAll(); useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false } }))
     useSessionUIStore.getState().openNewSessionDraft()
     try { await useSessionUIStore.getState().sendMessage('ls', 'openai', 'gpt-4o', undefined, [], undefined, undefined, undefined, 'shell') } catch { /* expected */ }
     expect(count).toBe(0)
 
     // no capability
     registerRuntimeAPIs(null)
-    resetAll(); useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, directoryOverride: null, parentID: null, draftSubmitting: false } }))
+    resetAll(); useSessionUIStore.setState(s => ({ ...s, newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false } }))
     useSessionUIStore.getState().openNewSessionDraft()
     try { await useSessionUIStore.getState().sendMessage('no api', 'openai', 'gpt-4o') } catch { /* expected */ }
     expect(count).toBe(0)
@@ -400,7 +576,7 @@ describe('handleCombinedDraftSend', () => {
     registerRuntimeAPIs(makeCombinedAPI(async (input) => { capturedInput = { ...input, parts: [...input.parts] }; return successResult() }))
 
     useSessionUIStore.setState(s => ({ ...s,
-      newSessionDraft: { open: true, directoryOverride: null, parentID: null, draftSubmitting: false, syntheticParts: [{ text: 'synth ctx', synthetic: true }] },
+      newSessionDraft: { open: true, draftID: crypto.randomUUID(), directoryOverride: null, parentID: null, draftSubmitting: false, syntheticParts: [{ text: 'synth ctx', synthetic: true }] },
       webUICreatedSessions: new Set(),
     }))
 
@@ -530,5 +706,27 @@ describe('staged message edits', () => {
 
     expect(sequence).toEqual(['send:programmatic', 'delete:msg_3', 'delete:msg_2', 'send:replacement'])
     expect(useSessionUIStore.getState().stagedMessageEdit).toBe(null)
+  })
+
+  test('an explicit queued owner directory routes POST and optimistic state to that directory', async () => {
+    const directoryA = '/projects/queue-owner-a'
+    const directoryB = '/projects/current-b'
+    const messageID = 'msg_queue_operation_a'
+    const posts: Array<{ directory?: string; messageId?: string }> = []
+    const optimisticDirectories: string[] = []
+    useSessionUIStore.setState({ currentSessionId: SESSION_ID, currentSessionDirectory: directoryB })
+    setOptimisticRefs((input: any) => { optimisticDirectories.push(input.directory) }, () => {})
+    opencodeClient.sendMessage = (async (params: { directory?: string; messageId?: string }) => { posts.push(params) }) as any
+
+    await useSessionUIStore.getState().sendMessage('queued', 'openai', 'gpt-4o', undefined, undefined, undefined, undefined, undefined, 'normal', {
+      sessionId: SESSION_ID,
+      directoryHint: directoryA,
+      messageID,
+    })
+
+    expect(posts.map(({ directory, messageId }) => ({ directory, messageId }))).toEqual([{ directory: directoryA, messageId: messageID }])
+    expect(optimisticDirectories).toEqual([directoryA])
+    expect(posts.filter((post) => post.directory === directoryB)).toHaveLength(0)
+    expect(optimisticDirectories.filter((directory) => directory === directoryB)).toHaveLength(0)
   })
 })

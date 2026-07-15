@@ -4,6 +4,7 @@ import { togglePermissionAutoAccept } from "../../components/chat/permissionAuto
 const storage = new Map<string, string>()
 const createSessionCalls: Array<{ title?: string; directory: string | null; parentID: string | null; metadata?: unknown }> = []
 const permissionAutoAcceptCalls: Array<[string, boolean]> = []
+const finalizeDraftOwnership = mock(async () => ({ status: "committed" as const, current: true, durable: true }))
 
 const getMockCalls = (fn: unknown): unknown[][] => ((fn as { mock?: { calls: unknown[][] } }).mock?.calls ?? [])
 
@@ -216,6 +217,9 @@ mock.module("../input-store", () => ({
       clearAttachedFiles: () => undefined,
       setPendingInputText: () => undefined,
       addRestoredAttachment: () => undefined,
+      captureDraftRuntime: () => ({ transportIdentity: "runtime-issue-2039", generation: 1 }),
+      getDraft: () => undefined,
+      finalizeDraftOwnership,
     }),
   },
 }))
@@ -243,6 +247,8 @@ mock.module("../session-actions", () => ({
   optimisticInsertUserMessage: mock(() => undefined),
   refetchSessionMessages: mock(async () => undefined),
   revertToMessage: mock(async () => undefined),
+  stageMessageEdit: mock(() => undefined),
+  commitMessageEdit: mock(async () => undefined),
   unrevertSession: mock(async () => undefined),
   forkSession: mock(async () => undefined),
   forkFromMessage: mock(async () => undefined),
@@ -309,12 +315,14 @@ describe("issue 2039 draft auto-accept", () => {
     storage.clear()
     createSessionCalls.length = 0
     permissionAutoAcceptCalls.length = 0
+    getMockCalls(finalizeDraftOwnership).length = 0
 
     useSessionUIStore.setState({
       currentSessionId: null,
       currentSessionDirectory: null,
       newSessionDraft: {
         open: false,
+        draftID: null,
         directoryOverride: null,
         parentID: null,
       },
@@ -358,5 +366,17 @@ describe("issue 2039 draft auto-accept", () => {
     expect(result).toBeNull()
     expect(createSessionCalls).toHaveLength(0)
     expect(permissionAutoAcceptCalls).toHaveLength(0)
+  })
+
+  test("skips ownership finalization when the materialized draft source is missing", async () => {
+    useSessionUIStore.getState().openNewSessionDraft()
+
+    const result = await materializeOpenDraftSession({
+      providerID: "provider",
+      modelID: "model",
+    })
+
+    expect(result?.sessionId).toBe("ses_issue_2039")
+    expect(getMockCalls(finalizeDraftOwnership)).toHaveLength(0)
   })
 })

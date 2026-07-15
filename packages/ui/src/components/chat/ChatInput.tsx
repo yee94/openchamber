@@ -24,7 +24,7 @@ import { appendInlineComments } from '@/lib/messages/inlineComments';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import { getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { dispatchQueuedMessage } from '@/hooks/useQueuedMessageAutoSend';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
@@ -121,7 +121,9 @@ import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
 import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import type { Part } from '@opencode-ai/sdk/v2/client';
-import { getLocalChatCommand, preservesComposerResources } from './localCommandClassifier';
+import { consumesImmediateCommandText, getLocalChatCommand, preservesComposerResources } from './localCommandClassifier';
+import { consumeImmediateCommandText } from './immediateCommandTextConsumption';
+import { runImmediateSessionCommand } from './immediateSessionCommandAction';
 import { admitChatInputQueueMessageAndConsumeResources } from './queueAdmission';
 import { togglePermissionAutoAccept } from './permissionAutoAccept';
 
@@ -1414,10 +1416,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     // Message queue
     const followUpBehavior = useMessageQueueStore((state) => state.followUpBehavior);
+    const queueTransportIdentity = React.useSyncExternalStore(
+        subscribeRuntimeEndpointChanged,
+        getRuntimeTransportIdentity,
+        getRuntimeTransportIdentity,
+    );
     const currentQueueScope = React.useMemo<Extract<QueueScope, { state: 'bound' }> | null>(() => {
-        const directory = currentSessionDirectoryForSync || currentDirectory;
-        return currentSessionId && directory ? { state: 'bound', transportIdentity: getRuntimeTransportIdentity(), directory, sessionID: currentSessionId } : null;
-    }, [currentDirectory, currentSessionDirectoryForSync, currentSessionId]);
+        const directory = currentSessionId ? currentSessionDirectoryForSync : currentDirectory;
+        return currentSessionId && directory ? { state: 'bound', transportIdentity: queueTransportIdentity, directory, sessionID: currentSessionId } : null;
+    }, [currentDirectory, currentSessionDirectoryForSync, currentSessionId, queueTransportIdentity]);
     const legacyQueue = React.useMemo(() => currentSessionId ? legacyQueueScope(currentSessionId) : null, [currentSessionId]);
     const boundQueuedMessages = useMessageQueueStore(
         React.useCallback(
@@ -1739,7 +1746,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const attachmentsToQueue = sanitizeAttachmentsForSend(sendableAttachedFiles);
 
         const scope = currentQueueScope;
-        if (!scope) return;
+        if (!scope) {
+            toast.error(t('chat.chatInput.toast.messageSendFailed'));
+            return;
+        }
         admitChatInputQueueMessageAndConsumeResources({
             bindLegacy: () => useMessageQueueStore.getState().bindLegacyQueue(legacyQueueScope(currentSessionId), scope),
             addComposer: () => addToQueue(scope, {
@@ -1768,7 +1778,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft]);
+    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t]);
 
     const handleQueuedMessageEdit = React.useCallback((content: string) => {
         setMessage(content);
@@ -1778,8 +1788,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, []);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
-        if (currentSessionId) void dispatchQueuedMessage(currentSessionId, { delivery: 'steer', queueItemID: messageId });
-    }, [currentSessionId]);
+        if (currentSessionId && currentQueueScope) {
+            void dispatchQueuedMessage(currentSessionId, { delivery: 'steer', queueItemID: messageId, scope: currentQueueScope, manual: true });
+            return;
+        }
+        toast.error(t('chat.chatInput.toast.messageSendFailed'));
+    }, [currentQueueScope, currentSessionId, t]);
 
     const handleOpenAgentPanel = React.useCallback(() => {
         setMobileControlsPanel('agent');
@@ -2102,6 +2116,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
         };
 
+        const consumeImmediateCommand = () => consumeImmediateCommandText({
+            currentSessionId,
+            cancelDraftPersist: clearPendingDraftPersist,
+            messageRef,
+            setMessage,
+            persistDraftImmediately,
+        });
+
         if (isMobile) {
             textareaRef.current?.blur();
         }
@@ -2115,12 +2137,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 .split(/\s+/)[0]
                 ?.toLowerCase();
 
+            if (currentSessionId && (commandName === 'undo' || commandName === 'redo') && consumesImmediateCommandText(normalizedCommand, inputMode)) {
+                consumeImmediateCommand();
+            }
+
             if (commandName === 'undo' && currentSessionId) {
                 try {
                     await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
                     scrollToBottom?.();
                 } catch (error) {
-                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
                 }
                 return;
@@ -2138,18 +2163,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
                     scrollToBottom?.();
                 } catch (error) {
-                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
                 }
                 return;
             }
             else if (commandName === 'fork' && currentSessionId) {
-                try {
-                    await useSessionUIStore.getState().forkCurrentSession(currentSessionId);
-                } catch (error) {
-                    restoreFailedSubmission();
-                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
-                }
+                await runImmediateSessionCommand({
+                    command: 'fork',
+                    consumeCommandText: consumeImmediateCommand,
+                    forkSession: () => useSessionUIStore.getState().forkCurrentSession(currentSessionId),
+                    waitForConnection: sessionActions.waitForConnectionOrThrow,
+                    getDirectoryForSession: () => useSessionUIStore.getState().getDirectoryForSession(currentSessionId),
+                    summarizeSession: async () => undefined,
+                    onCompactError: () => undefined,
+                    onForkError: (error) => {
+                        toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.messageSendFailed'));
+                    },
+                });
                 return;
             }
             else if (commandName === 'timeline' && currentSessionId) {
@@ -2157,14 +2187,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 return;
             }
             else if (commandName === 'compact' && currentSessionId) {
-                try {
-                    await sessionActions.waitForConnectionOrThrow();
-                    const compactDirectory = useSessionUIStore.getState().getDirectoryForSession(currentSessionId) || currentDirectory || undefined;
-                    await opencodeClient.summarizeSession(currentSessionId, currentProviderId, currentModelId, compactDirectory);
-                } catch (error) {
-                    restoreFailedSubmission();
-                    toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.compactFailed'));
-                }
+                await runImmediateSessionCommand({
+                    command: 'compact',
+                    consumeCommandText: consumeImmediateCommand,
+                    forkSession: async () => undefined,
+                    waitForConnection: sessionActions.waitForConnectionOrThrow,
+                    getDirectoryForSession: () => useSessionUIStore.getState().getAuthoritativeDirectoryForSession(currentSessionId),
+                    summarizeSession: (directory) => opencodeClient.summarizeSession(currentSessionId, currentProviderId, currentModelId, directory),
+                    onCompactError: () => { toast.error(t('chat.chatInput.toast.compactFailed')); },
+                    onForkError: () => undefined,
+                });
                 return;
             }
             else if (commandName === 'summary' && currentSessionId) {

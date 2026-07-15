@@ -7,7 +7,7 @@ type BlobError = DraftBlobError | { code: "runtime-value-missing" | "reference-c
 
 export type InputDraftDurabilityError = { phase: "blob"; error: BlobError; reference?: DraftAttachmentReference } | { phase: "metadata"; error: { code: InputDraftMetadataErrorCode } }
 export type InputDraftDurabilityResult = {
-  status: "committed" | "stale" | "memory-only" | "failed" | "unseeded" | "disabled"
+  status: "committed" | "stale" | "failed" | "unseeded" | "disabled"
   keys: string[]
   errors: InputDraftDurabilityError[]
   cleanupErrors: InputDraftDurabilityError[]
@@ -51,16 +51,22 @@ const parseSnapshot = (value: unknown): InputDraftMetadataSnapshot => {
 }
 const entries = <T>(value: ReadonlyMap<string, T> | Readonly<Record<string, T>> | undefined): Array<[string, T]> => value instanceof Map ? [...value.entries()] : Object.entries(value ?? {})
 const keyString = (key: DraftKey | string): string => typeof key === "string" ? key : draftKeyString(key)
+const cloneReference = (reference: DraftAttachmentReference): DraftAttachmentReference => ({ transportIdentity: reference.transportIdentity, owner: { kind: reference.owner.kind, ownerID: reference.owner.ownerID }, attachmentOccurrenceRefID: reference.attachmentOccurrenceRefID })
+const cloneAttachment = (attachment: DraftAttachmentMetadata): DraftAttachmentMetadata => JSON.parse(JSON.stringify(attachment)) as DraftAttachmentMetadata
+const cloneError = (error: InputDraftDurabilityError): InputDraftDurabilityError => error.phase === "metadata" ? { phase: "metadata", error: { code: error.error.code } } : { phase: "blob", error: { ...error.error }, ...(error.reference ? { reference: cloneReference(error.reference) } : {}) }
+const detachResult = (result: InputDraftDurabilityResult): InputDraftDurabilityResult => ({ status: result.status, keys: [...result.keys], errors: result.errors.map(cloneError), cleanupErrors: result.cleanupErrors.map(cloneError) })
+const positiveSafeInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0
+const validKey = (value: string): boolean => { try { const parsed: unknown = JSON.parse(value); return Array.isArray(parsed) && parsed.length === 3 && typeof parsed[0] === "string" && (parsed[1] === "session" || parsed[1] === "draft") && typeof parsed[2] === "string" && parsed[0].length > 0 && parsed[2].length > 0 } catch { return false } }
 const attachmentReferences = (record: DraftRecord): Array<{ reference: DraftAttachmentReference; attachment: DraftAttachmentMetadata }> => {
   const attachments = [...record.attachments, ...record.syntheticParts.flatMap((part) => part.attachments)]
-  return attachments.flatMap((attachment) => attachment.locator.kind === "blob" ? [{ reference: { transportIdentity: record.key.transportIdentity, owner: record.key.owner, attachmentOccurrenceRefID: attachment.attachmentRefID }, attachment }] : [])
+  return attachments.flatMap((attachment) => attachment.locator.kind === "blob" ? [{ reference: { transportIdentity: record.key.transportIdentity, owner: { kind: record.key.owner.kind, ownerID: record.key.owner.ownerID }, attachmentOccurrenceRefID: attachment.attachmentRefID }, attachment: cloneAttachment(attachment) }] : [])
 }
 const refMap = (drafts: Record<string, DraftRecord>): Map<string, { reference: DraftAttachmentReference; attachment: DraftAttachmentMetadata }> => {
   const refs = new Map<string, { reference: DraftAttachmentReference; attachment: DraftAttachmentMetadata }>()
   for (const record of Object.values(drafts)) for (const item of attachmentReferences(record)) refs.set(draftAttachmentRefID(item.reference), item)
   return refs
 }
-const blobError = (error: BlobError, reference?: DraftAttachmentReference): InputDraftDurabilityError => ({ phase: "blob", error, ...(reference ? { reference } : {}) })
+const blobError = (error: BlobError, reference?: DraftAttachmentReference): InputDraftDurabilityError => ({ phase: "blob", error: { ...error }, ...(reference ? { reference: cloneReference(reference) } : {}) })
 const emptyResult = (status: InputDraftDurabilityResult["status"], keys: string[] = []): InputDraftDurabilityResult => ({ status, keys, errors: [], cleanupErrors: [] })
 const itemBlobID = (item: { attachment: DraftAttachmentMetadata } | undefined): string => item?.attachment.locator.kind === "blob" ? item.attachment.locator.blobID : ""
 
@@ -74,49 +80,52 @@ export const createInputDraftDurabilityCoordinator = (blobStore: InputDraftBlobS
   const run = <T>(work: () => Promise<T>): Promise<T> => {
     const next = tail.then(work, work)
     tail = next.then(() => undefined, () => undefined)
-    return next
+    return next.then((value) => value && typeof value === "object" && "status" in value && "keys" in value && "errors" in value && "cleanupErrors" in value ? detachResult(value as InputDraftDurabilityResult) as T : value)
   }
   const cleanupPending = async (drafts = durable.drafts): Promise<InputDraftDurabilityError[]> => {
     const errors: InputDraftDurabilityError[] = []
     const desired = new Map([...refMap(drafts)].map(([id, item]) => [id, item.attachment.locator.kind === "blob" ? item.attachment.locator.blobID : ""]))
     for (const [id, entry] of cleanup) {
       if (desired.get(id) === entry.expectedBlobID) { cleanup.delete(id); continue }
-      const result = await blobStore.releaseIfMatches(entry.reference, entry.expectedBlobID)
+      const result = await blobStore.releaseIfMatches(cloneReference(entry.reference), entry.expectedBlobID)
       if (result.ok) cleanup.delete(id)
       else errors.push(blobError(result.error, entry.reference))
     }
     return errors
   }
   const release = async (reference: DraftAttachmentReference, expectedBlobID: string, errors: InputDraftDurabilityError[], reason: string): Promise<void> => {
-    const result = await blobStore.releaseIfMatches(reference, expectedBlobID)
+    const safeReference = cloneReference(reference)
+    const result = await blobStore.releaseIfMatches(safeReference, expectedBlobID)
     if (result.ok) return
-    cleanup.set(draftAttachmentRefID(reference), { reference, expectedBlobID, generation: enabledGeneration, reason })
-    errors.push(blobError(result.error, reference))
+    cleanup.set(draftAttachmentRefID(safeReference), { reference: cloneReference(safeReference), expectedBlobID, generation: enabledGeneration, reason })
+    errors.push(blobError(result.error, safeReference))
   }
   const ensure = async (item: { reference: DraftAttachmentReference; attachment: DraftAttachmentMetadata }, resolve: InputDraftDurabilityCommit["resolveBlobValue"]): Promise<{ acquired: boolean; error?: InputDraftDurabilityError }> => {
     const blobID = item.attachment.locator.kind === "blob" ? item.attachment.locator.blobID : ""
-    const existing = await blobStore.readReference(item.reference)
-    if (!existing.ok) return { acquired: false, error: blobError(existing.error, item.reference) }
-    if (existing.value && existing.value !== blobID) return { acquired: false, error: blobError({ code: "reference-conflict" }, item.reference) }
+    const reference = cloneReference(item.reference)
+    const attachment = cloneAttachment(item.attachment)
+    const existing = await blobStore.readReference(reference)
+    if (!existing.ok) return { acquired: false, error: blobError(existing.error, reference) }
+    if (existing.value && existing.value !== blobID) return { acquired: false, error: blobError({ code: "reference-conflict" }, reference) }
     if (existing.value === blobID) {
       const present = await blobStore.read(blobID)
       if (present.ok) return { acquired: false }
-      if (present.error.code !== "missing-blob") return { acquired: false, error: blobError(present.error, item.reference) }
-      const value = await resolve?.(item.reference, item.attachment)
-      if (value === undefined) return { acquired: false, error: blobError({ code: "runtime-value-missing" }, item.reference) }
-      const repaired = await blobStore.putAndRetain(item.reference, blobID, value)
-      return repaired.ok ? { acquired: true } : { acquired: false, error: blobError(repaired.error, item.reference) }
+      if (present.error.code !== "missing-blob") return { acquired: false, error: blobError(present.error, reference) }
+      const value = await resolve?.(cloneReference(reference), cloneAttachment(attachment))
+      if (value === undefined) return { acquired: false, error: blobError({ code: "runtime-value-missing" }, reference) }
+      const repaired = await blobStore.putAndRetain(reference, blobID, value)
+      return repaired.ok ? { acquired: true } : { acquired: false, error: blobError(repaired.error, reference) }
     }
     const present = await blobStore.read(blobID)
     if (present.ok) {
-      const retained = await blobStore.retain(item.reference, blobID)
-      return retained.ok ? { acquired: true } : { acquired: false, error: blobError(retained.error, item.reference) }
+      const retained = await blobStore.retain(reference, blobID)
+      return retained.ok ? { acquired: true } : { acquired: false, error: blobError(retained.error, reference) }
     }
-    if (present.error.code !== "missing-blob") return { acquired: false, error: blobError(present.error, item.reference) }
-    const value = await resolve?.(item.reference, item.attachment)
-    if (value === undefined) return { acquired: false, error: blobError({ code: "runtime-value-missing" }, item.reference) }
-    const put = await blobStore.putAndRetain(item.reference, blobID, value)
-    return put.ok ? { acquired: true } : { acquired: false, error: blobError(put.error, item.reference) }
+    if (present.error.code !== "missing-blob") return { acquired: false, error: blobError(present.error, reference) }
+    const value = await resolve?.(cloneReference(reference), cloneAttachment(attachment))
+    if (value === undefined) return { acquired: false, error: blobError({ code: "runtime-value-missing" }, reference) }
+    const put = await blobStore.putAndRetain(reference, blobID, value)
+    return put.ok ? { acquired: true } : { acquired: false, error: blobError(put.error, reference) }
   }
   return {
     seed: (snapshot) => run(async () => {
@@ -141,27 +150,44 @@ export const createInputDraftDurabilityCoordinator = (blobStore: InputDraftBlobS
     }),
     commit: (candidate) => {
       const keys = [...entries(candidate.drafts).map(([key]) => key), ...(candidate.delete ?? []).map(keyString)]
-      if (!enabled) return Promise.resolve(emptyResult("disabled", keys))
+      if (!enabled) return Promise.resolve(detachResult(emptyResult("disabled", keys)))
       return run(async () => {
         if (!seeded) return emptyResult("unseeded", keys)
         if (!enabled) return emptyResult("disabled", keys)
         const generation = enabledGeneration
         let cleanupErrors: InputDraftDurabilityError[] = []
         const next = cloneState(durable)
+        const draftEntries = entries(candidate.drafts)
+        const tombstoneEntries = entries(candidate.tombstones)
+        const deleteKeys = (candidate.delete ?? []).map(keyString)
+        if (draftEntries.some(([key, record]) => !validKey(key) || !positiveSafeInteger(record.revision))
+          || tombstoneEntries.some(([key, revision]) => !validKey(key) || !positiveSafeInteger(revision))
+          || deleteKeys.some((key) => !validKey(key))
+          || new Set(draftEntries.map(([key]) => key)).size !== draftEntries.length
+          || tombstoneEntries.some(([key]) => draftEntries.some(([draftKey]) => draftKey === key))) {
+          return { ...emptyResult("failed", keys), errors: [blobError({ code: "invalid-record" })] }
+        }
         try {
-          for (const [key, record] of entries(candidate.drafts)) {
+          for (const [key, record] of draftEntries) {
             const parsed = parseDraftRecord(record)
             if (!parsed || key !== draftKeyString(parsed.key)) throw new Error("invalid draft record")
             next.drafts[key] = parsed
             delete next.tombstones[key]
           }
+          for (const key of deleteKeys) delete next.drafts[key]
+          for (const [key, revision] of tombstoneEntries) next.tombstones[key] = revision
+          if (candidate.migration) next.migration = candidate.migration
+          if (candidate.legacy) next.legacy = candidate.legacy
+          // Strictly clone the complete candidate before every cleanup, blob, or metadata operation.
+          const parsed = parseSnapshot(snapshotFor(next))
+          next.drafts = parsed.drafts
+          next.tombstones = parsed.tombstones
+          next.migration = parsed.migration
+          next.legacy = parsed.legacy
         } catch {
           return { ...emptyResult("failed", keys), errors: [blobError({ code: "invalid-record" })], cleanupErrors }
         }
-        for (const key of candidate.delete ?? []) delete next.drafts[keyString(key)]
-        for (const [key, revision] of entries(candidate.tombstones)) next.tombstones[key] = revision
-        if (candidate.migration) next.migration = candidate.migration
-        if (candidate.legacy) next.legacy = candidate.legacy
+        if (!await candidate.isCurrent()) return emptyResult("stale", keys)
         const oldRefs = refMap(durable.drafts)
         const nextRefs = refMap(next.drafts)
         cleanupErrors = await cleanupPending(next.drafts)

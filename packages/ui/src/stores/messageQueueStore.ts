@@ -56,6 +56,7 @@ interface MessageQueueActions {
   recordQueueItemReconciliationCheck: (scope: QueueScope, identity: Required<Identity>) => void;
   resolveQueueItemReconciliation: (scope: QueueScope, identity: Required<Identity>) => void;
   markQueueItemDefinitiveFailure: (scope: QueueScope, identity: Identity, failure?: QueueFailureInput) => void;
+  resetQueueItemForDispatch: (scope: QueueScope, identity: Identity) => void;
   confirmQueueItem: (scope: QueueScope, identity: { operationID?: string; messageID?: string; queueItemID?: string }) => void;
 }
 type Store = MessageQueueState & MessageQueueActions;
@@ -156,5 +157,18 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
   recordQueueItemReconciliationCheck: (scope, identity) => update(set, scope, identity, (item) => item.status === 'reconciling' && sameIdentity(item, identity) ? { ...item, reconciliationChecks: (item.reconciliationChecks ?? 0) + 1, reconciliationNextCheckAt: Date.now() + 2000 } : item),
   resolveQueueItemReconciliation: (scope, identity) => update(set, scope, identity, (item) => item.status === 'reconciling' && sameIdentity(item, identity) ? { ...item, status: 'unresolved', nextAttemptAt: undefined } : item),
   markQueueItemDefinitiveFailure: (scope, identity, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'failed', nextAttemptAt: undefined, failure: { kind: 'definitive', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
+  resetQueueItemForDispatch: (scope, identity) => update(set, scope, identity, (item) => {
+    if (item.status !== 'failed' && item.status !== 'unresolved' && item.status !== 'retrying') return item;
+    return {
+      ...item,
+      status: 'queued',
+      nextAttemptAt: undefined,
+      failure: undefined,
+      reconciliationStartedAt: undefined,
+      reconciliationDeadlineAt: undefined,
+      reconciliationChecks: undefined,
+      reconciliationNextCheckAt: undefined,
+    };
+  }),
   confirmQueueItem: (scope, identity) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => { const operationMatch = identity.operationID ? candidate.operationID === identity.operationID : true; const messageMatch = identity.messageID ? candidate.messageID === identity.messageID : true; const itemMatch = identity.queueItemID ? candidate.queueItemID === identity.queueItemID : true; return operationMatch && messageMatch && itemMatch; }); if (!item || (!identity.operationID && !identity.messageID)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
 }), { name: 'message-queue-store', version: 3, storage: createDeferredSafeJSONStorage(), partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));

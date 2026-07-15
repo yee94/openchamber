@@ -168,6 +168,34 @@ test("authoritative miss 精确递增 checks 并写入 next-check", async () => 
   expect(h.log).toEqual(["transition"])
 })
 
+test("next-check 未到时跳过 reconciliation 并保留 item 引用", async () => {
+  for (const nextCheckAt of [11, 1_000] as const) {
+    let queries = 0
+    const h = harness({ now: () => 10, query: async () => { queries++; return "authoritative-miss" } }); h.value = reconciling(h.value!, { reconciliationChecks: 2, reconciliationNextCheckAt: nextCheckAt })
+    const before = h.value
+    expect(await h.dispatcher.reconcile(id)).toBe("skipped")
+    expect(queries).toBe(0); expect(h.log).toEqual([]); expect(h.value).toBe(before)
+    expect(h.value!.reconciliationChecks).toBe(2); expect(h.value!.reconciliationNextCheckAt).toBe(nextCheckAt)
+  }
+})
+
+test("next-check 到点允许一次 GET，并由 identity flight 共享", async () => {
+  const entered = deferred<void>(), release = deferred<void>()
+  let queries = 0
+  const h = harness({ now: () => 10, query: async () => { queries++; entered.resolve(); await release.promise; return "unavailable" } }); h.value = reconciling(h.value!, { reconciliationNextCheckAt: 10 })
+  const first = h.dispatcher.reconcile(id); await entered.promise
+  const second = h.dispatcher.reconcile(id)
+  expect(second).toBe(first); expect(queries).toBe(1)
+  release.resolve(); expect(await first).toBe("pending")
+})
+
+test("deadline 已到优先于未来 next-check 并直接 unresolved", async () => {
+  let queries = 0
+  const h = harness({ now: () => 100, query: async () => { queries++; return "confirmed" } }); h.value = reconciling(h.value!, { reconciliationDeadlineAt: 100, reconciliationNextCheckAt: 1_000 })
+  expect(await h.dispatcher.reconcile(id)).toBe("unresolved")
+  expect(queries).toBe(0); expect(h.log).toEqual(["transition"]); expect(h.value!.status).toBe("unresolved")
+})
+
 test("unavailable 和 query throw 保持 checks 并推进 next-check", async () => {
   for (const query of [async () => "unavailable" as const, async () => { throw Error("GET") }]) {
     const h = harness({ now: () => 10, reconciliationDelayMs: () => 7, query }); h.value = reconciling(h.value!, { reconciliationChecks: 2 })

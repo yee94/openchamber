@@ -6,19 +6,35 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
-import { useScopedSessionStatusReader, useScopedSessionStatusRevision } from '@/sync/sync-context';
+import { useChildStoreManager, useScopedSessionStatusReader, useScopedSessionStatusRevision } from '@/sync/sync-context';
 import type { ScopedSessionStatus } from '@/sync/scoped-session-status';
-import { getRuntimeGeneration, getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { fetchRecentSendConfirmationRecords, getSendFailureKind } from '@/sync/session-actions';
+import { getRuntimeGeneration, getRuntimeKey, getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { fetchRecentSendConfirmationRecords, getSendFailureKind, releaseUnconfirmedQueueSend } from '@/sync/session-actions';
 type SessionStatusType = ScopedSessionStatus;
 const RETRY_BASE = 2000; const RETRY_MAX = 60000; const RECENT_ABORT_DELAY_MS = 2000; const RECONCILIATION_QUERY_DEADLINE_MS = 5000; const MAX_RECONCILIATION_CHECKS = 3;
 export const getQueuedAutoSendRetryDelayMs = (failures: number) => Math.min(RETRY_BASE * 2 ** Math.max(failures - 1, 0), RETRY_MAX);
-type QueueHeadPlan = { dispatch?: boolean; query?: boolean; resolve?: boolean; nextWakeAt?: number };
+const dispatchFlights = new Map<string, Promise<void>>();
+const dispatchFlightListeners = new Set<() => void>();
+let dispatchFlightRevision = 0;
+const notifyDispatchFlightChanged = () => {
+  dispatchFlightRevision += 1;
+  for (const listener of dispatchFlightListeners) listener();
+};
+const dispatchFlightKey = (scope: BoundScope, identity: Pick<QueueItem, 'queueItemID' | 'operationID' | 'messageID'>) => JSON.stringify([queueScopeKey(scope), identity.queueItemID, identity.operationID, identity.messageID]);
+const getDispatchFlightKeys = () => new Set(dispatchFlights.keys());
+const subscribeDispatchFlights = (listener: () => void) => {
+  dispatchFlightListeners.add(listener);
+  return () => dispatchFlightListeners.delete(listener);
+};
+type QueueHeadPlan = { dispatch?: boolean; query?: boolean; resolve?: boolean; recover?: boolean; nextWakeAt?: number };
+const isAuthoritativeIdle = (status: SessionStatusType): boolean => status === 'idle';
+
 export const planQueueHead = (item: QueueItem | undefined, status: SessionStatusType, _previous: SessionStatusType | undefined, now: number, isInFlight = false): QueueHeadPlan => {
   if (!item) return {};
-  if (item.status === 'sending') return {};
-  if (item.status === 'queued') return status === 'idle' ? { dispatch: true } : {};
-  if (item.status === 'retrying') return status !== 'idle' ? {} : item.nextAttemptAt && item.nextAttemptAt > now ? { nextWakeAt: item.nextAttemptAt } : { dispatch: true };
+  // Abandoned in-flight POSTs must re-enter reconciliation; v4 does the same.
+  if (item.status === 'sending') return isInFlight ? {} : { recover: true };
+  if (item.status === 'queued') return isAuthoritativeIdle(status) ? { dispatch: true } : {};
+  if (item.status === 'retrying') return !isAuthoritativeIdle(status) ? {} : item.nextAttemptAt && item.nextAttemptAt > now ? { nextWakeAt: item.nextAttemptAt } : { dispatch: true };
   if (item.status === 'reconciling') {
     const persistedChecks = item.reconciliationChecks ?? 0;
     if (persistedChecks >= MAX_RECONCILIATION_CHECKS || (item.reconciliationDeadlineAt ?? Infinity) <= now) return { resolve: true };
@@ -28,24 +44,33 @@ export const planQueueHead = (item: QueueItem | undefined, status: SessionStatus
   return {};
 };
 export const shouldDispatchQueuedAutoSend = (previous: SessionStatusType | undefined, current: SessionStatusType, hasQueuedItems = false) => Boolean(planQueueHead(hasQueuedItems ? ({ status: 'queued' } as QueueItem) : undefined, current, previous, Date.now()).dispatch);
+type PersistedAutoReviewRun = { status?: string; runtimeKey?: string };
+export const getAutoReviewBlockedSessions = (runsByOriginalSessionID: Record<string, PersistedAutoReviewRun | undefined>, activeRuntimeKey: string): Set<string> => {
+  const blockedSessions = new Set<string>();
+  for (const [sessionID, run] of Object.entries(runsByOriginalSessionID)) {
+    if (run?.status === 'running' && run.runtimeKey === activeRuntimeKey) blockedSessions.add(sessionID);
+  }
+  return blockedSessions;
+};
 
 type BoundScope = Extract<QueueScope, { state: 'bound' }>;
 type QueryOperation = { scope: BoundScope; item: QueueItem; key: string };
-type QueueSchedulerPlan = { dispatchScopes: BoundScope[]; queryOperations: QueryOperation[]; resolveOperations: QueryOperation[]; nextWakeAt?: number; inspectedScopeCount: number };
-export const planQueueScheduler = ({ queuedMessages, activeTransportIdentity, getStatus, previous, inFlight, blockedSessions, now }: { queuedMessages: Record<string, QueuedMessage[]>; activeTransportIdentity: string; getStatus: (scope: BoundScope) => SessionStatusType; previous: Map<string, SessionStatusType>; inFlight: Set<string>; blockedSessions: Set<string>; now: number }): QueueSchedulerPlan => {
-  const plan: QueueSchedulerPlan = { dispatchScopes: [], queryOperations: [], resolveOperations: [], inspectedScopeCount: 0 };
+type QueueSchedulerPlan = { dispatchScopes: BoundScope[]; queryOperations: QueryOperation[]; resolveOperations: QueryOperation[]; recoverOperations: QueryOperation[]; nextWakeAt?: number; inspectedScopeCount: number };
+export const planQueueScheduler = ({ queuedMessages, activeTransportIdentity, getStatus, previous, inFlight, dispatchInFlight = getDispatchFlightKeys(), blockedSessions, now }: { queuedMessages: Record<string, QueuedMessage[]>; activeTransportIdentity: string; getStatus: (scope: BoundScope) => SessionStatusType; previous: Map<string, SessionStatusType>; inFlight: Set<string>; dispatchInFlight?: Set<string>; blockedSessions: Set<string>; now: number }): QueueSchedulerPlan => {
+  const plan: QueueSchedulerPlan = { dispatchScopes: [], queryOperations: [], resolveOperations: [], recoverOperations: [], inspectedScopeCount: 0 };
   const liveKeys = new Set<string>();
   for (const [scopeKey, queue] of Object.entries(queuedMessages)) {
     const item = queue[0] as QueueItem | undefined; const scope = item?.owner;
     if (!item || scope?.state !== 'bound' || scope.transportIdentity !== activeTransportIdentity) continue;
     plan.inspectedScopeCount += 1;
-    const key = `${scopeKey}:${item.queueItemID}`; liveKeys.add(key);
-    const status = getStatus(scope); const headPlan = planQueueHead(item, status, previous.get(scopeKey), now, inFlight.has(key));
+    const key = `${scopeKey}:${item.queueItemID}`; const dispatchKey = dispatchFlightKey(scope, item); liveKeys.add(key);
+    const status = getStatus(scope); const headPlan = planQueueHead(item, status, previous.get(scopeKey), now, dispatchInFlight.has(dispatchKey));
     previous.set(scopeKey, status);
     if (headPlan.nextWakeAt && (!plan.nextWakeAt || headPlan.nextWakeAt < plan.nextWakeAt)) plan.nextWakeAt = headPlan.nextWakeAt;
-    if (headPlan.dispatch && !blockedSessions.has(scope.sessionID)) plan.dispatchScopes.push(scope);
+    if (headPlan.dispatch && !blockedSessions.has(scope.sessionID) && !dispatchInFlight.has(dispatchKey)) plan.dispatchScopes.push(scope);
     if (headPlan.query && !inFlight.has(key)) plan.queryOperations.push({ scope, item, key });
     if (headPlan.resolve) plan.resolveOperations.push({ scope, item, key });
+    if (headPlan.recover && !inFlight.has(key)) plan.recoverOperations.push({ scope, item, key });
   }
   for (const key of inFlight) if (!liveKeys.has(key)) inFlight.delete(key);
   for (const key of previous.keys()) if (!queuedMessages[key]) previous.delete(key);
@@ -59,7 +84,7 @@ export const buildQueuedAutoSendPayload = (queue: QueuedMessage[]) => {
 };
 type Payload = NonNullable<ReturnType<typeof buildQueuedAutoSendPayload>>;
 type Resolved = { providerID: string; modelID: string; agent?: string; variant?: string };
-export const sendQueuedAutoSendPayload = (sessionId: string, payload: Payload, resolved: Resolved, options?: { delivery?: 'steer'; onSendConfirmed?: (messageID: string) => void }) => useSessionUIStore.getState().sendMessage(payload.primaryText, resolved.providerID, resolved.modelID, resolved.agent, payload.primaryAttachments, payload.agentMentionName, undefined, resolved.variant, 'normal', { sessionId, delivery: options?.delivery, messageID: payload.messageID, preserveOptimisticOnAmbiguous: true, onSendConfirmed: options?.onSendConfirmed });
+export const sendQueuedAutoSendPayload = (sessionId: string, payload: Payload, resolved: Resolved, options: { directory: string; delivery?: 'steer'; onSendConfirmed?: (messageID: string) => void }) => useSessionUIStore.getState().sendMessage(payload.primaryText, resolved.providerID, resolved.modelID, resolved.agent, payload.primaryAttachments, payload.agentMentionName, undefined, resolved.variant, 'normal', { sessionId, directoryHint: options.directory, delivery: options.delivery, messageID: payload.messageID, preserveOptimisticOnAmbiguous: true, onSendConfirmed: options.onSendConfirmed });
 const resolve = (sessionID: string, captured?: QueuedMessage['sendConfig']): Resolved => {
   const context = useContextStore.getState(); const config = useConfigStore.getState(); const selection = useSelectionStore.getState();
   const agent = captured?.agent ?? context.getSessionAgentSelection(sessionID) ?? context.getCurrentAgent(sessionID) ?? config.currentAgentName ?? undefined;
@@ -69,20 +94,70 @@ const resolve = (sessionID: string, captured?: QueuedMessage['sendConfig']): Res
 };
 export const queueScopeForSession = (sessionID: string): BoundScope | null => { const directory = useSessionUIStore.getState().getDirectoryForSession(sessionID); return directory ? { state: 'bound', transportIdentity: getRuntimeTransportIdentity(), directory, sessionID } : null; };
 
-export async function dispatchQueuedMessage(sessionID: string, options: { delivery?: 'steer'; queueItemID?: string; scope?: BoundScope } = {}): Promise<void> {
-  const scope = options.scope ?? queueScopeForSession(sessionID); if (!scope || scope.sessionID !== sessionID || scope.transportIdentity !== getRuntimeTransportIdentity()) return;
+const canDispatchQueueStatus = (status: QueueItem['status'] | undefined, manual: boolean): boolean => {
+  if (status === 'queued' || status === 'retrying') return true;
+  if (manual && (status === 'failed' || status === 'unresolved')) return true;
+  return false;
+};
+
+const findQueueHead = (store: ReturnType<typeof useMessageQueueStore.getState>, sessionID: string, queueItemID?: string, preferred?: BoundScope): { scope: BoundScope; item: QueueItem } | null => {
+  if (!preferred || preferred.sessionID !== sessionID) return null;
+  const head = store.getQueueForScope(preferred)[0] as QueueItem | undefined;
+  if (!head || head.owner?.state !== 'bound' || queueScopeKey(head.owner) !== queueScopeKey(preferred)) return null;
+  if (queueItemID && head.queueItemID !== queueItemID && head.id !== queueItemID) return null;
+  return { scope: preferred, item: head };
+};
+
+export function dispatchQueuedMessage(sessionID: string, options: { delivery?: 'steer'; queueItemID?: string; scope?: BoundScope; manual?: boolean } = {}): Promise<void> {
   const store = useMessageQueueStore.getState();
-  if (!options.scope) store.bindLegacyQueue({ state: 'unbound-legacy', sessionID }, scope);
-  const item = store.getQueueForScope(scope)[0] as QueueItem | undefined;
-  if (!item || queueScopeKey(item.owner) !== queueScopeKey(scope) || (options.queueItemID && item.queueItemID !== options.queueItemID) || (item.status !== 'queued' && !(item.status === 'retrying' && (item.nextAttemptAt ?? 0) <= Date.now()))) return;
-  const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const generation = getRuntimeGeneration(); const payload = buildQueuedAutoSendPayload([item]); if (!payload) return;
-  const resolved = resolve(sessionID, item.sendConfig); if (!resolved.providerID || !resolved.modelID) return;
-  store.markQueueItemSendAttempt(scope, identity);
-  const confirmationMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return getRuntimeTransportIdentity() === scope.transportIdentity && getRuntimeGeneration() === generation && current?.queueItemID === identity.queueItemID && current.operationID === identity.operationID && current.messageID === identity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
-  const failureMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return current?.queueItemID === identity.queueItemID && current.operationID === identity.operationID && current.messageID === identity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
-  const confirm = (messageID: string) => { if (confirmationMatches() && messageID === identity.messageID) useMessageQueueStore.getState().confirmQueueItem(scope, identity); };
-  try { await sendQueuedAutoSendPayload(sessionID, payload, resolved, { delivery: options.delivery, onSendConfirmed: confirm }); confirm(identity.messageID); }
-  catch (error) { if (!failureMatches()) return; const kind = getSendFailureKind(error); if (kind === 'pre-dispatch') store.markQueueItemPreDispatchRetry(scope, identity, Date.now() + getQueuedAutoSendRetryDelayMs(item.attemptCount + 1)); else if (kind === 'definitive-rejection') store.markQueueItemDefinitiveFailure(scope, identity); else store.markQueueItemReconciling(scope, identity); }
+  const preferred = options.scope ?? queueScopeForSession(sessionID);
+  if (preferred && !options.scope) store.bindLegacyQueue({ state: 'unbound-legacy', sessionID }, preferred);
+  const located = findQueueHead(store, sessionID, options.queueItemID, preferred ?? undefined);
+  if (!located || located.scope.transportIdentity !== getRuntimeTransportIdentity()) return Promise.resolve();
+  const scope = located.scope;
+  let item = located.item;
+  const manual = options.manual === true || options.delivery === 'steer';
+  const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID };
+  const key = dispatchFlightKey(scope, identity); const existing = dispatchFlights.get(key);
+  if (existing) return existing;
+  if (!canDispatchQueueStatus(item.status, manual)) return Promise.resolve();
+  if (item.status === 'retrying' && !manual && (item.nextAttemptAt ?? 0) > Date.now()) return Promise.resolve();
+  let settle: (() => void) | undefined;
+  const flight = new Promise<void>((resolve) => { settle = resolve; });
+  dispatchFlights.set(key, flight);
+  notifyDispatchFlightChanged();
+  void (async () => {
+    try {
+      if (item.status === 'failed' || item.status === 'unresolved' || item.status === 'retrying') {
+        store.resetQueueItemForDispatch(scope, identity);
+        const reset = store.getQueueForScope(scope)[0] as QueueItem | undefined;
+        if (!reset || reset.status !== 'queued' || reset.queueItemID !== identity.queueItemID) return;
+        item = reset;
+      }
+      const ready = item;
+      const generation = getRuntimeGeneration(); const payload = buildQueuedAutoSendPayload([ready]); if (!payload) return;
+      const resolved = resolve(sessionID, ready.sendConfig);
+      if (!resolved.providerID || !resolved.modelID) {
+        // Surface a retryable failure instead of silently stranding the head as queued.
+        store.markQueueItemSendAttempt(scope, identity);
+        store.markQueueItemPreDispatchRetry(scope, identity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1));
+        return;
+      }
+      store.markQueueItemSendAttempt(scope, identity);
+      const confirmationMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return getRuntimeTransportIdentity() === scope.transportIdentity && getRuntimeGeneration() === generation && current?.queueItemID === identity.queueItemID && current.operationID === identity.operationID && current.messageID === identity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
+      const failureMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return current?.queueItemID === identity.queueItemID && current.operationID === identity.operationID && current.messageID === identity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
+      const confirm = (messageID: string) => { if (confirmationMatches() && messageID === identity.messageID) useMessageQueueStore.getState().confirmQueueItem(scope, identity); };
+      try { await sendQueuedAutoSendPayload(sessionID, payload, resolved, { directory: scope.directory, delivery: options.delivery, onSendConfirmed: confirm }); confirm(identity.messageID); }
+      catch (error) { if (!failureMatches()) return; const kind = getSendFailureKind(error); if (kind === 'pre-dispatch') store.markQueueItemPreDispatchRetry(scope, identity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1)); else if (kind === 'definitive-rejection') store.markQueueItemDefinitiveFailure(scope, identity); else store.markQueueItemReconciling(scope, identity); }
+    } finally {
+      if (dispatchFlights.get(key) === flight) {
+        dispatchFlights.delete(key);
+        notifyDispatchFlightChanged();
+      }
+      settle?.();
+    }
+  })();
+  return flight;
 }
 
 export async function reconcileQueuedMessage(operation: QueryOperation, generation = getRuntimeGeneration()): Promise<void> {
@@ -105,27 +180,111 @@ export async function reconcileQueuedMessage(operation: QueryOperation, generati
   else useMessageQueueStore.getState().recordQueueItemReconciliationCheck(operation.scope, { queueItemID: operation.item.queueItemID, operationID: operation.item.operationID, messageID: operation.item.messageID });
 }
 
+const releaseUnresolvedQueueHead = (scope: BoundScope, item: QueueItem) => {
+  releaseUnconfirmedQueueSend({
+    sessionID: scope.sessionID,
+    messageID: item.messageID,
+    directory: scope.directory,
+  });
+  useMessageQueueStore.getState().resolveQueueItemReconciliation(scope, {
+    queueItemID: item.queueItemID,
+    operationID: item.operationID,
+    messageID: item.messageID,
+  });
+};
+
 export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?: boolean }) {
   const enabled = typeof enabledOrOptions === 'boolean' ? enabledOrOptions : enabledOrOptions?.enabled ?? true;
   const queuedMessages = useMessageQueueStore((state) => state.queuedMessages); const runsByOriginalSessionID = useAutoReviewStore((state) => state.runsByOriginalSessionID);
-  const activeTransportIdentity = getRuntimeTransportIdentity();
+  const activeTransportIdentity = React.useSyncExternalStore(
+    subscribeRuntimeEndpointChanged,
+    getRuntimeTransportIdentity,
+    getRuntimeTransportIdentity,
+  );
+  const activeRuntimeKey = React.useSyncExternalStore(
+    subscribeRuntimeEndpointChanged,
+    getRuntimeKey,
+    getRuntimeKey,
+  );
+  const dispatchFlightState = React.useSyncExternalStore(subscribeDispatchFlights, () => dispatchFlightRevision, () => dispatchFlightRevision);
   const scopes = React.useMemo(() => Object.values(queuedMessages).flatMap((queue) => { const owner = queue[0]?.owner; return owner?.state === 'bound' && owner.transportIdentity === activeTransportIdentity ? [owner] : []; }), [activeTransportIdentity, queuedMessages]);
   const statusRevision = useScopedSessionStatusRevision(scopes);
   const getScopedStatus = useScopedSessionStatusReader();
-  const [wake, setWake] = React.useState(0); const previous = React.useRef(new Map<string, SessionStatusType>()); const inFlight = React.useRef(new Set<string>());
-  React.useEffect(() => subscribeRuntimeEndpointChanged(() => setWake((value) => value + 1)), []);
+  const childStores = useChildStoreManager();
+  const scopeKey = React.useMemo(() => scopes.map((scope) => `${scope.directory}\n${scope.sessionID}`).join('\u0000'), [scopes]);
+  const scopesRef = React.useRef(scopes);
+  scopesRef.current = scopes;
+  // Message completion is a narrow scheduler wake. Live status remains authoritative.
+  const messageCompletionRevision = React.useSyncExternalStore(
+    React.useCallback((notify: () => void) => {
+      if (!scopeKey) return () => undefined;
+      const unsubs: Array<() => void> = [];
+      const seen = new Set<string>();
+      for (const scope of scopesRef.current) {
+        if (seen.has(scope.directory)) continue;
+        seen.add(scope.directory);
+        const store = childStores.getChild(scope.directory);
+        if (!store) continue;
+        unsubs.push(store.subscribe((state, previous) => {
+          for (const entry of scopesRef.current) {
+            if (entry.directory !== scope.directory) continue;
+            if (state.message?.[entry.sessionID] !== previous.message?.[entry.sessionID]) {
+              notify();
+              return;
+            }
+          }
+        }));
+      }
+      const unsubRegistry = childStores.subscribeRegistry(() => notify());
+      return () => {
+        unsubRegistry();
+        for (const unsub of unsubs) unsub();
+      };
+    }, [childStores, scopeKey]),
+    React.useCallback(() => {
+      if (!scopeKey) return '';
+      return scopesRef.current.map((scope) => {
+        const messages = childStores.getChild(scope.directory)?.getState().message?.[scope.sessionID] as Array<{ id?: string; role?: string; time?: { completed?: number } }> | undefined;
+        const last = messages?.[messages.length - 1];
+        return `${scope.sessionID}:${last?.id ?? ''}:${last?.time?.completed ?? ''}`;
+      }).join('\u0000');
+    }, [childStores, scopeKey]),
+    () => '',
+  );
+  const getStatus = React.useCallback((scope: BoundScope): SessionStatusType => {
+    return getScopedStatus(scope);
+  }, [getScopedStatus]);
+  const [wake, setWake] = React.useState(0); const previous = React.useRef(new Map<string, SessionStatusType>()); const reconciliationInFlight = React.useRef(new Set<string>());
   React.useEffect(() => {
     if (!enabled) return; const now = Date.now(); const abortFlags = useSessionUIStore.getState().sessionAbortFlags; const blockedSessions = new Set<string>();
     for (const [sessionID, record] of abortFlags) if (now - record.timestamp < RECENT_ABORT_DELAY_MS) blockedSessions.add(sessionID);
-    for (const [sessionID, run] of Object.entries(runsByOriginalSessionID)) if (run) blockedSessions.add(sessionID);
-    const schedule = planQueueScheduler({ queuedMessages, activeTransportIdentity, getStatus: getScopedStatus, previous: previous.current, inFlight: inFlight.current, blockedSessions, now });
-    for (const scope of schedule.dispatchScopes) void dispatchQueuedMessage(scope.sessionID, { scope });
-    for (const operation of schedule.resolveOperations) useMessageQueueStore.getState().resolveQueueItemReconciliation(operation.scope, { queueItemID: operation.item.queueItemID, operationID: operation.item.operationID, messageID: operation.item.messageID });
+    // A running auto-review pauses only its matching stable runtime. Legacy
+    // unkeyed records allow drain so persisted history cannot strand a queue.
+    for (const sessionID of getAutoReviewBlockedSessions(runsByOriginalSessionID, activeRuntimeKey)) blockedSessions.add(sessionID);
+    const schedule = planQueueScheduler({ queuedMessages, activeTransportIdentity, getStatus, previous: previous.current, inFlight: reconciliationInFlight.current, blockedSessions, now });
+    for (const operation of schedule.recoverOperations) {
+      useMessageQueueStore.getState().markQueueItemReconciling(operation.scope, {
+        queueItemID: operation.item.queueItemID,
+        operationID: operation.item.operationID,
+        messageID: operation.item.messageID,
+      });
+    }
+    for (const scope of schedule.dispatchScopes) {
+      const head = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined;
+      if (!head) continue;
+      void dispatchQueuedMessage(scope.sessionID, { scope }).finally(() => {
+        setWake((value) => value + 1);
+      });
+    }
+    for (const operation of schedule.resolveOperations) releaseUnresolvedQueueHead(operation.scope, operation.item);
     for (const operation of schedule.queryOperations) {
-      inFlight.current.add(operation.key);
+      reconciliationInFlight.current.add(operation.key);
       const generation = getRuntimeGeneration();
-      void reconcileQueuedMessage(operation, generation).finally(() => { inFlight.current.delete(operation.key); });
+      void reconcileQueuedMessage(operation, generation).finally(() => {
+        reconciliationInFlight.current.delete(operation.key);
+        setWake((value) => value + 1);
+      });
     }
     let timer: ReturnType<typeof setTimeout> | undefined; if (schedule.nextWakeAt) timer = setTimeout(() => setWake((value) => value + 1), Math.max(0, schedule.nextWakeAt - Date.now())); return () => { if (timer) clearTimeout(timer); };
-  }, [activeTransportIdentity, enabled, queuedMessages, runsByOriginalSessionID, statusRevision, getScopedStatus, wake]);
+  }, [activeRuntimeKey, activeTransportIdentity, dispatchFlightState, enabled, queuedMessages, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, wake]);
 }
