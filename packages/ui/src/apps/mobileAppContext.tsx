@@ -3,7 +3,7 @@ import React from 'react';
 
 export type MobileAppActions = {
   /** Open the Changes surface as a modal and (optionally) navigate it to a specific diff. */
-  openChanges: (options?: { diffPath?: string | null; staged?: boolean }) => void;
+  openChanges: (options?: { diffPath?: string | null; staged?: boolean; targetLine?: number }) => void;
   /** Open the Files surface as a modal. */
   openFiles: () => void;
   /** Open the Settings surface as a modal. */

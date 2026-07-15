@@ -1,191 +1,29 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { Agent } from '@opencode-ai/sdk/v2';
-import type { QueuedMessage } from '../stores/messageQueueStore';
-
-let visibleAgents: Agent[] = [];
-const sendMessageCalls: unknown[][] = [];
-
-const getVisibleAgentsMock = mock(() => visibleAgents);
-
-mock.module('@/stores/useConfigStore', () => ({
-  useConfigStore: {
-    getState: () => ({
-      getVisibleAgents: getVisibleAgentsMock,
-    }),
-  },
-}));
-
-mock.module('@/sync/session-ui-store', () => ({
-  useSessionUIStore: {
-    getState: () => ({
-      sendMessage: (...args: unknown[]) => {
-        sendMessageCalls.push(args);
-        return Promise.resolve();
-      },
-      sessionAbortFlags: new Map(),
-    }),
-  },
-}));
-
-import {
-  buildQueuedAutoSendPayload,
-  getQueuedAutoSendRetryDelayMs,
-  isQueuedAutoSendBackedOff,
-  sendQueuedAutoSendPayload,
-  shouldDispatchQueuedAutoSend,
-} from './useQueuedMessageAutoSend';
-
-describe('shouldDispatchQueuedAutoSend', () => {
-  test('dispatches only after an active session becomes idle', () => {
-    expect(shouldDispatchQueuedAutoSend('busy', 'idle', false)).toBe(true);
-    expect(shouldDispatchQueuedAutoSend('retry', 'idle', false)).toBe(true);
-  });
-
-  test('does not dispatch when idle is only first seen or status is missing', () => {
-    expect(shouldDispatchQueuedAutoSend(undefined, 'idle', false)).toBe(false);
-    expect(shouldDispatchQueuedAutoSend('idle', 'idle', false)).toBe(false);
-  });
-
-  test('dispatches when idle→idle and queue has items', () => {
-    expect(shouldDispatchQueuedAutoSend('idle', 'idle', true)).toBe(true);
-  });
-});
-
-describe('queued auto-send retry backoff', () => {
-  test('delay grows exponentially and is capped', () => {
-    expect(getQueuedAutoSendRetryDelayMs(1)).toBe(2000);
-    expect(getQueuedAutoSendRetryDelayMs(2)).toBe(4000);
-    expect(getQueuedAutoSendRetryDelayMs(3)).toBe(8000);
-    expect(getQueuedAutoSendRetryDelayMs(10)).toBe(60000);
-    expect(getQueuedAutoSendRetryDelayMs(100)).toBe(60000);
-  });
-
-  test('backs off only the failed message within its window', () => {
-    const failure = { messageId: 'queued-1', failures: 1, nextAttemptAt: 10_000 };
-
-    expect(isQueuedAutoSendBackedOff(failure, 'queued-1', 9_999)).toBe(true);
-    expect(isQueuedAutoSendBackedOff(failure, 'queued-1', 10_000)).toBe(false);
-    expect(isQueuedAutoSendBackedOff(failure, 'queued-2', 9_999)).toBe(false);
-    expect(isQueuedAutoSendBackedOff(undefined, 'queued-1', 0)).toBe(false);
-  });
-});
-
-describe('buildQueuedAutoSendPayload', () => {
-  beforeEach(() => {
-    visibleAgents = [];
-    sendMessageCalls.length = 0;
-  });
-
-  test('returns only the first queued message for auto-send', () => {
-    const queue: QueuedMessage[] = [
-      {
-        id: 'queued-1',
-        content: 'first queued message',
-        createdAt: 1,
-      },
-      {
-        id: 'queued-2',
-        content: 'second queued message',
-        createdAt: 2,
-      },
-    ];
-
-    const payload = buildQueuedAutoSendPayload(queue);
-
-    expect(payload).not.toBeNull();
-    expect(payload?.queuedMessageId).toBe('queued-1');
-    expect(payload?.primaryText).toBe('first queued message');
-    expect(payload?.primaryAttachments).toEqual([]);
-  });
-
-  test('uses the configured visible agents when parsing queued mentions', () => {
-    visibleAgents = [
-      {
-        name: 'Builder',
-        mode: 'subagent',
-        permission: [],
-        options: {},
-      } as Agent,
-    ];
-
-    const queue: QueuedMessage[] = [
-      {
-        id: 'queued-mention',
-        content: '@Builder please take this',
-        createdAt: 1,
-      },
-    ];
-
-    const payload = buildQueuedAutoSendPayload(queue);
-
-    expect(payload).not.toBeNull();
-    expect(payload?.agentMentionName).toBe('Builder');
-    expect(payload?.primaryText).toBe('@Builder please take this');
-  });
-
-  test('preserves attachment-only queued messages as sendable payloads', () => {
-    const queue: QueuedMessage[] = [
-      {
-        id: 'queued-attachments',
-        content: '',
-        createdAt: 1,
-        attachments: [
-          {
-            id: 'file-1',
-            filename: 'notes.txt',
-            mimeType: 'text/plain',
-            size: 5,
-            source: 'local',
-            file: new File(['hello'], 'notes.txt', { type: 'text/plain' }),
-            dataUrl: 'data:text/plain;base64,aGVsbG8=',
-          },
-        ],
-      },
-      {
-        id: 'queued-2',
-        content: 'later queued message',
-        createdAt: 2,
-      },
-    ];
-
-    const payload = buildQueuedAutoSendPayload(queue);
-
-    expect(payload).not.toBeNull();
-    expect(payload?.queuedMessageId).toBe('queued-attachments');
-    expect(payload?.primaryText).toBe('');
-    expect(payload?.primaryAttachments).toHaveLength(1);
-    expect(payload?.primaryAttachments[0]?.filename).toBe('notes.txt');
-  });
-
-  test('auto-send targets the queued session explicitly', async () => {
-    const payload = buildQueuedAutoSendPayload([
-      {
-        id: 'queued-1',
-        content: 'queued message',
-        createdAt: 1,
-      },
-    ]);
-
-    expect(payload).not.toBeNull();
-    await sendQueuedAutoSendPayload('session-original', payload!, {
-      providerID: 'provider-1',
-      modelID: 'model-1',
-      agent: 'agent-1',
-      variant: 'variant-1',
-    });
-
-    expect(sendMessageCalls.length).toBe(1);
-    expect(sendMessageCalls[0]).toEqual([
-      'queued message',
-      'provider-1',
-      'model-1',
-      'agent-1',
-      [],
-      undefined,
-      undefined,
-      'variant-1',
-      'normal',
-      { sessionId: 'session-original' },
-    ]);
-  });
+import { legacyQueueScope, queueScopeKey, useMessageQueueStore, type QueueItem, type QueueScope } from '../stores/messageQueueStore';
+let runtimeIdentity = 'runtime-a'; let runtimeGeneration = 1; let send = () => Promise.resolve(); let calls = 0; let sendOptions: unknown; let confirmations = 0; let records: Array<{ info: { id: string } }> = []; let fetchRecords: (_sessionID: string, _messageID: string, _directory: string, options?: { signal?: AbortSignal; timeoutMs?: number }) => Promise<Array<{ info: { id: string } }> | null> = () => Promise.resolve(records); let failure: 'pre-dispatch' | 'ambiguous-dispatched' | 'definitive-rejection' = 'ambiguous-dispatched';
+mock.module('@/sync/session-ui-store', () => ({ notifyConfirmedMessageSent: () => { confirmations += 1; }, useSessionUIStore: { getState: () => ({ sendMessage: (...args: unknown[]) => { calls += 1; sendOptions = args[9]; return send(); }, getDirectoryForSession: () => '/project', sessionAbortFlags: new Map() }) } }));
+mock.module('@/lib/runtime-switch', () => ({ getRuntimeTransportIdentity: () => runtimeIdentity, getRuntimeGeneration: () => runtimeGeneration, subscribeRuntimeEndpointChanged: () => () => {} }));
+mock.module('@/sync/session-actions', () => ({ getSendFailureKind: () => failure, fetchRecentSendConfirmationRecords: (...args: [_sessionID: string, _messageID: string, _directory: string, options?: { signal?: AbortSignal; timeoutMs?: number }]) => fetchRecords(...args) }));
+mock.module('@/stores/useConfigStore', () => ({ useConfigStore: { getState: () => ({ getVisibleAgents: () => [] }) } }));
+import { dispatchQueuedMessage, getQueuedAutoSendRetryDelayMs, planQueueHead, planQueueScheduler, reconcileQueuedMessage } from './useQueuedMessageAutoSend';
+const scope = (): Extract<QueueScope, { state: 'bound' }> => ({ state: 'bound', transportIdentity: runtimeIdentity, directory: '/project', sessionID: 'session-a' });
+const reset = () => useMessageQueueStore.setState({ queuedMessages: {}, followUpBehavior: 'queue' });
+const add = () => useMessageQueueStore.getState().addToQueue(scope(), { content: 'queued', sendConfig: { providerID: 'p', modelID: 'm' } });
+describe('queued dispatch and scheduler', () => {
+  beforeEach(() => { reset(); runtimeIdentity = 'runtime-a'; runtimeGeneration = 1; calls = 0; confirmations = 0; records = []; fetchRecords = () => Promise.resolve(records); sendOptions = undefined; send = () => Promise.resolve(); failure = 'ambiguous-dispatched'; });
+  test('sends one scoped head with its admission message ID', async () => { const item = add(); await dispatchQueuedMessage('session-a', { scope: scope() }); expect(calls).toBe(1); expect((sendOptions as { messageID?: string }).messageID).toBe(item.messageID); expect(useMessageQueueStore.getState().getQueueForScope(scope())).toEqual([]); });
+  test('dispatch uses the scheduler owner scope for duplicate session IDs', async () => { const first = add(); const owner = { ...scope(), directory: '/other-project' }; const second = useMessageQueueStore.getState().addToQueue(owner, { content: 'queued', sendConfig: { providerID: 'p', modelID: 'm' } }); await dispatchQueuedMessage('session-a', { scope: owner }); expect(useMessageQueueStore.getState().getQueueForScope(scope())).toEqual([first]); expect(useMessageQueueStore.getState().getQueueForScope(owner)).toEqual([]); expect((sendOptions as { messageID?: string }).messageID).toBe(second.messageID); });
+  test('late ambiguous failure reconciles runtime A while preserving runtime B references', async () => { const aScope = scope(); const a = add(); runtimeIdentity = 'runtime-b'; runtimeGeneration = 2; const bScope = scope(); const b = add(); const bQueue = useMessageQueueStore.getState().getQueueForScope(bScope); runtimeIdentity = 'runtime-a'; runtimeGeneration = 1; send = () => { runtimeIdentity = 'runtime-b'; runtimeGeneration = 2; return Promise.reject(new Error('late')); }; await dispatchQueuedMessage('session-a', { scope: aScope }); expect(useMessageQueueStore.getState().getQueueForScope(bScope)).toBe(bQueue); expect(bQueue[0]).toBe(b); expect(useMessageQueueStore.getState().getQueueForScope(aScope)[0]?.status).toBe('reconciling'); expect(useMessageQueueStore.getState().getQueueForScope(aScope)[0]?.operationID).toBe(a.operationID); });
+  test('late pre-dispatch failure retries runtime A with its stable message ID', async () => { const aScope = scope(); const a = add(); runtimeIdentity = 'runtime-b'; runtimeGeneration = 2; const bScope = scope(); const b = add(); const bQueue = useMessageQueueStore.getState().getQueueForScope(bScope); runtimeIdentity = 'runtime-a'; runtimeGeneration = 1; failure = 'pre-dispatch'; send = () => { runtimeIdentity = 'runtime-b'; runtimeGeneration = 2; return Promise.reject(new Error('late')); }; await dispatchQueuedMessage('session-a', { scope: aScope }); expect(useMessageQueueStore.getState().getQueueForScope(bScope)).toBe(bQueue); expect(bQueue[0]).toBe(b); expect(useMessageQueueStore.getState().getQueueForScope(aScope)[0]?.status).toBe('retrying'); expect(useMessageQueueStore.getState().getQueueForScope(aScope)[0]?.messageID).toBe(a.messageID); });
+  test('late definitive failure marks runtime A failed while preserving runtime B references', async () => { const aScope = scope(); add(); runtimeIdentity = 'runtime-b'; runtimeGeneration = 2; const bScope = scope(); const b = add(); const bQueue = useMessageQueueStore.getState().getQueueForScope(bScope); runtimeIdentity = 'runtime-a'; runtimeGeneration = 1; failure = 'definitive-rejection'; send = () => { runtimeIdentity = 'runtime-b'; runtimeGeneration = 2; return Promise.reject(new Error('late')); }; await dispatchQueuedMessage('session-a', { scope: aScope }); expect(useMessageQueueStore.getState().getQueueForScope(bScope)).toBe(bQueue); expect(bQueue[0]).toBe(b); expect(useMessageQueueStore.getState().getQueueForScope(aScope)[0]?.status).toBe('failed'); });
+  test('planner dispatches initially idle queues and schedules one persisted reconciliation wake', () => { const item = add() as QueueItem; const retry = { ...item, queueItemID: 'retry', operationID: 'retry-op', messageID: 'retry-message', owner: { ...scope(), directory: '/retry' }, status: 'retrying' as const, nextAttemptAt: 20 }; const reconciling = { ...item, queueItemID: 'reconcile', operationID: 'reconcile-op', messageID: 'reconcile-message', owner: { ...scope(), directory: '/reconcile' }, status: 'reconciling' as const, reconciliationNextCheckAt: 30 }; const queues = { a: [item], b: [retry], c: [reconciling] }; const plan = planQueueScheduler({ queuedMessages: queues, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set<string>(), blockedSessions: new Set<string>(), now: 10 }); expect(plan.dispatchScopes).toEqual([item.owner]); expect(plan.queryOperations).toHaveLength(0); expect(plan.nextWakeAt).toBe(20); expect(planQueueHead({ ...reconciling, reconciliationChecks: 3 }, 'idle', undefined, 10).resolve).toBe(true); expect(planQueueHead({ ...reconciling, reconciliationChecks: 0, reconciliationDeadlineAt: 10 }, 'idle', undefined, 10).resolve).toBe(true); expect(planQueueHead({ ...item, status: 'sending' }, 'idle', undefined, 10)).toEqual({}); });
+  test('scheduler examines one head per 1000 scopes', () => { const queues: Record<string, QueueItem[]> = {}; for (let index = 0; index < 1000; index += 1) { const owner = { ...scope(), directory: `/project-${index}` }; queues[String(index)] = [{ ...(add() as QueueItem), owner }]; } const plan = planQueueScheduler({ queuedMessages: queues, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: 0 }); expect(plan.inspectedScopeCount).toBe(1000); expect(plan.dispatchScopes).toHaveLength(1000); });
+  test('reconciling in-flight heads create neither queries nor wake timers', () => { const item = { ...(add() as QueueItem), status: 'reconciling' as const }; const key = `scope:${item.queueItemID}`; const plan = planQueueScheduler({ queuedMessages: { scope: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set([key]), blockedSessions: new Set(), now: 0 }); expect(plan.queryOperations).toEqual([]); expect(plan.nextWakeAt).toBe(undefined); });
+  test('reconciliation misses persist one next check and resolves after three checks without POST operations', () => { const item = add() as QueueItem; const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState(); actions.markQueueItemSendAttempt(scope(), identity); actions.markQueueItemReconciling(scope(), identity); actions.recordQueueItemReconciliationCheck(scope(), identity); let current = actions.getQueueForScope(scope())[0] as QueueItem; let plan = planQueueScheduler({ queuedMessages: { scope: [current] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: current.reconciliationNextCheckAt! - 1 }); expect(plan.queryOperations).toEqual([]); expect(plan.nextWakeAt).toBe(current.reconciliationNextCheckAt); actions.recordQueueItemReconciliationCheck(scope(), identity); actions.recordQueueItemReconciliationCheck(scope(), identity); current = actions.getQueueForScope(scope())[0] as QueueItem; plan = planQueueScheduler({ queuedMessages: { scope: [current] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: Date.now() }); expect(plan.resolveOperations).toHaveLength(1); expect(plan.dispatchScopes).toEqual([]); });
+  test('manual dispatch binds the legacy head before sending and preserves its message ID', async () => { const legacy = useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy', sendConfig: { providerID: 'p', modelID: 'm' } }); add(); await dispatchQueuedMessage('session-a', { delivery: 'steer' }); expect((sendOptions as { messageID?: string }).messageID).toBe(legacy.messageID); });
+  test('scheduler skips legacy scopes', () => { const item = useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy' }) as QueueItem; const plan = planQueueScheduler({ queuedMessages: { legacy: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: 0 }); expect(plan.inspectedScopeCount).toBe(0); expect(plan.queryOperations).toEqual([]); });
+  test('reconciliation notifies then confirms one matching scoped item', async () => { const item = add() as QueueItem; useMessageQueueStore.getState().markQueueItemSendAttempt(scope(), item); useMessageQueueStore.getState().markQueueItemReconciling(scope(), item); records = [{ info: { id: item.messageID } }]; await reconcileQueuedMessage({ scope: scope(), item: useMessageQueueStore.getState().getQueueForScope(scope())[0] as QueueItem, key: 'key' }); expect(confirmations).toBe(1); expect(useMessageQueueStore.getState().getQueueForScope(scope())).toEqual([]); });
+  test('reconciliation queries receive an AbortSignal and stop at the persisted deadline', async () => { const item = add() as QueueItem; const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState(); actions.markQueueItemSendAttempt(scope(), identity); actions.markQueueItemReconciling(scope(), identity); const reconciling = actions.getQueueForScope(scope())[0] as QueueItem; const expired = { ...reconciling, reconciliationDeadlineAt: Date.now() }; useMessageQueueStore.setState({ queuedMessages: { [queueScopeKey(scope())]: [expired] } }); let signal: AbortSignal | undefined; let timeoutMs: number | undefined; fetchRecords = (_sessionID, _messageID, _directory, options) => new Promise((resolve) => { signal = options?.signal; timeoutMs = options?.timeoutMs; options?.signal?.addEventListener('abort', () => resolve(null), { once: true }); }); await reconcileQueuedMessage({ scope: scope(), item: expired, key: 'key' }); expect(signal).toBeDefined(); expect(signal?.aborted).toBe(true); expect(timeoutMs).toBe(0); });
+  test('stale generation reconciliation misses preserve the item reference and reconciliation fields', async () => { const item = add() as QueueItem; const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState(); actions.markQueueItemSendAttempt(scope(), identity); actions.markQueueItemReconciling(scope(), identity); const before = actions.getQueueForScope(scope())[0] as QueueItem; const reconciliation = { reconciliationStartedAt: before.reconciliationStartedAt, reconciliationDeadlineAt: before.reconciliationDeadlineAt, reconciliationChecks: before.reconciliationChecks, reconciliationNextCheckAt: before.reconciliationNextCheckAt }; fetchRecords = () => { runtimeGeneration = 2; return Promise.resolve([]); }; await reconcileQueuedMessage({ scope: scope(), item: before, key: 'key' }, 1); const after = actions.getQueueForScope(scope())[0] as QueueItem; expect(after).toBe(before); expect({ reconciliationStartedAt: after.reconciliationStartedAt, reconciliationDeadlineAt: after.reconciliationDeadlineAt, reconciliationChecks: after.reconciliationChecks, reconciliationNextCheckAt: after.reconciliationNextCheckAt }).toEqual(reconciliation); });
+  test('backoff remains bounded', () => { expect(getQueuedAutoSendRetryDelayMs(1)).toBe(2000); expect(getQueuedAutoSendRetryDelayMs(100)).toBe(60000); });
 });

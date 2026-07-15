@@ -48,6 +48,7 @@ interface PierreDiffViewerProps {
   layout?: 'fill' | 'inline';
   enableComments?: boolean;
   enableSelectionActions?: boolean;
+  focusLine?: number | null;
 }
 
 /**
@@ -475,6 +476,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   layout = 'fill',
   enableComments = true,
   enableSelectionActions = true,
+  focusLine = null,
 }) => {
   const themeContext = useOptionalThemeSystem();
 
@@ -704,6 +706,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const instanceFileDiffRef = useRef<FileDiffMetadata | undefined>(undefined);
   const instanceOldFileRef = useRef<FileContents | undefined>(undefined);
   const instanceNewFileRef = useRef<FileContents | undefined>(undefined);
+  const lastFocusedLineRef = useRef<number | null>(null);
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
   const workerPool = useWorkerPool(isLargeContent ? 'unified' : (renderSideBySide ? 'split' : 'unified'));
 
@@ -953,13 +956,21 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     const cancelReady = waitForDiffReady(container, () => {
       preserveDone();
       wakeVirtualizer(instance, sharedVirtualizer, forceUpdate);
+      if (!focusLine || lastFocusedLineRef.current === focusLine) return;
+
+      const root = container.querySelector('diffs-container')?.shadowRoot;
+      const target = root?.querySelector(`[data-line="${focusLine}"]:not([data-line-type="change-deletion"])`);
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ block: 'center' });
+        lastFocusedLineRef.current = focusLine;
+      }
     });
 
     return () => {
       cancelReady();
       preserveDone();
     };
-  }, [diffThemeKey, fileDiff, fileName, language, modified, options, original, workerPool]);
+  }, [diffThemeKey, fileDiff, fileName, focusLine, language, modified, options, original, workerPool]);
 
   useEffect(() => {
     const instance = diffInstanceRef.current;

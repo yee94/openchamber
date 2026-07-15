@@ -21,6 +21,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { ICON_STROKE_WIDTH_MEDIUM } from '@/components/icon/Icon';
 import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
+import {
+    emitStreamingHapticEvent,
+    hasStreamingHapticSubscribers,
+    shouldEmitToolAppearanceHaptic,
+} from '@/sync/streaming-haptic-events';
 
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -447,6 +452,7 @@ interface MessageBodyProps {
     showReasoningTraces?: boolean;
     agentMention?: AgentMentionInfo;
     turnGroupingContext?: TurnGroupingContext;
+    onEdit?: () => void;
     onRevert?: () => void;
     onFork?: () => void;
     errorMessage?: string;
@@ -474,7 +480,7 @@ const writeRevealedToolIds = (messageId: string, value: Set<string>): void => {
     revealedToolIdsByMessage.set(messageId, new Set(value));
 };
 
-const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
+const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onEdit, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
     messageId: string;
     parts: Part[];
     messageCreatedAt?: number | null;
@@ -486,6 +492,7 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
     copiedMessage?: boolean;
     onShowPopup: (content: ToolPopupContent) => void;
     agentMention?: AgentMentionInfo;
+    onEdit?: () => void;
     onRevert?: () => void;
     onFork?: () => void;
     userActionsMode?: 'inline' | 'external-content' | 'external-actions';
@@ -575,7 +582,7 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
         const formatted = formatTimestampForDisplay(messageCreatedAt, timeFormatPreference);
         return formatted.length > 0 ? formatted : null;
     }, [locale, messageCreatedAt, timeFormatPreference]);
-    const actionsBlock = ((canCopyMessage && hasCopyableText) || onRevert || effectiveOnFork) && showUserActions ? (
+    const actionsBlock = ((canCopyMessage && hasCopyableText) || onEdit || onRevert || effectiveOnFork) && showUserActions ? (
         <div className={cn(
             'group/user-actions',
             isMobile
@@ -604,10 +611,10 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <span
-                                className="mr-1 flex items-center gap-1 text-sm tabular-nums text-muted-foreground/60"
+                                className={cn(MESSAGE_FOOTER_META_CLASS, 'mr-1')}
                                 aria-label={`Message time: ${timestamp}`}
                             >
-                                <Icon name="time" className="h-3.5 w-3.5" />
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="time" className={MESSAGE_FOOTER_META_ICON_CLASS} />
                                 <span className="message-footer__label">{timestamp}</span>
                             </span>
                         </TooltipTrigger>
@@ -633,6 +640,27 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.revert')}</TooltipContent>
+                    </Tooltip>
+                )}
+                {onEdit && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className={MESSAGE_ACTION_ICON_BUTTON_CLASS}
+                                aria-label={t('chat.messageBody.actions.editAria')}
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onEdit();
+                                }}
+                            >
+                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="edit" className={MESSAGE_ACTION_ICON_CLASS} />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.edit')}</TooltipContent>
                     </Tooltip>
                 )}
                 {effectiveOnFork && (
@@ -1034,6 +1062,20 @@ const AssistantMessageBody = React.memo(({
     const messageContentRef = React.useRef<HTMLDivElement>(null);
     const messageTextContentRef = React.useRef<HTMLDivElement>(null);
     const toolRevealReadyRef = React.useRef(false);
+    const isActiveHapticPhase = _streamPhase === 'streaming' || _streamPhase === 'cooldown';
+    const hapticLifecycleRef = React.useRef({
+        messageId,
+        experiencedStreamingOrCooldown: isActiveHapticPhase,
+    });
+
+    if (hapticLifecycleRef.current.messageId !== messageId) {
+        hapticLifecycleRef.current = {
+            messageId,
+            experiencedStreamingOrCooldown: isActiveHapticPhase,
+        };
+    } else if (isActiveHapticPhase) {
+        hapticLifecycleRef.current.experiencedStreamingOrCooldown = true;
+    }
 
     React.useEffect(() => {
         toolRevealReadyRef.current = true;
@@ -1279,6 +1321,46 @@ const AssistantMessageBody = React.memo(({
     const shouldShowTool = React.useCallback((toolPart: ToolPartType): boolean => {
         return isActiveTool(toolPart) || isToolFinalized(toolPart);
     }, [isActiveTool, isToolFinalized]);
+    const hasStreamingHapticLifecycle = hapticLifecycleRef.current.experiencedStreamingOrCooldown;
+
+    const toolHapticStateRef = React.useRef<{ messageId: string; initialized: boolean; observedPartIds: Set<string> }>({
+        messageId,
+        initialized: false,
+        observedPartIds: new Set(),
+    });
+
+    React.useEffect(() => {
+        if (toolHapticStateRef.current.messageId !== messageId) {
+            toolHapticStateRef.current = { messageId, initialized: false, observedPartIds: new Set() };
+        }
+        if (!hasStreamingHapticLifecycle) return;
+        if (!hasStreamingHapticSubscribers()) return;
+
+        const tracker = toolHapticStateRef.current;
+        const isInitialObservation = !tracker.initialized;
+        tracker.initialized = true;
+
+        for (const toolPart of toolParts) {
+            if (tracker.observedPartIds.has(toolPart.id)) continue;
+            if (!shouldShowTool(toolPart)) continue;
+
+            if (!shouldEmitToolAppearanceHaptic(isInitialObservation, isActiveTool(toolPart))) {
+                tracker.observedPartIds.add(toolPart.id);
+                continue;
+            }
+
+            const eventSessionId = sessionId ?? (toolPart as ToolPartType & { sessionID?: string }).sessionID;
+            if (!eventSessionId) continue;
+
+            tracker.observedPartIds.add(toolPart.id);
+            emitStreamingHapticEvent({
+                sessionID: eventSessionId,
+                messageID: messageId,
+                partID: toolPart.id,
+                kind: 'tool',
+            });
+        }
+    }, [hasStreamingHapticLifecycle, isActiveTool, messageId, sessionId, shouldShowTool, toolParts]);
 
     const allToolsFinalized = React.useMemo(() => {
         if (toolParts.length === 0) {
@@ -1627,13 +1709,14 @@ const AssistantMessageBody = React.memo(({
                     continue;
                 }
                 rendered.push(
-                    <div key={`assistant-text-${messageId}-${i}`} ref={messageTextContentRef} data-message-text-export-source="true">
+                    <div key={`assistant-text-${messageId}-${part.id ?? i}`} ref={messageTextContentRef} data-message-text-export-source="true">
                         <AssistantTextPart
                             part={part}
                             sessionId={sessionId}
                             messageId={messageId}
                             streamPhase={effectiveStreamPhase}
                             chatRenderMode={chatRenderMode}
+                            hasStreamingHapticLifecycle={hasStreamingHapticLifecycle}
                             onContentChange={onContentChange}
                             onShowPopup={onShowPopup}
                         />
@@ -1663,12 +1746,13 @@ const AssistantMessageBody = React.memo(({
                         // Non-collapsible mode: render thinking blocks as plain text inline.
                         rendered.push(
                             <AssistantTextPart
-                                key={`reasoning-${messageId}-${i}`}
+                                key={`reasoning-${messageId}-${part.id ?? i}`}
                                 part={part}
                                 sessionId={sessionId}
                                 messageId={messageId}
                                 streamPhase={effectiveStreamPhase}
                                 chatRenderMode={chatRenderMode}
+                                hasStreamingHapticLifecycle={hasStreamingHapticLifecycle}
                                 onContentChange={onContentChange}
                                 onShowPopup={onShowPopup}
                             />
@@ -1676,7 +1760,7 @@ const AssistantMessageBody = React.memo(({
                     } else {
                         // Per-part mode: each reasoning block at its natural position.
                         rendered.push(
-                            <div key={`reasoning-${messageId}-${i}`} className={getToolRowBlockClass(isMobile)}>
+                            <div key={`reasoning-${messageId}-${part.id ?? i}`} className={getToolRowBlockClass(isMobile)}>
                                 <ReasoningPart
                                     part={part}
                                     messageId={messageId}
@@ -1792,6 +1876,7 @@ const AssistantMessageBody = React.memo(({
         shouldShowStandaloneMessageActions,
         shouldShowTool,
         effectiveStreamPhase,
+        hasStreamingHapticLifecycle,
         showReasoningTraces,
         shouldDeferSortedInlineText,
         toggleActivityGroup,
@@ -2077,6 +2162,7 @@ const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
                 copiedMessage={props.copiedMessage}
                 onShowPopup={props.onShowPopup}
                 agentMention={props.agentMention}
+                onEdit={props.onEdit}
                 onRevert={props.onRevert}
                 onFork={props.onFork}
                 userActionsMode={props.userActionsMode}

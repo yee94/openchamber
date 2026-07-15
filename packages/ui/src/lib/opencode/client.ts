@@ -582,6 +582,16 @@ class OpencodeService {
     return unwrapSdkOptional(response, 'session.delete') === true;
   }
 
+  async deleteSessionMessage(sessionId: string, messageId: string, directory?: string | null): Promise<boolean> {
+    const requestDirectory = this.normalizeCandidatePath(directory) ?? this.currentDirectory;
+    const response = await this.client.session.deleteMessage({
+      sessionID: sessionId,
+      messageID: messageId,
+      ...(requestDirectory ? { directory: requestDirectory } : {}),
+    });
+    return unwrapSdkOptional(response, 'session.deleteMessage') === true;
+  }
+
   async updateSession(
     id: string,
     patch: { title?: string; metadata?: Record<string, unknown>; time?: { archived?: number | null } },
@@ -1002,12 +1012,23 @@ class OpencodeService {
 
   async forkSession(sessionId: string, messageId?: string, directory?: string | null): Promise<Session> {
     const requestDirectory = this.normalizeCandidatePath(directory) ?? this.currentDirectory;
+    console.info('[session-fork] SDK request starting', {
+      sessionId,
+      messageId: messageId ?? null,
+      hasDirectory: Boolean(requestDirectory),
+    });
     const response = await this.client.session.fork({
       sessionID: sessionId,
       ...(requestDirectory ? { directory: requestDirectory } : {}),
       messageID: messageId,
     });
-    return unwrapSdkData(response, 'session.fork');
+    const forkedSession = unwrapSdkData(response, 'session.fork');
+    console.info('[session-fork] SDK request completed', {
+      sessionId,
+      messageId: messageId ?? null,
+      forkedSessionId: forkedSession.id,
+    });
+    return forkedSession;
   }
 
   async getSessionStatus(): Promise<

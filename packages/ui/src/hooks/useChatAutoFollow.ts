@@ -46,12 +46,12 @@ export interface UseChatAutoFollowResult {
 // Chat auto-follow. The model is deliberately simple, which is what makes it
 // flicker-free:
 //
-//   • Auto-follow is on unless the user scrolled up (`released`), AND passive
-//     following only acts while the session is active (working, plus a short
-//     settle window). When idle, content-size changes are layout churn
-//     (virtualizer re-measurement, async tool/code rendering) rather than live
-//     growth, so the hook leaves scroll alone — re-pinning then would fight the
-//     virtualizer and twitch the viewport.
+//   • Auto-follow is on unless the user scrolled up (`released`). While
+//     `following`, content growth (cold history paint, virtualizer remeasure,
+//     async tool/code height) must silently re-pin to the bottom — including
+//     idle sessions. History load must not strand a bottom-pinned viewport
+//     mid-timeline. User wheel/touch/key gestures release immediately and are
+//     never fought.
 //   • Following the bottom is INSTANT — `scrollTop = scrollHeight` inside the
 //     content ResizeObserver, which fires after layout and before paint. There
 //     is NO easing loop and NO settle burst, so there are never two writers
@@ -87,17 +87,12 @@ const AUTO_MATCH_TOLERANCE_PX = 2;
 // through releaseFromUserIntent, so this is not glue. Sized to the reasoning
 // animation (200ms) plus headroom for trailing async scroll events.
 const ANIMATION_GUARD_MS = 350;
-// After streaming stops, keep following the bottom for a short window so the
-// final content can settle into place.
-const SETTLE_MS = 300;
 // Entry-stick window. On the FIRST open of a session, late async data (most
 // visibly a task/subagent tool whose nested rows are fetched from the child
 // session after entry — see useEnsureSessionMessages in ToolPart.tsx) grows the
-// timeline a beat or two AFTER we have already pinned to the bottom, leaving the
-// viewport stranded mid-history. The steady-state idle gate deliberately ignores
-// that growth (it can't tell entry from a user reading idle history). So instead
-// of weakening the gate, we open a short, gesture-cancellable window on entry
-// during which we FORCE the bottom on every growth. It ends QUIESCENCE_MS after
+// timeline a beat or two AFTER we have already pinned to the bottom. Steady-state
+// `following` already re-pins on growth; entry-stick FORCE-pins even if a false
+// `released` slipped in before the first gesture. It ends QUIESCENCE_MS after
 // growth stops (capped by MAX_MS), or instantly on any real user scroll gesture.
 const ENTRY_STICK_QUIESCENCE_MS = 600;
 const ENTRY_STICK_MAX_MS = 8000;
@@ -176,12 +171,6 @@ export const useChatAutoFollow = ({
     const stateRef = React.useRef<AutoFollowState>('following');
     const isMobileRef = React.useRef(isMobile);
     isMobileRef.current = isMobile;
-    const sessionIsWorkingRef = React.useRef(sessionIsWorking);
-    sessionIsWorkingRef.current = sessionIsWorking;
-    // `settling` keeps passive follow alive for a short window after work stops
-    // so the final content can land at the bottom.
-    const settlingRef = React.useRef(false);
-    const settleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionMessageCountRef = React.useRef(sessionMessageCount);
     sessionMessageCountRef.current = sessionMessageCount;
     const currentSessionIdRef = React.useRef(currentSessionId);
@@ -236,17 +225,6 @@ export const useChatAutoFollow = ({
             setContainerEl(scrollRef.current);
         }
     });
-
-    // `active` is `working || settling`. Passive auto-follow
-    // (the ResizeObserver re-pin and any non-forced scrollToBottom) only runs
-    // while active. When the session is idle, content-size changes are layout
-    // churn — virtualizer re-measurement, async tool/code rendering — NOT live
-    // growth, so we must NOT yank the user to the bottom. Forcing this gate is
-    // what stops the twitch when tall items (expanded tools) re-measure as the
-    // user scrolls.
-    const isActive = React.useCallback((): boolean => {
-        return sessionIsWorkingRef.current || settlingRef.current;
-    }, []);
 
     const setStateValue = React.useCallback((next: AutoFollowState) => {
         if (stateRef.current === next) return;
@@ -356,18 +334,16 @@ export const useChatAutoFollow = ({
     }, [markAuto]);
 
     // `force` true = user-intent jump (clears released and always scrolls).
-    // `force` false = passive follow (only while still following).
+    // `force` false = passive follow (only while still following — idle ok).
     const scrollToBottom = React.useCallback((force: boolean, behavior: ScrollBehavior = 'auto') => {
         const el = scrollRef.current;
-
-        // Passive follow only while active (working/settling). Forced jumps
-        // (send, go-to-bottom, session restore) always proceed.
-        if (!force && !isActive()) return;
 
         if (force && stateRef.current !== 'following') {
             setStateValue('following');
         }
         if (!el) return;
+        // Passive follow never runs after the user scrolled away. Forced jumps
+        // (send, go-to-bottom, session restore, entry-stick) always proceed.
         if (!force && stateRef.current !== 'following') return;
 
         const distance = distanceFromBottom(el);
@@ -378,7 +354,7 @@ export const useChatAutoFollow = ({
             return;
         }
         scrollToBottomNow(force ? behavior : 'auto');
-    }, [isActive, markAuto, scrollToBottomNow, setStateValue]);
+    }, [markAuto, scrollToBottomNow, setStateValue]);
 
     // User left the bottom — release auto-follow.
     const stop = React.useCallback(() => {
@@ -504,29 +480,12 @@ export const useChatAutoFollow = ({
         }
     }, [currentSessionId, flushSave]);
 
-    // When work begins and we are still
-    // following, pin to the bottom. When work stops, keep following alive for a
-    // short settle window so the final content lands at the bottom, then go
-    // idle (after which passive follow is disabled — see `isActive`).
+    // When work begins and we are still following, pin to the bottom so the
+    // first streaming frame does not paint mid-history.
     React.useEffect(() => {
-        settlingRef.current = false;
-        if (settleTimerRef.current) {
-            clearTimeout(settleTimerRef.current);
-            settleTimerRef.current = null;
+        if (sessionIsWorking && stateRef.current === 'following') {
+            scrollToBottom(true);
         }
-
-        if (sessionIsWorking) {
-            if (stateRef.current === 'following') {
-                scrollToBottom(true);
-            }
-            return;
-        }
-
-        settlingRef.current = true;
-        settleTimerRef.current = setTimeout(() => {
-            settlingRef.current = false;
-            settleTimerRef.current = null;
-        }, SETTLE_MS);
     }, [sessionIsWorking, scrollToBottom]);
 
     // Suppress the overlay scrollbar thumb only while we are actively following a
@@ -555,6 +514,10 @@ export const useChatAutoFollow = ({
         const previousTop = lastScrollTopRef.current;
         lastScrollTopRef.current = el.scrollTop;
         const scrollingDown = el.scrollTop > previousTop + 0.5;
+        // Pure content growth (history paint / remeasure) often fires `scroll`
+        // without changing scrollTop. That must re-pin, not release — otherwise
+        // a cold load leaves following stranded mid-timeline.
+        const scrollTopUnchanged = Math.abs(el.scrollTop - previousTop) < 0.5;
 
         updateOverflowAndButton();
 
@@ -579,10 +542,12 @@ export const useChatAutoFollow = ({
             return;
         }
 
-        // Our own geometry change (a programmatic write that landed at the bottom
-        // but where content grew between the write and this event, OR a tracked
-        // height animation in flight) — keep following, don't release.
-        if (stateRef.current === 'following' && (isAuto(el) || isAnimationGuardActive())) {
+        // Our own geometry change (programmatic write, height animation, or
+        // content growth that left scrollTop alone) — keep following, re-pin.
+        if (
+            stateRef.current === 'following'
+            && (isAuto(el) || isAnimationGuardActive() || scrollTopUnchanged)
+        ) {
             scrollToBottom(false);
             queueSave();
             return;
@@ -700,11 +665,9 @@ export const useChatAutoFollow = ({
                 if (grew) armEntryStickQuiet();
                 return;
             }
-            // Idle resize = layout churn (virtualizer re-measurement, async
-            // tool/code rendering), NOT live growth. Never re-pin when idle, or
-            // tall items re-measuring as the user scrolls cause an endless
-            // scroll-to-bottom/re-measure twitch.
-            if (!isActive()) return;
+            // Still following (including idle): re-pin on any content growth so
+            // cold history / async measure cannot leave the viewport mid-list.
+            // Released users are left alone — their gesture already opted out.
             if (stateRef.current !== 'following') return;
             scrollToBottom(false);
         });
@@ -714,7 +677,7 @@ export const useChatAutoFollow = ({
             observer.observe(inner);
         }
         return () => observer.disconnect();
-    }, [armEntryStickQuiet, containerEl, isActive, scrollToBottom, setStateValue, updateOverflowAndButton]);
+    }, [armEntryStickQuiet, containerEl, scrollToBottom, setStateValue, updateOverflowAndButton]);
 
     // ── native keyboard transitions (Capacitor choreography) ────────────────
     // The chat scroller gets NO transforms during the keyboard transition:
@@ -827,10 +790,6 @@ export const useChatAutoFollow = ({
             if (autoTimerRef.current) {
                 clearTimeout(autoTimerRef.current);
                 autoTimerRef.current = null;
-            }
-            if (settleTimerRef.current) {
-                clearTimeout(settleTimerRef.current);
-                settleTimerRef.current = null;
             }
             endEntryStick();
             flushSave();

@@ -56,6 +56,13 @@ import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests } fro
 import { EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, buildUserMessageHistorySnapshot, type UserMessageHistorySnapshot } from "./user-message-history"
 import { runtimeFetch } from "@/lib/runtime-fetch"
 import { waitForSessionStartupBarrier } from "@/lib/session-startup-barrier"
+import {
+  readScopedSessionStatus,
+  scopedSessionStatusSignature,
+  subscribeScopedSessionStatuses,
+  type ScopedSessionStatus,
+  type ScopedSessionStatusScope,
+} from "./scoped-session-status"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -2142,6 +2149,25 @@ export function useDirectoryStore(
 export function useDirectorySync<T>(selector: (state: State) => T, directory?: string): T {
   const store = useDirectoryStore(directory)
   return useStore(store, selector)
+}
+
+/** React wiring for exact requested directory status subscriptions. */
+export function useScopedSessionStatusRevision(scopes: ScopedSessionStatusScope[]): string {
+  const { childStores } = useSyncSystem()
+  const scopeKey = scopes.map((scope) => `${scope.directory}\n${scope.sessionID}`).join("\u0000")
+  const scopesRef = useRef(scopes)
+  scopesRef.current = scopes
+  const subscribe = useCallback((notify: () => void) => {
+    if (!scopeKey) return () => undefined
+    return subscribeScopedSessionStatuses(childStores, scopesRef.current, notify)
+  }, [childStores, scopeKey])
+  const getSnapshot = useCallback(() => scopeKey ? scopedSessionStatusSignature(childStores, scopesRef.current) : "", [childStores, scopeKey])
+  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export function useScopedSessionStatusReader(): (scope: ScopedSessionStatusScope) => ScopedSessionStatus {
+  const { childStores } = useSyncSystem()
+  return useCallback((scope) => readScopedSessionStatus(childStores, scope), [childStores])
 }
 
 /** Get session messages for a specific session */

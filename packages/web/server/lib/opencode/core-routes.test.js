@@ -199,6 +199,22 @@ describe('core-routes', () => {
     expect(response.body).toEqual({ body: payload });
   });
 
+  it('should parse conversation attachments larger than 256 KB', async () => {
+    const app = express();
+    registerCommonRequestMiddleware(app, { express });
+    app.post('/api/openchamber/conversations', (req, res) => {
+      res.json({ attachmentUrl: req.body.parts?.[0]?.url });
+    });
+
+    const url = `data:text/plain;base64,${'a'.repeat(300 * 1024)}`;
+    const response = await request(app)
+      .post('/api/openchamber/conversations')
+      .send({ parts: [{ type: 'file', url }] })
+      .expect(200);
+
+    expect(response.body).toEqual({ attachmentUrl: url });
+  });
+
   it('should require API auth before probing loopback preview URLs', async () => {
     const app = express();
     const originalFetch = globalThis.fetch;

@@ -1758,6 +1758,8 @@ export const dict = {
   'chat.textSelection.title.addToCurrentChat': 'Ajouter au chat actuel',
   'chat.textSelection.title.newSessionWithSelection': 'Créer une nouvelle session avec sélection',
   'chat.textSelection.title.saveInsightToNotes': 'Enregistrer le texte sélectionné dans les notes',
+  'chat.messageBody.actions.editAria': 'Modifier le message et conserver les modifications',
+  'chat.messageBody.actions.edit': 'Modifier et conserver les modifications',
   'chat.messageBody.actions.revertAria': 'Revenir à ce message',
   'chat.messageBody.actions.revert': 'Revenir à partir d\'ici',
   'chat.messageBody.actions.forkAria': 'Fork de ce message',

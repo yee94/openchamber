@@ -74,7 +74,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 ## Current important behavior
 
 - `read` and `skill` are **static navigation tools** and render via `StaticToolRow`.
-- `edit` / `multiedit` / `write` stay in `ToolPart` for title + path + diff-stats chrome, but are **non-expandable file navigation**: click opens the file at the first changed line in the right context panel (or VS Code editor). `apply_patch` opens the Changes panel scoped to the current turn, so every file changed by the patch is available as a diff. No chevron / expanded diff body.
+- `edit` / `multiedit` / `write` stay in `ToolPart` for title + path + diff-stats chrome, but are **non-expandable file navigation**: click opens the current turn's file diff and scrolls to the first changed line. VS Code opens its native patch diff. `apply_patch` opens the Changes panel scoped to the current turn, so every file changed by the patch is available as a diff. No chevron / expanded diff body.
 - Every other tool, including search/fetch, OpenCode built-ins, custom tools, plugins, and MCP tools, is **expandable** and renders through `ToolPart`.
 - `ToolPart` defers expanded content after a user toggle, preventing large tool input/output payloads from mounting during the initial chat render.
 - Virtualized history uses a `MarkdownHydrationProvider` per stable turn entry. The newest visible turns are released first, from bottom to top; upward scrolling additionally preloads only the nearest three mounted turns above the viewport.
@@ -84,6 +84,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 - After a row is released, the first layout pass sync-paints Markdown and reveals before the browser paints (so a streaming-tail → history remount does not flash the skeleton over already-rendered content). Async morphdom still upgrades to the rich DOM afterward. The target subtree remains exclusively imperative-owned.
 - Hydration state is keyed by stable turn/message entry keys rather than virtual indexes, so prepending older pages does not shift the wrong rows into the hydrated set. The newest entry stays hydrated immediately; streaming-tail Markdown remains immediate.
 - Thinking/Justification duration is hidden in `sorted` mode (handled in `ReasoningPart.tsx` + `JustificationBlock.tsx`).
+- Native mobile haptics follow visible AI output during an active message lifecycle: each Reasoning or Tool part fires once when it appears, while assistant and Justification text fire for each throttled visible content change. Native cadence scheduling retains one-shot appearances and coalesces pending text pulses.
 
 ## "I want to change description for Perplexity" (example recipe)
 

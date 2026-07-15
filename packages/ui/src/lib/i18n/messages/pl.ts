@@ -834,6 +834,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.addToCurrentChat': 'Dodaj do obecnego czatu',
   'chat.textSelection.title.newSessionWithSelection': 'Utwórz nową sesję z zaznaczeniem',
   'chat.textSelection.title.saveInsightToNotes': 'Zapisz zaznaczony tekst do notatek',
+  'chat.messageBody.actions.editAria': 'Edytuj wiadomość i zachowaj zmiany',
+  'chat.messageBody.actions.edit': 'Edytuj i zachowaj zmiany',
   'chat.messageBody.actions.revertAria': 'Cofnij do tej wiadomości',
   'chat.messageBody.actions.revert': 'Cofnij od tego miejsca',
   'chat.messageBody.actions.forkAria': 'Rozwidl z tej wiadomości',

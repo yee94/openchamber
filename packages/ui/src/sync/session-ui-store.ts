@@ -59,6 +59,8 @@ import {
   optimisticInsertUserMessage,
   refetchSessionMessages,
   revertToMessage as revertToMessageAction,
+  stageMessageEdit,
+  commitMessageEdit,
   unrevertSession as unrevertSessionAction,
   forkSession as forkSessionAction,
   fetchMessagesForSession,
@@ -101,16 +103,23 @@ export function routeMessage(params: {
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
   additionalParts?: Array<{ text: string; synthetic?: boolean; files?: Array<{ type: "file"; mime: string; url: string; filename: string }> }>
   delivery?: 'steer'
+  messageID?: string
+  preserveOptimisticOnAmbiguous?: boolean
+  onSendConfirmed?: (messageID: string) => void
 }): Promise<void> {
   const requestDirectory = params.directory ?? undefined
+  const onSendConfirmed = createConfirmedSendCallback(params.sessionId, params.onSendConfirmed)
   if (params.inputMode === "shell") {
+    const messageID = params.messageID ?? ascendingId("msg")
     return opencodeClient.shellSession({
       sessionId: params.sessionId,
       directory: requestDirectory,
       agent: params.agent ?? "",
       model: { providerID: params.providerID, modelID: params.modelID },
       command: params.content,
-    }).then(() => undefined)
+    }).then(() => {
+      onSendConfirmed(messageID)
+    })
   }
 
   // Slash commands — fire and forget, SSE delivers messages and status
@@ -140,6 +149,9 @@ export function routeMessage(params: {
         agent: params.agent,
         directory: requestDirectory,
         files: params.files,
+        messageID: params.messageID,
+        preserveOptimisticOnAmbiguous: params.preserveOptimisticOnAmbiguous,
+        onSendConfirmed,
         send: (messageID) => opencodeClient.sendCommand({
           id: params.sessionId,
           providerID: params.providerID,
@@ -165,6 +177,9 @@ export function routeMessage(params: {
     agent: params.agent,
     directory: requestDirectory,
     files: params.files,
+    messageID: params.messageID,
+    preserveOptimisticOnAmbiguous: params.preserveOptimisticOnAmbiguous,
+    onSendConfirmed,
     send: (messageID) => opencodeClient.sendMessage({
       id: params.sessionId,
       providerID: params.providerID,
@@ -185,6 +200,10 @@ export function routeMessage(params: {
 type SendMessageOptions = {
   sessionId?: string
   delivery?: 'steer'
+  commitStagedMessageEdit?: boolean
+  messageID?: string
+  preserveOptimisticOnAmbiguous?: boolean
+  onSendConfirmed?: (messageID: string) => void
 }
 
 type AssistantMessageSessionExecution = {
@@ -197,9 +216,29 @@ type AssistantMessageSessionExecution = {
   runAsGoal?: boolean
 }
 
-function notifyMessageSent(sessionId: string): void {
-  runtimeFetch(`/api/sessions/${sessionId}/message-sent`, { method: "POST" })
+export function notifyConfirmedMessageSent(sessionId: string, messageID: string): void {
+  runtimeFetch(`/api/sessions/${sessionId}/message-sent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messageID }),
+  })
     .catch(() => { /* ignore */ })
+}
+
+function createConfirmedSendCallback(
+  sessionId: string,
+  onSendConfirmed?: (messageID: string) => void,
+): (messageID: string) => void {
+  let confirmed = false
+  return (messageID) => {
+    if (confirmed) return
+    confirmed = true
+    try {
+      onSendConfirmed?.(messageID)
+    } finally {
+      notifyConfirmedMessageSent(sessionId, messageID)
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +318,7 @@ export type SessionUIState = {
 
   // Non-Git mode: dismissed signature hash per session, hides bar until new turn arrives
   pendingChangesBarDismissed: Map<string, string>
+  stagedMessageEdit: { sessionId: string; messageId: string } | null
   dismissPendingChangesBar: (sessionId: string, signature: string | null) => void
 
   // Actions — UI state management
@@ -328,6 +368,7 @@ export type SessionUIState = {
   shareSession: (sessionId: string) => Promise<Session | null>
   unshareSession: (sessionId: string) => Promise<Session | null>
   revertToMessage: (sessionId: string, messageId: string, options?: { skipRedoPush?: boolean }) => Promise<void>
+  editMessagePreservingChanges: (sessionId: string, messageId: string) => void
   forkFromMessage: (sessionId: string, messageId: string) => Promise<void>
   forkCurrentSession: (sessionId: string) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
@@ -670,7 +711,8 @@ async function handleCombinedDraftSend(params: {
     if (result.ok) {
       const session = result.session as Session; const sessionDir = directory ?? (session as { directory?: string }).directory ?? null
       const finalized = await finalizeDraftSession(session, { providerID, modelID, agent: effectiveAgent, variant }, { directory: sessionDir, agent: effectiveAgent, draftProjectId: draft.selectedProjectId, targetFolderId: draft.targetFolderId, draftSyntheticParts: draft.syntheticParts }, token)
-      if (finalized.selected) { notifyMessageSent(session.id); markPendingUserSendAnimation(session.id) }
+      notifyConfirmedMessageSent(session.id, messageID)
+      if (finalized.selected) markPendingUserSendAnimation(session.id)
       if (finalized.selected && sessionDir) {
         const dirState = getDirectoryState(sessionDir); const existingMessages = dirState?.message?.[session.id]
         if (!existingMessages?.some((m: Message) => m.id === messageID)) {
@@ -690,11 +732,15 @@ async function handleCombinedDraftSend(params: {
         const promptResult = result as Extract<ConversationCreateWithPromptResult, { ok: false; phase: 'prompt' }>
         const session = promptResult.session as Session; const sessionDir = directory ?? (session as { directory?: string }).directory ?? null
         const finalized = await finalizeDraftSession(session, { providerID, modelID, agent: effectiveAgent, variant }, { directory: sessionDir, agent: effectiveAgent, draftProjectId: draft.selectedProjectId, targetFolderId: draft.targetFolderId, draftSyntheticParts: draft.syntheticParts }, token)
-        if (!finalized.selected) return
-        notifyMessageSent(session.id)
         if (promptResult.ambiguous) {
           const records = await fetchRecentSendConfirmationRecords(session.id, messageID, sessionDir)
-          if (records) { markPendingUserSendAnimation(session.id); const store = dirStoreForDirectory(sessionDir ?? opencodeClient.getDirectory() ?? ""); materializeConfirmedSendRecords(store, session.id, messageID, records); return }
+          if (records) {
+            notifyConfirmedMessageSent(session.id, messageID)
+            if (finalized.selected) markPendingUserSendAnimation(session.id)
+            const store = dirStoreForDirectory(sessionDir ?? opencodeClient.getDirectory() ?? "")
+            materializeConfirmedSendRecords(store, session.id, messageID, records)
+            return
+          }
           useInputStore.getState().setPendingInputText(content, "replace"); throw await localizedSendError("chat.chatInput.toast.sendStatusUnknown")
         }
         useInputStore.getState().setPendingInputText(content, "replace"); throw await localizedSendError("chat.chatInput.toast.messageSendFailed")
@@ -767,6 +813,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   lastLoadedDirectory: null,
   sessionPlanAvailable: new Map(),
   pendingChangesBarDismissed: new Map(),
+  stagedMessageEdit: null,
 
   // ---------------------------------------------------------------------------
   // setCurrentSession
@@ -895,6 +942,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       error: null,
       sessionAbortFlags: new Map(),
       pendingChangesBarDismissed: new Map(),
+      stagedMessageEdit: null,
     })
     if (restoredSessionId) {
       setActiveSession(restoredDirectory ?? opencodeClient.getDirectory() ?? "", restoredSessionId)
@@ -1259,6 +1307,15 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     inputMode?: "normal" | "shell",
     options?: SendMessageOptions,
   ) => {
+    const stagedMessageEdit = get().stagedMessageEdit
+    const requestedSessionId = options?.sessionId ?? get().currentSessionId
+    if (options?.commitStagedMessageEdit && stagedMessageEdit && stagedMessageEdit.sessionId === requestedSessionId) {
+      await commitMessageEdit(stagedMessageEdit.sessionId, stagedMessageEdit.messageId)
+      if (get().stagedMessageEdit === stagedMessageEdit) {
+        set({ stagedMessageEdit: null })
+      }
+    }
+
     // Clear non-Git changed-files bar on new user message for current session
     const sid = options?.sessionId ?? get().currentSessionId;
     if (sid) {
@@ -1334,8 +1391,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         ? [...(additionalParts || []), ...createdDraftSession.syntheticParts]
         : additionalParts
 
-      notifyMessageSent(createdDraftSession.sessionId)
-
       markPendingUserSendAnimation(createdDraftSession.sessionId)
 
       const files = attachments?.map((a) => ({
@@ -1357,6 +1412,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         inputMode,
         files,
         delivery: options?.delivery,
+        messageID: options?.messageID,
+        preserveOptimisticOnAmbiguous: options?.preserveOptimisticOnAmbiguous,
+        onSendConfirmed: options?.onSendConfirmed,
         additionalParts: mergedAdditionalParts?.map((p) => ({
           text: p.text,
           synthetic: p.synthetic,
@@ -1412,10 +1470,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       ? normalizePath(get().getDirectoryForSession(targetSessionId))
       : null
     if (targetSessionId) {
-      notifyMessageSent(targetSessionId)
-    }
-
-    if (targetSessionId) {
       markPendingUserSendAnimation(targetSessionId)
     }
 
@@ -1438,6 +1492,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       inputMode,
       files,
       delivery: options?.delivery,
+      messageID: options?.messageID,
+      preserveOptimisticOnAmbiguous: options?.preserveOptimisticOnAmbiguous,
+      onSendConfirmed: options?.onSendConfirmed,
       additionalParts: additionalParts?.map((p) => ({
         text: p.text,
         synthetic: p.synthetic,
@@ -1549,6 +1606,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     await revertToMessageAction(sessionId, messageId)
   },
 
+  editMessagePreservingChanges: (sessionId, messageId) => {
+    stageMessageEdit(sessionId, messageId)
+    set({ stagedMessageEdit: { sessionId, messageId } })
+  },
+
   // ---------------------------------------------------------------------------
   // handleSlashUndo — reads from sync, records history for redo
   // ---------------------------------------------------------------------------
@@ -1632,10 +1694,33 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // forkFromMessage — delegates to session-actions (handles text + sidebar)
   // ---------------------------------------------------------------------------
   forkFromMessage: async (sessionId, messageId) => {
-    if (get().forkTransition) return
-    const sessions = getSyncSessions()
+    const activeTransition = get().forkTransition
+    console.info("[session-fork] forkFromMessage invoked", {
+      sessionId,
+      messageId,
+      activeOperationId: activeTransition?.operationId ?? null,
+      activeStage: activeTransition?.stage ?? null,
+    })
+    if (activeTransition) {
+      console.warn("[session-fork] forkFromMessage skipped because a transition is active", {
+        sessionId,
+        messageId,
+        activeOperationId: activeTransition.operationId,
+        activeSourceSessionId: activeTransition.sourceSessionId,
+        activeStage: activeTransition.stage,
+      })
+      return
+    }
+    const sessions = getAllSyncSessions()
     const existingSession = sessions.find((s) => s.id === sessionId)
-    if (!existingSession) return
+    if (!existingSession) {
+      console.warn("[session-fork] forkFromMessage could not find the source session", {
+        sessionId,
+        messageId,
+        sessionCount: sessions.length,
+      })
+      return
+    }
     const operationId = ++nextForkOperationId
 
     try {
@@ -1643,6 +1728,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         sessionId,
         (sid) => get().worktreeMetadata.get(sid),
       ) ?? opencodeClient.getDirectory() ?? ""
+      console.info("[session-fork] forkFromMessage starting transition", {
+        operationId,
+        sessionId,
+        messageId,
+        hasDirectory: Boolean(directory),
+      })
       set({
         forkTransition: {
           operationId,
@@ -1653,12 +1744,29 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
       const completed = await forkSessionAction(sessionId, operationId, messageId)
-      if (!completed) return
+      if (!completed) {
+        console.warn("[session-fork] forkFromMessage ended before completion", {
+          operationId,
+          sessionId,
+          messageId,
+        })
+        return
+      }
 
       const { toast } = await import("sonner")
+      console.info("[session-fork] forkFromMessage completed", {
+        operationId,
+        sessionId,
+        messageId,
+      })
       toast.success(`Forked from ${existingSession.title}`)
     } catch (error) {
-      console.error("Failed to fork session:", error)
+      console.error("[session-fork] forkFromMessage failed", {
+        operationId,
+        sessionId,
+        messageId,
+        error,
+      })
       const { toast } = await import("sonner")
       toast.error("Failed to fork session")
     } finally {
@@ -1669,10 +1777,30 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   },
 
   forkCurrentSession: async (sessionId) => {
-    if (get().forkTransition) return
-    const sessions = getSyncSessions()
+    const activeTransition = get().forkTransition
+    console.info("[session-fork] forkCurrentSession invoked", {
+      sessionId,
+      activeOperationId: activeTransition?.operationId ?? null,
+      activeStage: activeTransition?.stage ?? null,
+    })
+    if (activeTransition) {
+      console.warn("[session-fork] forkCurrentSession skipped because a transition is active", {
+        sessionId,
+        activeOperationId: activeTransition.operationId,
+        activeSourceSessionId: activeTransition.sourceSessionId,
+        activeStage: activeTransition.stage,
+      })
+      return
+    }
+    const sessions = getAllSyncSessions()
     const existingSession = sessions.find((s) => s.id === sessionId)
-    if (!existingSession) return
+    if (!existingSession) {
+      console.warn("[session-fork] forkCurrentSession could not find the source session", {
+        sessionId,
+        sessionCount: sessions.length,
+      })
+      return
+    }
     const operationId = ++nextForkOperationId
 
     try {
@@ -1680,6 +1808,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         sessionId,
         (sid) => get().worktreeMetadata.get(sid),
       ) ?? opencodeClient.getDirectory() ?? ""
+      console.info("[session-fork] forkCurrentSession starting transition", {
+        operationId,
+        sessionId,
+        hasDirectory: Boolean(directory),
+      })
       set({
         forkTransition: {
           operationId,
@@ -1690,12 +1823,26 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
       const completed = await forkSessionAction(sessionId, operationId)
-      if (!completed) return
+      if (!completed) {
+        console.warn("[session-fork] forkCurrentSession ended before completion", {
+          operationId,
+          sessionId,
+        })
+        return
+      }
 
       const { toast } = await import("sonner")
+      console.info("[session-fork] forkCurrentSession completed", {
+        operationId,
+        sessionId,
+      })
       toast.success(`Forked from ${existingSession.title}`)
     } catch (error) {
-      console.error("Failed to fork session:", error)
+      console.error("[session-fork] forkCurrentSession failed", {
+        operationId,
+        sessionId,
+        error,
+      })
       const { toast } = await import("sonner")
       toast.error("Failed to fork session")
     } finally {

@@ -262,11 +262,9 @@ const FileRow: React.FC<FileRowProps> = ({
       <Item onClick={(e: React.MouseEvent) => {
         e.stopPropagation();
         void copyTextToClipboard(node.path).then((result) => {
-          if (result.ok) {
-            toast.success(t('sidebarFilesTree.toast.pathCopied'));
-            return;
+          if (!result.ok) {
+            toast.error(t('sidebarFilesTree.toast.copyFailed'));
           }
-          toast.error(t('sidebarFilesTree.toast.copyFailed'));
         });
       }}>
         <Icon name="file-copy" className="mr-2 h-4 w-4" /> {t('sidebarFilesTree.menu.copyPath')}

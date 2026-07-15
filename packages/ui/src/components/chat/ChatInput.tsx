@@ -7,20 +7,25 @@ import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useLeaderKeyStore } from '@/stores/useLeaderKeyStore';
-import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
+import { useMessageQueueStore, getQueueForScope, legacyQueueScope, queueScopeKey, type QueueScope, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
+import { usePermissionStore } from '@/stores/permissionStore';
+import { autoRespondsPermission } from '@/stores/utils/permissionAutoAccept';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useInputStore } from '@/sync/input-store';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
 import { useDirectorySync, useUserMessageHistory } from '@/sync/sync-context';
+import { getAllSyncSessionMap, getSyncMessages } from '@/sync/sync-refs';
 import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { appendInlineComments } from '@/lib/messages/inlineComments';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import { dispatchQueuedMessage } from '@/hooks/useQueuedMessageAutoSend';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
 import { ActiveEditorFileSuggestion, AttachedFilesList, AttachedVSCodeFileChips } from './FileAttachment';
@@ -85,7 +90,6 @@ import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
-import { getSyncMessages } from '@/sync/sync-refs';
 import { EMPTY_REVERTED_MESSAGE_DOCK_STATE, buildRevertedMessageDockState, type RevertedMessageDockState } from './revertedMessageDockState';
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import { isSyntheticPart } from '@/lib/messages/synthetic';
@@ -117,6 +121,9 @@ import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
 import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import type { Part } from '@opencode-ai/sdk/v2/client';
+import { getLocalChatCommand, preservesComposerResources } from './localCommandClassifier';
+import { admitChatInputQueueMessageAndConsumeResources } from './queueAdmission';
+import { togglePermissionAutoAccept } from './permissionAutoAccept';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
@@ -596,6 +603,63 @@ const ComposerAttachmentControls = React.memo(function ComposerAttachmentControl
     && prev.withTooltip === next.withTooltip
 ));
 
+type PermissionAutoAcceptButtonProps = {
+    sessionId: string | null;
+    draftOpen: boolean;
+    draftEnabled: boolean;
+    enabled: boolean;
+    saving: boolean;
+    footerIconButtonClass: string;
+    iconSizeClass: string;
+    onSetDraftEnabled: (enabled: boolean) => void;
+    onSetSessionEnabled: (sessionId: string, enabled: boolean) => Promise<void>;
+    onOpenSessionFirst: () => void;
+    onToggleFailed: () => void;
+};
+
+const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButton(props: PermissionAutoAcceptButtonProps) {
+    const { t } = useI18n();
+    const actionLabel = t(props.enabled
+        ? 'chat.chatInput.permissionAutoAccept.disable'
+        : 'chat.chatInput.permissionAutoAccept.enable');
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <button
+                    type="button"
+                    disabled={props.saving}
+                    aria-pressed={props.enabled}
+                    aria-label={actionLabel}
+                    className={cn(
+                        props.footerIconButtonClass,
+                        props.enabled && 'rounded-md bg-interactive-selection text-interactive-selection-foreground',
+                    )}
+                    onClick={() => togglePermissionAutoAccept({
+                        permissionScopeSessionId: props.sessionId,
+                        newSessionDraftOpen: props.draftOpen,
+                        draftPermissionAutoAcceptEnabled: props.draftEnabled,
+                        permissionAutoAcceptEnabled: props.enabled,
+                        setDraftPermissionAutoAcceptEnabled: props.onSetDraftEnabled,
+                        setSessionAutoAccept: props.onSetSessionEnabled,
+                        onOpenSessionFirst: props.onOpenSessionFirst,
+                        onToggleFailed: props.onToggleFailed,
+                    })}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onPointerDownCapture={(event) => {
+                        if (event.pointerType === 'touch') {
+                            event.preventDefault();
+                        }
+                    }}
+                >
+                    <Icon name={props.enabled ? 'shield-check' : 'shield'} className={cn(props.iconSizeClass, 'text-current')} />
+                </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={8}>{actionLabel}</TooltipContent>
+        </Tooltip>
+    );
+});
+
 type ComposerActionButtonsProps = {
     isMobile: boolean;
     footerIconButtonClass: string;
@@ -930,6 +994,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
+    const setDraftPermissionAutoAcceptEnabled = useSessionUIStore((s) => s.setDraftPermissionAutoAcceptEnabled);
+    const permissionAutoAccept = usePermissionStore((s) => s.autoAccept);
+    const permissionAutoAcceptSaving = usePermissionStore((s) => s.saving);
+    const setSessionAutoAccept = usePermissionStore((s) => s.setSessionAutoAccept);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject);
     const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId);
@@ -953,6 +1021,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
     const [reviewDialogOpen, setReviewDialogOpen] = React.useState(false);
     const [reviewFlowSubmitting, setReviewFlowSubmitting] = React.useState(false);
+    const permissionAutoAcceptEnabled = React.useMemo(() => {
+        if (!currentSessionId) {
+            return newSessionDraft.permissionAutoAcceptEnabled === true;
+        }
+        return autoRespondsPermission({
+            autoAccept: permissionAutoAccept,
+            sessions: [],
+            sessionById: getAllSyncSessionMap(),
+            sessionID: currentSessionId,
+        });
+    }, [currentSessionId, newSessionDraft.permissionAutoAcceptEnabled, permissionAutoAccept]);
+    const handlePermissionAutoAcceptToggleFailed = React.useCallback(() => {
+        toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed'));
+    }, [t]);
 
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
     const currentModelId = useConfigStore((state) => state.currentModelId);
@@ -1332,15 +1414,32 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     // Message queue
     const followUpBehavior = useMessageQueueStore((state) => state.followUpBehavior);
-    const queuedMessages = useMessageQueueStore(
+    const currentQueueScope = React.useMemo<Extract<QueueScope, { state: 'bound' }> | null>(() => {
+        const directory = currentSessionDirectoryForSync || currentDirectory;
+        return currentSessionId && directory ? { state: 'bound', transportIdentity: getRuntimeTransportIdentity(), directory, sessionID: currentSessionId } : null;
+    }, [currentDirectory, currentSessionDirectoryForSync, currentSessionId]);
+    const legacyQueue = React.useMemo(() => currentSessionId ? legacyQueueScope(currentSessionId) : null, [currentSessionId]);
+    const boundQueuedMessages = useMessageQueueStore(
         React.useCallback(
             (state) => {
-                if (!currentSessionId) return EMPTY_QUEUE;
-                return state.queuedMessages[currentSessionId] ?? EMPTY_QUEUE;
+                return currentQueueScope ? getQueueForScope(state, currentQueueScope) : EMPTY_QUEUE;
             },
-            [currentSessionId]
+            [currentQueueScope]
         )
     );
+    const legacyQueuedMessages = useMessageQueueStore(
+        React.useCallback(
+            (state) => {
+                return legacyQueue ? getQueueForScope(state, legacyQueue) : EMPTY_QUEUE;
+            },
+            [legacyQueue]
+        )
+    );
+    const queuedMessages = React.useMemo(() => {
+        if (legacyQueuedMessages.length === 0) return boundQueuedMessages;
+        if (boundQueuedMessages.length === 0) return legacyQueuedMessages;
+        return [...legacyQueuedMessages, ...boundQueuedMessages];
+    }, [boundQueuedMessages, legacyQueuedMessages]);
     const addToQueue = useMessageQueueStore((state) => state.addToQueue);
     const clearQueue = useMessageQueueStore((state) => state.clearQueue);
     const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
@@ -1374,7 +1473,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [currentSessionId, newSessionDraftOpen]
         )
     );
-    const consumeDrafts = useInlineCommentDraftStore((state) => state.consumeDrafts);
     const removeInlineCommentDraft = useInlineCommentDraftStore((state) => state.removeDraft);
     const hasDrafts = draftCount > 0;
     const [previewConsoleCount, previewAnnotationCount, reviewCount] = draftSourceKey.split(':').map((entry) => Number(entry) || 0);
@@ -1575,7 +1673,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     React.useEffect(() => {
         if (pendingInputText !== null) {
             const pending = consumePendingInputText();
-            if (pending?.text) {
+            if (pending) {
                 if (pending.mode === 'append') {
                     setMessage((prev) => {
                         const next = pending.text;
@@ -1626,7 +1724,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId) return;
 
-        const drafts = consumeDrafts(currentSessionId);
+        const resourcePolicy = preservesComposerResources(inputSnapshot.message, inputMode);
+        if (resourcePolicy) {
+            void handleSubmitRef.current();
+            return;
+        }
+
+        const drafts = [...useInlineCommentDraftStore.getState().getDrafts(currentSessionId)].sort((a, b) => a.createdAt - b.createdAt);
 
         let messageToQueue = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
         if (drafts.length > 0) {
@@ -1634,30 +1738,37 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
         const attachmentsToQueue = sanitizeAttachmentsForSend(sendableAttachedFiles);
 
-        addToQueue(currentSessionId, {
-            content: messageToQueue,
-            attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
-            sendConfig: currentProviderId && currentModelId ? {
-                providerID: currentProviderId,
-                modelID: currentModelId,
-                agent: currentAgentName ?? undefined,
-                variant: currentVariant ?? undefined,
-            } : undefined,
+        const scope = currentQueueScope;
+        if (!scope) return;
+        admitChatInputQueueMessageAndConsumeResources({
+            bindLegacy: () => useMessageQueueStore.getState().bindLegacyQueue(legacyQueueScope(currentSessionId), scope),
+            addComposer: () => addToQueue(scope, {
+                content: messageToQueue,
+                attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
+                sendConfig: currentProviderId && currentModelId ? {
+                    providerID: currentProviderId,
+                    modelID: currentModelId,
+                    agent: currentAgentName ?? undefined,
+                    variant: currentVariant ?? undefined,
+                } : undefined,
+            }),
+            drafts,
+            consumeDraft: (draft) => removeInlineCommentDraft(currentSessionId, draft.id),
+            consumeBody: () => setMessage(''),
+            consumeAttachments: () => {
+                if (attachmentsToQueue.length > 0) {
+                    clearAttachedFiles();
+                }
+            },
         });
 
-        // Clear input and attachments
         // Note: confirmedMentionsRef is NOT cleared here because queued messages
         // are processed later in handleSubmit which reads the ref via extractInlineFileMentions.
         // The ref is cleared in handleSubmit after all queued messages are sent.
-        setMessage('');
-        if (attachmentsToQueue.length > 0) {
-            clearAttachedFiles();
-        }
-
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [getCurrentInputSnapshot, currentSessionId, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, consumeDrafts, currentProviderId, currentModelId, currentAgentName, currentVariant]);
+    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft]);
 
     const handleQueuedMessageEdit = React.useCallback((content: string) => {
         setMessage(content);
@@ -1667,9 +1778,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, []);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
-        // Force-sending from the queue during a busy session counts as steer
-        void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId, delivery: 'steer' });
-    }, []);
+        if (currentSessionId) void dispatchQueuedMessage(currentSessionId, { delivery: 'steer', queueItemID: messageId });
+    }, [currentSessionId]);
 
     const handleOpenAgentPanel = React.useCallback(() => {
         setMobileControlsPanel('agent');
@@ -1695,13 +1805,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             : getCurrentInputSnapshot();
         const inputAttachmentsSnapshot = attachedFiles;
         const normalizedInput = inputSnapshot.message.trimStart();
+        const localCommand = getLocalChatCommand(normalizedInput, inputMode);
+        const resourcePolicy = preservesComposerResources(inputSnapshot.message, inputMode);
         const isModelCommand = inputMode === 'normal' && /^\/model(?:\s|$)/i.test(normalizedInput);
 
         if (!queuedOnly && isModelCommand) {
-            setMessage('');
-            confirmedMentionsRef.current.clear();
-            saveStoredDraft(currentSessionId, '');
-            saveConfirmedMentions(currentSessionId, confirmedMentionsRef.current);
             setShowCommandAutocomplete(false);
             setCommandQuery('');
 
@@ -1712,7 +1820,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
             return;
         }
-        const queuedMessagesToSend = queuedMessageId
+        if (!queuedOnly && !resourcePolicy && currentSessionId && currentQueueScope) {
+            useMessageQueueStore.getState().bindLegacyQueue(legacyQueueScope(currentSessionId), currentQueueScope);
+        }
+        if (!queuedOnly && localCommand && localCommand !== 'model') {
+            // Local command handlers run below with their existing business actions.
+        } else if (!queuedOnly && currentSessionId && hasQueuedMessages) {
+            if (inputSnapshot.hasContent) handleQueueMessage();
+            await dispatchQueuedMessage(currentSessionId, { delivery: sessionPhase === 'idle' ? undefined : 'steer' });
+            return;
+        }
+        const queuedMessagesToSend = resourcePolicy ? [] : queuedMessageId
             ? queuedMessages.filter((message) => message.id === queuedMessageId)
             : queuedMessages;
 
@@ -1752,12 +1870,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         // queued-message auto-send hook delivers it as the next turn once the
         // rejected turn winds down and the session returns to idle. This avoids
         // aborting the turn (which would surface an "aborted" notice).
-        if (currentSessionId && !queuedOnly && autoReviewRunning) {
+        if (currentSessionId && !queuedOnly && !resourcePolicy && autoReviewRunning) {
             handleQueueMessage();
             return;
         }
 
-        if (currentSessionId && !queuedOnly) {
+        if (currentSessionId && !queuedOnly && !resourcePolicy) {
             const dismissedQuestions = await sessionActions.dismissOpenQuestionsForSession(currentSessionId);
             if (dismissedQuestions) {
                 handleQueueMessage();
@@ -1765,7 +1883,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
         }
 
-        const sendMessageOptions = delivery ? { delivery } : undefined;
+        const sendMessageOptions = {
+            ...(delivery ? { delivery } : {}),
+            commitStagedMessageEdit: !queuedOnly,
+        };
 
         // Build the primary message (first part) and additional parts
         let primaryText = '';
@@ -1781,7 +1902,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         };
 
         // Consume any pending synthetic parts (from conflict resolution, etc.)
-        const syntheticParts = consumePendingSyntheticParts();
+        const syntheticParts = resourcePolicy ? undefined : consumePendingSyntheticParts();
 
         // Process queued messages first
         for (let i = 0; i < queuedMessagesToSend.length; i++) {
@@ -1841,8 +1962,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
         let drafts: InlineCommentDraft[] = [];
-        if (!queuedOnly && sessionKey) {
-            drafts = consumeDrafts(sessionKey);
+        if (!queuedOnly && sessionKey && !resourcePolicy) {
+            drafts = [...useInlineCommentDraftStore.getState().getDrafts(sessionKey)].sort((a, b) => a.createdAt - b.createdAt);
         }
 
         if (drafts.length > 0) {
@@ -1897,12 +2018,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!primaryText && primaryAttachments.length === 0 && additionalParts.length === 0) return;
 
         // Clear queue and input
-        if (currentSessionId && queuedMessageId) {
-            removeFromQueue(currentSessionId, queuedMessageId);
-        } else if (currentSessionId && hasQueuedMessages) {
-            clearQueue(currentSessionId);
+        if (!resourcePolicy && currentSessionId && queuedMessageId) {
+            const queuedItem = currentQueueScope
+                ? getQueueForScope(useMessageQueueStore.getState(), currentQueueScope).find((message) => message.id === queuedMessageId || message.queueItemID === queuedMessageId)
+                : undefined;
+            if (currentQueueScope && queuedItem?.queueItemID && queuedItem.operationID) {
+                removeFromQueue(currentQueueScope, queuedItem.queueItemID, queuedItem.operationID);
+            }
+        } else if (!resourcePolicy && currentSessionId && hasQueuedMessages) {
+            if (currentQueueScope) clearQueue(currentQueueScope);
         }
-        if (!queuedOnly) {
+        if (!queuedOnly && !resourcePolicy) {
             setMessage('');
             confirmedMentionsRef.current.clear();
             // Clear per-session draft on submit
@@ -1919,14 +2045,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         const restoreFailedSubmission = () => {
-            if (currentSessionId && queuedMessagesToSend.length > 0) {
+            if (currentQueueScope && queuedMessagesToSend.length > 0) {
                 useMessageQueueStore.setState((state) => {
-                    const currentQueue = state.queuedMessages[currentSessionId] ?? [];
+                    const scopeKey = queueScopeKey(currentQueueScope);
+                    const currentQueue = state.queuedMessages[scopeKey] ?? [];
                     const restoredIds = new Set(queuedMessagesToSend.map((queuedMessage) => queuedMessage.id));
                     return {
                         queuedMessages: {
                             ...state.queuedMessages,
-                            [currentSessionId]: [
+                            [scopeKey]: [
                                 ...queuedMessagesToSend,
                                 ...currentQueue.filter((queuedMessage) => !restoredIds.has(queuedMessage.id)),
                             ],
@@ -5404,6 +5531,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             onOpenSettings={onOpenSettings}
                                             onOpenMobileSheet={openMobileAttachSheet}
                                         />
+                                        <PermissionAutoAcceptButton
+                                            sessionId={currentSessionId}
+                                            draftOpen={newSessionDraftOpen}
+                                            draftEnabled={newSessionDraft.permissionAutoAcceptEnabled === true}
+                                            enabled={permissionAutoAcceptEnabled}
+                                            saving={currentSessionId ? permissionAutoAcceptSaving : false}
+                                            footerIconButtonClass={footerIconButtonClass}
+                                            iconSizeClass={iconSizeClass}
+                                            onSetDraftEnabled={setDraftPermissionAutoAcceptEnabled}
+                                            onSetSessionEnabled={setSessionAutoAccept}
+                                            onOpenSessionFirst={openNewSessionDraft}
+                                            onToggleFailed={handlePermissionAutoAcceptToggleFailed}
+                                        />
                                         <SessionGoalButton
                                             sessionId={currentSessionId}
                                             directory={currentSessionDirectoryForSync ?? currentDirectory}
@@ -5450,6 +5590,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         openPrPicker={openPrPicker}
                                         onOpenSettings={onOpenSettings}
                                         withTooltip
+                                    />
+                                    <PermissionAutoAcceptButton
+                                        sessionId={currentSessionId}
+                                        draftOpen={newSessionDraftOpen}
+                                        draftEnabled={newSessionDraft.permissionAutoAcceptEnabled === true}
+                                        enabled={permissionAutoAcceptEnabled}
+                                        saving={currentSessionId ? permissionAutoAcceptSaving : false}
+                                        footerIconButtonClass={footerIconButtonClass}
+                                        iconSizeClass={iconSizeClass}
+                                        onSetDraftEnabled={setDraftPermissionAutoAcceptEnabled}
+                                        onSetSessionEnabled={setSessionAutoAccept}
+                                        onOpenSessionFirst={openNewSessionDraft}
+                                        onToggleFailed={handlePermissionAutoAcceptToggleFailed}
                                     />
                                     <div ref={setAgentPortalContainer} className="flex items-center" />
                                     <SessionGoalButton

@@ -49,9 +49,16 @@ So:
 | `session-ui-store.ts` | Session selection, draft lifecycle, abort prompts, worktree metadata, SDK-facing action entrypoints | App UI state |
 | `useGlobalSessionsStore.ts` | Global active sessions, global archived sessions, `sessionsByDirectory` | All opened project/worktree session lists |
 | `viewport-store.ts` | Scroll anchors, session memory, loading indicators | App UI state |
-| `input-store.ts` | Draft input state, attached files, synthetic parts | App UI state |
+| `input-store.ts` | Legacy pending input state plus keyed draft metadata, hydration, and persistence state | App UI state |
+| `input-draft-metadata-store.ts` | Validated durable draft metadata, legacy staging, migration markers | Browser storage |
 | `selection-store.ts` | Model/agent/variant selections | App UI state |
 | `voice-store.ts` | Voice state | App UI state |
+
+### Keyed draft metadata
+
+`input-store.ts` owns memory-first validated `DraftRecord` state keyed by transport identity and draft owner. `DraftRecord` stores attachment metadata only; per-occurrence `AttachedFile` views, missing blob occurrence IDs, and attachment hydration/persistence state remain runtime memory. Local files and VS Code selections use blob locators, while file/http/server URLs use URL locators. Blob put and draft-reference retain complete before a snapshot containing that metadata enters the durability lane; quota and storage failures preserve editable memory views for explicit retry. Removal and replacement persist metadata before releasing old blob references. `moveDraftWithAttachments()` retains destination references, moves metadata, persists, then releases source references; synchronous `moveDraft()` remains URL-only. Hydration isolates transport generation, key epoch, and record identity, so delayed blob reads cannot replace newer attachment views. Disabled persistence keeps drafts and attachment views in memory without IndexedDB work. Legacy session drafts import into the migration's claimed transport; the legacy `new` record remains staged until `claimLegacyNewDraft()` receives its destination key. Queue admission and send ownership transfers remain outside this store.
+
+`input-draft-durability-coordinator.ts` owns serialized draft durability. `input-store.ts` keeps memory-first records and submits scoped candidates through the coordinator; blob materialization, references, metadata ordering, rollback, release cleanup, and move transfers stay behind that boundary. Hydration seeds the coordinator once after migration, persists every touched snapshot, flushes durability before completion, and replays locally dirty keys after the durable baseline is available. Disabled persistence keeps editable memory records and blocks durable admission until re-enabled.
 
 ## Session list rules
 
@@ -85,6 +92,8 @@ Current consumers:
 - agent/session activity surfaces using `useGlobalSessionStatus()` / `useAllSessionStatuses()`
 
 Cross-directory selectors subscribe to the narrow child-store field they aggregate. Session aggregation listens to `state.session`; per-session status listens only to that session's `state.session_status` entry. Unrelated streaming events such as `message.part.delta` must not trigger global session/status scans.
+
+`scoped-session-status.ts` owns exact `(directory, sessionID)` status reads and subscriptions. A missing child-store snapshot reads as `unknown`; a successful directory status snapshot with no matching entry reads as `idle`. Its registry subscription rebinds when a requested directory store appears, and status listeners ignore parts plus other session IDs.
 
 Imperative cross-directory session lookups use the cached ID index from `getAllSyncSessionMap()`. The index is rebuilt only when a child store's `state.session` reference changes; permission lineage checks must reuse it instead of rebuilding a full session map per call.
 
@@ -208,6 +217,62 @@ becoming the cached startup result consumed by the session coordinator.
   and apply only its final identity; never remount `SyncProvider` once per
   intermediate host/token state.
 
+### Queue transport and admission invariants
+
+- `message-queue-runtime-controller.ts` owns the v4 queue runtime snapshot,
+  hydration state, mutation serialization, and scope-reference stability.
+  `message-queue-runtime.ts` exposes a lazy default facade. Importing it and
+  obtaining the facade perform zero storage, migration, hydration, or
+  reconciliation work; explicit `hydrate()` opens that durable boundary.
+  Every mutating call captures its runtime at the public API boundary; a queued
+  serialized operation retains that capture through blob and metadata work.
+  `message-queue-dispatch.ts` is the dependency-injected v4 dispatch boundary.
+  It owns send acquisition, durable sending/reconciliation transitions, exact
+  confirmation, and the pure one-head-per-scope scheduler planner.
+  The v3 production queue remains authoritative until the Lane 4 atomic cutover.
+
+- `queue-attachment-coordinator.ts` owns queue and send blob references. Queue
+  references use `queueItemID`; temporary send references use `operationID` and
+  monotonic BigInt-derived string acquisition tokens. Token-matched release owns send cleanup.
+  Admission acquires queue references before persisting v4 metadata and rolls
+  them back on a failed write. Removal persists metadata before releasing both
+  reference classes; release failures enter its retryable cleanup ledger.
+- The coordinator serializes every operation and validates runtime transport,
+  generation, and currentness before commit. The v4 ledger is authoritative for
+  queue desired references during hydration/reconciliation. Live reconciliation
+  includes active send references; startup reconciliation begins with an empty
+  send desired set and clears stale send ownership. Cleanup entries are discarded
+  when the same queue or send reference becomes desired again.
+- A metadata write that completes as the runtime becomes stale still becomes the
+  controller's durable baseline before the caller receives its `stale` result.
+- Partial or corrupt v4 hydration enters a recovery-required read-only state.
+  Valid rows from a partial snapshot remain visible, while every metadata or blob
+  mutation waits for a complete authoritative hydrate. Disabled hydration reads
+  and seeds the baseline while performing zero blob mutations and metadata writes.
+
+- Queue ownership uses stable transport identity plus directory and session ID.
+  Legacy bulk binding persists one snapshot, prepends bound rows, and cleans the
+  source references after commit.
+  Runtime generation captures the active transport lifetime; delayed work validates
+  that generation before committing to a child store or queue scope.
+- Child-store async work captures its owning store and directory. Shared HTTP
+  responses may serve concurrent requests, while each live child store commits
+  only through its own current capture.
+- Queue failures classify as pre-dispatch retry, ambiguous dispatched
+  reconciliation, or definitive rejection. Reconciliation confirms through the
+  response or HTTP records before a queued item is removed.
+- Reconciliation keeps persistent `reconciliationChecks`, `reconciliationDeadlineAt`,
+  and `reconciliationNextCheckAt`. In-flight checks own no timer; each miss writes
+  the next persistent check time, which drives the single global scheduler wake.
+  Exhausted checks or a reached deadline resolve to editable `unresolved` items;
+  Edit and Remove release that terminal state without another POST.
+- Message-sent confirmation precedes dependent queue side effects. A composer
+  queue admission completes before it consumes inline drafts, body text, or
+  attachments. Local chat commands retain these composer resources across both
+  successful actions and action failures. Legacy queue rows remain visible in
+  their legacy scope until an explicit send path performs a bulk bind into the
+  active bound scope.
+
 ## Session action rules
 
 Session actions live in `session-actions.ts` and are the canonical place for SDK-calling session mutations that affect global session lists.
@@ -266,6 +331,20 @@ message first, preserve that authoritative object and skip optimistic insertion.
 Create-phase failures restore the draft and input. Prompt-phase failures keep
 the created session; ambiguous delivery is confirmed by message ID and is never
 automatically re-submitted.
+
+### Queue dispatcher execution invariants
+
+`message-queue-dispatch.ts` keys flights by scope, queue item, operation, and
+message IDs. Dispatch, reconciliation, and sending recovery share that identity
+flight. Payload acquisition returns a monotonic token; each non-confirmed path
+releases its own token. Durable confirmation removes queue and send references
+before one best-effort notification. The planner exposes one head and one
+nearest wake per scope; Lane 4 owns session busy and blocked eligibility.
+
+Reconciliation persists `pending` next checks and durable `unresolved` terminal
+states. Authoritative misses increment a safe-integer count; unavailable queries
+preserve it while scheduling a bounded wake. Hydrated `sending` rows recover by
+persisting `sending → reconciling` without a POST.
 
 ## The golden rule
 
@@ -349,7 +428,7 @@ The optimization multiplies with targeted event cloning: fewer new references pe
 |-------|------|-----------------|
 | `session-ui-store.ts` | Session selection, draft lifecycle, abort, worktree, SDK actions | Session switch, draft open/close |
 | `voice-store.ts` | Voice connection/activity state | Voice toggle |
-| `input-store.ts` | Pending input text, synthetic parts, attached files | User typing, file attach, revert/fork |
+| `input-store.ts` | Pending input text, synthetic parts, attached files | User typing, file attach, revert/edit/fork |
 | `selection-store.ts` | Per-session model/agent/variant choices | Model/agent picker |
 | `viewport-store.ts` | Scroll anchors, session memory state, sync status | Streaming, scroll, session switch |
 

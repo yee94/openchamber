@@ -1948,6 +1948,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.textSelection.title.addToCurrentChat": "Додати до поточного чату",
   "chat.textSelection.title.newSessionWithSelection": "Створити нову сесію із виділенням",
   "chat.textSelection.title.saveInsightToNotes": "Зберегти вибраний текст у нотатках",
+  "chat.messageBody.actions.editAria": "Редагувати повідомлення й зберегти зміни",
+  "chat.messageBody.actions.edit": "Редагувати й зберегти зміни",
   "chat.messageBody.actions.revertAria": "Повернутися до цього повідомлення",
   "chat.messageBody.actions.revert": "Повернутися звідси",
   "chat.messageBody.actions.forkAria": "Відгалузити від цього повідомлення",

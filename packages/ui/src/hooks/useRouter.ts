@@ -263,6 +263,7 @@ export function useRouter(): void {
 
       prevSessionId = sessionId;
       syncURLFromState();
+      setRoute(parseRoute());
     });
 
     return unsubscribe;

@@ -810,10 +810,11 @@ const InlineReasoningBlock = React.memo(({ activity, onContentChange, streamPhas
 /**
  * Inline justification text block — rendered as normal assistant text between tools.
  */
-const InlineJustificationBlock = React.memo(({ activity, onContentChange, actions }: {
+const InlineJustificationBlock = React.memo(({ activity, onContentChange, actions, streamPhase }: {
     activity: TurnActivityPart;
     onContentChange?: (reason?: ContentChangeReason) => void;
     actions?: React.ReactNode;
+    streamPhase: StreamPhase;
 }) => {
     return (
         <JustificationBlock
@@ -821,6 +822,7 @@ const InlineJustificationBlock = React.memo(({ activity, onContentChange, action
             messageId={activity.messageId}
             onContentChange={onContentChange}
             actions={actions}
+            streamPhase={streamPhase}
         />
     );
 });
@@ -909,6 +911,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                             activity={row.activity}
                             onContentChange={onContentChange}
                             actions={renderJustificationActions?.(row.activity)}
+                            streamPhase={streamPhase}
                         />
                     </>
                 );

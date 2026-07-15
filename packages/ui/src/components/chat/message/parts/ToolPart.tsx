@@ -62,6 +62,7 @@ import { useDeferredToolHydration } from './deferredToolHydrationContext';
 import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { DualLimitLru } from '@/lib/dualLimitLru';
 import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
+import { useMobileAppActions } from '@/apps/mobileAppContext';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -1933,9 +1934,11 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     // Settings → Visual：「显示子智能体工作详情」；默认关闭，保持紧凑单行
     const showSubagentTaskDetails = useUIStore((s) => s.showSubagentTaskDetails);
     const openContextPanelTab = useUIStore((s) => s.openContextPanelTab);
+    const openContextDiff = useUIStore((s) => s.openContextDiff);
     const navigateToDiff = useUIStore((s) => s.navigateToDiff);
     const currentDirectory = useEffectiveDirectory() ?? '';
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
+    const mobileActions = useMobileAppActions();
 
     const normalizedPartTool = normalizeToolName(part.tool);
     const isTaskTool = normalizedPartTool === 'task';
@@ -2342,6 +2345,10 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             }
         } else if (['write', 'create', 'file_write'].includes(part.tool)) {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+            targetLine = 1;
+            if (typeof filePath === 'string' && typeof input?.content === 'string') {
+                toolDiff = buildWritePreviewPatch(filePath, input.content);
+            }
         } else if (part.tool === 'lsp') {
             filePath = input?.filePath || input?.file_path || input?.path;
             const line = input?.line;
@@ -2356,18 +2363,46 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     : (currentDirectory.endsWith('/') ? currentDirectory + filePath : `${currentDirectory}/${filePath}`)
             );
 
-            // Edit/Write：始终打开改动行，不再展开 diff 面板
-            if (isFileNavTool || part.tool === 'lsp') {
+            if (isFileNavTool) {
+                if (runtime?.runtime.isVSCode && runtime.editor && toolDiff) {
+                    const label = `${getRelativePath(absolutePath, currentDirectory)} (changes)`;
+                    void runtime.editor.openDiff('', absolutePath, label, { line: targetLine, patch: toolDiff });
+                    return;
+                }
+
+                if (isFilePathWithinDirectory(absolutePath, currentDirectory)) {
+                    const relativePath = getRelativePath(absolutePath, currentDirectory);
+                    if (mobileActions) {
+                        mobileActions.openChanges({ diffPath: relativePath, staged: false, targetLine });
+                    } else if (isMobile) {
+                        navigateToDiff(relativePath, false, 'turn', targetLine);
+                    } else {
+                        openContextDiff(currentDirectory, relativePath, false, 'turn', targetLine);
+                    }
+                    return;
+                }
+
                 if (runtime?.editor) {
-                    if (
-                        runtime.runtime.isVSCode
-                        && toolDiff
-                        && (part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch')
-                    ) {
-                        const label = `${getRelativePath(absolutePath, currentDirectory)} (changes)`;
-                        void runtime.editor.openDiff('', absolutePath, label, { line: targetLine, patch: toolDiff });
+                    void runtime.editor.openFile(absolutePath, targetLine);
+                    return;
+                }
+
+                const openInContext = () => {
+                    const uiStore = useUIStore.getState();
+                    const contextDirectory = getDirectoryForFilePath(currentDirectory, absolutePath);
+                    if (typeof targetLine === 'number' && Number.isFinite(targetLine)) {
+                        uiStore.openContextFileAtLine(contextDirectory, absolutePath, Math.max(1, Math.trunc(targetLine)), 1);
                         return;
                     }
+                    uiStore.openContextFile(contextDirectory, absolutePath);
+                };
+
+                void ensureOutsideFileGrantForDesktop(absolutePath, currentDirectory).then(openInContext);
+                return;
+            }
+
+            if (part.tool === 'lsp') {
+                if (runtime?.editor) {
                     void runtime.editor.openFile(absolutePath, targetLine);
                     return;
                 }

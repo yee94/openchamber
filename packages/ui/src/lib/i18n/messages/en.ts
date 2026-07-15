@@ -1970,6 +1970,8 @@ export const dict = {
   'chat.textSelection.title.addToCurrentChat': 'Add to current chat',
   'chat.textSelection.title.newSessionWithSelection': 'Create new session with selection',
   'chat.textSelection.title.saveInsightToNotes': 'Save selected text to notes',
+  'chat.messageBody.actions.editAria': 'Edit message and keep changes',
+  'chat.messageBody.actions.edit': 'Edit and keep changes',
   'chat.messageBody.actions.revertAria': 'Revert to this message',
   'chat.messageBody.actions.revert': 'Revert from here',
   'chat.messageBody.actions.forkAria': 'Fork from this message',

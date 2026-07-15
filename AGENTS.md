@@ -36,6 +36,12 @@ Desktop release work belongs in `packages/electron/`. Electron owns windows, men
 
 Release artifacts and repository links use `yee94/openchamber`. Electron is the desktop release target; use `bun run electron:build` for the current platform and `bun run release:test` for the release smoke build.
 
+## Native Module Runtime
+
+- The Web API development server runs with Node.js 24. `better-sqlite3` must use the matching Node ABI before Node starts the server.
+- `packages/web` development server scripts run `scripts/ensure-node-better-sqlite3.mjs`, which probes SQLite and rebuilds `better-sqlite3` with npm when its native binding targets another runtime ABI.
+- Electron packages rebuild native modules against Electron through `packages/electron/scripts/rebuild-native.mjs`. A later Web API development launch restores the Node-compatible `better-sqlite3` binding automatically.
+
 ## Always-On Constraints
 
 - Do not modify `../opencode`; it is a separate repository.

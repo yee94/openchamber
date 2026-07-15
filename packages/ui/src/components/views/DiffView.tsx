@@ -417,6 +417,7 @@ interface InlineDiffViewerProps {
   diff: DiffData;
   renderSideBySide: boolean;
   wrapLines: boolean;
+  focusLine?: number | null;
 }
 
 const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
@@ -424,6 +425,7 @@ const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
   diff,
   renderSideBySide,
   wrapLines,
+  focusLine,
 }) => {
   const language = React.useMemo(
     () => getLanguageFromExtension(filePath) || 'text',
@@ -454,6 +456,7 @@ const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
         fileName={filePath}
         renderSideBySide={renderSideBySide}
         wrapLines={wrapLines}
+        focusLine={focusLine}
         layout="inline"
         enableSelectionActions
       />
@@ -571,6 +574,7 @@ interface MultiFileDiffEntryProps {
     staged?: boolean;
     loadFullFiles?: boolean;
     initialDiffData?: DiffData | null;
+    focusLine?: number | null;
 }
 
 const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
@@ -590,6 +594,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     staged = false,
     loadFullFiles = false,
     initialDiffData = null,
+    focusLine = null,
 }) => {
     const { t } = useI18n();
     const { git } = useRuntimeAPIs();
@@ -915,6 +920,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                                 diff={diffData}
                                 renderSideBySide={renderSideBySide}
                                 wrapLines={wrapLines}
+                                focusLine={focusLine}
                             />
                             <div className="pointer-events-none absolute bottom-3 right-3 z-20">
                                 <div className="pointer-events-auto">
@@ -947,6 +953,8 @@ interface DiffViewProps {
     flushContent?: boolean;
     /** Render only the file selected by the surrounding context panel. */
     singleFileView?: boolean;
+    /** Scroll the selected file's diff to this modified-file line. */
+    targetLine?: number | null;
     /** Load complete file context when this view opens. */
     preloadFullFiles?: boolean;
 }
@@ -959,6 +967,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     diffScope = 'all',
     onDiffScopeChange,
     targetFilePath = null,
+    targetLine = null,
     flushContent = false,
     singleFileView = false,
     preloadFullFiles = false,
@@ -977,6 +986,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const setDiff = useGitStore((state) => state.setDiff);
     const [displayFile, setDisplayFile] = React.useState<string | null>(null);
     const [displayFileStaged, setDisplayFileStaged] = React.useState(false);
+    const [displayFocusLine, setDisplayFocusLine] = React.useState<number | null>(null);
     const [pinnedStackedTarget, setPinnedStackedTarget] = React.useState<string | null>(null);
     const [expandedFiles, setExpandedFiles] = React.useState<Set<string>>(() => new Set());
     const [mountedStackedFiles, setMountedStackedFiles] = React.useState<Set<string>>(() => new Set());
@@ -993,6 +1003,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const pendingDiffFile = useUIStore((state) => state.pendingDiffFile);
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
     const pendingDiffScope = useUIStore((state) => state.pendingDiffScope);
+    const pendingDiffLine = useUIStore((state) => state.pendingDiffLine);
     const setPendingDiffFile = useUIStore((state) => state.setPendingDiffFile);
     const diffLayoutPreference = useUIStore((state) => state.diffLayoutPreference);
     const diffFileLayout = useUIStore((state) => state.diffFileLayout);
@@ -1286,13 +1297,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
             }
             setDisplayFile(pendingDiffFile);
             setDisplayFileStaged(pendingDiffScope === 'staged' || (!pendingDiffScope && pendingDiffStaged));
+            setDisplayFocusLine(pendingDiffLine);
             setPendingDiffFile(null);
             shouldPinAfterAlignRef.current = true;
             pendingScrollTargetRef.current = pendingDiffFile;
             expandStackedFile(pendingDiffFile);
             setScrollRequestNonce((value) => value + 1);
         }
-    }, [activeDiffScope, expandStackedFile, pendingDiffFile, pendingDiffScope, pendingDiffStaged, setPendingDiffFile]);
+    }, [activeDiffScope, expandStackedFile, pendingDiffFile, pendingDiffLine, pendingDiffScope, pendingDiffStaged, setPendingDiffFile]);
 
     React.useEffect(() => {
         if (activeDiffScope === 'all') {
@@ -1306,12 +1318,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
         setDisplayFile(normalizedTarget);
         setDisplayFileStaged(activeDiffScope === 'staged');
+        setDisplayFocusLine(targetLine);
 
         shouldPinAfterAlignRef.current = true;
         pendingScrollTargetRef.current = normalizedTarget;
         expandStackedFile(normalizedTarget);
         setScrollRequestNonce((value) => value + 1);
-    }, [activeDiffScope, expandStackedFile, targetFilePath]);
+    }, [activeDiffScope, expandStackedFile, targetFilePath, targetLine]);
 
     React.useEffect(() => {
         if (!displayFile) {
@@ -1628,6 +1641,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                     staged={getFileStaged(file.path)}
                                     loadFullFiles={loadFullFiles}
                                     initialDiffData={activeDiffScope === 'turn' ? lastTurnDiffData.get(file.path) ?? null : null}
+                                    focusLine={file.path === (targetFilePath?.trim() || displayFile) ? (targetLine ?? displayFocusLine) : null}
                                 />
                             ))}
                         </div>

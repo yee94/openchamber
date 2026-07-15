@@ -6,7 +6,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
@@ -121,12 +120,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   };
 
   const handleCopyPath = async () => {
-    const text = directory;
-    const result = await copyTextToClipboard(text);
-    if (!result.ok) {
-      return;
-    }
-    toast.success(t('openInApp.toast.pathCopied'));
+    await copyTextToClipboard(directory);
   };
 
   return (

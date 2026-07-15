@@ -6,6 +6,13 @@ import {
   shouldTriggerHaptic,
   type HapticsInput,
 } from './streamingHaptics';
+import {
+  createStreamingHapticEventDeduper,
+  createStreamingHapticEventQueue,
+  evaluateVisiblePartHaptic,
+  shouldEmitToolAppearanceHaptic,
+  type StreamingHapticEvent,
+} from '../sync/streaming-haptic-events';
 
 const baseInput = (overrides: Partial<HapticsInput> = {}): HapticsInput => ({
   eventSessionId: 'session-1',
@@ -46,5 +53,168 @@ describe('haptic cadence', () => {
   test('allows haptics every 20ms', () => {
     expect(shouldTriggerHaptic(100, 119)).toBe(false);
     expect(shouldTriggerHaptic(100, 120)).toBe(true);
+  });
+});
+
+describe('visible part haptic semantics', () => {
+  test('fires once when reasoning first becomes visible', () => {
+    const pending = evaluateVisiblePartHaptic(null, {
+      identity: 'message-1:reasoning-1',
+      content: '',
+      isActive: true,
+      mode: 'appearance',
+    });
+    const visible = evaluateVisiblePartHaptic(pending.nextState, {
+      identity: 'message-1:reasoning-1',
+      content: 'Thinking',
+      isActive: false,
+      mode: 'appearance',
+    });
+    const tokenUpdate = evaluateVisiblePartHaptic(visible.nextState, {
+      identity: 'message-1:reasoning-1',
+      content: 'Thinking through the change',
+      isActive: false,
+      mode: 'appearance',
+    });
+
+    expect(pending.shouldEmit).toBe(false);
+    expect(visible.shouldEmit).toBe(true);
+    expect(tokenUpdate.shouldEmit).toBe(false);
+  });
+
+  test('fires for every visible assistant text change across finalization', () => {
+    const initial = evaluateVisiblePartHaptic(null, {
+      identity: 'message-1:text-1',
+      content: 'First',
+      isActive: true,
+      mode: 'changes',
+    });
+    const update = evaluateVisiblePartHaptic(initial.nextState, {
+      identity: 'message-1:text-1',
+      content: 'First update',
+      isActive: true,
+      mode: 'changes',
+    });
+    const finalUpdate = evaluateVisiblePartHaptic(update.nextState, {
+      identity: 'message-1:text-1',
+      content: 'First update complete',
+      isActive: false,
+      mode: 'changes',
+    });
+    const unchanged = evaluateVisiblePartHaptic(finalUpdate.nextState, {
+      identity: 'message-1:text-1',
+      content: 'First update complete',
+      isActive: false,
+      mode: 'changes',
+    });
+
+    expect(initial.shouldEmit).toBe(true);
+    expect(update.shouldEmit).toBe(true);
+    expect(finalUpdate.shouldEmit).toBe(true);
+    expect(unchanged.shouldEmit).toBe(false);
+  });
+
+  test('keeps completed history silent on first render', () => {
+    const historical = evaluateVisiblePartHaptic(null, {
+      identity: 'message-1:text-1',
+      content: 'Existing history',
+      isActive: false,
+      mode: 'changes',
+    });
+
+    expect(historical.shouldEmit).toBe(false);
+  });
+
+  test('fires delayed sorted text once after an active message lifecycle', () => {
+    const delayedFinalText = evaluateVisiblePartHaptic(null, {
+      identity: 'message-1:text-1',
+      content: 'Final response',
+      isActive: true,
+      mode: 'changes',
+    });
+
+    expect(delayedFinalText.shouldEmit).toBe(true);
+  });
+});
+
+describe('one-shot haptic event deduplication', () => {
+  const event = (kind: StreamingHapticEvent['kind'], partID = 'part-1'): StreamingHapticEvent => ({
+    sessionID: 'session-1',
+    messageID: 'message-1',
+    partID,
+    kind,
+  });
+
+  test('deduplicates reasoning and tool appearances while preserving text updates', () => {
+    const shouldProcess = createStreamingHapticEventDeduper();
+
+    expect(shouldProcess(event('thinking'))).toBe(true);
+    expect(shouldProcess(event('thinking'))).toBe(false);
+    expect(shouldProcess(event('tool', 'tool-1'))).toBe(true);
+    expect(shouldProcess(event('tool', 'tool-1'))).toBe(false);
+    expect(shouldProcess(event('text'))).toBe(true);
+    expect(shouldProcess(event('text'))).toBe(true);
+  });
+
+  test('bounds appearance history', () => {
+    const shouldProcess = createStreamingHapticEventDeduper(2);
+
+    expect(shouldProcess(event('tool', 'tool-1'))).toBe(true);
+    expect(shouldProcess(event('tool', 'tool-2'))).toBe(true);
+    expect(shouldProcess(event('tool', 'tool-3'))).toBe(true);
+    expect(shouldProcess(event('tool', 'tool-1'))).toBe(true);
+  });
+});
+
+describe('tool appearance haptic baseline', () => {
+  test('keeps initial finalized tools silent and emits active or newly observed tools', () => {
+    expect(shouldEmitToolAppearanceHaptic(true, false)).toBe(false);
+    expect(shouldEmitToolAppearanceHaptic(true, true)).toBe(true);
+    expect(shouldEmitToolAppearanceHaptic(false, false)).toBe(true);
+  });
+});
+
+describe('streaming haptic event queue', () => {
+  const event = (kind: StreamingHapticEvent['kind'], partID: string): StreamingHapticEvent => ({
+    sessionID: 'session-1',
+    messageID: 'message-1',
+    partID,
+    kind,
+  });
+
+  test('keeps same-batch tool appearances for cadence consumption', () => {
+    const queue = createStreamingHapticEventQueue();
+    const firstTool = event('tool', 'tool-1');
+    const secondTool = event('tool', 'tool-2');
+
+    queue.enqueue(firstTool);
+    queue.enqueue(secondTool);
+
+    expect(queue.dequeue()).toEqual(firstTool);
+    expect(queue.dequeue()).toEqual(secondTool);
+  });
+
+  test('coalesces pending text into its latest pulse', () => {
+    const queue = createStreamingHapticEventQueue();
+    queue.enqueue(event('text', 'text-1'));
+    queue.enqueue(event('tool', 'tool-1'));
+    const latestText = event('text', 'text-2');
+    queue.enqueue(latestText);
+
+    expect(queue.dequeue()).toEqual(event('tool', 'tool-1'));
+    expect(queue.dequeue()).toEqual(latestText);
+    expect(queue.size()).toBe(0);
+  });
+
+  test('bounds queued events', () => {
+    const queue = createStreamingHapticEventQueue(2);
+    queue.enqueue(event('tool', 'tool-1'));
+    queue.enqueue(event('thinking', 'reasoning-1'));
+    const newestTool = event('tool', 'tool-2');
+    queue.enqueue(newestTool);
+
+    expect(queue.size()).toBe(2);
+    expect(queue.dequeue()).toEqual(event('thinking', 'reasoning-1'));
+    expect(queue.dequeue()).toEqual(newestTool);
   });
 });

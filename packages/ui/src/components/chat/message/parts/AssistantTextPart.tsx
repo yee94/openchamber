@@ -8,7 +8,12 @@ import { resolveAssistantDisplayText, shouldRenderAssistantText } from './assist
 import { streamPerfCount, streamPerfObserve } from '@/stores/utils/streamDebug';
 import { GeneratedJsonResultCard } from './GeneratedJsonResultCard';
 import { parseGeneratedJsonResult } from './generatedJsonResult';
-import { emitStreamingHapticEvent, hasStreamingHapticSubscribers } from '@/sync/streaming-haptic-events';
+import {
+    emitStreamingHapticEvent,
+    evaluateVisiblePartHaptic,
+    hasStreamingHapticSubscribers,
+    type VisiblePartHapticState,
+} from '@/sync/streaming-haptic-events';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
@@ -18,6 +23,7 @@ interface AssistantTextPartProps {
     messageId: string;
     streamPhase: StreamPhase;
     chatRenderMode?: 'sorted' | 'live';
+    hasStreamingHapticLifecycle?: boolean;
     onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
     onShowPopup?: (content: ToolPopupContent) => void;
 }
@@ -28,6 +34,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     messageId,
     streamPhase,
     chatRenderMode = 'live',
+    hasStreamingHapticLifecycle = false,
     onShowPopup,
 }) => {
     // Use part directly from props — parent provides the latest version from the store.
@@ -60,28 +67,27 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         isStreaming,
     });
     const hapticIdentity = `${messageId}:${part.id ?? 'text'}`;
-    const hapticStateRef = React.useRef({ identity: hapticIdentity, displayLength: displayTextContent.length });
+    const hapticStateRef = React.useRef<VisiblePartHapticState | null>(null);
 
     React.useEffect(() => {
-        const state = hapticStateRef.current;
-        if (state.identity !== hapticIdentity) {
-            hapticStateRef.current = { identity: hapticIdentity, displayLength: displayTextContent.length };
-            return;
-        }
-        if (!isStreaming || !sessionId || !hasStreamingHapticSubscribers()) {
-            state.displayLength = displayTextContent.length;
-            return;
-        }
-        if ((part.type === 'text' || part.type === 'reasoning') && displayTextContent.length > state.displayLength) {
-            emitStreamingHapticEvent({
-                sessionID: sessionId,
-                messageID: messageId,
-                partID: part.id,
-                kind: part.type === 'reasoning' ? 'thinking' : 'text',
-            });
-        }
-        state.displayLength = displayTextContent.length;
-    }, [displayTextContent, hapticIdentity, isStreaming, messageId, part.id, part.type, sessionId]);
+        if (!hasStreamingHapticSubscribers()) return;
+        const isHapticPart = part.type === 'text' || part.type === 'reasoning';
+        const decision = evaluateVisiblePartHaptic(hapticStateRef.current, {
+            identity: hapticIdentity,
+            content: displayTextContent,
+            isActive: hasStreamingHapticLifecycle && isHapticPart,
+            mode: part.type === 'reasoning' ? 'appearance' : 'changes',
+        });
+        hapticStateRef.current = decision.nextState;
+
+        if (!decision.shouldEmit || !sessionId) return;
+        emitStreamingHapticEvent({
+            sessionID: sessionId,
+            messageID: messageId,
+            partID: part.id,
+            kind: part.type === 'reasoning' ? 'thinking' : 'text',
+        });
+    }, [displayTextContent, hapticIdentity, hasStreamingHapticLifecycle, messageId, part.id, part.type, sessionId]);
 
     streamPerfObserve('ui.assistant_text_part.display_len', displayTextContent.length);
 

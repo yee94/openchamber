@@ -17,9 +17,11 @@ minutes per session.
    pattern as session-assist. Purely event-driven — dormant sessions never
    generate anything.
 2. A newly observed root `session.created` generates its first title immediately
-   on the first `session.status: idle`. Later idle transitions arm a 15-second
-   quiet timer; any `busy`/`retry` status or a fresh user `message.updated`
-   clears it.
+   on the first `session.status: idle`. A fork title (`(fork #n)`) waits for its
+   first newly-created user message; the matching assistant completion triggers
+   an immediate title refresh that bypasses inherited title metadata and throttle.
+   Later idle transitions arm a 15-second quiet timer; any `busy`/`retry` status
+   or a fresh user `message.updated` clears it.
    A sidebar smart-title request sets `titleRefresh.requestedAt`; its
    `session.updated` event arms the same flow immediately.
 3. On fire:

@@ -1948,6 +1948,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.textSelection.title.addToCurrentChat": "Adicionar ao chat atual",
   "chat.textSelection.title.newSessionWithSelection": "Criar nova sessão com seleção",
   "chat.textSelection.title.saveInsightToNotes": "Salvar texto selecionado em notas",
+  "chat.messageBody.actions.editAria": "Editar a mensagem e manter as alterações",
+  "chat.messageBody.actions.edit": "Editar e manter as alterações",
   "chat.messageBody.actions.revertAria": "Voltar para esta mensagem",
   "chat.messageBody.actions.revert": "Voltar daqui",
   "chat.messageBody.actions.forkAria": "Bifurcar a partir desta mensagem",

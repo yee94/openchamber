@@ -1057,8 +1057,9 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
       req.path.startsWith('/api/openchamber/conversations')
     ) {
       // These OpenChamber-owned routes need parsed JSON before their handlers;
-      // the generic OpenCode proxy intentionally owns the remaining /api paths.
-      express.json({ limit: '256kb' })(req, res, next);
+      // conversation file parts can contain data URLs, so they share the API
+      // attachment payload limit. The generic OpenCode proxy owns remaining paths.
+      express.json({ limit: '50mb' })(req, res, next);
     } else if (
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/commands') ||

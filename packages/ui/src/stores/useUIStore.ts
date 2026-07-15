@@ -38,6 +38,7 @@ type ContextPanelTab = {
   readOnly: boolean;
   stagedDiff: boolean;
   diffScope: PendingDiffScope | null;
+  diffTargetLine?: number | null;
   touchedAt: number;
 };
 
@@ -50,6 +51,7 @@ type ContextPanelTabDescriptor = {
   readOnly?: boolean;
   stagedDiff?: boolean;
   diffScope?: PendingDiffScope | null;
+  diffTargetLine?: number | null;
 };
 
 type ContextPanelDirectoryState = {
@@ -238,6 +240,9 @@ const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPa
     readOnly: descriptor.readOnly === true,
     stagedDiff: descriptor.stagedDiff === true,
     diffScope: normalizePendingDiffScope(descriptor.diffScope) ?? (descriptor.stagedDiff === true ? 'staged' : 'working'),
+    diffTargetLine: typeof descriptor.diffTargetLine === 'number' && Number.isFinite(descriptor.diffTargetLine)
+      ? Math.max(1, Math.trunc(descriptor.diffTargetLine))
+      : null,
     touchedAt: Date.now(),
   };
 };
@@ -280,6 +285,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       readOnly?: unknown;
       stagedDiff?: unknown;
       diffScope?: unknown;
+      diffTargetLine?: unknown;
       touchedAt?: unknown;
     };
 
@@ -309,6 +315,9 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       readOnly: candidate.readOnly === true,
       stagedDiff: candidate.stagedDiff === true,
       diffScope: normalizePendingDiffScope(candidate.diffScope) ?? (candidate.stagedDiff === true ? 'staged' : 'working'),
+      diffTargetLine: typeof candidate.diffTargetLine === 'number' && Number.isFinite(candidate.diffTargetLine)
+        ? Math.max(1, Math.trunc(candidate.diffTargetLine))
+        : null,
       touchedAt: typeof candidate.touchedAt === 'number' && Number.isFinite(candidate.touchedAt)
         ? candidate.touchedAt
         : Date.now(),
@@ -363,6 +372,7 @@ const upsertContextPanelTab = (
     : current.tabs.map((tab, index) => (index === existingIndex
       ? {
           ...tab,
+          diffTargetLine: nextTab.diffTargetLine,
           mode: nextTab.mode,
           targetPath: nextTab.targetPath || tab.targetPath,
           dedupeKey: nextTab.dedupeKey,
@@ -551,6 +561,7 @@ interface UIStore {
   pendingDiffFile: string | null;
   pendingDiffStaged: boolean;
   pendingDiffScope: PendingDiffScope | null;
+  pendingDiffLine: number | null;
   pendingDiagramFile: string | null;
   pendingFileNavigation: PendingFileNavigation | null;
   pendingFileFocusPath: string | null;
@@ -685,7 +696,7 @@ interface UIStore {
   setRightSidebarWidth: (width: number) => void;
   setRightSidebarTab: (tab: RightSidebarTab) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
-  openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
+  openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number) => void;
   openContextFileDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
@@ -715,11 +726,11 @@ interface UIStore {
   prepareForRuntimeSwitch: (runtimeKey?: string | null) => void;
   restoreForRuntimeSwitch: (runtimeKey?: string | null) => void;
   setMainTabGuard: (guard: MainTabGuard | null) => void;
-  setPendingDiffFile: (filePath: string | null, staged?: boolean, scope?: PendingDiffScope | null) => void;
+  setPendingDiffFile: (filePath: string | null, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number) => void;
   setPendingDiagramFile: (filePath: string | null) => void;
   setPendingFileNavigation: (navigation: PendingFileNavigation | null) => void;
   setPendingFileFocusPath: (path: string | null) => void;
-  navigateToDiff: (filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
+  navigateToDiff: (filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number) => void;
   consumePendingDiffFile: () => string | null;
   navigateToDiagram: (filePath: string) => void;
   consumePendingDiagramFile: () => string | null;
@@ -881,6 +892,7 @@ export const useUIStore = create<UIStore>()(
         pendingDiffFile: null,
         pendingDiffStaged: false,
         pendingDiffScope: null,
+        pendingDiffLine: null,
         pendingDiagramFile: null,
         pendingFileNavigation: null,
         pendingFileFocusPath: null,
@@ -1137,7 +1149,7 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
-        openContextDiff: (directory, filePath, staged = false, scope = null) => {
+        openContextDiff: (directory, filePath, staged = false, scope = null, targetLine) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           const normalizedFilePath = (filePath || '').trim();
           if (!normalizedDirectory || !normalizedFilePath) {
@@ -1151,6 +1163,7 @@ export const useUIStore = create<UIStore>()(
             targetPath: normalizedFilePath,
             stagedDiff: diffScope === 'staged',
             diffScope,
+            diffTargetLine: targetLine,
           });
         },
 
@@ -1550,11 +1563,14 @@ export const useUIStore = create<UIStore>()(
           set({ activeMainTab: restored });
         },
 
-        setPendingDiffFile: (filePath, staged = false, scope = null) => {
+        setPendingDiffFile: (filePath, staged = false, scope = null, targetLine) => {
           set({
             pendingDiffFile: filePath,
             pendingDiffStaged: filePath ? staged : false,
             pendingDiffScope: filePath ? scope : null,
+            pendingDiffLine: filePath && typeof targetLine === 'number' && Number.isFinite(targetLine)
+              ? Math.max(1, Math.trunc(targetLine))
+              : null,
           });
         },
 
@@ -1570,18 +1586,26 @@ export const useUIStore = create<UIStore>()(
           set({ pendingFileFocusPath: path });
         },
 
-        navigateToDiff: (filePath, staged = false, scope = null) => {
+        navigateToDiff: (filePath, staged = false, scope = null, targetLine) => {
           const guard = get().mainTabGuard;
           if (guard && !guard('diff')) {
             return;
           }
-          set({ pendingDiffFile: filePath, pendingDiffStaged: staged, pendingDiffScope: scope, activeMainTab: 'diff' });
+          set({
+            pendingDiffFile: filePath,
+            pendingDiffStaged: staged,
+            pendingDiffScope: scope,
+            pendingDiffLine: typeof targetLine === 'number' && Number.isFinite(targetLine)
+              ? Math.max(1, Math.trunc(targetLine))
+              : null,
+            activeMainTab: 'diff',
+          });
         },
 
         consumePendingDiffFile: () => {
           const { pendingDiffFile } = get();
           if (pendingDiffFile) {
-            set({ pendingDiffFile: null, pendingDiffStaged: false, pendingDiffScope: null });
+            set({ pendingDiffFile: null, pendingDiffStaged: false, pendingDiffScope: null, pendingDiffLine: null });
           }
           return pendingDiffFile;
         },

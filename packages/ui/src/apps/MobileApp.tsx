@@ -2078,7 +2078,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   const [overflowOpen, setOverflowOpen] = React.useState(false);
   // When set, the Changes surface opens directly into the per-file diff for this path.
-  const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean } | null>(null);
+  const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean; targetLine?: number } | null>(null);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const updateAvailable = useUpdateStore((state) => state.available);
@@ -2118,7 +2118,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     setFilesOpen(true);
   }, [isIPad, isPortrait]);
 
-  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean } | null = null) => {
+  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean; targetLine?: number } | null = null) => {
     setPendingChangesDiff(diff);
     if (isIPad) {
       setIpadRightPanel('changes');
@@ -2163,8 +2163,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
-      openChanges: ({ diffPath, staged } = {}) => {
-        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true } : null);
+      openChanges: ({ diffPath, staged, targetLine } = {}) => {
+        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, targetLine } : null);
       },
       openFiles: () => openFilesSurface(),
       openSettings: () => {
@@ -2552,6 +2552,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                       onClose={closeIpadRightPanel}
                       initialDiffPath={pendingChangesDiff?.path ?? null}
                       initialDiffStaged={pendingChangesDiff?.staged === true}
+                      initialDiffTargetLine={pendingChangesDiff?.targetLine ?? null}
                     />
                   )}
                 </ErrorBoundary>
@@ -2596,6 +2597,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 onClose={closeChanges}
                 initialDiffPath={pendingChangesDiff?.path ?? null}
                 initialDiffStaged={pendingChangesDiff?.staged === true}
+                initialDiffTargetLine={pendingChangesDiff?.targetLine ?? null}
               />
             </ErrorBoundary>
           </MobileSurfaceShell>

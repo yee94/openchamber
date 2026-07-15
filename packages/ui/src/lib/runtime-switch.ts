@@ -23,6 +23,7 @@ let activeApiBaseUrl = '';
 let activeRuntimeKey = '';
 let activeEndpointFingerprint = '';
 let activeTransportFingerprint = '';
+let activeRuntimeGeneration = 0;
 
 const stableSerialize = (value: unknown): string => {
   if (Array.isArray(value)) {
@@ -88,6 +89,15 @@ const normalizeRuntimeUrlKey = (value: string): string => {
   }
 };
 
+const transportIdentityFor = (apiBaseUrl: string, relay?: RelayRuntimeDescriptor | null): string => {
+  if (!relay) return `direct:${normalizeRuntimeUrlKey(apiBaseUrl)}`;
+  return `relay:${stableSerialize({
+    relayUrl: relay.relayUrl,
+    serverId: relay.serverId,
+    hostEncPubJwk: relay.hostEncPubJwk,
+  })}`;
+};
+
 export const isRuntimeEndpointIdentityChange = (detail: RuntimeEndpointChangedDetail): boolean => (
   detail.transportIdentityChanged
   ?? normalizeRuntimeUrlKey(detail.apiBaseUrl) !== normalizeRuntimeUrlKey(detail.previousApiBaseUrl)
@@ -115,6 +125,12 @@ const sameOrigin = (left: string, right: string): boolean => {
 };
 
 export const getRuntimeApiBaseUrl = (): string => activeApiBaseUrl || readInjectedApiBaseUrl();
+/** Stable transport fingerprint with endpoint and public relay descriptor data only. */
+export const getRuntimeTransportIdentity = (): string => (
+  activeTransportFingerprint || transportIdentityFor(getRuntimeApiBaseUrl())
+);
+/** Monotonically increases whenever the active direct or relay transport changes. */
+export const getRuntimeGeneration = (): number => activeRuntimeGeneration;
 export const getRuntimeKey = (): string => {
   if (activeRuntimeKey) return activeRuntimeKey;
   const apiBaseUrl = getRuntimeApiBaseUrl();
@@ -134,6 +150,7 @@ export const initializeRuntimeEndpoint = (options: { apiBaseUrl?: string | null;
 
   activeApiBaseUrl = apiBaseUrl;
   activeRuntimeKey = options.runtimeKey?.trim() || (sameOrigin(apiBaseUrl, readInjectedLocalOrigin()) ? 'local' : normalizeRuntimeUrlKey(apiBaseUrl));
+  activeTransportFingerprint = transportIdentityFor(apiBaseUrl);
 };
 
 export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken?: string | null; runtimeKey?: string | null; requestHeaders?: Record<string, string> | null; relay?: RelayRuntimeDescriptor | null }): void => {
@@ -147,14 +164,12 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
   if (endpointFingerprint === activeEndpointFingerprint) {
     return;
   }
-  const previousTransportFingerprint = activeTransportFingerprint
-    || `direct:${normalizeRuntimeUrlKey(previousApiBaseUrl)}`;
-  const transportFingerprint = options.relay
-    ? `relay:${stableSerialize(options.relay)}`
-    : `direct:${normalizeRuntimeUrlKey(apiBaseUrl)}`;
+  const previousTransportFingerprint = getRuntimeTransportIdentity();
+  const transportFingerprint = transportIdentityFor(apiBaseUrl, options.relay);
   const transportIdentityChanged = transportFingerprint !== previousTransportFingerprint;
   activeEndpointFingerprint = endpointFingerprint;
   activeTransportFingerprint = transportFingerprint;
+  if (transportIdentityChanged) activeRuntimeGeneration += 1;
   activeApiBaseUrl = apiBaseUrl;
   activeRuntimeKey = runtimeKey;
   if (typeof window !== 'undefined') {

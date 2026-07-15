@@ -1972,6 +1972,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.addToCurrentChat': '현재 채팅에 추가',
   'chat.textSelection.title.newSessionWithSelection': '선택한 내용으로 새 세션 생성',
   'chat.textSelection.title.saveInsightToNotes': '선택한 텍스트를 메모에 저장',
+  'chat.messageBody.actions.editAria': '메시지를 편집하고 변경 사항 유지',
+  'chat.messageBody.actions.edit': '편집하고 변경 사항 유지',
   'chat.messageBody.actions.revertAria': '이 메시지로 되돌리기',
   'chat.messageBody.actions.revert': '여기부터 되돌리기',
   'chat.messageBody.actions.forkAria': '이 메시지에서 분기',

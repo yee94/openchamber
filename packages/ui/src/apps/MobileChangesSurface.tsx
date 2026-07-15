@@ -50,9 +50,10 @@ type MobileChangesSurfaceProps = {
    */
   initialDiffPath?: string | null;
   initialDiffStaged?: boolean;
+  initialDiffTargetLine?: number | null;
 };
 
-export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onClose, initialDiffPath, initialDiffStaged = false }) => {
+export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onClose, initialDiffPath, initialDiffStaged = false, initialDiffTargetLine = null }) => {
   const { t } = useI18n();
   const { git } = useRuntimeAPIs();
   const currentDirectory = normalizePath(useEffectiveDirectory() ?? null);
@@ -67,8 +68,8 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   const getDiff = useGitStore((state) => state.getDiff);
   const setDiff = useGitStore((state) => state.setDiff);
 
-  const [route, setRoute] = React.useState<{ type: 'list' } | { type: 'diff'; path: string; staged: boolean }>(
-    () => (initialDiffPath ? { type: 'diff', path: initialDiffPath, staged: initialDiffStaged } : { type: 'list' }),
+  const [route, setRoute] = React.useState<{ type: 'list' } | { type: 'diff'; path: string; staged: boolean; targetLine: number | null }>(
+    () => (initialDiffPath ? { type: 'diff', path: initialDiffPath, staged: initialDiffStaged, targetLine: initialDiffTargetLine } : { type: 'list' }),
   );
 
   // Allow the host (MobileApp) to push us into a specific diff when the surface
@@ -77,11 +78,11 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   React.useEffect(() => {
     if (!initialDiffPath) return;
     setRoute((current) => (
-      current.type === 'diff' && current.path === initialDiffPath && current.staged === initialDiffStaged
+      current.type === 'diff' && current.path === initialDiffPath && current.staged === initialDiffStaged && current.targetLine === initialDiffTargetLine
         ? current
-        : { type: 'diff', path: initialDiffPath, staged: initialDiffStaged }
+        : { type: 'diff', path: initialDiffPath, staged: initialDiffStaged, targetLine: initialDiffTargetLine }
     ));
-  }, [initialDiffPath, initialDiffStaged]);
+  }, [initialDiffPath, initialDiffStaged, initialDiffTargetLine]);
   const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
   const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
   const [commitMessage, setCommitMessage] = React.useState('');
@@ -283,7 +284,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   }, [currentDirectory, refreshStatusAndBranches, t]);
 
   const handleViewChangeDiff = React.useCallback((path: string, staged = false) => {
-    setRoute({ type: 'diff', path, staged });
+    setRoute({ type: 'diff', path, staged, targetLine: null });
   }, []);
 
   const handleRevertFile = React.useCallback(async (filePath: string) => {
@@ -487,6 +488,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         diff={selectedDiff}
         fileExists={Boolean(selectedFileEntry)}
         error={diffLoadError}
+        targetLine={route.targetLine}
         onBack={() => setRoute({ type: 'list' })}
         onRetry={() => setDiffRetryNonce((value) => value + 1)}
       />
@@ -586,9 +588,10 @@ const MobileDiffDetail: React.FC<{
   diff: { original: string; modified: string; isBinary?: boolean } | null;
   fileExists: boolean;
   error: string | null;
+  targetLine: number | null;
   onBack: () => void;
   onRetry: () => void;
-}> = ({ path, diff, fileExists, error, onBack, onRetry }) => {
+}> = ({ path, diff, fileExists, error, targetLine, onBack, onRetry }) => {
   const { t } = useI18n();
   const language = React.useMemo(() => getLanguageFromExtension(path) || 'text', [path]);
 
@@ -637,6 +640,7 @@ const MobileDiffDetail: React.FC<{
               fileName={path}
               renderSideBySide={false}
               wrapLines={true}
+              focusLine={targetLine}
               layout="inline"
             />
           </ScrollShadow>
