@@ -11,6 +11,23 @@ export type DraftKey = {
   owner: DraftOwner
 }
 
+const requiredIdentity = (value: string, name: string): string => {
+  if (!value) throw new Error(`${name} must be non-empty`)
+  return value
+}
+
+/** Stable durable keys intentionally exclude runtime generation. */
+export const sessionDraftKey = ({ transportIdentity }: Pick<DraftKey, "transportIdentity">, sessionID: string): DraftKey => ({
+  transportIdentity: requiredIdentity(transportIdentity, "transportIdentity"),
+  owner: { kind: "session", ownerID: requiredIdentity(sessionID, "sessionID") },
+})
+
+/** Stable durable keys intentionally exclude runtime generation. */
+export const newSessionDraftKey = ({ transportIdentity }: Pick<DraftKey, "transportIdentity">, draftID: string): DraftKey => ({
+  transportIdentity: requiredIdentity(transportIdentity, "transportIdentity"),
+  owner: { kind: "draft", ownerID: requiredIdentity(draftID, "draftID") },
+})
+
 export type DraftAttachmentReference = {
   transportIdentity: string
   owner: DraftAttachmentOwner

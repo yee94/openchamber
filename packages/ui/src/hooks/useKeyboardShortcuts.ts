@@ -68,6 +68,43 @@ const handleCloseContextPanelTabOrWindow = (): boolean => {
   return false;
 };
 
+type LeaderCompactDependencies = {
+  sessionId: string;
+  currentProviderId: string;
+  currentModelId: string;
+  waitForConnectionOrThrow: () => Promise<void>;
+  getAuthoritativeDirectoryForSession: (sessionId: string) => string | null | undefined;
+  summarizeSession: (
+    sessionId: string,
+    providerId: string,
+    modelId: string,
+    directory?: string | null,
+  ) => Promise<unknown>;
+  onCompactFailed: (error?: unknown) => void;
+};
+
+export const executeLeaderCompact = async ({
+  sessionId,
+  currentProviderId,
+  currentModelId,
+  waitForConnectionOrThrow,
+  getAuthoritativeDirectoryForSession,
+  summarizeSession,
+  onCompactFailed,
+}: LeaderCompactDependencies): Promise<void> => {
+  try {
+    await waitForConnectionOrThrow();
+    const compactDirectory = getAuthoritativeDirectoryForSession(sessionId);
+    if (!compactDirectory) {
+      onCompactFailed();
+      return;
+    }
+    await summarizeSession(sessionId, currentProviderId, currentModelId, compactDirectory);
+  } catch (error) {
+    onCompactFailed(error);
+  }
+};
+
 export const useKeyboardShortcuts = () => {
   const { t } = useI18n();
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
@@ -202,17 +239,18 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      try {
-        await sessionActions.waitForConnectionOrThrow();
-        const { currentProviderId, currentModelId } = useConfigStore.getState();
-        const compactDirectory =
-          useSessionUIStore.getState().getDirectoryForSession(sessionId)
-          || useDirectoryStore.getState().currentDirectory
-          || undefined;
-        await opencodeClient.summarizeSession(sessionId, currentProviderId, currentModelId, compactDirectory);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.compactFailed'));
-      }
+      const { currentProviderId, currentModelId } = useConfigStore.getState();
+      await executeLeaderCompact({
+        sessionId,
+        currentProviderId,
+        currentModelId,
+        waitForConnectionOrThrow: sessionActions.waitForConnectionOrThrow,
+        getAuthoritativeDirectoryForSession: useSessionUIStore.getState().getAuthoritativeDirectoryForSession,
+        summarizeSession: opencodeClient.summarizeSession,
+        onCompactFailed: (error) => {
+          toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.compactFailed'));
+        },
+      });
     };
 
     // Capture-phase leader chord handler so Ctrl+X / follow-up keys work inside the chat input

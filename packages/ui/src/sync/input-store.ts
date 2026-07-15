@@ -9,7 +9,7 @@ import { getRuntimeGeneration, getRuntimeTransportIdentity } from "@/lib/runtime
 import { createDefaultInputDraftMetadataSink, createInputDraftMetadataPersistenceCoordinator, createInputDraftMetadataRepository, type InputDraftMetadataErrorCode, type InputDraftMetadataMigration, type InputDraftMetadataPersistenceCoordinator, type InputDraftMetadataRepository, type InputDraftMetadataSink, type LegacyInputDraft } from "./input-draft-metadata-store"
 import { createInputDraftBlobStore, type DraftBlobErrorCode, type InputDraftBlobStore } from "./input-draft-blob-store"
 import { createInputDraftDurabilityCoordinator, type InputDraftDurabilityCoordinator, type InputDraftDurabilityResult } from "./input-draft-durability-coordinator"
-import { draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, parseDraftRecord, type DraftAttachmentMetadata, type DraftKey, type DraftMention, type DraftRecord, type DraftSyntheticPart } from "./input-draft-types"
+import { cloneDraftRecord, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDurableURL, parseDraftRecord, type DraftAttachmentMetadata, type DraftKey, type DraftMention, type DraftRecord, type DraftSyntheticPart } from "./input-draft-types"
 
 const FILE_URI_PREFIX = "file://"
 const pendingVSCodeSelectionKeys = new Set<string>()
@@ -94,6 +94,20 @@ export type DraftPersistenceStatus = "idle" | "saving" | "saved" | "error"
 export type DraftPersistenceState = { status: DraftPersistenceStatus; revision: number; errorCode?: InputDraftMetadataErrorCode | DraftBlobErrorCode }
 export type DraftAttachmentPersistenceState = DraftPersistenceState
 export type InputDraftRuntimeCapture = { transportIdentity: string; generation: number }
+export type DraftCommitStatus = "committed" | "conflict" | "stale" | "failed" | "disabled" | "unseeded"
+export type DraftCommitResult = {
+  status: DraftCommitStatus
+  record?: DraftRecord
+  errors: InputDraftDurabilityResult["errors"]
+  cleanupErrors: InputDraftDurabilityResult["cleanupErrors"]
+  /** True when this operation published into the current memory epoch. */
+  current: boolean
+  /** True after metadata persistence has established the coordinator baseline. */
+  durable: boolean
+}
+export type DraftOwnershipCommitResult = Omit<DraftCommitResult, "record"> & { source?: DraftRecord; destination?: DraftRecord }
+export type DraftSnapshot = Pick<DraftRecord, "text" | "attachments" | "syntheticParts" | "mentions">
+export type DraftCommitInput = { key: DraftKey; expectedRevision: number | "absent"; snapshot: DraftSnapshot; values?: ReadonlyMap<string, Blob | string>; runtime: InputDraftRuntimeCapture }
 export type InputDraftServices = {
   sink?: InputDraftMetadataSink
   repository?: InputDraftMetadataRepository
@@ -133,6 +147,9 @@ export type InputState = {
   legacyNewDraft?: LegacyInputDraft
   legacyDraftEntries: Record<string, LegacyInputDraft>
   migration: InputDraftMetadataMigration
+  captureDraftRuntime: () => InputDraftRuntimeCapture
+  commitDraftSnapshot: (input: DraftCommitInput) => Promise<DraftCommitResult>
+  finalizeDraftOwnership: (input: { source: DraftKey; destination: DraftKey; expectedSourceRevision: number; disposition: "preserve" | "consume"; runtime: InputDraftRuntimeCapture }) => Promise<DraftOwnershipCommitResult>
   ensureDraft: (key: DraftKey) => DraftRecord
   getDraft: (key: DraftKey) => DraftRecord | undefined
   setDraftText: (key: DraftKey, text: string) => DraftRecord
@@ -309,6 +326,27 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       persist([id])
       return next
     }
+    const cloneRecord = (record: DraftRecord | undefined): DraftRecord | undefined => record ? cloneDraftRecord(record) : undefined
+    const cloneErrors = (errors: InputDraftDurabilityResult["errors"] = []): InputDraftDurabilityResult["errors"] => JSON.parse(JSON.stringify(errors)) as InputDraftDurabilityResult["errors"]
+    const actionResult = (status: DraftCommitStatus, result: InputDraftDurabilityResult | undefined, record?: DraftRecord, current = false, durable = false): DraftCommitResult => ({ status, ...(cloneRecord(record) ? { record: cloneRecord(record)! } : {}), errors: cloneErrors(result?.errors), cleanupErrors: cloneErrors(result?.cleanupErrors), current, durable })
+    const ownershipResult = (status: DraftCommitStatus, result: InputDraftDurabilityResult | undefined, source?: DraftRecord, destination?: DraftRecord, current = false, durable = false): DraftOwnershipCommitResult => ({ status, errors: cloneErrors(result?.errors), cleanupErrors: cloneErrors(result?.cleanupErrors), current, durable, source: cloneRecord(source), destination: cloneRecord(destination) })
+    const actionStatus = (result: InputDraftDurabilityResult): DraftCommitStatus => result.status
+    const positiveSafeInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    const clearDraftEphemeralState = <T,>(values: Record<string, T>, ...ids: string[]): Record<string, T> => {
+      const next = { ...values }
+      for (const id of ids) delete next[id]
+      return next
+    }
+    const snapshotViews = async (record: DraftRecord, values?: ReadonlyMap<string, Blob | string>): Promise<Record<string, AttachedFile> | undefined> => {
+      const views: Record<string, AttachedFile> = {}
+      for (const attachment of attachmentList(record)) {
+        const value = values?.get(attachment.attachmentRefID) ?? (attachment.locator.kind === "url" ? attachment.locator.url : undefined)
+        if (attachment.locator.kind === "url" && value !== undefined && (value !== attachment.locator.url || !isDurableURL(value))) return undefined
+        if (attachment.locator.kind === "blob" && value !== undefined && !(value instanceof Blob) && !(typeof value === "string" && isDurableURL(value))) return undefined
+        if (value !== undefined) views[attachment.attachmentRefID] = await makeView(attachment, value)
+      }
+      return views
+    }
     return ({
   drafts: {},
   tombstones: {},
@@ -320,6 +358,125 @@ export const createInputStore = (services: InputDraftServices = {}) => {
   persistenceEnabled: services.persistenceEnabled ?? true,
   legacyDraftEntries: {},
   migration: { complete: false, claimedTransportIdentity: "" },
+  captureDraftRuntime: () => runtimeCapture(),
+  commitDraftSnapshot: async (input) => {
+    const id = draftKeyString(input.key)
+    const capture = input.runtime
+    if (capture.transportIdentity !== input.key.transportIdentity || !runtimeMatches(capture)) return actionResult("stale", undefined)
+    const state = get()
+    const existing = state.drafts[id]
+    const tombstone = state.tombstones[id] ?? 0
+    if ((input.expectedRevision !== "absent" && !positiveSafeInteger(input.expectedRevision)) || !Number.isSafeInteger(tombstone) || tombstone < 0) return actionResult("failed", undefined)
+    if (input.expectedRevision === "absent" ? !!existing : existing?.revision !== input.expectedRevision) return actionResult("conflict", undefined, existing)
+    const revision = input.expectedRevision === "absent" ? tombstone + 1 : input.expectedRevision + 1
+    if (!positiveSafeInteger(revision)) return actionResult("failed", undefined)
+    const record = valid({ version: 1, key: input.key, revision, ...input.snapshot })
+    if (!record) return actionResult("failed", undefined)
+    const views = await snapshotViews(record, input.values)
+    if (!views) return actionResult("failed", undefined)
+    const epoch = keyEpoch.get(id) ?? 0
+    const baselineRevision = existing?.revision ?? tombstone
+    const result = await durability.commit({
+      drafts: { [id]: record },
+      isCurrent: () => runtimeMatches(capture)
+        && (keyEpoch.get(id) ?? 0) === epoch
+        && (get().drafts[id]?.revision ?? get().tombstones[id] ?? 0) === baselineRevision,
+      resolveBlobValue: (reference) => input.values?.get(reference.attachmentOccurrenceRefID),
+    })
+    if (result.status !== "committed") return actionResult(actionStatus(result), result, existing)
+    const memoryCurrent = (keyEpoch.get(id) ?? 0) === epoch && (get().drafts[id]?.revision ?? get().tombstones[id] ?? 0) === baselineRevision
+    const runtimeCurrent = runtimeMatches(capture)
+    if (!memoryCurrent) {
+      if (!runtimeCurrent) set((currentState) => ({
+        draftAttachmentViews: clearDraftEphemeralState(currentState.draftAttachmentViews, id),
+        draftMissingAttachmentRefIDs: clearDraftEphemeralState(currentState.draftMissingAttachmentRefIDs, id),
+        draftHydration: clearDraftEphemeralState(currentState.draftHydration, id),
+        draftPersistence: clearDraftEphemeralState(currentState.draftPersistence, id),
+        draftAttachmentPersistence: clearDraftEphemeralState(currentState.draftAttachmentPersistence, id),
+      }))
+      return actionResult("stale", result, record, false, true)
+    }
+    const cloned = cloneDraftRecord(record)
+    if (!cloned) return actionResult("failed", result)
+    bump(id)
+    invalidateAttachmentHydration(id)
+    set((currentState) => ({
+      drafts: { ...currentState.drafts, [id]: cloned },
+      tombstones: (() => { const tombstones = { ...currentState.tombstones }; delete tombstones[id]; return tombstones })(),
+      draftAttachmentViews: runtimeCurrent ? { ...currentState.draftAttachmentViews, [id]: views } : clearDraftEphemeralState(currentState.draftAttachmentViews, id),
+      draftMissingAttachmentRefIDs: runtimeCurrent ? { ...currentState.draftMissingAttachmentRefIDs, [id]: [] } : clearDraftEphemeralState(currentState.draftMissingAttachmentRefIDs, id),
+      draftHydration: runtimeCurrent ? currentState.draftHydration : clearDraftEphemeralState(currentState.draftHydration, id),
+      draftPersistence: runtimeCurrent ? { ...currentState.draftPersistence, [id]: { status: "saved", revision: cloned.revision } } : clearDraftEphemeralState(currentState.draftPersistence, id),
+      draftAttachmentPersistence: runtimeCurrent ? { ...currentState.draftAttachmentPersistence, [id]: result.cleanupErrors.length ? { status: "error", revision: cloned.revision, errorCode: persistenceErrorCode(result) } : { status: "saved", revision: cloned.revision } } : clearDraftEphemeralState(currentState.draftAttachmentPersistence, id),
+    }))
+    return actionResult(runtimeCurrent ? "committed" : "stale", result, cloned, runtimeCurrent, true)
+  },
+  finalizeDraftOwnership: async (input) => {
+    const sourceID = draftKeyString(input.source)
+    const destinationID = draftKeyString(input.destination)
+    const capture = input.runtime
+    const state = get()
+    const source = state.drafts[sourceID]
+    const destination = state.drafts[destinationID]
+    if (sourceID === destinationID || input.destination.owner.kind !== "session" || input.source.transportIdentity !== capture.transportIdentity || input.destination.transportIdentity !== capture.transportIdentity || !runtimeMatches(capture)) return ownershipResult("stale", undefined, source, destination)
+    if (!positiveSafeInteger(input.expectedSourceRevision)) return ownershipResult("failed", undefined, source, destination)
+    if (!source || source.revision !== input.expectedSourceRevision) return ownershipResult("conflict", undefined, source, destination)
+    if (destination) return ownershipResult("conflict", undefined, source, destination)
+    const sourceEpoch = keyEpoch.get(sourceID) ?? 0
+    const destinationEpoch = keyEpoch.get(destinationID) ?? 0
+    const sourceTombstone = state.tombstones[sourceID] ?? 0
+    const destinationTombstone = state.tombstones[destinationID] ?? 0
+    if (!Number.isSafeInteger(sourceTombstone) || sourceTombstone < 0 || !Number.isSafeInteger(destinationTombstone) || destinationTombstone < 0) return ownershipResult("failed", undefined, source, destination)
+    const revision = Math.max(source.revision + 1, destinationTombstone + 1)
+    if (!positiveSafeInteger(revision)) return ownershipResult("failed", undefined, source, destination)
+    const destinationRecord = valid(input.disposition === "preserve"
+      ? { ...source, key: input.destination, revision }
+      : { ...emptyDraft(input.destination), revision })
+    if (!destinationRecord) return ownershipResult("failed", undefined, source, destination)
+    const result = await durability.commit({
+      drafts: { [destinationID]: destinationRecord },
+      tombstones: { [sourceID]: Math.max(sourceTombstone, revision) },
+      delete: [sourceID],
+      isCurrent: () => runtimeMatches(capture)
+        && (keyEpoch.get(sourceID) ?? 0) === sourceEpoch
+        && (keyEpoch.get(destinationID) ?? 0) === destinationEpoch
+        && get().drafts[sourceID]?.revision === source.revision
+        && !get().drafts[destinationID]
+        && (get().tombstones[sourceID] ?? 0) === sourceTombstone
+        && (get().tombstones[destinationID] ?? 0) === destinationTombstone,
+      resolveBlobValue: (reference) => state.draftAttachmentViews[sourceID]?.[reference.attachmentOccurrenceRefID]?.file,
+    })
+    if (result.status !== "committed") return ownershipResult(actionStatus(result), result, source, destination)
+    const sourceCurrent = (keyEpoch.get(sourceID) ?? 0) === sourceEpoch && get().drafts[sourceID]?.revision === source.revision && (get().tombstones[sourceID] ?? 0) === sourceTombstone
+    const destinationCurrent = (keyEpoch.get(destinationID) ?? 0) === destinationEpoch && !get().drafts[destinationID] && (get().tombstones[destinationID] ?? 0) === destinationTombstone
+    const runtimeCurrent = runtimeMatches(capture)
+    const cloned = cloneDraftRecord(destinationRecord)
+    if (!cloned) return ownershipResult("failed", result, source, destination)
+    if (runtimeCurrent && !sourceCurrent && !destinationCurrent) return ownershipResult("stale", result, source, destinationRecord, false, true)
+    if (sourceCurrent) { bump(sourceID); invalidateAttachmentHydration(sourceID) }
+    if (destinationCurrent) { bump(destinationID); invalidateAttachmentHydration(destinationID) }
+    set((currentState) => {
+      let drafts = currentState.drafts
+      let tombstones = currentState.tombstones
+      if (sourceCurrent || destinationCurrent) drafts = { ...drafts }
+      if (sourceCurrent || destinationCurrent) tombstones = { ...tombstones }
+      if (sourceCurrent) { delete drafts[sourceID]; tombstones[sourceID] = Math.max(tombstones[sourceID] ?? 0, revision) }
+      if (destinationCurrent) { drafts[destinationID] = cloned; delete tombstones[destinationID] }
+      let draftHydration = currentState.draftHydration; let draftPersistence = currentState.draftPersistence; let draftAttachmentViews = currentState.draftAttachmentViews; let draftMissingAttachmentRefIDs = currentState.draftMissingAttachmentRefIDs; let draftAttachmentPersistence = currentState.draftAttachmentPersistence
+      if (!runtimeCurrent) {
+        draftHydration = clearDraftEphemeralState(draftHydration, sourceID, destinationID); draftPersistence = clearDraftEphemeralState(draftPersistence, sourceID, destinationID); draftAttachmentViews = clearDraftEphemeralState(draftAttachmentViews, sourceID, destinationID); draftMissingAttachmentRefIDs = clearDraftEphemeralState(draftMissingAttachmentRefIDs, sourceID, destinationID); draftAttachmentPersistence = clearDraftEphemeralState(draftAttachmentPersistence, sourceID, destinationID)
+      } else {
+        if (sourceCurrent) { draftHydration = clearDraftEphemeralState(draftHydration, sourceID); draftPersistence = clearDraftEphemeralState(draftPersistence, sourceID); draftAttachmentViews = clearDraftEphemeralState(draftAttachmentViews, sourceID); draftMissingAttachmentRefIDs = clearDraftEphemeralState(draftMissingAttachmentRefIDs, sourceID); draftAttachmentPersistence = clearDraftEphemeralState(draftAttachmentPersistence, sourceID) }
+        if (destinationCurrent) {
+          draftHydration = clearDraftEphemeralState(draftHydration, destinationID); draftPersistence = { ...clearDraftEphemeralState(draftPersistence, destinationID), [destinationID]: { status: "saved", revision: cloned.revision } }; draftAttachmentViews = clearDraftEphemeralState(draftAttachmentViews, destinationID); draftMissingAttachmentRefIDs = clearDraftEphemeralState(draftMissingAttachmentRefIDs, destinationID); draftAttachmentPersistence = { ...clearDraftEphemeralState(draftAttachmentPersistence, destinationID), [destinationID]: result.cleanupErrors.length ? { status: "error", revision: cloned.revision, errorCode: persistenceErrorCode(result) } : { status: "saved", revision: cloned.revision } }
+        if (runtimeCurrent && sourceCurrent && input.disposition === "preserve") { draftAttachmentViews = { ...draftAttachmentViews, [destinationID]: currentState.draftAttachmentViews[sourceID] ?? {} }; draftMissingAttachmentRefIDs = { ...draftMissingAttachmentRefIDs, [destinationID]: currentState.draftMissingAttachmentRefIDs[sourceID] ?? [] } }
+        }
+      }
+      return { drafts, tombstones, draftHydration, draftPersistence, draftAttachmentViews, draftMissingAttachmentRefIDs, draftAttachmentPersistence }
+    })
+    const committed = sourceCurrent && destinationCurrent && runtimeCurrent
+    return ownershipResult(committed ? "committed" : "stale", result, source, destinationRecord, committed, true)
+  },
   flushDraftPersistence: async () => {
     while (pendingPersists.size) await Promise.all([...pendingPersists])
     await durability.flush()
@@ -498,6 +655,7 @@ export const createInputStore = (services: InputDraftServices = {}) => {
     const record = get().drafts[id]
     if (!record || (expectedRevision !== undefined && record.revision !== expectedRevision)) return false
     const revision = record.revision + 1
+    if (!positiveSafeInteger(revision)) return false
     bump(id)
     invalidateAttachmentHydration(id)
     set((state) => {

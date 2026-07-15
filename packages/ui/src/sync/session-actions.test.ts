@@ -13,6 +13,8 @@ let sessionShareResult: { data?: unknown; error?: unknown; response?: { status?:
 let sessionUpdateResult: { data?: unknown; error?: unknown; response?: { status?: number } } = {}
 let sessionMessagesResult: { data?: unknown; error?: unknown; response?: { status?: number } } = { data: [] }
 let sessionDeleteMessageFailureID: string | null = null
+let sessionForkResult: import("@opencode-ai/sdk/v2/client").Session | null = null
+let clearAttachedFilesCalls = 0
 const globalUpsertedSessions: unknown[] = []
 
 const mockScopedClient = {
@@ -133,6 +135,11 @@ mock.module("@/lib/opencode/client", () => ({
       replyCalls.push({ method: "session.update", params: { sessionID: sessionId, ...changes, directory } })
       return Promise.resolve(sessionUpdateResult.data)
     }),
+    forkSession: mock((sessionId: string, messageId?: string, directory?: string | null) => {
+      replyCalls.push({ method: "session.fork", params: { sessionID: sessionId, messageID: messageId, directory } })
+      if (!sessionForkResult) throw new Error("session.fork result is unavailable")
+      return Promise.resolve(sessionForkResult)
+    }),
   },
 }))
 
@@ -155,7 +162,9 @@ mock.module("./session-ui-store", () => ({
         if (sessionId === "session-b") return "/other/project"
         return null
       },
+      setCurrentSession: () => undefined,
     }),
+    setState: () => undefined,
   },
 }))
 
@@ -165,6 +174,7 @@ const inputState = {
   pendingInputMode: "normal" as const,
   attachedFiles: [],
   clearAttachedFiles: () => {
+    clearAttachedFilesCalls += 1
     inputState.attachedFiles = []
   },
   addRestoredAttachment: (attachment: never) => {
@@ -296,6 +306,62 @@ describe("resolveForkMessageId", () => {
 
     expect(resolveForkMessageId("selected-message", [userMessage, assistantMessage], { type: "busy" })).toBe("selected-message")
     expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "idle" })).toBe(undefined)
+  })
+})
+
+describe("forkSession input restoration", () => {
+  beforeEach(() => {
+    replyCalls.length = 0
+    clearAttachedFilesCalls = 0
+    sessionMessagesResult = { data: [] }
+    sessionForkResult = { id: "forked-session", title: "Source (fork #1)", time: { created: 2 } } as Session
+    sessionUpdateResult = { data: sessionForkResult }
+    Object.assign(inputState, {
+      pendingInputText: "existing draft",
+      pendingInputMode: "normal" as const,
+      attachedFiles: [{ url: "file:///existing.txt", mimeType: "text/plain", filename: "existing.txt" }],
+    })
+  })
+
+  test("preserves composer attachments for a current-session fork without a message id", async () => {
+    const sourceSession = { id: "session-a", title: "Source", time: { created: 1 } } as Session
+    const sessionStore = createStore({}, { session: [sourceSession], session_status: { "session-a": { type: "idle" } } })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const { forkSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    await forkSession("session-a", 1)
+
+    expect(replyCalls.find((call) => call.method === "session.fork")?.params.messageID).toBe(undefined)
+    expect(clearAttachedFilesCalls).toBe(0)
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///existing.txt", mimeType: "text/plain", filename: "existing.txt" }])
+    expect(inputState.pendingInputText).toBe("existing draft")
+  })
+
+  test("restores selected-message text and attachments", async () => {
+    const sourceSession = { id: "session-a", title: "Source", time: { created: 1 } } as Session
+    const selectedMessage = { id: "message-a", sessionID: "session-a", role: "user", time: { created: 1 } } as Message
+    const sessionStore = createStore({}, {
+      session: [sourceSession],
+      message: { "session-a": [selectedMessage] },
+      session_status: { "session-a": { type: "idle" } },
+      part: {
+        "message-a": [
+          { id: "text-a", messageID: "message-a", type: "text", text: "fork message" },
+          { id: "file-a", messageID: "message-a", type: "file", url: "file:///fork.txt", mime: "text/plain", filename: "fork.txt" },
+        ] as Part[],
+      },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const { forkSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    await forkSession("session-a", 2, "message-a")
+
+    expect(clearAttachedFilesCalls).toBe(1)
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///fork.txt", mimeType: "text/plain", filename: "fork.txt" }])
+    expect(inputState.pendingInputText).toBe("fork message")
+    expect(inputState.pendingInputText).not.toContain("/fork")
   })
 })
 
@@ -619,6 +685,32 @@ describe("optimisticSend target directory", () => {
     expect(optimisticConfirm).toBe(null)
     expect(replyCalls.filter((call) => call.method === "session.messages").every((call) => call.params.limit === 30)).toBe(true)
     expect(targetStore.getState().session_status["session-missing"]?.type).toBe("idle")
+  })
+})
+
+describe("queue reconciliation optimistic cleanup", () => {
+  test("removes the exact optimistic row while preserving authoritative busy status", async () => {
+    const targetStore = createStore({}, {
+      session_status: { "queued-session": { type: "busy" } },
+    })
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let removed: OptimisticRemoveCall | null = null
+    const { releaseUnconfirmedQueueSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+    setOptimisticRefs(() => {}, (input) => { removed = input })
+
+    releaseUnconfirmedQueueSend({
+      sessionID: "queued-session",
+      messageID: "queued-message-id",
+      directory: "/target/project",
+    })
+
+    expect(removed).toEqual({
+      sessionID: "queued-session",
+      messageID: "queued-message-id",
+      directory: "/target/project",
+    })
+    expect(targetStore.getState().session_status["queued-session"]?.type).toBe("busy")
   })
 })
 

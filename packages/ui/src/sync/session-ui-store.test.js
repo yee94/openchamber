@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore, materializeOpenDraftSession } from './session-ui-store';
 import { setActionRefs, setOptimisticRefs } from './session-actions';
+import { setSyncRefs } from './sync-refs';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useInputStore } from './input-store';
+import { newSessionDraftKey, sessionDraftKey } from './input-draft-types';
 
 /**
  * Unit tests for session worktree routing through the authoritative store.
@@ -29,7 +33,54 @@ describe('session-worktree-store worktree routing', () => {
     for (const sessionId of attachments.keys()) {
       store.clearAttachment(sessionId);
     }
-    useSessionUIStore.setState({ currentSessionId: null, worktreeMetadata: new Map() });
+    useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null, worktreeMetadata: new Map() });
+    useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [] });
+    setSyncRefs(opencodeClient, { children: new Map(), getState: () => undefined }, '');
+  });
+
+  test('getAuthoritativeDirectoryForSession excludes the current-session fallback', () => {
+    useSessionUIStore.setState({
+      currentSessionId: 'session-fallback',
+      currentSessionDirectory: '/fallback/directory',
+    });
+
+    expect(useSessionUIStore.getState().getAuthoritativeDirectoryForSession('session-fallback')).toBeNull();
+  });
+
+  test('getAuthoritativeDirectoryForSession resolves worktree metadata', () => {
+    useSessionUIStore.setState({ worktreeMetadata: new Map([['session-metadata', { path: '/repo/worktrees/metadata' }]]) });
+
+    expect(useSessionUIStore.getState().getAuthoritativeDirectoryForSession('session-metadata')).toBe('/repo/worktrees/metadata');
+  });
+
+  test('getAuthoritativeDirectoryForSession resolves attached session directories', () => {
+    useSessionWorktreeStore.getState().setAttachment('session-attached', {
+      worktreeRoot: '/repo/worktrees/attached',
+      cwd: '/repo/worktrees/attached/src',
+      branch: 'attached',
+      headState: 'branch',
+      worktreeStatus: 'ready',
+      worktreeSource: 'existing',
+      legacy: false,
+      degraded: false,
+    });
+
+    expect(useSessionUIStore.getState().getAuthoritativeDirectoryForSession('session-attached')).toBe('/repo/worktrees/attached/src');
+  });
+
+  test('getAuthoritativeDirectoryForSession resolves sync and global session metadata', () => {
+    setSyncRefs(opencodeClient, {
+      children: new Map([['/repo/sync', { getState: () => ({ session: [{ id: 'session-sync', directory: '/repo/sync' }] }) }]]),
+      getState: () => undefined,
+    }, '');
+    useGlobalSessionsStore.setState({
+      activeSessions: [{ id: 'session-global-active', directory: '/repo/global-active' }],
+      archivedSessions: [{ id: 'session-global-archived', project: { worktree: '/repo/global-archived' } }],
+    });
+
+    expect(useSessionUIStore.getState().getAuthoritativeDirectoryForSession('session-sync')).toBe('/repo/sync');
+    expect(useSessionUIStore.getState().getAuthoritativeDirectoryForSession('session-global-active')).toBe('/repo/global-active');
+    expect(useSessionUIStore.getState().getAuthoritativeDirectoryForSession('session-global-archived')).toBe('/repo/global-archived');
   });
 
   test('getDirectoryForSession prefers authoritative attachment cwd over sync fallback', () => {
@@ -330,6 +381,40 @@ describe('openNewSessionDraft project binding', () => {
   });
 });
 
+describe('new-session draft identity', () => {
+  beforeEach(() => {
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false, submissionToken: 0 },
+      availableWorktreesByProject: new Map(),
+    });
+    useProjectsStore.setState({ projects: [], activeProjectId: null });
+    useDirectoryStore.setState({ currentDirectory: null });
+  });
+
+  test('creates a UUID on first open, retains it while idle, rotates it while submitting, and clears it on close', () => {
+    const store = useSessionUIStore.getState();
+    store.openNewSessionDraft();
+    const first = useSessionUIStore.getState().newSessionDraft;
+    expect(first.draftID).toMatch(/^[0-9a-f-]{36}$/i);
+
+    store.openNewSessionDraft();
+    const idle = useSessionUIStore.getState().newSessionDraft;
+    expect(idle.draftID).toBe(first.draftID);
+    expect(idle.submissionToken).toBe(first.submissionToken);
+
+    useSessionUIStore.setState({ newSessionDraft: { ...idle, draftSubmitting: true, submissionToken: 4 } });
+    store.openNewSessionDraft();
+    const replaced = useSessionUIStore.getState().newSessionDraft;
+    expect(replaced.draftID).not.toBe(first.draftID);
+    expect(replaced.submissionToken).toBe(0);
+
+    store.closeNewSessionDraft();
+    expect(useSessionUIStore.getState().newSessionDraft.draftID).toBeNull();
+  });
+});
+
 describe('routeMessage skill invocation', () => {
   // OpenCode registers every skill as a command (source: "skill"), so a skill
   // selected from the slash menu must be dispatched via session.command so its
@@ -602,6 +687,125 @@ describe('materializeOpenDraftSession atomic lifecycle', () => {
       modelID: 'm',
     });
     expect(result).toBeNull();
+  });
+});
+
+describe('new-session draft ownership lifecycle', () => {
+  let originalCaptureDraftRuntime;
+  let originalGetDraft;
+  let originalFinalizeDraftOwnership;
+  let originalCreateSession;
+
+  beforeEach(() => {
+    const input = useInputStore.getState();
+    originalCaptureDraftRuntime = input.captureDraftRuntime;
+    originalGetDraft = input.getDraft;
+    originalFinalizeDraftOwnership = input.finalizeDraftOwnership;
+    originalCreateSession = opencodeClient.createSession;
+    opencodeClient.createSession = async (_title, directory) => ({ id: 'ses-owner', directory });
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false, submissionToken: 0 },
+      availableWorktreesByProject: new Map(),
+    });
+    useProjectsStore.setState({ projects: [], activeProjectId: null });
+    useDirectoryStore.setState({ currentDirectory: null });
+  });
+
+  afterEach(() => {
+    useInputStore.setState({
+      captureDraftRuntime: originalCaptureDraftRuntime,
+      getDraft: originalGetDraft,
+      finalizeDraftOwnership: originalFinalizeDraftOwnership,
+    });
+    opencodeClient.createSession = originalCreateSession;
+  });
+
+  test('restores each runtime draft identity after A/B prepare and restore', () => {
+    const draftA = crypto.randomUUID();
+    const draftB = crypto.randomUUID();
+    useSessionUIStore.setState({ newSessionDraft: { open: true, draftID: draftA, directoryOverride: null, parentID: null, draftSubmitting: false, submissionToken: 1 } });
+    useSessionUIStore.getState().prepareForRuntimeSwitch('runtime-a');
+    useSessionUIStore.setState({ newSessionDraft: { open: true, draftID: draftB, directoryOverride: null, parentID: null, draftSubmitting: false, submissionToken: 2 } });
+    useSessionUIStore.getState().prepareForRuntimeSwitch('runtime-b');
+
+    useSessionUIStore.getState().restoreForRuntimeSwitch('runtime-a');
+    expect(useSessionUIStore.getState().newSessionDraft.draftID).toBe(draftA);
+    useSessionUIStore.getState().restoreForRuntimeSwitch('runtime-b');
+    expect(useSessionUIStore.getState().newSessionDraft.draftID).toBe(draftB);
+  });
+
+  test('materialization preserves the opened source record with its exact key, revision, and runtime', async () => {
+    const runtime = { transportIdentity: 'runtime-owner', generation: 4 };
+    const calls = [];
+    useInputStore.setState({
+      captureDraftRuntime: () => runtime,
+      getDraft: (key) => ({ key, revision: 17 }),
+      finalizeDraftOwnership: async (input) => { calls.push(input); return { status: 'committed', current: true, durable: true }; },
+    });
+    useSessionUIStore.getState().openNewSessionDraft();
+    const draftID = useSessionUIStore.getState().newSessionDraft.draftID;
+    const result = await materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+
+    expect(result?.sessionId).toBe('ses-owner');
+    expect(calls).toEqual([{
+      source: newSessionDraftKey(runtime, draftID),
+      destination: sessionDraftKey(runtime, 'ses-owner'),
+      expectedSourceRevision: 17,
+      disposition: 'preserve',
+      runtime,
+    }]);
+  });
+
+  test('materialization skips ownership when its opened source record is missing', async () => {
+    let calls = 0;
+    useInputStore.setState({
+      captureDraftRuntime: () => ({ transportIdentity: 'runtime-owner', generation: 4 }),
+      getDraft: () => undefined,
+      finalizeDraftOwnership: async () => { calls++; return { status: 'committed', current: true, durable: true }; },
+    });
+    useSessionUIStore.getState().openNewSessionDraft();
+    await materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+    expect(calls).toBe(0);
+  });
+
+  test('ownership rejection keeps the created session result', async () => {
+    const runtime = { transportIdentity: 'runtime-owner', generation: 4 };
+    useInputStore.setState({
+      captureDraftRuntime: () => runtime,
+      getDraft: (key) => ({ key, revision: 17 }),
+      finalizeDraftOwnership: async () => { throw new Error('durability rejected'); },
+    });
+    useSessionUIStore.getState().openNewSessionDraft();
+    const result = await materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+    expect(result?.sessionId).toBe('ses-owner');
+  });
+
+  test('a switched-away failed claim clears its old runtime memory and restores retryability', async () => {
+    let runtime = { transportIdentity: 'runtime-a', generation: 1 };
+    let rejectCreate;
+    let createStarted;
+    const createStartedPromise = new Promise((resolve) => { createStarted = resolve; });
+    opencodeClient.createSession = () => new Promise((_, reject) => { rejectCreate = reject; createStarted(); });
+    useInputStore.setState({
+      captureDraftRuntime: () => runtime,
+      getDraft: () => undefined,
+    });
+    useSessionUIStore.getState().openNewSessionDraft();
+    const pending = materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+    expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(true);
+    await createStartedPromise;
+    useSessionUIStore.getState().prepareForRuntimeSwitch();
+
+    runtime = { transportIdentity: 'runtime-b', generation: 2 };
+    rejectCreate(new Error('old runtime failed'));
+    expect(await pending).toBeNull();
+
+    runtime = { transportIdentity: 'runtime-a', generation: 1 };
+    useSessionUIStore.getState().restoreForRuntimeSwitch();
+    expect(useSessionUIStore.getState().newSessionDraft.open).toBe(true);
+    expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(false);
   });
 });
 

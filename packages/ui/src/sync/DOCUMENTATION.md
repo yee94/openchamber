@@ -60,6 +60,8 @@ So:
 
 `input-draft-durability-coordinator.ts` owns serialized draft durability. `input-store.ts` keeps memory-first records and submits scoped candidates through the coordinator; blob materialization, references, metadata ordering, rollback, release cleanup, and move transfers stay behind that boundary. Hydration seeds the coordinator once after migration, persists every touched snapshot, flushes durability before completion, and replays locally dirty keys after the durable baseline is available. Disabled persistence keeps editable memory records and blocks durable admission until re-enabled.
 
+Committed draft snapshot and ownership actions use per-key CAS epochs plus a captured runtime generation. The durability lane validates candidate currentness before every blob, cleanup, or metadata operation and validates it again before metadata persistence. A metadata-committed action adopts its durable draft or tombstone keys independently after post-write epoch changes; runtime-stale completions clear attachment views, missing-ref IDs, hydration, and both persistence maps in one publication while preserving newer memory records. Ownership finalization evaluates source and destination epochs independently, so one durable source tombstone can coexist with a newer destination record. Revision increments require positive safe integers, including delete tombstones.
+
 ## Session list rules
 
 ### Directory-scoped session list
@@ -251,8 +253,14 @@ becoming the cached startup result consumed by the session coordinator.
   and seeds the baseline while performing zero blob mutations and metadata writes.
 
 - Queue ownership uses stable transport identity plus directory and session ID.
-  Legacy bulk binding persists one snapshot, prepends bound rows, and cleans the
-  source references after commit.
+  Legacy migration constructs recovery metadata, then degrades every unbound
+  attachment into a `legacy-unbound-data` issue before source validation, URL
+  classification, or byte decoding; unbound rows store empty `attachments`.
+  Single binding accepts one attachment-free unbound source row whose three IDs
+  match the request. Bulk binding accepts the complete ordered source scope.
+  Each binding persists one snapshot and prepends moved rows to the target scope.
+  Unbound rows own no transport-scoped blob references, so binding performs zero
+  blob retain or release operations.
   Runtime generation captures the active transport lifetime; delayed work validates
   that generation before committing to a child store or queue scope.
 - Child-store async work captures its owning store and directory. Shared HTTP
@@ -264,14 +272,28 @@ becoming the cached startup result consumed by the session coordinator.
 - Reconciliation keeps persistent `reconciliationChecks`, `reconciliationDeadlineAt`,
   and `reconciliationNextCheckAt`. In-flight checks own no timer; each miss writes
   the next persistent check time, which drives the single global scheduler wake.
-  Exhausted checks or a reached deadline resolve to editable `unresolved` items;
-  Edit and Remove release that terminal state without another POST.
+Exhausted checks or a reached deadline resolve to editable `unresolved` items.
+Auto-send never re-POSTs unresolved heads (ambiguous delivery). Explicit manual
+Send resets the head to `queued` and POSTs once more; Edit and Remove still
+release the terminal state without another POST. `running` auto-review runs
+block queue drain only when their stable `runtimeKey` matches the active runtime;
+legacy records without a runtime key allow drain. Completed, stopped, and error
+records allow drain.
+
+- Definitive `failed` heads share the terminal manual-recovery contract with
+`unresolved` heads. The v3 production scheduler auto-dispatches only `queued`
+heads and due `retrying` heads with an authoritative scoped `idle` status;
+`unknown`, `busy`, and `retry` statuses keep dispatch paused. Message completion
+revisions wake the scheduler and never override live session status.
 - Message-sent confirmation precedes dependent queue side effects. A composer
   queue admission completes before it consumes inline drafts, body text, or
   attachments. Local chat commands retain these composer resources across both
-  successful actions and action failures. Legacy queue rows remain visible in
-  their legacy scope until an explicit send path performs a bulk bind into the
-  active bound scope.
+  successful actions and action failures. Immediate local commands (`/compact`,
+  `/fork`, `/undo`, and `/redo`) consume only their command text before awaiting
+  their action, clear the source session's legacy text draft synchronously, and
+  preserve attachments, inline drafts, synthetic parts, linked context, and
+  queue state. Legacy queue rows remain visible in their legacy scope until an
+  explicit send path performs a bulk bind into the active bound scope.
 
 ## Session action rules
 
@@ -281,10 +303,11 @@ Rules:
 
 1. If an action mutates session list membership or visible session metadata, update `useGlobalSessionsStore` there.
 2. If an action targets a session by ID, resolve the **session's own directory**. Do not assume the current directory is correct.
-3. `session-ui-store.ts` should delegate to `session-actions.ts` for these mutations instead of duplicating SDK calls.
-4. `setCurrentSession()` announces a monotonic session-switch intent before directory resolution or store publication. Delayed visual/transition callbacks must validate that intent and silently discard stale work.
-5. Sidebar previous/next navigation is scope-aware. `SessionSidebar` publishes the Recent order plus logically visible project rows to `session-navigation.ts`; keyboard and native-menu actions share that registry and update the explicit session Focus before committing current-session authority. Project-origin navigation is restricted to the current expanded project and never falls through to hidden rows or another project.
-6. Global Mod+1…9 navigation is session-row based, not project based. `SessionSidebar` combines the currently revealed Recent rows with logically visible project rows, caps the visual order at nine, and publishes it through `sidebar-numbered-navigation.ts`. The numbered activation preserves the selected row's exact Recent/Project Focus identity.
+3. Scope-sensitive session actions use `getAuthoritativeDirectoryForSession()`, which resolves worktree metadata, session attachments, sync metadata, and global session metadata.
+4. `session-ui-store.ts` should delegate to `session-actions.ts` for these mutations instead of duplicating SDK calls.
+5. `setCurrentSession()` announces a monotonic session-switch intent before directory resolution or store publication. Delayed visual/transition callbacks must validate that intent and silently discard stale work.
+6. Sidebar previous/next navigation is scope-aware. `SessionSidebar` publishes the Recent order plus logically visible project rows to `session-navigation.ts`; keyboard and native-menu actions share that registry and update the explicit session Focus before committing current-session authority. Project-origin navigation is restricted to the current expanded project and never falls through to hidden rows or another project.
+7. Global Mod+1…9 navigation is session-row based, not project based. `SessionSidebar` combines the currently revealed Recent rows with logically visible project rows, caps the visual order at nine, and publishes it through `sidebar-numbered-navigation.ts`. The numbered activation preserves the selected row's exact Recent/Project Focus identity.
 
 Examples of global-store updates performed in `session-actions.ts`:
 
@@ -310,6 +333,8 @@ must not materialize that complete copied history into the directory store.
   through normally.
 - A current-session fork during `busy` or `retry` targets the latest user
   message. The active assistant message remains outside the forked history.
+- A fork from a selected message restores that message's text and file parts.
+  A current-session fork preserves the composer's existing resources.
 
 ### New conversation orchestration
 
@@ -332,19 +357,74 @@ Create-phase failures restore the draft and input. Prompt-phase failures keep
 the created session; ambiguous delivery is confirmed by message ID and is never
 automatically re-submitted.
 
+### New-session draft ownership (Phase 1 Lane 3b)
+
+An open new-session draft carries a stable `draftID`. Opening from closed state
+creates a UUID, an idle repeated open retains that UUID and submission token,
+and opening during submission creates a fresh UUID with a reset token sequence.
+Close clears the ID. Runtime session memory preserves the complete draft state,
+including its identity, per runtime.
+
+Submission claims capture the draft ID, token, UI draft snapshot, input runtime
+capture, runtime-memory key, and the existing source record key/revision. The
+claim CAS gates UI restoration with draft ID, token, and runtime capture; its
+runtime memory uses the same claim identity so a switched-away runtime cannot
+retain a submitting draft forever. A stale completion records its created remote
+session while leaving the current runtime UI and any reopened draft intact.
+
+Ownership finalization calls `input.finalizeDraftOwnership` only when the
+claimed source exists. `consume` applies after a confirmed combined prompt or a
+successful fallback route; `preserve` applies after standalone materialization,
+permanent prompt failure, ambiguous unresolved delivery, and fallback route
+failure. Pre-create failures retain the source record. Finalization reports
+non-committed outcomes through diagnostics and does not reopen drafts or retry.
+
+Lane 3b owns client-side draft identity and ownership finalization. Lane 4 owns
+production queue admission and atomic queue cutover.
+
 ### Queue dispatcher execution invariants
 
-`message-queue-dispatch.ts` keys flights by scope, queue item, operation, and
-message IDs. Dispatch, reconciliation, and sending recovery share that identity
-flight. Payload acquisition returns a monotonic token; each non-confirmed path
+`useQueuedMessageAutoSend.ts` owns the v3 dispatch flight registry keyed by the
+exact scope, queue item, operation, and message identity. Direct manual and
+automatic dispatches share one POST flight; reconciliation queries retain their
+separate scheduler flight. Payload acquisition returns a monotonic token; each non-confirmed path
 releases its own token. Durable confirmation removes queue and send references
 before one best-effort notification. The planner exposes one head and one
 nearest wake per scope; Lane 4 owns session busy and blocked eligibility.
+Each queued dispatch passes its verified bound-scope directory through the
+session send target, optimistic route, and OpenCode request. Duplicate session
+IDs retain their exact queue-owner directory across manual and automatic
+dispatches.
 
 Reconciliation persists `pending` next checks and durable `unresolved` terminal
 states. Authoritative misses increment a safe-integer count; unavailable queries
 preserve it while scheduling a bounded wake. Hydrated `sending` rows recover by
 persisting `sending → reconciling` without a POST.
+
+### Queue edit bridge (Phase 1 Lane 3c)
+
+`message-queue-edit-bridge.ts` materializes one locked queue identity into a
+target draft through injected queue and draft commit dependencies. It captures
+matching queue/input transport generations before any owner call, validates a
+complete root-occurrence attachment payload, then commits the draft before
+removing the queue row. A durable draft always attempts removal, including a
+runtime-stale draft completion. Queue removal reports `durableRemoval` from the
+coordinator metadata commit: post-commit stale results remain durable, while
+pre-commit outcomes retain the queue for retry. The default convenience entry
+captures both runtimes at invocation and keeps module import lazy. One queue
+identity shares one edit flight; distinct identities run independently. Every
+bridge failure returns a stable diagnostic result without exposing draft text or
+attachment values. Materialization holds an owner-level send reservation through
+draft commit and queue removal. Dispatch acquisition, transition, and confirmation
+honor that reservation; every bridge completion path releases it, while durable
+removal releases its coordinator send ownership. Ordinary remove, reorder, bind,
+and bind-many return `reserved` for a reserved identity. `removeEditReservation`
+accepts the matching reservation token and runtime capture as the sole durable
+remove capability. A matching coordinator release clears reservation ownership
+for both committed and cleanup-failed outcomes because its send acquisition has
+ended; stale keeps the reservation for its matching token. Owner throw handling
+clears the local fence and reports cleanup diagnostics. Hydrate and disable
+attempt old reservation release before rebuilding or fencing runtime state.
 
 ## The golden rule
 

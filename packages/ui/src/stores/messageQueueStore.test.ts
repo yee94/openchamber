@@ -63,4 +63,17 @@ describe('messageQueueStore scoped ledger', () => {
     const expired = { ...reconciling, reconciliationDeadlineAt: Date.now() - 1 }; useMessageQueueStore.setState({ queuedMessages: { [queueScopeKey(a)]: [expired] } }); actions.resolveQueueItemReconciliation(a, identity);
     expect(actions.getQueueForScope(a)[0]?.status).toBe('unresolved');
   });
+  test('resets failed unresolved and retrying heads to a clean queued state for redispatch', () => {
+    const item = add(); const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState();
+    actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemDefinitiveFailure(a, identity);
+    actions.resetQueueItemForDispatch(a, identity);
+    const reset = actions.getQueueForScope(a)[0] as QueueItem;
+    expect(reset.status).toBe('queued');
+    expect(reset.nextAttemptAt).toBe(undefined);
+    expect(reset.failure).toBe(undefined);
+    actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemReconciling(a, identity); actions.resolveQueueItemReconciliation(a, identity);
+    actions.resetQueueItemForDispatch(a, identity);
+    expect(actions.getQueueForScope(a)[0]?.status).toBe('queued');
+    expect(actions.getQueueForScope(a)[0]?.reconciliationDeadlineAt).toBe(undefined);
+  });
 });

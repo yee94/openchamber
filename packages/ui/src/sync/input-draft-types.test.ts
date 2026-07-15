@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { cloneDraftRecord, draftAttachmentRefID, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDraftRecordPersistable, parseDraftRecord, type DraftRecord } from "./input-draft-types"
+import { cloneDraftRecord, draftAttachmentRefID, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDraftRecordPersistable, newSessionDraftKey, parseDraftRecord, sessionDraftKey, type DraftRecord } from "./input-draft-types"
 
 const record = (): DraftRecord => ({
   version: 1,
@@ -18,6 +18,13 @@ describe("input draft types", () => {
     expect(draftAttachmentRefID(reference)).toBe('["runtime-a","session","same","[\\"root\\",\\"attachment-a\\"]"]')
     expect(draftAttachmentRefID({ ...reference, transportIdentity: "runtime-b" })).not.toBe(draftAttachmentRefID(reference))
     expect(draftSyntheticPartAttachmentOccurrenceRefID("part-a", "attachment-a")).not.toBe(draftRootAttachmentOccurrenceRefID("attachment-a"))
+  })
+
+  test("builds stable session and new-session keys from transport identity", () => {
+    expect(sessionDraftKey({ transportIdentity: "runtime-a" }, "session-a")).toEqual({ transportIdentity: "runtime-a", owner: { kind: "session", ownerID: "session-a" } })
+    expect(newSessionDraftKey({ transportIdentity: "runtime-a" }, "draft-a")).toEqual({ transportIdentity: "runtime-a", owner: { kind: "draft", ownerID: "draft-a" } })
+    expect(() => sessionDraftKey({ transportIdentity: "" }, "session-a")).toThrow("transportIdentity")
+    expect(() => newSessionDraftKey({ transportIdentity: "runtime-a" }, "")).toThrow("draftID")
   })
 
   test("parses and clones the complete frozen DTO", () => {
