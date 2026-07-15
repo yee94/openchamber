@@ -39,6 +39,8 @@ export const createMessageQueueRuntime = (factory: MessageQueueRuntimeFactory = 
     setEnabled: (enabled) => controller().setEnabled(enabled),
     admit: (item, resolve, capture) => controller().admit(item, resolve, capture),
     materializeForEdit: (identity, capture) => controller().materializeForEdit(identity, capture),
+    releaseEditReservation: (identity, token, capture) => controller().releaseEditReservation(identity, token, capture),
+    removeEditReservation: (identity, token, capture) => controller().removeEditReservation(identity, token, capture),
     remove: (identity, capture) => controller().remove(identity, capture),
     reorder: (scopeKey, ids, capture) => controller().reorder(scopeKey, ids, capture),
     bind: (identity, owner, capture) => controller().bind(identity, owner, capture),

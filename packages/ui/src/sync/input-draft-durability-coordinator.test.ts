@@ -202,6 +202,27 @@ describe("input draft durability coordinator", () => {
     expect(writer.snapshots).toHaveLength(1)
   })
 
+  test("rejects a stale complete blob candidate before every blob cleanup and metadata operation", async () => {
+    const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver())
+    let blobCalls = 0
+    const blobs: InputDraftBlobStore = new Proxy(base, { get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver)
+      return typeof value === "function" ? (...args: unknown[]) => { blobCalls++; return value.apply(target, args) } : value
+    } })
+    const writer = metadata()
+    let metadataCalls = 0
+    const originalPersist = writer.coordinator.persist
+    writer.coordinator.persist = async (value) => { metadataCalls++; return originalPersist(value) }
+    const coordinator = createInputDraftDurabilityCoordinator(blobs, writer.coordinator)
+    await coordinator.seed(null)
+    blobCalls = 0
+    metadataCalls = 0
+    const value = record(1, "owner", [attachment("a", "blob-a")])
+    expect((await commit(coordinator, value, { isCurrent: () => false })).status).toBe("stale")
+    expect(blobCalls).toBe(0)
+    expect(metadataCalls).toBe(0)
+  })
+
   test("handles synthetic occurrences and reconciles crash orphans by transport and owner", async () => {
     const blobs = createInputDraftBlobStore(new MemoryInputDraftBlobDriver())
     const coordinator = createInputDraftDurabilityCoordinator(blobs, metadata().coordinator)
@@ -300,5 +321,55 @@ describe("input draft durability coordinator", () => {
     expect((await commit(coordinator, record(1, "owner", [attachment("a", "blob-a")]))).status).toBe("disabled")
     expect(writer.snapshots).toEqual([])
     await coordinator.flush()
+  })
+
+  test("rejects conflicting and invalid tombstone candidates before blob or metadata I/O", async () => {
+    const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver())
+    let blobCalls = 0
+    const blobs: InputDraftBlobStore = {
+      ...base,
+      readReference: async (...args) => { blobCalls++; return base.readReference(...args) },
+      read: async (...args) => { blobCalls++; return base.read(...args) },
+    }
+    const writer = metadata()
+    const coordinator = createInputDraftDurabilityCoordinator(blobs, writer.coordinator)
+    await coordinator.seed(null)
+    const value = record(1, "owner", [attachment("a", "blob-a")])
+    const id = draftKeyString(value.key)
+    expect((await coordinator.commit({ drafts: { [id]: value }, tombstones: { [id]: 2 }, isCurrent: () => true })).status).toBe("failed")
+    for (const revision of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect((await coordinator.commit({ tombstones: { [id]: revision }, isCurrent: () => true })).status).toBe("failed")
+    }
+    expect(blobCalls).toBe(0)
+    expect(writer.snapshots).toEqual([])
+    expect((await coordinator.commit({ tombstones: { [id]: Number.MAX_SAFE_INTEGER }, isCurrent: () => true })).status).toBe("committed")
+  })
+
+  test("rejects invalid migration and legacy candidates before blob or metadata I/O", async () => {
+    const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver())
+    let blobCalls = 0
+    const blobs: InputDraftBlobStore = new Proxy(base, { get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver)
+      return typeof value === "function" && property !== "reconcileReferences" ? (...args: unknown[]) => { blobCalls++; return value.apply(target, args) } : value
+    } })
+    const writer = metadata()
+    const coordinator = createInputDraftDurabilityCoordinator(blobs, writer.coordinator)
+    await coordinator.seed(null)
+    expect((await coordinator.commit({ migration: { complete: true, claimedTransportIdentity: 1 } as never, isCurrent: () => true })).status).toBe("failed")
+    expect((await coordinator.commit({ legacy: { entries: { broken: { text: 1 } } } as never, isCurrent: () => true })).status).toBe("failed")
+    expect(blobCalls).toBe(0)
+    expect(writer.snapshots).toHaveLength(0)
+  })
+
+  test("persists a complete delete and tombstone candidate", async () => {
+    const writer = metadata()
+    const coordinator = createInputDraftDurabilityCoordinator(createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), writer.coordinator)
+    await coordinator.seed(null)
+    const value = record()
+    await commit(coordinator, value)
+    const result = await coordinator.commit({ delete: [value.key], tombstones: { [draftKeyString(value.key)]: 2 }, isCurrent: () => true })
+    expect(result.status).toBe("committed")
+    expect(writer.snapshots.at(-1)?.drafts).toEqual({})
+    expect(writer.snapshots.at(-1)?.tombstones).toEqual({ [draftKeyString(value.key)]: 2 })
   })
 })

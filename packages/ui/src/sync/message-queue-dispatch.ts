@@ -154,9 +154,11 @@ export const createMessageQueueDispatcher = (deps: QueueDispatcherDependencies) 
     if (!validConfig()) return "failed"
     const capture = explicitCapture ?? deps.runtime.captureRuntime(), item = locate(id, capture)
     if (!item || item.status !== "reconciling" || !await current(capture)) return "skipped"
-    if ((item.reconciliationDeadlineAt ?? 0) <= now() || (item.reconciliationChecks ?? 0) >= maxChecks) {
+    const initialNow = now()
+    if ((item.reconciliationDeadlineAt ?? 0) <= initialNow || (item.reconciliationChecks ?? 0) >= maxChecks) {
       try { const resolved = await deps.runtime.transition(id, "reconciling", (value) => clearTransient(value, { status: "unresolved", failureKind: "ambiguous-dispatch", reconciliationStartedAt: value.reconciliationStartedAt!, reconciliationDeadlineAt: value.reconciliationDeadlineAt!, reconciliationChecks: value.reconciliationChecks ?? 0, reconciliationNextCheckAt: value.reconciliationNextCheckAt }), capture); return resolved.status === "committed" ? "unresolved" : resolved.status === "stale" ? "stale" : "failed" } catch { return "failed" }
     }
+    if (item.reconciliationNextCheckAt !== undefined && item.reconciliationNextCheckAt > initialNow) return "skipped"
     let verdict: QueueReconciliationResult
     try { verdict = await deps.query(item.owner as Extract<QueueItemDTO["owner"], { state: "bound" }>, id.messageID, capture) } catch { verdict = "unavailable" }
     if (!await current(capture) || !locate(id, capture)) return "stale"

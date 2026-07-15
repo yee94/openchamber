@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getLocalChatCommand, LOCAL_CHAT_COMMANDS, preservesComposerResources } from './localCommandClassifier';
+import { consumesImmediateCommandText, getLocalChatCommand, IMMEDIATE_LOCAL_CHAT_COMMANDS, LOCAL_CHAT_COMMANDS, preservesComposerResources } from './localCommandClassifier';
 
 describe('getLocalChatCommand', () => {
   test('classifies every local command', () => {
@@ -17,6 +17,11 @@ describe('getLocalChatCommand', () => {
   test('keeps every local command resource-preserving and admits remote commands', () => {
     for (const command of LOCAL_CHAT_COMMANDS) expect(preservesComposerResources(`/${command}`, 'normal')).toBe(true);
     expect(preservesComposerResources('/remote-command', 'normal')).toBe(false);
+  });
+  test('consumes text only for immediate local actions', () => {
+    for (const command of IMMEDIATE_LOCAL_CHAT_COMMANDS) expect(consumesImmediateCommandText(`/${command}`, 'normal')).toBe(true);
+    expect(consumesImmediateCommandText('/summary', 'normal')).toBe(false);
+    expect(consumesImmediateCommandText('/compact', 'shell')).toBe(false);
   });
   test('preserves shared composer resources for every local command outcome', () => {
     const consume = () => {

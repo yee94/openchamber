@@ -108,17 +108,6 @@ test("metadata commit adopts its baseline after runtime becomes stale", async ()
   const retained = await blobs.readReference({ transportIdentity: "t", owner: { kind: "queue", ownerID: "q" }, attachmentOccurrenceRefID: '["root","a"]' })
   expect(retained.ok && retained.value).toBe("b")
 })
-test("bind metadata commit stays committed through cleanup failure and stale currentness", async () => {
-  let current = true, writes = 0
-  const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), queued = item(); queued.attachments = [blob()]
-  const blobs: InputDraftBlobStore = { ...base, releaseIfMatches: async () => ({ ok: false as const, error: { code: "transaction-failed" as const } }) }
-  const coordinator = createQueueAttachmentCoordinator(blobs, { ...metadata(), persist: async () => { if (++writes === 2) current = false; return { ok: true as const, value: undefined } } }); await coordinator.hydrate(null)
-  await base.putAndRetain({ transportIdentity: "t", owner: { kind: "queue", ownerID: "q" }, attachmentOccurrenceRefID: '["root","a"]' }, "b", new Blob(["x"]))
-  await coordinator.admit(queued, { ...runtime, isCurrent: () => current })
-  const bound = await coordinator.bind(identity, { state: "bound", transportIdentity: "t", directory: "/next", sessionID: "s" }, { ...runtime, isCurrent: () => current })
-  expect(bound.status).toBe("committed"); expect(bound.current).toBe(false); expect(bound.cleanupErrors[0]?.code).toBe("transaction-failed")
-  expect(Object.keys(coordinator.getSnapshot().queues)).toEqual(['bound:["t","/next","s"]'])
-})
 test("matching queue reference repairs a missing blob through the resolver", async () => {
   const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), queued = item(); queued.attachments = [blob()]
   const queueRef = { transportIdentity: "t", owner: { kind: "queue" as const, ownerID: "q" }, attachmentOccurrenceRefID: '["root","a"]' }
@@ -197,10 +186,14 @@ test("preexisting send references validate matching blobs without releasing them
 
 test("disabled token release clears its acquisition and permits a later acquisition", async () => {
   const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), queued = item(); queued.attachments = [blob()]
-  const coordinator = createQueueAttachmentCoordinator(base, metadata()); await coordinator.hydrate(null)
+  let writes = 0, mutations = 0
+  const blobs: InputDraftBlobStore = { ...base, retain: async (...args) => { mutations++; return base.retain(...args) }, releaseIfMatches: async (...args) => { mutations++; return base.releaseIfMatches(...args) } }
+  const coordinator = createQueueAttachmentCoordinator(blobs, { ...metadata(), persist: async () => { writes++; return { ok: true as const, value: undefined } } }); await coordinator.hydrate(null)
   await base.putAndRetain({ transportIdentity: "t", owner: { kind: "queue", ownerID: "q" }, attachmentOccurrenceRefID: '["root","a"]' }, "b", new Blob(["x"]))
   await coordinator.admit(queued, runtime); const first = await coordinator.acquireSendPayload(identity, runtime)
-  await coordinator.setEnabled(false); expect((await coordinator.releaseSend(identity, first.token!)).status).toBe("committed")
+  await coordinator.setEnabled(false); writes = 0; mutations = 0
+  expect((await coordinator.transition(identity, (value) => ({ ...value, status: "sending", attemptCount: 1 }), runtime)).status).toBe("disabled"); expect(writes).toBe(0); expect(mutations).toBe(0)
+  expect((await coordinator.releaseSend(identity, first.token!)).status).toBe("committed")
   await coordinator.setEnabled(true); expect((await coordinator.acquireSendPayload(identity, runtime)).status).toBe("committed")
 })
 
@@ -234,15 +227,62 @@ test("remove commits metadata before queue and send cleanup, retaining failed cl
   fail = false; expect((await coordinator.retryCleanup()).status).toBe("committed")
 })
 
-test("bindMany prepends source rows once and rolls back blob or metadata failures", async () => {
-  const legacy = (id: string): QueueItemDTO => ({ ...item(), queueItemID: id, operationID: `o-${id}`, messageID: `m-${id}`, owner: { state: "unbound-legacy", sessionID: "legacy" }, attachments: [{ ...blob(`b-${id}`, `["root","${id}"]`), attachmentID: id }] })
+test("bindMany atomically prepends its complete attachment-free source scope", async () => {
+  const legacy = (id: string): QueueItemDTO => ({ ...item(), queueItemID: id, operationID: `o-${id}`, messageID: `m-${id}`, owner: { state: "unbound-legacy", sessionID: "legacy" } })
   const first = legacy("one"), second = legacy("two"), existing = item(); existing.queueItemID = "existing"; existing.operationID = "o-existing"; existing.messageID = "m-existing"
-  let writes = 0
-  const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), coordinator = createQueueAttachmentCoordinator(base, { ...metadata(), persist: async () => { writes++; return { ok: true as const, value: undefined } } })
+  let writes = 0, mutations = 0
+  const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), blobs: InputDraftBlobStore = { ...base, retain: async (...args) => { mutations++; return base.retain(...args) }, releaseIfMatches: async (...args) => { mutations++; return base.releaseIfMatches(...args) } }, coordinator = createQueueAttachmentCoordinator(blobs, { ...metadata(), persist: async () => { writes++; return { ok: true as const, value: undefined } } })
   await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': [first, second], 'bound:["t","/d","s"]': [existing] }, migration: { v3State: "complete" } })
-  await base.putAndRetain({ transportIdentity: "t", owner: { kind: "queue", ownerID: "one" }, attachmentOccurrenceRefID: '["root","one"]' }, "b-one", new Blob(["1"])); await base.putAndRetain({ transportIdentity: "t", owner: { kind: "queue", ownerID: "two" }, attachmentOccurrenceRefID: '["root","two"]' }, "b-two", new Blob(["2"]))
   expect((await coordinator.bindMany([{ ...identity, queueItemID: "one", operationID: "o-one", messageID: "m-one" }, { ...identity, queueItemID: "two", operationID: "o-two", messageID: "m-two" }], { state: "bound", transportIdentity: "t", directory: "/d", sessionID: "s" }, runtime)).status).toBe("committed")
-  expect(coordinator.getSnapshot().queues['bound:["t","/d","s"]']?.map((row) => row.queueItemID)).toEqual(["one", "two", "existing"]); expect(writes).toBe(1)
+  expect(coordinator.getSnapshot().queues['bound:["t","/d","s"]']?.map((row) => row.queueItemID)).toEqual(["one", "two", "existing"]); expect(writes).toBe(1); expect(mutations).toBe(0)
+})
+
+test("bindMany preserves source and target snapshots on persistence failure without blob work", async () => {
+  const rows = ["one", "two"].map((id) => ({ ...item(), queueItemID: id, operationID: `o-${id}`, messageID: `m-${id}`, owner: { state: "unbound-legacy" as const, sessionID: "legacy" } }))
+  const existing = { ...item(), queueItemID: "target", operationID: "o-target", messageID: "m-target" }
+  let mutations = 0
+  const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), blobs: InputDraftBlobStore = { ...base, retain: async (...args) => { mutations++; return base.retain(...args) }, releaseIfMatches: async (...args) => { mutations++; return base.releaseIfMatches(...args) } }, coordinator = createQueueAttachmentCoordinator(blobs, { ...metadata(), persist: async () => ({ ok: false as const, error: { code: "quota" as const } }) })
+  await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': rows, 'bound:["t","/d","s"]': [existing] }, migration: { v3State: "complete" } }); const before = coordinator.getSnapshot()
+  expect((await coordinator.bindMany(rows.map((row) => ({ queueItemID: row.queueItemID, operationID: row.operationID, messageID: row.messageID })), { state: "bound", transportIdentity: "t", directory: "/d", sessionID: "s" }, runtime)).status).toBe("failed")
+  expect(coordinator.getSnapshot()).toEqual(before); expect(mutations).toBe(0)
+})
+
+test("bind rejects a multi-row source scope without persistence or snapshot changes", async () => {
+  const first = { ...item(), owner: { state: "unbound-legacy" as const, sessionID: "legacy" } }, second = { ...first, queueItemID: "two", operationID: "o-two", messageID: "m-two" }
+  let writes = 0
+  const coordinator = createQueueAttachmentCoordinator(createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), { ...metadata(), persist: async () => { writes++; return { ok: true as const, value: undefined } } }), owner = { state: "bound" as const, transportIdentity: "t", directory: "/d", sessionID: "s" }
+  await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': [first, second] }, migration: { v3State: "complete" } }); const before = coordinator.getSnapshot()
+  expect((await coordinator.bind(identity, owner, runtime)).status).toBe("failed")
+  expect(writes).toBe(0); expect(coordinator.getSnapshot()).toEqual(before)
+})
+
+test("bind prepends its one-row source scope to existing target rows", async () => {
+  const legacy = { ...item(), owner: { state: "unbound-legacy" as const, sessionID: "legacy" } }, existing = { ...item(), queueItemID: "existing", operationID: "o-existing", messageID: "m-existing" }, coordinator = createQueueAttachmentCoordinator(createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), metadata()), owner = { state: "bound" as const, transportIdentity: "t", directory: "/d", sessionID: "s" }
+  await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': [legacy], 'bound:["t","/d","s"]': [existing] }, migration: { v3State: "complete" } })
+  expect((await coordinator.bind(identity, owner, runtime)).status).toBe("committed")
+  expect(coordinator.getSnapshot().queues['bound:["t","/d","s"]']?.map((row) => row.queueItemID)).toEqual(["q", "existing"])
+})
+
+test("bind preserves source and target after persistence failure and rejects triple-ID mismatches", async () => {
+  const legacy = { ...item(), owner: { state: "unbound-legacy" as const, sessionID: "legacy" } }, existing = { ...item(), queueItemID: "existing", operationID: "o-existing", messageID: "m-existing" }; let writes = 0
+  const coordinator = createQueueAttachmentCoordinator(createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), { ...metadata(), persist: async () => { writes++; return { ok: false as const, error: { code: "quota" as const } } } }), owner = { state: "bound" as const, transportIdentity: "t", directory: "/d", sessionID: "s" }
+  await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': [legacy], 'bound:["t","/d","s"]': [existing] }, migration: { v3State: "complete" } }); const before = coordinator.getSnapshot()
+  expect((await coordinator.bind(identity, owner, runtime)).status).toBe("failed"); expect(writes).toBe(1); expect(coordinator.getSnapshot()).toEqual(before)
+  expect((await coordinator.bind({ ...identity, messageID: "wrong" }, owner, runtime)).status).toBe("failed"); expect(writes).toBe(1); expect(coordinator.getSnapshot()).toEqual(before)
+})
+
+test("bind rejects bound rows, partial or reordered sources, and unbound attachments", async () => {
+  const first = { ...item(), owner: { state: "unbound-legacy" as const, sessionID: "legacy" } }, second = { ...first, queueItemID: "two", operationID: "o-two", messageID: "m-two" }, bound = { ...item(), queueItemID: "bound", operationID: "o-bound", messageID: "m-bound" }
+  let writes = 0, mutations = 0
+  const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), blobs: InputDraftBlobStore = { ...base, retain: async (...args) => { mutations++; return base.retain(...args) }, releaseIfMatches: async (...args) => { mutations++; return base.releaseIfMatches(...args) } }, coordinator = createQueueAttachmentCoordinator(blobs, { ...metadata(), persist: async () => { writes++; return { ok: true as const, value: undefined } } })
+  await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': [first, second], 'bound:["t","/d","s"]': [bound] }, migration: { v3State: "complete" } }); const owner = { state: "bound" as const, transportIdentity: "t", directory: "/d", sessionID: "s" }
+  expect((await coordinator.bindMany([{ queueItemID: first.queueItemID, operationID: first.operationID, messageID: first.messageID }], owner, runtime)).status).toBe("failed")
+  expect((await coordinator.bindMany([{ queueItemID: second.queueItemID, operationID: second.operationID, messageID: second.messageID }, { queueItemID: first.queueItemID, operationID: first.operationID, messageID: first.messageID }], owner, runtime)).status).toBe("failed")
+  expect((await coordinator.bind({ queueItemID: bound.queueItemID, operationID: bound.operationID, messageID: bound.messageID }, owner, runtime)).status).toBe("failed")
+  const invalid = { ...first, attachments: [blob()] }; await coordinator.hydrate({ version: 4, queues: { 'unbound-legacy:["legacy"]': [invalid] }, migration: { v3State: "complete" } }); writes = 0; mutations = 0
+  expect((await coordinator.bindMany([{ queueItemID: invalid.queueItemID, operationID: invalid.operationID, messageID: invalid.messageID }], owner, runtime)).status).toBe("failed")
+  expect((await coordinator.bind({ queueItemID: invalid.queueItemID, operationID: invalid.operationID, messageID: invalid.messageID }, owner, runtime)).status).toBe("failed")
+  expect(writes).toBe(0); expect(mutations).toBe(0); expect(coordinator.getSnapshot().queues['unbound-legacy:["legacy"]']?.[0]?.attachments).toHaveLength(1)
 })
 
 test("transition matrix preserves snapshots and skips persistence for every rejected mutation", async () => {

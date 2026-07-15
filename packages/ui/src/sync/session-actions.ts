@@ -215,6 +215,23 @@ export function setOptimisticRefs(
   _optimisticConfirm = confirm ?? null
 }
 
+/**
+ * Queue reconciliation concluded the message never landed. Drop the preserved
+ * optimistic user row in its exact owner scope.
+ */
+export function releaseUnconfirmedQueueSend(input: {
+  sessionID: string
+  messageID: string
+  directory?: string | null
+}): void {
+  const directory = input.directory ?? null
+  _optimisticRemove?.({
+    sessionID: input.sessionID,
+    directory,
+    messageID: input.messageID,
+  })
+}
+
 function sdk() {
   if (!_sdk) throw new Error("SDK not initialized — is SyncProvider mounted?")
   return _sdk
@@ -1703,8 +1720,9 @@ export async function forkSession(sessionId: string, operationId: number, messag
       pendingInputMode: "replace" as const,
     })
   }
-  // Clear existing attachments and restore file parts from the forked message.
-  restoreFilePartsToInput(fileParts)
+  // A selected message owns its attachment restoration snapshot. A current-session
+  // fork preserves the composer's existing resources.
+  if (messageId) restoreFilePartsToInput(fileParts)
   console.info("[session-fork] forked session is ready", {
     operationId,
     sessionId,

@@ -197,11 +197,17 @@ failed, and confirmed removal; persisted `sending` entries hydrate as
 `reconciling` because delivery status requires confirmation.
 
 Sending and reconciling items remain immutable while dispatch ownership or
-delivery status is unresolved. Queued, failed, and terminal unresolved entries
-remain recoverable through Edit and Remove. Reconciliation persists its check
-count, deadline, and `nextCheckAt`; in-flight requests own no timer, while the
-global scheduler wakes once at the earliest persisted next check. A max-check or
-deadline terminal result becomes unresolved and triggers no POST.
+delivery status is unresolved. The v3 auto-send owner tracks dispatch flights
+by exact scope, queue item, operation, and message identity; live `sending`
+heads outside that registry recover into reconciling (same as v4). Queued heads and due
+retrying heads auto-dispatch only with an authoritative scoped `idle` status.
+Failed and unresolved entries are terminal queue states and require explicit
+manual Send, Edit, or Remove. Manual Send resets failed, retrying, and unresolved
+heads through `resetQueueItemForDispatch` before one new send attempt. Reconciliation persists
+its check count, deadline, and `nextCheckAt`; in-flight requests own no timer,
+while the global scheduler wakes once at the earliest persisted next check. A
+max-check or deadline terminal result becomes unresolved and triggers no auto
+POST.
 Legacy migration preserves known bound owners and places unresolved entries in
 an unbound legacy scope until an explicit bulk send bind. Legacy rows remain
 visible in that scope. Queue UI selects one scope or one item at a time; it

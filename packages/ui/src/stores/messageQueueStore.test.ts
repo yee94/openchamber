@@ -12,6 +12,20 @@ describe('messageQueueStore scoped ledger', () => {
     const first = add(a); const second = add(b); const state = useMessageQueueStore.getState();
     expect(queueScopeKey(a)).not.toBe(queueScopeKey(b));
     expect(state.getQueueForScope(a)[0]).toBe(first); expect(state.getQueueForScope(b)[0]).toBe(second);
+    expect(/^msg_/.test(first.messageID)).toBe(true); expect(/^msg_/.test(second.messageID)).toBe(true);
+  });
+  test('replaces invalid persisted message IDs while preserving queue and operation identities', () => {
+    const persisted = { queuedMessages: { [queueScopeKey(a)]: [{ id: 'queue-1', queueItemID: 'queue-1', operationID: 'operation-1', messageID: 'message-invalid', content: 'one', createdAt: 1, owner: a, status: 'failed' as const, attemptCount: 1 }] } };
+    const migrated = migrateMessageQueueState(persisted);
+    const item = migrated.queuedMessages[queueScopeKey(a)]![0] as QueueItem;
+    const repeated = migrateMessageQueueState(migrated).queuedMessages[queueScopeKey(a)]![0] as QueueItem;
+    expect(/^msg_/.test(item.messageID)).toBe(true); expect(item.queueItemID).toBe('queue-1'); expect(item.operationID).toBe('operation-1'); expect(item.status).toBe('failed'); expect(repeated.messageID).toBe(item.messageID);
+  });
+  test('keeps valid persisted msg IDs unchanged across repeated migrations', () => {
+    const persisted = { queuedMessages: { [queueScopeKey(a)]: [{ id: 'queue-1', queueItemID: 'queue-1', operationID: 'operation-1', messageID: 'msg_existing', content: 'one', createdAt: 1, owner: a }] } };
+    const migrated = migrateMessageQueueState(persisted);
+    expect(migrated.queuedMessages[queueScopeKey(a)]![0]?.messageID).toBe('msg_existing');
+    expect(migrateMessageQueueState(migrated).queuedMessages[queueScopeKey(a)]![0]?.messageID).toBe('msg_existing');
   });
   test('migrates v2 session queues by item owner and remains idempotent', () => {
     const migrated = migrateMessageQueueState({ queuedMessages: { 'session-a': [{ id: 'legacy', content: 'one', createdAt: 1 }, { id: 'owned', content: 'two', createdAt: 2, owner: a }] } });
@@ -62,5 +76,18 @@ describe('messageQueueStore scoped ledger', () => {
     actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemReconciling(a, identity); const reconciling = actions.getQueueForScope(a)[0] as QueueItem;
     const expired = { ...reconciling, reconciliationDeadlineAt: Date.now() - 1 }; useMessageQueueStore.setState({ queuedMessages: { [queueScopeKey(a)]: [expired] } }); actions.resolveQueueItemReconciliation(a, identity);
     expect(actions.getQueueForScope(a)[0]?.status).toBe('unresolved');
+  });
+  test('resets failed unresolved and retrying heads to a clean queued state for redispatch', () => {
+    const item = add(); const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState();
+    actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemDefinitiveFailure(a, identity);
+    actions.resetQueueItemForDispatch(a, identity);
+    const reset = actions.getQueueForScope(a)[0] as QueueItem;
+    expect(reset.status).toBe('queued');
+    expect(reset.nextAttemptAt).toBe(undefined);
+    expect(reset.failure).toBe(undefined);
+    actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemReconciling(a, identity); actions.resolveQueueItemReconciliation(a, identity);
+    actions.resetQueueItemForDispatch(a, identity);
+    expect(actions.getQueueForScope(a)[0]?.status).toBe('queued');
+    expect(actions.getQueueForScope(a)[0]?.reconciliationDeadlineAt).toBe(undefined);
   });
 });
