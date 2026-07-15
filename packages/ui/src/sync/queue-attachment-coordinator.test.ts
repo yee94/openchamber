@@ -158,7 +158,8 @@ test("recovery gate blocks every mutating operation until a complete hydrate", a
   const coordinator = createQueueAttachmentCoordinator(blobs, { ...metadata(), persist: async () => { persists++; return { ok: true as const, value: undefined } } })
   const partial = { raw: "partial", snapshot: snapshot(item()), status: "partial" as const, issues: [{ path: "$.queues.bad", reason: "item" }], degradedScopeKeys: [] }
   expect((await coordinator.hydrate(partial)).status).toBe("recovery-required")
-  for (const result of [await coordinator.admit(item(), runtime), await coordinator.transition(identity, (value) => value, runtime), await coordinator.acquireSendPayload(identity, runtime), await coordinator.releaseSend(identity, "token" as never, runtime), await coordinator.remove(identity, runtime), await coordinator.reconcile(), await coordinator.retryCleanup()]) expect(result.status).toBe("recovery-required")
+  for (const result of [await coordinator.admit(item(), runtime), await coordinator.transition(identity, (value) => value, runtime), await coordinator.acquireSendPayload(identity, runtime), await coordinator.remove(identity, runtime), await coordinator.reconcile(), await coordinator.retryCleanup()]) expect(result.status).toBe("recovery-required")
+  expect((await coordinator.releaseSend(identity, "token" as never, runtime)).status).toBe("stale")
   expect(persists).toBe(0); expect(mutations).toBe(0)
   await coordinator.hydrate(snapshot(item()))
   await coordinator.transition(identity, (value) => ({ ...value, status: "sending", attemptCount: value.attemptCount + 1 }), runtime)
@@ -234,7 +235,7 @@ test("remove commits metadata before queue and send cleanup, retaining failed cl
 })
 
 test("bindMany prepends source rows once and rolls back blob or metadata failures", async () => {
-  const legacy = (id: string): QueueItemDTO => ({ ...item(), queueItemID: id, operationID: `o-${id}`, messageID: `m-${id}`, owner: { state: "unbound-legacy", sessionID: "legacy" }, attachments: [blob(`b-${id}`, `["root","${id}"]`)] })
+  const legacy = (id: string): QueueItemDTO => ({ ...item(), queueItemID: id, operationID: `o-${id}`, messageID: `m-${id}`, owner: { state: "unbound-legacy", sessionID: "legacy" }, attachments: [{ ...blob(`b-${id}`, `["root","${id}"]`), attachmentID: id }] })
   const first = legacy("one"), second = legacy("two"), existing = item(); existing.queueItemID = "existing"; existing.operationID = "o-existing"; existing.messageID = "m-existing"
   let writes = 0
   const base = createInputDraftBlobStore(new MemoryInputDraftBlobDriver()), coordinator = createQueueAttachmentCoordinator(base, { ...metadata(), persist: async () => { writes++; return { ok: true as const, value: undefined } } })
@@ -252,11 +253,13 @@ test("transition matrix preserves snapshots and skips persistence for every reje
   for (const update of [
     (value: QueueItemDTO) => ({ ...value, status: "queued" as const }),
     (value: QueueItemDTO) => ({ ...value, attemptCount: 0 }),
+    (value: QueueItemDTO) => ({ ...value, attemptCount: 2 }),
     (value: QueueItemDTO) => ({ ...value, reconciliationChecks: 0 }),
     (value: QueueItemDTO) => ({ ...value, reconciliationStartedAt: 3 }),
     (value: QueueItemDTO) => ({ ...value, reconciliationDeadlineAt: 5 }),
     (value: QueueItemDTO) => ({ ...value, content: "changed" }),
     (value: QueueItemDTO) => ({ ...value, attachments: [blob()] }),
+    (value: QueueItemDTO) => ({ ...value, queueItemID: "changed" }),
   ]) expect((await coordinator.transition(identity, update, runtime)).status).toBe("failed")
   expect(writes).toBe(0); expect(coordinator.getSnapshot()).toEqual(baseline)
 })
@@ -269,7 +272,7 @@ test("transition matrix accepts every durable edge", async () => {
     (value: QueueItemDTO) => ({ ...value, status: "retrying" as const, nextAttemptAt: 2, failureKind: "pre-dispatch" as const }),
     (value: QueueItemDTO) => ({ ...value, status: "reconciling" as const, failureKind: "ambiguous-dispatch" as const, reconciliationStartedAt: 1, reconciliationDeadlineAt: 2, reconciliationChecks: 0, reconciliationNextCheckAt: 1 }),
     (value: QueueItemDTO) => ({ ...value, status: "failed" as const, failureKind: "definitive" as const }),
-  ]) { const coordinator = await make({ ...item(), status: "sending", attemptCount: 1 }); expect((await coordinator.transition(identity, update, runtime)).status).toBe("committed") }
+  ]) { const coordinator = await make(item()); await coordinator.transition(identity, (value) => ({ ...value, status: "sending", attemptCount: 1 }), runtime); expect((await coordinator.transition(identity, update, runtime)).status).toBe("committed") }
   const reconciling = { ...item(), status: "reconciling" as const, attemptCount: 1, failureKind: "ambiguous-dispatch" as const, reconciliationStartedAt: 1, reconciliationDeadlineAt: 2, reconciliationChecks: 0, reconciliationNextCheckAt: 1 }
   const checking = await make(reconciling); expect((await checking.transition(identity, (value) => ({ ...value, reconciliationChecks: 1, reconciliationNextCheckAt: 2 }), runtime)).status).toBe("committed")
   const unresolved = await make(reconciling); expect((await unresolved.transition(identity, (value) => ({ ...value, status: "unresolved", reconciliationNextCheckAt: undefined }), runtime)).status).toBe("committed")
