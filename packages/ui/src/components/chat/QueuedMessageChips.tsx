@@ -40,7 +40,14 @@ const QueuedMessageChip = memo(({ message, isQueueHead, onEdit, onSend }: Queued
     const status = message.status ?? 'queued';
     const isReadOnly = status === 'sending' || status === 'reconciling';
     const isDragDisabled = message.owner?.state === 'unbound-legacy' || isReadOnly;
-    const canSend = isQueueHead && status === 'queued';
+    // Head items in a recoverable terminal/retry state can be force-sent.
+    // Locked in-flight states stay disabled until recover/reconcile finishes.
+    const canSend = isQueueHead && !isReadOnly && (
+      status === 'queued'
+      || status === 'retrying'
+      || status === 'failed'
+      || status === 'unresolved'
+    );
     const queueItemID = message.queueItemID ?? message.id;
     const recovery = message.failure?.recovery;
     const visibleContent = recovery?.content ?? message.content;

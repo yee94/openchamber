@@ -102,12 +102,12 @@ export const migrateLegacyMessageQueue = async (sink: QueueLedgerMetadataSink, b
         const serverPath = source === "server" ? candidate.serverPath as string : undefined, vscodePath = source === "vscode" ? candidate.vscodePath as string : undefined, vscodeSource = source === "vscode" ? candidate.vscodeSource as "file" | "selection" : undefined
         const metadata: Omit<QueueAttachmentRefDTO, "version" | "locator"> = { attachmentID, occurrenceRefID, filename, mimeType, size, source, ...(serverPath ? { serverPath } : {}), ...(vscodePath ? { vscodePath } : {}), ...(vscodeSource ? { vscodeSource } : {}) }
         const addIssue = (reason: QueueAttachmentIssueDTO["reason"]): void => { attachmentIssues.push({ ...metadata, reason }); issues.push(migrationIssue(scopeKey, queueItemID, attachmentPath, reason)) }
+        if (owner.state === "unbound-legacy") { addIssue("legacy-unbound-data"); continue }
         if (!sourceValid) { issues.push(migrationIssue(scopeKey, queueItemID, attachmentPath, candidate.source === "server" ? "server-metadata" : candidate.source === "vscode" ? "vscode-metadata" : "attachment-source")); addIssue("legacy-bytes-missing"); continue }
         const dataUrl = typeof candidate.dataUrl === "string" ? candidate.dataUrl : ""
         if (isDurableURL(dataUrl)) { attachments.push({ version: 1, ...metadata, locator: { kind: "url", url: dataUrl } }); continue }
         if (dataUrl.startsWith("blob:")) { addIssue("legacy-blob-url"); continue }
         if (!dataUrl.startsWith("data:")) { addIssue("legacy-bytes-missing"); continue }
-        if (owner.state === "unbound-legacy") { addIssue("legacy-unbound-data"); continue }
         const blob = decodeDataURL(dataUrl)
         if (!blob) { addIssue("legacy-bytes-missing"); continue }
         const blobID = await legacyID("legacy-blob", `${queueItemID}:${attachmentID}`), reference = { transportIdentity: owner.transportIdentity, owner: { kind: "queue" as const, ownerID: queueItemID }, attachmentOccurrenceRefID: occurrenceRefID }, existing = await blobs.readReference(reference)

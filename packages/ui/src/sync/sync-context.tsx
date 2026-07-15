@@ -509,7 +509,7 @@ function getActiveSessionCandidateIds(directory: string, state: DirectoryStore):
   })
 }
 
-type DirectorySessionStatusSnapshot = NonNullable<
+export type DirectorySessionStatusSnapshot = NonNullable<
   Awaited<ReturnType<typeof opencodeClient.getSessionStatusForDirectory>>
 >
 
@@ -527,7 +527,7 @@ type DirectorySessionStatusSnapshot = NonNullable<
 //   are lowered to idle. Used by reconnect/escalated resyncs, a deliberate edge
 //   where the live server snapshot is the source of truth (mirrors the bootstrap
 //   snapshot). The snapshot wins over any derived message state here.
-type StatusSnapshotMode = "monotonic" | "authoritative"
+export type StatusSnapshotMode = "monotonic" | "authoritative"
 
 export function applySessionStatusSnapshot(
   store: StoreApi<DirectoryStore>,
@@ -670,7 +670,7 @@ const normalizeEventDirectory = (rawDirectory: string): string => {
   return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
 }
 
-const getSessionIdFromPayload = (event: Event): string | null => {
+export const getSessionIdFromPayload = (event: Event): string | null => {
   const properties = (event as { properties?: unknown }).properties
   if (!properties || typeof properties !== "object") {
     return null
@@ -690,6 +690,8 @@ const getSessionIdFromPayload = (event: Event): string | null => {
   if (
     event.type === "message.removed"
     || event.type === "session.status"
+    || event.type === "session.idle"
+    || event.type === "session.error"
     || event.type === "todo.updated"
     || event.type === "permission.asked"
     || event.type === "permission.replied"

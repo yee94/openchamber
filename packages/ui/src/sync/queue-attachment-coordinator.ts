@@ -220,28 +220,23 @@ export const createQueueAttachmentCoordinator = (blobStore: InputDraftBlobStore,
       if (!seeded) return outcome("unseeded")
       if (recoveryReadOnly) return recoveryRequired()
       const item = find(id)
-      if (!item || !ownsRuntime(item, runtime) || owner.transportIdentity !== runtime.transportIdentity) return stale()
+      if (!item) return outcome("failed", [error("identity", "invalid-bind")])
+      if (!ownsRuntime(item, runtime) || owner.transportIdentity !== runtime.transportIdentity) return stale()
+      if (item.owner.state !== "unbound-legacy" || item.attachments.length) return outcome("failed", [error("identity", "invalid-bind", item)])
+      const sourceKey = queueLedgerScopeKey(item.owner), sourceQueue = snapshot.queues[sourceKey]
+      if (!sourceQueue || sourceQueue.length !== 1 || !sameIdentity(sourceQueue[0]!, id) || sourceQueue[0]!.owner.state !== "unbound-legacy" || sourceQueue[0]!.attachments.length) return outcome("failed", [error("identity", "invalid-bind", item)])
       const captured = capture(runtime, item)
       if (!await current(runtime, captured)) return stale()
       const nextItem = { ...clone(item), owner }
       const parsedItem = parseQueueLedgerSnapshot({ version: 4, queues: { [queueLedgerScopeKey(owner)]: [nextItem] }, migration: snapshot.migration })
       if (parsedItem.status === "corrupt" || parsedItem.issues.length) return outcome("failed", [error("identity", "invalid-bind", item)])
-      const acquired: Held[] = []
-      for (const held of entries(nextItem, "queue")) {
-        const existing = await blobStore.readReference(held.reference)
-        if (!existing.ok || existing.value && existing.value !== held.blobID) return outcome("failed", [error("blob", existing.ok ? "blob-id-conflict" : existing.error.code, item, held.attachment)], await rollback(acquired))
-        if (existing.value === undefined) { const retained = await blobStore.retain(held.reference, held.blobID); if (!retained.ok) return outcome("failed", [error("blob", retained.error.code, item, held.attachment)], await rollback(acquired)); acquired.push(held) }
-      }
-      const next = clone(snapshot), oldKey = queueLedgerScopeKey(item.owner), newKey = queueLedgerScopeKey(owner)
+      const next = clone(snapshot), oldKey = sourceKey, newKey = queueLedgerScopeKey(owner)
       next.queues[oldKey] = next.queues[oldKey]!.filter((entry) => !sameIdentity(entry, id)); if (!next.queues[oldKey]!.length) delete next.queues[oldKey]
-      next.queues[newKey] = [...(next.queues[newKey] ?? []), nextItem]
+      next.queues[newKey] = [nextItem, ...(next.queues[newKey] ?? [])]
       const parsed = parseQueueLedgerSnapshot(next)
-      if (parsed.status === "corrupt" || parsed.issues.length) return outcome("failed", [error("identity", "invalid-bind", item)], await rollback(acquired))
+      if (parsed.status === "corrupt" || parsed.issues.length) return outcome("failed", [error("identity", "invalid-bind", item)])
       const committed = await commit(parsed.snapshot, runtime, captured)
-      if (!committed.committed) return committed.error ? outcome("failed", [committed.error], await rollback(acquired)) : { ...stale(), cleanupErrors: await rollback(acquired) }
-      const cleanupErrors: QueueAttachmentCoordinatorError[] = []
-      for (const held of entries(item, "queue")) await release(held, cleanupErrors)
-      return outcome("committed", [], cleanupErrors, committed.current)
+      return committed.committed ? outcome("committed", [], [], committed.current) : committed.error ? outcome("failed", [committed.error]) : stale()
     }),
     bindMany: (ids, owner, runtime) => run(async () => {
       if (!enabled) return outcome("disabled")
@@ -250,25 +245,17 @@ export const createQueueAttachmentCoordinator = (blobStore: InputDraftBlobStore,
       const items = ids.map(find)
       if (!items.length || items.some((item) => !item || !ownsRuntime(item, runtime) || item.owner.state !== "unbound-legacy") || owner.transportIdentity !== runtime.transportIdentity) return stale()
       const source = items[0]!.owner
-      if (items.some((item) => stable(item!.owner) !== stable(source))) return outcome("failed", [error("identity", "invalid-bind")])
+      const sourceQueue = snapshot.queues[queueLedgerScopeKey(source)]
+      if (!sourceQueue || sourceQueue.length !== ids.length || items.some((item) => stable(item!.owner) !== stable(source) || item!.attachments.length) || sourceQueue.some((item, index) => !sameIdentity(item, ids[index]!))) return outcome("failed", [error("identity", "invalid-bind")])
       const captured = capture(runtime, items[0]!); if (!await current(runtime, captured)) return stale()
       const bound = items as QueueItemDTO[], moved = bound.map((item) => ({ ...clone(item), owner }))
-      const acquired: Held[] = []
-      for (const item of moved) for (const held of entries(item, "queue")) {
-        const existing = await blobStore.readReference(held.reference)
-        if (!existing.ok || existing.value && existing.value !== held.blobID) return outcome("failed", [error("blob", existing.ok ? "blob-id-conflict" : existing.error.code, item, held.attachment)], await rollback(acquired))
-        if (existing.value === undefined) { const retained = await blobStore.retain(held.reference, held.blobID); if (!retained.ok) return outcome("failed", [error("blob", retained.error.code, item, held.attachment)], await rollback(acquired)); acquired.push(held) }
-      }
       const next = clone(snapshot), oldKey = queueLedgerScopeKey(source), newKey = queueLedgerScopeKey(owner)
       next.queues[oldKey] = next.queues[oldKey]!.filter((entry) => !bound.some((item) => sameIdentity(entry, item))); if (!next.queues[oldKey]!.length) delete next.queues[oldKey]
       next.queues[newKey] = [...moved, ...(next.queues[newKey] ?? [])]
       const parsed = parseQueueLedgerSnapshot(next)
-      if (parsed.status === "corrupt" || parsed.issues.length) return outcome("failed", [error("identity", "invalid-bind")], await rollback(acquired))
+      if (parsed.status === "corrupt" || parsed.issues.length) return outcome("failed", [error("identity", "invalid-bind")])
       const committed = await commit(parsed.snapshot, runtime, captured)
-      if (!committed.committed) return committed.error ? outcome("failed", [committed.error], await rollback(acquired)) : { ...stale(), cleanupErrors: await rollback(acquired) }
-      const cleanupErrors: QueueAttachmentCoordinatorError[] = []
-      for (const item of bound) for (const held of entries(item, "queue")) await release(held, cleanupErrors)
-      return outcome("committed", [], cleanupErrors, committed.current)
+      return committed.committed ? outcome("committed", [], [], committed.current) : committed.error ? outcome("failed", [committed.error]) : stale()
     }),
     acquireSendPayload: (id, runtime) => run(async () => {
       if (!enabled) return outcome("disabled")

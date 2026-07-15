@@ -68,7 +68,8 @@ import {
   materializeConfirmedSendRecords,
   dirStoreForDirectory,
 } from "./session-actions"
-import { useInputStore, type SyntheticContextPart } from "./input-store"
+import { useInputStore, type InputDraftRuntimeCapture, type DraftOwnershipCommitResult, type SyntheticContextPart } from "./input-store"
+import { newSessionDraftKey, sessionDraftKey, type DraftKey } from "./input-draft-types"
 import { useSessionGoalArmStore } from "@/stores/useSessionGoalArmStore"
 import { setSessionGoal } from "@/lib/sessionGoalActions"
 import { wrapSystemReminder } from "@/lib/systemReminder"
@@ -199,6 +200,7 @@ export function routeMessage(params: {
 
 type SendMessageOptions = {
   sessionId?: string
+  directoryHint?: string | null
   delivery?: 'steer'
   commitStagedMessageEdit?: boolean
   messageID?: string
@@ -250,6 +252,7 @@ export type { SessionMemoryState } from "./viewport-store"
 
 export type NewSessionDraftState = {
   open: boolean
+  draftID: string | null
   selectedProjectId?: string | null
   directoryOverride: string | null
   permissionAutoAcceptEnabled?: boolean
@@ -272,7 +275,7 @@ type ForkTransitionState = {
   stage: "preparing" | "copying" | "opening"
 }
 
-type OpenNewSessionDraftOptions = Partial<NewSessionDraftState> & {
+type OpenNewSessionDraftOptions = Omit<Partial<NewSessionDraftState>, "draftID" | "open" | "submissionToken" | "draftSubmitting"> & {
   /**
    * An explicit directory from an external deep link represents a project
    * target. If it is not already covered by a project or worktree, register
@@ -377,6 +380,7 @@ export type SessionUIState = {
 
   // Data access helpers (read from sync)
   getSessionsByDirectory: (directory: string) => Session[]
+  getAuthoritativeDirectoryForSession: (sessionId: string) => string | null
   getDirectoryForSession: (sessionId: string) => string | null
   getLastUserChoice: (sessionId: string) => { agent?: string; providerID?: string; modelID?: string; variant?: string } | null
   getCurrentAgent: (sessionId: string) => string | undefined
@@ -434,15 +438,18 @@ const getAttachmentForSession = (sessionId: string | null | undefined): SessionW
 const resolveSessionDirectory = (
   sessionId: string | null | undefined,
   getWtMeta: (id: string) => WorktreeMetadata | undefined,
+  options?: { includeRuntimeMemory?: boolean },
 ): string | null => {
   if (!sessionId) return null
   const attachmentDirectory = getAttachedSessionDirectory(getAttachmentForSession(sessionId))
   if (attachmentDirectory) return attachmentDirectory
   const metaPath = getWtMeta(sessionId)?.path
   if (typeof metaPath === "string" && metaPath.trim().length > 0) return normalizePath(metaPath)
-  const runtimeMemory = runtimeSessionMemory.get(runtimeMemoryKey())
-  if (runtimeMemory?.sessionId === sessionId && runtimeMemory.directory) {
-    return normalizePath(runtimeMemory.directory)
+  if (options?.includeRuntimeMemory !== false) {
+    const runtimeMemory = runtimeSessionMemory.get(runtimeMemoryKey())
+    if (runtimeMemory?.sessionId === sessionId && runtimeMemory.directory) {
+      return normalizePath(runtimeMemory.directory)
+    }
   }
   const sessions = getAllSyncSessions()
   const target = sessions.find((s) => s.id === sessionId)
@@ -456,6 +463,7 @@ const activateConfigForDirectory = async (directory: string | null | undefined):
 
 const DEFAULT_DRAFT: NewSessionDraftState = {
   open: false,
+  draftID: null,
   directoryOverride: null,
   parentID: null,
   draftSubmitting: false,
@@ -494,6 +502,15 @@ type MaterializedDraftSession = {
   syntheticParts?: SyntheticContextPart[]
 }
 
+type DraftSubmissionClaim = {
+  token: number
+  draftID: string
+  draft: NewSessionDraftState
+  runtime: InputDraftRuntimeCapture
+  runtimeMemoryKey: string
+  source: { key: DraftKey; revision: number } | null
+}
+
 const resolveProjectRefForWorktreeDirectory = (directory: string | null, projectId?: string | null): { id: string; path: string } | null => {
   const projectsState = useProjectsStore.getState()
   if (projectId) {
@@ -527,32 +544,106 @@ const promoteProjectForConversation = (
   }
 }
 
-async function claimDraftSubmission(): Promise<{ token: number; draft: NewSessionDraftState } | null> {
+const sameRuntimeCapture = (a: InputDraftRuntimeCapture, b: InputDraftRuntimeCapture): boolean =>
+  a.transportIdentity === b.transportIdentity && a.generation === b.generation
+
+const hasClaimDraftIdentity = (draft: NewSessionDraftState, claim: DraftSubmissionClaim): boolean =>
+  draft.open
+    && draft.draftSubmitting === true
+    && draft.draftID === claim.draftID
+    && draft.submissionToken === claim.token
+
+const isCurrentClaimDraft = (draft: NewSessionDraftState, claim: DraftSubmissionClaim): boolean =>
+  hasClaimDraftIdentity(draft, claim)
+    && sameRuntimeCapture(useInputStore.getState().captureDraftRuntime(), claim.runtime)
+
+async function claimDraftSubmission(): Promise<DraftSubmissionClaim | null> {
+  let draftID: string | null = null
   let token: number | null = null
+  let memoryKey: string | null = null
   useSessionUIStore.setState((s) => {
     const d = s.newSessionDraft
-    if (!d?.open || d.draftSubmitting) return {}
+    if (!d?.open || d.draftSubmitting || !d.draftID) return {}
     const nextToken = (d.submissionToken ?? 0) + 1
-    token = nextToken
     const nextDraft: NewSessionDraftState = { ...d, draftSubmitting: true, submissionToken: nextToken }
-    writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: nextDraft })
+    memoryKey = runtimeMemoryKey()
+    draftID = nextDraft.draftID
+    token = nextToken
+    writeRuntimeSessionMemory(memoryKey, { draft: nextDraft })
     return { newSessionDraft: nextDraft }
   })
-  if (token === null) return null
-  const draft = useSessionUIStore.getState().newSessionDraft
-  return { token, draft: { ...draft } }
+  if (!draftID || token === null || !memoryKey) return null
+  const runtime = useInputStore.getState().captureDraftRuntime()
+  const sourceKey = newSessionDraftKey(runtime, draftID)
+  const source = useInputStore.getState().getDraft(sourceKey)
+  return {
+    token,
+    draftID,
+    draft: cloneDraft(useSessionUIStore.getState().newSessionDraft),
+    runtime,
+    runtimeMemoryKey: memoryKey,
+    source: source ? { key: sourceKey, revision: source.revision } : null,
+  }
 }
 
-function restoreDraftSubmission(token: number): void {
+function restoreDraftSubmission(claim: DraftSubmissionClaim): void {
   useSessionUIStore.setState((s) => {
     const d = s.newSessionDraft
-    if (d.draftSubmitting && d.submissionToken === token && d.open) {
+    if (isCurrentClaimDraft(d, claim)) {
       const restored: NewSessionDraftState = { ...d, draftSubmitting: false }
-      writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: restored })
+      const memory = runtimeSessionMemory.get(claim.runtimeMemoryKey)
+      if (memory && hasClaimDraftIdentity(memory.draft, claim)) {
+        writeRuntimeSessionMemory(claim.runtimeMemoryKey, { draft: restored })
+      }
       return { newSessionDraft: restored }
     }
     return {}
   })
+  const memory = runtimeSessionMemory.get(claim.runtimeMemoryKey)
+  if (memory && hasClaimDraftIdentity(memory.draft, claim)) {
+    writeRuntimeSessionMemory(claim.runtimeMemoryKey, { draft: { ...memory.draft, draftSubmitting: false } })
+  }
+}
+
+function clearStaleClaimMemory(claim: DraftSubmissionClaim): void {
+  const memory = runtimeSessionMemory.get(claim.runtimeMemoryKey)
+  if (memory && hasClaimDraftIdentity(memory.draft, claim)) {
+    writeRuntimeSessionMemory(claim.runtimeMemoryKey, { draft: { ...DEFAULT_DRAFT } })
+  }
+}
+
+async function finalizeClaimedDraftOwnership(
+  claim: DraftSubmissionClaim,
+  sessionID: string,
+  disposition: "preserve" | "consume",
+): Promise<DraftOwnershipCommitResult | null> {
+  if (!claim.source) return null
+  let result: DraftOwnershipCommitResult
+  try {
+    result = await useInputStore.getState().finalizeDraftOwnership({
+      source: claim.source.key,
+      destination: sessionDraftKey(claim.runtime, sessionID),
+      expectedSourceRevision: claim.source.revision,
+      disposition,
+      runtime: claim.runtime,
+    })
+  } catch {
+    console.warn("[session-ui-store] draft ownership finalization rejected", {
+      disposition,
+      sessionID,
+      draftID: claim.draftID,
+    })
+    return null
+  }
+  if (result.status !== "committed") {
+    console.warn("[session-ui-store] draft ownership finalization did not commit", {
+      status: result.status,
+      disposition,
+      sessionID,
+      draftID: claim.draftID,
+    })
+  }
+  return result
 }
 
 interface FinalizeDraftSessionParams {
@@ -576,18 +667,14 @@ async function finalizeDraftSession(
   created: Session,
   selection: { providerID: string; modelID: string; agent?: string; variant?: string },
   params: FinalizeDraftSessionParams,
-  token?: number,
+  claim?: DraftSubmissionClaim,
 ): Promise<MaterializedDraftSession & { selected: boolean }> {
   const store = useSessionUIStore.getState()
   const { targetFolderId, draftProjectId, draftSyntheticParts } = params
   const createdDirectory = normalizePath(params.directory ?? created.directory ?? null)
   const currentDraft = store.newSessionDraft
   const draftPermissionAutoAcceptEnabled = currentDraft.permissionAutoAcceptEnabled === true
-  const stale =
-    token !== undefined &&
-    (!currentDraft.open ||
-     !currentDraft.draftSubmitting ||
-     currentDraft.submissionToken !== token)
+  const stale = claim !== undefined && !isCurrentClaimDraft(currentDraft, claim)
   recordCreatedSession(created, createdDirectory)
   const configState = useConfigStore.getState()
   const effectiveDraftAgent = params.agent ?? configState.currentAgentName
@@ -617,6 +704,7 @@ async function finalizeDraftSession(
         })
     }
   }
+  if (stale && claim) clearStaleClaimMemory(claim)
   return {
     sessionId: created.id,
     directory: createdDirectory,
@@ -638,29 +726,39 @@ async function resolveDraftDirectory(draft: NewSessionDraftState): Promise<{ dir
   return { directory: normalizePath(resolvedDir), projectId }
 }
 
-export async function materializeOpenDraftSession(selection: {
+async function materializeClaimedDraftSession(selection: {
   providerID: string; modelID: string; agent?: string; variant?: string
-}): Promise<MaterializedDraftSession | null> {
+}): Promise<{ materialized: MaterializedDraftSession; claim: DraftSubmissionClaim } | null> {
   const claimed = await claimDraftSubmission()
   if (!claimed) return null
-  const { token, draft } = claimed
+  const { draft } = claimed
   const trimmedAgent = typeof selection.agent === "string" && selection.agent.trim().length > 0 ? selection.agent.trim() : undefined
   try {
     const { directory } = await resolveDraftDirectory(draft)
     const dir = directory ?? opencodeClient.getDirectory()
     const created = await createSessionAction(draft.title, dir, draft.parentID ?? null, undefined)
     if (!created?.id) throw new Error("Failed to create session")
-    return await finalizeDraftSession(created, selection, {
+    const finalized = await finalizeDraftSession(created, selection, {
       directory: directory ?? (created as { directory?: string }).directory ?? null,
       agent: trimmedAgent,
       draftProjectId: draft.selectedProjectId,
       targetFolderId: draft.targetFolderId,
       draftSyntheticParts: draft.syntheticParts,
-    })
+    }, claimed)
+    return { materialized: finalized, claim: claimed }
   } catch {
-    restoreDraftSubmission(token)
+    restoreDraftSubmission(claimed)
     return null
   }
+}
+
+export async function materializeOpenDraftSession(selection: {
+  providerID: string; modelID: string; agent?: string; variant?: string
+}): Promise<MaterializedDraftSession | null> {
+  const result = await materializeClaimedDraftSession(selection)
+  if (!result) return null
+  await finalizeClaimedDraftOwnership(result.claim, result.materialized.sessionId, "preserve")
+  return result.materialized
 }
 
 const COMBINED_RETRY_MAX = 2
@@ -679,7 +777,7 @@ async function handleCombinedDraftSend(params: {
   const { content, providerID, modelID, agent, agentMentionName, variant, attachments, additionalParts } = params
   const claimed = await claimDraftSubmission()
   if (!claimed) throw await localizedSendError("chat.chatInput.toast.messageSendFailed")
-  const { token, draft } = claimed
+  const { draft } = claimed
   try {
     const { directory } = await resolveDraftDirectory(draft)
     const trimmedAgent = typeof agent === "string" && agent.trim().length > 0 ? agent.trim() : undefined
@@ -707,10 +805,11 @@ async function handleCombinedDraftSend(params: {
         if (attempt === COMBINED_RETRY_MAX) break
       }
     }
-    if (!result) { restoreDraftSubmission(token); useInputStore.getState().setPendingInputText(content, "replace"); throw await localizedSendError("chat.chatInput.toast.messageSendFailed") }
+    if (!result) { restoreDraftSubmission(claimed); useInputStore.getState().setPendingInputText(content, "replace"); throw await localizedSendError("chat.chatInput.toast.messageSendFailed") }
     if (result.ok) {
       const session = result.session as Session; const sessionDir = directory ?? (session as { directory?: string }).directory ?? null
-      const finalized = await finalizeDraftSession(session, { providerID, modelID, agent: effectiveAgent, variant }, { directory: sessionDir, agent: effectiveAgent, draftProjectId: draft.selectedProjectId, targetFolderId: draft.targetFolderId, draftSyntheticParts: draft.syntheticParts }, token)
+      const finalized = await finalizeDraftSession(session, { providerID, modelID, agent: effectiveAgent, variant }, { directory: sessionDir, agent: effectiveAgent, draftProjectId: draft.selectedProjectId, targetFolderId: draft.targetFolderId, draftSyntheticParts: draft.syntheticParts }, claimed)
+      await finalizeClaimedDraftOwnership(claimed, session.id, "consume")
       notifyConfirmedMessageSent(session.id, messageID)
       if (finalized.selected) markPendingUserSendAnimation(session.id)
       if (finalized.selected && sessionDir) {
@@ -725,28 +824,31 @@ async function handleCombinedDraftSend(params: {
     if (!result.ok) {
       const phase = (result as { ok: false; phase: string }).phase
       if (phase === 'create' || phase === 'validate' || phase === 'conflict' || phase === 'unavailable' || phase === 'internal') {
-        restoreDraftSubmission(token); useInputStore.getState().setPendingInputText(content, "replace")
+        restoreDraftSubmission(claimed); useInputStore.getState().setPendingInputText(content, "replace")
         throw await localizedSendError("chat.chatInput.toast.messageSendFailed")
       }
       if (phase === 'prompt') {
         const promptResult = result as Extract<ConversationCreateWithPromptResult, { ok: false; phase: 'prompt' }>
         const session = promptResult.session as Session; const sessionDir = directory ?? (session as { directory?: string }).directory ?? null
-        const finalized = await finalizeDraftSession(session, { providerID, modelID, agent: effectiveAgent, variant }, { directory: sessionDir, agent: effectiveAgent, draftProjectId: draft.selectedProjectId, targetFolderId: draft.targetFolderId, draftSyntheticParts: draft.syntheticParts }, token)
+        const finalized = await finalizeDraftSession(session, { providerID, modelID, agent: effectiveAgent, variant }, { directory: sessionDir, agent: effectiveAgent, draftProjectId: draft.selectedProjectId, targetFolderId: draft.targetFolderId, draftSyntheticParts: draft.syntheticParts }, claimed)
         if (promptResult.ambiguous) {
           const records = await fetchRecentSendConfirmationRecords(session.id, messageID, sessionDir)
           if (records) {
+            await finalizeClaimedDraftOwnership(claimed, session.id, "consume")
             notifyConfirmedMessageSent(session.id, messageID)
             if (finalized.selected) markPendingUserSendAnimation(session.id)
             const store = dirStoreForDirectory(sessionDir ?? opencodeClient.getDirectory() ?? "")
             materializeConfirmedSendRecords(store, session.id, messageID, records)
             return
           }
+          await finalizeClaimedDraftOwnership(claimed, session.id, "preserve")
           useInputStore.getState().setPendingInputText(content, "replace"); throw await localizedSendError("chat.chatInput.toast.sendStatusUnknown")
         }
+        await finalizeClaimedDraftOwnership(claimed, session.id, "preserve")
         useInputStore.getState().setPendingInputText(content, "replace"); throw await localizedSendError("chat.chatInput.toast.messageSendFailed")
       }
     }
-  } catch (_error) { restoreDraftSubmission(token); throw _error }
+  } catch (_error) { restoreDraftSubmission(claimed); throw _error }
 }
 
 
@@ -955,6 +1057,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // openNewSessionDraft
   // ---------------------------------------------------------------------------
   openNewSessionDraft: (options) => {
+    const existingDraft = get().newSessionDraft
     let projectsState = useProjectsStore.getState()
     const projects = projectsState.projects
     const availableWorktreesByProject = get().availableWorktreesByProject
@@ -1027,6 +1130,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const nextDraft: NewSessionDraftState = {
       open: true,
+      draftID: existingDraft.open && !existingDraft.draftSubmitting
+        ? existingDraft.draftID ?? crypto.randomUUID()
+        : crypto.randomUUID(),
       selectedProjectId: selectedProject?.id ?? null,
       directoryOverride: directory,
       permissionAutoAcceptEnabled: options?.permissionAutoAcceptEnabled === true,
@@ -1038,6 +1144,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       initialPrompt: options?.initialPrompt,
       syntheticParts: options?.syntheticParts,
       targetFolderId: options?.targetFolderId,
+      submissionToken: existingDraft.open && !existingDraft.draftSubmitting
+        ? existingDraft.submissionToken
+        : 0,
       draftSubmitting: false,
     }
 
@@ -1085,6 +1194,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   closeNewSessionDraft: () => {
     const nextDraft: NewSessionDraftState = {
         open: false,
+        draftID: null,
         selectedProjectId: null,
         directoryOverride: null,
         pendingWorktreeRequestId: null,
@@ -1379,13 +1489,14 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         return
       }
 
-      const createdDraftSession = await materializeOpenDraftSession({
+      const materialized = await materializeClaimedDraftSession({
         providerID,
         modelID,
         agent: trimmedAgent,
         variant,
       })
-      if (!createdDraftSession) throw new Error("Failed to create session")
+      if (!materialized) throw new Error("Failed to create session")
+      const { materialized: createdDraftSession, claim } = materialized
 
       const mergedAdditionalParts = createdDraftSession.syntheticParts?.length
         ? [...(additionalParts || []), ...createdDraftSession.syntheticParts]
@@ -1400,7 +1511,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         filename: a.filename,
       }))
 
-      await routeMessage({
+      try {
+        await routeMessage({
         sessionId: createdDraftSession.sessionId,
         directory: createdDraftSession.directory,
         content,
@@ -1425,7 +1537,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
             filename: a.filename,
           })),
         })),
-      })
+        })
+        await finalizeClaimedDraftOwnership(claim, createdDraftSession.sessionId, "consume")
+      } catch (error) {
+        await finalizeClaimedDraftOwnership(claim, createdDraftSession.sessionId, "preserve")
+        throw error
+      }
       promoteProjectForConversation(createdDraftSession.directory, get().availableWorktreesByProject)
       applyArmedGoal(createdDraftSession.sessionId, createdDraftSession.directory)
       return
@@ -1467,7 +1584,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     }
 
     const currentSessionDirectory = targetSessionId
-      ? normalizePath(get().getDirectoryForSession(targetSessionId))
+      ? normalizePath(options?.directoryHint) ?? normalizePath(get().getDirectoryForSession(targetSessionId))
       : null
     if (targetSessionId) {
       markPendingUserSendAnimation(targetSessionId)
@@ -1985,22 +2102,26 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     return sessions.filter((s) => resolveDirectoryKey(s) === nd)
   },
 
+  getAuthoritativeDirectoryForSession: (sessionId) => {
+    const resolved = resolveSessionDirectory(
+      sessionId,
+      (sid) => get().worktreeMetadata.get(sid),
+      { includeRuntimeMemory: false },
+    )
+    if (resolved) return resolved
+    const globalStore = useGlobalSessionsStore.getState()
+    const globalSession = [...globalStore.activeSessions, ...globalStore.archivedSessions]
+      .find((s) => s.id === sessionId)
+    return globalSession ? resolveGlobalSessionDirectory(globalSession) : null
+  },
+
   getDirectoryForSession: (sessionId) => {
     if (sessionId === get().currentSessionId && get().currentSessionDirectory) {
       return get().currentSessionDirectory
     }
     const resolved = resolveSessionDirectory(sessionId, (sid) => get().worktreeMetadata.get(sid))
     if (resolved) return resolved
-    const attachmentDirectory = getAttachedSessionDirectory(getAttachmentForSession(sessionId))
-    if (attachmentDirectory) return attachmentDirectory
-    const sessions = getAllSyncSessions()
-    const session = sessions.find((s) => s.id === sessionId)
-    if (session) return resolveDirectoryKey(session)
-    const globalStore = useGlobalSessionsStore.getState()
-    const globalSession = [...globalStore.activeSessions, ...globalStore.archivedSessions]
-      .find((s) => s.id === sessionId)
-    if (globalSession) return resolveGlobalSessionDirectory(globalSession)
-    return null
+    return get().getAuthoritativeDirectoryForSession(sessionId)
   },
 
   getLastUserChoice: (sessionId) => {
