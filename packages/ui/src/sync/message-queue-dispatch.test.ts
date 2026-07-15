@@ -190,7 +190,7 @@ test("reconciliation transition failed、stale 与 throw 保持结构化结果�
     const h = harness({ now: () => 10, query: async () => "authoritative-miss" }); h.value = reconciling(h.value!); h.runtime.transition = async () => ({ status: outcome, errors: [], cleanupErrors: [] })
     expect(await h.dispatcher.reconcile(id)).toBe(outcome); expect(h.log).toEqual([])
   }
-  const throwing = harness({ now: () => 10, query: async () => "confirmed" }); throwing.value = reconciling(throwing.value!); throwing.runtime.confirm = async () => { throw Error("confirm") }
+  const throwing = harness({ now: () => 10, query: async () => "authoritative-miss" }); throwing.value = reconciling(throwing.value!); throwing.runtime.transition = async () => { throw Error("transition") }
   expect(await throwing.dispatcher.reconcile(id)).toBe("failed"); expect(throwing.log).toEqual([])
 })
 
@@ -219,11 +219,13 @@ test("planner 只检查每 scope head，并计算唯一最近 wake", () => {
   const plan = planMessageQueueWork(snapshot, "t", 10); expect(plan.dispatch).toEqual([]); expect(plan.query).toEqual([]); expect(plan.resolve).toEqual([]); expect(plan.recover).toEqual([]); expect(plan.nextWakeAt).toBe(30); expect(plan.inspectedScopeCount).toBe(3)
 })
 
-test("GET confirmed 与 POST callback 竞争时 confirm/notify 各一次", async () => {
-  const wait = deferred<void>(), h = harness({ query: async () => "confirmed", post: async (_scope, _payload, options) => { await wait.promise; options.onSendConfirmed(id.messageID) } })
+test("GET confirmed 与 POST callback 同 identity flight 只 confirm/notify 一次", async () => {
+  const entered = deferred<void>(), release = deferred<void>(), h = harness({ now: () => 10, query: async () => { entered.resolve(); await release.promise; return "confirmed" }, post: async (_scope, _payload, options) => { options.onSendConfirmed(id.messageID) } })
   h.value = reconciling(h.value!)
-  const query = h.dispatcher.reconcile(id); await query
-  h.value = item(); const post = h.dispatcher.dispatch(id); wait.resolve(); await post
-  expect(h.log.filter((entry) => entry === "confirm")).toHaveLength(2)
-  expect(h.log.filter((entry) => entry === "notify")).toHaveLength(2)
+  const query = h.dispatcher.reconcile(id); await entered.promise
+  const post = h.dispatcher.dispatch(id); expect(post).toBe(query)
+  release.resolve(); expect(await query).toBe("confirmed")
+  expect(h.log.filter((entry) => entry === "post")).toHaveLength(0)
+  expect(h.log.filter((entry) => entry === "confirm")).toHaveLength(1)
+  expect(h.log.filter((entry) => entry === "notify")).toHaveLength(1)
 })
