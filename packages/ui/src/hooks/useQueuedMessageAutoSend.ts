@@ -34,7 +34,10 @@ export const planQueueHead = (item: QueueItem | undefined, status: SessionStatus
   // Abandoned in-flight POSTs must re-enter reconciliation; v4 does the same.
   if (item.status === 'sending') return isInFlight ? {} : { recover: true };
   if (item.status === 'queued') return isAuthoritativeIdle(status) ? { dispatch: true } : {};
-  if (item.status === 'retrying') return !isAuthoritativeIdle(status) ? {} : item.nextAttemptAt && item.nextAttemptAt > now ? { nextWakeAt: item.nextAttemptAt } : { dispatch: true };
+  if (item.status === 'retrying') {
+    if (item.nextAttemptAt && item.nextAttemptAt > now) return { nextWakeAt: item.nextAttemptAt };
+    return isAuthoritativeIdle(status) ? { dispatch: true } : {};
+  }
   if (item.status === 'reconciling') {
     const persistedChecks = item.reconciliationChecks ?? 0;
     if (persistedChecks >= MAX_RECONCILIATION_CHECKS || (item.reconciliationDeadlineAt ?? Infinity) <= now) return { resolve: true };
@@ -214,7 +217,6 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
   const scopeKey = React.useMemo(() => scopes.map((scope) => `${scope.directory}\n${scope.sessionID}`).join('\u0000'), [scopes]);
   const scopesRef = React.useRef(scopes);
   scopesRef.current = scopes;
-  // Message completion is a narrow scheduler wake. Live status remains authoritative.
   const messageCompletionRevision = React.useSyncExternalStore(
     React.useCallback((notify: () => void) => {
       if (!scopeKey) return () => undefined;
@@ -286,5 +288,5 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
       });
     }
     let timer: ReturnType<typeof setTimeout> | undefined; if (schedule.nextWakeAt) timer = setTimeout(() => setWake((value) => value + 1), Math.max(0, schedule.nextWakeAt - Date.now())); return () => { if (timer) clearTimeout(timer); };
-  }, [activeRuntimeKey, activeTransportIdentity, dispatchFlightState, enabled, queuedMessages, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, wake]);
+  }, [activeRuntimeKey, activeTransportIdentity, childStores, dispatchFlightState, enabled, queuedMessages, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, wake]);
 }

@@ -16,6 +16,7 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
   },
 }))
 import { applySessionEventToGlobalSessions } from "../session-event-router"
+import { getSessionIdFromPayload } from "../sync-context"
 
 const buildSession = (title: string, time: Session["time"]): Session => ({
   id: "ses_1",
@@ -58,5 +59,21 @@ describe("applySessionEventToGlobalSessions", () => {
     applySessionEventToGlobalSessions(buildEvent(buildSession("New Title", { created: 1, updated: 20 })))
 
     expect(upsertedSessions).toHaveLength(1)
+  })
+})
+
+describe("getSessionIdFromPayload", () => {
+  test("extracts properties.sessionID for session.idle", () => {
+    expect(getSessionIdFromPayload({
+      type: "session.idle",
+      properties: { sessionID: "ses_1" },
+    } as Event)).toBe("ses_1")
+  })
+
+  test("extracts properties.sessionID for session.error", () => {
+    expect(getSessionIdFromPayload({
+      type: "session.error",
+      properties: { sessionID: "ses_1" },
+    } as Event)).toBe("ses_1")
   })
 })

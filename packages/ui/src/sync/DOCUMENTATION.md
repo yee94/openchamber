@@ -253,6 +253,7 @@ becoming the cached startup result consumed by the session coordinator.
   and seeds the baseline while performing zero blob mutations and metadata writes.
 
 - Queue ownership uses stable transport identity plus directory and session ID.
+  Queue admission captures an OpenCode-compatible `msg_` message identity.
   Legacy migration constructs recovery metadata, then degrades every unbound
   attachment into a `legacy-unbound-data` issue before source validation, URL
   classification, or byte decoding; unbound rows store empty `attachments`.
@@ -464,7 +465,7 @@ Keep this in sync with `handleDirectoryEvent` in `sync-context.tsx`:
 |---|---|
 | `session.created/updated/deleted` | `session`, `permission`, `todo`, `part` |
 | `session.diff` | `session_diff` |
-| `session.status` | `session_status` |
+| `session.status/session.idle/session.error` | `session_status` |
 | `todo.updated` | `todo` |
 | `message.updated` | `message`, `part` when a loaded session observes a new assistant before its first part |
 | `message.removed` | `message`, `part` |

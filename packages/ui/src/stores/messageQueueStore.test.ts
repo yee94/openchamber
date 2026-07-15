@@ -12,6 +12,20 @@ describe('messageQueueStore scoped ledger', () => {
     const first = add(a); const second = add(b); const state = useMessageQueueStore.getState();
     expect(queueScopeKey(a)).not.toBe(queueScopeKey(b));
     expect(state.getQueueForScope(a)[0]).toBe(first); expect(state.getQueueForScope(b)[0]).toBe(second);
+    expect(/^msg_/.test(first.messageID)).toBe(true); expect(/^msg_/.test(second.messageID)).toBe(true);
+  });
+  test('replaces invalid persisted message IDs while preserving queue and operation identities', () => {
+    const persisted = { queuedMessages: { [queueScopeKey(a)]: [{ id: 'queue-1', queueItemID: 'queue-1', operationID: 'operation-1', messageID: 'message-invalid', content: 'one', createdAt: 1, owner: a, status: 'failed' as const, attemptCount: 1 }] } };
+    const migrated = migrateMessageQueueState(persisted);
+    const item = migrated.queuedMessages[queueScopeKey(a)]![0] as QueueItem;
+    const repeated = migrateMessageQueueState(migrated).queuedMessages[queueScopeKey(a)]![0] as QueueItem;
+    expect(/^msg_/.test(item.messageID)).toBe(true); expect(item.queueItemID).toBe('queue-1'); expect(item.operationID).toBe('operation-1'); expect(item.status).toBe('failed'); expect(repeated.messageID).toBe(item.messageID);
+  });
+  test('keeps valid persisted msg IDs unchanged across repeated migrations', () => {
+    const persisted = { queuedMessages: { [queueScopeKey(a)]: [{ id: 'queue-1', queueItemID: 'queue-1', operationID: 'operation-1', messageID: 'msg_existing', content: 'one', createdAt: 1, owner: a }] } };
+    const migrated = migrateMessageQueueState(persisted);
+    expect(migrated.queuedMessages[queueScopeKey(a)]![0]?.messageID).toBe('msg_existing');
+    expect(migrateMessageQueueState(migrated).queuedMessages[queueScopeKey(a)]![0]?.messageID).toBe('msg_existing');
   });
   test('migrates v2 session queues by item owner and remains idempotent', () => {
     const migrated = migrateMessageQueueState({ queuedMessages: { 'session-a': [{ id: 'legacy', content: 'one', createdAt: 1 }, { id: 'owned', content: 'two', createdAt: 2, owner: a }] } });
