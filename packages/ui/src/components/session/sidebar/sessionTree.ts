@@ -23,9 +23,9 @@ export type BuildSessionTreeOptions = {
 /**
  * Build a parent/child session forest.
  *
- * Pinned filtering happens after attachment so children of pinned parents keep
- * their parent edge. Project callers omit pinned nodes from the visible forest;
- * pinned callers keep them and render the full descendant tree under the pin.
+ * Pinned filtering happens after attachment. Project callers omit pinned roots
+ * from the visible forest; children of those roots stay hidden only while the
+ * parent is pinned (flat pin rows). Unpinning rebuilds the normal parent/child tree.
  */
 export const buildSessionTree = (
   sessions: Session[],
@@ -73,8 +73,8 @@ export const buildSessionTree = (
     if (!parentID) return true;
     const parentSession = sessionMap.get(parentID);
     if (!parentSession) return true;
-    // Parent is pinned and omitted from project forest → child would otherwise
-    // become a floating root. Keep children under the pin only.
+    // Parent is pinned and omitted from the project forest; pinned rows stay flat
+    // and do not render nested subagents. Keep those children hidden entirely.
     if (omitPinnedSessions && pinnedSessionIds.has(parentID)) {
       return false;
     }
@@ -82,48 +82,4 @@ export const buildSessionTree = (
   });
 
   return roots.map((session) => buildNode(session));
-};
-
-/** Build a single session node with its full descendant tree (for pinned rows). */
-export const buildSessionNodeWithChildren = (
-  session: Session,
-  allSessions: Session[],
-  options: Omit<BuildSessionTreeOptions, 'omitPinnedSessions'> = {},
-): SessionNode => {
-  const pinnedSessionIds = options.pinnedSessionIds ?? new Set<string>();
-  const getWorktree = options.getWorktree ?? (() => null);
-
-  const sortedSessions = dedupeSessionsById(allSessions)
-    .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
-  const sessionMap = new Map(sortedSessions.map((item) => [item.id, item]));
-  // Ensure the requested session is present even if it was missing from allSessions.
-  if (!sessionMap.has(session.id)) {
-    sessionMap.set(session.id, session);
-    sortedSessions.push(session);
-  }
-
-  const childrenMap = new Map<string, Session[]>();
-  sortedSessions.forEach((item) => {
-    const parentID = getParentID(item);
-    if (!parentID) return;
-    const parentSession = sessionMap.get(parentID);
-    if (!parentSession || isArchivedSession(parentSession) !== isArchivedSession(item)) {
-      return;
-    }
-    const collection = childrenMap.get(parentID) ?? [];
-    collection.push(item);
-    childrenMap.set(parentID, collection);
-  });
-  childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
-
-  const buildNode = (item: Session): SessionNode => {
-    const children = (childrenMap.get(item.id) ?? []).map((child) => buildNode(child));
-    return {
-      session: item,
-      children,
-      worktree: getWorktree(item),
-    };
-  };
-
-  return buildNode(sessionMap.get(session.id) ?? session);
 };

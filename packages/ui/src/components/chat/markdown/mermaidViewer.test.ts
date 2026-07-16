@@ -3,11 +3,14 @@ import { describe, expect, test } from 'bun:test';
 import {
   fitMermaidViewBox,
   formatMermaidViewBox,
+  getMermaidPointerInViewport,
   getMermaidSvgContentBox,
   getMermaidViewerSignature,
   hasMermaidPointerDragMoved,
   MERMAID_BLOCK_SELECTOR,
+  normalizeMermaidWheelDelta,
   panMermaidViewBox,
+  pinchMermaidViewBox,
   shouldRefreshMermaidViewers,
   zoomMermaidViewBoxAtPoint,
 } from './mermaidViewer';
@@ -153,6 +156,70 @@ describe('mermaidViewer', () => {
       width: 400,
       height: 200,
     });
+  });
+
+  test('converts client pointer coordinates relative to the viewport origin', () => {
+    expect(getMermaidPointerInViewport(
+      { clientX: 145, clientY: 96 },
+      { left: 120, top: 80 },
+    )).toEqual({ x: 25, y: 16 });
+  });
+
+  test('normalizes pixel, line, and page wheel deltas to equivalent pixels', () => {
+    expect(normalizeMermaidWheelDelta(16, 0, 400)).toBe(16);
+    expect(normalizeMermaidWheelDelta(1, 1, 400)).toBe(16);
+    expect(normalizeMermaidWheelDelta(1, 2, 16)).toBe(16);
+  });
+
+  test('bounds wheel deltas to a finite zoom exponent', () => {
+    expect(normalizeMermaidWheelDelta(1e9, 0, 400)).toBe(1000);
+    expect(normalizeMermaidWheelDelta(-1e9, 1, 400)).toBe(-1000);
+    expect(normalizeMermaidWheelDelta(Number.POSITIVE_INFINITY, 0, 400)).toBe(0);
+    expect(normalizeMermaidWheelDelta(1, 2, 0)).toBe(0);
+    expect(Math.pow(1.0015, -normalizeMermaidWheelDelta(1e9, 0, 400))).toBeGreaterThan(0);
+  });
+
+  test('pinch zoom keeps the SVG point under the moving gesture center stable', () => {
+    const current = { x: 0, y: 0, width: 400, height: 400 };
+    const previousGesture = { center: { x: 100, y: 100 }, distance: 100 };
+    const gesture = { center: { x: 125, y: 100 }, distance: 150 };
+    const next = pinchMermaidViewBox({
+      currentBox: current,
+      contentBox: { x: 0, y: 0, width: 400, height: 200 },
+      viewport: { width: 200, height: 200 },
+      previousGesture,
+      gesture,
+      minScale: 0.5,
+      maxScale: 4,
+    });
+
+    const svgPointBefore = {
+      x: current.x + (previousGesture.center.x / 200) * current.width,
+      y: current.y + (previousGesture.center.y / 200) * current.height,
+    };
+    const svgPointAfter = {
+      x: next.x + (gesture.center.x / 200) * next.width,
+      y: next.y + (gesture.center.y / 200) * next.height,
+    };
+
+    expect(Math.abs(svgPointAfter.x - svgPointBefore.x) < 1e-6).toBe(true);
+    expect(Math.abs(svgPointAfter.y - svgPointBefore.y) < 1e-6).toBe(true);
+    expect(Math.abs(next.width - (400 / 1.5)) < 1e-6).toBe(true);
+    expect(Math.abs(next.height - (400 / 1.5)) < 1e-6).toBe(true);
+  });
+
+  test('ignores pinch zoom when either pointer distance is zero', () => {
+    const current = { x: 0, y: 0, width: 400, height: 400 };
+
+    expect(pinchMermaidViewBox({
+      currentBox: current,
+      contentBox: { x: 0, y: 0, width: 400, height: 200 },
+      viewport: { width: 200, height: 200 },
+      previousGesture: { center: { x: 100, y: 100 }, distance: 0 },
+      gesture: { center: { x: 100, y: 100 }, distance: 100 },
+      minScale: 0.5,
+      maxScale: 4,
+    })).toBe(current);
   });
 
   test('distinguishes real pointer drag from click jitter', () => {

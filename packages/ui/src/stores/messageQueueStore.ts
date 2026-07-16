@@ -58,6 +58,7 @@ interface MessageQueueActions {
   resolveQueueItemReconciliation: (scope: QueueScope, identity: Required<Identity>) => void;
   markQueueItemDefinitiveFailure: (scope: QueueScope, identity: Identity, failure?: QueueFailureInput) => void;
   resetQueueItemForDispatch: (scope: QueueScope, identity: Identity) => void;
+  beginQueueItemDispatch: (scope: QueueScope, expectedIdentity: Required<Identity>, freshMessageID: string, manual: boolean, now?: number) => QueueItem | null;
   confirmQueueItem: (scope: QueueScope, identity: { operationID?: string; messageID?: string; queueItemID?: string }) => void;
 }
 type Store = MessageQueueState & MessageQueueActions;
@@ -66,6 +67,8 @@ const createID = (prefix: string) => `${prefix}-${globalThis.crypto?.randomUUID?
 const recoveryFor = (item: QueuedMessage): QueueRecoveryPayload => ({ content: item.content, attachments: item.attachments, sendConfig: item.sendConfig });
 const sameIdentity = (item: QueueItem, identity: Identity) => item.queueItemID === identity.queueItemID && item.operationID === identity.operationID && (!identity.messageID || item.messageID === identity.messageID);
 const locked = (item: QueueItem) => item.status === 'sending' || item.status === 'reconciling';
+const messageQueueStorage = createDeferredSafeJSONStorage<Pick<MessageQueueState, 'queuedMessages' | 'followUpBehavior'>>();
+export const flushMessageQueuePersistence = (): boolean => messageQueueStorage?.flush() ?? true;
 
 const reconciliationFields = (message: QueuedMessage, now = Date.now()) => ({
   reconciliationStartedAt: message.reconciliationStartedAt ?? now,
@@ -172,5 +175,34 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
       reconciliationNextCheckAt: undefined,
     };
   }),
+  beginQueueItemDispatch: (scope, expectedIdentity, freshMessageID, manual, now = Date.now()) => {
+    if (!freshMessageID.startsWith('msg_')) return null;
+    const key = queueScopeKey(scope);
+    let dispatched: QueueItem | null = null;
+    set((state) => {
+      const queue = state.queuedMessages[key];
+      const item = queue?.[0] as QueueItem | undefined;
+      const eligible = item?.status === 'queued'
+        || (item?.status === 'retrying' && (manual || (item.nextAttemptAt ?? 0) <= now))
+        || (manual && (item?.status === 'failed' || item?.status === 'unresolved'));
+      if (!item || queueScopeKey(item.owner) !== key || !sameIdentity(item, expectedIdentity) || !eligible) return state;
+      dispatched = {
+        ...item,
+        messageID: freshMessageID,
+        status: 'sending',
+        attemptCount: item.attemptCount + 1,
+        nextAttemptAt: undefined,
+        failure: undefined,
+        reconciliationStartedAt: undefined,
+        reconciliationDeadlineAt: undefined,
+        reconciliationChecks: undefined,
+        reconciliationNextCheckAt: undefined,
+      };
+      const nextQueue = queue.slice();
+      nextQueue[0] = dispatched;
+      return { queuedMessages: { ...state.queuedMessages, [key]: nextQueue } };
+    });
+    return dispatched;
+  },
   confirmQueueItem: (scope, identity) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => { const operationMatch = identity.operationID ? candidate.operationID === identity.operationID : true; const messageMatch = identity.messageID ? candidate.messageID === identity.messageID : true; const itemMatch = identity.queueItemID ? candidate.queueItemID === identity.queueItemID : true; return operationMatch && messageMatch && itemMatch; }); if (!item || (!identity.operationID && !identity.messageID)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
-}), { name: 'message-queue-store', version: 4, storage: createDeferredSafeJSONStorage(), partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));
+}), { name: 'message-queue-store', version: 4, storage: messageQueueStorage, partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));

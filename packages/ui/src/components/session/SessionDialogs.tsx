@@ -26,6 +26,10 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
+import {
+    deleteSessionsWithUndo,
+    showArchivedSessionsUndoToast,
+} from '@/lib/sessionMutationUndo';
 
 const renderToastDescription = (text?: string) =>
     text ? <span className="text-foreground/80 dark:text-foreground/70">{text}</span> : undefined;
@@ -64,9 +68,7 @@ export const SessionDialogs: React.FC = () => {
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const setDraftBootstrapPendingDirectory = useSessionUIStore((s) => s.setDraftBootstrapPendingDirectory);
-    const deleteSession = sessionActions.deleteSession;
     const archiveSession = sessionActions.archiveSession;
-    const deleteSessions = useSessionUIStore((s) => s.deleteSessions);
     const archiveSessions = useSessionUIStore((s) => s.archiveSessions);
     const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
     const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
@@ -148,48 +150,23 @@ export const SessionDialogs: React.FC = () => {
         setDirtyWorktreePaths(new Set());
     }, []);
 
-    const deleteSessionsWithoutDialog = React.useCallback(async (payload: { sessions: Session[]; dateLabel?: string }) => {
+    const deleteSessionsWithoutDialog = React.useCallback((payload: { sessions: Session[]; dateLabel?: string }) => {
         if (payload.sessions.length === 0) {
             return;
         }
 
-        if (payload.sessions.length === 1) {
-            const target = payload.sessions[0];
-            const success = await deleteSession(target.id);
-            if (success) {
-                toast.success(t('sessions.sidebar.session.delete.success'));
-            } else {
-                toast.error(t('sessions.sidebar.session.delete.error'));
-            }
-            return;
-        }
-
         const ids = payload.sessions.map((session) => session.id);
-        const { deletedIds, failedIds } = await deleteSessions(ids);
-
-        if (deletedIds.length > 0) {
-            const successDescription = failedIds.length > 0
-                ? (failedIds.length === 1
-                    ? t('sessions.sidebar.dialogs.deleteResult.singleFailedToDelete', { count: failedIds.length })
-                    : t('sessions.sidebar.dialogs.deleteResult.manyFailedToDelete', { count: failedIds.length }))
-                : payload.dateLabel
-                    ? t('sessions.sidebar.dialogs.deleteResult.removedFromDate', { dateLabel: payload.dateLabel })
-                    : undefined;
-            toast.success(deletedIds.length === 1
-                ? t('sessions.sidebar.bulkActions.deletedSingle', { count: deletedIds.length })
-                : t('sessions.sidebar.bulkActions.deletedPlural', { count: deletedIds.length }), {
-                description: renderToastDescription(successDescription),
-            });
-        }
-
-        if (failedIds.length > 0) {
-            toast.error(failedIds.length === 1
-                ? t('sessions.sidebar.bulkActions.failedDeleteSingle', { count: failedIds.length })
-                : t('sessions.sidebar.bulkActions.failedDeletePlural', { count: failedIds.length }), {
-                description: renderToastDescription(t('sessions.sidebar.dialogs.deleteResult.tryAgain')),
-            });
-        }
-    }, [deleteSession, deleteSessions, t]);
+        deleteSessionsWithUndo({
+            sessionIds: ids,
+            message: ids.length === 1
+                ? t('sessions.sidebar.session.delete.success')
+                : t('sessions.sidebar.bulkActions.deletedPlural', { count: ids.length }),
+            undoLabel: t('sessions.sidebar.undo'),
+            commitFailedMessage: ids.length === 1
+                ? t('sessions.sidebar.session.delete.error')
+                : t('sessions.sidebar.bulkActions.failedDeletePlural', { count: ids.length }),
+        });
+    }, [t]);
 
     React.useEffect(() => {
         return sessionEvents.onDeleteRequest((payload) => {
@@ -399,9 +376,7 @@ export const SessionDialogs: React.FC = () => {
         setIsProcessingDelete(true);
 
         try {
-            const shouldArchive = shouldArchiveWorktree;
-            const removeRemoteBranch = shouldArchive && deleteDialogShouldRemoveRemote;
-            const deleteLocalBranch = shouldArchive && deleteDialogShouldDeleteLocalBranch;
+            const deleteLocalBranch = shouldArchiveWorktree && deleteDialogShouldDeleteLocalBranch;
 
             if (deleteDialog.sessions.length === 0 && isWorktreeDelete && deleteDialog.worktree) {
                 removeSelectedWorktreeInBackground(deleteDialog.worktree, deleteLocalBranch);
@@ -411,36 +386,29 @@ export const SessionDialogs: React.FC = () => {
 
             if (deleteDialog.sessions.length === 1) {
                 const target = deleteDialog.sessions[0];
-                const success = isWorktreeDelete
-                    ? await archiveSession(target.id)
-                    : await deleteSession(target.id, {
-                        // In "worktree" mode, remove the selected worktree explicitly below.
-                        // Don't try to derive worktree removal from per-session metadata (may be missing).
-                        archiveWorktree: false,
-                        deleteRemoteBranch: removeRemoteBranch,
-                        deleteLocalBranch,
+                if (isWorktreeDelete) {
+                    const success = await archiveSession(target.id);
+                    if (!success) {
+                        toast.error(t('sessions.sidebar.session.archive.error'));
+                        setIsProcessingDelete(false);
+                        return;
+                    }
+                    showArchivedSessionsUndoToast({
+                        sessionIds: [target.id],
+                        message: t('sessions.sidebar.session.archive.success'),
+                        undoLabel: t('sessions.sidebar.undo'),
+                        settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+                        undoFailedMessage: t('sessions.sidebar.session.archive.undoFailed'),
                     });
-                if (!success) {
-                    toast.error(isWorktreeDelete
-                        ? t('sessions.sidebar.session.archive.error')
-                        : t('sessions.sidebar.session.delete.error'));
-                    setIsProcessingDelete(false);
-                    return;
+                } else {
+                    // Delayed hard-delete with undo countdown.
+                    deleteSessionsWithUndo({
+                        sessionIds: [target.id],
+                        message: t('sessions.sidebar.session.delete.success'),
+                        undoLabel: t('sessions.sidebar.undo'),
+                        commitFailedMessage: t('sessions.sidebar.session.delete.error'),
+                    });
                 }
-                const archiveNote = !isWorktreeDelete && shouldArchive
-                    ? removeRemoteBranch
-                        ? t('sessions.sidebar.sessionDialogs.worktree.removedWithRemote')
-                        : t('sessions.sidebar.sessionDialogs.worktree.attachedArchived')
-                    : undefined;
-                toast.success(isWorktreeDelete
-                    ? t('sessions.sidebar.session.archive.success')
-                    : t('sessions.sidebar.session.delete.success'), {
-                    description: renderToastDescription(archiveNote),
-                    action: {
-                        label: t('sessions.sidebar.sessionDialogs.ok'),
-                        onClick: () => { },
-                    },
-                });
             } else {
                 const ids = deleteDialog.sessions.map((session) => session.id);
                 let deletedIds: string[] = [];
@@ -450,9 +418,18 @@ export const SessionDialogs: React.FC = () => {
                     deletedIds = result.archivedIds;
                     failedIds = result.failedIds;
                 } else {
-                    const result = await deleteSessions(ids);
-                    deletedIds = result.deletedIds;
-                    failedIds = result.failedIds;
+                    deleteSessionsWithUndo({
+                        sessionIds: ids,
+                        message: ids.length === 1
+                            ? t('sessions.sidebar.bulkActions.deletedSingle', { count: ids.length })
+                            : t('sessions.sidebar.bulkActions.deletedPlural', { count: ids.length }),
+                        undoLabel: t('sessions.sidebar.undo'),
+                        commitFailedMessage: ids.length === 1
+                            ? t('sessions.sidebar.bulkActions.failedDeleteSingle', { count: ids.length })
+                            : t('sessions.sidebar.bulkActions.failedDeletePlural', { count: ids.length }),
+                    });
+                    deletedIds = ids;
+                    failedIds = [];
                 }
 
                 if (isWorktreeDelete && deleteDialog.worktree && failedIds.length === 0) {
@@ -462,37 +439,17 @@ export const SessionDialogs: React.FC = () => {
                     // sync handles session refresh automatically
                 }
 
-                if (deletedIds.length > 0) {
-                    const archiveNote = !isWorktreeDelete && shouldArchive
-                        ? removeRemoteBranch
-                            ? t('sessions.sidebar.sessionDialogs.worktree.archivedAndRemoteRemoved')
-                            : t('sessions.sidebar.sessionDialogs.worktree.attachedArchivedPlural')
-                        : undefined;
-                    const successDescription =
-                        failedIds.length > 0
-                            ? (isWorktreeDelete
-                                ? (failedIds.length === 1
-                                    ? t('sessions.sidebar.dialogs.deleteResult.singleFailedToArchive', { count: failedIds.length })
-                                    : t('sessions.sidebar.dialogs.deleteResult.manyFailedToArchive', { count: failedIds.length }))
-                                : (failedIds.length === 1
-                                    ? t('sessions.sidebar.dialogs.deleteResult.singleFailedToDelete', { count: failedIds.length })
-                                    : t('sessions.sidebar.dialogs.deleteResult.manyFailedToDelete', { count: failedIds.length })))
-                            : deleteDialog.dateLabel
-                                ? t('sessions.sidebar.dialogs.deleteResult.removedFromDate', { dateLabel: deleteDialog.dateLabel })
-                                : undefined;
-                    const combinedDescription = [successDescription, archiveNote].filter(Boolean).join(' ');
-                    toast.success(isWorktreeDelete
-                        ? (deletedIds.length === 1
+                if (isWorktreeDelete && deletedIds.length > 0) {
+                    showArchivedSessionsUndoToast({
+                        sessionIds: deletedIds,
+                        message: deletedIds.length === 1
                             ? t('sessions.sidebar.bulkActions.archivedSingle', { count: deletedIds.length })
-                            : t('sessions.sidebar.bulkActions.archivedPlural', { count: deletedIds.length }))
-                        : (deletedIds.length === 1
-                            ? t('sessions.sidebar.bulkActions.deletedSingle', { count: deletedIds.length })
-                            : t('sessions.sidebar.bulkActions.deletedPlural', { count: deletedIds.length })), {
-                        description: renderToastDescription(combinedDescription || undefined),
-                        action: {
-                            label: t('sessions.sidebar.sessionDialogs.ok'),
-                            onClick: () => { },
-                        },
+                            : t('sessions.sidebar.bulkActions.archivedPlural', { count: deletedIds.length }),
+                        undoLabel: t('sessions.sidebar.undo'),
+                        settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+                        undoFailedMessage: deletedIds.length === 1
+                            ? t('sessions.sidebar.session.archive.undoFailed')
+                            : t('sessions.sidebar.bulkActions.archiveUndoFailed', { count: deletedIds.length }),
                     });
                 }
 
@@ -524,10 +481,7 @@ export const SessionDialogs: React.FC = () => {
         }
     }, [
         deleteDialog,
-        deleteDialogShouldRemoveRemote,
         deleteDialogShouldDeleteLocalBranch,
-        deleteSession,
-        deleteSessions,
         archiveSession,
         archiveSessions,
         closeDeleteDialog,

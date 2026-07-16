@@ -119,6 +119,35 @@ describe('safeStorage', () => {
         }
     });
 
+    test('flushes synchronously and preserves a failed write for the next flush', async () => {
+        const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+        const backingStorage = createFakeStorage();
+        let fail = true;
+        const fakeWindow = {
+            localStorage: backingStorage,
+            sessionStorage: createFakeStorage(),
+            addEventListener: () => {},
+        };
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: fakeWindow });
+        try {
+            const { createDeferredSafeJSONStorage } = await importSafeStorage();
+            const storage = createDeferredSafeJSONStorage<{ value: string }>({ replacer: (_key, value) => {
+                if (fail) throw new Error('serialize');
+                return value;
+            } });
+            if (!storage) throw new Error('storage unavailable');
+            storage.setItem('k', { state: { value: 'v' } });
+            expect(storage.flush()).toBe(false);
+            expect(backingStorage.getItem('k')).toBeNull();
+            fail = false;
+            expect(storage.flush()).toBe(true);
+            expect(backingStorage.getItem('k')).toBe('{"state":{"value":"v"}}');
+        } finally {
+            if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+            else delete (globalThis as { window?: unknown }).window;
+        }
+    });
+
     test('defers direct storage writes and flushes on pagehide', async () => {
         const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
         const backingStorage = createFakeStorage();

@@ -155,6 +155,8 @@ Add new native capabilities in this order:
 
 Electron uses `electron-log`. In development, console logs are also visible in the terminal. In packaged apps, logs are written through the platform log path for the `OpenChamber` app name.
 
+`~/Library/Logs/OpenChamber/main.log` records `[queue-debug]` entries with queue delivery IDs and status metadata only.
+
 Development builds use a separate user data directory named `OpenChamber Dev`, so dev state does not overwrite normal packaged app state.
 
 ## Things To Be Careful With

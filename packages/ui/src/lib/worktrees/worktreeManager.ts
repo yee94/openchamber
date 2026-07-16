@@ -17,6 +17,7 @@ import type {
   GitWorktreeValidationResult,
 } from '@/lib/api/types';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 
 type WorktreeListEntry = {
   path?: string;
@@ -479,6 +480,15 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   for (const [sid, meta] of currentMetadata.entries()) {
     if (meta && normalizePath(meta.path) === normalizedWorktreePath) {
       updatedMetadata.delete(sid);
+    }
+  }
+
+  for (const [sessionId, attachment] of useSessionWorktreeStore.getState().attachments) {
+    if (
+      (typeof attachment.worktreeRoot === 'string' && normalizePath(attachment.worktreeRoot) === normalizedWorktreePath)
+      || (typeof attachment.cwd === 'string' && normalizePath(attachment.cwd) === normalizedWorktreePath)
+    ) {
+      useSessionWorktreeStore.getState().clearAttachment(sessionId);
     }
   }
 

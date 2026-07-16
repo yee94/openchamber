@@ -196,6 +196,13 @@ const withInlineInsertionBoundaries = (content: string, before: string, after: s
     return `${needsLeadingSpace ? ' ' : ''}${content}${needsTrailingSpace ? ' ' : ''}`;
 };
 
+const withAttachmentCitationBoundaries = (content: string, before: string, after: string): string => {
+    const insertion = withInlineInsertionBoundaries(content, before, after);
+    const leadingSpace = before.length === 0 && !/^\s/.test(insertion) ? ' ' : '';
+    const trailingSpace = after.length === 0 && !/\s$/.test(insertion) ? ' ' : '';
+    return `${leadingSpace}${insertion}${trailingSpace}`;
+};
+
 const collectInlineSkillMentions = (text: string, skillNames: Set<string>): string[] => {
     const mentions: string[] = [];
     INLINE_SKILL_TOKEN_PATTERN.lastIndex = 0;
@@ -1279,7 +1286,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 {
                     ...range,
                     style: 'mentionFile' as const,
-                    className: 'relative inline-block h-5 max-w-full whitespace-nowrap rounded-md bg-[var(--status-info-background)] align-middle text-[var(--status-info)]',
+                    // The invisible citation keeps the textarea's exact width and
+                    // baseline; the visual tag is overlaid without changing layout.
+                    className: 'relative inline-block max-w-full whitespace-nowrap align-baseline text-transparent',
                     priority: 101,
                     attachmentName,
                 },
@@ -3451,24 +3460,24 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
         }
 
-        const fileMap = new Map<string, File>();
-
-        Array.from(e.clipboardData.files || []).forEach(file => {
-            if (file.type.startsWith('image/')) {
-                fileMap.set(`${file.name}-${file.size}`, file);
-            }
-        });
-
-        Array.from(e.clipboardData.items || []).forEach(item => {
-            if (item.kind === 'file' && item.type.startsWith('image/')) {
-                const file = item.getAsFile();
-                if (file) {
-                    fileMap.set(`${file.name}-${file.size}`, file);
-                }
-            }
-        });
-
-        const imageFiles = Array.from(fileMap.values());
+        // Prefer clipboard.files; only fall back to items. Reading both often
+        // yields the same image twice (or png+tiff twins) with different name/size
+        // keys, which then becomes two attachments for one paste.
+        const filesFromClipboard = Array.from(e.clipboardData.files || [])
+            .filter((file) => file.type.startsWith('image/'));
+        const filesFromItems = Array.from(e.clipboardData.items || [])
+            .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => Boolean(file));
+        // macOS often exposes the same screenshot as image/png + image/tiff via items.
+        // When we only have items, keep a single preferred representation.
+        const imageFiles = filesFromClipboard.length > 0
+            ? filesFromClipboard
+            : (() => {
+                if (filesFromItems.length <= 1) return filesFromItems;
+                const preferred = filesFromItems.find((file) => /image\/(png|webp|jpe?g|gif)/i.test(file.type));
+                return preferred ? [preferred] : [filesFromItems[0]];
+            })();
         const pastedText = e.clipboardData.getData('text');
         if (imageFiles.length === 0) {
             if (pastedText.includes('@')) {
@@ -3500,7 +3509,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const insertionContent = pastedText
             ? `${pastedText}${/\s$/.test(pastedText) ? '' : ' '}${citationText}`
             : citationText;
-        const insertionText = withInlineInsertionBoundaries(
+        const insertionText = withAttachmentCitationBoundaries(
             insertionContent,
             message.slice(0, selectionStart),
             message.slice(selectionEnd),
@@ -3888,11 +3897,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         if (files.length > 0) {
             const citationText = buildAttachmentCitationText(files.map((file) => file.name));
-            insertTextAtSelection(withInlineInsertionBoundaries(
+            const insertionText = withAttachmentCitationBoundaries(
                 citationText,
                 messageRef.current.slice(0, textareaRef.current?.selectionStart ?? messageRef.current.length),
                 messageRef.current.slice(textareaRef.current?.selectionEnd ?? messageRef.current.length),
-            ));
+            );
+            insertTextAtSelection(insertionText);
             for (const file of files) {
                 try {
                     await addAttachedFile(file);
@@ -3925,11 +3935,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         if (list.length > 0) {
             const citationText = buildAttachmentCitationText(list.map((file) => file.name));
-            insertTextAtSelection(withInlineInsertionBoundaries(
+            const insertionText = withAttachmentCitationBoundaries(
                 citationText,
                 messageRef.current.slice(0, textareaRef.current?.selectionStart ?? messageRef.current.length),
                 messageRef.current.slice(textareaRef.current?.selectionEnd ?? messageRef.current.length),
-            ));
+            );
+            insertTextAtSelection(insertionText);
         }
 
         for (const file of list) {
@@ -5422,9 +5433,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             {part.attachmentName ? (
                                                 <>
                                                     <span className="invisible">{part.text}</span>
-                                                    <span className="absolute inset-0 flex min-w-0 items-center gap-1 overflow-hidden px-1 text-[0.875em]">
-                                                        <FileTypeIcon filePath={getAttachmentCitationIconPath(part.attachmentName)} className="size-3.5 shrink-0" />
-                                                        <span className="min-w-0 truncate">{part.attachmentName}</span>
+                                                    <span className="before:content-[''] before:absolute before:-inset-x-0.5 before:inset-y-0 before:-z-10 before:rounded-md before:bg-[var(--status-info-background)] isolate absolute left-0 top-1/2 inline-flex h-5 w-max max-w-[min(120px,100%)] -translate-y-1/2 items-center gap-0.5 overflow-visible px-0.5 text-[0.875em] leading-none text-[var(--status-info)]">
+                                                        <FileTypeIcon filePath={getAttachmentCitationIconPath(part.attachmentName)} className="size-3 shrink-0" />
+                                                        <span className="min-w-0 truncate overflow-hidden">{part.attachmentName}</span>
                                                     </span>
                                                 </>
                                             ) : part.text}

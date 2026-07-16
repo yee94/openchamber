@@ -578,14 +578,118 @@ interface MessageFilesDisplayProps {
   compact?: boolean;
 }
 
+const filePartDedupeKey = (file: FilePart): string => {
+  const filename = typeof file.filename === 'string' ? file.filename.trim().toLowerCase() : '';
+  const mime = typeof file.mime === 'string' ? file.mime.trim().toLowerCase() : '';
+  // Image optimistic parts often keep a data: URL while the server echo uses a
+  // different locator for the same attachment — prefer filename identity there.
+  if (mime.startsWith('image/') && filename) return `image:${filename}|${mime}`;
+  const url = typeof file.url === 'string' ? file.url.trim() : '';
+  if (url) return `url:${url}`;
+  return `meta:${filename}|${mime}|${file.size ?? ''}`;
+};
+
+const MessageImageRow = memo(({
+  imageFiles,
+  resolveDisplayName,
+  onImageClick,
+}: {
+  imageFiles: FilePart[];
+  resolveDisplayName: (file: FilePart) => string;
+  onImageClick: (index: number) => void;
+}) => {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = React.useState(false);
+  const [canExpand, setCanExpand] = React.useState(false);
+  const rowRef = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    const el = rowRef.current;
+    if (!el || imageFiles.length <= 1) {
+      setCanExpand(false);
+      return;
+    }
+    const measure = () => {
+      const first = el.firstElementChild as HTMLElement | null;
+      const rowH = first?.offsetHeight ?? 40;
+      setCanExpand(el.scrollHeight > rowH + 4);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [imageFiles]);
+
+  React.useEffect(() => {
+    if (!canExpand && expanded) setExpanded(false);
+  }, [canExpand, expanded]);
+
+  return (
+    <div className="mt-0.5 flex min-w-0 items-start gap-0.5">
+      <div
+        ref={rowRef}
+        className={cn(
+          'flex min-w-0 flex-1 flex-wrap items-center gap-1',
+          !expanded && 'max-h-10 overflow-hidden',
+        )}
+      >
+        {imageFiles.map((file, index) => {
+          const filename = resolveDisplayName(file) || 'Image';
+          return (
+            <Tooltip key={`img-${file.url || file.filename || index}`}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onImageClick(index)}
+                  className="relative h-9 w-9 flex-none overflow-hidden rounded-md bg-transparent transition-colors hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={filename}
+                >
+                  {file.url ? (
+                    <img
+                      src={file.url}
+                      alt={filename}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.visibility = 'hidden';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                      <Icon name="file-image" className="h-4 w-4" />
+                    </div>
+                  )}
+                  <span className="sr-only">{filename}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
+                {filename}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+      {(canExpand || expanded) ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-label={expanded ? t('chat.fileAttachment.actions.collapseImages') : t('chat.fileAttachment.actions.expandImages')}
+          title={expanded ? t('chat.fileAttachment.actions.collapseImages') : t('chat.fileAttachment.actions.expandImages')}
+          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
+        >
+          <Icon name={expanded ? 'arrow-up-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+});
+
+MessageImageRow.displayName = 'MessageImageRow';
+
 export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }: MessageFilesDisplayProps) => {
   const { t } = useI18n();
-
-  const fileItems = files.filter(f => (
-    f.type === 'file'
-    && (f.mime || f.url)
-    && !isCodeSelectionFilePart(f)
-  ));
 
   const extractFilename = (path?: string): string => {
     if (!path) return 'Unnamed file';
@@ -612,8 +716,28 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/') && f.url);
-  const otherFiles = fileItems.filter(f => !f.mime?.startsWith('image/'));
+  // Guard against optimistic+server part races that leave two file parts for one attachment.
+  const dedupedFileItems = React.useMemo(() => {
+    const seen = new Set<string>();
+    const next: FilePart[] = [];
+    for (const file of files) {
+      if (
+        file.type !== 'file'
+        || !(file.mime || file.url)
+        || isCodeSelectionFilePart(file)
+      ) {
+        continue;
+      }
+      const key = filePartDedupeKey(file);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      next.push(file);
+    }
+    return next;
+  }, [files]);
+
+  const imageFiles = dedupedFileItems.filter(f => f.mime?.startsWith('image/') && f.url);
+  const otherFiles = dedupedFileItems.filter(f => !f.mime?.startsWith('image/'));
 
   const imageGallery = React.useMemo(
     () =>
@@ -661,7 +785,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
     });
   }, [imageGallery, onShowPopup]);
 
-  if (fileItems.length === 0) return null;
+  if (dedupedFileItems.length === 0) return null;
 
   if (compact) {
     return (
@@ -716,47 +840,11 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
         )}
 
         {imageFiles.length > 0 && (
-          <div className="overflow-x-auto -mx-1 px-1 py-0.5 scrollbar-thin">
-            <div className="flex snap-x snap-mandatory gap-2">
-              {imageFiles.map((file, index) => {
-                const filename = resolveDisplayName(file) || 'Image';
-
-                return (
-                  <Tooltip key={`img-${file.url || file.filename || index}`}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => handleImageClick(index)}
-                        className="relative flex-none border border-border/40 bg-muted/10 overflow-hidden snap-start h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary"
-                        aria-label={filename}
-                      >
-                        {file.url ? (
-                          <img
-                            src={file.url}
-                            alt={filename}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.visibility = 'hidden';
-                            }}
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
-                            <Icon name="file-image" className="h-6 w-6" />
-                          </div>
-                        )}
-                        <span className="sr-only">{filename}</span>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
-                      {filename}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          </div>
+          <MessageImageRow
+            imageFiles={imageFiles}
+            resolveDisplayName={resolveDisplayName}
+            onImageClick={handleImageClick}
+          />
         )}
       </div>
     );
@@ -767,7 +855,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
       "grid gap-2",
       compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
     )}>
-      {fileItems.map((file, index) => {
+      {dedupedFileItems.map((file, index) => {
         const fileName = resolveDisplayName(file);
         const isImage = file.mime?.startsWith('image/');
         const sizeText = formatFileSize(file.size);

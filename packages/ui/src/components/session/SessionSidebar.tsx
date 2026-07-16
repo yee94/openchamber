@@ -15,6 +15,7 @@ import { useGitRepoStatusMap } from '@/stores/useGitStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { NewWorktreeDialog } from './NewWorktreeDialog';
 import { ScheduledTasksDialog } from './ScheduledTasksDialog';
+import { ArchivedSessionsDialog } from '@/components/sections/openchamber/ArchivedSessionsDialog';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useArchivedAutoFolders } from './sidebar/hooks/useArchivedAutoFolders';
@@ -65,7 +66,6 @@ import {
 } from '@/stores/useSessionFocusStore';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
 import { derivePinnedSessions } from './sidebar/pinnedSessions';
-import { buildSessionNodeWithChildren } from './sidebar/sessionTree';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
@@ -763,8 +763,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     (updateStore.runtimeType === "desktop" ||
       updateStore.runtimeType === "web");
 
-  const deleteSession = useSessionUIStore((state) => state.deleteSession);
-  const deleteSessions = useSessionUIStore((state) => state.deleteSessions);
   const archiveSession = useSessionUIStore((state) => state.archiveSession);
   const archiveSessions = useSessionUIStore((state) => state.archiveSessions);
 
@@ -798,8 +796,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     updateSessionTitle,
     shareSession,
     unshareSession,
-    deleteSession,
-    deleteSessions,
     archiveSession,
     archiveSessions,
     childrenMap,
@@ -953,10 +949,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       currentVisibleCount: number,
       totalSessions: number,
     ) => {
-      const nextVisibleCount = currentVisibleCount + 7;
+      const defaultCount = getDefaultProjectGroupVisibleCount();
+      const pageSize = 7;
+      const currentLimit = Math.max(defaultCount, currentVisibleCount);
+      const nextVisibleCount = currentLimit + pageSize;
       setVisibleSessionCountByGroup((prev) => {
+        const current = Math.max(
+          defaultCount,
+          prev.get(groupId) ?? defaultCount,
+          currentVisibleCount,
+        );
         const next = new Map(prev);
-        next.set(groupId, nextVisibleCount);
+        next.set(groupId, current + pageSize);
         return next;
       });
       if (group.isArchivedBucket || nextVisibleCount < totalSessions) return;
@@ -1412,7 +1416,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     lastRepoStatusRef.current = Boolean(projectRepoStatus.get(activeProjectId));
   }
 
-  const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
   const projectSortOrder = useSessionDisplayStore((state) => state.projectSortOrder);
   const manualProjectOrder = useProjectsStore((state) => state.manualProjectOrder);
 
@@ -1627,17 +1630,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const sessionDirectory = normalizePath(
         (session as Session & { directory?: string | null }).directory ?? null,
       );
-      // Project meta omits pinned roots, so always rebuild the pinned node with
-      // its full subagent tree from the global session list.
-      const node = buildSessionNodeWithChildren(session, sessions, {
-        pinnedSessionIds,
-        getWorktree: (item) => worktreeMetadata.get(item.id) ?? null,
-      });
-      const filteredNodes = hasSessionSearchQuery
-        ? filterSessionNodesForSearch([node], normalizedSessionSearchQuery)
-        : [node];
-      const filteredNode = filteredNodes[0];
-      if (!filteredNode) {
+      // Pinned rows stay flat — leaf node only. Subagents of pinned parents stay
+      // hidden (not under the pin, not re-surfaced as project roots).
+      const node: SessionNode = {
+        session,
+        children: [],
+        worktree: worktreeMetadata.get(session.id) ?? null,
+      };
+      if (
+        hasSessionSearchQuery
+        && filterSessionNodesForSearch([node], normalizedSessionSearchQuery).length === 0
+      ) {
         return null;
       }
       const secondaryMeta = existing?.secondaryMeta
@@ -1647,7 +1650,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           }
         : null;
       return {
-        node: filteredNode,
+        node,
         projectId: existing?.projectId ?? null,
         groupDirectory: existing?.groupDirectory ?? sessionDirectory,
         secondaryMeta,
@@ -1664,21 +1667,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     hasSessionSearchQuery,
     isVSCode,
     normalizedSessionSearchQuery,
-    pinnedSessionIds,
     pinnedSessions,
     sessionSidebarMetaById,
-    sessions,
     worktreeMetadata,
   ]);
 
   const sectionsForSidebarRender = React.useMemo(() => {
-    return showArchivedSessions
-      ? sectionsForRender
-      : sectionsForRender.map((section) => ({
-          ...section,
-          groups: section.groups.filter((group) => !group.isArchivedBucket),
-        }));
-  }, [sectionsForRender, showArchivedSessions]);
+    return sectionsForRender.map((section) => ({
+      ...section,
+      groups: section.groups.filter((group) => !group.isArchivedBucket),
+    }));
+  }, [sectionsForRender]);
 
   const navigationProjectSections = React.useMemo(() => {
     const sourceSections = hasSessionSearchQuery
@@ -2386,10 +2385,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       expandAllProjects={expandAllProjects}
     />
   ) : null;
+  const showBrandInContent = mobileVariant || isDesktopShellRuntime;
   const topContent =
     !isVSCode && !hasSessionSearchQuery ? (
       <>
-        <SidebarBrandMark />
+        {showBrandInContent ? <SidebarBrandMark /> : null}
         {pinnedItems.length > 0 ? (
           <SidebarPinnedSessions
             items={pinnedItems}
@@ -2431,7 +2431,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     removeSessionsFromFolders,
     createFolderAndStartRename,
     archiveSessions,
-    deleteSessions,
     setBulkDeleteConfirm,
   });
   return (
@@ -2555,6 +2554,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       ) : null}
 
       <ScheduledTasksDialog />
+      <ArchivedSessionsDialog />
 
       <SessionDeleteConfirmDialog
         value={deleteSessionConfirm}

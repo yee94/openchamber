@@ -88,8 +88,8 @@ export const useSessionGrouping = (args: Args) => {
       };
 
       // Build the full parent/child forest first, then omit pinned roots from the
-      // project area. Filtering pinned sessions before attachment used to orphan
-      // subagents of pinned parents (they never found parent in the map).
+      // project area. Children of pinned parents stay hidden (pinned rows are flat
+      // and do not host or re-surface the subagent tree).
       const forestRoots = buildSessionTree(projectSessions, {
         pinnedSessionIds: args.pinnedSessionIds,
         omitPinnedSessions: true,

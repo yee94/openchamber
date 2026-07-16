@@ -123,8 +123,8 @@ status transitions are owned by the OpenChamber server's global event
 subscriber. Renderer session events update visible metadata only; time-only
 session updates, busy/retry transitions, and token/message delta events do not
 replace the global session list or write the SQLite index. The session-index
-long poll remains active after startup so a user message's ordering revision
-promotes that session inside its project immediately.
+long poll remains active after startup so user-message and task-completion
+ordering revisions promote their session inside its project immediately.
 
 Sidebar directory refreshes are intentionally bounded snapshots, not full catalogs:
 
@@ -285,7 +285,14 @@ records allow drain.
 `unresolved` heads. The v3 production scheduler auto-dispatches only `queued`
 heads and due `retrying` heads with an authoritative scoped `idle` status;
 `unknown`, `busy`, and `retry` statuses keep dispatch paused. Message completion
-revisions wake the scheduler and never override live session status.
+revisions wake the scheduler and never override live session status. A trailing
+user, incomplete assistant, or unknown-role message keeps an idle scope paused;
+missing message materialization preserves the idle path.
+- Status snapshots apply per session only when their request-start timestamp is
+  newer than that session's observed status timestamp. Optimistic busy and
+  rollback idle writes advance the observed timestamp, so an in-flight HTTP
+  snapshot cannot overwrite either transition. Successful authoritative polls
+  retain their directory snapshot timestamp.
 - Message-sent confirmation precedes dependent queue side effects. A composer
   queue admission completes before it consumes inline drafts, body text, or
   attachments. Local chat commands retain these composer resources across both
@@ -317,7 +324,10 @@ Examples of global-store updates performed in `session-actions.ts`:
 - `updateSessionTitle()` -> `upsertSession(result.data)`
 - `shareSession()` / `unshareSession()` -> `upsertSession(result.data)`
 - `archiveSession()` -> `archiveSessions([id], archivedAt)`
-- `deleteSession()` -> `removeSessions([id])`
+- `unarchiveSession()` -> `updateSession({ time: { archived: 0 } })` then `upsertSession` into the active list
+- `deleteSession()` -> optimistic `removeSessions([id])` then immediate server delete
+- UI hard-deletes use `scheduleSessionDeletes()` so the server delete waits for a 5s undo window; `cancelScheduledSessionDeletes()` restores local state without calling the server
+- Archive success toasts use `showArchivedSessionsUndoToast()` (undo + open `ArchivedSessionsDialog` via `setArchivedSessionsDialogOpen`); delete success toasts use `deleteSessionsWithUndo()`. Neither expands the sidebar archived bucket by default.
 
 ### Fork transition and event isolation
 
@@ -395,7 +405,12 @@ production queue admission and atomic queue cutover.
 ### Queue dispatcher execution invariants
 
 `useQueuedMessageAutoSend.ts` owns the v3 dispatch flight registry keyed by the
-exact scope, queue item, operation, and message identity. Direct manual and
+exact scope, queue item, and operation identity. Admission message IDs are
+candidates. Before every real POST, v3 reads the current largest scoped `msg_`
+message ID, rotates to a fresh ID above that floor, and durably enters `sending`
+as one barrier. Ambiguous delivery retains that fresh ID for reconciliation;
+pre-dispatch retry and manual terminal send rotate again. The v4 cutover requires
+the same fresh-ID barrier before it becomes authoritative. Direct manual and
 automatic dispatches share one POST flight; reconciliation queries retain their
 separate scheduler flight. Payload acquisition returns a monotonic token; each non-confirmed path
 releases its own token. Durable confirmation removes queue and send references

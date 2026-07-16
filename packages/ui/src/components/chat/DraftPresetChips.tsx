@@ -29,7 +29,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import {
@@ -50,12 +49,13 @@ type DraftPresetChipsProps = {
 // from any chip id (which are `group:type:name`) so collisions never alias.
 const TRASH_DROPPABLE_ID = '__draft-starter-trash__';
 
-// Shared box for the round icon buttons in the "+" slot (add picker and the
-// mobile trash drop-zone). Identical so swapping one for the other never shifts
-// layout or changes the circle size. shrink-0 keeps it from being compressed by
-// the wrapping flex row.
-const ROUND_ICON_BUTTON_CLASS =
-    'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors';
+// Quiet icon buttons for add / expand / mobile trash. No border, no fill — only
+// hover bg so the row stays visually light next to the composer.
+const QUIET_ICON_BUTTON_CLASS =
+    'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground';
+
+// Single-line chip height used for the collapsed max-height clamp.
+const CHIP_ROW_MAX_H = 'max-h-7';
 
 const PICKER_SECTIONS: { key: PinnableSection; headingKey: 'chat.draftStarters.sectionBuiltIn' | 'chat.draftStarters.sectionCommands' | 'chat.draftStarters.sectionSkills' }[] = [
     { key: 'built-in', headingKey: 'chat.draftStarters.sectionBuiltIn' },
@@ -71,12 +71,7 @@ const SortableChip: React.FC<{
     hideRemove?: boolean;
 }> = ({ item, onSubmit, onRemove, hideRemove }) => {
     const { t } = useI18n();
-    const { currentTheme } = useThemeSystem();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
-    const chipStyle: React.CSSProperties = {
-        backgroundColor: currentTheme?.colors?.surface?.elevated,
-        borderColor: currentTheme?.colors?.interactive?.border,
-    };
 
     return (
         <div
@@ -91,10 +86,13 @@ const SortableChip: React.FC<{
                 {...attributes}
                 {...listeners}
                 onClick={() => onSubmit(item.submitText)}
-                className="group inline-flex touch-none select-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
-                style={chipStyle}
+                className={cn(
+                    'group inline-flex touch-none select-none items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors',
+                    'hover:bg-[var(--interactive-hover)] hover:text-foreground',
+                    !hideRemove && 'pr-5',
+                )}
             >
-                <Icon name={item.icon} className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
+                <Icon name={item.icon} className="h-3 w-3 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
                 <span className="whitespace-nowrap">{item.label}</span>
             </button>
             {hideRemove ? null : (
@@ -103,8 +101,7 @@ const SortableChip: React.FC<{
                     onClick={(e) => { e.stopPropagation(); onRemove(); }}
                     aria-label={t('chat.draftStarters.remove')}
                     title={t('chat.draftStarters.remove')}
-                    className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full border text-muted-foreground shadow-sm hover:text-foreground group-hover/chip:flex"
-                    style={chipStyle}
+                    className="absolute right-0.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:text-foreground group-hover/chip:flex"
                 >
                     <Icon name="close" className="h-2.5 w-2.5" />
                 </button>
@@ -139,7 +136,6 @@ const StarterGroup: React.FC<{
  */
 const TrashDropZone: React.FC = () => {
     const { t } = useI18n();
-    const { currentTheme } = useThemeSystem();
     const { setNodeRef, isOver } = useDroppable({ id: TRASH_DROPPABLE_ID });
 
     return (
@@ -148,18 +144,12 @@ const TrashDropZone: React.FC = () => {
             ref={setNodeRef}
             aria-label={t('chat.draftStarters.remove')}
             title={t('chat.draftStarters.remove')}
-            // Same box as the "+" button so the swap never shifts layout; on-hover
-            // feedback is color-only (no resize).
             className={cn(
-                ROUND_ICON_BUTTON_CLASS,
-                isOver ? 'border-destructive text-destructive' : 'text-muted-foreground',
+                QUIET_ICON_BUTTON_CLASS,
+                isOver && 'text-destructive hover:text-destructive',
             )}
-            style={{
-                backgroundColor: currentTheme?.colors?.surface?.elevated,
-                borderColor: isOver ? undefined : currentTheme?.colors?.interactive?.border,
-            }}
         >
-            <Icon name="delete-bin" className="h-4 w-4" />
+            <Icon name="delete-bin" className="h-3.5 w-3.5" />
         </button>
     );
 };
@@ -204,7 +194,6 @@ const AddStarterPicker: React.FC<{
     onAdd: (item: PinnableItem) => void;
 }> = ({ pinnable, onOpen, onAdd }) => {
     const { t } = useI18n();
-    const { currentTheme } = useThemeSystem();
     const [open, setOpen] = React.useState(false);
 
     return (
@@ -220,13 +209,9 @@ const AddStarterPicker: React.FC<{
                     type="button"
                     aria-label={t('chat.draftStarters.add')}
                     title={t('chat.draftStarters.add')}
-                    className={cn(ROUND_ICON_BUTTON_CLASS, 'text-muted-foreground hover:bg-[var(--interactive-hover)] hover:text-foreground')}
-                    style={{
-                        backgroundColor: currentTheme?.colors?.surface?.elevated,
-                        borderColor: currentTheme?.colors?.interactive?.border,
-                    }}
+                    className={QUIET_ICON_BUTTON_CLASS}
                 >
-                    <Icon name="add" className="h-4 w-4" />
+                    <Icon name="add" className="h-3.5 w-3.5" />
                 </button>
             </DialogTrigger>
             <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-sm">
@@ -253,11 +238,18 @@ const AddStarterPicker: React.FC<{
  * replaces the "+" while dragging) is reachable from either group's drag.
  * Reorder is constrained to within a chip's own group; cross-group hovers are
  * ignored.
+ *
+ * Default layout is a single quiet row (no border/fill, hover-only bg). When
+ * chips overflow one line, an expand control reveals the rest.
  */
 export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, className }) => {
+    const { t } = useI18n();
     const { global, project, pinnable, ensureLoaded, addStarter, removeStarter, reorder } = useDraftStarters();
     const { isMobile } = useDeviceInfo();
     const [isDragging, setIsDragging] = React.useState(false);
+    const [expanded, setExpanded] = React.useState(false);
+    const [canCollapse, setCanCollapse] = React.useState(false);
+    const chipsRef = React.useRef<HTMLDivElement>(null);
 
     const sensors = useSensors(
         // Desktop: start dragging after a small move so a click still submits.
@@ -271,6 +263,35 @@ export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, cl
             global.find((i) => i.id === id) ?? project.find((i) => i.id === id),
         [global, project],
     );
+
+    const totalChips = global.length + project.length;
+
+    // Detect multi-line content. scrollHeight stays full even when max-height clamps,
+    // so compare against one chip's height rather than clientHeight (which equals
+    // scrollHeight when expanded and would hide the collapse control).
+    React.useLayoutEffect(() => {
+        const el = chipsRef.current;
+        if (!el || totalChips === 0) {
+            setCanCollapse(false);
+            return;
+        }
+
+        const measure = () => {
+            const first = el.firstElementChild as HTMLElement | null;
+            const rowH = first?.offsetHeight ?? 28;
+            setCanCollapse(el.scrollHeight > rowH + 4);
+        };
+
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [totalChips, expanded, global, project]);
+
+    // If chips shrink to one line, drop the expanded flag so the next overflow starts collapsed.
+    React.useEffect(() => {
+        if (!canCollapse && expanded) setExpanded(false);
+    }, [canCollapse, expanded]);
 
     const handleDragStart = () => setIsDragging(true);
     const handleDragCancel = () => setIsDragging(false);
@@ -294,6 +315,8 @@ export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, cl
         }
     };
 
+    const showExpand = canCollapse || expanded;
+
     return (
         <DndContext
             sensors={sensors}
@@ -305,28 +328,56 @@ export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, cl
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
         >
-            <div className={cn('flex flex-wrap items-center justify-center gap-2', className)}>
-                {global.length > 0 ? (
-                    <StarterGroup
-                        items={global}
-                        onSubmit={onSubmit}
-                        onRemove={(item) => removeStarter('global', item.ref)}
-                        hideRemove={isMobile}
-                    />
-                ) : null}
-                {project.length > 0 ? (
-                    <StarterGroup
-                        items={project}
-                        onSubmit={onSubmit}
-                        onRemove={(item) => removeStarter('project', item.ref)}
-                        hideRemove={isMobile}
-                    />
-                ) : null}
-                {isMobile && isDragging ? (
-                    <TrashDropZone />
-                ) : (
-                    <AddStarterPicker pinnable={pinnable} onOpen={ensureLoaded} onAdd={addStarter} />
-                )}
+            {/*
+              Do not put `w-full` here: callers pass `chat-input-column`, whose
+              width is min(100%, 48rem). A later `w-full` would force the row to
+              the full form width and overflow past the composer.
+            */}
+            <div className={cn('flex min-w-0 max-w-full items-start justify-center gap-0.5', className)}>
+                <div
+                    ref={chipsRef}
+                    className={cn(
+                        'flex min-w-0 flex-1 flex-wrap items-center justify-center gap-x-0.5 gap-y-0.5',
+                        !expanded && CHIP_ROW_MAX_H,
+                        !expanded && 'overflow-hidden',
+                    )}
+                >
+                    {global.length > 0 ? (
+                        <StarterGroup
+                            items={global}
+                            onSubmit={onSubmit}
+                            onRemove={(item) => removeStarter('global', item.ref)}
+                            hideRemove={isMobile}
+                        />
+                    ) : null}
+                    {project.length > 0 ? (
+                        <StarterGroup
+                            items={project}
+                            onSubmit={onSubmit}
+                            onRemove={(item) => removeStarter('project', item.ref)}
+                            hideRemove={isMobile}
+                        />
+                    ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5 self-start">
+                    {showExpand ? (
+                        <button
+                            type="button"
+                            onClick={() => setExpanded((v) => !v)}
+                            aria-expanded={expanded}
+                            aria-label={expanded ? t('chat.draftStarters.collapse') : t('chat.draftStarters.expand')}
+                            title={expanded ? t('chat.draftStarters.collapse') : t('chat.draftStarters.expand')}
+                            className={QUIET_ICON_BUTTON_CLASS}
+                        >
+                            <Icon name={expanded ? 'arrow-up-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
+                        </button>
+                    ) : null}
+                    {isMobile && isDragging ? (
+                        <TrashDropZone />
+                    ) : (
+                        <AddStarterPicker pinnable={pinnable} onOpen={ensureLoaded} onAdd={addStarter} />
+                    )}
+                </div>
             </div>
         </DndContext>
     );

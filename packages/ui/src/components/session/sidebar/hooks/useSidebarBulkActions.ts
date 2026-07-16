@@ -1,6 +1,10 @@
 import React from 'react';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
+import {
+  deleteSessionsWithUndo,
+  showArchivedSessionsUndoToast,
+} from '@/lib/sessionMutationUndo';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 import type { SessionFolder } from '@/stores/useSessionFoldersStore';
 
@@ -12,7 +16,6 @@ type Args = {
   removeSessionsFromFolders: (scopeKey: string, sessionIds: string[]) => void;
   createFolderAndStartRename: (scopeKey: string, parentId?: string | null) => { id: string } | null;
   archiveSessions: (ids: string[]) => Promise<{ archivedIds: string[]; failedIds: string[] }>;
-  deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
   setBulkDeleteConfirm: React.Dispatch<React.SetStateAction<{
     sessionCount: number;
     archivedBucket: boolean;
@@ -43,7 +46,6 @@ export const useSidebarBulkActions = (args: Args) => {
     removeSessionsFromFolders,
     createFolderAndStartRename,
     archiveSessions,
-    deleteSessions,
     setBulkDeleteConfirm,
   } = args;
 
@@ -126,23 +128,30 @@ export const useSidebarBulkActions = (args: Args) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     if (bulkScopeIsArchived) {
-      const { deletedIds, failedIds } = await deleteSessions(ids);
-      if (deletedIds.length > 0) {
-        toast.success(deletedIds.length === 1
-          ? t('sessions.sidebar.bulkActions.deletedSingle', { count: deletedIds.length })
-          : t('sessions.sidebar.bulkActions.deletedPlural', { count: deletedIds.length }));
-      }
-      if (failedIds.length > 0) {
-        toast.error(failedIds.length === 1
-          ? t('sessions.sidebar.bulkActions.failedDeleteSingle', { count: failedIds.length })
-          : t('sessions.sidebar.bulkActions.failedDeletePlural', { count: failedIds.length }));
-      }
+      deleteSessionsWithUndo({
+        sessionIds: ids,
+        message: ids.length === 1
+          ? t('sessions.sidebar.bulkActions.deletedSingle', { count: ids.length })
+          : t('sessions.sidebar.bulkActions.deletedPlural', { count: ids.length }),
+        undoLabel: t('sessions.sidebar.undo'),
+        commitFailedMessage: ids.length === 1
+          ? t('sessions.sidebar.bulkActions.failedDeleteSingle', { count: ids.length })
+          : t('sessions.sidebar.bulkActions.failedDeletePlural', { count: ids.length }),
+      });
     } else {
       const { archivedIds, failedIds } = await archiveSessions(ids);
       if (archivedIds.length > 0) {
-        toast.success(archivedIds.length === 1
-          ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
-          : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }));
+        showArchivedSessionsUndoToast({
+          sessionIds: archivedIds,
+          message: archivedIds.length === 1
+            ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
+            : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
+          undoLabel: t('sessions.sidebar.undo'),
+          settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+          undoFailedMessage: archivedIds.length === 1
+            ? t('sessions.sidebar.session.archive.undoFailed')
+            : t('sessions.sidebar.bulkActions.archiveUndoFailed', { count: archivedIds.length }),
+        });
       }
       if (failedIds.length > 0) {
         toast.error(failedIds.length === 1
@@ -151,12 +160,14 @@ export const useSidebarBulkActions = (args: Args) => {
       }
     }
     useSessionMultiSelectStore.getState().clear();
-  }, [archiveSessions, bulkScopeIsArchived, deleteSessions, selectedIds, t]);
+  }, [archiveSessions, bulkScopeIsArchived, selectedIds, t]);
 
   const handleBulkDelete = React.useCallback(() => {
     if (!hasSelection) return;
     const count = selectedIds.size;
-    if (!showDeletionDialog) {
+    // Bulk archive skips confirm (undo toast). Hard-delete from archived bucket
+    // still uses the confirm dialog when enabled.
+    if (!bulkScopeIsArchived || !showDeletionDialog) {
       void executeBulkDelete();
       return;
     }

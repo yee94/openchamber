@@ -614,6 +614,7 @@ describe("optimisticSend target directory", () => {
     expect(add.message.id).toBe(sentMessageID)
     expect(optimisticRemove).toBe(null)
     expect(targetStore.getState().session_status["session-new"]?.type).toBe("busy")
+    expect(typeof targetStore.getState().session_status_observed_at["session-new"]).toBe("number")
     expect(currentStore.getState().session_status["session-new"]).toBe(undefined)
   })
 
@@ -755,6 +756,7 @@ describe("optimisticSend target directory", () => {
     expect(optimisticConfirm).toBe(null)
     expect(replyCalls.filter((call) => call.method === "session.messages").every((call) => call.params.limit === 30)).toBe(true)
     expect(targetStore.getState().session_status["session-missing"]?.type).toBe("idle")
+    expect(typeof targetStore.getState().session_status_observed_at["session-missing"]).toBe("number")
   })
 })
 

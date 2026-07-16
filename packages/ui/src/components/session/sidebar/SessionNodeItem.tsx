@@ -1,16 +1,6 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { ContextMenu } from '@base-ui/react/context-menu';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { dropdownMenuItemClass, dropdownMenuPopupClass, dropdownMenuSeparatorClass, dropdownMenuSubTriggerClass } from '@/components/ui/dropdown-menu.styles';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn, isMacOS } from '@/lib/utils';
@@ -160,36 +150,84 @@ type Props = {
 
 type QuickSessionActionProps = {
   pinLabel: string;
-  deleteLabel: string;
   buttonSizeClass: string;
   iconSizeClass: string;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onMouseDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onPin: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
-// Extracted so only this small button re-renders when Shift is pressed/released,
-// instead of every mounted session row.
+// Pin-only quick action. Shift+delete lives on the archive button instead.
 const QuickSessionAction = React.memo(function QuickSessionAction({
   pinLabel,
-  deleteLabel,
   buttonSizeClass,
   iconSizeClass,
   onPointerDown,
   onMouseDown,
   onPin,
-  onDelete,
 }: QuickSessionActionProps): React.ReactNode {
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-none',
+            buttonSizeClass,
+          )}
+          aria-label={pinLabel}
+          onPointerDown={onPointerDown}
+          onMouseDown={onMouseDown}
+          onClick={onPin}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <Icon name="pushpin-2" className={cn(iconSizeClass, 'rotate-45')} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4} className="rounded-md px-1.5 py-0.5 typography-micro">
+        {pinLabel}
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+
+type QuickArchiveActionProps = {
+  archiveLabel: string;
+  deleteLabel: string;
+  /** Archived bucket: only hard-delete is available. */
+  deleteOnly?: boolean;
+  buttonSizeClass: string;
+  iconSizeClass: string;
+  revealClassName?: string;
+  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onMouseDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onArchive: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+};
+
+// Default archives; hold Shift to hard-delete (same pattern as pin quick action).
+const QuickArchiveAction = React.memo(function QuickArchiveAction({
+  archiveLabel,
+  deleteLabel,
+  deleteOnly = false,
+  buttonSizeClass,
+  iconSizeClass,
+  revealClassName,
+  onPointerDown,
+  onMouseDown,
+  onArchive,
+  onDelete,
+}: QuickArchiveActionProps): React.ReactNode {
   const shiftHeld = useShiftKeyHeld();
-  const label = shiftHeld ? deleteLabel : pinLabel;
+  const showDelete = deleteOnly || shiftHeld;
+  const label = showDelete ? deleteLabel : archiveLabel;
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (shiftHeld || event.shiftKey) {
+    if (deleteOnly || shiftHeld || event.shiftKey) {
       onDelete(event);
       return;
     }
-    onPin(event);
+    onArchive(event);
   };
 
   return (
@@ -199,10 +237,11 @@ const QuickSessionAction = React.memo(function QuickSessionAction({
           type="button"
           className={cn(
             'inline-flex items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-none',
-            shiftHeld
+            showDelete
               ? 'text-destructive hover:text-destructive hover:bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)]'
               : 'text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)]',
             buttonSizeClass,
+            revealClassName,
           )}
           aria-label={label}
           onPointerDown={onPointerDown}
@@ -210,13 +249,10 @@ const QuickSessionAction = React.memo(function QuickSessionAction({
           onClick={handleClick}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          <Icon
-            name={shiftHeld ? 'delete-bin' : 'pushpin-2'}
-            className={cn(iconSizeClass, !shiftHeld && 'rotate-45')}
-          />
+          <Icon name={showDelete ? 'delete-bin' : 'inbox-archive'} className={iconSizeClass} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="left" sideOffset={8}>
+      <TooltipContent side="top" sideOffset={4} className="rounded-md px-1.5 py-0.5 typography-micro">
         {label}
       </TooltipContent>
     </Tooltip>
@@ -269,7 +305,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     copiedSessionId,
     handleCopyShareUrl,
     handleUnshareSession,
-    openSidebarMenuKey,
     setOpenSidebarMenuKey,
     renamingFolderId,
     getFoldersForScope,
@@ -313,7 +348,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const actionIconSizeClass = 'h-3.5 w-3.5';
   const hoverActionCount = (showQuickPinAction || showQuickUnpinAction ? 1 : 0)
     + (showOpenInEditorAction ? 1 : 0)
-    + 1; // overflow menu
+    + 1; // archive / delete
   const hoverActionPadClass = hoverActionCount >= 3
     ? 'group-hover:pr-18 group-focus-within:pr-18'
     : hoverActionCount >= 2
@@ -457,9 +492,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionTimestamp = getSessionActivityUpdatedAt(resolvedSession) || Date.now();
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
-  const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
   const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
-  const isSessionMenuOpen = isMenuOpen || isContextMenuOpen;
+  const isSessionMenuOpen = isContextMenuOpen;
   const isMultiRunLikeSession = React.useMemo(() => parseMultiRunSessionTitle(resolvedSession.title) !== null, [resolvedSession.title]);
   const [fusionDialogOpen, setFusionDialogOpen] = React.useState(false);
 
@@ -672,7 +706,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           {!isMinimalMode ? (
             <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
               <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                {hasChildren && !isSubtaskSession ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
+                {hasChildren && !isPinnedContext && !isSubtaskSession ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
                 <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
                 {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
                 {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
@@ -738,8 +772,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   ) : null;
   // Subsession chevron: align with the folder-icon column; idle hidden, hover only
   // (touch / alwaysShowActions keeps it visible).
-  // Pinned parents must still expand subagents; only nested subtask rows stay leaf-like.
-  const canExpandSubsessions = !isSubtaskSession && hasChildren;
+  // Pinned rows stay flat — no expand chrome and no nested children (indent noise).
+  const canExpandSubsessions = !isPinnedContext && !isSubtaskSession && hasChildren;
   const hideChevronUntilHover = canExpandSubsessions && !alwaysShowActions;
   const subsessionChevronLeft = getSidebarRowPaddingLeft(Math.max(0, depth - 1));
   const toggleSubsessionTree = () => {
@@ -787,13 +821,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     ? <Icon name="error-warning" className="h-4 w-4 text-status-warning" />
     : null;
 
-  const handleMenuOpenChange = (open: boolean) => {
-    if (open) {
-      setIsContextMenuOpen(false);
-    }
-    setOpenSidebarMenuKey(open ? menuInstanceKey : null);
-  };
-
   const handleMenuOpenChangeComplete = (open: boolean) => {
     if (!open && pendingRenameRef.current) {
       const { id, title } = pendingRenameRef.current;
@@ -805,22 +832,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
   const handleContextMenuOpenChange = (open: boolean) => {
     setIsContextMenuOpen(open);
-  };
-
-  const handleMenuTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setOpenSidebarMenuKey(isMenuOpen ? null : menuInstanceKey);
-  };
-
-  const handleMenuTriggerPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleMenuTriggerMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
   };
 
   const handleQuickPinPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -840,10 +851,18 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     togglePinnedSession(session.id);
   };
 
-  const handleQuickDeleteClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleQuickArchiveClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setOpenSidebarMenuKey(null);
+    handleDeleteSession(session, { archivedBucket });
+  };
+
+  const handleQuickHardDeleteClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpenSidebarMenuKey(null);
+    // Quick row action matches pin+Shift: skip the confirm dialog.
     handleDeleteSession(session, { archivedBucket, hardDelete: true, skipConfirm: true });
   };
 
@@ -1084,18 +1103,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     </>
   );
 
-  const sessionMenuContent = (
-    <DropdownMenuContent align="end" className="min-w-[180px]" finalFocus={() => (renamingFolderId || editingIdRef.current) ? false : true}>
-      {renderSessionMenuItems({
-        Item: DropdownMenuItem,
-        Separator: DropdownMenuSeparator,
-        Sub: DropdownMenuSub,
-        SubTrigger: DropdownMenuSubTrigger,
-        SubContent: DropdownMenuSubContent,
-      })}
-    </DropdownMenuContent>
-  );
-
   const contextMenuContent = (
     <ContextMenu.Portal>
       <ContextMenu.Positioner className="app-region-no-drag z-50">
@@ -1303,13 +1310,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
             {showQuickPinAction ? (
               <QuickSessionAction
                 pinLabel={t('sessions.sidebar.session.menu.pin')}
-                deleteLabel={t('sessions.sidebar.bulkActions.delete')}
                 buttonSizeClass={actionButtonSizeClass}
                 iconSizeClass={actionIconSizeClass}
                 onPointerDown={handleQuickPinPointerDown}
                 onMouseDown={handleQuickPinMouseDown}
                 onPin={handleQuickPinClick}
-                onDelete={handleQuickDeleteClick}
               />
             ) : null}
             {showQuickUnpinAction ? (
@@ -1330,7 +1335,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     <Icon name="pushpin-2-fill" className={actionIconSizeClass} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="left" sideOffset={8}>
+                <TooltipContent side="top" sideOffset={4} className="rounded-md px-1.5 py-0.5 typography-micro">
                   {t('sessions.sidebar.session.actions.pinned')}
                 </TooltipContent>
               </Tooltip>
@@ -1353,39 +1358,33 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     <Icon name="external-link" className={actionIconSizeClass} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="left" sideOffset={8}>
+                <TooltipContent side="top" sideOffset={4} className="rounded-md px-1.5 py-0.5 typography-micro">
                   {t('sessions.sidebar.session.actions.openInEditor')}
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} onOpenChangeComplete={handleMenuOpenChangeComplete}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-none',
-                    actionButtonSizeClass,
-                    isMinimalMode && !alwaysShowActions && !isSessionMenuOpen
-                      ? cn('opacity-0', revealOnHoverClass)
-                      : 'opacity-100',
-                  )}
-                  aria-label={t('sessions.sidebar.session.menu.label')}
-                  onPointerDown={handleMenuTriggerPointerDown}
-                  onMouseDown={handleMenuTriggerMouseDown}
-                  onClick={handleMenuTriggerClick}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                   <Icon name="more-2" className={actionIconSizeClass} />
-                </button>
-              </DropdownMenuTrigger>
-              {sessionMenuContent}
-            </DropdownMenu>
+            <QuickArchiveAction
+              archiveLabel={t('sessions.sidebar.bulkActions.archive')}
+              deleteLabel={t('sessions.sidebar.bulkActions.delete')}
+              deleteOnly={archivedBucket === true}
+              buttonSizeClass={actionButtonSizeClass}
+              iconSizeClass={actionIconSizeClass}
+              revealClassName={
+                isMinimalMode && !alwaysShowActions && !isSessionMenuOpen
+                  ? cn('opacity-0', revealOnHoverClass)
+                  : 'opacity-100'
+              }
+              onPointerDown={handleQuickPinPointerDown}
+              onMouseDown={handleQuickPinMouseDown}
+              onArchive={handleQuickArchiveClick}
+              onDelete={handleQuickHardDeleteClick}
+            />
           </div>
           </ContextMenu.Trigger>
           {contextMenuContent}
         </ContextMenu.Root>
       </DraggableSessionRow>
-      {hasChildren && isExpanded
+      {!isPinnedContext && hasChildren && isExpanded
         ? node.children.map((child): React.ReactNode => {
           const childRenderExtras: SessionNodeChildRenderExtras = childRenderExtrasFor
             ? childRenderExtrasFor(child)

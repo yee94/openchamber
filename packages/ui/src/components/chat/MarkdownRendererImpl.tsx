@@ -689,7 +689,7 @@ const useMermaidInlineInteractions = ({
     };
 
     const handleInlineWheel = (event: WheelEvent) => {
-      if (allowMermaidWheelEvents || ((event.ctrlKey || event.metaKey) && enablePanZoom)) {
+      if (allowMermaidWheelEvents || enablePanZoom) {
         return;
       }
 

@@ -51,4 +51,19 @@ describe('session index event ingest', () => {
     }, 201)).toBe(false);
     expect(service.touchActivity).not.toHaveBeenCalled();
   });
+
+  it('promotes a session when its task completes', () => {
+    const service = {
+      touchActivity: vi.fn(() => true),
+      updateStatus: vi.fn(() => true),
+    };
+
+    expect(applySessionIndexEvent(service, {
+      type: 'session.idle',
+      properties: { sessionID: 'ses_1' },
+    }, 400)).toBe(true);
+
+    expect(service.touchActivity).toHaveBeenCalledWith('ses_1', 400);
+    expect(service.updateStatus).toHaveBeenCalledWith('ses_1', 'idle', 400);
+  });
 });

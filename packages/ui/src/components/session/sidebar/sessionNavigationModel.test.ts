@@ -197,7 +197,7 @@ describe('buildProjectNavigationTargets', () => {
       collapsedGroupKeys: new Set(['project-a:collapsed']),
       collapsedFolderIds: new Set(['folder-a']),
       visibleSessionCountByGroup: new Map([['project-a:root', 7]]),
-      defaultVisibleSessionCount: 5,
+      defaultVisibleSessionCount: 3,
       hasSessionSearchQuery: false,
     }).map((item) => item.sessionId)).toEqual(['revealed-by-more']);
 
@@ -207,10 +207,10 @@ describe('buildProjectNavigationTargets', () => {
       collapsedGroupKeys: new Set(['project-a:collapsed']),
       collapsedFolderIds: new Set(['folder-a']),
       visibleSessionCountByGroup: new Map(),
-      defaultVisibleSessionCount: 5,
+      defaultVisibleSessionCount: 3,
       hasSessionSearchQuery: true,
     }).map((item) => item.sessionId)).toEqual(['revealed-by-more', 'revealed-by-search']);
 
-    expect(getDefaultProjectGroupVisibleCount()).toBe(5);
+    expect(getDefaultProjectGroupVisibleCount()).toBe(3);
   });
 });

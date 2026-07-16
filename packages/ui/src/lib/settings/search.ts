@@ -397,6 +397,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['archive', 'delete', 'expire'],
   },
   {
+    id: 'sessions.archived',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.archivedSessions.title',
+    descriptionKey: 'settings.openchamber.archivedSessions.description',
+    keywords: ['archive', 'archived', 'restore', 'preview', 'history'],
+  },
+  {
     id: 'sessions.desktop-launch-at-login',
     page: 'sessions',
     titleKey: 'settings.openchamber.desktopNetwork.field.launchAtLogin',

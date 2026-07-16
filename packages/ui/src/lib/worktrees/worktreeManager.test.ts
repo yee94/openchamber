@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { SessionWorktreeAttachment } from '@/stores/types/sessionTypes';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 type WorktreeListEntry = {
@@ -21,6 +22,20 @@ const createdWorktree = {
 const sessionState = {
   availableWorktreesByProject: new Map<string, WorktreeMetadata[]>(),
   availableWorktrees: [] as WorktreeMetadata[],
+  worktreeMetadata: new Map<string, WorktreeMetadata>(),
+};
+const clearedAttachmentSessions: string[] = [];
+const sessionWorktreeState = {
+  attachments: new Map<string, SessionWorktreeAttachment>(),
+  clearAttachment: (sessionId: string) => {
+    clearedAttachmentSessions.push(sessionId);
+    sessionWorktreeState.attachments.delete(sessionId);
+  },
+};
+const removeWorktreeCalls: Array<[string, { directory: string; deleteLocalBranch: boolean }]> = [];
+const removeWorktree = (directory: string, options: { directory: string; deleteLocalBranch: boolean }) => {
+  removeWorktreeCalls.push([directory, options]);
+  return Promise.resolve({ success: true });
 };
 
 mock.module('@/lib/openchamberConfig', () => ({
@@ -49,6 +64,12 @@ mock.module('@/sync/session-ui-store', () => ({
   },
 }));
 
+mock.module('@/sync/session-worktree-store', () => ({
+  useSessionWorktreeStore: {
+    getState: () => sessionWorktreeState,
+  },
+}));
+
 mock.module('@/lib/gitApi', () => ({
   deleteRemoteBranch: mock(),
   git: {
@@ -60,12 +81,12 @@ mock.module('@/lib/gitApi', () => ({
         });
       },
       create: mock(() => Promise.resolve(createdWorktree)),
-      remove: mock(() => Promise.resolve({ success: true })),
+      remove: removeWorktree,
     },
   },
 }));
 
-const { createWorktree, listProjectWorktrees, worktreeMapsEqual } = await import('./worktreeManager');
+const { createWorktree, listProjectWorktrees, removeProjectWorktree, worktreeMapsEqual } = await import('./worktreeManager');
 
 const waitForListCallCount = async (count: number): Promise<void> => {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -83,6 +104,10 @@ describe('worktreeManager list invalidation', () => {
     listResolvers.length = 0;
     sessionState.availableWorktreesByProject = new Map();
     sessionState.availableWorktrees = [];
+    sessionState.worktreeMetadata = new Map();
+    sessionWorktreeState.attachments.clear();
+    clearedAttachmentSessions.length = 0;
+    removeWorktreeCalls.length = 0;
   });
 
   test('retries an in-flight list when a worktree is created before it resolves', async () => {
@@ -119,6 +144,56 @@ describe('worktreeManager list invalidation', () => {
 
     expect(metadata.worktreeStatus).toBe('pending');
     expect(sessionState.availableWorktrees[0]?.worktreeStatus).toBe('pending');
+  });
+});
+
+describe('removeProjectWorktree', () => {
+  test('clears removed worktree state while retaining attachments for other directories', async () => {
+    const project = { id: 'project-1', path: '/repo' };
+    const removed = {
+      path: '/repo/feature/',
+      branch: 'feature',
+      projectDirectory: '/repo',
+      label: 'feature',
+    };
+    const retained = {
+      path: '/repo/other',
+      branch: 'other',
+      projectDirectory: '/repo',
+      label: 'other',
+    };
+    sessionState.availableWorktreesByProject = new Map([['/repo', [removed, retained]]]);
+    sessionState.availableWorktrees = [removed, retained];
+    sessionState.worktreeMetadata = new Map([
+      ['removed-session', removed],
+      ['retained-session', retained],
+    ]);
+    sessionWorktreeState.attachments = new Map([
+      ['root-session', {
+        worktreeRoot: '/repo/feature', cwd: '/repo', branch: 'feature', headState: 'branch',
+        worktreeStatus: 'ready', worktreeSource: 'existing', legacy: false, degraded: false,
+      }],
+      ['cwd-session', {
+        worktreeRoot: '/repo', cwd: '/repo/feature/', branch: 'feature', headState: 'branch',
+        worktreeStatus: 'ready', worktreeSource: 'existing', legacy: false, degraded: false,
+      }],
+      ['retained-session', {
+        worktreeRoot: '/repo/other', cwd: '/repo/other', branch: 'other', headState: 'branch',
+        worktreeStatus: 'ready', worktreeSource: 'existing', legacy: false, degraded: false,
+      }],
+    ]);
+
+    await removeProjectWorktree(project, removed, { deleteLocalBranch: true });
+
+    expect(removeWorktreeCalls).toEqual([['/repo', {
+      directory: '/repo/feature/',
+      deleteLocalBranch: true,
+    }]]);
+    expect(sessionState.availableWorktreesByProject.get('/repo')).toEqual([retained]);
+    expect(sessionState.availableWorktrees).toEqual([retained]);
+    expect(sessionState.worktreeMetadata).toEqual(new Map([['retained-session', retained]]));
+    expect([...sessionWorktreeState.attachments.keys()]).toEqual(['retained-session']);
+    expect(clearedAttachmentSessions).toEqual(['root-session', 'cwd-session']);
   });
 });
 
