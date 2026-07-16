@@ -6,6 +6,10 @@
 - Sidebar is now a single multi-project tree: an optional `pinned` top section,
   then projects, then worktrees/archived groups, then sessions. Pinned sessions
   render only in the top section and are excluded from project groups.
+  Parent/child attachment always runs on the full session list first; pinned
+  roots are omitted from project groups only after children attach. The pinned
+  section rebuilds each pinned root with `buildSessionNodeWithChildren` so
+  subagents (including newly created ones) follow under the pin and can expand.
 - The Pinned section renders every pinned session and supports header collapse.
   Expanded project/worktree
   groups reveal 5 sessions by default from the already-fetched 20-session page;
@@ -134,6 +138,7 @@
   prefetch neighboring/recent session messages because those background pages
   compete with the active chat during cold start and rapid navigation.
 - `hooks/useSessionGrouping.ts`: Builds grouped session structures and search text/filter helpers.
+- `sessionTree.ts`: Pure parent/child forest builders shared by project grouping and the pinned section.
 - `hooks/useSessionSidebarSections.ts`: Composes final per-project sections and group search metadata for rendering.
 - `hooks/useProjectSessionSelection.ts`: Resolves active/current project-session selection logic and session-directory context.
 - `hooks/useGroupOrdering.ts`: Applies persisted/custom group order with stable fallback ordering; archived groups are reorderable.

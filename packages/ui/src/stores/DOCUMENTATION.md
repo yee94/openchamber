@@ -46,6 +46,8 @@ Examples:
 
 These stores coordinate visible app state, navigation, selected tabs, dialogs, and lightweight feature flags.
 
+`useUIStore` keeps context-panel tab *content* directory-scoped (`contextPanelByDirectory`), but the *open* state of the right workspace (context panel for subagent/file preview/diff, plus right sidebar git/files) is session-correlated. `syncWorkspacePanelsForSessionSwitch()` captures the previous session snapshot into in-memory `sessionWorkspacePanelById` and restores the next session (or closes panels when there is no snapshot). `setCurrentSession()` is the single switch boundary that calls it.
+
 `useConfigStore.ts` keeps provider and agent snapshots project-scoped. Its transient
 provider/agent loading maps are keyed by the active config directory so a deeplink
 into an uncached project can show explicit composer loading controls while cached

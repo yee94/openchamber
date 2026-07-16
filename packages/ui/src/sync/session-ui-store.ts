@@ -945,6 +945,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     announceSessionSwitchIntent(id)
     setRuntimeInteractiveSessionRequestId(id)
     const previousSessionId = get().currentSessionId
+    const previousDirectory = get().currentSessionDirectory
     if (previousSessionId !== id) {
       beginSessionSwitchMeasure()
     }
@@ -983,6 +984,17 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     // same child store that send/SSE events will update during startup races.
     set({ currentSessionId: id, currentSessionDirectory: id ? resolvedDir ?? null : null })
     writeRuntimeSessionMemory(key, { sessionId: id, directory: resolvedDir ?? null })
+
+    // Workspace panels (context/subagent/file preview + right sidebar git/files)
+    // are session-correlated: hide when leaving, restore when returning.
+    if (previousSessionId !== id) {
+      useUIStore.getState().syncWorkspacePanelsForSessionSwitch({
+        previousSessionId,
+        previousDirectory,
+        nextSessionId: id,
+        nextDirectory: id ? resolvedDir ?? null : null,
+      })
+    }
 
     // Kick off the message fetch on the same tick, before React commits the
     // state change and fires ChatContainer.useEffect. The fetch is

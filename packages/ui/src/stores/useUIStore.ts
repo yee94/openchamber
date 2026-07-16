@@ -63,6 +63,24 @@ type ContextPanelDirectoryState = {
   touchedAt: number;
 };
 
+/** Session-scoped snapshot of workspace panels that should follow the left chat session. */
+type SessionWorkspacePanelState = {
+  isRightSidebarOpen: boolean;
+  rightSidebarTab: RightSidebarTab;
+  contextPanelDirectory: string | null;
+  contextPanelIsOpen: boolean;
+  contextPanelActiveTabId: string | null;
+  contextPanelExpanded: boolean;
+  touchedAt: number;
+};
+
+type SessionWorkspacePanelSwitchArgs = {
+  previousSessionId: string | null;
+  previousDirectory?: string | null;
+  nextSessionId: string | null;
+  nextDirectory?: string | null;
+};
+
 type PendingFileNavigation = {
   path: string;
   line: number;
@@ -118,6 +136,7 @@ const CONTEXT_PANEL_DEFAULT_WIDTH = 380;
 const CONTEXT_PANEL_MIN_WIDTH = 380;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
 const CONTEXT_PANEL_MAX_TABS = 12;
+const SESSION_WORKSPACE_PANEL_MAX = 40;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
 const LEFT_SIDEBAR_MIN_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 360;
@@ -533,6 +552,91 @@ const clampContextPanelRoots = (
   return next;
 };
 
+const clampSessionWorkspacePanels = (
+  byId: Record<string, SessionWorkspacePanelState>,
+  maxSessions: number,
+): Record<string, SessionWorkspacePanelState> => {
+  const entries = Object.entries(byId);
+  if (entries.length <= maxSessions) {
+    return byId;
+  }
+
+  entries.sort((a, b) => (b[1]?.touchedAt ?? 0) - (a[1]?.touchedAt ?? 0));
+  const next: Record<string, SessionWorkspacePanelState> = {};
+  for (const [sessionId, state] of entries.slice(0, maxSessions)) {
+    next[sessionId] = state;
+  }
+  return next;
+};
+
+const captureSessionWorkspacePanelState = (
+  state: {
+    isRightSidebarOpen: boolean;
+    rightSidebarTab: RightSidebarTab;
+    contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
+  },
+  directory: string | null | undefined,
+): SessionWorkspacePanelState => {
+  const normalizedDirectory = normalizeDirectoryPath((directory || '').trim()) || null;
+  const panel = normalizedDirectory ? state.contextPanelByDirectory[normalizedDirectory] : undefined;
+  return {
+    isRightSidebarOpen: state.isRightSidebarOpen,
+    rightSidebarTab: state.rightSidebarTab,
+    contextPanelDirectory: normalizedDirectory,
+    contextPanelIsOpen: Boolean(panel?.isOpen && panel.tabs.length > 0),
+    contextPanelActiveTabId: panel?.activeTabId ?? null,
+    contextPanelExpanded: Boolean(panel?.expanded),
+    touchedAt: Date.now(),
+  };
+};
+
+const applySessionWorkspacePanelToDirectory = (
+  byDirectory: Record<string, ContextPanelDirectoryState>,
+  directory: string | null | undefined,
+  snapshot: SessionWorkspacePanelState | undefined,
+): Record<string, ContextPanelDirectoryState> => {
+  const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+  if (!normalizedDirectory) {
+    return byDirectory;
+  }
+
+  const current = byDirectory[normalizedDirectory];
+  if (!current) {
+    return byDirectory;
+  }
+
+  const shouldOpen = Boolean(
+    snapshot?.contextPanelIsOpen
+    && snapshot.contextPanelDirectory === normalizedDirectory
+    && current.tabs.length > 0,
+  );
+  const activeTabId = shouldOpen
+    ? resolveActiveContextPanelTabID(current.tabs, snapshot?.contextPanelActiveTabId ?? current.activeTabId)
+    : current.activeTabId;
+  const expanded = shouldOpen
+    ? Boolean(snapshot?.contextPanelExpanded)
+    : current.expanded;
+
+  if (
+    current.isOpen === shouldOpen
+    && current.activeTabId === activeTabId
+    && current.expanded === expanded
+  ) {
+    return byDirectory;
+  }
+
+  return {
+    ...byDirectory,
+    [normalizedDirectory]: {
+      ...current,
+      isOpen: shouldOpen,
+      activeTabId,
+      expanded,
+      touchedAt: Date.now(),
+    },
+  };
+};
+
 interface UIStore {
 
   theme: 'light' | 'dark' | 'system';
@@ -546,6 +650,8 @@ interface UIStore {
   hasManuallyResizedRightSidebar: boolean;
   rightSidebarTab: RightSidebarTab;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
+  /** In-memory session-scoped restore for right sidebar + context panel open state. */
+  sessionWorkspacePanelById: Record<string, SessionWorkspacePanelState>;
   contextPanelsOpenBeforeRightSidebarCollapse: string[];
   isBottomTerminalOpen: boolean;
   isBottomTerminalExpanded: boolean;
@@ -695,6 +801,11 @@ interface UIStore {
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarWidth: (width: number) => void;
   setRightSidebarTab: (tab: RightSidebarTab) => void;
+  /**
+   * Capture workspace panels for the previous session and restore the next
+   * session's right sidebar / context panel (subagent, git, file preview).
+   */
+  syncWorkspacePanelsForSessionSwitch: (args: SessionWorkspacePanelSwitchArgs) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number) => void;
   openContextFileDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
@@ -877,6 +988,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedRightSidebar: false,
         rightSidebarTab: 'git',
         contextPanelByDirectory: {},
+        sessionWorkspacePanelById: {},
         contextPanelsOpenBeforeRightSidebarCollapse: [],
         isBottomTerminalOpen: false,
         isBottomTerminalExpanded: false,
@@ -1129,6 +1241,70 @@ export const useUIStore = create<UIStore>()(
 
         setRightSidebarTab: (tab) => {
           set({ rightSidebarTab: tab });
+        },
+
+        syncWorkspacePanelsForSessionSwitch: ({
+          previousSessionId,
+          previousDirectory,
+          nextSessionId,
+          nextDirectory,
+        }) => {
+          const previousId = typeof previousSessionId === 'string' ? previousSessionId.trim() : '';
+          const nextId = typeof nextSessionId === 'string' ? nextSessionId.trim() : '';
+          if (previousId === nextId) {
+            return;
+          }
+
+          set((state) => {
+            let sessionWorkspacePanelById = state.sessionWorkspacePanelById;
+            if (previousId) {
+              sessionWorkspacePanelById = {
+                ...sessionWorkspacePanelById,
+                [previousId]: captureSessionWorkspacePanelState(state, previousDirectory),
+              };
+            }
+
+            const nextSnapshot = nextId ? sessionWorkspacePanelById[nextId] : undefined;
+            const contextPanelByDirectory = applySessionWorkspacePanelToDirectory(
+              state.contextPanelByDirectory,
+              nextDirectory,
+              nextSnapshot,
+            );
+
+            // Also close a previously open panel when leaving that directory for
+            // another session in a different root, so stale isOpen does not
+            // reappear on directory-only navigation without a session restore.
+            const previousDir = normalizeDirectoryPath((previousDirectory || '').trim());
+            const nextDir = normalizeDirectoryPath((nextDirectory || '').trim());
+            let nextContextPanelByDirectory = contextPanelByDirectory;
+            if (previousDir && previousDir !== nextDir) {
+              const previousPanel = nextContextPanelByDirectory[previousDir];
+              if (previousPanel?.isOpen) {
+                nextContextPanelByDirectory = {
+                  ...nextContextPanelByDirectory,
+                  [previousDir]: {
+                    ...previousPanel,
+                    isOpen: false,
+                    touchedAt: Date.now(),
+                  },
+                };
+              }
+            }
+
+            const isRightSidebarOpen = nextSnapshot ? nextSnapshot.isRightSidebarOpen : false;
+            const rightSidebarTab = nextSnapshot?.rightSidebarTab ?? state.rightSidebarTab;
+
+            return {
+              sessionWorkspacePanelById: clampSessionWorkspacePanels(
+                sessionWorkspacePanelById,
+                SESSION_WORKSPACE_PANEL_MAX,
+              ),
+              contextPanelByDirectory: nextContextPanelByDirectory,
+              isRightSidebarOpen,
+              rightSidebarTab,
+              contextPanelsOpenBeforeRightSidebarCollapse: [],
+            };
+          });
         },
 
         openContextPanelTab: (directory, tab) => {

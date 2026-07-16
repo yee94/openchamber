@@ -3,8 +3,6 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SessionGroup, SessionNode } from '../types';
 import {
-  compareSessionsByPinnedAndTime,
-  dedupeSessionsById,
   getArchivedScopeKey,
   normalizeForBranchComparison,
   normalizePath,
@@ -13,6 +11,7 @@ import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
+import { buildSessionTree } from '../sessionTree';
 
 type Args = {
   homeDirectory: string | null;
@@ -21,8 +20,6 @@ type Args = {
   gitBranches: Map<string, string | null>;
   isVSCode: boolean;
 };
-
-const isArchivedSession = (session: Session): boolean => Boolean(session.time?.archived);
 
 export const useSessionGrouping = (args: Args) => {
   const { t } = useI18n();
@@ -68,24 +65,6 @@ export const useSessionGrouping = (args: Args) => {
       projectIsRepo: boolean,
     ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
-      const sortedProjectSessions = dedupeSessionsById(projectSessions)
-        .filter((session) => !args.pinnedSessionIds.has(session.id))
-        .sort((a, b) => compareSessionsByPinnedAndTime(a, b, args.pinnedSessionIds));
-
-      const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
-      const childrenMap = new Map<string, Session[]>();
-      sortedProjectSessions.forEach((session) => {
-        const parentID = (session as Session & { parentID?: string | null }).parentID;
-        if (!parentID) return;
-        const parentSession = sessionMap.get(parentID);
-        if (!parentSession || isArchivedSession(parentSession) !== isArchivedSession(session)) {
-          return;
-        }
-        const collection = childrenMap.get(parentID) ?? [];
-        collection.push(session);
-        childrenMap.set(parentID, collection);
-      });
-      childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, args.pinnedSessionIds)));
 
       const worktreeByPath = new Map<string, WorktreeMetadata>();
       availableWorktrees.forEach((meta) => {
@@ -108,17 +87,13 @@ export const useSessionGrouping = (args: Args) => {
         return null;
       };
 
-      const buildProjectNode = (session: Session): SessionNode => {
-        const children = childrenMap.get(session.id) ?? [];
-        return { session, children: children.map((child) => buildProjectNode(child)), worktree: getSessionWorktree(session) };
-      };
-
-      const roots = sortedProjectSessions.filter((session) => {
-        const parentID = (session as Session & { parentID?: string | null }).parentID;
-        if (!parentID) return true;
-        const parentSession = sessionMap.get(parentID);
-        if (!parentSession) return true;
-        return isArchivedSession(parentSession) !== isArchivedSession(session);
+      // Build the full parent/child forest first, then omit pinned roots from the
+      // project area. Filtering pinned sessions before attachment used to orphan
+      // subagents of pinned parents (they never found parent in the map).
+      const forestRoots = buildSessionTree(projectSessions, {
+        pinnedSessionIds: args.pinnedSessionIds,
+        omitPinnedSessions: true,
+        getWorktree: getSessionWorktree,
       });
 
       const groupedNodes = new Map<string, SessionNode[]>();
@@ -139,9 +114,8 @@ export const useSessionGrouping = (args: Args) => {
         return archivedKey;
       };
 
-      roots.forEach((session) => {
-        const node = buildProjectNode(session);
-        const groupKey = getGroupKey(session);
+      forestRoots.forEach((node) => {
+        const groupKey = getGroupKey(node.session);
         if (!groupedNodes.has(groupKey)) groupedNodes.set(groupKey, []);
         groupedNodes.get(groupKey)?.push(node);
       });

@@ -4,8 +4,10 @@ import { useUIStore } from './useUIStore';
 beforeEach(() => {
   useUIStore.setState({
     contextPanelByDirectory: {},
+    sessionWorkspacePanelById: {},
     contextPanelsOpenBeforeRightSidebarCollapse: [],
     isRightSidebarOpen: false,
+    rightSidebarTab: 'git',
   });
 });
 
@@ -97,5 +99,70 @@ describe('useUIStore context panel tabs', () => {
 
     expect(useUIStore.getState().contextPanelByDirectory[firstDirectory]?.isOpen).toBe(true);
     expect(useUIStore.getState().contextPanelByDirectory[secondDirectory]?.isOpen).toBe(true);
+  });
+
+  test('syncWorkspacePanelsForSessionSwitch hides and restores session-scoped panels', () => {
+    const directory = '/repo';
+    const store = useUIStore.getState();
+
+    store.openContextPanelTab(directory, {
+      mode: 'chat',
+      dedupeKey: 'session:ses_child',
+      label: 'Subagent',
+    });
+    store.openContextFile(directory, '/repo/src/a.ts');
+    store.setRightSidebarOpen(true);
+    store.setRightSidebarTab('git');
+
+    const activeTabId = useUIStore.getState().contextPanelByDirectory[directory]?.activeTabId;
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.isOpen).toBe(true);
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(true);
+
+    store.syncWorkspacePanelsForSessionSwitch({
+      previousSessionId: 'ses_a',
+      previousDirectory: directory,
+      nextSessionId: 'ses_b',
+      nextDirectory: directory,
+    });
+
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.isOpen).toBe(false);
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(false);
+    // Tabs stay cached so restore can reopen them.
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.tabs.length).toBeGreaterThan(0);
+
+    store.syncWorkspacePanelsForSessionSwitch({
+      previousSessionId: 'ses_b',
+      previousDirectory: directory,
+      nextSessionId: 'ses_a',
+      nextDirectory: directory,
+    });
+
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.isOpen).toBe(true);
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.activeTabId).toBe(activeTabId);
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(true);
+    expect(useUIStore.getState().rightSidebarTab).toBe('git');
+  });
+
+  test('syncWorkspacePanelsForSessionSwitch closes previous directory when roots differ', () => {
+    const firstDirectory = '/repo-one';
+    const secondDirectory = '/repo-two';
+    const store = useUIStore.getState();
+
+    store.openContextPanelTab(firstDirectory, {
+      mode: 'chat',
+      dedupeKey: 'session:ses_child',
+      label: 'Subagent',
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[firstDirectory]?.isOpen).toBe(true);
+
+    store.syncWorkspacePanelsForSessionSwitch({
+      previousSessionId: 'ses_a',
+      previousDirectory: firstDirectory,
+      nextSessionId: 'ses_b',
+      nextDirectory: secondDirectory,
+    });
+
+    expect(useUIStore.getState().contextPanelByDirectory[firstDirectory]?.isOpen).toBe(false);
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(false);
   });
 });
