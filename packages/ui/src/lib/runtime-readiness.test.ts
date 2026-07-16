@@ -67,4 +67,29 @@ describe('runtime readiness coordinator', () => {
     releases[1]?.(true);
     expect(await current).toBe(undefined);
   });
+
+  test('shares a failure cooldown across queued directory callers', async () => {
+    let now = 1_000;
+    let probes = 0;
+    let ready = false;
+    const coordinator = createRuntimeReadinessCoordinator({
+      probe: async () => {
+        probes += 1;
+        return ready;
+      },
+      wait: async () => undefined,
+      retryDelaysMs: [0],
+      failureCooldownMs: 5_000,
+      now: () => now,
+    });
+
+    await expect(coordinator.waitUntilReady('runtime-a')).rejects.toThrow('did not become ready');
+    await expect(coordinator.waitUntilReady('runtime-a')).rejects.toThrow('cooling down');
+    expect(probes).toBe(1);
+
+    now += 5_001;
+    ready = true;
+    expect(await coordinator.waitUntilReady('runtime-a')).toBe(undefined);
+    expect(probes).toBe(2);
+  });
 });

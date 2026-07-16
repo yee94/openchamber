@@ -8,7 +8,6 @@ import { isVSCodeRuntime } from "@/lib/desktop";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { opencodeClient } from "@/lib/opencode/client";
-import { getRuntimeKey } from "@/lib/runtime-switch";
 
 type PermissionPolicySnapshot = {
     sessions: PermissionAutoAcceptMap;
@@ -16,21 +15,14 @@ type PermissionPolicySnapshot = {
 
 interface PermissionStore {
     autoAccept: PermissionAutoAcceptMap;
-    controlVisibility: Record<string, boolean>;
     loaded: boolean;
     saving: boolean;
     hydrate: () => Promise<void>;
     applySnapshot: (snapshot: PermissionPolicySnapshot) => void;
     reset: () => void;
     isSessionAutoAccepting: (sessionId: string) => boolean;
-    revalidateControlVisibility: (directory?: string, agentName?: string) => Promise<void>;
     setSessionAutoAccept: (sessionId: string, enabled: boolean) => Promise<void>;
 }
-
-const controlVisibilityRequests = new Map<string, Promise<void>>();
-
-export const getPermissionControlVisibilityKey = (directory?: string, agentName?: string): string =>
-    `${getRuntimeKey()}\n${directory?.trim() ?? ""}\n${agentName?.trim() ?? ""}`;
 
 const readSnapshot = async (response: Response): Promise<PermissionPolicySnapshot> => {
     if (!response.ok) throw new Error(`Permission auto-accept request failed (${response.status})`);
@@ -55,7 +47,6 @@ const isAutoAccepting = (
 
 export const usePermissionStore = create<PermissionStore>()(persist((set, get) => ({
     autoAccept: {},
-    controlVisibility: {},
     loaded: false,
     saving: false,
 
@@ -80,8 +71,7 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
     },
 
     reset: () => {
-        controlVisibilityRequests.clear();
-        set({ autoAccept: {}, controlVisibility: {}, loaded: false, saving: false });
+        set({ autoAccept: {}, loaded: false, saving: false });
     },
 
     applySnapshot: (snapshot) => {
@@ -97,33 +87,6 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
         const autoAccept = get().autoAccept;
         if (Object.keys(autoAccept).length === 0) return false;
         return isAutoAccepting(autoAccept, getAllSyncSessionMap(), sessionId);
-    },
-
-    revalidateControlVisibility: async (directory, agentName) => {
-        if (isVSCodeRuntime()) return;
-        const key = getPermissionControlVisibilityKey(directory, agentName);
-        const existing = controlVisibilityRequests.get(key);
-        if (existing) return existing;
-        const query = new URLSearchParams();
-        if (directory?.trim()) query.set("directory", directory.trim());
-        if (agentName?.trim()) query.set("agent", agentName.trim());
-        const queryString = query.size > 0 ? `?${query.toString()}` : "";
-        const request = (async () => {
-            const response = await runtimeFetch(`/api/permission-auto-accept/control-visibility${queryString}`);
-            if (!response.ok) throw new Error(`Permission control visibility request failed (${response.status})`);
-            const payload = await response.json() as { visible?: unknown };
-            if (typeof payload.visible !== "boolean") {
-                throw new Error("Invalid permission control visibility response");
-            }
-            const visible = payload.visible;
-            set((state) => ({
-                controlVisibility: { ...state.controlVisibility, [key]: visible },
-            }));
-        })().finally(() => {
-            controlVisibilityRequests.delete(key);
-        });
-        controlVisibilityRequests.set(key, request);
-        return request;
     },
 
     setSessionAutoAccept: async (sessionId, enabled) => {
@@ -162,6 +125,5 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
     storage: createDeferredSafeJSONStorage(),
     partialize: (state) => ({
         autoAccept: state.autoAccept,
-        controlVisibility: state.controlVisibility,
     }),
 }));

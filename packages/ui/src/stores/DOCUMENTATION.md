@@ -53,6 +53,10 @@ provider/agent loading maps are keyed by the active config directory so a deepli
 into an uncached project can show explicit composer loading controls while cached
 projects continue to render immediately during background refresh.
 
+`ChatInput` subscribes directly to the active `agents` snapshot for permission
+auto-accept visibility. It derives the selected agent's prompt capability locally,
+so this UI decision adds no server request.
+
 ### Session / project coordination stores
 
 Examples:
@@ -88,6 +92,12 @@ Directory session loads also wait on the runtime-keyed OpenCode readiness
 coordinator. Concurrent directories share one health-probe chain, so a cold
 OpenCode process is not hit by parallel `session.list` calls. A runtime reset
 invalidates both the directory requests and the matching readiness generation.
+Cold directory refresh starts at three concurrent requests because each request
+initializes directory-scoped OpenCode config and plugins. Successful completions
+raise concurrency toward seven; timeout or overload feedback drops it to three
+and then one. A failed readiness probe also enters a short runtime-scoped
+cooldown, so queued directories share the same failure instead of starting a
+new health-probe chain each time.
 
 On Electron, `useGlobalSessionsStore` is also the UI owner for the SQLite
 session-index startup state. The root coordinator restores summaries first and

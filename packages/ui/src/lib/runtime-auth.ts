@@ -19,6 +19,8 @@ let runtimeAuthGeneration = 0;
 
 const URL_AUTH_REFRESH_SKEW_MS = 10_000;
 
+export const getRuntimeAuthGeneration = (): number => runtimeAuthGeneration;
+
 const isReservedRuntimeExtraHeaderName = (name: string): boolean => name.toLowerCase() === 'authorization';
 
 const sanitizeRuntimeExtraHeaders = (headers: Record<string, string> | null | undefined): Record<string, string> => {

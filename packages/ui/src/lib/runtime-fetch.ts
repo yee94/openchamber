@@ -1,6 +1,6 @@
 import { getActiveRelayTunnel } from './relay/runtime-tunnel';
 import { TUNNEL_PARSE_BASE } from './relay/tunnel-payloads';
-import { buildRuntimeAuthHeaders } from './runtime-auth';
+import { buildRuntimeAuthHeaders, getRuntimeAuthGeneration } from './runtime-auth';
 import { getRuntimeUrlResolver, type RuntimeUrlQuery } from './runtime-url';
 
 export interface RuntimeFetchOptions extends RequestInit {
@@ -310,15 +310,35 @@ const resolveRuntimeFetchInput = (input: string | URL | Request, query?: Runtime
 // as soon as the request settles, so this only ever shares overlapping in-flight
 // requests — it never serves a stale/cached response.
 // ---------------------------------------------------------------------------
-const COALESCE_READ_PATH = /\/api\/(config|path|app\/agents|agent|project|command)(\b|\/|\?|$)/;
+const COALESCE_READ_PATH = /\/api\/(config|path|app\/agents|agent|project|command|opencode\/upgrade-status)(\b|\/|\?|$)/;
 const READ_COALESCE = new Map<string, Promise<Response>>();
+const RELAY_COALESCE_IDS = new WeakMap<object, number>();
+let nextRelayCoalesceId = 1;
 
-const coalesceReadKey = (method: string, url: string, hasSignal: boolean): string | null => {
+const relayCoalesceId = (relay: object): number => {
+  const existing = RELAY_COALESCE_IDS.get(relay);
+  if (existing) return existing;
+  const id = nextRelayCoalesceId;
+  nextRelayCoalesceId += 1;
+  RELAY_COALESCE_IDS.set(relay, id);
+  return id;
+};
+
+const coalesceReadKey = (
+  method: string,
+  url: string,
+  hasSignal: boolean,
+  authGeneration: number,
+  authGenerationStable: boolean,
+  relay: object | null,
+): string | null => {
   if (hasSignal) return null;
+  if (!authGenerationStable) return null;
   if (method !== 'GET') return null;
   if (url.includes('/event')) return null;
   if (!COALESCE_READ_PATH.test(url)) return null;
-  return `GET ${url}`;
+  const transport = relay ? `relay:${relayCoalesceId(relay)}` : `url:${url}`;
+  return `GET ${transport} ${url} auth:${authGeneration}`;
 };
 
 export const runtimeFetch = async (input: string | URL | Request, init: RuntimeFetchOptions = {}): Promise<Response> => {
@@ -329,6 +349,7 @@ export const runtimeFetch = async (input: string | URL | Request, init: RuntimeF
   // deduping concurrent identical GETs matters there most.
   const relay = getActiveRelayTunnel();
   const relayPath = relay ? extractRelayPath(input, query) : null;
+  const authGeneration = getRuntimeAuthGeneration();
 
   let doFetch: () => Promise<Response>;
   let url: string;
@@ -365,7 +386,14 @@ export const runtimeFetch = async (input: string | URL | Request, init: RuntimeF
   // an explicit init.signal, as "has signal" and skip coalescing for safety.
   const hasSignal = requestInit.signal != null || input instanceof Request;
 
-  const key = coalesceReadKey(method, url, hasSignal);
+  const key = coalesceReadKey(
+    method,
+    url,
+    hasSignal,
+    authGeneration,
+    authGeneration === getRuntimeAuthGeneration(),
+    relay && relayPath !== null ? relay : null,
+  );
   if (!key) return doFetch();
 
   const existing = READ_COALESCE.get(key);

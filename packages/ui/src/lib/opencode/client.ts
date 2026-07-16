@@ -42,6 +42,8 @@ import {
 const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
 const CONFIG_CACHE_TTL_MS = 10_000;
 const OPENCODE_HEALTH_TIMEOUT_MS = 4_000;
+const OPENCODE_HEALTH_CACHE_TTL_MS = 3_000;
+const OPENCODE_HEALTH_FAILURE_CACHE_TTL_MS = 1_000;
 
 /**
  * Render an SDK error payload into a short string for Error messages.
@@ -293,6 +295,9 @@ class OpencodeService {
   private configCache: Map<string, { config: Config; expiresAt: number }> = new Map();
   private configCacheGeneration = 0;
   private listDirectoryCache: Map<string, { entries: FilesystemEntry[]; expiresAt: number }> = new Map();
+  private healthInFlight: Map<string, Promise<boolean>> = new Map();
+  private healthCache: Map<string, { healthy: boolean; expiresAt: number }> = new Map();
+  private healthCacheGeneration = 0;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     const runtimeBase = resolveRuntimeBaseUrl();
@@ -319,6 +324,7 @@ class OpencodeService {
     this.listAgentsInFlight.clear();
     this.clearConfigCache();
     this.listDirectoryCache.clear();
+    this.clearHealthCache();
   }
 
   /** Expose the raw SDK client for direct use (e.g., SyncProvider) */
@@ -1368,6 +1374,12 @@ class OpencodeService {
     this.configCache.clear();
   }
 
+  private clearHealthCache(): void {
+    this.healthCacheGeneration += 1;
+    this.healthInFlight.clear();
+    this.healthCache.clear();
+  }
+
   async getConfig(directory?: string | null): Promise<Config> {
     const effectiveDirectory = this.normalizeCandidatePath(directory) ?? directory ?? this.currentDirectory ?? undefined;
     const key = effectiveDirectory ?? '';
@@ -1661,25 +1673,55 @@ class OpencodeService {
 
   // Lightweight readiness check. Full diagnostics still live at /health.
   async checkHealth(): Promise<boolean> {
-    try {
-      const normalizedBase = this.baseUrl.endsWith('/') ? this.baseUrl.replace(/\/+$/, '') : this.baseUrl;
-      const healthUrl = normalizedBase === '/api' || normalizedBase.endsWith('/api')
-        ? '/api/opencode/health'
-        : `${normalizedBase}/opencode/health`;
-      markStartupTrace('opencodeClient.checkHealth:url', { baseUrl: this.baseUrl, healthUrl });
-      const timeout = createTimeoutSignal(OPENCODE_HEALTH_TIMEOUT_MS);
-      const response = await runtimeFetch(healthUrl, { signal: timeout.signal }).finally(timeout.cleanup);
-      markStartupTrace('opencodeClient.checkHealth:response', { status: response.status });
-      if (!response.ok) {
-        return false;
+    const runtimeKey = getRuntimeKey();
+    const cached = this.healthCache.get(runtimeKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.healthy;
+    }
+
+    const existing = this.healthInFlight.get(runtimeKey);
+    if (existing) {
+      return existing;
+    }
+
+    const generation = this.healthCacheGeneration;
+    const request = (async () => {
+      let healthy = false;
+      try {
+        const normalizedBase = this.baseUrl.endsWith('/') ? this.baseUrl.replace(/\/+$/, '') : this.baseUrl;
+        const healthUrl = normalizedBase === '/api' || normalizedBase.endsWith('/api')
+          ? '/api/opencode/health'
+          : `${normalizedBase}/opencode/health`;
+        markStartupTrace('opencodeClient.checkHealth:url', { baseUrl: this.baseUrl, healthUrl });
+        const timeout = createTimeoutSignal(OPENCODE_HEALTH_TIMEOUT_MS);
+        const response = await runtimeFetch(healthUrl, { signal: timeout.signal }).finally(timeout.cleanup);
+        markStartupTrace('opencodeClient.checkHealth:response', { status: response.status });
+        if (response.ok) {
+          const healthData = await response.json();
+          markStartupTrace('opencodeClient.checkHealth:result', { healthy: healthData?.healthy });
+          healthy = healthData?.healthy === true;
+        }
+      } catch {
+        healthy = false;
       }
 
-      const healthData = await response.json();
-      markStartupTrace('opencodeClient.checkHealth:result', { healthy: healthData?.healthy });
+      const isCurrentRuntime = generation === this.healthCacheGeneration && runtimeKey === getRuntimeKey();
+      if (!isCurrentRuntime) return false;
 
-      return healthData?.healthy === true;
-    } catch {
-      return false;
+      this.healthCache.set(runtimeKey, {
+        healthy,
+        expiresAt: Date.now() + (healthy ? OPENCODE_HEALTH_CACHE_TTL_MS : OPENCODE_HEALTH_FAILURE_CACHE_TTL_MS),
+      });
+      return healthy;
+    })();
+
+    this.healthInFlight.set(runtimeKey, request);
+    try {
+      return await request;
+    } finally {
+      if (this.healthInFlight.get(runtimeKey) === request) {
+        this.healthInFlight.delete(runtimeKey);
+      }
     }
   }
 

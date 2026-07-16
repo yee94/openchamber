@@ -84,14 +84,14 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
   const runningRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!enabled || !autoDeleteEnabled || autoDeleteAfterDays <= 0) return;
+    if (!enabled || !autoRun || !autoDeleteEnabled || autoDeleteAfterDays <= 0) return;
     // Retention cleanup needs a broad catalog eventually, but must not race the
     // active-project cold-start send path with an unfiltered global list.
     const timer = window.setTimeout(() => {
       void ensureFullGlobalSessionsLoaded(getAllSyncSessions());
     }, 8000);
     return () => window.clearTimeout(timer);
-  }, [autoDeleteAfterDays, autoDeleteEnabled, enabled]);
+  }, [autoDeleteAfterDays, autoDeleteEnabled, autoRun, enabled]);
 
   const candidates = React.useMemo(() => {
     if (autoDeleteAfterDays <= 0) {
