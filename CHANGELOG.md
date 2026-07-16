@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.16] - 2026-07-16
+
+- **Chat:** new session send now shows a full-screen establishing page immediately (like fork), instead of keeping the draft composer visible during combined create+prompt.
+- **Fork:** cold-start fork no longer fails silently — source sessions are resolved from the global session index or `session.get` when the directory child store hasn't hydrated yet.
+- **Keyboard:** first Esc now shows "Press Esc again to abort" in the status row; the abort prompt is visible on every layout including expanded input and desktop.
+- **Keyboard:** `Ctrl+C` (customizable) clears the composer and any queued messages without interfering with text selection copy.
+- **Compact:** `Ctrl+X C` compact command no longer fails with a `normalizeCandidatePath` error after the unbound-method regression fix.
+- **Sessions:** workspace panels (right sidebar + context panel) now restore their per-session state when switching conversations.
+- **Sessions:** improved sidebar session tree deduplication and pinned session handling.
+
+## [1.16.15] - 2026-07-16
+
+- **Sessions:** workspace panels (right sidebar + context panel) now follow the active session — hiding when leaving, restoring when returning, with a capped in-memory cache.
+- **Sidebar:** refactored session tree construction and grouping for correct pinned/child/root deduplication.
+
+## [1.16.14] - 2026-07-16
+
+- **Chat:** new session send now shows a full-screen establishing page immediately (like fork), instead of keeping the draft composer visible during combined create+prompt.
+- **Fork:** cold-start fork no longer fails silently — source sessions are resolved from the global session index or `session.get` when the directory child store hasn't hydrated yet.
+- **Keyboard:** first Esc now shows "Press Esc again to abort" in the status row; the abort prompt is visible on every layout including expanded input and desktop.
+- **Keyboard:** `Ctrl+C` (customizable) clears the composer and any queued messages without interfering with text selection copy.
+- **Compact:** `Ctrl+X C` compact command no longer fails with a `normalizeCandidatePath` error after the unbound-method regression fix.
+
 ## [1.16.13] - 2026-07-16
 
 - **Queued message delivery:** generate OpenCode-compatible `msg_` message identifiers, migrate queued legacy identifiers, and route terminal session events through their directory-scoped status stores so consecutive queued messages dispatch after the active response settles.
