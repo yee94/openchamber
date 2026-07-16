@@ -270,7 +270,7 @@ const SessionShortcutHint = React.memo(function SessionShortcutHint({
   return (
     <Kbd
       data-sidebar-shortcut-number={number}
-      className="absolute right-0 top-1/2 z-20 h-4 min-w-0 -translate-y-1/2 rounded-full px-1.5 font-sans font-normal shadow-none"
+      className="h-3.5 min-w-0 shrink-0 rounded-full border-0 bg-[color-mix(in_srgb,var(--surface-foreground)_6%,transparent)] px-1.5 font-sans text-[10px] font-medium tracking-tight text-muted-foreground/65 shadow-none"
       aria-hidden="true"
     >
       {isMacOS() ? `⌘${number}` : `Ctrl+${number}`}
@@ -1205,7 +1205,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     className={cn(
                       // No padding transition: busy ring / unread dot must snap away
                       // the moment hover reveals actions (no slide-with-padding).
-                      'relative flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
+                      'relative flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none has-[[data-sidebar-shortcut-number]]:!pr-0',
                       isTouchPressed && 'bg-[color-mix(in_srgb,var(--surface-foreground)_8%,transparent)]',
                       alwaysShowActions
                         ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
@@ -1248,8 +1248,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                           {statusMarkerContent}
                         </span>
                       ) : null}
+                      {shortcutNumber ? <SessionShortcutHint number={shortcutNumber} /> : null}
                     </div>
-                    {shortcutNumber ? <SessionShortcutHint number={shortcutNumber} /> : null}
                   </button>
                 </TooltipTrigger>
                 {/* VS Code already shows project context via workspace headers, so
@@ -1299,7 +1299,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
           <div className={cn(
             // Instant show/hide with the trailing status marker — no opacity fade.
-            'absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 transition-none',
+            'absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 transition-none group-has-[[data-sidebar-shortcut-number]]:hidden',
             isSessionMenuOpen
               ? 'opacity-100'
               : (alwaysShowActions && !isVSCode)

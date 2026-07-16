@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.20] - 2026-07-16
+
+- **Sidebar:** refine Mod+1…9 shortcut hints into compact inline chips that replace row actions while the modifier is held.
+
 ## [1.16.19] - 2026-07-16
 
 - **Sessions:** add undoable archive and delete actions with a 10-second recovery window, plus an archived-session manager for browsing and restoring sessions.
