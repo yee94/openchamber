@@ -9,7 +9,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useLeaderKeyStore } from '@/stores/useLeaderKeyStore';
 import { useMessageQueueStore, getQueueForScope, legacyQueueScope, queueScopeKey, type QueueScope, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { getPermissionControlVisibilityKey, usePermissionStore } from '@/stores/permissionStore';
+import { usePermissionStore } from '@/stores/permissionStore';
 import { autoRespondsPermission } from '@/stores/utils/permissionAutoAccept';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -125,7 +125,7 @@ import { consumesImmediateCommandText, getLocalChatCommand, preservesComposerRes
 import { consumeImmediateCommandText } from './immediateCommandTextConsumption';
 import { runImmediateSessionCommand } from './immediateSessionCommandAction';
 import { admitChatInputQueueMessageAndConsumeResources } from './queueAdmission';
-import { togglePermissionAutoAccept } from './permissionAutoAccept';
+import { shouldShowPermissionAutoAcceptControl, togglePermissionAutoAccept } from './permissionAutoAccept';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
@@ -1031,18 +1031,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         });
     }, [currentSessionId, newSessionDraft.permissionAutoAcceptEnabled, permissionAutoAccept]);
     const currentAgentName = useConfigStore((state) => state.currentAgentName);
-    const permissionPolicyDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? undefined;
-    const permissionControlVisibilityKey = getPermissionControlVisibilityKey(permissionPolicyDirectory, currentAgentName);
-    const showPermissionAutoAcceptControl = usePermissionStore(
-        React.useCallback(
-            (state) => isVSCodeRuntime() || (state.controlVisibility[permissionControlVisibilityKey] ?? true),
-            [permissionControlVisibilityKey],
-        ),
-    );
-    const revalidatePermissionControlVisibility = usePermissionStore((state) => state.revalidateControlVisibility);
-    React.useEffect(() => {
-        void revalidatePermissionControlVisibility(permissionPolicyDirectory, currentAgentName).catch(() => undefined);
-    }, [currentAgentName, permissionPolicyDirectory, revalidatePermissionControlVisibility]);
+    const configuredAgents = useConfigStore((state) => state.agents);
+    const showPermissionAutoAcceptControl = isVSCodeRuntime()
+        || shouldShowPermissionAutoAcceptControl(configuredAgents, currentAgentName);
     const handlePermissionAutoAcceptToggleFailed = React.useCallback(() => {
         toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed'));
     }, [t]);

@@ -2645,7 +2645,7 @@ export const ContextPanel: React.FC = () => {
       <div className={cn('relative min-h-0 flex-1 overflow-hidden', isResizing && 'pointer-events-none')}>
         {hasFileTabs ? (
           <div className={cn('absolute inset-0', isFileTabActive ? 'block' : 'hidden')}>
-            <FilesView mode="editor-only" />
+            <FilesView mode="editor-only" isActive={isOpen && isFileTabActive} />
           </div>
         ) : null}
         {chatTabs.map((tab) => {

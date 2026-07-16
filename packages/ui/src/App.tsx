@@ -203,7 +203,6 @@ const EmbeddedSessionChatContent: React.FC<{
   return (
     <>
       <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
-      <OpenCodeUpdateToast />
       <ChatView readOnly={embeddedSessionChat.readOnly} />
       <Toaster />
     </>
@@ -233,7 +232,7 @@ function App({ apis }: AppProps) {
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
-  const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true);
+  const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(false);
   const [initRetryExhausted, setInitRetryExhausted] = React.useState(false);
   const [initRetryEpoch, setInitRetryEpoch] = React.useState(0);
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
@@ -351,6 +350,10 @@ function App({ apis }: AppProps) {
   // Desktop shells strictly require a valid boot outcome before dismissing.
   // Non-main outcomes (chooser/recovery) can dismiss without waiting for init.
   React.useEffect(() => {
+    if (!embeddedBackgroundWorkEnabled) {
+      return;
+    }
+
     const readyForFirstDesktopPaint = isInitialized
       || (isDesktopRuntime && bootViewIsMain && hasCachedSessionIndex);
     if (!canDismissInitialLoading({
@@ -362,18 +365,22 @@ function App({ apis }: AppProps) {
       return;
     }
 
+    let removalTimer: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => {
       const loadingElement = document.getElementById('initial-loading');
       if (loadingElement) {
         loadingElement.classList.add('fade-out');
-        setTimeout(() => {
+        removalTimer = setTimeout(() => {
           loadingElement.remove();
         }, 300);
       }
     }, 150);
 
-    return () => clearTimeout(timer);
-  }, [isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain, hasCachedSessionIndex]);
+    return () => {
+      clearTimeout(timer);
+      if (removalTimer) clearTimeout(removalTimer);
+    };
+  }, [embeddedBackgroundWorkEnabled, isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain, hasCachedSessionIndex]);
 
   // Deterministic malformed handling: update splash text so the user
   // sees a specific error instead of a generic spinner, but do NOT
@@ -391,24 +398,32 @@ function App({ apis }: AppProps) {
 
   // Non-desktop fallback: remove splash after 5 seconds even if init stalls.
   React.useEffect(() => {
-    if (isDesktopRuntime) {
+    if (!embeddedBackgroundWorkEnabled || isDesktopRuntime) {
       return;
     }
 
+    let removalTimer: ReturnType<typeof setTimeout> | undefined;
     const fallbackTimer = setTimeout(() => {
       const loadingElement = document.getElementById('initial-loading');
       if (loadingElement && !isInitialized) {
         loadingElement.classList.add('fade-out');
-        setTimeout(() => {
+        removalTimer = setTimeout(() => {
           loadingElement.remove();
         }, 300);
       }
     }, 5000);
 
-    return () => clearTimeout(fallbackTimer);
-  }, [isDesktopRuntime, isInitialized]);
+    return () => {
+      clearTimeout(fallbackTimer);
+      if (removalTimer) clearTimeout(removalTimer);
+    };
+  }, [embeddedBackgroundWorkEnabled, isDesktopRuntime, isInitialized]);
 
   React.useEffect(() => {
+    if (!embeddedBackgroundWorkEnabled) {
+      return;
+    }
+
     let cancelled = false;
 
     const run = async () => {
@@ -430,9 +445,13 @@ function App({ apis }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [setPlanModeEnabled]);
+  }, [embeddedBackgroundWorkEnabled, setPlanModeEnabled]);
 
   React.useEffect(() => {
+    if (!embeddedBackgroundWorkEnabled) {
+      return;
+    }
+
     // VS Code runtime bootstraps config + sessions after the managed OpenCode instance reports "connected".
     // Doing the default initialization here can race with startup and lead to one-shot failures.
     if (isVSCodeRuntime) {
@@ -446,10 +465,10 @@ function App({ apis }: AppProps) {
       return undefined;
     });
     return () => { cancelled = true; };
-  }, [initializeApp, isVSCodeRuntime]);
+  }, [embeddedBackgroundWorkEnabled, initializeApp, isVSCodeRuntime]);
 
   React.useEffect(() => {
-    if (isVSCodeRuntime || isInitialized) return;
+    if (!embeddedBackgroundWorkEnabled || isVSCodeRuntime || isInitialized) return;
 
     let active = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -493,31 +512,32 @@ function App({ apis }: AppProps) {
       active = false;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [initRetryEpoch, isInitialized, isVSCodeRuntime]);
+  }, [embeddedBackgroundWorkEnabled, initRetryEpoch, isInitialized, isVSCodeRuntime]);
 
   React.useEffect(() => {
-    if (isInitialized) {
+    if (embeddedBackgroundWorkEnabled && isInitialized) {
       setInitRetryExhausted(false);
     }
-  }, [isInitialized]);
+  }, [embeddedBackgroundWorkEnabled, isInitialized]);
 
   React.useEffect(() => {
-    if (!initRetryExhausted) return;
+    if (!embeddedBackgroundWorkEnabled || !initRetryExhausted) return;
 
     const loadingElement = document.getElementById('initial-loading');
     if (loadingElement) {
       loadingElement.classList.add('fade-out');
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         loadingElement.remove();
       }, 300);
+      return () => clearTimeout(timer);
     }
-  }, [initRetryExhausted]);
+  }, [embeddedBackgroundWorkEnabled, initRetryExhausted]);
 
   // Startup recovery: poll until providers AND agents are loaded.
   // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
   // so a reactive effect can't detect failure — we need an interval.
   React.useEffect(() => {
-    if (isVSCodeRuntime || !isConnected) return;
+    if (!embeddedBackgroundWorkEnabled || isVSCodeRuntime || !isConnected) return;
     if (providersCount > 0 && agentsCount > 0) return;
 
     let active = true;
@@ -539,7 +559,7 @@ function App({ apis }: AppProps) {
       void attempt();
     }, 2000);
     return () => { active = false; clearInterval(id); };
-  }, [isConnected, isVSCodeRuntime, loadAgents, loadProviders, providersCount, agentsCount]);
+  }, [embeddedBackgroundWorkEnabled, isConnected, isVSCodeRuntime, loadAgents, loadProviders, providersCount, agentsCount]);
 
   React.useEffect(() => {
     if (isSwitchingDirectory) {
@@ -733,12 +753,12 @@ function App({ apis }: AppProps) {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!isInitialized || isSwitchingDirectory) return;
+    if (!embeddedBackgroundWorkEnabled || !isInitialized || isSwitchingDirectory) return;
     if (appReadyDispatchedRef.current) return;
     appReadyDispatchedRef.current = true;
     (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady = true;
     window.dispatchEvent(new Event('openchamber:app-ready'));
-  }, [isInitialized, isSwitchingDirectory]);
+  }, [embeddedBackgroundWorkEnabled, isInitialized, isSwitchingDirectory]);
 
   // useEventStream replaced by SyncProvider + SyncBridge
 

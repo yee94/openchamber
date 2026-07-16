@@ -125,7 +125,9 @@ const inflightActiveDirectoryLoadMore = new Map<string, Promise<boolean>>();
 const directoryTaskQueue: Array<() => void> = [];
 const directoryAbortControllers = new Set<AbortController>();
 let runningDirectoryTasks = 0;
-let directoryFetchConcurrency = DIRECTORY_FETCH_CONCURRENCY_MAX;
+// Directory requests initialize project config and plugins in OpenCode. Start
+// conservatively, then use successful completions to recover toward the cap.
+let directoryFetchConcurrency = DIRECTORY_FETCH_CONCURRENCY_MID;
 let consecutiveDirectorySuccesses = 0;
 let sessionIndexPollController: AbortController | null = null;
 
@@ -672,7 +674,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     inflightActiveDirectoryLoadMore.clear();
     directoryAbortControllers.forEach((controller) => controller.abort());
     directoryAbortControllers.clear();
-    directoryFetchConcurrency = DIRECTORY_FETCH_CONCURRENCY_MAX;
+    directoryFetchConcurrency = DIRECTORY_FETCH_CONCURRENCY_MID;
     consecutiveDirectorySuccesses = 0;
     sessionIndexPollController?.abort();
     sessionIndexPollController = null;

@@ -668,7 +668,15 @@ const Dialogs: React.FC<DialogsProps> = ({
 
 interface FilesViewProps {
   mode?: 'full' | 'editor-only';
+  isActive?: boolean;
 }
+
+// eslint-disable-next-line react-refresh/only-export-components -- Pure polling predicate is tested directly.
+export const shouldPollSelectedFile = (
+  isActive: boolean,
+  selectedPath: string | null | undefined,
+  loadedPath: string | null,
+): boolean => isActive && Boolean(selectedPath) && loadedPath === selectedPath;
 
 /**
  * Keeps a token-bearing asset preview (image/HTML/PDF) authenticated. While
@@ -726,7 +734,7 @@ const useAssetAuthRefresh = (
   return { readyKey, nonce };
 };
 
-export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
+export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = true }) => {
   const { t } = useI18n();
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
@@ -1322,21 +1330,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [expandedPaths, files.listDirectory, refreshDirectory]);
-
-  // Poll expanded directories for external changes
-  React.useEffect(() => {
-    if (!files.listDirectory) return;
-    if (expandedPaths.length === 0) return;
-
-    const interval = setInterval(() => {
-      if (document.hidden) return;
-      for (const dir of expandedPaths) {
-        void refreshDirectory(dir);
-      }
-    }, 8000);
-
-    return () => clearInterval(interval);
   }, [expandedPaths, files.listDirectory, refreshDirectory]);
 
   const handleDialogSubmit = React.useCallback(async (e?: React.FormEvent) => {
@@ -2004,7 +1997,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   // When a change is detected, reset loadedFilePath so the effect above
   // triggers a single reload — no double-load.
   React.useEffect(() => {
-    if (!selectedFile?.path || loadedFilePath !== selectedFile.path) {
+    const selectedPath = selectedFile?.path ?? '';
+    if (!shouldPollSelectedFile(isActive, selectedPath, loadedFilePath)) {
       return;
     }
 
@@ -2014,14 +2008,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         return;
       }
 
-      void readFileStat(selectedFile.path, selectedFileReadOptions)
+      void readFileStat(selectedPath, selectedFileReadOptions)
         .then((latestStat) => {
           if (cancelled || !latestStat) {
             return;
           }
 
           const previousStat = lastLoadedFileStatRef.current;
-          if (!previousStat || previousStat.path !== selectedFile.path) {
+          if (!previousStat || previousStat.path !== selectedPath) {
             lastLoadedFileStatRef.current = latestStat;
             return;
           }
@@ -2050,7 +2044,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [loadedFilePath, readFileStat, selectedFile?.path, selectedFileReadOptions]);
+  }, [isActive, loadedFilePath, readFileStat, selectedFile?.path, selectedFileReadOptions]);
 
   const discardAndContinue = React.useCallback(() => {
     const nextFile = pendingSelectFileRef.current;

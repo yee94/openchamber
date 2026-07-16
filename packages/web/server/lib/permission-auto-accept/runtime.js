@@ -1,5 +1,3 @@
-import { shouldShowPermissionAutoAcceptControl } from './prompt-policy.js';
-
 const SETTINGS_KEY = 'permissionAutoAccept';
 const RETRY_DELAYS_MS = [0, 250, 1000];
 const REQUEST_TIMEOUT_MS = 5000;
@@ -123,29 +121,6 @@ export function createPermissionAutoAcceptRuntime({
     return sessions.get(sessionId) ?? null;
   };
 
-  const getControlVisibility = async (directory, agentName) => {
-    const [configPayload, agentsPayload] = await Promise.all([
-      request('/config', { directory }),
-      request('/agent', { directory }),
-    ]);
-    const config = configPayload?.data ?? configPayload;
-    const agents = agentsPayload?.data ?? agentsPayload;
-    if (!config || typeof config !== 'object' || !Array.isArray(agents)) {
-      throw new Error('Invalid OpenCode permission configuration response');
-    }
-    const normalizedAgentName = typeof agentName === 'string' ? agentName.trim() : '';
-    const relevantAgents = normalizedAgentName
-      ? agents.filter((agent) => agent?.name === normalizedAgentName)
-      : agents;
-    if (normalizedAgentName && relevantAgents.length === 0) return { visible: true };
-    return {
-      visible: shouldShowPermissionAutoAcceptControl({
-        configPermission: config.permission,
-        agents: relevantAgents,
-      }),
-    };
-  };
-
   const isSessionAutoAccepting = async (sessionId, directory) => {
     await load();
     const seen = new Set();
@@ -261,7 +236,6 @@ export function createPermissionAutoAcceptRuntime({
     snapshot,
     load,
     setSessionPolicy,
-    getControlVisibility,
     isSessionAutoAccepting,
     processPermission,
     reconcilePending,
@@ -275,16 +249,6 @@ export function registerPermissionAutoAcceptRoutes(app, runtime) {
       res.json(await runtime.load());
     } catch (error) {
       res.status(500).json({ error: error?.message ?? 'Failed to load permission auto-accept policy' });
-    }
-  });
-
-  app.get('/api/permission-auto-accept/control-visibility', async (req, res) => {
-    try {
-      const directory = typeof req.query?.directory === 'string' ? req.query.directory : undefined;
-      const agentName = typeof req.query?.agent === 'string' ? req.query.agent : undefined;
-      res.json(await runtime.getControlVisibility(directory, agentName));
-    } catch (error) {
-      res.status(502).json({ error: error?.message ?? 'Failed to resolve permission prompt policy' });
     }
   });
 

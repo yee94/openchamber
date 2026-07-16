@@ -93,7 +93,7 @@ describe('useGlobalSessionsStore', () => {
     expect(listCalls).toHaveLength(2);
   });
 
-  test('starts no more than seven cold directory summaries at once', async () => {
+  test('starts with three cold directory summaries before adaptive recovery', async () => {
     type ListResult = { data: Session[]; error: undefined; response: Response };
     const resolvers: Array<(value: ListResult) => void> = [];
     const listCalls: Array<Record<string, unknown>> = [];
@@ -111,11 +111,15 @@ describe('useGlobalSessionsStore', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(listCalls).toHaveLength(7);
-    resolvers.splice(0).forEach((resolve) => resolve({ data: [], error: undefined, response: new Response(null, { status: 200 }) }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(listCalls).toHaveLength(8);
-    resolvers.splice(0).forEach((resolve) => resolve({ data: [], error: undefined, response: new Response(null, { status: 200 }) }));
+    expect(listCalls).toHaveLength(3);
+    while (listCalls.length < 8 || resolvers.length > 0) {
+      resolvers.splice(0).forEach((resolve) => resolve({
+        data: [],
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     await refresh;
   });
 

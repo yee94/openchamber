@@ -19,7 +19,6 @@ Unknown lineage and failed policy loads fail closed. A failed pending-permission
 ## Routes
 
 - `GET /api/permission-auto-accept`
-- `GET /api/permission-auto-accept/control-visibility?directory=...&agent=...`
 - `PUT /api/permission-auto-accept/sessions/:sessionId`
 
 These are normal authenticated OpenChamber runtime routes. They must not be added to browser URL-token allowlists.
@@ -28,10 +27,10 @@ These are normal authenticated OpenChamber runtime routes. They must not be adde
 
 `packages/ui/src/stores/permissionStore.ts` is a projection of server policy and does not persist an independent policy. The server is the sole responder and the UI renders pending requests until the authoritative `permission.replied` event arrives.
 
-The control-visibility route reads the effective directory-scoped OpenCode config and selected-agent permission rules. The UI keeps the last successful boolean by runtime, directory, and agent, renders it immediately, and revalidates in the background. Failed revalidation preserves the stale value; an unknown value keeps the control visible.
+`ChatInput` derives control visibility from the persisted, directory-scoped `useConfigStore` agent snapshot. A selected agent with a final global `allow` or `deny` rule has no remaining prompt path and hides the control. Unknown snapshots, missing selected agents, and rules that can ask keep the control visible. This path issues no additional request.
 
 VS Code retains its foreground-only implementation because it does not run the web server runtime.
 
 ## Tests
 
-`runtime.test.js` covers restart persistence, control visibility, nearest explicit subagent inheritance, missing-lineage lookup, retry/deduplication, and reconnect reconciliation. `prompt-policy.test.js` covers permission config normalization and visibility decisions.
+`runtime.test.js` covers restart persistence, nearest explicit subagent inheritance, missing-lineage lookup, retry/deduplication, and reconnect reconciliation. `packages/ui/src/components/chat/permissionAutoAccept.test.ts` covers permission configuration normalization and visibility decisions.

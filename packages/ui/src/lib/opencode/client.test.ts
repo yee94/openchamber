@@ -8,6 +8,10 @@ const configResolvers: Array<(response: ConfigResponse) => void> = [];
 let configCalls = 0;
 const promptAsyncCalls: unknown[][] = [];
 const promptAsyncResults: Array<unknown> = [];
+let runtimeKey = 'test-runtime';
+let runtimeBase = '/api';
+const healthFetchCalls: unknown[][] = [];
+const healthFetchResults: Array<Response | Error | Promise<Response>> = [];
 
 const promptAsyncMock = mock(async (...args: unknown[]) => {
   promptAsyncCalls.push(args);
@@ -38,19 +42,26 @@ mock.module('@/contexts/runtimeAPIRegistry', () => ({
 
 mock.module('@/lib/runtime-url', () => ({
   getRuntimeUrlResolver: mock(() => ({
-    api: (path: string) => path,
+    api: () => runtimeBase,
   })),
 }));
 
 mock.module('@/lib/runtime-switch', () => ({
   getRuntimeApiBaseUrl: mock(() => ''),
-  getRuntimeKey: mock(() => 'test-runtime'),
+  getRuntimeKey: mock(() => runtimeKey),
 }));
 
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: mock(async () => new Response(JSON.stringify([]), {
+const runtimeFetchMock = mock((...args: unknown[]) => {
+  healthFetchCalls.push(args);
+  const next = healthFetchResults.shift();
+  if (next instanceof Error) return Promise.reject(next);
+  return Promise.resolve(next ?? new Response(JSON.stringify({ healthy: true }), {
     headers: { 'Content-Type': 'application/json' },
-  })),
+  }));
+});
+
+mock.module('@/lib/runtime-fetch', () => ({
+  runtimeFetch: runtimeFetchMock,
 }));
 
 mock.module('@/lib/startupTrace', () => ({
@@ -62,6 +73,10 @@ const { opencodeClient } = await import(`./client?cache-test=${Date.now()}`);
 beforeEach(() => {
   promptAsyncCalls.length = 0;
   promptAsyncResults.length = 0;
+  healthFetchCalls.length = 0;
+  healthFetchResults.length = 0;
+  runtimeKey = 'test-runtime';
+  runtimeBase = '/api';
 });
 
 describe('opencodeClient getConfig cache', () => {
@@ -159,5 +174,109 @@ describe('opencodeClient prompt retry behavior', () => {
 
     expect(promptAsyncCalls.length).toBe(1);
     expect(error instanceof Error ? error.message : String(error)).toContain('Failed to send message (503)');
+  });
+});
+
+describe('opencodeClient checkHealth cache', () => {
+  test('merges concurrent probes for the same runtime', async () => {
+    let resolveHealth: (response: Response) => void = () => undefined;
+    healthFetchResults.push(new Promise((resolve) => {
+      resolveHealth = resolve;
+    }));
+
+    const first = opencodeClient.checkHealth();
+    const second = opencodeClient.checkHealth();
+    expect(healthFetchCalls.length).toBe(1);
+
+    resolveHealth(new Response(JSON.stringify({ healthy: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+  });
+
+  test('uses successful health results within the runtime TTL', async () => {
+    runtimeKey = 'health-ttl-runtime';
+    expect(await opencodeClient.checkHealth()).toBe(true);
+    expect(await opencodeClient.checkHealth()).toBe(true);
+    expect(healthFetchCalls.length).toBe(1);
+  });
+
+  test('isolates health probes by runtime key', async () => {
+    runtimeKey = 'health-runtime-a';
+    expect(await opencodeClient.checkHealth()).toBe(true);
+
+    runtimeKey = 'health-runtime-b';
+    expect(await opencodeClient.checkHealth()).toBe(true);
+    expect(healthFetchCalls.length).toBe(2);
+  });
+
+  test('merges failed probes and shares the failure TTL', async () => {
+    runtimeKey = 'health-failure-ttl-runtime';
+    let resolveHealth: (response: Response) => void = () => undefined;
+    healthFetchResults.push(new Promise((resolve) => {
+      resolveHealth = resolve;
+    }));
+
+    const first = opencodeClient.checkHealth();
+    const second = opencodeClient.checkHealth();
+    expect(healthFetchCalls.length).toBe(1);
+
+    resolveHealth(new Response('starting', { status: 503 }));
+    expect(await first).toBe(false);
+    expect(await second).toBe(false);
+    expect(await opencodeClient.checkHealth()).toBe(false);
+    expect(healthFetchCalls.length).toBe(1);
+  });
+
+  test('reprobes after the failure TTL expires', async () => {
+    const originalDateNow = Date.now;
+    let now = 1_000;
+    Date.now = () => now;
+    try {
+      runtimeKey = 'health-failure-expiry-runtime';
+      healthFetchResults.push(new TypeError('network unavailable'));
+      expect(await opencodeClient.checkHealth()).toBe(false);
+      expect(await opencodeClient.checkHealth()).toBe(false);
+      expect(healthFetchCalls.length).toBe(1);
+
+      now += 1_001;
+      expect(await opencodeClient.checkHealth()).toBe(true);
+      expect(healthFetchCalls.length).toBe(2);
+    } finally {
+      Date.now = originalDateNow;
+    }
+  });
+
+  test('caches false for unhealthy and malformed health responses', async () => {
+    for (const [key, response] of [
+      ['health-unhealthy-runtime', new Response(JSON.stringify({ healthy: false }), { headers: { 'Content-Type': 'application/json' } })],
+      ['health-malformed-runtime', new Response('invalid json', { headers: { 'Content-Type': 'application/json' } })],
+    ] as const) {
+      runtimeKey = key;
+      healthFetchResults.push(response);
+      expect(await opencodeClient.checkHealth()).toBe(false);
+      expect(await opencodeClient.checkHealth()).toBe(false);
+    }
+    expect(healthFetchCalls.length).toBe(2);
+  });
+
+  test('clears health state on runtime base changes without caching stale responses', async () => {
+    runtimeKey = 'health-old-runtime';
+    let resolveHealth: (response: Response) => void = () => undefined;
+    healthFetchResults.push(new Promise((resolve) => {
+      resolveHealth = resolve;
+    }));
+    const oldRequest = opencodeClient.checkHealth();
+
+    runtimeBase = '/next/api';
+    opencodeClient.reconnectToRuntimeBaseUrl();
+    resolveHealth(new Response(JSON.stringify({ healthy: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    expect(await oldRequest).toBe(false);
+
+    expect(await opencodeClient.checkHealth()).toBe(true);
+    expect(healthFetchCalls.length).toBe(2);
   });
 });

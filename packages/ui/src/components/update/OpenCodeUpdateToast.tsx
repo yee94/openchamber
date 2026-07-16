@@ -13,11 +13,10 @@ import {
   shouldShowOpenCodeUpdateToast,
   type OpenCodeUpgradeStatusLike,
 } from './openCodeUpdateDedup';
+import { scheduleOpenCodeUpdateInitialCheck } from './openCodeUpdateInitialCheck';
 
 const UPDATE_TOAST_ID = 'opencode-update-available';
 const UPGRADE_TOAST_ID = 'opencode-upgrade-progress';
-const INITIAL_CHECK_DELAY_MS = 5_000;
-const CHECK_RETRY_DELAYS_MS = [10_000, 60_000];
 const UPDATE_TOAST_DISMISSED_VERSION_KEY = 'opencode-update-toast-dismissed-version';
 
 export const OpenCodeUpdateToast: React.FC = () => {
@@ -133,9 +132,8 @@ export const OpenCodeUpdateToast: React.FC = () => {
     };
 
     let cancelled = false;
-    const timeoutIds: Array<ReturnType<typeof setTimeout>> = [];
 
-    const checkForUpdate = async (attempt: number) => {
+    const checkForUpdate = async () => {
       try {
         const response = await runtimeFetch('/api/opencode/upgrade-status', { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error(response.statusText || 'OpenCode upgrade status check failed');
@@ -145,21 +143,19 @@ export const OpenCodeUpdateToast: React.FC = () => {
           showUpdateAvailableToast(version);
         }
       } catch {
-        const delay = CHECK_RETRY_DELAYS_MS[attempt];
-        if (!cancelled && delay !== undefined) {
-          timeoutIds.push(setTimeout(() => { void checkForUpdate(attempt + 1); }, delay));
-        }
+        // The delayed status check is best effort. Runtime events surface later availability.
       }
     };
 
-    if (showOpenCodeUpdateNotifications) {
-      timeoutIds.push(setTimeout(() => { void checkForUpdate(0); }, INITIAL_CHECK_DELAY_MS));
-    }
+    const cancelInitialCheck = scheduleOpenCodeUpdateInitialCheck(
+      showOpenCodeUpdateNotifications,
+      checkForUpdate,
+    );
 
     window.addEventListener('openchamber:opencode-update-available', onUpdateAvailable);
     return () => {
       cancelled = true;
-      for (const timeoutId of timeoutIds) clearTimeout(timeoutId);
+      cancelInitialCheck();
       window.removeEventListener('openchamber:opencode-update-available', onUpdateAvailable);
     };
   }, [runUpgrade, showOpenCodeUpdateNotifications, t]);

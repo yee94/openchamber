@@ -11,7 +11,7 @@ mock.module('@/sync/session-ui-store', () => ({
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: { getDirectory: () => '/fallback' },
 }));
-const { getPermissionControlVisibilityKey, usePermissionStore } = await import('./permissionStore');
+const { usePermissionStore } = await import('./permissionStore');
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
 describe('permission store server policy', () => {
@@ -63,45 +63,4 @@ describe('permission store server policy', () => {
     expect(usePermissionStore.getState().autoAccept).toEqual({ root: true });
   });
 
-  test('revalidates cached control visibility from the server', async () => {
-    const key = getPermissionControlVisibilityKey('/project', 'build');
-    usePermissionStore.setState({ controlVisibility: { [key]: true } });
-    let requested = '';
-    fetchImpl = async (input) => {
-      requested = input;
-      return json({ visible: false });
-    };
-
-    await usePermissionStore.getState().revalidateControlVisibility('/project', 'build');
-
-    expect(requested).toBe('/api/permission-auto-accept/control-visibility?directory=%2Fproject&agent=build');
-    expect(usePermissionStore.getState().controlVisibility[key]).toBe(false);
-  });
-
-  test('preserves stale control visibility when revalidation fails', async () => {
-    const key = getPermissionControlVisibilityKey('/project', 'build');
-    usePermissionStore.setState({ controlVisibility: { [key]: false } });
-    fetchImpl = async () => json({}, 503);
-
-    await expect(usePermissionStore.getState().revalidateControlVisibility('/project', 'build')).rejects.toThrow();
-
-    expect(usePermissionStore.getState().controlVisibility[key]).toBe(false);
-  });
-
-  test('deduplicates concurrent control visibility revalidation', async () => {
-    let resolveResponse: (response: Response) => void = () => undefined;
-    const pendingResponse = new Promise<Response>((resolve) => { resolveResponse = resolve; });
-    let requests = 0;
-    fetchImpl = async () => {
-      requests += 1;
-      return pendingResponse;
-    };
-
-    const first = usePermissionStore.getState().revalidateControlVisibility('/project', 'build');
-    const second = usePermissionStore.getState().revalidateControlVisibility('/project', 'build');
-    resolveResponse(json({ visible: false }));
-    await Promise.all([first, second]);
-
-    expect(requests).toBe(1);
-  });
 });

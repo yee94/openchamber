@@ -8,7 +8,13 @@ import {
   sanitizeHeadersForBrowser,
   setRuntimeInteractiveSessionRequestId,
 } from './runtime-fetch';
-import { clearRuntimeAuthCredentialProvider, setRuntimeBearerToken } from './runtime-auth';
+import {
+  clearRuntimeAuthCredentialProvider,
+  setRuntimeAuthCredentialProvider,
+  setRuntimeBearerToken,
+} from './runtime-auth';
+import { adoptRelayTunnel, deactivateRelayTunnel } from './relay/runtime-tunnel';
+import type { RelayTunnelClient } from './relay/tunnel-client';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from './runtime-url';
 
 const originalFetch = globalThis.fetch;
@@ -350,6 +356,142 @@ describe('runtimeFetch read coalescing', () => {
       // After settle the entry is gone — a later call re-fetches.
       await runtimeFetch('/api/config/providers');
       expect(calls).toBe(2);
+    } finally {
+      setRuntimeUrlResolver(previous);
+      globalThis.fetch = originalFetch;
+      clearRuntimeAuthCredentialProvider();
+    }
+  });
+
+  test('coalesces concurrent upgrade-status GET reads with readable responses', async () => {
+    const previous = getRuntimeUrlResolver();
+    let calls = 0;
+    try {
+      configureRuntimeUrlResolver({ apiBaseUrl: 'https://api.example' });
+      globalThis.fetch = (async () => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return new Response(JSON.stringify({ current: '1.0.0', latest: '1.1.0' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const [first, second] = await Promise.all([
+        runtimeFetch('/api/opencode/upgrade-status'),
+        runtimeFetch('/api/opencode/upgrade-status'),
+      ]);
+
+      expect(calls).toBe(1);
+      expect(await first.json()).toEqual({ current: '1.0.0', latest: '1.1.0' });
+      expect(await second.json()).toEqual({ current: '1.0.0', latest: '1.1.0' });
+    } finally {
+      setRuntimeUrlResolver(previous);
+      globalThis.fetch = originalFetch;
+      clearRuntimeAuthCredentialProvider();
+    }
+  });
+
+  test('keeps different relay paths separate while coalescing identical reads', async () => {
+    const paths: string[] = [];
+    const relay = {
+      fetch: async (input: string | URL | Request) => {
+        const path = input instanceof Request ? input.url : input.toString();
+        paths.push(path);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return new Response(JSON.stringify({ path }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+      openWebSocket: () => { throw new Error('unused'); },
+      getStatus: () => ({ state: 'connected' as const }),
+      subscribeStatus: () => () => undefined,
+      close: () => undefined,
+    } satisfies RelayTunnelClient;
+
+    try {
+      adoptRelayTunnel({ relayUrl: 'wss://relay.example', serverId: 'server-a', hostEncPubJwk: {} }, relay);
+      const [first, second, upgrade] = await Promise.all([
+        runtimeFetch('/api/config/providers'),
+        runtimeFetch('/api/config/providers'),
+        runtimeFetch('/api/opencode/upgrade-status'),
+      ]);
+
+      expect(paths).toEqual(['/api/config/providers', '/api/opencode/upgrade-status']);
+      expect(await first.json()).toEqual({ path: '/api/config/providers' });
+      expect(await second.json()).toEqual({ path: '/api/config/providers' });
+      expect(await upgrade.json()).toEqual({ path: '/api/opencode/upgrade-status' });
+    } finally {
+      deactivateRelayTunnel();
+      clearRuntimeAuthCredentialProvider();
+    }
+  });
+
+  test('keeps same-URL reads separate across credential generations', async () => {
+    const previous = getRuntimeUrlResolver();
+    const calls: Headers[] = [];
+    let releaseFirstResponse: (() => void) | undefined;
+    const firstResponse = new Promise<void>((resolve) => {
+      releaseFirstResponse = resolve;
+    });
+    try {
+      configureRuntimeUrlResolver({ apiBaseUrl: 'https://api.example' });
+      setRuntimeBearerToken('credential-one');
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push(new Headers(init?.headers));
+        if (calls.length === 1) await firstResponse;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as typeof fetch;
+
+      const first = runtimeFetch('/api/config/providers');
+      while (calls.length === 0) await Promise.resolve();
+
+      setRuntimeBearerToken('credential-two');
+      const second = runtimeFetch('/api/config/providers');
+      while (calls.length < 2) await Promise.resolve();
+      releaseFirstResponse?.();
+
+      await Promise.all([first, second]);
+      expect(calls).toHaveLength(2);
+      expect(calls.map((headers) => headers.get('authorization'))).toEqual([
+        'Bearer credential-one',
+        'Bearer credential-two',
+      ]);
+    } finally {
+      setRuntimeUrlResolver(previous);
+      globalThis.fetch = originalFetch;
+      clearRuntimeAuthCredentialProvider();
+    }
+  });
+
+  test('skips coalescing when credentials change while headers are building', async () => {
+    const previous = getRuntimeUrlResolver();
+    const calls: Headers[] = [];
+    let resolveCredential: ((credential: { type: 'bearer'; token: string }) => void) | undefined;
+    const credential = new Promise<{ type: 'bearer'; token: string }>((resolve) => {
+      resolveCredential = resolve;
+    });
+    try {
+      configureRuntimeUrlResolver({ apiBaseUrl: 'https://api.example' });
+      setRuntimeAuthCredentialProvider(() => credential);
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push(new Headers(init?.headers));
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as typeof fetch;
+
+      const first = runtimeFetch('/api/config/providers');
+      await Promise.resolve();
+      setRuntimeBearerToken('credential-two');
+      resolveCredential?.({ type: 'bearer', token: 'credential-one' });
+      const second = runtimeFetch('/api/config/providers');
+
+      await Promise.all([first, second]);
+      expect(calls).toHaveLength(2);
+      expect(calls.map((headers) => headers.get('authorization'))).toEqual([
+        'Bearer credential-one',
+        'Bearer credential-two',
+      ]);
     } finally {
       setRuntimeUrlResolver(previous);
       globalThis.fetch = originalFetch;

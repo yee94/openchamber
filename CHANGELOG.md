@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.18] - 2026-07-16
+
+- **Startup reliability:** remove the permission-control visibility probe that queried OpenCode during composer mount, preventing startup request storms when the managed server is still initializing.
+- **Runtime requests:** coalesce health, upgrade-status, and other idempotent reads by runtime, transport, and credential generation, with short failure cooldowns for unavailable OpenCode instances.
+- **Embedded chats:** pause hidden iframe initialization and background recovery work; keep upgrade checks on the primary app surface.
+- **Files:** pause external-change polling for inactive editor tabs and avoid repeated hidden `fs/stat` traffic.
+- **Desktop:** fix an Electron `Illegal invocation` crash caused by unbound native timer calls in the delayed upgrade check.
+
 ## [1.16.17] - 2026-07-16
 
 - **Chat:** new session send now shows a full-screen establishing page immediately (like fork), instead of keeping the draft composer visible during combined create+prompt.
