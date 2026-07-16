@@ -98,7 +98,25 @@ Android 客户端通过 `https://api.github.com/repos/yee94/openchamber/releases
 
 ### `Extract changelog for release` 失败
 
-补充匹配版本号的 `CHANGELOG.md` 段落，提交并推送到 `main`，然后以 `release_scope=all` 手动重跑 `release.yml`。该 workflow 会在当前 `main` 提交上构建同版本 Release。
+补充匹配版本号的 `CHANGELOG.md` 段落，提交并推送到 `main`，然后手动重跑 `release.yml`。该 workflow 会在当前 `main` 提交上构建同版本 Release。
+
+**手动重跑命令**（不带 `release_scope`，当前 workflow 只接受 `version` 一个 input）：
+
+```bash
+gh workflow run release.yml \
+  --repo yee94/openchamber \
+  --ref main \
+  -f version="$VERSION"
+```
+
+**日志查看**（避免上下文污染，不在此对话里拉取和解析 log 原文）：
+
+```bash
+gh run list --repo yee94/openchamber --workflow release.yml --limit 3
+gh run view <run-id> --repo yee94/openchamber
+# 只看失败步骤的日志摘要，不拉全量 log
+gh run view <run-id> --repo yee94/openchamber --log-failed | tail -50
+```
 
 ### Android job 未执行
 

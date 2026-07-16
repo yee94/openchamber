@@ -52,6 +52,67 @@ describe('permission auto-accept runtime', () => {
     await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(true);
   });
 
+  it('hides the control when effective config and agents cannot prompt', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const path = new URL(url).pathname;
+      if (path === '/config') return Response.json({ permission: { '*': 'allow' } });
+      if (path === '/agent') {
+        return Response.json([
+          { name: 'build', permission: [{ permission: '*', pattern: '*', action: 'allow' }] },
+        ]);
+      }
+      return Response.json([]);
+    });
+    const { runtime } = createRuntime({ fetchImpl });
+
+    await expect(runtime.getControlVisibility('/project', 'build')).resolves.toEqual({ visible: false });
+    const visibilityCalls = fetchImpl.mock.calls.filter(([url]) => {
+      const path = new URL(url).pathname;
+      return path === '/config' || path === '/agent';
+    });
+    expect(visibilityCalls.every(([url]) => new URL(url).searchParams.get('directory') === '/project')).toBe(true);
+  });
+
+  it('shows the control when an effective agent can prompt', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const path = new URL(url).pathname;
+      if (path === '/config') return Response.json({ data: { permission: { '*': 'allow' } } });
+      if (path === '/agent') {
+        return Response.json({ data: [
+          { name: 'build', permission: [{ permission: 'bash', pattern: '*', action: 'ask' }] },
+        ] });
+      }
+      return Response.json([]);
+    });
+    const { runtime } = createRuntime({ fetchImpl });
+
+    await expect(runtime.getControlVisibility('/project', 'build')).resolves.toEqual({ visible: true });
+  });
+
+  it('fails open when the selected agent is absent', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const path = new URL(url).pathname;
+      if (path === '/config') return Response.json({ permission: { '*': 'allow' } });
+      if (path === '/agent') return Response.json([]);
+      return Response.json([]);
+    });
+    const { runtime } = createRuntime({ fetchImpl });
+
+    await expect(runtime.getControlVisibility('/project', 'missing')).resolves.toEqual({ visible: true });
+  });
+
+  it('rejects an invalid authoritative response', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const path = new URL(url).pathname;
+      if (path === '/config') return Response.json({ permission: { '*': 'allow' } });
+      if (path === '/agent') return Response.json({ invalid: true });
+      return Response.json([]);
+    });
+    const { runtime } = createRuntime({ fetchImpl });
+
+    await expect(runtime.getControlVisibility('/project')).rejects.toThrow('Invalid OpenCode permission configuration response');
+  });
+
   it('fetches missing subagent lineage before replying', async () => {
     const fetchImpl = vi.fn(async (url, init = {}) => {
       const path = new URL(url).pathname;

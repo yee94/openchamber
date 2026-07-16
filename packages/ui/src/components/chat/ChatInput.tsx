@@ -9,7 +9,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useLeaderKeyStore } from '@/stores/useLeaderKeyStore';
 import { useMessageQueueStore, getQueueForScope, legacyQueueScope, queueScopeKey, type QueueScope, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { usePermissionStore } from '@/stores/permissionStore';
+import { getPermissionControlVisibilityKey, usePermissionStore } from '@/stores/permissionStore';
 import { autoRespondsPermission } from '@/stores/utils/permissionAutoAccept';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -633,10 +633,7 @@ const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButto
                     disabled={props.saving}
                     aria-pressed={props.enabled}
                     aria-label={actionLabel}
-                    className={cn(
-                        props.footerIconButtonClass,
-                        props.enabled && 'rounded-md bg-interactive-selection text-interactive-selection-foreground',
-                    )}
+                    className={props.footerIconButtonClass}
                     onClick={() => togglePermissionAutoAccept({
                         permissionScopeSessionId: props.sessionId,
                         newSessionDraftOpen: props.draftOpen,
@@ -1033,6 +1030,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             sessionID: currentSessionId,
         });
     }, [currentSessionId, newSessionDraft.permissionAutoAcceptEnabled, permissionAutoAccept]);
+    const currentAgentName = useConfigStore((state) => state.currentAgentName);
+    const permissionPolicyDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? undefined;
+    const permissionControlVisibilityKey = getPermissionControlVisibilityKey(permissionPolicyDirectory, currentAgentName);
+    const showPermissionAutoAcceptControl = usePermissionStore(
+        React.useCallback(
+            (state) => isVSCodeRuntime() || (state.controlVisibility[permissionControlVisibilityKey] ?? true),
+            [permissionControlVisibilityKey],
+        ),
+    );
+    const revalidatePermissionControlVisibility = usePermissionStore((state) => state.revalidateControlVisibility);
+    React.useEffect(() => {
+        void revalidatePermissionControlVisibility(permissionPolicyDirectory, currentAgentName).catch(() => undefined);
+    }, [currentAgentName, permissionPolicyDirectory, revalidatePermissionControlVisibility]);
     const handlePermissionAutoAcceptToggleFailed = React.useCallback(() => {
         toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed'));
     }, [t]);
@@ -1040,7 +1050,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
     const currentModelId = useConfigStore((state) => state.currentModelId);
     const currentVariant = useConfigStore((state) => state.currentVariant);
-    const currentAgentName = useConfigStore((state) => state.currentAgentName);
     const setAgent = useConfigStore((state) => state.setAgent);
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
     const agents = getVisibleAgents();
@@ -5601,19 +5610,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             onOpenSettings={onOpenSettings}
                                             onOpenMobileSheet={openMobileAttachSheet}
                                         />
-                                        <PermissionAutoAcceptButton
-                                            sessionId={currentSessionId}
-                                            draftOpen={newSessionDraftOpen}
-                                            draftEnabled={newSessionDraft.permissionAutoAcceptEnabled === true}
-                                            enabled={permissionAutoAcceptEnabled}
-                                            saving={currentSessionId ? permissionAutoAcceptSaving : false}
-                                            footerIconButtonClass={footerIconButtonClass}
-                                            iconSizeClass={iconSizeClass}
-                                            onSetDraftEnabled={setDraftPermissionAutoAcceptEnabled}
-                                            onSetSessionEnabled={setSessionAutoAccept}
-                                            onOpenSessionFirst={openNewSessionDraft}
-                                            onToggleFailed={handlePermissionAutoAcceptToggleFailed}
-                                        />
+                                        {showPermissionAutoAcceptControl ? (
+                                            <PermissionAutoAcceptButton
+                                                sessionId={currentSessionId}
+                                                draftOpen={newSessionDraftOpen}
+                                                draftEnabled={newSessionDraft.permissionAutoAcceptEnabled === true}
+                                                enabled={permissionAutoAcceptEnabled}
+                                                saving={currentSessionId ? permissionAutoAcceptSaving : false}
+                                                footerIconButtonClass={footerIconButtonClass}
+                                                iconSizeClass={iconSizeClass}
+                                                onSetDraftEnabled={setDraftPermissionAutoAcceptEnabled}
+                                                onSetSessionEnabled={setSessionAutoAccept}
+                                                onOpenSessionFirst={openNewSessionDraft}
+                                                onToggleFailed={handlePermissionAutoAcceptToggleFailed}
+                                            />
+                                        ) : null}
                                         <SessionGoalButton
                                             sessionId={currentSessionId}
                                             directory={currentSessionDirectoryForSync ?? currentDirectory}
@@ -5661,19 +5672,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         onOpenSettings={onOpenSettings}
                                         withTooltip
                                     />
-                                    <PermissionAutoAcceptButton
-                                        sessionId={currentSessionId}
-                                        draftOpen={newSessionDraftOpen}
-                                        draftEnabled={newSessionDraft.permissionAutoAcceptEnabled === true}
-                                        enabled={permissionAutoAcceptEnabled}
-                                        saving={currentSessionId ? permissionAutoAcceptSaving : false}
-                                        footerIconButtonClass={footerIconButtonClass}
-                                        iconSizeClass={iconSizeClass}
-                                        onSetDraftEnabled={setDraftPermissionAutoAcceptEnabled}
-                                        onSetSessionEnabled={setSessionAutoAccept}
-                                        onOpenSessionFirst={openNewSessionDraft}
-                                        onToggleFailed={handlePermissionAutoAcceptToggleFailed}
-                                    />
+                                    {showPermissionAutoAcceptControl ? (
+                                        <PermissionAutoAcceptButton
+                                            sessionId={currentSessionId}
+                                            draftOpen={newSessionDraftOpen}
+                                            draftEnabled={newSessionDraft.permissionAutoAcceptEnabled === true}
+                                            enabled={permissionAutoAcceptEnabled}
+                                            saving={currentSessionId ? permissionAutoAcceptSaving : false}
+                                            footerIconButtonClass={footerIconButtonClass}
+                                            iconSizeClass={iconSizeClass}
+                                            onSetDraftEnabled={setDraftPermissionAutoAcceptEnabled}
+                                            onSetSessionEnabled={setSessionAutoAccept}
+                                            onOpenSessionFirst={openNewSessionDraft}
+                                            onToggleFailed={handlePermissionAutoAcceptToggleFailed}
+                                        />
+                                    ) : null}
                                     <div ref={setAgentPortalContainer} className="flex items-center" />
                                     <SessionGoalButton
                                         sessionId={currentSessionId}
