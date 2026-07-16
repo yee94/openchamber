@@ -97,6 +97,10 @@ const mockSdk = {
   },
 }
 
+let sessionGetResult: Session | null = null
+let globalActiveSessions: Session[] = []
+let globalArchivedSessions: Session[] = []
+
 // Mock opencodeClient singleton
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
@@ -105,6 +109,11 @@ mock.module("@/lib/opencode/client", () => ({
       return mockScopedClient
     },
     getDirectory: () => "/test/project",
+    getSession: mock((sessionId: string, directory?: string | null) => {
+      replyCalls.push({ method: "session.get", params: { sessionID: sessionId, directory } })
+      if (!sessionGetResult) throw new Error("session.get result is unavailable")
+      return Promise.resolve(sessionGetResult)
+    }),
     replyToPermission: mock((requestId: string, reply: string, options?: { directory?: string | null }) => {
       replyCalls.push({ method: "permission.reply", params: { requestID: requestId, reply, directory: options?.directory } })
       return Promise.resolve(true)
@@ -202,8 +211,8 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
   },
   useGlobalSessionsStore: {
     getState: () => ({
-      activeSessions: [],
-      archivedSessions: [],
+      activeSessions: globalActiveSessions,
+      archivedSessions: globalArchivedSessions,
       upsertSession: (session: unknown) => {
         globalUpsertedSessions.push(session)
       },
@@ -314,6 +323,9 @@ describe("forkSession input restoration", () => {
     replyCalls.length = 0
     clearAttachedFilesCalls = 0
     sessionMessagesResult = { data: [] }
+    sessionGetResult = null
+    globalActiveSessions = []
+    globalArchivedSessions = []
     sessionForkResult = { id: "forked-session", title: "Source (fork #1)", time: { created: 2 } } as Session
     sessionUpdateResult = { data: sessionForkResult }
     Object.assign(inputState, {
@@ -362,6 +374,64 @@ describe("forkSession input restoration", () => {
     expect(inputState.attachedFiles).toEqual([{ url: "file:///fork.txt", mimeType: "text/plain", filename: "fork.txt" }])
     expect(inputState.pendingInputText).toBe("fork message")
     expect(inputState.pendingInputText).not.toContain("/fork")
+  })
+
+  test("hydrates source session from global store when child store has no session row", async () => {
+    const sourceSession = {
+      id: "session-a",
+      title: "Cold start source",
+      directory: "/test/project",
+      time: { created: 1 },
+    } as Session & { directory?: string }
+    globalActiveSessions = [sourceSession]
+    // Messages already loaded (user is viewing the chat) but session row missing — cold start race.
+    const sessionStore = createStore({}, {
+      session: [],
+      message: {
+        "session-a": [{ id: "message-a", sessionID: "session-a", role: "user", time: { created: 1 } } as Message],
+      },
+      session_status: { "session-a": { type: "idle" } },
+      part: {
+        "message-a": [
+          { id: "text-a", messageID: "message-a", type: "text", text: "fork after cold start" },
+        ] as Part[],
+      },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const { forkSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    const completed = await forkSession("session-a", 3, "message-a")
+
+    expect(completed).toBe(true)
+    expect(sessionStore.getState().session.some((session) => session.id === "session-a")).toBe(true)
+    expect(replyCalls.find((call) => call.method === "session.get")).toBeFalsy()
+    expect(replyCalls.find((call) => call.method === "session.fork")?.params.sessionID).toBe("session-a")
+    expect(inputState.pendingInputText).toBe("fork after cold start")
+  })
+
+  test("hydrates source session via session.get when global and child stores miss it", async () => {
+    const sourceSession = { id: "session-a", title: "Fetched source", time: { created: 1 } } as Session
+    sessionGetResult = sourceSession
+    const sessionStore = createStore({}, {
+      session: [],
+      session_status: { "session-a": { type: "idle" } },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const { forkSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    const completed = await forkSession("session-a", 4)
+
+    expect(completed).toBe(true)
+    expect(replyCalls.find((call) => call.method === "session.get")?.params).toEqual({
+      sessionID: "session-a",
+      directory: "/test/project",
+    })
+    // Fork also inserts the forked session; source must still be present.
+    expect(sessionStore.getState().session.some((session) => session.id === "session-a")).toBe(true)
+    expect(sessionStore.getState().session.some((session) => session.id === "forked-session")).toBe(true)
+    expect(replyCalls.find((call) => call.method === "session.fork")?.params.sessionID).toBe("session-a")
   })
 })
 

@@ -1800,6 +1800,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.statusRow.tasksTitle': '任務',
   'chat.statusRow.summary.activeLeft': '{active} 個活躍 · 剩餘 {left} 個',
   'chat.statusRow.aborted': '已中止',
+  'chat.statusRow.abortPrompt': '再按一次 Esc 中止',
   'chat.assistantStatus.readingFile': '正在讀取檔案',
   'chat.assistantStatus.writingFile': '正在寫入檔案',
   'chat.assistantStatus.editingFile': '正在編輯檔案',

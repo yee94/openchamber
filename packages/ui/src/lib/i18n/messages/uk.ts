@@ -1808,6 +1808,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.statusRow.tasksTitle": "завдання",
   "chat.statusRow.summary.activeLeft": "Активних: {active} · залишилось: {left}",
   "chat.statusRow.aborted": "Перервано",
+  "chat.statusRow.abortPrompt": "Натисніть Esc ще раз, щоб перервати",
   "chat.assistantStatus.readingFile": "Читання файлу",
   "chat.assistantStatus.writingFile": "Запис файлу",
   "chat.assistantStatus.editingFile": "Редагування файлу",

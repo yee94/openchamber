@@ -20,9 +20,17 @@ export const StatusRowContainer: React.FC = React.memo(() => {
             return state.sessionAbortFlags?.get(currentSessionId) ?? null;
         }, [currentSessionId]),
     );
+    const abortPromptSessionId = useSessionUIStore((state) => state.abortPromptSessionId);
+    const abortPromptExpiresAt = useSessionUIStore((state) => state.abortPromptExpiresAt);
     const { working } = useAssistantStatus();
     const currentAgentName = useConfigStore((state) => state.currentAgentName);
     const wasAborted = Boolean(abortRecord && !abortRecord.acknowledged);
+    const showAbortPrompt = Boolean(
+        currentSessionId
+        && abortPromptSessionId === currentSessionId
+        && typeof abortPromptExpiresAt === 'number'
+        && abortPromptExpiresAt > Date.now(),
+    );
 
     return (
         <StatusRow
@@ -33,6 +41,7 @@ export const StatusRowContainer: React.FC = React.memo(() => {
             wasAborted={wasAborted || working.wasAborted}
             abortActive={wasAborted || working.abortActive}
             retryInfo={working.retryInfo}
+            showAbortPrompt={showAbortPrompt}
             showAssistantStatus
             showTodos={false}
             agentName={currentAgentName}

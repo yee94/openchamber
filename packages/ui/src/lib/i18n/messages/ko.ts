@@ -1832,6 +1832,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.statusRow.tasksTitle': '작업',
   'chat.statusRow.summary.activeLeft': '{active}개 활성 · {left}개 남음',
   'chat.statusRow.aborted': '중단됨',
+  'chat.statusRow.abortPrompt': 'Esc를 다시 눌러 중단',
   'chat.assistantStatus.readingFile': '파일 읽는 중',
   'chat.assistantStatus.writingFile': '파일 쓰는 중',
   'chat.assistantStatus.editingFile': '파일 편집 중',

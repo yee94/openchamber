@@ -1631,6 +1631,7 @@ export const dict = {
   'chat.statusRow.tasksTitle': 'Tâches',
   'chat.statusRow.summary.activeLeft': '{active} actif · {left} gauche',
   'chat.statusRow.aborted': 'Avorté',
+  'chat.statusRow.abortPrompt': 'Appuyez encore sur Échap pour arrêter',
   'chat.assistantStatus.readingFile': 'Lecture du fichier',
   'chat.assistantStatus.writingFile': 'Écriture du fichier',
   'chat.assistantStatus.editingFile': 'Modification du fichier',

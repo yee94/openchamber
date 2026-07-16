@@ -1830,6 +1830,7 @@ export const dict = {
   'chat.statusRow.tasksTitle': 'Tasks',
   'chat.statusRow.summary.activeLeft': '{active} active · {left} left',
   'chat.statusRow.aborted': 'Aborted',
+  'chat.statusRow.abortPrompt': 'Press Esc again to abort',
   'chat.assistantStatus.readingFile': 'Reading file',
   'chat.assistantStatus.writingFile': 'Writing file',
   'chat.assistantStatus.editingFile': 'Editing file',

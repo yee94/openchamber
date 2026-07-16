@@ -1796,6 +1796,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.statusRow.tasksTitle': '任务',
   'chat.statusRow.summary.activeLeft': '{active} 个活跃 · 剩余 {left} 个',
   'chat.statusRow.aborted': '已中止',
+  'chat.statusRow.abortPrompt': '再按一次 Esc 中止',
   'chat.assistantStatus.readingFile': '正在读取文件',
   'chat.assistantStatus.writingFile': '正在写入文件',
   'chat.assistantStatus.editingFile': '正在编辑文件',

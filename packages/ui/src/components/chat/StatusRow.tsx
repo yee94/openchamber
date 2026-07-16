@@ -96,6 +96,8 @@ interface StatusRowProps {
   retryInfo?: { attempt?: number; next?: number } | null;
   // Abort status display
   showAbortStatus?: boolean;
+  /** First Esc armed: show "press Esc again to abort" until window expires. */
+  showAbortPrompt?: boolean;
   showAssistantStatus?: boolean;
   showTodos?: boolean;
   agentName?: string;
@@ -111,6 +113,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   abortActive,
   retryInfo,
   showAbortStatus,
+  showAbortPrompt = false,
   showAssistantStatus = true,
   showTodos = true,
   agentName,
@@ -175,6 +178,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   }, [visibleTodos]);
 
   const hasTodoContent = showTodos && statusSummary.left > 0;
+  const hasAbortPrompt = Boolean(showAbortPrompt);
   const hasAssistantContent = showAssistantStatus && (
     isWorking ||
     Boolean(wasAborted) ||
@@ -182,9 +186,9 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   );
   const hasLeftAccessory = Boolean(leftAccessory);
   // Original logic from ChatInput
-  const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive);
+  const shouldRenderPlaceholder = !showAbortStatus && !hasAbortPrompt && (wasAborted || !abortActive);
 
-  const hasContent = hasAssistantContent || hasTodoContent || hasLeftAccessory;
+  const hasContent = hasAbortPrompt || hasAssistantContent || hasTodoContent || hasLeftAccessory;
 
   // Close popover when clicking outside
   const popoverRef = React.useRef<HTMLDivElement>(null);
@@ -263,9 +267,23 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   return (
     <div className={cn("mb-1", !hasLeftAccessory && "chat-column")} style={STATUS_ROW_CONTAINER_STYLE}>
       <div className={cn("flex items-center justify-between py-0.5 gap-2 h-[1.2rem]", hasLeftAccessory && "px-0.5")}>
-        {/* Left: Abort status | Working placeholder | leftAccessory */}
+        {/* Left: Abort prompt | Abort status | Working placeholder | leftAccessory */}
         <div className={cn("flex-1 flex items-center min-w-0 gap-2", hasLeftAccessory ? "pl-1.5" : "overflow-x-hidden")}>
-          {showAssistantStatus && showAbortStatus ? (
+          {hasAbortPrompt ? (
+            <div
+              className="flex min-w-0 items-center text-muted-foreground pl-0.5"
+              role="status"
+              aria-live="polite"
+              aria-label={t('chat.statusRow.abortPrompt')}
+            >
+              <span className="flex min-w-0 items-center gap-1.5 typography-ui-label">
+                <Icon name="error-warning" className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="animate-text-shimmer truncate whitespace-nowrap">
+                  {t('chat.statusRow.abortPrompt')}
+                </span>
+              </span>
+            </div>
+          ) : showAssistantStatus && showAbortStatus ? (
             <div className="flex h-full items-center text-[var(--status-error)] pl-0.5">
               <span className="flex items-center gap-1.5 typography-ui-label">
                 <Icon name="close-circle" aria-hidden="true"/>

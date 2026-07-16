@@ -1113,54 +1113,15 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 	}
 
 	if (!currentSessionId && draftOpen) {
-		// When the draft is being materialized into a real session (createSession
-		// is awaiting), show localized establishment feedback instead of the
-		// normal draft title + chips, while keeping the ChatInput structure
-		// intact. This avoids the blank render gap previously caused by
-		// closeNewSessionDraft firing before createSessionAction resolved.
-		const isEstablishing = draftSubmitting;
-
-		return (
-			// No transform on this root: it would become the containing block for
-			// the fullscreen composer's position:fixed visual-viewport pinning in
-			// mobile browsers (see ChatInput's composerFormRef effect).
-			<div className="relative flex h-full flex-col bg-background">
-				{useCompactDraftLayout && !isDesktopExpandedInput ? (
-					<div className="oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-						{isEstablishing ? (
-							<div
-								className="flex flex-col items-center gap-3"
-								role="status"
-								aria-live="polite"
-								aria-label={t('chat.emptyState.establishingConversation')}
-							>
-								<span className="typography-ui-header text-muted-foreground">
-									<span className="animate-text-shimmer">{t('chat.emptyState.establishingConversation')}</span>
-									<BusyDots />
-								</span>
-							</div>
-						) : (
-							<>
-								<h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
-									{renderDraftTitle(
-										draftProjectLabel
-											? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
-											: t('chat.emptyState.draftTitle'),
-										draftProjectLabel,
-									)}
-								</h1>
-								<DraftPresetChips
-									onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
-									className="oc-draft-starters mt-8 max-w-md"
-								/>
-							</>
-						)}
-					</div>
-				) : null}
-				{/* Desktop (non-compact) establishing status: light banner above ChatInput */}
-				{isEstablishing && !useCompactDraftLayout && !isDesktopExpandedInput ? (
+		// Match fork: once submission is claimed, leave the draft composer and
+		// show a full-screen establishing page until a real session ID arrives.
+		// Combined create+prompt can take a while; partial draft banners were
+		// easy to miss (especially desktop / expanded-input layouts).
+		if (draftSubmitting) {
+			return (
+				<div className="flex h-full flex-col items-center justify-center bg-background px-6 text-center">
 					<div
-						className="flex items-center justify-center pt-6 pb-2"
+						className="flex flex-col items-center gap-3"
 						role="status"
 						aria-live="polite"
 						aria-label={t('chat.emptyState.establishingConversation')}
@@ -1169,6 +1130,30 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							<span className="animate-text-shimmer">{t('chat.emptyState.establishingConversation')}</span>
 							<BusyDots />
 						</span>
+					</div>
+				</div>
+			);
+		}
+
+		return (
+			// No transform on this root: it would become the containing block for
+			// the fullscreen composer's position:fixed visual-viewport pinning in
+			// mobile browsers (see ChatInput's composerFormRef effect).
+			<div className="relative flex h-full flex-col bg-background">
+				{useCompactDraftLayout && !isDesktopExpandedInput ? (
+					<div className="oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+						<h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
+							{renderDraftTitle(
+								draftProjectLabel
+									? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
+									: t('chat.emptyState.draftTitle'),
+								draftProjectLabel,
+							)}
+						</h1>
+						<DraftPresetChips
+							onSubmit={(text) => useInputStore.getState().requestPresetSubmit(text)}
+							className="oc-draft-starters mt-8 max-w-md"
+						/>
 					</div>
 				) : null}
 				<div

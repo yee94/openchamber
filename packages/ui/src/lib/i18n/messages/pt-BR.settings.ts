@@ -1045,6 +1045,7 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label": "Modelo favorito anterior",
   "settings.openchamber.keyboardShortcuts.action.open_model_selector.label": "Abrir seletor de modelo",
   "settings.openchamber.keyboardShortcuts.action.expand_input.label": "Expandir entrada",
+"settings.openchamber.keyboardShortcuts.action.clear_all_messages.label": "Limpar todas as mensagens",
   "settings.openchamber.keyboardShortcuts.action.open_timeline_dialog.label": "Abrir linha do tempo da conversa",
   "settings.openchamber.keyboardShortcuts.action.toggle_prompt_navigator.label": "Mostrar ou ocultar navegador de prompts",
   "settings.projects.sidebar.total": "Total {count}",

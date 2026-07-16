@@ -325,6 +325,12 @@ OpenCode publishes one `message.updated` event per cloned message and one
 must not materialize that complete copied history into the directory store.
 
 - Enter the shared fork transition view before dispatching the SDK request.
+- Do not require the source session to already exist in a directory child
+  store. Cold start may only have the session in the global index (or messages
+  already loaded without a `state.session` row). Resolve the directory from
+  current selection / worktree / global index, then hydrate the source session
+  into the target directory store from the global snapshot or `session.get`
+  before forking. Missing directory is a hard failure with user-visible toast.
 - Suppress copied message/part events for the target session while the request
   is active.
 - When the real session ID arrives, select it and load the normal bounded tail
@@ -348,8 +354,10 @@ modes, and older runtimes keep the regular SDK sequence.
 
 The client generates the message ID before the request. The server/runtime host
 uses it as the bounded operation key, so reconnect retries reuse the in-flight
-or completed operation instead of creating another session. The draft remains
-visible in a submitting state until a real session ID is returned.
+or completed operation instead of creating another session. Claiming a draft
+submission sets `draftSubmitting` and yields one frame so the chat surface can
+paint a full-screen establishing page (same visual pattern as fork transition)
+until a real session ID is returned.
 
 After success, commit the real session to directory routing, global session
 state, selection state, and the optimistic shadow map. If SSE delivered the

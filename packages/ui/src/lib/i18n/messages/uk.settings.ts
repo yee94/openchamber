@@ -1045,6 +1045,7 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label": "Перемкнути улюблену модель назад",
   "settings.openchamber.keyboardShortcuts.action.open_model_selector.label": "Відкрити вибір моделі",
   "settings.openchamber.keyboardShortcuts.action.expand_input.label": "Розгорнути введення",
+"settings.openchamber.keyboardShortcuts.action.clear_all_messages.label": "Очистити всі повідомлення",
   "settings.openchamber.keyboardShortcuts.action.open_timeline_dialog.label": "Відкрити хронологію розмови",
   "settings.openchamber.keyboardShortcuts.action.toggle_prompt_navigator.label": "Показати або приховати навігатор промптів",
   "settings.projects.sidebar.total": "Усього {count}",
