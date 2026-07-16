@@ -1080,18 +1080,33 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     }, [currentSessionId, effectiveSessionDirectory, ensureSessionRenderable, hasRenderableSessionSnapshot, syncDirectory]);
 
 	if (forkTransition) {
-		const stageKey = forkTransition.stage === 'preparing'
-			? 'chat.forkTransition.preparing'
-			: forkTransition.stage === 'copying'
-				? 'chat.forkTransition.copying'
-				: 'chat.forkTransition.opening';
+		const stageKey =
+			forkTransition.stage === 'preparing'
+				? 'chat.forkTransition.preparing'
+				: forkTransition.stage === 'copying'
+					? 'chat.forkTransition.copying'
+					: forkTransition.stage === 'opening'
+						? 'chat.forkTransition.opening'
+						: 'chat.forkTransition.loading';
+		const stageOrder = ['preparing', 'copying', 'opening', 'loading'] as const;
+		const stageIndex = Math.max(1, stageOrder.indexOf(forkTransition.stage) + 1);
+		const progressLabel = t('chat.forkTransition.progress', {
+			current: stageIndex,
+			total: stageOrder.length,
+		});
 		return (
 			<div className="flex h-full flex-col items-center justify-center bg-background px-6 text-center">
-				<div className="flex flex-col items-center gap-3" role="status" aria-live="polite" aria-label={t(stageKey)}>
+				<div
+					className="flex flex-col items-center gap-2"
+					role="status"
+					aria-live="polite"
+					aria-label={`${t(stageKey)}. ${progressLabel}`}
+				>
 					<span className="typography-ui-header text-muted-foreground">
 						<span className="animate-text-shimmer">{t(stageKey)}</span>
 						<BusyDots />
 					</span>
+					<span className="text-xs text-muted-foreground/70 tabular-nums">{progressLabel}</span>
 				</div>
 			</div>
 		);
