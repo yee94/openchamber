@@ -419,6 +419,61 @@ function restoreGlobalSessionSnapshot(session: Session | null): void {
   useGlobalSessionsStore.getState().upsertSession(session)
 }
 
+function upsertSessionIntoDirectoryStore(store: DirectoryStoreApi, session: Session): Session {
+  const sanitized = stripSessionDiffSnapshots(session)
+  const sessions = [...store.getState().session]
+  const searchResult = Binary.search(sessions, sanitized.id, (item) => item.id)
+  if (searchResult.found) {
+    const merged = mergeSessionDirectoryMetadata(sanitized, sessions[searchResult.index])
+    sessions[searchResult.index] = merged
+    store.setState({ session: sessions })
+    return merged
+  }
+  sessions.splice(searchResult.index, 0, sanitized)
+  store.setState({ session: sessions })
+  return sanitized
+}
+
+/**
+ * Cold start / lazy directory stores may show a session in the sidebar (global
+ * index) and even load its messages before `state.session` contains the row.
+ * Fork needs a real Session object in the target child store for title/copy
+ * isolation — hydrate from global snapshot or session.get when missing.
+ */
+async function ensureForkSourceSession(
+  sessionId: string,
+  store: DirectoryStoreApi,
+  directory: string,
+): Promise<Session> {
+  const live = store.getState().session.find((session) => session.id === sessionId)
+  if (live) return live
+
+  const globalSnapshot = getGlobalSessionSnapshot(sessionId)
+  if (globalSnapshot) {
+    console.info("[session-fork] hydrating source session from global store", {
+      sessionId,
+      directory,
+    })
+    return upsertSessionIntoDirectoryStore(store, globalSnapshot)
+  }
+
+  console.info("[session-fork] fetching source session via session.get", {
+    sessionId,
+    directory,
+  })
+  try {
+    const fetched = await opencodeClient.getSession(sessionId, directory)
+    return upsertSessionIntoDirectoryStore(store, fetched)
+  } catch (error) {
+    console.error("[session-fork] failed to hydrate source session", {
+      sessionId,
+      directory,
+      error,
+    })
+    throw new Error("Fork source session is unavailable")
+  }
+}
+
 function getSessionDirectory(sessionId: string): string | undefined {
   return findSessionDirectoryInChildStores(sessionId)
     || useSessionUIStore.getState().getDirectoryForSession(sessionId)
@@ -1566,9 +1621,9 @@ export async function forkSession(sessionId: string, operationId: number, messag
   const forkRuntimeKey = getRuntimeKey()
   const { store, directory } = dirStoreForSession(sessionId)
   if (!directory) throw new Error("Fork session directory is unavailable")
+  const sourceSession = await ensureForkSourceSession(sessionId, store, directory)
+  registerSessionDirectory(sessionId, directory)
   let state = store.getState()
-  const sourceSession = state.session.find((session) => session.id === sessionId)
-  if (!sourceSession) throw new Error("Fork source session is unavailable")
 
   let sourceStatus = state.session_status[sessionId]
   let sourceMessages = state.message[sessionId] ?? []

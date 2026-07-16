@@ -2001,6 +2001,7 @@ export const settingsDict = {
   'settings.openchamber.visual.option.followUpBehavior.steer.label': 'Steer',
   'settings.openchamber.visual.option.followUpBehavior.queue.label': 'Queue',
   'settings.appearance.language.select': 'Wybierz język',
+'settings.openchamber.keyboardShortcuts.action.clear_all_messages.label': 'Wyczyść wszystkie wiadomości',
   'settings.openchamber.keyboardShortcuts.action.open_timeline_dialog.label': 'Otwórz oś czasu rozmowy',
   'settings.openchamber.visual.actions.resetMobileKeyboardModeAria': 'Zresetuj tryb klawiatury mobilnej',
   'settings.openchamber.visual.field.mobileKeyboardModeAria': 'Tryb klawiatury mobilnej',

@@ -639,8 +639,14 @@ describe('materializeOpenDraftSession atomic lifecycle', () => {
       modelID: 'm',
     });
 
-    // draftSubmitting must be set synchronously
+    // draftSubmitting must be set synchronously (before paint-gate yield)
     expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(true);
+
+    // Claim yields one frame before createSession; wait until the deferred is held.
+    for (let i = 0; i < 20 && createSessionCalls.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(createSessionCalls.length).toBe(1);
 
     // Fail the create
     rejectCreate(new Error('network error'));
@@ -664,6 +670,12 @@ describe('materializeOpenDraftSession atomic lifecycle', () => {
       providerID: 'p',
       modelID: 'm',
     });
+
+    // Claim yields one frame before createSession; wait until the deferred is held.
+    for (let i = 0; i < 20 && createSessionCalls.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(createSessionCalls.length).toBe(1);
 
     // While createSession is pending, user opens a new draft (closing the old)
     useSessionUIStore.getState().closeNewSessionDraft();

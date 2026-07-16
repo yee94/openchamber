@@ -1808,6 +1808,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.statusRow.tasksTitle": "Tarefas",
   "chat.statusRow.summary.activeLeft": "{active} ativas · {left} restantes",
   "chat.statusRow.aborted": "Interrompido",
+  "chat.statusRow.abortPrompt": "Pressione Esc novamente para interromper",
   "chat.assistantStatus.readingFile": "Lendo arquivo",
   "chat.assistantStatus.writingFile": "Gravando arquivo",
   "chat.assistantStatus.editingFile": "Editando arquivo",

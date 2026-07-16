@@ -970,6 +970,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': 'Faire défiler le modèle favori vers l\'arrière',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': 'Ouvrir le sélecteur de modèle',
   'settings.openchamber.keyboardShortcuts.action.expand_input.label': 'Développer l\'entrée',
+'settings.openchamber.keyboardShortcuts.action.clear_all_messages.label': 'Effacer tous les messages',
   'settings.openchamber.keyboardShortcuts.action.open_timeline_dialog.label': 'Chronologie de la conversation ouverte',
   'settings.openchamber.keyboardShortcuts.action.toggle_prompt_navigator.label': 'Afficher ou masquer le navigateur de prompts',
   'settings.projects.sidebar.total': 'Total {count}',

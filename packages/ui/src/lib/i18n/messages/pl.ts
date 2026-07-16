@@ -696,6 +696,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.statusRow.tasksTitle': 'Zadania',
   'chat.statusRow.summary.activeLeft': '{active} aktywne · {left} pozostało',
   'chat.statusRow.aborted': 'Przerwane',
+  'chat.statusRow.abortPrompt': 'Naciśnij Esc ponownie, aby przerwać',
   'chat.assistantStatus.readingFile': 'Odczytywanie pliku',
   'chat.assistantStatus.writingFile': 'Zapisywanie pliku',
   'chat.assistantStatus.editingFile': 'Edytowanie pliku',

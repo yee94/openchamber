@@ -1013,7 +1013,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
     const pendingInputText = useInputStore((s) => s.pendingInputText);
     const consumePendingSyntheticParts = useInputStore((s) => s.consumePendingSyntheticParts);
-    const acknowledgeSessionAbort = useSessionUIStore((s) => s.acknowledgeSessionAbort);
     const abortCurrentOperation = React.useCallback(
         (sessionIdOverride?: string) => sessionActions.abortCurrentOperation(sessionIdOverride ?? currentSessionId ?? ''),
         [currentSessionId],
@@ -1065,9 +1064,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const setTimelineDialogOpen = useUIStore((state) => state.setTimelineDialogOpen);
     const { git: runtimeGit, vscode: vscodeApi } = useRuntimeAPIs();
     const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
+    const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
     const cycleAgentShortcut = React.useMemo(() => (
         getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
     ), [cycleAgentShortcutOverride]);
+    const clearAllMessagesShortcut = React.useMemo(
+        () => getEffectiveShortcutCombo('clear_all_messages', shortcutOverrides),
+        [shortcutOverrides],
+    );
     const { currentTheme } = useThemeSystem();
     const chatSearchDirectory = useChatSearchDirectory();
     const isGitRepo = useIsGitRepo(currentDirectory);
@@ -1390,7 +1394,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [chatSearchDirectory]);
     const [autocompleteOverlayPosition, setAutocompleteOverlayPosition] = React.useState<AutocompleteOverlayPosition | null>(null);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const prevWasAbortedRef = React.useRef(false);
 
     // Issue linking state
     const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
@@ -2566,10 +2569,62 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (text) submitPresetPrompt(text);
     }, [pendingPresetSubmit, submitPresetPrompt]);
 
+    // OpenCode-compatible input_clear: wipe the composer body and any queued turns.
+    const handleClearAllMessages = React.useCallback(() => {
+        clearPendingDraftPersist();
+        skipNextDraftPersistRef.current = true;
+        setMessage('');
+        messageRef.current = '';
+        confirmedMentionsRef.current.clear();
+        saveConfirmedMentions(currentSessionId, confirmedMentionsRef.current);
+        persistDraftImmediately(currentSessionId, '');
+        setHistoryIndex(-1);
+        setDraftMessage('');
+        if (attachedFiles.length > 0) {
+            clearAttachedFiles();
+        }
+        if (currentQueueScope) {
+            clearQueue(currentQueueScope);
+        }
+        setShowCommandAutocomplete(false);
+        setShowSkillAutocomplete(false);
+        setShowSnippetAutocomplete(false);
+        setShowFileMention(false);
+        if (inputMode === 'shell') {
+            setInputMode('normal');
+        }
+    }, [
+        attachedFiles.length,
+        clearAttachedFiles,
+        clearPendingDraftPersist,
+        clearQueue,
+        currentQueueScope,
+        currentSessionId,
+        inputMode,
+        persistDraftImmediately,
+    ]);
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Early return during IME composition to prevent interference with autocomplete.
         // Uses keyCode === 229 fallback for WebKit where compositionend fires before keydown.
         if (isIMECompositionEvent(e)) return;
+
+        if (
+            clearAllMessagesShortcut
+            && eventMatchesShortcut(e, clearAllMessagesShortcut)
+            && !isLeaderKeyPending
+        ) {
+            const textarea = textareaRef.current;
+            const hasSelection = textarea
+                ? textarea.selectionStart !== textarea.selectionEnd
+                : false;
+            // Preserve native copy when text is selected (Ctrl+C on Windows/Linux).
+            if (!hasSelection) {
+                e.preventDefault();
+                handleClearAllMessages();
+                return;
+            }
+        }
 
         if (inputMode === 'shell' && e.key === 'Escape') {
             e.preventDefault();
@@ -4701,23 +4756,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const composerChromeOpacityClass = composerChromeEmphasized
         ? 'opacity-100'
         : 'opacity-45 hover:opacity-100 focus-within:opacity-100';
-    React.useEffect(() => {
-        const pendingAbortBanner = Boolean(abortPromptSessionId) && abortPromptSessionId === currentSessionId;
-        if (!prevWasAbortedRef.current && pendingAbortBanner && !showAbortStatus) {
-            startAbortIndicator();
-            if (currentSessionId) {
-                acknowledgeSessionAbort(currentSessionId);
-            }
-        }
-        prevWasAbortedRef.current = pendingAbortBanner;
-    }, [
-        abortPromptSessionId,
-        acknowledgeSessionAbort,
-        currentSessionId,
-        showAbortStatus,
-        startAbortIndicator,
-    ]);
-
     React.useEffect(() => {
         return () => {
             if (abortTimeoutRef.current) {

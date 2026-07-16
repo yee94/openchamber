@@ -277,6 +277,13 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     description: 'Clear the input field',
   },
   {
+    id: 'clear_all_messages',
+    defaultCombo: 'ctrl+c',
+    label: 'Clear all messages',
+    description: 'Clear the composer input and queued messages',
+    customizable: true,
+  },
+  {
     id: 'open_diff_panel',
     defaultCombo: 'mod+2',
     label: 'Open diff panel',

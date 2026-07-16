@@ -1826,6 +1826,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.statusRow.tasksTitle': 'タスク',
   'chat.statusRow.summary.activeLeft': '{active}アクティブ · {left}残り',
   'chat.statusRow.aborted': '中止されました',
+  'chat.statusRow.abortPrompt': 'もう一度 Esc で中止',
   'chat.assistantStatus.readingFile': 'ファイルを読み込み中',
   'chat.assistantStatus.writingFile': 'ファイルを書き込み中',
   'chat.assistantStatus.editingFile': 'ファイルを編集中',

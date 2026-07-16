@@ -246,7 +246,9 @@ export const useKeyboardShortcuts = () => {
         currentModelId,
         waitForConnectionOrThrow: sessionActions.waitForConnectionOrThrow,
         getAuthoritativeDirectoryForSession: useSessionUIStore.getState().getAuthoritativeDirectoryForSession,
-        summarizeSession: opencodeClient.summarizeSession,
+        // Keep `this` bound — summarizeSession reads normalizeCandidatePath on the client.
+        summarizeSession: (sessionId, providerId, modelId, directory) =>
+          opencodeClient.summarizeSession(sessionId, providerId, modelId, directory),
         onCompactFailed: (error) => {
           toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.compactFailed'));
         },

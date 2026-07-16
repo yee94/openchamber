@@ -457,6 +457,14 @@ const resolveSessionDirectory = (
   return resolveDirectoryKey(target)
 }
 
+/** Best-effort session snapshot for fork toasts — live child store, then global index. */
+const resolveForkSourceSessionSnapshot = (sessionId: string): Session | null => {
+  const fromSync = getAllSyncSessions().find((session) => session.id === sessionId)
+  if (fromSync) return fromSync
+  const global = useGlobalSessionsStore.getState()
+  return [...global.activeSessions, ...global.archivedSessions].find((session) => session.id === sessionId) ?? null
+}
+
 const activateConfigForDirectory = async (directory: string | null | undefined): Promise<void> => {
   await useConfigStore.getState().activateDirectory(normalizePath(directory))
 }
@@ -573,13 +581,26 @@ async function claimDraftSubmission(): Promise<DraftSubmissionClaim | null> {
     return { newSessionDraft: nextDraft }
   })
   if (!draftID || token === null || !memoryKey) return null
+  // Same paint gate as forkTransition: let React commit the full-screen
+  // establishing page before create/prompt work continues.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  const currentDraft = useSessionUIStore.getState().newSessionDraft
+  // Runtime switch / reopen / close during the paint frame invalidates this claim.
+  if (
+    !currentDraft.open
+    || currentDraft.draftSubmitting !== true
+    || currentDraft.draftID !== draftID
+    || currentDraft.submissionToken !== token
+  ) {
+    return null
+  }
   const runtime = useInputStore.getState().captureDraftRuntime()
   const sourceKey = newSessionDraftKey(runtime, draftID)
   const source = useInputStore.getState().getDraft(sourceKey)
   return {
     token,
     draftID,
-    draft: cloneDraft(useSessionUIStore.getState().newSessionDraft),
+    draft: cloneDraft(currentDraft),
     runtime,
     runtimeMemoryKey: memoryKey,
     source: source ? { key: sourceKey, revision: source.revision } : null,
@@ -1828,28 +1849,30 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
       return
     }
-    const sessions = getAllSyncSessions()
-    const existingSession = sessions.find((s) => s.id === sessionId)
-    if (!existingSession) {
-      console.warn("[session-fork] forkFromMessage could not find the source session", {
-        sessionId,
-        messageId,
-        sessionCount: sessions.length,
-      })
-      return
-    }
+    // Title is best-effort for the success toast. Cold start may only have the
+    // session in the global index — forkSession hydrates the live child store.
+    const existingSession = resolveForkSourceSessionSnapshot(sessionId)
     const operationId = ++nextForkOperationId
 
     try {
-      const directory = resolveSessionDirectory(
-        sessionId,
-        (sid) => get().worktreeMetadata.get(sid),
-      ) ?? opencodeClient.getDirectory() ?? ""
+      const directory = get().getDirectoryForSession(sessionId)
+        ?? opencodeClient.getDirectory()
+        ?? ""
+      if (!directory) {
+        console.warn("[session-fork] forkFromMessage missing directory", {
+          sessionId,
+          messageId,
+        })
+        const { toast } = await import("sonner")
+        toast.error("Failed to fork session")
+        return
+      }
       console.info("[session-fork] forkFromMessage starting transition", {
         operationId,
         sessionId,
         messageId,
         hasDirectory: Boolean(directory),
+        hasLocalSnapshot: Boolean(existingSession),
       })
       set({
         forkTransition: {
@@ -1876,7 +1899,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         sessionId,
         messageId,
       })
-      toast.success(`Forked from ${existingSession.title}`)
+      toast.success(`Forked from ${existingSession?.title ?? "session"}`)
     } catch (error) {
       console.error("[session-fork] forkFromMessage failed", {
         operationId,
@@ -1909,26 +1932,26 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
       return
     }
-    const sessions = getAllSyncSessions()
-    const existingSession = sessions.find((s) => s.id === sessionId)
-    if (!existingSession) {
-      console.warn("[session-fork] forkCurrentSession could not find the source session", {
-        sessionId,
-        sessionCount: sessions.length,
-      })
-      return
-    }
+    const existingSession = resolveForkSourceSessionSnapshot(sessionId)
     const operationId = ++nextForkOperationId
 
     try {
-      const directory = resolveSessionDirectory(
-        sessionId,
-        (sid) => get().worktreeMetadata.get(sid),
-      ) ?? opencodeClient.getDirectory() ?? ""
+      const directory = get().getDirectoryForSession(sessionId)
+        ?? opencodeClient.getDirectory()
+        ?? ""
+      if (!directory) {
+        console.warn("[session-fork] forkCurrentSession missing directory", {
+          sessionId,
+        })
+        const { toast } = await import("sonner")
+        toast.error("Failed to fork session")
+        return
+      }
       console.info("[session-fork] forkCurrentSession starting transition", {
         operationId,
         sessionId,
         hasDirectory: Boolean(directory),
+        hasLocalSnapshot: Boolean(existingSession),
       })
       set({
         forkTransition: {
@@ -1953,7 +1976,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         operationId,
         sessionId,
       })
-      toast.success(`Forked from ${existingSession.title}`)
+      toast.success(`Forked from ${existingSession?.title ?? "session"}`)
     } catch (error) {
       console.error("[session-fork] forkCurrentSession failed", {
         operationId,
