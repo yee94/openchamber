@@ -198,6 +198,38 @@ describe('mergeOptimisticPage idempotency across commits (#2084)', () => {
     expect(merged.confirmed).toEqual([])
     expect(merged.complete).toBe(true)
   })
+
+  test('does not double file parts when server echoes different part IDs', () => {
+    const message = userMessage('msg_1')
+    const optimisticFile = {
+      id: 'prt_opt_file',
+      type: 'file',
+      mime: 'image/png',
+      url: 'data:image/png;base64,abc',
+      filename: 'image-1.png',
+    } as never
+    const serverFile = {
+      id: 'prt_server_file',
+      type: 'file',
+      mime: 'image/png',
+      url: 'data:image/png;base64,abc',
+      filename: 'image-1.png',
+    } as never
+    const page = {
+      session: [message],
+      part: [{ id: 'msg_1', part: [textPart('prt_server_text', 'msg_1'), serverFile] }],
+      cursor: undefined,
+      complete: true,
+    }
+    const merged = mergeOptimisticPage(page, [{
+      message,
+      parts: [textPart('prt_opt_text', 'msg_1'), optimisticFile],
+    }])
+    expect(merged.confirmed).toEqual(['msg_1'])
+    const parts = merged.part.find((item) => item.id === 'msg_1')?.part ?? []
+    expect(parts.filter((part) => part.type === 'file')).toHaveLength(1)
+    expect(parts.find((part) => part.type === 'file')?.id).toBe('prt_server_file')
+  })
 })
 
 describe('first-commit gating invariant (#2084)', () => {

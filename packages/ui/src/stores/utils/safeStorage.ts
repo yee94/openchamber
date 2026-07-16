@@ -12,6 +12,8 @@ type JsonStorageOptions = {
     replacer?: (key: string, value: unknown) => unknown;
 };
 
+export type DeferredPersistStorage<S> = PersistStorage<S> & { flush: () => boolean };
+
 const registerDeferredFlusher = (flush: () => void) => {
     deferredFlushers.add(flush);
     if (deferredFlushListenersRegistered || typeof window === 'undefined') return;
@@ -38,7 +40,7 @@ const registerDeferredFlusher = (flush: () => void) => {
 const createDeferredJSONStorage = <S>(
     getStorage: () => StateStorage,
     options?: JsonStorageOptions,
-): PersistStorage<S> | undefined => {
+): DeferredPersistStorage<S> | undefined => {
     let storage: StateStorage;
     try {
         storage = getStorage();
@@ -50,20 +52,23 @@ const createDeferredJSONStorage = <S>(
     const pendingDeletes = new Set<string>();
     let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const flush = () => {
+    const flush = (): boolean => {
         flushTimer = undefined;
-        if (pendingWrites.size === 0 && pendingDeletes.size === 0) return;
+        if (pendingWrites.size === 0 && pendingDeletes.size === 0) return true;
 
         const writes = Array.from(pendingWrites.entries());
         const deletes = Array.from(pendingDeletes);
         pendingWrites.clear();
         pendingDeletes.clear();
 
+        let succeeded = true;
         for (const [name, value] of writes) {
             try {
                 storage.setItem(name, JSON.stringify(value, options?.replacer));
             } catch (error) {
                 console.error('Failed to persist deferred storage value', error);
+                pendingWrites.set(name, value);
+                succeeded = false;
             }
         }
         for (const name of deletes) {
@@ -71,8 +76,12 @@ const createDeferredJSONStorage = <S>(
                 storage.removeItem(name);
             } catch (error) {
                 console.error('Failed to remove deferred storage value', error);
+                pendingDeletes.add(name);
+                succeeded = false;
             }
         }
+        if (!succeeded) scheduleFlush();
+        return succeeded;
     };
 
     const scheduleFlush = () => {
@@ -111,10 +120,11 @@ const createDeferredJSONStorage = <S>(
             pendingDeletes.add(name);
             scheduleFlush();
         },
-    };
+        flush,
+    } as DeferredPersistStorage<S>;
 };
 
-export const createDeferredSafeJSONStorage = <S>(options?: JsonStorageOptions) => (
+export const createDeferredSafeJSONStorage = <S>(options?: JsonStorageOptions): DeferredPersistStorage<S> | undefined => (
     createDeferredJSONStorage<S>(() => getSafeStorage(), options)
 );
 

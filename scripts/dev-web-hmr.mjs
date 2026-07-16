@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,6 +84,12 @@ async function stopChildTree(child) {
 const uiPort = process.env.OPENCHAMBER_HMR_UI_PORT || '5180';
 const backendPort = process.env.OPENCHAMBER_HMR_API_PORT || '3902';
 const hmrHost = process.env.OPENCHAMBER_HMR_HOST || '127.0.0.1';
+// Keep the HMR session index separate from desktop and normal CLI runtimes.
+// Settings and authentication continue using the normal development data dir.
+const hmrSessionIndexDir = path.resolve(
+  process.env.OPENCHAMBER_HMR_DATA_DIR || path.join(repoRoot, 'data', 'hmr'),
+);
+const hmrSessionIndexDbPath = path.join(hmrSessionIndexDir, 'session-index.sqlite');
 
 function getLanAddresses() {
   const addresses = [];
@@ -111,9 +117,11 @@ function clearViteCache() {
 }
 
 clearViteCache();
+mkdirSync(hmrSessionIndexDir, { recursive: true });
 
 const api = run('api', 'bun', ['run', '--cwd', 'packages/web', 'dev:server:watch'], {
   OPENCHAMBER_PORT: backendPort,
+  OPENCHAMBER_SESSION_INDEX_DB_PATH: hmrSessionIndexDbPath,
 });
 const vite = run(
   'vite',
@@ -138,6 +146,7 @@ if (hmrHost === '0.0.0.0' || hmrHost === '::') {
   }
 }
 console.log(`[dev:web:hmr] API: http://127.0.0.1:${backendPort}`);
+console.log(`[dev:web:hmr] Session index: ${hmrSessionIndexDbPath}`);
 console.log('[dev:web:hmr] IMPORTANT: open UI URL above for HMR; backend URL has no HMR');
 
 let shuttingDown = false;

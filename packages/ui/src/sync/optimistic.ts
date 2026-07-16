@@ -19,25 +19,6 @@ export type MessagePage = {
   complete: boolean
 }
 
-const hasParts = (parts: Part[] | undefined, want: Part[]) => {
-  if (!parts) return want.length === 0
-  return want.every((part) => Binary.search(parts, part.id, (item) => item.id).found)
-}
-
-const mergeParts = (parts: Part[] | undefined, want: Part[]) => {
-  if (!parts) return sortParts(want)
-  const next = [...parts]
-  let changed = false
-  for (const part of want) {
-    const result = Binary.search(next, part.id, (item) => item.id)
-    if (result.found) continue
-    next.splice(result.index, 0, part)
-    changed = true
-  }
-  if (!changed) return parts
-  return next
-}
-
 export function mergeOptimisticPage(page: MessagePage, items: OptimisticItem[]) {
   if (items.length === 0) return { ...page, confirmed: [] as string[] }
 
@@ -48,15 +29,25 @@ export function mergeOptimisticPage(page: MessagePage, items: OptimisticItem[]) 
   for (const item of items) {
     const result = Binary.search(session, item.message.id, (message) => message.id)
     const found = result.found
-    if (!found) session.splice(result.index, 0, item.message)
+    if (!found) {
+      // Not on the server yet — keep the optimistic message + parts as placeholders.
+      session.splice(result.index, 0, item.message)
+      part.set(item.message.id, sortParts(item.parts))
+      continue
+    }
 
     const current = part.get(item.message.id)
-    if (found && hasParts(current, item.parts)) {
+    // Server already owns this message. Prefer its parts and drop the shadow
+    // entry. Optimistic file/text parts use client-generated IDs, so merging by
+    // id alone would keep both the optimistic and server file parts and render
+    // duplicate attachment thumbnails for a single citation.
+    if (current && current.length > 0) {
       confirmed.push(item.message.id)
       continue
     }
 
-    part.set(item.message.id, mergeParts(current, item.parts))
+    // Message shell arrived without parts yet — keep optimistic placeholders.
+    part.set(item.message.id, sortParts(item.parts))
   }
 
   return {

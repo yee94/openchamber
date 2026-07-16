@@ -90,4 +90,21 @@ describe('messageQueueStore scoped ledger', () => {
     expect(actions.getQueueForScope(a)[0]?.status).toBe('queued');
     expect(actions.getQueueForScope(a)[0]?.reconciliationDeadlineAt).toBe(undefined);
   });
+  test('atomically begins only the matching eligible head with a fresh message ID', () => {
+    const first = add(); const second = add(); const actions = useMessageQueueStore.getState();
+    const fresh = 'msg_ffffffffffffABCDEFGHIJKLMN';
+    expect(actions.beginQueueItemDispatch(a, { queueItemID: second.queueItemID, operationID: second.operationID, messageID: second.messageID }, fresh, false)).toBeNull();
+    const started = actions.beginQueueItemDispatch(a, { queueItemID: first.queueItemID, operationID: first.operationID, messageID: first.messageID }, fresh, false, Date.now());
+    expect(started?.status).toBe('sending'); expect(started?.messageID).toBe(fresh); expect(started?.attemptCount).toBe(1);
+    expect(actions.beginQueueItemDispatch(a, { queueItemID: first.queueItemID, operationID: first.operationID, messageID: first.messageID }, 'msg_ffffffffffffABCDEFGHIJKLMO', false)).toBeNull();
+    actions.markQueueItemDefinitiveFailure(a, started!);
+    expect(actions.beginQueueItemDispatch(a, { queueItemID: first.queueItemID, operationID: first.operationID, messageID: fresh }, 'msg_ffffffffffffABCDEFGHIJKLMO', true)?.status).toBe('sending');
+  });
+  test('begins due retries automatically and persisted queued rows with a rotated ID', () => {
+    const item = add(); const actions = useMessageQueueStore.getState(); const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID };
+    actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemPreDispatchRetry(a, identity, 20);
+    expect(actions.beginQueueItemDispatch(a, identity, 'msg_ffffffffffffABCDEFGHIJKLMN', false, 19)).toBeNull();
+    const retry = actions.beginQueueItemDispatch(a, identity, 'msg_ffffffffffffABCDEFGHIJKLMN', false, 20);
+    expect(retry?.messageID).toBe('msg_ffffffffffffABCDEFGHIJKLMN');
+  });
 });

@@ -2,15 +2,19 @@
 
 Every OpenChamber Web Server enables `session-index.sqlite` in its data
 directory by default. Electron injects its user-data path explicitly.
+`sessionIndexDbPath` and `OPENCHAMBER_SESSION_INDEX_DB_PATH` override that
+default; the HMR startup script uses the environment override to isolate its
+development index without changing settings or authentication storage.
 `service.js` exclusively owns the WAL database and stores at most the
 newest 20 root-session summaries per runtime and directory. It never stores
 messages, attachments, permissions, provider data, or model metadata.
 
 The server-side global OpenCode event subscriber writes session summary events
-directly into this index. User `message.updated` events advance the separate
-`activity_updated_at` ordering field, while session status transitions update
-`status` and `status_changed_at`. Renderer event handling never performs these
-index writes and assistant streaming events never change session ordering.
+directly into this index. User `message.updated` events and `session.idle`
+completion events advance the separate `activity_updated_at` ordering field,
+while session status transitions update `status` and `status_changed_at`.
+Renderer event handling never performs these index writes and assistant
+streaming events never change session ordering.
 
 `sync-runtime.js` owns cold-start synchronization. The renderer submits all
 known project directories once to `POST /api/openchamber/session-index/sync`.

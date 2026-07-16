@@ -756,49 +756,65 @@ function cleanupSessionWorktreeMetadata(sessionId: string): void {
   useSessionUIStore.getState().setWorktreeMetadata(sessionId, null)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function deleteSession(sessionId: string, _options?: Record<string, unknown>): Promise<boolean> {
-  const sessionDirectory = getSessionDirectory(sessionId)
-  const snapshots = optimisticRemoveSession(sessionId, sessionDirectory)
-  const globalSnapshot = getGlobalSessionSnapshot(sessionId)
-  useGlobalSessionsStore.getState().removeSessions([sessionId])
+/** Soft-delete undo window. Hard delete only hits the server after this delay. */
+export const SESSION_DELETE_UNDO_MS = 10_000
 
-  const ui = useSessionUIStore.getState()
-  if (ui.currentSessionId === sessionId) {
-    ui.setCurrentSession(null)
-  }
-  try {
-    await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory)
-    const deleted = await opencodeClient.deleteSession(sessionId, sessionDirectory)
-    if (deleted !== true) {
-      throw new Error("session.delete failed: server did not confirm deletion")
-    }
-    useGlobalSessionsStore.getState().removeSessions([sessionId])
-    cleanupSessionWorktreeMetadata(sessionId)
-    return true
-  } catch (error) {
-    console.error("[session-actions] deleteSession failed", error)
-    // The server cascade-deletes child sessions when the parent is removed.
-    // Subsequent delete attempts for those children return 404; treat as
-    // success since the session was already deleted by the cascade.
-    if ((error as { status?: number })?.status === 404) {
-      cleanupSessionWorktreeMetadata(sessionId)
-      return true
-    }
-    restoreSessionListSnapshots(snapshots)
-    restoreGlobalSessionSnapshot(globalSnapshot)
-    return false
+type PendingDeleteEntry = {
+  sessionId: string
+  directory?: string
+  listSnapshots: SessionListSnapshot[]
+  globalSnapshot: Session | null
+  wasCurrent: boolean
+}
+
+type PendingDeleteBatch = {
+  entries: PendingDeleteEntry[]
+  timer: ReturnType<typeof setTimeout>
+  onSettled?: (result: { deletedIds: string[]; failedIds: string[] }) => void
+}
+
+const pendingDeleteBatches = new Map<string, PendingDeleteBatch>()
+let pendingDeleteBatchSeq = 0
+
+function clearArchivedTimestamp(session: Session): Session {
+  if (session.time?.archived === undefined) return session
+  const restTime = { ...session.time }
+  delete restTime.archived
+  return {
+    ...session,
+    time: restTime,
   }
 }
 
-/** Delete a session specifying which directory it lives in. Used by agent groups for cross-directory deletes. */
-export async function deleteSessionInDirectory(sessionId: string, directory: string): Promise<boolean> {
-  if (!_childStores) return false
-  const snapshots = optimisticRemoveSession(sessionId, directory)
+function restorePendingDeleteEntry(entry: PendingDeleteEntry): void {
+  restoreSessionListSnapshots(entry.listSnapshots)
+  restoreGlobalSessionSnapshot(entry.globalSnapshot)
+  if (entry.wasCurrent) {
+    useSessionUIStore.getState().setCurrentSession(entry.sessionId, entry.directory ?? null)
+  }
+}
+
+function optimisticallyRemoveSessionForDelete(sessionId: string, directory?: string): PendingDeleteEntry {
+  const sessionDirectory = directory ?? getSessionDirectory(sessionId)
+  const listSnapshots = optimisticRemoveSession(sessionId, sessionDirectory)
   const globalSnapshot = getGlobalSessionSnapshot(sessionId)
   useGlobalSessionsStore.getState().removeSessions([sessionId])
   const ui = useSessionUIStore.getState()
-  if (ui.currentSessionId === sessionId) ui.setCurrentSession(null)
+  const wasCurrent = ui.currentSessionId === sessionId
+  if (wasCurrent) {
+    ui.setCurrentSession(null)
+  }
+  return {
+    sessionId,
+    directory: sessionDirectory,
+    listSnapshots,
+    globalSnapshot,
+    wasCurrent,
+  }
+}
+
+/** Commit a delete that has already been optimistically removed from local stores. */
+async function commitRemovedSessionDelete(sessionId: string, directory?: string): Promise<boolean> {
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, directory)
     const deleted = await opencodeClient.deleteSession(sessionId, directory)
@@ -809,15 +825,107 @@ export async function deleteSessionInDirectory(sessionId: string, directory: str
     cleanupSessionWorktreeMetadata(sessionId)
     return true
   } catch (error) {
-    console.error("[session-actions] deleteSessionInDirectory failed", error)
+    console.error("[session-actions] commitRemovedSessionDelete failed", error)
+    // The server cascade-deletes child sessions when the parent is removed.
+    // Subsequent delete attempts for those children return 404; treat as
+    // success since the session was already deleted by the cascade.
     if ((error as { status?: number })?.status === 404) {
       cleanupSessionWorktreeMetadata(sessionId)
       return true
     }
-    restoreSessionListSnapshots(snapshots)
-    restoreGlobalSessionSnapshot(globalSnapshot)
     return false
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function deleteSession(sessionId: string, _options?: Record<string, unknown>): Promise<boolean> {
+  const entry = optimisticallyRemoveSessionForDelete(sessionId)
+  const ok = await commitRemovedSessionDelete(sessionId, entry.directory)
+  if (ok) return true
+  restorePendingDeleteEntry(entry)
+  return false
+}
+
+/** Delete a session specifying which directory it lives in. Used by agent groups for cross-directory deletes. */
+export async function deleteSessionInDirectory(sessionId: string, directory: string): Promise<boolean> {
+  if (!_childStores) return false
+  const entry = optimisticallyRemoveSessionForDelete(sessionId, directory)
+  const ok = await commitRemovedSessionDelete(sessionId, directory)
+  if (ok) return true
+  restorePendingDeleteEntry(entry)
+  return false
+}
+
+/**
+ * Optimistically remove sessions and permanently delete them after `delayMs`.
+ * Call `cancelScheduledSessionDeletes` within the window to restore local state
+ * without hitting the server.
+ */
+export function scheduleSessionDeletes(
+  sessionIds: string[],
+  options?: {
+    delayMs?: number
+    onSettled?: (result: { deletedIds: string[]; failedIds: string[] }) => void
+  },
+): { batchId: string; scheduledIds: string[] } {
+  const uniqueIds = Array.from(new Set(sessionIds.filter(Boolean)))
+  if (uniqueIds.length === 0) {
+    return { batchId: "", scheduledIds: [] }
+  }
+
+  const entries = uniqueIds.map((sessionId) => optimisticallyRemoveSessionForDelete(sessionId))
+  const batchId = `session-delete-${Date.now()}-${pendingDeleteBatchSeq += 1}`
+  const delayMs = options?.delayMs ?? SESSION_DELETE_UNDO_MS
+
+  const timer = setTimeout(() => {
+    void (async () => {
+      const batch = pendingDeleteBatches.get(batchId)
+      if (!batch) return
+      pendingDeleteBatches.delete(batchId)
+
+      const deletedIds: string[] = []
+      const failedIds: string[] = []
+      for (const entry of batch.entries) {
+        const ok = await commitRemovedSessionDelete(entry.sessionId, entry.directory)
+        if (ok) {
+          deletedIds.push(entry.sessionId)
+        } else {
+          failedIds.push(entry.sessionId)
+          restorePendingDeleteEntry(entry)
+        }
+      }
+      batch.onSettled?.({ deletedIds, failedIds })
+    })()
+  }, delayMs)
+
+  pendingDeleteBatches.set(batchId, {
+    entries,
+    timer,
+    onSettled: options?.onSettled,
+  })
+
+  return { batchId, scheduledIds: uniqueIds }
+}
+
+/** Cancel a pending delayed delete batch and restore optimistic local state. */
+export function cancelScheduledSessionDeletes(batchId: string): boolean {
+  if (!batchId) return false
+  const batch = pendingDeleteBatches.get(batchId)
+  if (!batch) return false
+  clearTimeout(batch.timer)
+  pendingDeleteBatches.delete(batchId)
+  for (const entry of [...batch.entries].reverse()) {
+    restorePendingDeleteEntry(entry)
+  }
+  return true
+}
+
+/** Test helper: drop pending timers without restoring UI. */
+export function clearScheduledSessionDeletesForTests(): void {
+  for (const batch of pendingDeleteBatches.values()) {
+    clearTimeout(batch.timer)
+  }
+  pendingDeleteBatches.clear()
 }
 
 export async function archiveSession(sessionId: string): Promise<boolean> {
@@ -842,6 +950,56 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
     console.error("[session-actions] archiveSession failed", error)
     restoreSessionListSnapshots(snapshots)
     restoreGlobalSessionSnapshot(globalSnapshot)
+    return false
+  }
+}
+
+/** Restore an archived session to the active list (`time.archived = 0`). */
+export async function unarchiveSession(sessionId: string): Promise<boolean> {
+  const sessionDirectory = getSessionDirectory(sessionId)
+  const globalSnapshot = getGlobalSessionSnapshot(sessionId)
+  const optimistic = globalSnapshot ? clearArchivedTimestamp(globalSnapshot) : null
+
+  if (optimistic) {
+    useGlobalSessionsStore.getState().upsertSession(optimistic)
+    if (sessionDirectory && _childStores) {
+      const store = _childStores.children.get(sessionDirectory)
+      if (store) {
+        upsertSessionIntoDirectoryStore(store, optimistic)
+      }
+    }
+  }
+
+  try {
+    const updated = await opencodeClient.updateSession(
+      sessionId,
+      { time: { archived: 0 } },
+      sessionDirectory,
+    )
+    if (!updated) {
+      throw new Error("session.update failed: server did not return the unarchived session")
+    }
+    const restored = clearArchivedTimestamp(updated)
+    useGlobalSessionsStore.getState().upsertSession(restored)
+    if (sessionDirectory && _childStores) {
+      const store = _childStores.children.get(sessionDirectory)
+      if (store) {
+        upsertSessionIntoDirectoryStore(store, restored)
+      } else {
+        mirrorSessionIntoLiveStores(restored, sessionDirectory)
+      }
+    } else {
+      mirrorSessionIntoLiveStores(restored, sessionDirectory)
+    }
+    return true
+  } catch (error) {
+    console.error("[session-actions] unarchiveSession failed", error)
+    if (globalSnapshot) {
+      useGlobalSessionsStore.getState().upsertSession(globalSnapshot)
+      if (globalSnapshot.time?.archived) {
+        optimisticRemoveSession(sessionId, sessionDirectory)
+      }
+    }
     return false
   }
 }
@@ -993,10 +1151,15 @@ export async function optimisticSend(input: {
       messageID,
     })
     const s = capture.store.getState()
+    const now = Date.now()
     capture.store.setState({
       session_status: {
         ...s.session_status,
         [input.sessionId]: { type: "idle" as const },
+      },
+      session_status_observed_at: {
+        ...s.session_status_observed_at,
+        [input.sessionId]: now,
       },
     })
     throw dispatchError
@@ -1085,6 +1248,7 @@ export function optimisticInsertUserMessage(input: {
     }
   }
 
+  const now = Date.now()
   const optimisticMessage = {
     id: input.messageID,
     role: "user" as const,
@@ -1096,7 +1260,7 @@ export function optimisticInsertUserMessage(input: {
     agent: input.agent ?? "",
     model: `${input.providerID}/${input.modelID}`,
     metadata: {} as Record<string, unknown>,
-    time: { created: Date.now(), completed: 0 },
+    time: { created: now, completed: 0 },
   } as unknown as Message
 
   _optimisticAdd({
@@ -1112,6 +1276,10 @@ export function optimisticInsertUserMessage(input: {
     session_status: {
       ...current.session_status,
       [input.sessionId]: { type: "busy" as const },
+    },
+    session_status_observed_at: {
+      ...current.session_status_observed_at,
+      [input.sessionId]: now,
     },
   })
 

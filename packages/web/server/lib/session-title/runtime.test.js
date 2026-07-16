@@ -121,6 +121,86 @@ describe('session-title helpers', () => {
     expect(result.languageSample).toBe('修复会话标题语言');
   });
 
+  it('keeps only the latest 10 turns by default', () => {
+    const messages = [];
+    for (let i = 1; i <= 12; i += 1) {
+      messages.push({
+        info: { id: `u${i}`, role: 'user' },
+        parts: [{ type: 'text', text: `user turn ${i}` }],
+      });
+      messages.push({
+        info: { id: `a${i}`, role: 'assistant' },
+        parts: [{ type: 'text', text: `assistant turn ${i}` }],
+      });
+    }
+    const result = buildLatestTitleTranscript(messages);
+    // Latest window is turns 3–12; turn 1 only appears as subject anchor.
+    expect(result.subjectAnchor).toBe('user turn 1');
+    expect(result.transcript).toContain('Earlier subject anchor');
+    expect(result.transcript).toContain('user turn 3');
+    expect(result.transcript).toContain('user turn 12');
+    expect(result.transcript).not.toContain('user turn 2');
+    expect(result.lastAssistantId).toBe('a12');
+  });
+
+  it('stops at the most recent compaction boundary', () => {
+    const messages = [
+      {
+        info: { id: 'u-old', role: 'user' },
+        parts: [{ type: 'text', text: 'old topic before compact' }],
+      },
+      {
+        info: { id: 'a-old', role: 'assistant' },
+        parts: [{ type: 'text', text: 'old reply before compact' }],
+      },
+      {
+        info: { id: 'u-compact', role: 'user' },
+        parts: [{ type: 'compaction', auto: false }],
+      },
+      {
+        info: { id: 'u-new', role: 'user' },
+        parts: [{ type: 'text', text: 'new topic after compact' }],
+      },
+      {
+        info: { id: 'a-new', role: 'assistant' },
+        parts: [{ type: 'text', text: 'new reply after compact' }],
+      },
+    ];
+    const result = buildLatestTitleTranscript(messages);
+    expect(result.transcript).not.toContain('old topic before compact');
+    expect(result.transcript).not.toContain('old reply before compact');
+    expect(result.transcript).toContain('new topic after compact');
+    expect(result.transcript).toContain('new reply after compact');
+    expect(result.subjectAnchor).toBe('');
+    expect(result.realUserCount).toBe(1);
+    expect(result.lastAssistantId).toBe('a-new');
+  });
+
+  it('hard-caps the transcript under the char budget', () => {
+    const huge = 'x'.repeat(80_000);
+    const messages = [
+      {
+        info: { id: 'u1', role: 'user' },
+        parts: [{ type: 'text', text: `early ${huge}` }],
+      },
+      {
+        info: { id: 'a1', role: 'assistant' },
+        parts: [{ type: 'text', text: `mid ${huge}` }],
+      },
+      {
+        info: { id: 'u2', role: 'user' },
+        parts: [{ type: 'text', text: `late ${huge}` }],
+      },
+      {
+        info: { id: 'a2', role: 'assistant' },
+        parts: [{ type: 'text', text: `tail ${huge}` }],
+      },
+    ];
+    const result = buildLatestTitleTranscript(messages, { maxChars: 10_000 });
+    expect(result.transcript.length).toBeLessThanOrEqual(10_000);
+    expect(result.transcript).toContain('tail');
+  });
+
   it('refreshes a fork title after its first newly-sent reply completes', async () => {
     const originalFetch = globalThis.fetch;
     const session = {

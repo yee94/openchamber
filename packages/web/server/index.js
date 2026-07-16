@@ -1313,8 +1313,11 @@ async function main(options = {}) {
   const getDesktopRuntimeConfig = typeof options.getDesktopRuntimeConfig === 'function'
     ? options.getDesktopRuntimeConfig
     : null;
+  const sessionIndexDbPath = options.sessionIndexDbPath !== undefined
+    ? options.sessionIndexDbPath
+    : process.env.OPENCHAMBER_SESSION_INDEX_DB_PATH;
   const sessionIndexService = createSessionIndexService({
-    dbPath: resolveSessionIndexDbPath(options, OPENCHAMBER_DATA_DIR),
+    dbPath: resolveSessionIndexDbPath({ sessionIndexDbPath }, OPENCHAMBER_DATA_DIR),
     getRuntimeConfig: () => getDesktopRuntimeConfig?.() ?? null,
   });
   const sessionIndexSyncRuntime = createSessionIndexSyncRuntime({

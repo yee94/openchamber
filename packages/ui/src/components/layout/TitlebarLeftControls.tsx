@@ -6,14 +6,16 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
 import { WindowsWindowControls } from '@/components/desktop/WindowsWindowControls';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
-import { invokeDesktop } from '@/lib/desktop';
+import { invokeDesktop, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
+import { SidebarBrandMark } from './SidebarBrandMark';
 
 const ICON_BUTTON_CLASS =
   'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:bg-interactive-hover transition-colors';
 
 /**
- * Persistent top-left titlebar controls (sidebar toggle).
+ * Persistent top-left titlebar controls (sidebar toggle), with the Web
+ * wordmark sharing the control row while the sidebar is open.
  *
  * Rendered exactly once as an absolutely-positioned overlay above both the
  * sidebar and the header, so the buttons never migrate / re-mount between the
@@ -25,12 +27,18 @@ const ICON_BUTTON_CLASS =
  */
 export const TitlebarLeftControls: React.FC = () => {
   const { t } = useI18n();
+  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+  const sidebarWidth = useUIStore((state) => state.sidebarWidth);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const clusterRef = React.useRef<HTMLDivElement | null>(null);
 
   const toggleShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_sidebar', shortcutOverrides));
   const { usesFramelessChrome, side: windowControlsSide } = useDesktopWindowControlsLayout();
+  const usesWebSidebarHeader = React.useMemo(
+    () => isWebRuntime() && !isDesktopShell() && !isVSCodeRuntime(),
+    [],
+  );
 
   const handleOpenWindowsAppMenu = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -78,9 +86,20 @@ export const TitlebarLeftControls: React.FC = () => {
       style={{
         height: 'var(--oc-header-height, 3rem)',
         paddingLeft: 'var(--oc-titlebar-left-inset, 0.75rem)',
+        width: usesWebSidebarHeader && isSidebarOpen ? `${sidebarWidth || 280}px` : undefined,
       }}
     >
-      <div ref={clusterRef} className="flex items-center gap-2">
+      <div
+        ref={clusterRef}
+        className={cn(
+          'flex items-center gap-2',
+          usesWebSidebarHeader && isSidebarOpen && 'w-full justify-between',
+        )}
+      >
+        {usesWebSidebarHeader && isSidebarOpen ? (
+          <SidebarBrandMark className="flex min-w-0 items-center p-0" />
+        ) : null}
+
         {usesFramelessChrome && windowControlsSide === 'left' ? (
           <WindowsWindowControls visible position="left" />
         ) : null}

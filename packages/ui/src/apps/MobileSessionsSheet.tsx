@@ -23,6 +23,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions, useAllSessionStatuses } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
+import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { abortCurrentOperation } from '@/sync/session-actions';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
@@ -68,7 +69,7 @@ type ProjectNode = {
   isActive: boolean;
 };
 
-const SESSIONS_PER_BUCKET = 7;
+const SESSIONS_PER_BUCKET = 3;
 
 // Left padding for session rows so the title's first letter aligns with its
 // parent label. Root/project-level sessions align with the project label;
@@ -367,39 +368,41 @@ const SessionRow: React.FC<{
   );
 };
 
-const ShowMoreRow: React.FC<{
+const PaginationRow: React.FC<{
   indent: number;
-  onClick: () => void;
-}> = ({ indent, onClick }) => {
+  showMore: boolean;
+  showFewer: boolean;
+  onShowMore?: () => void;
+  onShowFewer?: () => void;
+}> = ({ indent, showMore, showFewer, onShowMore, onShowFewer }) => {
   const { t } = useI18n();
+  if (!showMore && !showFewer) return null;
   return (
-    <button
-      type="button"
-      className="flex min-h-10 w-full items-center gap-2 py-1.5 pr-3 text-left text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+    <div
+      className="flex min-h-10 w-full items-center gap-3 py-1.5 pr-3 text-muted-foreground"
       style={{ paddingLeft: indent, touchAction: 'manipulation' }}
-      onClick={onClick}
     >
-      <Icon name="arrow-down-s" className="size-4" />
-      <span className="typography-micro">{t('sessions.sidebar.group.showMore')}</span>
-    </button>
-  );
-};
-
-const ShowFewerRow: React.FC<{
-  indent: number;
-  onClick: () => void;
-}> = ({ indent, onClick }) => {
-  const { t } = useI18n();
-  return (
-    <button
-      type="button"
-      className="flex min-h-10 w-full items-center gap-2 py-1.5 pr-3 text-left text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-      style={{ paddingLeft: indent, touchAction: 'manipulation' }}
-      onClick={onClick}
-    >
-      <Icon name="arrow-up-s" className="size-4" />
-      <span className="typography-micro">{t('sessions.sidebar.group.showFewer')}</span>
-    </button>
+      {showMore ? (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+          onClick={onShowMore}
+        >
+          <Icon name="arrow-down-s" className="size-4" />
+          <span className="typography-micro">{t('sessions.sidebar.group.showMore')}</span>
+        </button>
+      ) : null}
+      {showFewer ? (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+          onClick={onShowFewer}
+        >
+          <Icon name="arrow-up-s" className="size-4" />
+          <span className="typography-micro">{t('sessions.sidebar.group.showFewer')}</span>
+        </button>
+      ) : null}
+    </div>
   );
 };
 
@@ -672,7 +675,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     const visibleCount = visibleCountByBucket.get(bucketKey) ?? SESSIONS_PER_BUCKET;
     const visibleRoots = roots.slice(0, visibleCount);
     const remaining = roots.length - visibleRoots.length;
-    const canShowFewer = roots.length > SESSIONS_PER_BUCKET && remaining === 0;
+    // Show fewer whenever the rendered list is past the default page, even if
+    // more remain — so "more" and "fewer" can appear together for fold / load-more.
+    const canShowFewer = roots.length > SESSIONS_PER_BUCKET
+      && (visibleRoots.length > SESSIONS_PER_BUCKET || visibleCount > SESSIONS_PER_BUCKET);
 
     const renderNode = (session: Session, rowIndent: number): React.ReactNode => {
       const children = childrenByParent.get(session.id) ?? [];
@@ -715,12 +721,13 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     return (
       <div>
         {visibleRoots.map((session) => renderNode(session, indent))}
-        {remaining > 0 ? (
-          <ShowMoreRow indent={indent} onClick={() => showMoreBucketSessions(bucketKey, visibleRoots.length)} />
-        ) : null}
-        {canShowFewer ? (
-          <ShowFewerRow indent={indent} onClick={() => resetBucketVisibleCount(bucketKey)} />
-        ) : null}
+        <PaginationRow
+          indent={indent}
+          showMore={remaining > 0}
+          showFewer={canShowFewer}
+          onShowMore={() => showMoreBucketSessions(bucketKey, visibleRoots.length)}
+          onShowFewer={() => resetBucketVisibleCount(bucketKey)}
+        />
       </div>
     );
   };
@@ -757,8 +764,17 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const handleConfirmArchive = async (session: Session) => {
     setConfirmingArchiveSessionId(null);
     const ok = await archiveSession(session.id);
-    if (ok) toast.success(t('sessions.sidebar.session.archive.success'));
-    else toast.error(t('sessions.sidebar.session.archive.error'));
+    if (ok) {
+      showArchivedSessionsUndoToast({
+        sessionIds: [session.id],
+        message: t('sessions.sidebar.session.archive.success'),
+        undoLabel: t('sessions.sidebar.undo'),
+        settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+        undoFailedMessage: t('sessions.sidebar.session.archive.undoFailed'),
+      });
+    } else {
+      toast.error(t('sessions.sidebar.session.archive.error'));
+    }
   };
 
   const handleStartNewChat = () => {
@@ -838,7 +854,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         type="button"
         variant="default"
         size="sm"
-        className="normal-case"
         aria-label={t('mobile.sessions.newChat')}
         onClick={handleStartNewChat}
         style={{ touchAction: 'manipulation' }}

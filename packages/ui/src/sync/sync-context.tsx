@@ -552,6 +552,9 @@ export function applySessionStatusSnapshot(
     }
 
     for (const sessionId of candidateSessionIds) {
+      if (observedAt !== undefined && (state.session_status_observed_at[sessionId] ?? -Infinity) >= observedAt) {
+        continue
+      }
       const incoming = toSessionStatus(snapshot[sessionId])
 
       if (incoming && incoming.type !== "idle") {
@@ -2003,11 +2006,10 @@ export function SyncProvider(props: {
       if (polling.has(directory)) return
       polling.add(directory)
       try {
-        const before = store.getState()
         const statuses = await resyncDirectorySessionStatuses(directory, store, candidateSessionIds, "monotonic")
         if (!statuses) return
         const needsSnapshot = candidateSessionIds.some((sessionId) => (
-          needsSnapshotAfterStatusPoll(before, sessionId, statuses[sessionId])
+          needsSnapshotAfterStatusPoll(store.getState(), sessionId, statuses[sessionId])
         ))
         if (needsSnapshot) {
           triggerDirectoryResync(directory, "stale-status-resync")

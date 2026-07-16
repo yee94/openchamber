@@ -14,7 +14,6 @@ import { ArchiveAllDropdown } from '@/components/session/ArchiveAllDropdown';
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { SessionsTabTitle } from '@/components/session/SessionsTabTitle';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -27,6 +26,7 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/components/ui';
+import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
 import { PaceIndicator } from '@/components/sections/usage/PaceIndicator';
@@ -317,7 +317,15 @@ export const VSCodeLayout: React.FC = () => {
 
     const { archivedIds, failedIds } = await store.archiveSessions(allIds);
     if (archivedIds.length > 0) {
-      toast.success(t('vscodeLayout.actions.archiveAllSuccess', { count: archivedIds.length }));
+      showArchivedSessionsUndoToast({
+        sessionIds: archivedIds,
+        message: t('vscodeLayout.actions.archiveAllSuccess', { count: archivedIds.length }),
+        undoLabel: t('sessions.sidebar.undo'),
+        settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+        undoFailedMessage: archivedIds.length === 1
+          ? t('sessions.sidebar.session.archive.undoFailed')
+          : t('sessions.sidebar.bulkActions.archiveUndoFailed', { count: archivedIds.length }),
+      });
     }
     if (failedIds.length > 0) {
       toast.error(t('vscodeLayout.actions.archiveAllError', { count: failedIds.length }));
@@ -654,8 +662,6 @@ interface VSCodeHeaderProps {
 
 const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, onArchiveAll, onNewSession, onSettings, onAgentManager, showMcp, showContextUsage, showRateLimits, enableSessionSwitcher }) => {
   const { t } = useI18n();
-  const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
-  const toggleArchivedSessions = useSessionDisplayStore((state) => state.toggleArchivedSessions);
   const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
   const providers = useConfigStore((state) => state.providers);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
@@ -833,21 +839,6 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
         <SessionsTabTitle title={title} />
       )}
       <div className="min-w-0 flex-1" />
-      {onArchiveAll && (
-        <button
-          type="button"
-          onClick={toggleArchivedSessions}
-          className={cn(
-            'inline-flex h-8 w-8 items-center justify-center p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-            showArchivedSessions ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
-          )}
-          aria-label={t('sessions.sidebar.header.displayMode.showArchived')}
-          aria-pressed={showArchivedSessions}
-          title={t('sessions.sidebar.header.displayMode.showArchived')}
-        >
-          <Icon name="archive-stack" className="h-5 w-5" />
-        </button>
-      )}
       {onArchiveAll && <ArchiveAllDropdown onArchiveAll={onArchiveAll} />}
       {onNewSession && (
         <button

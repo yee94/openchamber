@@ -9,6 +9,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from '@/components/icon/Icon';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -33,11 +34,16 @@ export function SidebarDisplayModeMenu({
 }: Props): React.ReactNode {
   const { t } = useI18n();
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
-  const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
   const setDisplayMode = useSessionDisplayStore((state) => state.setDisplayMode);
-  const toggleArchivedSessions = useSessionDisplayStore((state) => state.toggleArchivedSessions);
+  const setSettingsPage = useUIStore((state) => state.setSettingsPage);
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   // VS Code forces the expanded layout, so the mode toggle is meaningless there.
   const showDisplayModeToggle = !isVSCodeRuntime();
+
+  const openSessionsSettings = React.useCallback(() => {
+    setSettingsPage('sessions');
+    setSettingsDialogOpen(true);
+  }, [setSettingsDialogOpen, setSettingsPage]);
 
   return (
     <DropdownMenu>
@@ -80,15 +86,15 @@ export function SidebarDisplayModeMenu({
               <span>{t('sessions.sidebar.header.displayMode.minimal')}</span>
               {displayMode === 'minimal' ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
           </>
         ) : null}
-        {showDisplayModeToggle ? <DropdownMenuSeparator /> : null}
         <DropdownMenuItem
-          onClick={toggleArchivedSessions}
-          className="flex items-center justify-between"
+          onClick={openSessionsSettings}
+          className="flex items-center gap-2"
         >
-          <span>{t('sessions.sidebar.header.displayMode.showArchived')}</span>
-          {showArchivedSessions ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
+          <Icon name="settings-3" className="h-4 w-4" />
+          <span>{t('sessions.sidebar.openSettings')}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={collapseAllProjects} className="flex items-center gap-2">

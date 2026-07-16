@@ -35,6 +35,16 @@ const BUSY: SessionStatus = { type: "busy" }
 
 describe("applySessionStatusSnapshot", () => {
   describe("monotonic mode (periodic poll)", () => {
+    test("keeps a newer idle state when an older busy snapshot completes", () => {
+      const store = createDirectoryStore({
+        session_status: { ses_a: { type: "idle" } },
+        session_status_observed_at: { ses_a: 20 },
+      })
+      const changed = applySessionStatusSnapshot(store, { ses_a: { type: "busy" } }, ["ses_a"], "monotonic", 10)
+      expect(changed).toBe(false)
+      expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
+      expect(store.getState().session_status_observed_at.ses_a).toBe(20)
+    })
     test("does NOT lower a busy session to idle when the snapshot omits it", () => {
       const store = createDirectoryStore({ session_status: { ses_a: BUSY } })
       const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "monotonic")
@@ -64,6 +74,27 @@ describe("applySessionStatusSnapshot", () => {
   })
 
   describe("authoritative mode (reconnect / escalated resync)", () => {
+    test("keeps a newer busy state when an older absent snapshot completes", () => {
+      const store = createDirectoryStore({
+        session_status: { ses_a: BUSY },
+        session_status_observed_at: { ses_a: 20 },
+      })
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative", 10)
+      expect(changed).toBe(false)
+      expect(store.getState().session_status.ses_a).toEqual(BUSY)
+      expect(store.getState().session_status_observed_at.ses_a).toBe(20)
+    })
+
+    test("applies a newer snapshot and records its observation time", () => {
+      const store = createDirectoryStore({
+        session_status: { ses_a: BUSY },
+        session_status_observed_at: { ses_a: 10 },
+      })
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative", 20)
+      expect(changed).toBe(true)
+      expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
+      expect(store.getState().session_status_observed_at.ses_a).toBe(20)
+    })
     test("lowers a busy session to idle when the snapshot omits it", () => {
       const store = createDirectoryStore({
         session_status: { ses_a: BUSY },

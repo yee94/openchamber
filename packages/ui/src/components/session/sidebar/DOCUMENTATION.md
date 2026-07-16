@@ -7,13 +7,16 @@
   then projects, then worktrees/archived groups, then sessions. Pinned sessions
   render only in the top section and are excluded from project groups.
   Parent/child attachment always runs on the full session list first; pinned
-  roots are omitted from project groups only after children attach. The pinned
-  section rebuilds each pinned root with `buildSessionNodeWithChildren` so
-  subagents (including newly created ones) follow under the pin and can expand.
+  roots are omitted from project groups only after children attach. Pinned rows
+  stay flat (no expand chevron, no nested subagents). Children of pinned parents
+  stay hidden only while the parent is pinned; unpinning restores the normal
+  parent/child tree under Projects.
 - The Pinned section renders every pinned session and supports header collapse.
-  Expanded project/worktree
-  groups reveal 5 sessions by default from the already-fetched 20-session page;
-  Show more reveals cached rows before loading the next 20-session page on demand.
+   Expanded project/worktree
+   groups reveal 3 sessions by default from the already-fetched 20-session page;
+   Show more reveals cached rows before loading the next 20-session page on demand.
+   Once expanded past the default page, Show fewer is available alongside Show more
+   so the list can fold back without loading every remaining row first.
 - Project/worktree Show more first reveals already-fetched rows, then fetches the next 20-session page for its own directory at the local boundary.
 - Project rows retain the persisted project-registry order while session and worktree data hydrates. A successfully sent message promotes its owning project to the top; ordinary activity and selection do not reorder the structural project tree.
 - The Projects section header no longer shows a global syncing accessory. While a
@@ -77,16 +80,18 @@
   expand chevrons align to the folder-icon column and stay hidden until row hover (unless
   always-show-actions). They render only when the session has loaded children or the
   persistent session index has confirmed that it has at least one child.
-  Recent rows stay flat: no pin glyph, no subsession chevron, and no nested children — that tree
-  chrome belongs only under Projects.
+  Pinned rows stay flat: no subsession chevron and no nested children.
 - Session rows are single-line (no inline timestamp); details (title, relative time, folder/project,
   branch) open in an immediate floating hover card (`delayDuration={0}`, top-left aligned).
 - A session title button focused by an explicit mouse click enters inline rename
   on Enter. Keyboard or programmatic focus does not arm this shortcut, and blur
   clears the mouse-focus authorization.
 - Compact relative times use `common.relative.*Compact` i18n keys.
-- Row action icons (pin, menu) use title-matched `h-3.5` glyphs with `gap-1` spacing; the title
+- Row action icons (pin, archive/delete) use title-matched `h-3.5` glyphs with `gap-1` spacing; the title
   reserves right padding on hover so icons own their space — no fade veil behind them.
+  The former three-dot overflow menu is a direct archive control; hold Shift to hard-delete
+  (archived buckets always show delete). Rename/share/folder and other actions remain on the
+  row context menu.
 - Session busy/unread status is a trailing shrink-0 marker on the right of the title
   (ContextUsage-style track+arc ring while busy, info-colored unread dot when
   idle+unseen). It owns its own gutter so long titles truncate before it, and
@@ -138,7 +143,7 @@
   prefetch neighboring/recent session messages because those background pages
   compete with the active chat during cold start and rapid navigation.
 - `hooks/useSessionGrouping.ts`: Builds grouped session structures and search text/filter helpers.
-- `sessionTree.ts`: Pure parent/child forest builders shared by project grouping and the pinned section.
+- `sessionTree.ts`: Pure parent/child forest builder for project grouping (pinned roots and their descendants omitted).
 - `hooks/useSessionSidebarSections.ts`: Composes final per-project sections and group search metadata for rendering.
 - `hooks/useProjectSessionSelection.ts`: Resolves active/current project-session selection logic and session-directory context.
 - `hooks/useGroupOrdering.ts`: Applies persisted/custom group order with stable fallback ordering; archived groups are reorderable.

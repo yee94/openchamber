@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Icon } from "@/components/icon/Icon";
 import { useUIStore } from '@/stores/useUIStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useI18n } from '@/lib/i18n';
 
@@ -28,6 +29,8 @@ export const SessionRetentionSettings: React.FC = () => {
 
   const { candidates, isRunning, runCleanup, action } = useSessionAutoCleanup({ autoRun: false });
   const pendingCount = candidates.length;
+  const archivedCount = useGlobalSessionsStore((state) => state.archivedSessions.length);
+  const setArchivedSessionsDialogOpen = useUIStore((state) => state.setArchivedSessionsDialogOpen);
 
   const handleRunCleanup = React.useCallback(async () => {
     const result = await runCleanup({ force: true });
@@ -170,6 +173,39 @@ export const SessionRetentionSettings: React.FC = () => {
           {action === 'archive'
             ? t('settings.openchamber.sessionRetention.manualCleanup.eligibleArchiveNow', { count: pendingCount })
             : t('settings.openchamber.sessionRetention.manualCleanup.eligibleDeleteNow', { count: pendingCount })}
+        </p>
+      </div>
+
+      <div
+        data-settings-item="sessions.archived"
+        className="mt-4 px-2 py-1.5 space-y-1 border-t border-border/40 pt-4"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-8">
+          <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
+            <p className="typography-meta text-foreground font-medium">
+              {t('settings.openchamber.archivedSessions.title')}
+            </p>
+            <p className="typography-meta text-muted-foreground">
+              {archivedCount === 1
+                ? t('settings.openchamber.archivedSessions.summarySingle', { count: archivedCount })
+                : t('settings.openchamber.archivedSessions.summaryPlural', { count: archivedCount })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 sm:w-fit">
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => setArchivedSessionsDialogOpen(true)}
+              className="!font-normal"
+            >
+              <Icon name="archive" className="mr-1 h-3.5 w-3.5" />
+              {t('settings.openchamber.archivedSessions.actions.manage')}
+            </Button>
+          </div>
+        </div>
+        <p className="typography-meta text-muted-foreground">
+          {t('settings.openchamber.archivedSessions.description')}
         </p>
       </div>
     </div>

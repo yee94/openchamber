@@ -3,6 +3,10 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
+import {
+  deleteSessionsWithUndo,
+  showArchivedSessionsUndoToast,
+} from '@/lib/sessionMutationUndo';
 import type { MainTab } from '@/stores/useUIStore';
 
 type DeleteSessionConfirmSetter = React.Dispatch<React.SetStateAction<{
@@ -38,8 +42,6 @@ type Args = {
   updateSessionTitle: (id: string, title: string) => Promise<void>;
   shareSession: (id: string) => Promise<Session | null>;
   unshareSession: (id: string) => Promise<Session | null>;
-  deleteSession: (id: string) => Promise<boolean>;
-  deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
   archiveSession: (id: string) => Promise<boolean>;
   archiveSessions: (ids: string[]) => Promise<{ archivedIds: string[]; failedIds: string[] }>;
   childrenMap: Map<string, Session[]>;
@@ -200,43 +202,58 @@ export const useSessionActions = (args: Args) => {
       const descendantIds = precomputed?.descendantIds
         ?? filterDescendantsForAction(collectDescendants(session.id), shouldHardDelete).map((s) => s.id);
       if (descendantIds.length === 0) {
-        const success = shouldHardDelete
-          ? await args.deleteSession(session.id)
-          : await args.archiveSession(session.id);
+        if (shouldHardDelete) {
+          deleteSessionsWithUndo({
+            sessionIds: [session.id],
+            message: t('sessions.sidebar.session.delete.success'),
+            undoLabel: t('sessions.sidebar.undo'),
+            commitFailedMessage: t('sessions.sidebar.session.delete.error'),
+          });
+          return;
+        }
+        const success = await args.archiveSession(session.id);
         if (success) {
-          toast.success(shouldHardDelete
-            ? t('sessions.sidebar.session.delete.success')
-            : t('sessions.sidebar.session.archive.success'));
+          showArchivedSessionsUndoToast({
+            sessionIds: [session.id],
+            message: t('sessions.sidebar.session.archive.success'),
+            undoLabel: t('sessions.sidebar.undo'),
+            settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+            undoFailedMessage: t('sessions.sidebar.session.archive.undoFailed'),
+          });
         } else {
-          toast.error(shouldHardDelete
-            ? t('sessions.sidebar.session.delete.error')
-            : t('sessions.sidebar.session.archive.error'));
+          toast.error(t('sessions.sidebar.session.archive.error'));
         }
         return;
       }
 
       const ids = [session.id, ...descendantIds];
       if (shouldHardDelete) {
-        // Delete root + all descendants individually. If the server
-        // cascade-deletes some children before we get to them, 404 is
-        // treated as success by deleteSession and no rollback occurs.
-        const { deletedIds, failedIds } = await args.deleteSessions(ids);
-        if (failedIds.length === 0) {
-          const totalDeleted = deletedIds.length;
-          toast.success(totalDeleted === 1
-            ? t('sessions.sidebar.bulkActions.deletedSingle', { count: totalDeleted })
-            : t('sessions.sidebar.bulkActions.deletedPlural', { count: totalDeleted }));
-        } else {
-          toast.error(t('sessions.sidebar.session.delete.error'));
-        }
+        // Delete root + all descendants with a shared undo window. Server
+        // cascade-deletes may 404 for children; commit treats that as success.
+        deleteSessionsWithUndo({
+          sessionIds: ids,
+          message: ids.length === 1
+            ? t('sessions.sidebar.bulkActions.deletedSingle', { count: ids.length })
+            : t('sessions.sidebar.bulkActions.deletedPlural', { count: ids.length }),
+          undoLabel: t('sessions.sidebar.undo'),
+          commitFailedMessage: t('sessions.sidebar.session.delete.error'),
+        });
         return;
       }
 
       const { archivedIds, failedIds } = await args.archiveSessions(ids);
       if (archivedIds.length > 0) {
-        toast.success(archivedIds.length === 1
-          ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
-          : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }));
+        showArchivedSessionsUndoToast({
+          sessionIds: archivedIds,
+          message: archivedIds.length === 1
+            ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
+            : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
+          undoLabel: t('sessions.sidebar.undo'),
+          settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+          undoFailedMessage: archivedIds.length === 1
+            ? t('sessions.sidebar.session.archive.undoFailed')
+            : t('sessions.sidebar.bulkActions.archiveUndoFailed', { count: archivedIds.length }),
+        });
       }
       if (failedIds.length > 0) {
         toast.error(failedIds.length === 1
@@ -254,7 +271,9 @@ export const useSessionActions = (args: Args) => {
         collectDescendants(session.id),
         shouldHardDelete,
       ).map((s) => s.id);
-      if (!args.showDeletionDialog || source?.skipConfirm === true) {
+      // Archive has an undo toast, so skip the confirm dialog. Hard delete
+      // still respects showDeletionDialog unless skipConfirm is set.
+      if (!shouldHardDelete || !args.showDeletionDialog || source?.skipConfirm === true) {
         void executeDeleteSession(session, source, { descendantIds: effectiveDescendantIds });
         return;
       }

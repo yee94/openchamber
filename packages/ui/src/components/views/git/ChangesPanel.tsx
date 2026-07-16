@@ -441,9 +441,9 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
             }
           >
             {isExpanded ? (
-              <Icon name="folder-open-fill" className="h-3.5 w-3.5 flex-shrink-0 text-primary/60" />
+              <Icon name="folder-open-fill" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             ) : (
-              <Icon name="folder-3-fill" className="h-3.5 w-3.5 flex-shrink-0 text-primary/60" />
+              <Icon name="folder-3-fill" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             )}
             <span className="min-w-0 flex-1 truncate typography-code text-foreground" title={directory.path}>
               {directory.name}

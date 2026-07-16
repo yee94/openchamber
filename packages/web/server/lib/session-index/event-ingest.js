@@ -41,7 +41,15 @@ export const applySessionIndexEvent = (service, event, observedAt = Date.now()) 
     return sessionID && status ? service.updateStatus(sessionID, status, observedAt) : false;
   }
 
-  if (payload.type === 'session.idle' || payload.type === 'session.error') {
+  if (payload.type === 'session.idle') {
+    const sessionID = typeof properties.sessionID === 'string' ? properties.sessionID : '';
+    if (!sessionID) return false;
+    const activityChanged = service.touchActivity(sessionID, observedAt);
+    const statusChanged = service.updateStatus(sessionID, 'idle', observedAt);
+    return activityChanged || statusChanged;
+  }
+
+  if (payload.type === 'session.error') {
     const sessionID = typeof properties.sessionID === 'string' ? properties.sessionID : '';
     return sessionID ? service.updateStatus(sessionID, 'idle', observedAt) : false;
   }

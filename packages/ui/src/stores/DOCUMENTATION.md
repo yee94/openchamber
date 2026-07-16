@@ -203,8 +203,12 @@ performs zero migration mutation. Existing v4 metadata remains authoritative.
 The v3 message queue physically partitions entries by
 `transportIdentity + directory + sessionID`. Queue item identity has three
 separate IDs: `queueItemID` identifies the ledger row, `operationID` identifies
-one send operation, and `messageID` identifies the admitted message for server
-confirmation. States progress through queued, sending, reconciling, retrying,
+one send operation, and `messageID` begins as an admission candidate. Each real
+v3 POST reads the scoped maximum `msg_` ID, rotates to a fresh ID above it, and
+persists that ID with `sending` through one barrier. Stable flights use scope,
+queue item, and operation. Ambiguous dispatch keeps its fresh ID for
+reconciliation; pre-dispatch retries and manual terminal sends rotate again. The
+v4 cutover requires this same fresh-ID barrier. States progress through queued, sending, reconciling, retrying,
 failed, and confirmed removal; persisted `sending` entries hydrate as
 `reconciling` because delivery status requires confirmation.
 

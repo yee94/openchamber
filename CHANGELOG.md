@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.19] - 2026-07-16
+
+- **Sessions:** add undoable archive and delete actions with a 10-second recovery window, plus an archived-session manager for browsing and restoring sessions.
+- **Sidebar:** simplify pinned session rows, improve project pagination with Show more/Show fewer controls, and streamline archive/delete actions across desktop and mobile.
+- **Queued messages:** improve delivery ordering, message ID generation, persistence flushing, retry handling, and reconciliation across runtime changes and directory-scoped sessions.
+- **Chat composer:** prevent duplicate pasted images, deduplicate optimistic attachments, and add expandable attachment and draft-preset layouts.
+- **Mermaid:** add smoother pan, wheel zoom, pinch zoom, copy-source, and SVG download controls.
+- **Session titles:** improve topic continuity, language selection, fork-title refreshes, and protection for manually renamed sessions.
+- **Files and workspace:** align folder icon treatments across mobile, sidebar, file, and changes views, and refine the web sidebar brand layout.
+- **Localization:** add translated copy for archived sessions, undo actions, pagination, and related settings across supported languages.
+- **Documentation:** refresh the project overview in English and Chinese with current product screenshots.
+
 ## [1.16.18] - 2026-07-16
 
 - **Startup reliability:** remove the permission-control visibility probe that queried OpenCode during composer mount, preventing startup request storms when the managed server is still initializing.

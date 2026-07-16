@@ -21,6 +21,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { refreshTrayStatusTargets } from './tray-status-refresh';
 import { resolveProjectForSessionDirectory, normalizeProjectPath } from '@/lib/projectResolution';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 import type { ProjectEntry } from '@/lib/api/types';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { toast } from '@/components/ui';
@@ -113,7 +114,7 @@ const questionLabel = (request: QuestionRequest): string => {
 };
 
 const updatedAt = (session: Session): number =>
-  session.time?.updated ?? session.time?.created ?? 0;
+  getSessionActivityUpdatedAt(session);
 
 const basenameOf = (p: string): string => {
   const norm = p.replace(/\\/g, '/').replace(/\/+$/, '');

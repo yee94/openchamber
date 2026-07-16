@@ -15,6 +15,11 @@ type MermaidPoint = {
   y: number;
 };
 
+type MermaidPinchGesture = {
+  center: MermaidPoint;
+  distance: number;
+};
+
 type MermaidViewerController = {
   zoomIn: () => void;
   zoomOut: () => void;
@@ -55,6 +60,8 @@ const clamp = (value: number, min: number, max: number): number => Math.min(max,
 const VIEW_BOX_PRECISION = 6;
 const ZOOM_STEP = 1.25;
 const WHEEL_ZOOM_BASE = 1.0015;
+const WHEEL_LINE_DELTA_PX = 16;
+const MAX_WHEEL_DELTA_PX = 1_000;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 12;
 const DRAG_CLICK_SUPPRESSION_THRESHOLD_PX = 3;
@@ -175,6 +182,39 @@ export const panMermaidViewBox = ({
   };
 };
 
+export const normalizeMermaidWheelDelta = (
+  deltaY: number,
+  deltaMode: number,
+  viewportHeight: number,
+): number => {
+  const unit = deltaMode === 1
+    ? WHEEL_LINE_DELTA_PX
+    : deltaMode === 2
+      ? (isPositiveFinite(viewportHeight) ? viewportHeight : 0)
+      : 1;
+  const delta = deltaY * unit;
+  return Number.isFinite(delta) ? clamp(delta, -MAX_WHEEL_DELTA_PX, MAX_WHEEL_DELTA_PX) : 0;
+};
+
+const getMermaidPinchGesture = (pointers: Iterable<MermaidPoint>): MermaidPinchGesture | null => {
+  let first: MermaidPoint | null = null;
+  for (const pointer of pointers) {
+    if (!first) {
+      first = pointer;
+      continue;
+    }
+
+    return {
+      center: {
+        x: (first.x + pointer.x) / 2,
+        y: (first.y + pointer.y) / 2,
+      },
+      distance: Math.hypot(pointer.x - first.x, pointer.y - first.y),
+    };
+  }
+  return null;
+};
+
 export const hasMermaidPointerDragMoved = (start: MermaidPoint, current: MermaidPoint): boolean => {
   const deltaX = current.x - start.x;
   const deltaY = current.y - start.y;
@@ -232,6 +272,47 @@ export const zoomMermaidViewBoxAtPoint = ({
   };
 };
 
+export const pinchMermaidViewBox = ({
+  currentBox,
+  contentBox,
+  viewport,
+  previousGesture,
+  gesture,
+  minScale,
+  maxScale,
+}: {
+  currentBox: MermaidViewBox;
+  contentBox: MermaidViewBox;
+  viewport: MermaidViewport;
+  previousGesture: MermaidPinchGesture;
+  gesture: MermaidPinchGesture;
+  minScale: number;
+  maxScale: number;
+}): MermaidViewBox => {
+  if (!isPositiveFinite(previousGesture.distance) || !isPositiveFinite(gesture.distance)) {
+    return currentBox;
+  }
+
+  const pannedBox = panMermaidViewBox({
+    currentBox,
+    viewport,
+    delta: {
+      x: gesture.center.x - previousGesture.center.x,
+      y: gesture.center.y - previousGesture.center.y,
+    },
+  });
+
+  return zoomMermaidViewBoxAtPoint({
+    currentBox: pannedBox,
+    contentBox,
+    viewport,
+    pointer: gesture.center,
+    zoomFactor: gesture.distance / previousGesture.distance,
+    minScale,
+    maxScale,
+  });
+};
+
 const controllerByBlock = new WeakMap<HTMLElement, MermaidViewerController>();
 
 export const getMermaidViewerController = (block: Element | null): MermaidViewerController | null => (
@@ -260,13 +341,17 @@ const getViewportSize = (viewport: HTMLElement): MermaidViewport => {
   return { width: rect.width, height: rect.height };
 };
 
-const getPointerInViewport = (event: Pick<PointerEvent | WheelEvent, 'clientX' | 'clientY'>, viewport: HTMLElement): MermaidPoint => {
-  const rect = viewport.getBoundingClientRect();
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
-  };
-};
+export const getMermaidPointerInViewport = (
+  event: Pick<PointerEvent | WheelEvent, 'clientX' | 'clientY'>,
+  viewport: Pick<DOMRect, 'left' | 'top'>,
+): MermaidPoint => ({
+  x: event.clientX - viewport.left,
+  y: event.clientY - viewport.top,
+});
+
+const getPointerInViewport = (event: Pick<PointerEvent | WheelEvent, 'clientX' | 'clientY'>, viewport: HTMLElement): MermaidPoint => (
+  getMermaidPointerInViewport(event, viewport.getBoundingClientRect())
+);
 
 const isPanExcludedTarget = (target: EventTarget | null): boolean => (
   target instanceof Element && Boolean(target.closest('button, a, [role="button"]'))
@@ -292,6 +377,9 @@ const createMermaidViewerController = (block: HTMLElement): MermaidViewerControl
   let activePointerId: number | null = null;
   let dragStartPointer: MermaidPoint | null = null;
   let lastPointer: MermaidPoint | null = null;
+  const touchPointers = new Map<number, MermaidPoint>();
+  const capturedPointerIds = new Set<number>();
+  let lastPinchGesture: MermaidPinchGesture | null = null;
   let clearClickSuppressionTimer: number | null = null;
 
   const applyViewBox = (box: MermaidViewBox): void => {
@@ -328,36 +416,118 @@ const createMermaidViewerController = (block: HTMLElement): MermaidViewerControl
   };
 
   const onWheel = (event: WheelEvent): void => {
-    if (!event.ctrlKey && !event.metaKey) {
-      return;
-    }
     event.preventDefault();
     event.stopPropagation();
-    zoomAt(getPointerInViewport(event, viewport), Math.pow(WHEEL_ZOOM_BASE, -event.deltaY));
+    const delta = normalizeMermaidWheelDelta(event.deltaY, event.deltaMode, getViewportSize(viewport).height);
+    zoomAt(getPointerInViewport(event, viewport), Math.pow(WHEEL_ZOOM_BASE, -delta));
+  };
+
+  const capturePointer = (pointerId: number): void => {
+    try {
+      viewport.setPointerCapture(pointerId);
+      capturedPointerIds.add(pointerId);
+    } catch {
+      // Pointer capture can be unavailable when the pointer has already ended.
+    }
+  };
+
+  const releasePointer = (pointerId: number): void => {
+    if (!capturedPointerIds.delete(pointerId)) {
+      return;
+    }
+    try {
+      if (viewport.hasPointerCapture(pointerId)) {
+        viewport.releasePointerCapture(pointerId);
+      }
+    } catch {
+      // Pointer capture can be unavailable when the viewport has been removed.
+    }
+  };
+
+  const clearPointerState = (): void => {
+    activePointerId = null;
+    dragStartPointer = null;
+    lastPointer = null;
+    touchPointers.clear();
+    lastPinchGesture = null;
+  };
+
+  const finishPan = (): void => {
+    clearPointerState();
+    block.removeAttribute('data-mermaid-panning');
+    if (block.hasAttribute('data-mermaid-suppress-click')) {
+      clearClickSuppressionTimer = window.setTimeout(() => {
+        block.removeAttribute('data-mermaid-suppress-click');
+        clearClickSuppressionTimer = null;
+      }, DRAG_CLICK_SUPPRESSION_CLEAR_MS);
+    }
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0 || isPanExcludedTarget(event.target)) {
+    if ((event.pointerType !== 'touch' && event.button !== 0) || isPanExcludedTarget(event.target)) {
       return;
     }
-    activePointerId = event.pointerId;
-    dragStartPointer = { x: event.clientX, y: event.clientY };
-    lastPointer = dragStartPointer;
     if (clearClickSuppressionTimer !== null) {
       window.clearTimeout(clearClickSuppressionTimer);
       clearClickSuppressionTimer = null;
     }
     block.removeAttribute('data-mermaid-suppress-click');
-    viewport.setPointerCapture?.(event.pointerId);
+    const pointer = getPointerInViewport(event, viewport);
+    capturePointer(event.pointerId);
     block.setAttribute('data-mermaid-panning', 'true');
+
+    if (event.pointerType === 'touch') {
+      touchPointers.set(event.pointerId, pointer);
+      if (touchPointers.size >= 2) {
+        activePointerId = null;
+        dragStartPointer = null;
+        lastPointer = null;
+        lastPinchGesture = getMermaidPinchGesture(touchPointers.values());
+        block.setAttribute('data-mermaid-suppress-click', 'true');
+      } else {
+        activePointerId = event.pointerId;
+        dragStartPointer = pointer;
+        lastPointer = pointer;
+      }
+    } else {
+      activePointerId = event.pointerId;
+      dragStartPointer = pointer;
+      lastPointer = pointer;
+    }
     event.preventDefault();
   };
 
   const onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch') {
+      if (!touchPointers.has(event.pointerId)) {
+        return;
+      }
+      const pointer = getPointerInViewport(event, viewport);
+      touchPointers.set(event.pointerId, pointer);
+      if (touchPointers.size >= 2) {
+        const gesture = getMermaidPinchGesture(touchPointers.values());
+        if (lastPinchGesture && gesture) {
+          applyViewBox(pinchMermaidViewBox({
+            currentBox,
+            contentBox,
+            viewport: getViewportSize(viewport),
+            previousGesture: lastPinchGesture,
+            gesture,
+            minScale: MIN_SCALE,
+            maxScale: MAX_SCALE,
+          }));
+        }
+        lastPinchGesture = gesture;
+        block.setAttribute('data-mermaid-suppress-click', 'true');
+        event.preventDefault();
+        return;
+      }
+    }
+
     if (activePointerId !== event.pointerId || !lastPointer) {
       return;
     }
-    const nextPointer = { x: event.clientX, y: event.clientY };
+    const nextPointer = getPointerInViewport(event, viewport);
     applyViewBox(panMermaidViewBox({
       currentBox,
       viewport: getViewportSize(viewport),
@@ -374,20 +544,37 @@ const createMermaidViewerController = (block: HTMLElement): MermaidViewerControl
   };
 
   const stopPan = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch' || touchPointers.has(event.pointerId)) {
+      if (!touchPointers.has(event.pointerId)) {
+        return;
+      }
+      touchPointers.delete(event.pointerId);
+      lastPinchGesture = getMermaidPinchGesture(touchPointers.values());
+      if (touchPointers.size > 0) {
+        for (const [pointerId, pointer] of touchPointers) {
+          activePointerId = pointerId;
+          dragStartPointer = pointer;
+          lastPointer = pointer;
+          break;
+        }
+        if (touchPointers.size >= 2) {
+          activePointerId = null;
+          dragStartPointer = null;
+          lastPointer = null;
+        }
+        releasePointer(event.pointerId);
+        return;
+      }
+      finishPan();
+      releasePointer(event.pointerId);
+      return;
+    }
+
     if (activePointerId !== event.pointerId) {
       return;
     }
-    viewport.releasePointerCapture?.(event.pointerId);
-    activePointerId = null;
-    dragStartPointer = null;
-    lastPointer = null;
-    block.removeAttribute('data-mermaid-panning');
-    if (block.hasAttribute('data-mermaid-suppress-click')) {
-      clearClickSuppressionTimer = window.setTimeout(() => {
-        block.removeAttribute('data-mermaid-suppress-click');
-        clearClickSuppressionTimer = null;
-      }, DRAG_CLICK_SUPPRESSION_CLEAR_MS);
-    }
+    finishPan();
+    releasePointer(event.pointerId);
   };
 
   const onResize = (): void => {
@@ -399,6 +586,7 @@ const createMermaidViewerController = (block: HTMLElement): MermaidViewerControl
   viewport.addEventListener('pointermove', onPointerMove);
   viewport.addEventListener('pointerup', stopPan);
   viewport.addEventListener('pointercancel', stopPan);
+  viewport.addEventListener('lostpointercapture', stopPan);
   window.addEventListener('resize', onResize);
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
   observer?.observe(viewport);
@@ -414,11 +602,16 @@ const createMermaidViewerController = (block: HTMLElement): MermaidViewerControl
       viewport.removeEventListener('pointermove', onPointerMove);
       viewport.removeEventListener('pointerup', stopPan);
       viewport.removeEventListener('pointercancel', stopPan);
+      viewport.removeEventListener('lostpointercapture', stopPan);
       window.removeEventListener('resize', onResize);
       observer?.disconnect();
       if (clearClickSuppressionTimer !== null) {
         window.clearTimeout(clearClickSuppressionTimer);
       }
+      for (const pointerId of Array.from(capturedPointerIds)) {
+        releasePointer(pointerId);
+      }
+      clearPointerState();
       block.removeAttribute('data-mermaid-panning');
       block.removeAttribute('data-mermaid-suppress-click');
       controllerByBlock.delete(block);

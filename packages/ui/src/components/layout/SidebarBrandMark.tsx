@@ -1,9 +1,11 @@
 import React from 'react';
 import { loadBrandDisplayFont } from '@/lib/fontLoader';
 import { useSidebarBrandStore } from '@/stores/useSidebarBrandStore';
+import { cn } from '@/lib/utils';
 
 /**
- * Left-sidebar wordmark, rendered above the Recent section.
+ * Left-sidebar wordmark, rendered in the Web header row or above the Recent
+ * section where the runtime keeps its existing sidebar chrome.
  *
  * Dual-tone like Codex branding: leading words use the surface foreground and
  * the final word uses the primary accent. Set in Syne (geometric display face)
@@ -16,7 +18,11 @@ import { useSidebarBrandStore } from '@/stores/useSidebarBrandStore';
  * An empty (whitespace-only) config hides the mark entirely — no default
  * fallback — so that logo slot stays vacant.
  */
-export const SidebarBrandMark: React.FC = () => {
+interface SidebarBrandMarkProps {
+  className?: string;
+}
+
+export const SidebarBrandMark: React.FC<SidebarBrandMarkProps> = ({ className }) => {
   const sidebarBrandName = useSidebarBrandStore((state) => state.sidebarBrandName);
 
   React.useEffect(() => {
@@ -33,7 +39,7 @@ export const SidebarBrandMark: React.FC = () => {
   const highlightedWord = brandWords.at(-1);
 
   return (
-    <div className="px-2 pb-2 pt-1">
+    <div className={cn('px-2 pb-2 pt-1', className)}>
       <span
         aria-label={brandWords.join(' ')}
         className="inline-flex min-w-0 items-baseline gap-[0.28em] truncate"

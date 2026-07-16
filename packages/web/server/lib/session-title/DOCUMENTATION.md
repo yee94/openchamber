@@ -38,13 +38,21 @@ minutes per session.
    - Set `metadata.openchamber.titleRefresh.isGenerating` while the small
      model call is active so connected clients animate the existing sidebar
      title as a loading state.
-   - Call `generateSmallModelText` with the latest few turns plus an earlier
-     subject anchor (first real user message when it fell outside the latest
-     window) and the current title as a continuity hint. The prompt asks the
-     model to name the main subject of the work, keep that subject across
-     wrap-up turns, and only switch when the user clearly started a new topic.
-     Restricted to the session's own provider unless the user explicitly
-     configured a small model.
+    - Call `generateSmallModelText` with a **bounded** transcript — never the
+      full session history:
+      - Fetch only the latest ~24 messages (`limit` on OpenCode message API).
+      - Keep the latest 10 user/assistant turns after the most recent
+        compaction part (if any); content before compaction is ignored.
+      - Optionally prepend an earlier subject anchor (first real user message
+        still inside that post-compaction window when it fell outside the
+        latest turns).
+      - Hard-cap the final transcript under 100K characters (prefer latest
+        content when over budget).
+      - Pass the current title as a continuity hint. The prompt asks the model
+        to name the main subject of the work, keep that subject across wrap-up
+        turns, and only switch when the user clearly started a new topic.
+        Restricted to the session's own provider unless the user explicitly
+        configured a small model.
 4. Clean the model output to a single short line, then PATCH `title` and
    `metadata.openchamber.titleRefresh` (`lastAutoTitle`, `forMessageID`,
    `generatedAt`) from a fresh session read so concurrent metadata writes

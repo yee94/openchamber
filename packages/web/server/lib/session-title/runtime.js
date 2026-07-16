@@ -24,8 +24,13 @@ const OPENCHAMBER_SETTINGS_FILE = path.join(
 export const TITLE_QUIET_MS = 15_000;
 /** At most one auto title refresh per session in this window. */
 export const TITLE_THROTTLE_MS = 5 * 60_000;
-const TRANSCRIPT_MESSAGE_LIMIT = 16;
+/** Fetch only a short recent window — never the full session. */
+const TRANSCRIPT_MESSAGE_LIMIT = 24;
+/** Latest user/assistant turns used for title generation. */
+const TRANSCRIPT_MAX_TURNS = 10;
 const TRANSCRIPT_PART_CHAR_LIMIT = 4_000;
+/** Hard cap so long sessions / huge parts stay under small-model budget. */
+const TRANSCRIPT_MAX_CHARS = 100_000;
 const TITLE_CHAR_LIMIT = 80;
 const FETCH_TIMEOUT_MS = 5_000;
 
@@ -211,6 +216,29 @@ const isRealUserMessage = (message) => {
   return !parts.every((part) => part && typeof part === 'object' && part.synthetic === true);
 };
 
+/** Compaction marks a hard history boundary — title context stops there. */
+const messageHasCompaction = (message) => {
+  const parts = Array.isArray(message?.parts) ? message.parts : [];
+  return parts.some((part) => part && typeof part === 'object' && part.type === 'compaction');
+};
+
+/** Keep only messages after the most recent compaction part (if any). */
+const scopeMessagesAfterCompaction = (messages) => {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messageHasCompaction(messages[i])) {
+      return messages.slice(i + 1);
+    }
+  }
+  return messages;
+};
+
+const clampTranscriptChars = (transcript, maxChars = TRANSCRIPT_MAX_CHARS) => {
+  if (typeof transcript !== 'string' || transcript.length <= maxChars) return transcript || '';
+  // Prefer the latest content when over budget.
+  return `…\n${transcript.slice(-(maxChars - 2))}`;
+};
+
 const cleanGeneratedTitle = (raw) => {
   if (typeof raw !== 'string') return '';
   const cleaned = raw
@@ -246,14 +274,22 @@ const readTitleRefreshMeta = (session) => {
 
 /**
  * Build a short transcript for title generation.
- * Latest turns show what just happened; when the window does not already
- * include the first real user message, prepend that earlier subject anchor
- * so wrap-up turns (commit/push/etc.) do not erase the feature being done.
+ * Uses only the latest N turns (default 10) from a bounded recent fetch —
+ * never the full session. Stops at the most recent compaction boundary.
+ * When the latest window does not include the first real user message after
+ * that boundary, prepend that subject anchor so wrap-up turns do not erase
+ * the feature being done. Final transcript is hard-capped under 100K chars.
  */
-export const buildLatestTitleTranscript = (messages, { maxTurns = 4 } = {}) => {
+export const buildLatestTitleTranscript = (
+  messages,
+  { maxTurns = TRANSCRIPT_MAX_TURNS, maxChars = TRANSCRIPT_MAX_CHARS } = {},
+) => {
+  const scoped = scopeMessagesAfterCompaction(messages);
   const turns = [];
-  for (let i = messages.length - 1; i >= 0 && turns.length < maxTurns * 2; i -= 1) {
-    const message = messages[i];
+  for (let i = scoped.length - 1; i >= 0 && turns.length < maxTurns * 2; i -= 1) {
+    const message = scoped[i];
+    // Defensive: never walk past a compaction part even if scoping missed one.
+    if (messageHasCompaction(message)) break;
     const role = message?.info?.role;
     if (role !== 'user' && role !== 'assistant') continue;
     if (role === 'user' && !isRealUserMessage(message)) continue;
@@ -263,7 +299,7 @@ export const buildLatestTitleTranscript = (messages, { maxTurns = 4 } = {}) => {
   }
   if (turns.length === 0) return { transcript: '', lastAssistantId: '', realUserCount: 0 };
 
-  const realUserCount = messages.filter(isRealUserMessage).length;
+  const realUserCount = scoped.filter(isRealUserMessage).length;
   let lastAssistantId = '';
   for (let i = turns.length - 1; i >= 0; i -= 1) {
     if (turns[i].role === 'assistant') {
@@ -272,11 +308,12 @@ export const buildLatestTitleTranscript = (messages, { maxTurns = 4 } = {}) => {
     }
   }
 
-  // First real user turn as subject anchor when it fell outside the latest window.
+  // First real user turn after compaction as subject anchor when it fell
+  // outside the latest window (still within the compact-scoped slice only).
   let subjectAnchor = '';
   const latestIds = new Set(turns.map((turn) => turn.id).filter(Boolean));
-  for (let i = 0; i < messages.length; i += 1) {
-    const message = messages[i];
+  for (let i = 0; i < scoped.length; i += 1) {
+    const message = scoped[i];
     if (!isRealUserMessage(message)) continue;
     const text = messagePartsToText(message);
     if (!text) continue;
@@ -289,9 +326,12 @@ export const buildLatestTitleTranscript = (messages, { maxTurns = 4 } = {}) => {
   const latestTranscript = turns
     .map((turn) => `${turn.role === 'user' ? 'User' : 'Assistant'}:\n${turn.text}`)
     .join('\n\n');
-  const transcript = subjectAnchor
-    ? `Earlier subject anchor:\nUser:\n${subjectAnchor}\n\nLatest turns:\n${latestTranscript}`
-    : latestTranscript;
+  const transcript = clampTranscriptChars(
+    subjectAnchor
+      ? `Earlier subject anchor:\nUser:\n${subjectAnchor}\n\nLatest turns:\n${latestTranscript}`
+      : latestTranscript,
+    maxChars,
+  );
   // Language sample from real user text only — transcript wrappers are English labels.
   const latestUserText = [...turns].reverse().find((turn) => turn.role === 'user')?.text || '';
   const languageSample = (latestUserText || subjectAnchor || transcript)

@@ -585,11 +585,15 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   }), [allFoldersForGroup, collapsedFolderIds, hasSessionSearchQuery, visibleSessions]);
   const hasRemoteSessions = sessionPagination?.hasMore === true;
   const isLoadingRemoteSessions = sessionPagination?.loadingMore === true;
+  // At the default page only More is offered. After the user (or navigation
+  // auto-reveal) expands past that page, Fewer stays available even when
+  // remote hasMore is still true — so More and Fewer can appear together.
+  const isAtDefaultPage = visibleSessions.length <= maxVisible
+    && (visibleSessionCount === undefined || visibleSessionCount <= maxVisible);
   const canShowLess = !group.isArchivedBucket
     && !hasSessionSearchQuery
     && totalSessions > maxVisible
-    && remainingCount === 0
-    && !hasRemoteSessions;
+    && !isAtDefaultPage;
 
   // Virtualize large groups. Archived buckets grow into the hundreds or
   // thousands of rows; active/worktree groups can also hit 80+ sessions
@@ -1100,30 +1104,34 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
             : t('sessions.sidebar.group.empty.noSessionsInWorkspace')}
         </div>
       ) : null}
-      {remainingCount > 0 || hasRemoteSessions ? (
-        <button
-          type="button"
-          onClick={() => showMoreGroupSessions(groupKey, visibleSessions.length, totalSessions)}
-          disabled={isLoadingRemoteSessions}
-          className={cn(
-            SIDEBAR_MUTED_HINT_CLASS,
-            'hover:text-foreground hover:underline disabled:pointer-events-none',
-            isLoadingRemoteSessions && 'animate-pulse',
-          )}
+      {(remainingCount > 0 || hasRemoteSessions || canShowLess) ? (
+        <div
+          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'flex w-full items-center gap-3')}
           style={{ paddingLeft: getSidebarRowPaddingLeft(contentDepth) }}
         >
-          {t('sessions.sidebar.group.showMore')}
-        </button>
-      ) : null}
-      {canShowLess ? (
-        <button
-          type="button"
-          onClick={() => resetGroupSessionLimit(groupKey)}
-          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'hover:text-foreground hover:underline')}
-          style={{ paddingLeft: getSidebarRowPaddingLeft(contentDepth) }}
-        >
-          {t('sessions.sidebar.group.showFewer')}
-        </button>
+          {remainingCount > 0 || hasRemoteSessions ? (
+            <button
+              type="button"
+              onClick={() => showMoreGroupSessions(groupKey, visibleSessions.length, totalSessions)}
+              disabled={isLoadingRemoteSessions}
+              className={cn(
+                'text-left hover:text-foreground hover:underline disabled:pointer-events-none',
+                isLoadingRemoteSessions && 'animate-pulse',
+              )}
+            >
+              {t('sessions.sidebar.group.showMore')}
+            </button>
+          ) : null}
+          {canShowLess ? (
+            <button
+              type="button"
+              onClick={() => resetGroupSessionLimit(groupKey)}
+              className="text-left hover:text-foreground hover:underline"
+            >
+              {t('sessions.sidebar.group.showFewer')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </SessionFolderDndScope>
   );
