@@ -14,6 +14,19 @@ import { isVSCodeRuntime } from "@/lib/desktop";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from "@/lib/i18n";
+import {
+  statusBarPopoverClassName,
+  statusBarPopoverHeaderClassName,
+  statusBarPopoverHeaderMetaClassName,
+  statusBarPopoverHeaderTitleClassName,
+  statusBarPopoverListClassName,
+  statusBarPopoverRowClassName,
+  statusBarPopoverStyle,
+  statusBarTriggerClassName,
+  statusBarTriggerIconClassName,
+  statusBarTriggerLabelClassName,
+  statusBarTriggerMetaClassName,
+} from "./statusBarPopover";
 
 const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "status-row" };
 
@@ -64,7 +77,8 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) 
       ref={activeRef}
       aria-current={isActive ? "step" : undefined}
       className={cn(
-        "group relative grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-2.5",
+        "group relative grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5",
+        statusBarPopoverRowClassName,
         isActive && "bg-[var(--surface-muted)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-[var(--status-info)]",
       )}
     >
@@ -77,7 +91,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) 
         </TooltipContent>
       </Tooltip>
       <span className="min-w-0 flex-1">
-        <span className={cn("block text-xs leading-4", config.textClassName)}>{todo.content}</span>
+        <span className={cn("block", config.textClassName)}>{todo.content}</span>
       </span>
     </li>
   );
@@ -228,33 +242,26 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     <button
       type="button"
       onClick={toggleExpanded}
-      className="flex items-center gap-1 flex-shrink-0 text-muted-foreground"
+      className={cn(statusBarTriggerClassName, "shrink-0")}
       aria-label={todoSummaryLabel}
       title={todoSummaryLabel}
     >
+      <Icon name="list-check-3" className={statusBarTriggerIconClassName} />
       {/* Desktop: show task text; Mobile/VSCode: just "Tasks" */}
       {!isCompact && activeTodo ? (
-        <span className="status-row__active-todo typography-ui-label text-foreground truncate max-w-[200px]">
+        <span className={cn("status-row__active-todo max-w-[200px]", statusBarTriggerLabelClassName)}>
           {activeTodo.content}
         </span>
       ) : (
-        <span className="typography-ui-label">{t('chat.statusRow.tasksTitle')}</span>
+        <span className="text-xs leading-4 md:text-[0.8125rem] md:leading-5">{t('chat.statusRow.tasksTitle')}</span>
       )}
-      <span className="typography-meta flex items-center gap-1 tabular-nums" aria-hidden="true">
-        <span className="flex items-center gap-0.5">
-          <Icon name="record-circle" className="h-3.5 w-3.5 text-[var(--status-info)]" />
-          {statusSummary.active}
-        </span>
-        <span>·</span>
-        <span className="flex items-center gap-0.5">
-          <Icon name="time" className="h-3.5 w-3.5" />
-          {statusSummary.left}
-        </span>
+      <span className={statusBarTriggerMetaClassName} aria-hidden="true">
+        {progress.completed}/{progress.total}
       </span>
       {isExpanded ? (
-        <Icon name="arrow-up-s" className="h-3.5 w-3.5" />
+        <Icon name="arrow-up-s" className={statusBarTriggerIconClassName} />
       ) : (
-        <Icon name="arrow-down-s" className="h-3.5 w-3.5" />
+        <Icon name="arrow-down-s" className={statusBarTriggerIconClassName} />
       )}
     </button>
   ) : null;
@@ -312,24 +319,18 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           {/* Popover dropdown */}
           {isExpanded && hasTodoContent && (
             <div
-              style={{
-                maxWidth: "min(28rem, calc(100cqw - 4ch))",
-                backgroundColor: "var(--surface-elevated)",
-                color: "var(--surface-elevated-foreground)",
-              }}
+              style={statusBarPopoverStyle}
               className={cn(
+                statusBarPopoverClassName,
                 "absolute right-0 bottom-full mb-1 z-50",
-                "w-[min(30rem,calc(100cqw-1rem))] min-w-[280px] overflow-hidden rounded-xl",
-                "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.8),inset_0_0_0_1px_rgba(0,0,0,0.04),0_0_0_1px_rgba(0,0,0,0.10),0_1px_2px_-0.5px_rgba(0,0,0,0.08),0_4px_8px_-2px_rgba(0,0,0,0.08),0_12px_20px_-4px_rgba(0,0,0,0.08)]",
-                "dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20),0_6px_6px_-3px_rgba(0,0,0,0.16)]",
                 "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
                 "duration-150"
               )}
             >
               {/* Header */}
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--surface-subtle)] px-3 py-2.5">
-                <span className="typography-ui-label font-medium text-foreground">{t('chat.statusRow.tasksTitle')}</span>
-                <span className="typography-meta tabular-nums text-muted-foreground">
+              <div className={statusBarPopoverHeaderClassName}>
+                <span className={statusBarPopoverHeaderTitleClassName}>{t('chat.statusRow.tasksTitle')}</span>
+                <span className={statusBarPopoverHeaderMetaClassName}>
                   {progress.completed}/{progress.total}
                 </span>
               </div>
@@ -337,7 +338,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               {/* Todo list */}
               <ul
                 ref={todoListRef}
-                className="m-0 max-h-[min(22rem,50vh)] list-none divide-y divide-[var(--surface-subtle)] overflow-y-auto p-0"
+                className={statusBarPopoverListClassName}
               >
                 {visibleTodos.map((todo, index) => (
                   <TodoItemRow
