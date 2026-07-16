@@ -2,28 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.16.16] - 2026-07-16
+## [1.16.17] - 2026-07-16
 
 - **Chat:** new session send now shows a full-screen establishing page immediately (like fork), instead of keeping the draft composer visible during combined create+prompt.
 - **Fork:** cold-start fork no longer fails silently — source sessions are resolved from the global session index or `session.get` when the directory child store hasn't hydrated yet.
 - **Keyboard:** first Esc now shows "Press Esc again to abort" in the status row; the abort prompt is visible on every layout including expanded input and desktop.
 - **Keyboard:** `Ctrl+C` (customizable) clears the composer and any queued messages without interfering with text selection copy.
-- **Compact:** `Ctrl+X C` compact command no longer fails with a `normalizeCandidatePath` error after the unbound-method regression fix.
+- **Compact:** `Ctrl+X C` compact command no longer fixes a `normalizeCandidatePath` unbound-method error.
 - **Sessions:** workspace panels (right sidebar + context panel) now restore their per-session state when switching conversations.
 - **Sessions:** improved sidebar session tree deduplication and pinned session handling.
-
-## [1.16.15] - 2026-07-16
-
-- **Sessions:** workspace panels (right sidebar + context panel) now follow the active session — hiding when leaving, restoring when returning, with a capped in-memory cache.
-- **Sidebar:** refactored session tree construction and grouping for correct pinned/child/root deduplication.
-
-## [1.16.14] - 2026-07-16
-
-- **Chat:** new session send now shows a full-screen establishing page immediately (like fork), instead of keeping the draft composer visible during combined create+prompt.
-- **Fork:** cold-start fork no longer fails silently — source sessions are resolved from the global session index or `session.get` when the directory child store hasn't hydrated yet.
-- **Keyboard:** first Esc now shows "Press Esc again to abort" in the status row; the abort prompt is visible on every layout including expanded input and desktop.
-- **Keyboard:** `Ctrl+C` (customizable) clears the composer and any queued messages without interfering with text selection copy.
-- **Compact:** `Ctrl+X C` compact command no longer fails with a `normalizeCandidatePath` error after the unbound-method regression fix.
+- **Status bar:** moved changed files and pending changes into a unified popover, cleaning up the status row layout.
 
 ## [1.16.13] - 2026-07-16
 

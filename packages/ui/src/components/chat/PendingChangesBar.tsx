@@ -14,6 +14,12 @@ import {
 } from './changedFiles';
 import { ChangedFilesList } from './ChangedFilesList';
 import { changedFilesPopoverClassName, changedFilesPopoverStyle } from './changedFilesPopover';
+import {
+    statusBarTriggerClassName,
+    statusBarTriggerIconClassName,
+    statusBarTriggerLabelClassName,
+    statusBarTriggerMetaClassName,
+} from './statusBarPopover';
 import { useI18n } from '@/lib/i18n';
 
 export const PendingChangesBar: React.FC = React.memo(() => {
@@ -102,31 +108,28 @@ export const PendingChangesBar: React.FC = React.memo(() => {
         <div className="relative" ref={popoverRef}>
             <button
                 type="button"
-                className="flex min-w-0 max-w-full items-center gap-1 text-left text-muted-foreground"
+                className={cn(statusBarTriggerClassName, 'max-w-full text-left')}
                 onClick={() => setIsExpanded((value) => !value)}
                 aria-expanded={isExpanded}
             >
-                <Icon name="file-edit" className="h-3.5 w-3.5 flex-shrink-0 text-[var(--status-warning)]" />
-                <span className="min-w-0 typography-ui-label text-foreground flex-shrink-0">{labelHead}</span>
-                <span className="status-row__changed-label min-w-0 typography-ui-label text-foreground truncate">
+                <Icon name="file-edit" className={statusBarTriggerIconClassName} />
+                <span className={cn(statusBarTriggerLabelClassName, 'shrink-0')}>{labelHead}</span>
+                <span className={cn('status-row__changed-label', statusBarTriggerLabelClassName)}>
                     {t('chat.pendingChanges.changedInWorkspace')}
                 </span>
-                <span className="text-[0.75rem] tabular-nums inline-flex items-baseline gap-1 flex-shrink-0">
+                <span className={cn(statusBarTriggerMetaClassName, 'items-baseline gap-0.5')}>
                     {totalAdded > 0 ? <span style={{ color: 'var(--status-success)' }}>+{totalAdded}</span> : null}
                     {totalRemoved > 0 ? <span style={{ color: 'var(--status-error)' }}>-{totalRemoved}</span> : null}
                 </span>
                 {isExpanded ? (
-                    <Icon name="arrow-up-s" className="h-3.5 w-3.5 flex-shrink-0" />
+                    <Icon name="arrow-up-s" className={statusBarTriggerIconClassName} />
                 ) : (
-                    <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0" />
+                    <Icon name="arrow-down-s" className={statusBarTriggerIconClassName} />
                 )}
             </button>
             {isExpanded && (
                 <div
-                    style={{
-                        ...changedFilesPopoverStyle,
-                        maxWidth: 'min(28rem, calc(100cqw - 4ch))',
-                    }}
+                    style={changedFilesPopoverStyle}
                     className={cn(
                         changedFilesPopoverClassName,
                         "absolute left-0 bottom-full mb-1 z-50",
