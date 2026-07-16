@@ -143,6 +143,7 @@ export const iconSpriteData = {
   "key": `<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4" /> <path d="m21 2-9.6 9.6" /> <circle cx="7.5" cy="15.5" r="5.5" />`,
   "layout-column": `<rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M12 3v18" />`,
   "layout-left": `<rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M9 3v18" />`,
+  "layout-left-rounded": `<rect width="18" height="18" x="3" y="3" rx="4" /><path d="M9.5 3v18" />`,
   "layout-right": `<rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M15 3v18" />`,
   "leaf": `<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" /> <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />`,
   "lightbulb": `<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /> <path d="M9 18h6" /> <path d="M10 22h4" />`,

@@ -424,17 +424,26 @@ export const useKeyboardShortcuts = () => {
 
       if (eventMatchesShortcut(e, combo('close_context_panel_tab'))) {
         const directory = resolveEffectiveDirectory();
-        const activeTabId = directory
-          ? useTerminalStore.getState().getDirectoryState(directory)?.activeTabId
-          : null;
+        const directoryState = directory
+          ? useTerminalStore.getState().getDirectoryState(directory)
+          : undefined;
+        const activeTabId = directoryState?.activeTabId ?? null;
 
-        if (!directory || !activeTabId) {
+        if (!directory || !directoryState || !activeTabId) {
           return;
         }
 
         e.preventDefault();
         e.stopPropagation();
         void useTerminalStore.getState().closeTab(directory, activeTabId);
+
+        if (directoryState.tabs.length === 1) {
+          const uiState = useUIStore.getState();
+          uiState.setBottomTerminalOpen(false);
+          if (uiState.activeMainTab === 'terminal') {
+            uiState.setActiveMainTab('chat');
+          }
+        }
         return;
       }
 

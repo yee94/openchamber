@@ -2454,6 +2454,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       <SidebarProjectsList
         topContent={topContent}
+        hasLeadingSection={pinnedItems.length > 0}
         headerAccessory={pinnedItems.length === 0 ? displayModeMenu : null}
         sectionsForRender={sectionsForSidebarRender}
         projectSections={projectSections}

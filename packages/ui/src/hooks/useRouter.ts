@@ -172,6 +172,7 @@ export function useRouter(): void {
 
       const state = getCurrentAppState();
       updateBrowserURL(state, options);
+      setRoute(parseRoute());
     },
     [isVSCode, isEmbeddedChat, getCurrentAppState]
   );

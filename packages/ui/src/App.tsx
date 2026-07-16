@@ -18,7 +18,7 @@ import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
-import { isDesktopLocalOriginActive, isDesktopShell, restartDesktopApp, invokeDesktop } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isPackagedElectronShell, restartDesktopApp, invokeDesktop } from '@/lib/desktop';
 import {
   getInjectedBootOutcome,
   getBootInjectionStatus,
@@ -63,6 +63,7 @@ import { OpenCodeUpdateToast } from '@/components/update/OpenCodeUpdateToast';
 import { StartupSessionSyncOverlay } from '@/components/session/StartupSessionSyncOverlay';
 import { SessionStartupCoordinator } from '@/components/session/SessionStartupCoordinator';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 import { markStartupTrace, startupTraceEnabled } from '@/lib/startupTrace';
 import { releaseSessionStartupBarrier, waitForSessionStartupBarrier } from '@/lib/session-startup-barrier';
 
@@ -237,6 +238,7 @@ function App({ apis }: AppProps) {
   const [initRetryEpoch, setInitRetryEpoch] = React.useState(0);
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
   const [manualInitRetrying, setManualInitRetrying] = React.useState(false);
+  const startupUpdateCheckStartedRef = React.useRef(false);
   const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled);
   const mobileKeyboardMode = useUIStore((state) => state.mobileKeyboardMode);
   const isDesktopRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -777,6 +779,15 @@ function App({ apis }: AppProps) {
   }, []);
 
   useMenuActions(handleToggleMemoryDebug);
+
+  React.useEffect(() => {
+    if (!isInitialized || !isPackagedElectronShell() || startupUpdateCheckStartedRef.current) {
+      return;
+    }
+
+    startupUpdateCheckStartedRef.current = true;
+    void useUpdateStore.getState().checkForUpdates();
+  }, [isInitialized]);
 
   useTraySync();
 

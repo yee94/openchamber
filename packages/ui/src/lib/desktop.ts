@@ -232,6 +232,7 @@ type DesktopBridgeGlobal = {
 
 type ElectronRuntimeGlobal = {
   runtime?: string;
+  packaged?: boolean;
   macVibrancy?: boolean;
   macVibrancySupported?: boolean;
 };
@@ -247,6 +248,10 @@ const getDesktopBridge = (): DesktopBridgeGlobal | null => {
 };
 
 export const isElectronShell = (): boolean => getElectronRuntime()?.runtime === 'electron';
+
+export const isPackagedElectronShell = (): boolean => {
+  return isElectronShell() && getElectronRuntime()?.packaged === true;
+};
 
 export const getElectronPathForFile = (file: File): string | null => {
   if (!isElectronShell()) return null;

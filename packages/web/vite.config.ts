@@ -12,7 +12,7 @@ const pwaDevEnabled = process.env.OPENCHAMBER_DISABLE_PWA_DEV !== '1';
 const reactScanToggle = (process.env.VITE_ENABLE_REACT_SCAN ?? '').toLowerCase();
 const enableReactScan = reactScanToggle === '1' || reactScanToggle === 'true' || reactScanToggle === 'on' || reactScanToggle === 'yes';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: path.resolve(__dirname, '.'),
   plugins: [
     react({
@@ -131,4 +131,17 @@ export default defineConfig({
       },
     },
   },
-});
+  // Preserve warnings and errors in production while dropping renderer-only
+  // diagnostic logs and their ordinary object payloads from shipped bundles.
+  esbuild: command === 'build' ? {
+    pure: [
+      'console.debug',
+      'console.info',
+      'console.log',
+      'console.trace',
+      'console.group',
+      'console.groupCollapsed',
+      'console.groupEnd',
+    ],
+  } : undefined,
+}));

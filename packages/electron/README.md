@@ -94,7 +94,7 @@ Packaged Desktop builds include the official OpenCode CLI that matches the pinne
 
 ## Releases and automatic updates
 
-Packaged desktop apps read updates from GitHub Releases in `yee94/openchamber`. The publish target in `package.json` and the runtime feed in `main.mjs` must continue to point to the same repository.
+Packaged desktop apps read updates from GitHub Releases in `yee94/openchamber`. Each cold startup checks once, and users can check again from the app menu, sidebar, or Settings. The publish target in `package.json` and the runtime feed in `main.mjs` must continue to point to the same repository.
 
 The `Release` GitHub Actions workflow runs for `v*` tags or by manual dispatch. Before starting a release:
 
@@ -153,7 +153,7 @@ Add new native capabilities in this order:
 
 ## Logs And Data
 
-Electron uses `electron-log`. In development, console logs are also visible in the terminal. In packaged apps, logs are written through the platform log path for the `OpenChamber` app name.
+Electron uses `electron-log`. In development, console logs are also visible in the terminal. Packaged apps route `console.warn` and `console.error`, plus explicit `electron-log` events, through the platform log path for the `OpenChamber` app name; ordinary `console.debug`, `console.info`, and `console.log` calls are no-ops.
 
 `~/Library/Logs/OpenChamber/main.log` records `[queue-debug]` entries with queue delivery IDs and status metadata only.
 

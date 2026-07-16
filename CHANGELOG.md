@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.21] - 2026-07-16
+
+- **Sessions:** add undoable archive and delete actions with a recovery window, plus archived-session browsing and restore controls.
+- **Sidebar:** refine pinned sessions, project pagination, archive/delete actions, and modifier shortcut hints across desktop and mobile.
+- **Chat and queues:** improve queued-message delivery, attachment deduplication, draft presets, and session-title continuity.
+- **Mermaid:** add smoother pan and zoom controls, source copying, and SVG download support.
+- **Reliability:** reduce startup and background request storms, improve runtime recovery, and pause hidden or inactive polling work.
+
 ## [1.16.20] - 2026-07-16
 
 - **Sidebar:** refine Mod+1…9 shortcut hints into compact inline chips that replace row actions while the modifier is held.

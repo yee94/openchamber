@@ -53,14 +53,14 @@ git push origin "v$VERSION"
 
 `release.yml` 在 `v*` tag push 后创建 Draft Release、构建桌面端和移动端、上传产物，再将 Draft Release 发布为正式 Release。Android 流程会生成签名 APK/AAB，并将两类文件上传到对应 GitHub Release。
 
-手动运行 `release.yml` 时，选择 `release_scope: all` 才会执行 `mobile-release`：
+手动运行 `release.yml` 时，提供版本号；该 workflow 会执行桌面端和 Android 发布。`dry_run=true` 会保留 Draft Release，用于验证构建和产物：
 
 ```bash
 gh workflow run release.yml \
   --repo yee94/openchamber \
   --ref main \
   -f version="$VERSION" \
-  -f release_scope=all
+  -f dry_run=true
 ```
 
 Android 构建依赖以下 GitHub Secrets：
@@ -100,7 +100,7 @@ Android 客户端通过 `https://api.github.com/repos/yee94/openchamber/releases
 
 补充匹配版本号的 `CHANGELOG.md` 段落，提交并推送到 `main`，然后手动重跑 `release.yml`。该 workflow 会在当前 `main` 提交上构建同版本 Release。
 
-**手动重跑命令**（不带 `release_scope`，当前 workflow 只接受 `version` 一个 input）：
+**手动重跑命令**（当前 workflow 接受必填 `version` 与可选 `dry_run`）：
 
 ```bash
 gh workflow run release.yml \

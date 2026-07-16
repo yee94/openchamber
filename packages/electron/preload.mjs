@@ -18,6 +18,7 @@ const runtimeHeadersRaw = readArgValue('--openchamber-runtime-headers');
 const homeDirectory = readArgValue('--openchamber-home');
 const macosMajorRaw = readArgValue('--openchamber-macos-major');
 const macosMajor = Number.parseInt(macosMajorRaw, 10);
+const isPackaged = readArgValue('--openchamber-packaged') === '1';
 const macVibrancySupported = process.platform === 'darwin';
 // Effective state for this window (main process resolves the saved preference
 // and passes it in). Defaults on when supported unless explicitly '0'.
@@ -95,6 +96,7 @@ if (Number.isFinite(macosMajor) && macosMajor > 0) {
 
 contextBridge.exposeInMainWorld('__OPENCHAMBER_ELECTRON__', {
   runtime: 'electron',
+  packaged: isPackaged,
   macVibrancy: hasMacVibrancy,
   macVibrancySupported,
 });

@@ -85,6 +85,10 @@
     min-width: 36px;
   }
 
+  :root.mobile-pointer:not(.desktop-runtime) .session-mutation-undo-action {
+    font-size: 0.75rem !important;
+  }
+
   /* Tool rows provide their own compact rhythm. The generic touch target rule
      would otherwise enlarge expandable rows such as Search Files only. */
   :root.mobile-pointer:not(.desktop-runtime) .oc-tool-row[role="button"] {

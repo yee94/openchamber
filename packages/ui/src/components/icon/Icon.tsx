@@ -11,10 +11,27 @@ export const ICON_STROKE_WIDTH = 1.5
 /** Slightly heavier stroke for small chrome (message actions) — clearer on dense/mobile screens without going solid. */
 export const ICON_STROKE_WIDTH_MEDIUM = 2
 
-let spriteInjected = false
+const ICON_SPRITE_SIGNATURE = (() => {
+  let hash = 2166136261
+  for (const [name, content] of Object.entries(iconSpriteData)) {
+    const value = `${name}:${content};`
+    for (let index = 0; index < value.length; index += 1) {
+      hash = Math.imul(hash ^ value.charCodeAt(index), 16777619)
+    }
+  }
+  return (hash >>> 0).toString(36)
+})()
 
-function ensureSpriteOnce() {
-  if (spriteInjected) return
+let spriteInjected = false
+let injectedIconNames = new Set<string>()
+let injectedSpriteSignature: string | null = null
+
+function ensureSpriteOnce(requiredName: IconName) {
+  if (
+    spriteInjected
+    && injectedIconNames.has(requiredName)
+    && injectedSpriteSignature === ICON_SPRITE_SIGNATURE
+  ) return
   if (typeof document === "undefined") return
   const body = document.body
   if (!body) return
@@ -22,10 +39,19 @@ function ensureSpriteOnce() {
   const existing = document.getElementById(SPRITE_ID)
   if (existing) {
     // 旧 sprite 写死 stroke-width，换成 CSS var 后需重建才能让 weight 生效
-    if (!existing.innerHTML.includes('--oc-icon-stroke')) {
+    const existingIconNames = new Set(
+      Array.from(existing.querySelectorAll('symbol[id^="oc-"]'), (symbol) => symbol.id.slice(3)),
+    )
+    if (
+      !existing.innerHTML.includes('--oc-icon-stroke')
+      || existing.dataset.spriteSignature !== ICON_SPRITE_SIGNATURE
+      || !existingIconNames.has(requiredName)
+    ) {
       existing.remove()
     } else {
       spriteInjected = true
+      injectedIconNames = existingIconNames
+      injectedSpriteSignature = ICON_SPRITE_SIGNATURE
       return
     }
   }
@@ -33,6 +59,7 @@ function ensureSpriteOnce() {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
   svg.id = SPRITE_ID
   svg.setAttribute("aria-hidden", "true")
+  svg.dataset.spriteSignature = ICON_SPRITE_SIGNATURE
   svg.style.display = "none"
   // Stroke weight via CSS var so individual <Icon> instances can bump weight
   // (e.g. message actions) without regenerating the sprite.
@@ -44,6 +71,8 @@ function ensureSpriteOnce() {
     .join("")
   body.insertBefore(svg, body.firstChild)
   spriteInjected = true
+  injectedIconNames = new Set(Object.keys(iconSpriteData))
+  injectedSpriteSignature = ICON_SPRITE_SIGNATURE
 }
 
 export interface IconProps extends React.ComponentPropsWithoutRef<"svg"> {
@@ -56,7 +85,7 @@ export const Icon = React.memo(({ name, className, weight = "regular", style, ..
   // Inline sprite injection during render – must run before <use> tries
   // to resolve the #oc-* reference during the same commit.
   if (typeof document !== "undefined") {
-    ensureSpriteOnce()
+    ensureSpriteOnce(name)
   }
 
   const strokeWidth = weight === "medium" ? ICON_STROKE_WIDTH_MEDIUM : ICON_STROKE_WIDTH

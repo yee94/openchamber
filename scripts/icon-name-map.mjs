@@ -23,6 +23,10 @@ export const CODEX_FOLDER_SVG =
 export const CODEX_FOLDER_PLUS_SVG =
   `${CODEX_FOLDER_SVG}<path d="M12 11v6" /><path d="M9 14h6" />`
 
+/** Compact sidebar toggle with softer corners for titlebar chrome. */
+export const ROUNDED_PANEL_LEFT_SVG =
+  `<rect width="18" height="18" x="3" y="3" rx="4" /><path d="M9.5 3v18" />`
+
 /**
  * Remixicon `PushpinFill` — classic diagonal thumbtack. Lucide's upright `pin`
  * reads poorly as a sidebar pinned marker at 12px.
@@ -172,6 +176,7 @@ export const ICON_NAME_MAP = {
   "key": { lucide: "key", fill: false },
   "layout-column": { lucide: "columns-2", fill: false },
   "layout-left": { lucide: "panel-left", fill: false },
+  "layout-left-rounded": { custom: ROUNDED_PANEL_LEFT_SVG },
   "layout-right": { lucide: "panel-right", fill: false },
   "leaf": { lucide: "leaf", fill: false },
   "lightbulb": { lucide: "lightbulb", fill: false },

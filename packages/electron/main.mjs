@@ -99,13 +99,23 @@ log.transports.file.maxSize = 5 * 1024 * 1024;
 log.transports.file.level = 'info';
 log.transports.console.level = isDev ? 'debug' : 'warn';
 
-// The in-process web server runs in this same Node process and uses plain
-// `console.log/warn/error`. Without piping console through electron-log,
-// that output never lands in ~/Library/Logs/OpenChamber/main.log and we
-// can't diagnose issues (e.g. OpenCode lifecycle, SSE disconnects) after
-// the fact. Route all console calls through electron-log so server-side
-// diagnostics are persisted.
-Object.assign(console, log.functions);
+// The in-process web server shares this process and uses plain console calls.
+// Development preserves those diagnostics. Packaged builds retain warning and
+// error persistence while making chatty diagnostic levels no-ops, avoiding
+// file I/O when the renderer's DevTools are closed.
+Object.assign(console, isDev
+  ? log.functions
+  : {
+      debug: () => {},
+      log: () => {},
+      info: () => {},
+      trace: () => {},
+      group: () => {},
+      groupCollapsed: () => {},
+      groupEnd: () => {},
+      warn: (...args) => log.warn(...args),
+      error: (...args) => log.error(...args),
+    });
 
 const LOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 try {
@@ -2361,6 +2371,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
         `--openchamber-runtime-headers=${JSON.stringify(desktopRequestHeaders)}`,
         `--openchamber-home=${desktopHome}`,
         `--openchamber-macos-major=${desktopMacosMajor}`,
+        `--openchamber-packaged=${app.isPackaged ? '1' : '0'}`,
         `--openchamber-mac-vibrancy=${useVibrancy ? '1' : '0'}`,
         `--openchamber-boot-outcome=${JSON.stringify(state.bootOutcome || null)}`,
         `--openchamber-relay-host-id=${rendererRuntimeConfig.relayHostId || ''}`,
@@ -2810,6 +2821,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
         `--openchamber-runtime-headers=${JSON.stringify(desktopRequestHeaders)}`,
         `--openchamber-home=${desktopHome}`,
         `--openchamber-macos-major=${desktopMacosMajor}`,
+        `--openchamber-packaged=${app.isPackaged ? '1' : '0'}`,
       ],
       preload: isDev ? path.join(__dirname, 'preload.mjs') : path.join(app.getAppPath(), 'preload.mjs'),
       backgroundThrottling: false,

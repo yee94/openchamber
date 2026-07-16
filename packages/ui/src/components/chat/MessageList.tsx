@@ -704,7 +704,7 @@ const TurnBlock = React.memo(({
                         changedFiles: turnGroupingContextBase.changedFiles,
                         userMessageCreatedAt: turnGroupingContextBase.userMessageCreatedAt,
                         userMessageVariant: turnGroupingContextBase.userMessageVariant,
-                        isGroupExpanded: turnUiState.isExpanded,
+                        isGroupExpanded: turnUiState.isExpanded || (isLastTurn && sessionIsWorking),
                         toggleGroup: handleToggleTurnGroup,
                     } : {}),
                 } satisfies TurnGroupingContext

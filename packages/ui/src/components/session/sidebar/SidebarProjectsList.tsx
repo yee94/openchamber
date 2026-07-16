@@ -35,6 +35,7 @@ type ProjectSection = {
 
 type Props = {
   topContent?: React.ReactNode;
+  hasLeadingSection: boolean;
   headerAccessory?: React.ReactNode;
   sharedSessionsOnly?: boolean;
   hasSharedSessions?: boolean;
@@ -201,7 +202,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
           {!props.hasSessionSearchQuery ? (
             <SidebarSectionHeader
               title={t('sessions.sidebar.projectsTitle')}
-              isFirst={!props.topContent}
+              isFirst={!props.hasLeadingSection}
               accessory={props.headerAccessory}
             />
           ) : null}

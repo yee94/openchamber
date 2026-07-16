@@ -11,7 +11,7 @@ import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControls
 import { SidebarBrandMark } from './SidebarBrandMark';
 
 const ICON_BUTTON_CLASS =
-  'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:bg-interactive-hover transition-colors';
+  'app-region-no-drag inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:bg-interactive-hover hover:text-foreground transition-colors';
 
 /**
  * Persistent top-left titlebar controls (sidebar toggle), with the Web
@@ -86,7 +86,7 @@ export const TitlebarLeftControls: React.FC = () => {
       style={{
         height: 'var(--oc-header-height, 3rem)',
         paddingLeft: 'var(--oc-titlebar-left-inset, 0.75rem)',
-        width: usesWebSidebarHeader && isSidebarOpen ? `${sidebarWidth || 280}px` : undefined,
+        width: usesWebSidebarHeader && isSidebarOpen ? `${sidebarWidth || 260}px` : undefined,
       }}
     >
       <div
@@ -128,9 +128,12 @@ export const TitlebarLeftControls: React.FC = () => {
               type="button"
               onClick={toggleSidebar}
               aria-label={t('header.actions.openSessionsAria')}
-              className={cn(ICON_BUTTON_CLASS, 'shrink-0')}
+              className={cn(ICON_BUTTON_CLASS, 'group shrink-0')}
             >
-              <Icon name="layout-left" className="h-[18px] w-[18px]" />
+              <Icon
+                name="layout-left-rounded"
+                className="size-4 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground"
+              />
             </button>
           </TooltipTrigger>
           <TooltipContent>

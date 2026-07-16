@@ -138,7 +138,7 @@ const CONTEXT_PANEL_MAX_WIDTH = 1400;
 const CONTEXT_PANEL_MAX_TABS = 12;
 const SESSION_WORKSPACE_PANEL_MAX = 40;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
-const LEFT_SIDEBAR_MIN_WIDTH = 280;
+const LEFT_SIDEBAR_MIN_WIDTH = 260;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 360;
 export const RIGHT_SIDEBAR_MAX_WIDTH = 860;
 const activeMainTabByRuntime = new Map<string, MainTab>();
@@ -2548,12 +2548,17 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 10,
+        version: 11,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
+
+          // v10 -> v11: move the previous default sidebar width to the tighter default.
+          if (version < 11 && state.sidebarWidth === 280) {
+            state.sidebarWidth = LEFT_SIDEBAR_MIN_WIDTH;
+          }
 
           // v9 -> v10: remove obsolete single-file diff view mode setting
           if (version < 10) {

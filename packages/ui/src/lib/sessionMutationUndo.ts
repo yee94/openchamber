@@ -1,4 +1,5 @@
 import React from "react"
+import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import { UndoCountdownRing } from "@/components/ui/UndoCountdownRing"
 import { useUIStore } from "@/stores/useUIStore"
@@ -44,21 +45,20 @@ function showSessionUndoToast(args: {
       "div",
       {
         className:
-          "flex items-center gap-2.5 rounded-[var(--radius-xl)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20)]",
+          "flex max-w-[calc(100vw-2rem)] items-center gap-2.5 text-foreground",
       },
-      React.createElement(UndoCountdownRing, { durationMs: args.durationMs }),
       React.createElement(
         "span",
-        { className: "typography-ui-label font-medium whitespace-nowrap" },
+        { className: "min-w-0 flex-1 typography-ui-label font-medium whitespace-nowrap" },
         args.message,
       ),
       args.secondaryLabel && args.onSecondary
         ? React.createElement(
-            "button",
+            Button,
             {
-              type: "button",
-              className:
-                "rounded-[var(--radius-md)] bg-[var(--interactive-hover)] px-2 py-1 typography-meta font-medium text-foreground transition-colors hover:bg-[var(--interactive-active)]",
+              variant: "secondary",
+              size: "sm",
+              className: "session-mutation-undo-action !h-[26px] !min-h-0 !min-w-0 shrink-0 !px-2 !text-[12px]",
               onClick: () => {
                 args.onSecondary?.()
                 toast.dismiss(id)
@@ -68,22 +68,22 @@ function showSessionUndoToast(args: {
           )
         : null,
       React.createElement(
-        "button",
+        Button,
         {
-          type: "button",
-          className:
-            "rounded-[var(--radius-md)] bg-[var(--primary-base)] px-2 py-1 typography-meta font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-85",
+          variant: "default",
+          size: "sm",
+          className: "session-mutation-undo-action !h-[26px] !min-h-0 !min-w-0 shrink-0 gap-1 !pl-2 !pr-1 !text-[12px]",
           onClick: () => {
             args.onPrimary()
             toast.dismiss(id)
           },
         },
         args.primaryLabel,
+        React.createElement(UndoCountdownRing, { durationMs: args.durationMs }),
       ),
     ),
     {
       duration: args.durationMs,
-      className: "session-mutation-undo-toast !p-0 !bg-transparent !border-0 !shadow-none",
     },
   )
 }

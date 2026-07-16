@@ -199,8 +199,8 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         'flex-1 min-w-0 flex items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md transition-[padding]',
                         reorderEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                         isRepo && !hideDirectoryControls
-                          ? (alwaysShowActions ? 'pr-20' : 'pr-7 group-hover/project:pr-20 group-focus-within/project:pr-20')
-                          : (alwaysShowActions ? 'pr-14' : 'pr-7 group-hover/project:pr-14 group-focus-within/project:pr-14'),
+                          ? (alwaysShowActions ? 'pr-20' : 'pr-7 group-hover/project:pr-20 group-has-[:focus-visible]/project:pr-20')
+                          : (alwaysShowActions ? 'pr-14' : 'pr-7 group-hover/project:pr-14 group-has-[:focus-visible]/project:pr-14'),
                       )}
                     >
                     <span
@@ -216,11 +216,11 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         <>
                           <span className={cn(
                             'h-4 w-4 items-center justify-center',
-                            alwaysShowActions ? 'inline-flex' : 'hidden group-hover/project:inline-flex group-focus-within/project:inline-flex',
+                            alwaysShowActions ? 'inline-flex' : 'hidden group-hover/project:inline-flex group-has-[:focus-visible]/project:inline-flex',
                           )}>
                             {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
                           </span>
-                          <span className={cn(alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden')}>
+                          <span className={cn(alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-has-[:focus-visible]/project:hidden')}>
                             {projectIconImage ? (
                               <ProjectIconImage
                                 project={{ id, iconImage: projectIconImage }}
@@ -260,7 +260,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         }}
                         className={cn(
                         'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground transition-opacity',
-                          alwaysShowActions ? 'opacity-100' : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-focus-within/project:opacity-100 group-focus-within/project:pointer-events-auto',
+                          alwaysShowActions ? 'opacity-100' : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-has-[:focus-visible]/project:opacity-100 group-has-[:focus-visible]/project:pointer-events-auto',
                         )}
                         aria-label={t('sessions.sidebar.project.actions.newWorktree')}
                       >
@@ -287,7 +287,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                             ? 'opacity-100 pointer-events-auto'
                             : alwaysShowActions
                               ? 'opacity-100'
-                              : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-focus-within/project:opacity-100 group-focus-within/project:pointer-events-auto',
+                              : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-has-[:focus-visible]/project:opacity-100 group-has-[:focus-visible]/project:pointer-events-auto',
                         )}
                         aria-label={t('sessions.sidebar.project.actions.projectMenu')}
                         onPointerDown={handleMenuTriggerPointerDown}
@@ -316,7 +316,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         }}
                         className={cn(
                           'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
-                          alwaysShowActions ? 'opacity-100' : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-focus-within/project:opacity-100 group-focus-within/project:pointer-events-auto',
+                          alwaysShowActions ? 'opacity-100' : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto group-has-[:focus-visible]/project:opacity-100 group-has-[:focus-visible]/project:pointer-events-auto',
                         )}
                         aria-label={isRepo
                           ? t('sessions.sidebar.project.actions.newDraftSession')
