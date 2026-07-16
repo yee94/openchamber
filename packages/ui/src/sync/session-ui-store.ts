@@ -268,11 +268,13 @@ export type NewSessionDraftState = {
   draftSubmitting?: boolean
 }
 
-type ForkTransitionState = {
+export type ForkTransitionStage = "preparing" | "copying" | "opening" | "loading"
+
+export type ForkTransitionState = {
   operationId: number
   sourceSessionId: string
   directory: string
-  stage: "preparing" | "copying" | "opening"
+  stage: ForkTransitionStage
 }
 
 type OpenNewSessionDraftOptions = Omit<Partial<NewSessionDraftState>, "draftID" | "open" | "submissionToken" | "draftSubmitting"> & {

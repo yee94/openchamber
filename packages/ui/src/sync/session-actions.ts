@@ -5,7 +5,7 @@
 
 import type { OpencodeClient, Session, Message, Part, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { Binary } from "./binary"
-import { useSessionUIStore } from "./session-ui-store"
+import { useSessionUIStore, type ForkTransitionStage } from "./session-ui-store"
 import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
@@ -70,6 +70,19 @@ function getForkedSessionTitle(title: string): string {
   const match = title.match(/^(.+) \(fork #(\d+)\)$/)
   if (!match) return `${title} (fork #1)`
   return `${match[1]} (fork #${Number.parseInt(match[2], 10) + 1})`
+}
+
+/** Advance the full-screen fork Loading label and yield so React can paint. */
+async function setForkTransitionStage(
+  operationId: number,
+  stage: ForkTransitionStage,
+): Promise<void> {
+  useSessionUIStore.setState((state) =>
+    state.forkTransition?.operationId === operationId
+      ? { forkTransition: { ...state.forkTransition, stage } }
+      : state,
+  )
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
 export function resolveForkMessageId(
@@ -1682,11 +1695,8 @@ export async function forkSession(sessionId: string, operationId: number, messag
     sourceSessionID: sessionId,
     expectedTargetTitle: getForkedSessionTitle(sourceSession.title),
   }
-  useSessionUIStore.setState((state) => ({
-    forkTransition: state.forkTransition?.operationId === operationId
-      ? { ...state.forkTransition, stage: "copying" }
-      : state.forkTransition,
-  }))
+  // Long sessions spend most of the wait here (server-side clone).
+  await setForkTransitionStage(operationId, "copying")
 
   let forkedSession: Session
   try {
@@ -1710,16 +1720,12 @@ export async function forkSession(sessionId: string, operationId: number, messag
       if (activeForkCopy?.operationId === operationId) activeForkCopy = null
       return false
     }
+    await setForkTransitionStage(operationId, "opening")
     try {
       forkedSession = await markForkSessionAsLatest(forkedSession, directory)
     } catch (error) {
       console.warn("[session-actions] failed to promote forked session", error)
     }
-    useSessionUIStore.setState((state) => ({
-      forkTransition: state.forkTransition?.operationId === operationId
-        ? { ...state.forkTransition, stage: "opening" }
-        : state.forkTransition,
-    }))
   } catch (error) {
     if (activeForkCopy?.operationId === operationId) activeForkCopy = null
     throw error
@@ -1750,6 +1756,7 @@ export async function forkSession(sessionId: string, operationId: number, messag
     // Switch immediately once OpenCode reveals the real ID, then keep the
     // transition visible until the bounded initial page is available.
     useSessionUIStore.getState().setCurrentSession(forkedSession.id, directory)
+    await setForkTransitionStage(operationId, "loading")
     console.info("[session-fork] loading the forked session", {
       operationId,
       sessionId,
