@@ -672,7 +672,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           {!isMinimalMode ? (
             <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
               <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                {hasChildren && !isPinnedContext ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
+                {hasChildren && !isSubtaskSession ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
                 <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
                 {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
                 {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
@@ -738,7 +738,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   ) : null;
   // Subsession chevron: align with the folder-icon column; idle hidden, hover only
   // (touch / alwaysShowActions keeps it visible).
-  const canExpandSubsessions = !isPinnedContext && !isSubtaskSession && hasChildren;
+  // Pinned parents must still expand subagents; only nested subtask rows stay leaf-like.
+  const canExpandSubsessions = !isSubtaskSession && hasChildren;
   const hideChevronUntilHover = canExpandSubsessions && !alwaysShowActions;
   const subsessionChevronLeft = getSidebarRowPaddingLeft(Math.max(0, depth - 1));
   const toggleSubsessionTree = () => {
@@ -1384,7 +1385,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           {contextMenuContent}
         </ContextMenu.Root>
       </DraggableSessionRow>
-      {!isPinnedContext && hasChildren && isExpanded
+      {hasChildren && isExpanded
         ? node.children.map((child): React.ReactNode => {
           const childRenderExtras: SessionNodeChildRenderExtras = childRenderExtrasFor
             ? childRenderExtrasFor(child)

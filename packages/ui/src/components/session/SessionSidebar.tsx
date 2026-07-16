@@ -65,6 +65,7 @@ import {
 } from '@/stores/useSessionFocusStore';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
 import { derivePinnedSessions } from './sidebar/pinnedSessions';
+import { buildSessionNodeWithChildren } from './sidebar/sessionTree';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
@@ -1626,7 +1627,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const sessionDirectory = normalizePath(
         (session as Session & { directory?: string | null }).directory ?? null,
       );
-      const node = existing?.node ?? { session, children: [], worktree: null };
+      // Project meta omits pinned roots, so always rebuild the pinned node with
+      // its full subagent tree from the global session list.
+      const node = buildSessionNodeWithChildren(session, sessions, {
+        pinnedSessionIds,
+        getWorktree: (item) => worktreeMetadata.get(item.id) ?? null,
+      });
       const filteredNodes = hasSessionSearchQuery
         ? filterSessionNodesForSearch([node], normalizedSessionSearchQuery)
         : [node];
@@ -1658,8 +1664,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     hasSessionSearchQuery,
     isVSCode,
     normalizedSessionSearchQuery,
+    pinnedSessionIds,
     pinnedSessions,
     sessionSidebarMetaById,
+    sessions,
+    worktreeMetadata,
   ]);
 
   const sectionsForSidebarRender = React.useMemo(() => {
