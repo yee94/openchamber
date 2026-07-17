@@ -216,10 +216,23 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
+  const isMountedRef = React.useRef(true);
+  const readGenerationRef = React.useRef(0);
+  const saveGenerationRef = React.useRef(0);
+  const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      readGenerationRef.current += 1;
+      saveGenerationRef.current += 1;
+    };
+  }, []);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
 
@@ -379,6 +392,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
     }
 
     let cancelled = false;
+    const generation = ++readGenerationRef.current;
+    const isCurrent = () => !cancelled && isMountedRef.current && generation === readGenerationRef.current;
 
     const readText = async (path: string): Promise<string> => {
       if (runtimeApis.files?.readFile) {
@@ -411,15 +426,15 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         setLoading(true);
         try {
           const text = await readText(targetPath);
-          if (cancelled) return;
+          if (!isCurrent()) return;
           setResolvedPath(targetPath);
           setContent(text);
         } catch {
-          if (cancelled) return;
+          if (!isCurrent()) return;
           setResolvedPath(null);
           setContent('');
         } finally {
-          if (!cancelled) setLoading(false);
+          if (isCurrent()) setLoading(false);
         }
         return;
       }
@@ -455,7 +470,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
           }
         }
 
-        if (cancelled) return;
+        if (!isCurrent()) return;
 
         if (!resolved || text === null) {
           setResolvedPath(null);
@@ -466,11 +481,11 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         setResolvedPath(resolved);
         setContent(text);
       } catch {
-        if (cancelled) return;
+        if (!isCurrent()) return;
         setResolvedPath(null);
         setContent('');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     };
 
@@ -482,38 +497,52 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
   }, [homeDirectory, planModeEnabled, runtimeApis.files, sessionDirectory, session?.slug, session?.time?.created, targetPath]);
 
   React.useEffect(() => {
+    const generation = ++saveGenerationRef.current;
+    const isCurrent = () => isMountedRef.current && generation === saveGenerationRef.current;
+
     if (!resolvedPath) {
-      setSaveError(null);
+      if (isCurrent()) setSaveError(null);
       return;
     }
 
-    const controller = window.setTimeout(async () => {
-      setSaveError(null);
-      try {
-        if (runtimeApis.files?.writeFile) {
-          const result = await runtimeApis.files.writeFile(resolvedPath, content);
-          if (!result?.success) {
-            throw new Error(t('planView.error.writeFailed'));
+    const controller = window.setTimeout(() => {
+      const save = async () => {
+        if (!isCurrent()) return;
+
+        setSaveError(null);
+        try {
+          if (runtimeApis.files?.writeFile) {
+            const result = await runtimeApis.files.writeFile(resolvedPath, content);
+            if (!result?.success) {
+              throw new Error(t('planView.error.writeFailed'));
+            }
+          } else {
+            const response = await runtimeFetch('/api/fs/write', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: resolvedPath, content }),
+            });
+            if (!response.ok) {
+              throw new Error(t('planView.error.writePlanFileFailed', { status: response.status }));
+            }
           }
-        } else {
-          const response = await runtimeFetch('/api/fs/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: resolvedPath, content }),
-          });
-          if (!response.ok) {
-            throw new Error(t('planView.error.writePlanFileFailed', { status: response.status }));
+        } catch (error) {
+          if (isCurrent()) {
+            setSaveError(error instanceof Error ? error.message : t('planView.error.saveFailed'));
           }
         }
-      } catch (error) {
-        setSaveError(error instanceof Error ? error.message : t('planView.error.saveFailed'));
-      }
+      };
+
+      saveQueueRef.current = saveQueueRef.current.then(save, save);
     }, 350);
 
     return () => {
       window.clearTimeout(controller);
+      if (saveGenerationRef.current === generation) {
+        saveGenerationRef.current += 1;
+      }
     };
-  }, [content, resolvedPath, runtimeApis.files, t]);
+  }, [content, homeDirectory, planModeEnabled, resolvedPath, runtimeApis.files, sessionDirectory, session?.slug, session?.time?.created, t, targetPath]);
 
   React.useEffect(() => {
     return () => {

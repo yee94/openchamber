@@ -154,6 +154,10 @@ existing bounded SDK-backed path. A successful
 empty root page replaces stale index rows; a failed page preserves its last
 good cache.
 
+Every global session-index asynchronous entry captures the runtime generation
+and transport identity. Snapshot hydration, startup sync, persistence, and
+long-poll updates commit only while that capture remains current.
+
 Password-gated runtimes force a fresh settings hydration after authentication
 and keep the app tree behind the auth gate until persisted project paths have
 been applied. This prevents a pre-authenticated `401` settings request from
@@ -218,6 +222,14 @@ becoming the cached startup result consumed by the session coordinator.
   in one short burst. App reset and authentication consumers coalesce that burst
   and apply only its final identity; never remount `SyncProvider` once per
   intermediate host/token state.
+- TanStack Query owns runtime-scoped pull server state. Query keys begin with
+  transport identity and append feature scope such as directory or quota
+  provider. A transport identity change clears the Query client.
+- Agents and commands cache by transport identity plus configuration directory.
+  A metadata refresh failure retains the prior complete snapshot for that key.
+- Quota runtime reset clears rendered results, fetch state, errors, and active
+  refresh generations. Provider refreshes commit independently, preserving
+  successful provider results while exposing a failed provider error.
 
 ### Queue transport and admission invariants
 

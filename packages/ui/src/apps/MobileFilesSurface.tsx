@@ -1,5 +1,6 @@
 import React from 'react';
 import { File as PierreFile } from '@pierre/diffs/react';
+import { CancelledError, useQuery } from '@tanstack/react-query';
 
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { PIERRE_RUNTIME_BASE_CSS } from '@/components/views/PierreDiffViewer';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
@@ -22,6 +24,7 @@ import type { FileListEntry, FileSearchResult } from '@/lib/api/types';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
+import { queryKeys } from '@/lib/queryRuntime';
 import { cn } from '@/lib/utils';
 
 type MobileFilesRoute =
@@ -86,16 +89,10 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
   const { files } = useRuntimeAPIs();
   const root = normalizePath(useEffectiveDirectory() ?? null);
   const [route, setRoute] = React.useState<MobileFilesRoute>(() => ({ type: 'browser', directory: root }));
-  const [entries, setEntries] = React.useState<FileListEntry[]>([]);
-  const [isLoadingDirectory, setIsLoadingDirectory] = React.useState(false);
-  const [directoryError, setDirectoryError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
-  const [searchResults, setSearchResults] = React.useState<FileSearchResult[]>([]);
-  const [isSearching, setIsSearching] = React.useState(false);
-  const [fileContent, setFileContent] = React.useState('');
-  const [fileError, setFileError] = React.useState<string | null>(null);
-  const [isLoadingFile, setIsLoadingFile] = React.useState(false);
   const directoryLoadRequestIdRef = React.useRef(0);
+  const fileLoadRequestIdRef = React.useRef(0);
+  const searchIntentRef = React.useRef('');
 
   React.useEffect(() => {
     if (!root) return;
@@ -106,102 +103,69 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
   }, [root]);
 
   const currentDirectory = route.type === 'browser' ? route.directory : route.returnDirectory;
+  const browserDirectory = route.type === 'browser' ? route.directory : '';
+  const filePath = route.type === 'file' ? route.path : '';
+  const debouncedQuery = useDebouncedValue(query, 250);
+  const normalizedQuery = query.trim();
+  const normalizedDebouncedQuery = debouncedQuery.trim();
+  searchIntentRef.current = browserDirectory ? `${browserDirectory}\0${query}` : '';
 
-  const loadDirectory = React.useCallback(async (directory: string) => {
-    if (!directory) return;
-    const requestId = directoryLoadRequestIdRef.current + 1;
-    directoryLoadRequestIdRef.current = requestId;
-    setIsLoadingDirectory(true);
-    setDirectoryError(null);
-    try {
-      const result = await files.listDirectory(directory);
-      if (directoryLoadRequestIdRef.current !== requestId) return;
-      setEntries(result.entries.slice().sort((a, b) => {
+  const directoryQuery = useQuery({
+    queryKey: queryKeys.scoped('mobile-files-directory', browserDirectory),
+    enabled: Boolean(browserDirectory),
+    refetchOnMount: 'always',
+    queryFn: async (): Promise<FileListEntry[]> => {
+      const requestId = directoryLoadRequestIdRef.current + 1;
+      directoryLoadRequestIdRef.current = requestId;
+      const result = await files.listDirectory(browserDirectory);
+      if (directoryLoadRequestIdRef.current !== requestId) throw new CancelledError({ silent: true });
+      return result.entries.slice().sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
         return a.name.localeCompare(b.name);
-      }));
-    } catch (error) {
-      if (directoryLoadRequestIdRef.current !== requestId) return;
-      setEntries([]);
-      setDirectoryError(error instanceof Error ? error.message : t('mobile.files.error.listFailed'));
-    } finally {
-      if (directoryLoadRequestIdRef.current === requestId) {
-        setIsLoadingDirectory(false);
-      }
-    }
-  }, [files, t]);
-
-  React.useEffect(() => {
-    if (route.type !== 'browser') return;
-    void loadDirectory(route.directory);
-  }, [loadDirectory, route]);
-
-  React.useEffect(() => {
-    if (route.type !== 'browser') return;
-    const normalizedQuery = query.trim();
-    if (!normalizedQuery) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    let cancelled = false;
-    const timeoutId = window.setTimeout(() => {
-      setIsSearching(true);
-      void files.search({ directory: route.directory, query: normalizedQuery, maxResults: 40 })
-        .then((results) => {
-          if (!cancelled) setSearchResults(results);
-        })
-        .catch(() => {
-          if (!cancelled) setSearchResults([]);
-        })
-        .finally(() => {
-          if (!cancelled) setIsSearching(false);
-        });
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [files, query, route]);
-
-  React.useEffect(() => {
-    if (route.type !== 'file') return;
-    setFileContent('');
-    setFileError(null);
-
-    if (isImageFile(route.path) && !route.path.toLowerCase().endsWith('.svg')) {
-      setIsLoadingFile(false);
-      return;
-    }
-
-    if (!files.readFile) {
-      setFileError(t('mobile.files.error.readUnavailable'));
-      setIsLoadingFile(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingFile(true);
-    void files.readFile(route.path)
-      .then((result) => {
-        if (cancelled) return;
-        setFileContent(result.content.length > MAX_MOBILE_FILE_CHARS
-          ? `${result.content.slice(0, MAX_MOBILE_FILE_CHARS)}\n\n${t('mobile.files.file.truncated')}`
-          : result.content);
-      })
-      .catch((error) => {
-        if (!cancelled) setFileError(error instanceof Error ? error.message : t('filesView.error.readFileFailed'));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingFile(false);
       });
+    },
+  });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [files, route, t]);
+  const searchQuery = useQuery({
+    queryKey: queryKeys.scoped('mobile-files-search', browserDirectory, normalizedDebouncedQuery, 40),
+    enabled: Boolean(browserDirectory && normalizedDebouncedQuery),
+    queryFn: async (): Promise<FileSearchResult[]> => {
+      const intent = `${browserDirectory}\0${debouncedQuery}`;
+      const results = await files.search({ directory: browserDirectory, query: normalizedDebouncedQuery, maxResults: 40 });
+      if (searchIntentRef.current !== intent) throw new CancelledError({ silent: true });
+      return results;
+    },
+  });
+
+  const shouldReadFile = Boolean(filePath && files.readFile && (!isImageFile(filePath) || filePath.toLowerCase().endsWith('.svg')));
+  const fileQuery = useQuery({
+    queryKey: queryKeys.scoped('mobile-files-content', filePath, MAX_MOBILE_FILE_CHARS),
+    enabled: shouldReadFile,
+    queryFn: async (): Promise<string> => {
+      const requestId = fileLoadRequestIdRef.current + 1;
+      fileLoadRequestIdRef.current = requestId;
+      const result = await files.readFile!(filePath);
+      if (fileLoadRequestIdRef.current !== requestId) throw new CancelledError({ silent: true });
+      return result.content;
+    },
+  });
+
+  const entries = directoryQuery.data ?? [];
+  const directoryError = directoryQuery.error
+    ? directoryQuery.error instanceof Error ? directoryQuery.error.message : t('mobile.files.error.listFailed')
+    : null;
+  const isLoadingDirectory = directoryQuery.isFetching;
+  const searchResults = searchQuery.data ?? [];
+  const isSearching = Boolean(normalizedQuery && normalizedDebouncedQuery && query === debouncedQuery && searchQuery.isFetching);
+  const fileContent = fileQuery.data && fileQuery.data.length > MAX_MOBILE_FILE_CHARS
+    ? `${fileQuery.data.slice(0, MAX_MOBILE_FILE_CHARS)}\n\n${t('mobile.files.file.truncated')}`
+    : fileQuery.data ?? '';
+  const fileError = filePath && !files.readFile
+    ? t('mobile.files.error.readUnavailable')
+    : fileQuery.error
+      ? fileQuery.error instanceof Error ? fileQuery.error.message : t('filesView.error.readFileFailed')
+      : null;
+  const isLoadingFile = shouldReadFile && fileQuery.isFetching;
 
   const openDirectory = (directory: string) => {
     setQuery('');
@@ -284,7 +248,7 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
           type="button"
           className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label={t('mobile.files.refreshAria')}
-          onClick={() => void loadDirectory(route.directory)}
+          onClick={() => void directoryQuery.refetch()}
           style={{ touchAction: 'manipulation' }}
         >
           <Icon name="refresh" className={cn('size-5', isLoadingDirectory && 'animate-spin')} />

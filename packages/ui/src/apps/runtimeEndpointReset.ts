@@ -7,6 +7,7 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { usePermissionStore } from '@/stores/permissionStore';
+import { resetQuotaStoreForRuntimeSwitch } from '@/stores/useQuotaStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { resetStreamingState } from '@/sync/streaming';
 
@@ -50,6 +51,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   // previous instance — drop it so stale sessions can't linger after a switch.
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   usePermissionStore.getState().reset();
+  resetQuotaStoreForRuntimeSwitch();
   useSessionUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey);
   useUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey);
   resetStreamingState();

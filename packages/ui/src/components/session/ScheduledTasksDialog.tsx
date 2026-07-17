@@ -31,6 +31,8 @@ import {
   type ScheduledTaskStatus,
 } from '@/lib/scheduledTasksApi';
 import { ScheduledTaskEditorDialog } from './ScheduledTaskEditorDialog';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { queryClient, queryKeys } from '@/lib/queryRuntime';
 
 const scheduleTimes = (task: ScheduledTask): string[] => {
   const raw = Array.isArray(task.schedule.times)
@@ -178,13 +180,10 @@ export function ScheduledTasksDialog() {
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
   const [selectedProjectID, setSelectedProjectID] = React.useState<string>('');
-  const [tasks, setTasks] = React.useState<ScheduledTask[]>([]);
-  // Start in loading state so the first frame after open shows the spinner,
-  // not an empty/select-project flash before the fetch effect runs.
-  const [loading, setLoading] = React.useState(true);
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editorTask, setEditorTask] = React.useState<ScheduledTask | null>(null);
   const [mutatingTaskID, setMutatingTaskID] = React.useState<string | null>(null);
+  const wasOpenRef = React.useRef(false);
 
   const selectedProject = React.useMemo(
     () => projects.find((project) => project.id === selectedProjectID) || null,
@@ -208,17 +207,13 @@ export function ScheduledTasksDialog() {
     );
   }, []);
 
-  const reloadTasks = React.useCallback(async (projectID: string, options?: { silent?: boolean }) => {
-    if (!projectID) {
-      setTasks([]);
-      return;
-    }
-    if (!options?.silent) {
-      setLoading(true);
-    }
-    try {
-      const nextTasks = await fetchScheduledTasks(projectID);
-      nextTasks.sort((a, b) => {
+  const tasksQueryKey = queryKeys.scoped('scheduled-tasks', selectedProjectID);
+  const tasksQuery = useQuery({
+    queryKey: tasksQueryKey,
+    enabled: open && Boolean(selectedProjectID),
+    refetchOnMount: 'always',
+    queryFn: () => fetchScheduledTasks(selectedProjectID),
+    select: (nextTasks) => [...nextTasks].sort((a, b) => {
         if (a.enabled !== b.enabled) {
           return a.enabled ? -1 : 1;
         }
@@ -227,33 +222,52 @@ export function ScheduledTasksDialog() {
           return byName;
         }
         return (a.state?.nextRunAt || Number.MAX_SAFE_INTEGER) - (b.state?.nextRunAt || Number.MAX_SAFE_INTEGER);
-      });
-      setTasks(nextTasks);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed'));
-      if (!options?.silent) {
-        setTasks([]);
-      }
-    } finally {
-      if (!options?.silent) {
-        setLoading(false);
-      }
+      }),
+  });
+  const tasks = tasksQuery.data ?? [];
+  const loading = tasksQuery.isLoading;
+  React.useEffect(() => {
+    if (tasksQuery.error) {
+      toast.error(tasksQuery.error instanceof Error ? tasksQuery.error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed'));
     }
-  }, [t]);
+  }, [tasksQuery.error, t]);
+  const invalidateTasks = React.useCallback(async (projectID: string) => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.scoped('scheduled-tasks', projectID) });
+  }, []);
+  const saveTaskMutation = useMutation({
+    mutationFn: ({ projectID, taskDraft }: { projectID: string; taskDraft: Partial<ScheduledTask> }) => upsertScheduledTask(projectID, taskDraft),
+    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
+  });
+  const toggleTaskMutation = useMutation({
+    mutationFn: ({ projectID, task }: { projectID: string; task: ScheduledTask }) => upsertScheduledTask(projectID, task),
+    onMutate: ({ projectID, task }) => {
+      queryClient.setQueryData<ScheduledTask[]>(queryKeys.scoped('scheduled-tasks', projectID), (current = []) =>
+        current.map((item) => item.id === task.id ? task : item),
+      );
+    },
+    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
+  });
+  const deleteTaskMutation = useMutation({
+    mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => deleteScheduledTask(projectID, taskID),
+    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
+  });
+  const runTaskMutation = useMutation({
+    mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => runScheduledTaskNow(projectID, taskID),
+    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
+  });
 
   React.useEffect(() => {
     if (!open) {
+      wasOpenRef.current = false;
       return;
     }
     const preferredProjectID = activeProject?.id || projects[0]?.id || '';
-    setSelectedProjectID(preferredProjectID);
-    if (preferredProjectID) {
-      void reloadTasks(preferredProjectID);
-    } else {
-      setTasks([]);
-      setLoading(false);
+    if (wasOpenRef.current && preferredProjectID === selectedProjectID) {
+      return;
     }
-  }, [open, activeProject, projects, reloadTasks]);
+    wasOpenRef.current = true;
+    setSelectedProjectID(preferredProjectID);
+  }, [open, activeProject, projects, selectedProjectID]);
 
   React.useEffect(() => {
     if (!open) {
@@ -271,7 +285,7 @@ export function ScheduledTasksDialog() {
         clearTimeout(timeoutID);
       }
       timeoutID = setTimeout(() => {
-        void reloadTasks(selectedProjectID, { silent: true });
+        void invalidateTasks(selectedProjectID);
       }, 400);
     });
     return () => {
@@ -280,36 +294,29 @@ export function ScheduledTasksDialog() {
       }
       unsubscribe();
     };
-  }, [open, selectedProjectID, reloadTasks]);
+  }, [open, selectedProjectID, invalidateTasks]);
 
   const handleSaveTask = React.useCallback(async (taskDraft: Partial<ScheduledTask>) => {
     if (!selectedProjectID) {
       throw new Error(t('sessions.scheduledTasks.dialog.error.chooseProjectFirst'));
     }
-    await upsertScheduledTask(selectedProjectID, taskDraft);
-    await reloadTasks(selectedProjectID);
+    await saveTaskMutation.mutateAsync({ projectID: selectedProjectID, taskDraft });
     toast.success(t('sessions.scheduledTasks.dialog.toast.saved'));
-  }, [selectedProjectID, reloadTasks, t]);
+  }, [selectedProjectID, saveTaskMutation, t]);
 
   const handleToggleEnabled = React.useCallback(async (task: ScheduledTask, enabled: boolean) => {
     if (!selectedProjectID) {
       return;
     }
     setMutatingTaskID(task.id);
-    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, enabled } : item)));
     try {
-      await upsertScheduledTask(selectedProjectID, {
-        ...task,
-        enabled,
-      });
-      await reloadTasks(selectedProjectID, { silent: true });
+      await toggleTaskMutation.mutateAsync({ projectID: selectedProjectID, task: { ...task, enabled } });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.updateFailed'));
-      await reloadTasks(selectedProjectID, { silent: true });
     } finally {
       setMutatingTaskID(null);
     }
-  }, [selectedProjectID, reloadTasks, t]);
+  }, [selectedProjectID, toggleTaskMutation, t]);
 
   const handleDeleteTask = React.useCallback(async (task: ScheduledTask) => {
     if (!selectedProjectID) {
@@ -322,15 +329,14 @@ export function ScheduledTasksDialog() {
 
     setMutatingTaskID(task.id);
     try {
-      await deleteScheduledTask(selectedProjectID, task.id);
-      await reloadTasks(selectedProjectID, { silent: true });
+      await deleteTaskMutation.mutateAsync({ projectID: selectedProjectID, taskID: task.id });
       toast.success(t('sessions.scheduledTasks.dialog.toast.deleted'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.deleteFailed'));
     } finally {
       setMutatingTaskID(null);
     }
-  }, [selectedProjectID, reloadTasks, t]);
+  }, [selectedProjectID, deleteTaskMutation, t]);
 
   const handleRunNow = React.useCallback(async (task: ScheduledTask) => {
     if (!selectedProjectID) {
@@ -338,15 +344,14 @@ export function ScheduledTasksDialog() {
     }
     setMutatingTaskID(task.id);
     try {
-      await runScheduledTaskNow(selectedProjectID, task.id);
-      await reloadTasks(selectedProjectID, { silent: true });
+      await runTaskMutation.mutateAsync({ projectID: selectedProjectID, taskID: task.id });
       toast.success(t('sessions.scheduledTasks.dialog.toast.started'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.runFailed'));
     } finally {
       setMutatingTaskID(null);
     }
-  }, [selectedProjectID, reloadTasks, t]);
+  }, [selectedProjectID, runTaskMutation, t]);
 
   const projectSelector = (
     <div className="flex flex-col items-start gap-1">
@@ -356,11 +361,6 @@ export function ScheduledTasksDialog() {
         onValueChange={(value) => {
           const nextProjectID = value === '__none' ? '' : value;
           setSelectedProjectID(nextProjectID);
-          if (nextProjectID) {
-            void reloadTasks(nextProjectID);
-          } else {
-            setTasks([]);
-          }
         }}
       >
         <SelectTrigger className={isMobile ? 'w-full' : undefined}>
@@ -404,6 +404,10 @@ export function ScheduledTasksDialog() {
       {loading ? (
         <div className="flex items-center gap-2 typography-meta text-muted-foreground">
           <Icon name="loader-4" className="h-4 w-4 animate-spin" /> {t('sessions.scheduledTasks.dialog.loading')}
+        </div>
+      ) : tasksQuery.error ? (
+        <div className="rounded-lg border border-dashed border-border p-4 typography-meta text-muted-foreground">
+          {tasksQuery.error instanceof Error ? tasksQuery.error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed')}
         </div>
       ) : tasks.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 typography-meta text-muted-foreground">

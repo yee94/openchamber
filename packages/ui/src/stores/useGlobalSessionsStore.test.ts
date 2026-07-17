@@ -479,6 +479,55 @@ describe('useGlobalSessionsStore', () => {
     }
   });
 
+  test('drops a session-index snapshot that resolves after a runtime switch', async () => {
+    const originalWindow = globalThis.window;
+    const originalFetch = globalThis.fetch;
+    const stale = buildSession('https://share.example/stale-index', { directory: '/repo/stale-index' });
+    let resolveSync: (response: Response) => void = () => undefined;
+    const snapshot = {
+      revision: 7,
+      sync: {
+        active: false,
+        completed: 1,
+        total: 1,
+        pendingDirectories: [],
+        completedDirectories: ['/repo/stale-index'],
+        failedDirectories: [],
+      },
+      directories: [{
+        directory: '/repo/stale-index',
+        cursor: null,
+        hasMore: false,
+        lastSyncedAt: 1000,
+        lastFullSyncedAt: 1000,
+        lastAccessedAt: 1000,
+        sessions: [stale],
+      }],
+    };
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
+      });
+      globalThis.fetch = () => new Promise<Response>((resolve) => { resolveSync = resolve; });
+
+      const sync = useGlobalSessionsStore.getState().syncSessionsForDirectories(['/repo/stale-index']);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+      resolveSync(new Response(JSON.stringify(snapshot), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+      await sync;
+
+      expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+      expect(useGlobalSessionsStore.getState().sessionIndexSyncByDirectory).toEqual(new Map());
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test('keeps first-run cache provenance stable while the server writes its first directory', async () => {
     const originalWindow = globalThis.window;
     const originalFetch = globalThis.fetch;
@@ -668,6 +717,41 @@ describe('useGlobalSessionsStore', () => {
     useSessionFoldersStore.getState().cleanupSessions('/repo/app', completeIds);
     expect(useSessionFoldersStore.getState().foldersMap['/repo/app']?.[0]?.sessionIds).toEqual(['ses_25']);
     expect(useSessionFoldersStore.getState().sessionOrderByScope['/repo/app']).toEqual(['ses_25']);
+  });
+
+  test('keeps the current global load flight after a stale runtime load settles', async () => {
+    type ListResult = { data: Session[]; error: undefined; response: Response };
+    const resolvers: Array<(value: ListResult) => void> = [];
+    const list = () => new Promise<ListResult>((resolve) => { resolvers.push(resolve); });
+    const sdk = { experimental: { session: { list } } } as unknown as OpencodeClient;
+    const originalGetSdkClient = opencodeClient.getSdkClient;
+    opencodeClient.getSdkClient = () => sdk;
+    restoreGetSdkClient = () => { opencodeClient.getSdkClient = originalGetSdkClient; };
+
+    const staleLoad = useGlobalSessionsStore.getState().loadSessions();
+    while (resolvers.length < 2) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    const currentLoad = useGlobalSessionsStore.getState().loadSessions();
+    while (resolvers.length < 4) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    resolvers.splice(0, 2).forEach((resolve) => resolve({
+      data: [],
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    }));
+    await staleLoad;
+
+    const dedupedCurrentLoad = useGlobalSessionsStore.getState().loadSessions();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(resolvers).toHaveLength(2);
+
+    resolvers.splice(0).forEach((resolve) => resolve({
+      data: [],
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    }));
+    await Promise.all([currentLoad, dedupedCurrentLoad]);
   });
 
   test('merges an incremental start-window response without erasing cached sessions', async () => {

@@ -16,6 +16,7 @@ import { useProjectsStore } from "@/stores/useProjectsStore";
 import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore";
 import { invalidateSkillsLoadCache, useSkillsStore } from "@/stores/useSkillsStore";
 import { runtimeFetch } from "@/lib/runtime-fetch";
+import { getRuntimeTransportIdentity } from "@/lib/runtime-switch";
 
 // Note: useDirectoryStore cannot be imported at top level to avoid circular dependency
 // useDirectoryStore -> useAgentsStore (for refreshAfterOpenCodeRestart)
@@ -64,10 +65,11 @@ const getConfigDirectory = (): string | null => {
 const AGENTS_LOAD_CACHE_TTL_MS = 5000;
 const DEFAULT_AGENTS_CACHE_KEY = '__default__';
 const agentsLastLoadedAt = new Map<string, number>();
+const agentsCompleteCacheKeys = new Set<string>();
 const agentsLoadInFlight = new Map<string, Promise<boolean>>();
 
 const getAgentsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_AGENTS_CACHE_KEY;
+  return JSON.stringify([getRuntimeTransportIdentity(), directory?.trim() || DEFAULT_AGENTS_CACHE_KEY]);
 };
 
 const invalidateAgentsLoadCache = (directory: string | null = getConfigDirectory()) => {
@@ -197,6 +199,8 @@ interface AgentsStore {
 
   selectedAgentName: string | null;
   agents: Agent[];
+  agentsByCacheKey: Record<string, Agent[]>;
+  activeAgentsCacheKey: string | null;
   isLoading: boolean;
   agentDraft: AgentDraft | null;
 
@@ -224,6 +228,8 @@ export const useAgentsStore = create<AgentsStore>()(
 
         selectedAgentName: null,
         agents: [],
+        agentsByCacheKey: {},
+        activeAgentsCacheKey: null,
         isLoading: false,
         agentDraft: null,
 
@@ -240,7 +246,16 @@ export const useAgentsStore = create<AgentsStore>()(
           const cacheKey = getAgentsCacheKey(configDirectory);
           const now = Date.now();
           const loadedAt = agentsLastLoadedAt.get(cacheKey) ?? 0;
-          const hasCachedAgents = get().agents.length > 0;
+          const state = get();
+          const cachedAgents = state.agentsByCacheKey[cacheKey]
+            ?? (state.activeAgentsCacheKey === null ? state.agents : []);
+          const hasCachedAgents = agentsLastLoadedAt.has(cacheKey);
+
+          set({
+            agents: cachedAgents,
+            activeAgentsCacheKey: cacheKey,
+            isLoading: !hasCachedAgents || now - loadedAt >= AGENTS_LOAD_CACHE_TTL_MS,
+          });
 
           if (hasCachedAgents && now - loadedAt < AGENTS_LOAD_CACHE_TTL_MS) {
             return true;
@@ -252,8 +267,7 @@ export const useAgentsStore = create<AgentsStore>()(
           }
 
           const request = (async () => {
-            set({ isLoading: true });
-            const previousAgents = get().agents;
+            const previousAgents = get().agentsByCacheKey[cacheKey] ?? [];
             const previousSignature = buildAgentsSignature(previousAgents);
 
             for (let attempt = 0; attempt < 3; attempt++) {
@@ -265,7 +279,7 @@ export const useAgentsStore = create<AgentsStore>()(
                 // store instead of issuing a duplicate agents fetch at startup.
                 const agents = await opencodeClient.listAgents(configDirectory);
 
-                const agentsWithScope = await Promise.all(
+                const agentMetadata = await Promise.all(
                   agents.map(async (agent) => {
                     try {
                       // Force no-cache to ensure we get the latest scope info
@@ -296,33 +310,51 @@ export const useAgentsStore = create<AgentsStore>()(
                         const group = parseAgentGroup(mdPath);
 
                         if (scope === 'project' || scope === 'user') {
-                          return { ...agent, scope: scope as AgentScope, group };
+                          return { agent: { ...agent, scope: scope as AgentScope, group }, complete: true };
                         }
 
                         // Explicitly set null scope if not found, to clear stale state
-                        return { ...agent, scope: undefined, group };
+                        return { agent: { ...agent, scope: undefined, group }, complete: true };
                       }
                     } catch (err) {
                       console.warn(`[AgentsStore] Failed to fetch config for agent ${agent.name}:`, err);
                     }
-                    return agent;
+                    return { agent, complete: false };
                   })
                 );
 
+                const metadataComplete = agentMetadata.every((entry) => entry.complete);
+                const agentsWithScope = agentMetadata.map((entry) => entry.agent);
+
                 const nextSignature = buildAgentsSignature(agentsWithScope);
-                if (previousSignature !== nextSignature) {
-                  set({ agents: agentsWithScope, isLoading: false });
-                } else {
-                  set({ isLoading: false });
+                const nextAgents = !metadataComplete && agentsCompleteCacheKeys.has(cacheKey)
+                  ? previousAgents
+                  : previousSignature !== nextSignature ? agentsWithScope : previousAgents;
+                const state = get();
+                const nextState: Partial<AgentsStore> = {
+                  agentsByCacheKey: {
+                    ...state.agentsByCacheKey,
+                    [cacheKey]: nextAgents,
+                  },
+                };
+                if (state.activeAgentsCacheKey === cacheKey) {
+                  nextState.agents = nextAgents;
+                  nextState.isLoading = false;
                 }
-                agentsLastLoadedAt.set(cacheKey, Date.now());
+                set(nextState);
+                if (metadataComplete) {
+                  agentsLastLoadedAt.set(cacheKey, Date.now());
+                  agentsCompleteCacheKeys.add(cacheKey);
+                }
                 return true;
               } catch {
                 // ignore error
               }
             }
 
-            set({ isLoading: false });
+            if (get().activeAgentsCacheKey === cacheKey) {
+              set({ isLoading: false });
+            }
             return false;
           })();
 
