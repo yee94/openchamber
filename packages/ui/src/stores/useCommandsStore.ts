@@ -11,6 +11,7 @@ import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { runtimeFetch } from "@/lib/runtime-fetch";
+import { getRuntimeTransportIdentity } from "@/lib/runtime-switch";
 
 
 export type CommandScope = 'user' | 'project';
@@ -41,10 +42,11 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const COMMANDS_LOAD_CACHE_TTL_MS = 5000;
 const DEFAULT_COMMANDS_CACHE_KEY = '__default__';
 const commandsLastLoadedAt = new Map<string, number>();
+const commandsCompleteCacheKeys = new Set<string>();
 const commandsLoadInFlight = new Map<string, Promise<boolean>>();
 
 const getCommandsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_COMMANDS_CACHE_KEY;
+  return JSON.stringify([getRuntimeTransportIdentity(), directory?.trim() || DEFAULT_COMMANDS_CACHE_KEY]);
 };
 
 export const invalidateCommandsLoadCache = (directory: string | null = getRequestDirectory()) => {
@@ -59,6 +61,8 @@ const buildCommandsSignature = (commands: Command[]): string => {
       command.description ?? '',
       command.agent ?? '',
       command.model ?? '',
+      command.source ?? '',
+      command.template ?? '',
       String(command.isBuiltIn === true),
     ].join('|'))
     .join('||');
@@ -106,6 +110,8 @@ interface CommandsStore {
 
   selectedCommandName: string | null;
   commands: Command[];
+  commandsByCacheKey: Record<string, Command[]>;
+  activeCommandsCacheKey: string | null;
   isLoading: boolean;
   commandDraft: CommandDraft | null;
 
@@ -131,6 +137,8 @@ export const useCommandsStore = create<CommandsStore>()(
 
         selectedCommandName: null,
         commands: [],
+        commandsByCacheKey: {},
+        activeCommandsCacheKey: null,
         isLoading: false,
         commandDraft: null,
 
@@ -147,7 +155,16 @@ export const useCommandsStore = create<CommandsStore>()(
           const cacheKey = getCommandsCacheKey(directory);
           const now = Date.now();
           const loadedAt = commandsLastLoadedAt.get(cacheKey) ?? 0;
-          const hasCachedCommands = get().commands.length > 0;
+          const state = get();
+          const cachedCommands = state.commandsByCacheKey[cacheKey]
+            ?? (state.activeCommandsCacheKey === null ? state.commands : []);
+          const hasCachedCommands = commandsLastLoadedAt.has(cacheKey);
+
+          set({
+            commands: cachedCommands,
+            activeCommandsCacheKey: cacheKey,
+            isLoading: !hasCachedCommands || now - loadedAt >= COMMANDS_LOAD_CACHE_TTL_MS,
+          });
 
           if (hasCachedCommands && now - loadedAt < COMMANDS_LOAD_CACHE_TTL_MS) {
             return true;
@@ -159,8 +176,7 @@ export const useCommandsStore = create<CommandsStore>()(
           }
 
           const request = (async () => {
-            set({ isLoading: true });
-            const previousCommands = get().commands;
+            const previousCommands = get().commandsByCacheKey[cacheKey] ?? [];
             const previousSignature = buildCommandsSignature(previousCommands);
             let lastError: unknown = null;
 
@@ -174,6 +190,7 @@ export const useCommandsStore = create<CommandsStore>()(
 
                 const configurableCommands = commands.filter((cmd) => cmd.source !== 'skill');
                 let commandsWithScope = configurableCommands;
+                let metadataComplete = true;
                 if (configurableCommands.length > 0) {
                   try {
                     const response = await runtimeFetch('/api/config/commands/metadata', {
@@ -196,19 +213,35 @@ export const useCommandsStore = create<CommandsStore>()(
                           ? { ...command, scope }
                           : command;
                       });
+                    } else {
+                      metadataComplete = false;
                     }
                   } catch (error) {
                     console.warn('[CommandsStore] Failed to fetch command metadata batch:', error);
+                    metadataComplete = false;
                   }
                 }
 
                 const nextSignature = buildCommandsSignature(commandsWithScope);
-                if (previousSignature !== nextSignature) {
-                  set({ commands: commandsWithScope, isLoading: false });
-                } else {
-                  set({ isLoading: false });
+                const nextCommands = !metadataComplete && commandsCompleteCacheKeys.has(cacheKey)
+                  ? previousCommands
+                  : previousSignature !== nextSignature ? commandsWithScope : previousCommands;
+                const state = get();
+                const nextState: Partial<CommandsStore> = {
+                  commandsByCacheKey: {
+                    ...state.commandsByCacheKey,
+                    [cacheKey]: nextCommands,
+                  },
+                };
+                if (state.activeCommandsCacheKey === cacheKey) {
+                  nextState.commands = nextCommands;
+                  nextState.isLoading = false;
                 }
-                commandsLastLoadedAt.set(cacheKey, Date.now());
+                set(nextState);
+                if (metadataComplete) {
+                  commandsLastLoadedAt.set(cacheKey, Date.now());
+                  commandsCompleteCacheKeys.add(cacheKey);
+                }
                 return true;
               } catch (error) {
                 lastError = error;
@@ -218,7 +251,9 @@ export const useCommandsStore = create<CommandsStore>()(
             }
 
             console.error("Failed to load commands:", lastError);
-            set({ commands: previousCommands, isLoading: false });
+            if (get().activeCommandsCacheKey === cacheKey) {
+              set({ isLoading: false });
+            }
             return false;
           })();
 

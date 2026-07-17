@@ -8,8 +8,12 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getDefaultModels } from '@/lib/quota/model-families';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { fetchQuotaProvider, queryClient, queryKeys } from '@/lib/queryRuntime';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 60000;
+let refreshGeneration = 0;
+let quotaRuntimeGeneration = 0;
+const providerFetchCounts = new Map<QuotaProviderId, number>();
 
 interface QuotaSettingsState {
   autoRefresh: boolean;
@@ -135,6 +139,76 @@ const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
   };
 };
 
+type ProviderRefreshOutcome =
+  | { providerId: QuotaProviderId; result: ProviderResult }
+  | { providerId: QuotaProviderId; error: string }
+  | { providerId: QuotaProviderId; stale: true };
+
+const refreshProviderQuota = async (
+  providerId: QuotaProviderId,
+  set: (partial: Partial<QuotaStore> | ((state: QuotaStore) => Partial<QuotaStore>)) => void,
+): Promise<ProviderRefreshOutcome> => {
+  const runtimeGeneration = quotaRuntimeGeneration;
+  providerFetchCounts.set(providerId, (providerFetchCounts.get(providerId) ?? 0) + 1);
+  set((state) => ({
+    isFetchingProvider: { ...state.isFetchingProvider, [providerId]: true },
+  }));
+
+  try {
+    const result = await queryClient.fetchQuery({
+      queryKey: queryKeys.quota(providerId),
+      queryFn: ({ signal }) => fetchQuotaProvider(providerId, signal),
+      staleTime: 0,
+      retry: false,
+    });
+    if (runtimeGeneration !== quotaRuntimeGeneration) {
+      return { providerId, stale: true };
+    }
+    set((state) => {
+      const next = state.results.filter((entry) => entry.providerId !== providerId);
+      next.push(result);
+      return { results: next };
+    });
+    return { providerId, result };
+  } catch (error) {
+    if (runtimeGeneration !== quotaRuntimeGeneration) {
+      return { providerId, stale: true };
+    }
+    return {
+      providerId,
+      error: error instanceof Error ? error.message : 'Failed to fetch quota',
+    };
+  } finally {
+    if (runtimeGeneration === quotaRuntimeGeneration) {
+      const remaining = (providerFetchCounts.get(providerId) ?? 1) - 1;
+      if (remaining > 0) {
+        providerFetchCounts.set(providerId, remaining);
+      } else {
+        providerFetchCounts.delete(providerId);
+      }
+      set((state) => ({
+        isFetchingProvider: {
+          ...state.isFetchingProvider,
+          [providerId]: remaining > 0,
+        },
+      }));
+    }
+  }
+};
+
+export const resetQuotaStoreForRuntimeSwitch = (): void => {
+  quotaRuntimeGeneration += 1;
+  refreshGeneration += 1;
+  providerFetchCounts.clear();
+  useQuotaStore.setState({
+    results: [],
+    isLoading: false,
+    isFetchingProvider: {},
+    lastUpdated: null,
+    error: null,
+  });
+};
+
 export const useQuotaStore = create<QuotaStore>()(
   devtools(
     (set, get) => ({
@@ -162,59 +236,25 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchAllQuotas: async () => {
+        const generation = ++refreshGeneration;
         set({ isLoading: true, error: null });
         const providerIds = QUOTA_PROVIDERS.map((provider) => provider.id);
-        try {
-          await Promise.all(
-            providerIds.map((providerId) => get().fetchProviderQuota(providerId))
-          );
+        const outcomes = await Promise.all(providerIds.map((providerId) => refreshProviderQuota(providerId, set)));
+        if (generation === refreshGeneration) {
+          const failed = outcomes.find((outcome): outcome is Extract<ProviderRefreshOutcome, { error: string }> => 'error' in outcome);
+          const succeeded = outcomes.some((outcome) => 'result' in outcome);
           set({
             isLoading: false,
-            lastUpdated: Date.now()
+            ...(succeeded ? { lastUpdated: Date.now() } : {}),
+            error: failed?.error ?? null,
           });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to fetch quotas';
-          set({ isLoading: false, error: message });
         }
       },
 
       fetchProviderQuota: async (providerId) => {
-        set((state) => ({
-          isFetchingProvider: { ...state.isFetchingProvider, [providerId]: true }
-        }));
-        try {
-          const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`);
-          const payload = await response.json().catch(() => null);
-          if (!response.ok) {
-            throw new Error(payload?.error || 'Failed to fetch quota');
-          }
-
-          const result = payload as ProviderResult;
-          set((state) => {
-            const next = state.results.filter((entry) => entry.providerId !== providerId);
-            next.push(result);
-            return { results: next, error: null };
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to fetch quota';
-          const fallback: ProviderResult = {
-            providerId,
-            providerName: providerId,
-            ok: false,
-            configured: false,
-            error: message,
-            usage: null,
-            fetchedAt: Date.now()
-          };
-          set((state) => {
-            const next = state.results.filter((entry) => entry.providerId !== providerId);
-            next.push(fallback);
-            return { results: next, error: message };
-          });
-        } finally {
-          set((state) => ({
-            isFetchingProvider: { ...state.isFetchingProvider, [providerId]: false }
-          }));
+        const outcome = await refreshProviderQuota(providerId, set);
+        if (!('stale' in outcome)) {
+          set({ error: 'error' in outcome ? outcome.error : null });
         }
       },
 

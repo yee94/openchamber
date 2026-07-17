@@ -19,10 +19,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 
 interface ServerTTSStatusCache {
   available: boolean;
   checkedAt: number;
+}
+
+interface PlaybackSession {
+  abort: AbortController;
 }
 
 interface UseServerTTSOptions {
@@ -31,40 +36,43 @@ interface UseServerTTSOptions {
 }
 
 const SERVER_TTS_STATUS_TTL_MS = 30000;
-let serverTTSStatusCache: ServerTTSStatusCache | null = null;
-let serverTTSStatusRequest: Promise<boolean> | null = null;
+const serverTTSStatusCache = new Map<string, ServerTTSStatusCache>();
+const serverTTSStatusRequests = new Map<string, Promise<boolean>>();
 
-async function getServerTTSStatus(): Promise<boolean> {
+async function getServerTTSStatus(transportIdentity: string): Promise<boolean> {
   const now = Date.now();
-  if (serverTTSStatusCache && now - serverTTSStatusCache.checkedAt < SERVER_TTS_STATUS_TTL_MS) {
-    return serverTTSStatusCache.available;
+  const cached = serverTTSStatusCache.get(transportIdentity);
+  if (cached && now - cached.checkedAt < SERVER_TTS_STATUS_TTL_MS) {
+    return cached.available;
   }
 
-  if (serverTTSStatusRequest) {
-    return serverTTSStatusRequest;
+  const inFlight = serverTTSStatusRequests.get(transportIdentity);
+  if (inFlight) {
+    return inFlight;
   }
 
-  serverTTSStatusRequest = (async () => {
+  const request = (async () => {
     try {
       const response = await runtimeFetch('/api/tts/status');
       if (!response.ok) {
-        serverTTSStatusCache = { available: false, checkedAt: Date.now() };
+        serverTTSStatusCache.set(transportIdentity, { available: false, checkedAt: Date.now() });
         return false;
       }
 
       const data = await response.json();
       const available = Boolean(data.available);
-      serverTTSStatusCache = { available, checkedAt: Date.now() };
+      serverTTSStatusCache.set(transportIdentity, { available, checkedAt: Date.now() });
       return available;
     } catch {
-      serverTTSStatusCache = { available: false, checkedAt: Date.now() };
+      serverTTSStatusCache.set(transportIdentity, { available: false, checkedAt: Date.now() });
       return false;
     } finally {
-      serverTTSStatusRequest = null;
+      serverTTSStatusRequests.delete(transportIdentity);
     }
   })();
+  serverTTSStatusRequests.set(transportIdentity, request);
 
-  return serverTTSStatusRequest;
+  return request;
 }
 
 export interface UseServerTTSReturn {
@@ -133,7 +141,8 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
   const [error, setError] = useState<string | null>(null);
   
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const sessionRef = useRef<PlaybackSession | null>(null);
+  const availabilityGenerationRef = useRef(0);
   
   // Get current model and API settings from config store.
   const currentProviderId = useConfigStore((state) => state.currentProviderId);
@@ -144,35 +153,36 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
 
   // Check if server TTS is available
   const checkAvailability = useCallback(async (): Promise<boolean> => {
+    const generation = ++availabilityGenerationRef.current;
+    const transportIdentity = getRuntimeTransportIdentity();
+    const applyAvailability = (available: boolean): boolean => {
+      if (generation === availabilityGenerationRef.current && getRuntimeTransportIdentity() === transportIdentity) {
+        setIsAvailable(available);
+      }
+      return available;
+    };
     if (!enabled) {
-      setIsAvailable(false);
-      return false;
+      return applyAvailability(false);
     }
 
     const hasClientKey = Boolean(openaiApiKey && openaiApiKey.trim().length > 0);
     const hasCustomUrl = Boolean(openaiCompatibleUrl && openaiCompatibleUrl.trim().length > 0);
     if (availabilityMode === 'openai-compatible') {
-      setIsAvailable(hasCustomUrl);
-      return hasCustomUrl;
+      return applyAvailability(hasCustomUrl);
     }
 
     if (hasClientKey) {
-      setIsAvailable(true);
-      return true;
+      return applyAvailability(true);
     }
 
     if (availabilityMode === 'auto' && hasCustomUrl) {
-      setIsAvailable(true);
-      return true;
+      return applyAvailability(true);
     }
 
     try {
-      const hasServerKey = await getServerTTSStatus();
-      setIsAvailable(hasServerKey);
-      return hasServerKey;
+      return applyAvailability(await getServerTTSStatus(transportIdentity));
     } catch {
-      setIsAvailable(false);
-      return false;
+      return applyAvailability(false);
     }
   }, [availabilityMode, enabled, openaiApiKey, openaiCompatibleUrl]);
 
@@ -181,21 +191,25 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
     void checkAvailability();
   }, [checkAvailability]);
 
+  useEffect(() => subscribeRuntimeEndpointChanged(() => {
+    void checkAvailability();
+  }), [checkAvailability]);
+
   // Stop current playback
   const stop = useCallback(() => {
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    session?.abort.abort();
+
     // Stop Web Audio API source
     if (audioSourceRef.current) {
       try {
+        audioSourceRef.current.onended = null;
         audioSourceRef.current.stop();
       } catch {
         // Already stopped
       }
       audioSourceRef.current = null;
-    }
-    
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
     }
     
     setIsPlaying(false);
@@ -239,6 +253,8 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
     }
 
     setError(null);
+    const session: PlaybackSession = { abort: new AbortController() };
+    sessionRef.current = session;
 
     try {
       // Unlock audio context first (required for mobile Safari)
@@ -255,9 +271,6 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       silentSource.buffer = silentBuffer;
       silentSource.connect(ctx.destination);
       silentSource.start(0);
-
-      // Create abort controller for this request
-      abortControllerRef.current = new AbortController();
 
       const voice = options?.voice || 'nova';
       console.log('[useServerTTS] Speaking with voice:', voice, 'options:', options);
@@ -283,8 +296,12 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
           // Send custom base URL for OpenAI-compatible servers
           baseURL: options?.baseURL || undefined,
         }),
-        signal: abortControllerRef.current.signal,
+        signal: session.abort.signal,
       });
+
+      if (sessionRef.current !== session) {
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -294,10 +311,16 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       // Get audio data from response
       const audioBlob = await response.blob();
       const arrayBuffer = await audioBlob.arrayBuffer();
+      if (sessionRef.current !== session) {
+        return;
+      }
       
       // Decode audio data using the same context we unlocked earlier
       console.log('[useServerTTS] Decoding audio data...');
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      if (sessionRef.current !== session) {
+        return;
+      }
       
       // Create source node
       const source = ctx.createBufferSource();
@@ -320,9 +343,13 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       
       // Set up event handlers
       source.onended = () => {
+        if (sessionRef.current !== session || audioSourceRef.current !== source) {
+          return;
+        }
         console.log('[useServerTTS] Audio playback ended');
         setIsPlaying(false);
         audioSourceRef.current = null;
+        sessionRef.current = null;
         options?.onEnd?.();
       };
       
@@ -330,10 +357,13 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       console.log('[useServerTTS] Starting audio playback via Web Audio API...');
       setIsPlaying(true);
       options?.onStart?.();
+      if (sessionRef.current !== session || audioSourceRef.current !== source) {
+        return;
+      }
       source.start(0);
       
     } catch (err) {
-      if ((err as Error).name === 'AbortError') {
+      if ((err as Error).name === 'AbortError' || sessionRef.current !== session) {
         // Request was aborted, don't show error
         return;
       }
@@ -343,6 +373,11 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       setError(errorMsg);
       options?.onError?.(errorMsg);
       setIsPlaying(false);
+      if (audioSourceRef.current) {
+        audioSourceRef.current.onended = null;
+        audioSourceRef.current = null;
+      }
+      sessionRef.current = null;
     }
   }, [stop, currentProviderId, currentModelId, openaiApiKey, openaiCompatibleApiKey]);
 

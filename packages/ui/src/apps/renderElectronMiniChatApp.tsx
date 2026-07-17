@@ -13,6 +13,7 @@ import { initializeLocale, I18nProvider } from '@/lib/i18n';
 import { initializeAppearancePreferences, syncDesktopSettings } from '@/lib/persistence';
 import { startModelPrefsAutoSave } from '@/lib/modelPrefsAutoSave';
 import { startTypographyWatcher } from '@/lib/typographyWatcher';
+import { QueryRuntimeProvider } from '@/lib/QueryRuntimeProvider';
 import { ElectronMiniChatApp } from './ElectronMiniChatApp';
 
 const initializeSharedPreferences = () => {
@@ -44,15 +45,17 @@ export function renderElectronMiniChatApp(apis: RuntimeAPIs) {
 
   createRoot(rootElement).render(
     <StrictMode>
-      <I18nProvider>
-        <ThemeSystemProvider>
-          <ThemeProvider>
-            <SessionAuthGate>
-              <ElectronMiniChatApp apis={apis} />
-            </SessionAuthGate>
-          </ThemeProvider>
-        </ThemeSystemProvider>
-      </I18nProvider>
+      <QueryRuntimeProvider>
+        <I18nProvider>
+          <ThemeSystemProvider>
+            <ThemeProvider>
+              <SessionAuthGate>
+                <ElectronMiniChatApp apis={apis} />
+              </SessionAuthGate>
+            </ThemeProvider>
+          </ThemeSystemProvider>
+        </I18nProvider>
+      </QueryRuntimeProvider>
     </StrictMode>,
   );
 }

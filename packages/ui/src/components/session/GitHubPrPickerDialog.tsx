@@ -20,8 +20,10 @@ import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { useDeviceInfo } from '@/lib/device';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import type { GitHubPullRequestContextResult, GitHubPullRequestSummary, GitHubPullRequestsListResult, GitHubRepoSelector } from '@/lib/api/types';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import type { GitHubPullRequestContextResult, GitHubRepoSelector } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { queryKeys } from '@/lib/queryRuntime';
 
 const parsePrNumber = (value: string): number | null => {
   const trimmed = value.trim();
@@ -80,141 +82,56 @@ export function GitHubPrPickerDialog({
 
   const [query, setQuery] = React.useState('');
   const [includeDiff, setIncludeDiff] = React.useState(false);
-  const [result, setResult] = React.useState<GitHubPullRequestsListResult | null>(null);
-  const [prs, setPrs] = React.useState<GitHubPullRequestSummary[]>([]);
-  const [page, setPage] = React.useState(1);
-  const [hasMore, setHasMore] = React.useState(false);
   const [loadingPrNumber, setLoadingPrNumber] = React.useState<number | null>(null);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const actionRequestGenerationRef = React.useRef(0);
 
   const directNumber = React.useMemo(() => parsePrNumber(query), [query]);
   const debouncedQuery = useDebouncedValue(query, 350);
-  const isTextSearch = debouncedQuery.trim().length > 0 && !directNumber;
-
-  const refresh = React.useCallback(async () => {
-    if (!projectDirectory) {
-      setResult(null);
-      setError(t('session.githubPrPicker.error.noActiveProject'));
-      return;
-    }
-    if (githubAuthChecked && githubAuthStatus?.connected === false) {
-      setResult({ connected: false });
-      setPrs([]);
-      setHasMore(false);
-      setPage(1);
-      setError(null);
-      return;
-    }
-    if (!github?.prsList) {
-      setResult(null);
-      setError(t('session.githubPrPicker.error.runtimeUnavailable'));
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      const next = await github.prsList(projectDirectory, { page: 1 });
-      setResult(next);
-      setPrs(next.prs ?? []);
-      setPage(next.page ?? 1);
-      setHasMore(Boolean(next.hasMore));
-      if (next.connected === false) {
-        setError(null);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [github, githubAuthChecked, githubAuthStatus, projectDirectory, t]);
-
-  React.useEffect(() => {
-    if (!open || !projectDirectory) return;
-    if (githubAuthChecked && githubAuthStatus?.connected === false) return;
-    if (!github?.prsList) return;
-    if (!debouncedQuery.trim() || directNumber) {
-      void refresh();
-      return;
-    }
-
-    const controller = new AbortController();
-    setIsLoading(true);
-    setError(null);
-
-    github.prsList(projectDirectory, { page: 1, query: debouncedQuery.trim() })
-      .then((next) => {
-        if (controller.signal.aborted) return;
-        setResult(next);
-        setPrs(next.prs ?? []);
-        setPage(next.page ?? 1);
-        setHasMore(Boolean(next.hasMore));
-      })
-      .catch((e) => {
-        if (controller.signal.aborted) return;
-        setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setIsLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [open, projectDirectory, github, githubAuthChecked, githubAuthStatus, debouncedQuery, directNumber, refresh, t]);
-
+  const searchQuery = directNumber ? '' : debouncedQuery.trim();
+  const searchReady = Boolean(directNumber) || query === debouncedQuery;
+  const enabled = open && searchReady && Boolean(projectDirectory) && Boolean(github?.prsList) && !(githubAuthChecked && githubAuthStatus?.connected === false);
+  const prsQuery = useInfiniteQuery({
+    queryKey: queryKeys.scoped('github-prs', projectDirectory, searchQuery),
+    enabled,
+    initialPageParam: 1,
+    refetchOnMount: 'always',
+    queryFn: ({ pageParam }) => github!.prsList!(projectDirectory!, {
+      page: pageParam,
+      ...(searchQuery ? { query: searchQuery } : {}),
+    }),
+    getNextPageParam: (lastPage) => lastPage.hasMore ? (lastPage.page ?? 1) + 1 : undefined,
+  });
+  const result = searchReady ? prsQuery.data?.pages.at(-1) ?? null : null;
+  const prs = searchReady ? prsQuery.data?.pages.flatMap((page) => page.prs ?? []) ?? [] : [];
+  const hasMore = searchReady && prsQuery.hasNextPage;
+  const isLoading = !directNumber && !searchReady || prsQuery.isLoading;
+  const isLoadingMore = searchReady && prsQuery.isFetchingNextPage;
+  const error = searchReady && prsQuery.error
+    ? prsQuery.error instanceof Error ? prsQuery.error.message : String(prsQuery.error)
+    : null;
   const loadMore = React.useCallback(async () => {
-    if (!projectDirectory) return;
-    if (!github?.prsList) return;
-    if (isLoadingMore || isLoading) return;
-    if (!hasMore) return;
-
-    setIsLoadingMore(true);
     try {
-      const nextPage = page + 1;
-      const next = isTextSearch
-        ? await github.prsList(projectDirectory, { page: nextPage, query: debouncedQuery.trim() })
-        : await github.prsList(projectDirectory, { page: nextPage });
-      setResult(next);
-      setPrs((prev) => [...prev, ...(next.prs ?? [])]);
-      setPage(next.page ?? nextPage);
-      setHasMore(Boolean(next.hasMore));
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      await prsQuery.fetchNextPage();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       toast.error(t('session.githubPrPicker.toast.loadMoreFailed'), { description: message });
-    } finally {
-      setIsLoadingMore(false);
     }
-  }, [github, hasMore, isLoading, isLoadingMore, isTextSearch, debouncedQuery, page, projectDirectory, t]);
+  }, [prsQuery, t]);
 
   React.useEffect(() => {
     if (!open) {
+      ++actionRequestGenerationRef.current;
       setQuery('');
       setIncludeDiff(false);
       setLoadingPrNumber(null);
-      setError(null);
-      setResult(null);
-      setPrs([]);
-      setPage(1);
-      setHasMore(false);
-      setIsLoading(false);
-      return;
     }
-    void refresh();
-  }, [open, refresh]);
+  }, [open]);
 
   React.useEffect(() => {
-    if (!open) return;
-    if (githubAuthChecked && githubAuthStatus?.connected === false) {
-      setResult({ connected: false });
-      setPrs([]);
-      setHasMore(false);
-      setPage(1);
-      setError(null);
-    }
-  }, [githubAuthChecked, githubAuthStatus, open]);
+    ++actionRequestGenerationRef.current;
+  }, [open, projectDirectory]);
 
-  const connected = githubAuthChecked ? result?.connected !== false : true;
+  const connected = !githubAuthChecked || (githubAuthStatus?.connected !== false && result?.connected !== false);
 
   const openGitHubSettings = React.useCallback(() => {
     setSettingsPage('github');
@@ -232,6 +149,8 @@ export function GitHubPrPickerDialog({
     }
     if (loadingPrNumber) return;
 
+    const requestGeneration = ++actionRequestGenerationRef.current;
+    const isCurrentRequest = () => actionRequestGenerationRef.current === requestGeneration;
     setLoadingPrNumber(prNumber);
     try {
       const context = await github.prContext(projectDirectory, prNumber, {
@@ -239,6 +158,7 @@ export function GitHubPrPickerDialog({
         includeCheckDetails: false,
         sourceRepo,
       });
+      if (!isCurrentRequest()) return;
 
       if (context.connected === false) {
         toast.error(t('session.githubPrPicker.error.notConnected'));
@@ -259,6 +179,7 @@ export function GitHubPrPickerDialog({
 
       if (onSelect) {
         const instructionsText = await renderMagicPrompt('github.pr.review.instructions');
+        if (!isCurrentRequest()) return;
         onSelect({
           number: context.pr.number,
           title: context.pr.title,
@@ -278,10 +199,11 @@ export function GitHubPrPickerDialog({
       }
       onOpenChange(false);
     } catch (e) {
+      if (!isCurrentRequest()) return;
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('session.githubPrPicker.toast.loadDetailsFailed'), { description: message });
     } finally {
-      setLoadingPrNumber(null);
+      if (isCurrentRequest()) setLoadingPrNumber(null);
     }
   }, [github, includeDiff, loadingPrNumber, onOpenChange, onSelect, projectDirectory, t]);
 
@@ -296,7 +218,9 @@ export function GitHubPrPickerDialog({
           <Input
             placeholder={t('session.githubPrPicker.searchPlaceholder')}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+            }}
             className="pl-9 w-full"
           />
         </div>
@@ -369,7 +293,7 @@ export function GitHubPrPickerDialog({
             </div>
           ) : null}
 
-          {prs.length === 0 && !isLoading && connected && github && projectDirectory ? (
+          {prs.length === 0 && !isLoading && !error && connected && github && projectDirectory ? (
             <div className="text-center text-muted-foreground py-8">{debouncedQuery.trim() ? t('session.githubPrPicker.empty.noPullRequestsFound') : t('session.githubPrPicker.empty.noOpenPullRequestsFound')}</div>
           ) : null}
 

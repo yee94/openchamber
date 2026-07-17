@@ -18,6 +18,7 @@ import { startModelPrefsAutoSave } from '@/lib/modelPrefsAutoSave';
 import { startTypographyWatcher } from '@/lib/typographyWatcher';
 import { preloadMarkdownRenderer } from '@/components/chat/markdownRendererLoader';
 import { SessionAuthGate } from '@/components/auth/SessionAuthGate';
+import { QueryRuntimeProvider } from '@/lib/QueryRuntimeProvider';
 import { MobileApp } from './MobileApp';
 
 const initializeSharedPreferences = () => {
@@ -81,15 +82,17 @@ export function renderMobileApp(apis: RuntimeAPIs) {
 
   createRoot(rootElement).render(
     <StrictMode>
-      <I18nProvider>
-        <ThemeSystemProvider>
-          <ThemeProvider>
-            <DiffWorkerProvider>
-              {isNativeShell ? app : <SessionAuthGate>{app}</SessionAuthGate>}
-            </DiffWorkerProvider>
-          </ThemeProvider>
-        </ThemeSystemProvider>
-      </I18nProvider>
+      <QueryRuntimeProvider>
+        <I18nProvider>
+          <ThemeSystemProvider>
+            <ThemeProvider>
+              <DiffWorkerProvider>
+                {isNativeShell ? app : <SessionAuthGate>{app}</SessionAuthGate>}
+              </DiffWorkerProvider>
+            </ThemeProvider>
+          </ThemeSystemProvider>
+        </I18nProvider>
+      </QueryRuntimeProvider>
     </StrictMode>,
   );
 }

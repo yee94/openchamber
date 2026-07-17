@@ -13,22 +13,51 @@ export function DiagramView() {
   const [xml, setXml] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const editorRef = React.useRef<DiagramEditorHandle>(null);
+  const mountedRef = React.useRef(false);
+  const latestRequestRef = React.useRef<{ path: string; generation: number } | null>(null);
+  const requestGenerationRef = React.useRef(0);
+  const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const pendingDiagramFile = useUIStore((state) => state.pendingDiagramFile);
 
   const loadFile = React.useCallback(async (path: string) => {
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+    latestRequestRef.current = { path, generation };
     setLoading(true);
     setFilePath(path);
+
     try {
       const result = await files?.readFile?.(path);
+      const latestRequest = latestRequestRef.current;
+      if (!mountedRef.current || latestRequest?.path !== path || latestRequest.generation !== generation) {
+        return;
+      }
+
       if (result) {
         setXml(result.content);
       }
     } catch {
+      const latestRequest = latestRequestRef.current;
+      if (!mountedRef.current || latestRequest?.path !== path || latestRequest.generation !== generation) {
+        return;
+      }
+
       setXml('');
     } finally {
-      setLoading(false);
+      const latestRequest = latestRequestRef.current;
+      if (mountedRef.current && latestRequest?.path === path && latestRequest.generation === generation) {
+        setLoading(false);
+      }
     }
   }, [files]);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!pendingDiagramFile) {
@@ -42,10 +71,20 @@ export function DiagramView() {
 
   const saveDiagram = React.useCallback(async () => {
     const newXml = editorRef.current?.getXml();
-    if (filePath && files?.writeFile && newXml && newXml !== xml) {
-      await files.writeFile(filePath, newXml);
-      setXml(newXml);
-    }
+    const request = latestRequestRef.current;
+    const writeFile = files?.writeFile;
+    if (!filePath || !writeFile || !newXml || newXml === xml || request?.path !== filePath) return;
+
+    const { path, generation } = request;
+    const save = saveQueueRef.current.then(async () => {
+      await writeFile(path, newXml);
+      const latestRequest = latestRequestRef.current;
+      if (mountedRef.current && latestRequest?.path === path && latestRequest.generation === generation) {
+        setXml(newXml);
+      }
+    });
+    saveQueueRef.current = save.catch(() => undefined);
+    await save;
   }, [filePath, files, xml]);
 
   const fileName = filePath ? filePath.split('/').pop() || filePath : '';

@@ -18,6 +18,7 @@ import { getRuntimeKey } from './lib/runtime-switch'
 import type { RuntimeAPIs } from './lib/api/types'
 import { isDesktopShell } from './lib/desktop'
 import { beginSessionStartupBarrier } from './lib/session-startup-barrier'
+import { QueryRuntimeProvider } from './lib/QueryRuntimeProvider'
 
 declare global {
   interface Window {
@@ -79,14 +80,16 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <I18nProvider>
-      <ThemeSystemProvider>
-        <ThemeProvider>
-          <SessionAuthGate>
-            <App apis={runtimeAPIs} />
-          </SessionAuthGate>
-        </ThemeProvider>
-      </ThemeSystemProvider>
-    </I18nProvider>
+    <QueryRuntimeProvider>
+      <I18nProvider>
+        <ThemeSystemProvider>
+          <ThemeProvider>
+            <SessionAuthGate>
+              <App apis={runtimeAPIs} />
+            </SessionAuthGate>
+          </ThemeProvider>
+        </ThemeSystemProvider>
+      </I18nProvider>
+    </QueryRuntimeProvider>
   </StrictMode>,
 );

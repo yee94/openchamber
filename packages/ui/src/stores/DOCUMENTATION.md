@@ -30,10 +30,25 @@ These are the most performance-sensitive.
 
 These stores act like centralized keyed caches. UI should consume narrow slices from them instead of re-fetching the same data in multiple places.
 
+TanStack Query owns runtime-scoped pull server state. Every query key begins with
+the runtime transport identity; `queryKeys.scoped()` appends feature arguments
+such as directory, and `queryKeys.quota()` appends the provider. A runtime
+transport identity change clears the Query client, so cached data never crosses
+runtime transports.
+
 `useCommandsStore` loads the official command catalog through the OpenCode SDK,
 then resolves OpenChamber-owned scope metadata with one batched runtime request.
 Never restore the per-command metadata `Promise.all` path: large command catalogs
 otherwise create an N+1 preflight/request storm during cold startup.
+
+Agents and commands cache entries use transport identity plus configuration
+directory. A metadata failure retains the prior complete snapshot for that key;
+the incomplete refresh never replaces it.
+
+`useQuotaStore` keeps UI settings and rendered provider results. Runtime reset
+clears quota results, fetch state, errors, and active refresh generations.
+Provider refreshes commit independently, so successful providers remain visible
+when another provider fails; the store reports the failed provider error.
 
 ### UI state stores
 
@@ -105,6 +120,9 @@ then starts one server-owned background job. A low-priority long poll applies
 new SQLite revisions and updates `startupSyncProgress`; it must not issue
 per-directory OpenCode requests from the renderer. Do not add a second
 session-summary cache to browser storage or a sidebar-local startup refresh.
+Every global session-index asynchronous entry captures runtime generation and
+transport identity, then applies its result only while both still match. This
+covers snapshot hydration, startup sync, persistence, and long-poll revisions.
 
 ## Git / PR Stores
 

@@ -12,16 +12,16 @@ export type ScrollShadowProps = React.HTMLAttributes<HTMLElement> & {
   onVisibilityChange?: (state: "both" | "none" | "top" | "bottom" | "left" | "right") => void;
 };
 
-function mergeRefs<T>(...refs: Array<React.Ref<T>>): React.RefCallback<T> {
-  return (value) => {
-    refs.forEach((ref) => {
+function useMergedRefs<T>(first: React.Ref<T> | undefined, second: React.Ref<T> | undefined): React.RefCallback<T> {
+  return React.useMemo(() => (value) => {
+    [first, second].forEach((ref) => {
       if (typeof ref === "function") {
         ref(value);
       } else if (ref && typeof ref === "object") {
         (ref as React.MutableRefObject<T | null>).current = value;
       }
     });
-  };
+  }, [first, second]);
 }
 
 export const ScrollShadow = React.forwardRef<HTMLElement, ScrollShadowProps>(
@@ -86,6 +86,10 @@ export const ScrollShadow = React.forwardRef<HTMLElement, ScrollShadowProps>(
 
       if (!isEnabled) {
         clearAttributes(el);
+        if (visibleRef.current !== "none") {
+          visibleRef.current = "none";
+          onVisibilityChange?.("none");
+        }
         return;
       }
 
@@ -117,9 +121,15 @@ export const ScrollShadow = React.forwardRef<HTMLElement, ScrollShadowProps>(
       }
     }, [clearAttributes, hideTopShadow, hideBottomShadow, isEnabled, offset, onVisibilityChange, orientation, setAttributes]);
 
+    React.useLayoutEffect(() => {
+      if (!isEnabled) {
+        checkOverflow();
+      }
+    }, [checkOverflow, isEnabled]);
+
     React.useEffect(() => {
       const el = internalRef.current;
-      if (!el) return;
+      if (!el || !isEnabled) return;
 
       // Throttle with RAF to avoid excessive calls during rapid DOM changes
       let rafId: number | null = null;
@@ -131,7 +141,7 @@ export const ScrollShadow = React.forwardRef<HTMLElement, ScrollShadowProps>(
         });
       };
 
-      const handleScroll = () => checkOverflow(); // Scroll should be immediate
+      const handleScroll = throttledCheck;
       const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(throttledCheck) : null;
       const mutationObserver =
         observeMutations && typeof MutationObserver !== "undefined" ? new MutationObserver(throttledCheck) : null;
@@ -154,12 +164,14 @@ export const ScrollShadow = React.forwardRef<HTMLElement, ScrollShadowProps>(
         resizeObserver?.disconnect();
         mutationObserver?.disconnect();
       };
-    }, [checkOverflow, observeMutations]);
+    }, [checkOverflow, isEnabled, observeMutations]);
+
+    const mergedRefs = useMergedRefs(internalRef, ref);
 
     return (
       <Component
         {...rest}
-        ref={mergeRefs(internalRef, ref)}
+        ref={mergedRefs}
         className={className}
         data-orientation={orientation}
         data-scroll-shadow={dataScrollShadow ?? true}

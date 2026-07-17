@@ -15,6 +15,7 @@ import {
   type SessionIndexSnapshot,
 } from '@/lib/session-index-api';
 import { normalizePath } from '@/lib/pathNormalization';
+import { getRuntimeGeneration, getRuntimeTransportIdentity } from '@/lib/runtime-switch';
 
 type GlobalSessionsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -130,6 +131,24 @@ let runningDirectoryTasks = 0;
 let directoryFetchConcurrency = DIRECTORY_FETCH_CONCURRENCY_MID;
 let consecutiveDirectorySuccesses = 0;
 let sessionIndexPollController: AbortController | null = null;
+
+type SessionIndexRuntimeCapture = {
+  loadGeneration: number;
+  runtimeGeneration: number;
+  transportIdentity: string;
+};
+
+const captureSessionIndexRuntime = (): SessionIndexRuntimeCapture => ({
+  loadGeneration,
+  runtimeGeneration: getRuntimeGeneration(),
+  transportIdentity: getRuntimeTransportIdentity(),
+});
+
+const isCurrentSessionIndexRuntime = (capture: SessionIndexRuntimeCapture): boolean => (
+  capture.loadGeneration === loadGeneration
+  && capture.runtimeGeneration === getRuntimeGeneration()
+  && capture.transportIdentity === getRuntimeTransportIdentity()
+);
 
 const isDirectoryOverloaded = (error: unknown): boolean => {
   const status = (error as { status?: number } | null)?.status;
@@ -703,8 +722,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 
   hydrateSessionIndex: async () => {
+    const runtime = captureSessionIndexRuntime();
     try {
       const snapshot = await loadSessionIndexSnapshot();
+      if (!isCurrentSessionIndexRuntime(runtime)) return;
       if (!snapshot) return;
       set((state) => ({
         ...applySessionIndexSnapshotState(state, snapshot, false),
@@ -715,13 +736,19 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       // authoritative OpenCode session flow.
       console.warn('[GlobalSessions] Failed to hydrate runtime session index:', error);
     } finally {
-      set((state) => state.hasHydratedSessionIndex ? state : { hasHydratedSessionIndex: true });
+      if (isCurrentSessionIndexRuntime(runtime)) {
+        set((state) => state.hasHydratedSessionIndex ? state : { hasHydratedSessionIndex: true });
+      }
     }
   },
 
   startSessionIndexStartup: async (directories) => {
+    const runtime = captureSessionIndexRuntime();
     set({ startupSyncProgress: { active: true, phase: 'restoring', completed: 0, total: 0 } });
     await get().hydrateSessionIndex();
+    if (!isCurrentSessionIndexRuntime(runtime)) {
+      return { activeSessions: [], archivedSessions: [] };
+    }
     const directorySet = normalizeDirectorySet([
       ...directories,
       ...get().cachedDirectories,
@@ -734,9 +761,16 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     const hasCachedSnapshot = get().hasCachedSessionIndex;
     const snapshot = { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
     let initial: SessionIndexSnapshot | null = null;
+    const startRuntime = captureSessionIndexRuntime();
     try {
       initial = await startSessionIndexBackgroundSync([...directorySet]);
+      if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(startRuntime)) {
+        return { activeSessions: [], archivedSessions: [] };
+      }
     } catch (error) {
+      if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(startRuntime)) {
+        return { activeSessions: [], archivedSessions: [] };
+      }
       console.warn('[GlobalSessions] Failed to start server-side session index sync:', error);
     }
 
@@ -746,7 +780,12 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       const refresh = refreshStartupGlobalSessionsForDirectories(directorySet, snapshot.activeSessions, {
         retryFailed: !hasCachedSnapshot,
       });
-      if (!hasCachedSnapshot) await refresh;
+      if (!hasCachedSnapshot) {
+        await refresh;
+        if (!isCurrentSessionIndexRuntime(runtime)) {
+          return { activeSessions: [], archivedSessions: [] };
+        }
+      }
       else void refresh;
       return snapshot;
     }
@@ -754,7 +793,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     sessionIndexPollController?.abort();
     const controller = new AbortController();
     sessionIndexPollController = controller;
-    const generation = loadGeneration;
     const shouldBlock = !hasCachedSnapshot;
     const initialSnapshot = initial;
     if (!shouldBlock) {
@@ -772,7 +810,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     };
     const consume = async () => {
       let current = initialSnapshot;
-      while (!controller.signal.aborted && generation === loadGeneration) {
+      while (!controller.signal.aborted && isCurrentSessionIndexRuntime(runtime)) {
         set((state) => ({
           ...applySessionIndexSnapshotState(state, current, true),
           startupSyncProgress: shouldBlock
@@ -785,7 +823,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             : state.startupSyncProgress,
         }));
         if (!current.sync.active) settleRootSync();
+        const pollRuntime = captureSessionIndexRuntime();
         const next = await pollSessionIndexChanges(current.revision, controller.signal);
+        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(pollRuntime)) break;
         if (!next) break;
         current = next;
       }
@@ -797,7 +837,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     }).finally(() => {
       settleRootSync();
       if (sessionIndexPollController === controller) sessionIndexPollController = null;
-      if (shouldBlock && generation === loadGeneration) {
+      if (shouldBlock && isCurrentSessionIndexRuntime(runtime)) {
         set((state) => ({
           startupSyncProgress: {
             active: false,
@@ -808,7 +848,12 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         }));
       }
     });
-    if (shouldBlock) await rootSyncFinished;
+    if (shouldBlock) {
+      await rootSyncFinished;
+      if (!isCurrentSessionIndexRuntime(runtime)) {
+        return { activeSessions: [], archivedSessions: [] };
+      }
+    }
     else void polling;
     return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
   },
@@ -821,7 +866,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     set((state) => (state.status === 'loading' ? state : { status: 'loading' }));
 
     const generation = loadGeneration;
-    inflightLoad = (async () => {
+    const load = Promise.resolve().then(async () => {
       const current = get();
 
       try {
@@ -886,11 +931,14 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         set((state) => applySnapshot(state, nextActiveSessions, nextArchivedSessions, 'error'));
         return { activeSessions: nextActiveSessions, archivedSessions: nextArchivedSessions };
       } finally {
-        inflightLoad = null;
+        if (inflightLoad === load) {
+          inflightLoad = null;
+        }
       }
-    })();
+    });
+    inflightLoad = load;
 
-    return inflightLoad;
+    return load;
   },
 
   refreshSessionsForDirectories: async (directories, fallbackActive, options) => {
@@ -1031,6 +1079,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 
   syncSessionsForDirectories: async (directories, fallbackActive) => {
+    const runtime = captureSessionIndexRuntime();
     const directorySet = normalizeDirectorySet(directories);
     if (directorySet.size === 0) {
       const state = get();
@@ -1038,9 +1087,16 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     }
 
     let snapshot: SessionIndexSnapshot | null = null;
+    const startRuntime = captureSessionIndexRuntime();
     try {
       snapshot = await startSessionIndexBackgroundSync([...directorySet]);
+      if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(startRuntime)) {
+        return { activeSessions: [], archivedSessions: [] };
+      }
     } catch (error) {
+      if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(startRuntime)) {
+        return { activeSessions: [], archivedSessions: [] };
+      }
       console.warn('[GlobalSessions] Failed to start server-side session index sync:', error);
     }
 
@@ -1048,26 +1104,30 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return get().refreshSessionsForDirectories(directorySet, fallbackActive);
     }
 
-    const generation = loadGeneration;
     const controller = new AbortController();
     directoryAbortControllers.add(controller);
     try {
       let current = snapshot;
-      while (!controller.signal.aborted && generation === loadGeneration) {
+      while (!controller.signal.aborted && isCurrentSessionIndexRuntime(runtime)) {
         set((state) => applySessionIndexSnapshotState(state, current, true));
         if (!current.sync.active) break;
+        const pollRuntime = captureSessionIndexRuntime();
         const next = await pollSessionIndexChanges(current.revision, controller.signal);
+        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(pollRuntime)) break;
         if (!next) break;
         current = next;
       }
     } catch (error) {
-      if (!controller.signal.aborted && generation === loadGeneration) {
+      if (!controller.signal.aborted && isCurrentSessionIndexRuntime(runtime)) {
         console.warn('[GlobalSessions] Session index sync failed:', error);
       }
     } finally {
       directoryAbortControllers.delete(controller);
     }
 
+    if (!isCurrentSessionIndexRuntime(runtime)) {
+      return { activeSessions: [], archivedSessions: [] };
+    }
     return { activeSessions: get().activeSessions, archivedSessions: get().archivedSessions };
   },
 

@@ -14,7 +14,7 @@ export const useIsTextTruncated = <T extends HTMLElement>(
       return;
     }
     const next = element.scrollWidth > element.clientWidth + 1;
-    setIsTruncated(next);
+    setIsTruncated((current) => current === next ? current : next);
   }, [ref]);
 
   useIsomorphicLayoutEffect(() => {
@@ -34,7 +34,7 @@ export const useIsTextTruncated = <T extends HTMLElement>(
   }, [checkTruncation, ref]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || typeof ResizeObserver !== 'undefined') {
       return;
     }
     const handleResize = () => checkTruncation();

@@ -2,14 +2,14 @@ import * as React from "react";
 
 type AnyProps = Record<string, unknown>;
 
-function mergeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
-  return (value: T) => {
-    for (const ref of refs) {
+function useMergedRefs<T>(first: React.Ref<T> | undefined, second: React.Ref<T> | undefined): React.RefCallback<T> {
+  return React.useMemo(() => (value) => {
+    for (const ref of [first, second]) {
       if (!ref) continue;
       if (typeof ref === "function") ref(value);
       else (ref as React.MutableRefObject<T | null>).current = value;
     }
-  };
+  }, [first, second]);
 }
 
 function mergeProps(childProps: AnyProps, slotProps: AnyProps): AnyProps {
@@ -41,10 +41,14 @@ export const Slot = React.forwardRef<HTMLElement, SlotProps>(function Slot(
   { children, ...slotProps },
   ref,
 ) {
-  if (!React.isValidElement(children)) return null;
-  const child = children as React.ReactElement<AnyProps & { ref?: React.Ref<unknown> }>;
+  const child = React.isValidElement(children)
+    ? children as React.ReactElement<AnyProps & { ref?: React.Ref<unknown> }>
+    : null;
+  const childRef = child ? (child as unknown as { ref?: React.Ref<unknown> }).ref : undefined;
+  const mergedRefs = useMergedRefs(ref as React.Ref<unknown>, childRef);
+  if (!child) return null;
   return React.cloneElement(child, {
     ...mergeProps(child.props as AnyProps, slotProps as AnyProps),
-    ref: mergeRefs(ref as React.Ref<unknown>, (child as unknown as { ref?: React.Ref<unknown> }).ref),
+    ref: mergedRefs,
   } as AnyProps);
 });
