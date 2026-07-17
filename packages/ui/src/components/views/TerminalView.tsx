@@ -20,6 +20,7 @@ import { primeTerminalInputTransport } from '@/lib/terminalApi';
 import { extractTerminalPreviewUrl, isTerminalPreviewUrlAvailable } from '@/lib/terminalPreview';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_ACTION_ICON_MAP, type ProjectActionIconKey } from '@/lib/projectActions';
+import { isDesktopShell } from '@/lib/desktop';
 
 type Modifier = 'ctrl' | 'cmd';
 type MobileKey =
@@ -97,7 +98,7 @@ export const TerminalView: React.FC = () => {
     // Tabs are supported for web + desktop runtimes, including mobile (not VSCode).
     const enableTabs = runtime.platform !== 'vscode';
     const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
-    const showQuickKeys = isTouchTerminal || showTerminalQuickKeysOnDesktop;
+    const showQuickKeys = !isDesktopShell() && (isTouchTerminal || showTerminalQuickKeysOnDesktop);
 
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);

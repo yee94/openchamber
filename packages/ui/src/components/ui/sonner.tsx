@@ -90,12 +90,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           toast:
             "group/toast toast !rounded-[var(--radius-xl)] !border-0 !px-3.5 !py-3 !gap-2.5 !text-foreground",
+          content: "!min-w-0 !flex-1",
           title: "typography-ui-label !font-medium !text-foreground",
           description: "typography-meta !text-muted-foreground !mt-0.5",
           actionButton:
-            "!rounded-[var(--radius-md)] !bg-[var(--primary-base)] !text-[var(--primary-foreground)] hover:!opacity-85 !px-2 !py-1 typography-meta !font-medium transition-opacity",
+            "!ms-0 !me-0 !rounded-[var(--radius-md)] !bg-[var(--primary-base)] !text-[var(--primary-foreground)] hover:!opacity-85 !px-2 !py-1 typography-meta !font-medium transition-opacity",
           cancelButton:
-            "!rounded-[var(--radius-md)] !bg-[var(--interactive-hover)] !text-foreground hover:!bg-[var(--interactive-active)] !px-2 !py-1 typography-meta !font-medium transition-colors",
+            "!ms-auto !me-0 !rounded-[var(--radius-md)] !bg-[var(--interactive-hover)] !text-foreground hover:!bg-[var(--interactive-active)] !px-2 !py-1 typography-meta !font-medium transition-colors",
           closeButton:
             "!rounded-[var(--radius-md)] !bg-[var(--interactive-hover)] !text-foreground hover:!bg-[var(--interactive-active)]",
           icon: "!text-muted-foreground",

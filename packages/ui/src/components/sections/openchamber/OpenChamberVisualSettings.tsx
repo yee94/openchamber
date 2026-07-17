@@ -1501,7 +1501,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.expandedEditorToolbar')}</span>
                                 </div>
                             )}
-                            {shouldShow('terminalQuickKeys') && !isMobile && (
+                            {shouldShow('terminalQuickKeys') && !isMobile && !isDesktopShell() && (
                                 <div
                                     data-settings-item="appearance.terminal-quick-keys"
                                     className="group flex cursor-pointer items-center gap-2 py-1.5"

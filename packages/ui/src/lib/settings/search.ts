@@ -174,7 +174,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.terminalQuickKeys',
     descriptionKey: 'settings.openchamber.visual.field.terminalQuickKeysTooltip',
     keywords: ['terminal', 'keyboard', 'esc', 'ctrl', 'arrows'],
-    isAvailable: (ctx) => !ctx.isMobile && !ctx.isVSCode,
+    isAvailable: (ctx) => !ctx.isMobile && !ctx.isDesktop && !ctx.isVSCode,
   },
   {
     id: 'appearance.usage-reports',

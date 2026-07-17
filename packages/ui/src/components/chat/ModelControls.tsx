@@ -48,6 +48,7 @@ import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import { markStartupTrace } from '@/lib/startupTrace';
+import { focusComposerTextarea, resolveComposerTextarea } from './composerFocus';
 
 type IconComponent = IconName;
 
@@ -290,6 +291,7 @@ const formatDate = (value?: string) => {
 
 interface ModelControlsProps {
     className?: string;
+    composerTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
     mobilePanel?: MobileControlsPanel;
     onMobilePanelChange?: (panel: MobileControlsPanel) => void;
     /**
@@ -302,6 +304,7 @@ interface ModelControlsProps {
 
 export const ModelControls: React.FC<ModelControlsProps> = ({
     className,
+    composerTextareaRef,
     mobilePanel,
     onMobilePanelChange,
     relocateAgent = false,
@@ -467,12 +470,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const [pendingThinkingVariants, setPendingThinkingVariants] = React.useState<Map<string, string | undefined>>(new Map());
     const [adjustedThinkingModels, setAdjustedThinkingModels] = React.useState<Set<string>>(new Set());
     const [modelPickerRenderVersion, setModelPickerRenderVersion] = React.useState(0);
-    // Root cause: Base UI Menu returns focus to the trigger after close. Our custom
+    // React.Activity keeps cached session views mounted, so this instance ref avoids
+    // targeting another session's textarea. Base UI Menu returns focus to the trigger after close. Our custom
     // ModelPickerList closes via controlled open (not Menu.Item), so the default
     // lands on the model/agent chip and the composer never receives the caret.
-    // finalFocus={false} disables that return-to-trigger path entirely; we then
-    // focus the composer once after unmount (onOpenChangeComplete runs inside
-    // flushSync, so defer with a microtask until FloatingFocusManager is gone).
+    // finalFocus={resolveComposerFinalFocus} hands focus to the composer during
+    // unmount; onOpenChangeComplete runs a deferred backup once FloatingFocusManager
+    // is fully gone (a bare microtask is too early and loses the race in WebKit).
+    const restoreComposerFocus = React.useCallback(() => {
+        const focusComposer = () => {
+            const state = useUIStore.getState();
+            if (!state.isModelSelectorOpen && !state.isAgentSelectorOpen) {
+                focusComposerTextarea(composerTextareaRef);
+            }
+        };
+        window.setTimeout(() => {
+            requestAnimationFrame(() => {
+                focusComposer();
+                // Retry on the next frame after the popup unmounts in WebKit.
+                requestAnimationFrame(focusComposer);
+            });
+        }, 0);
+    }, [composerTextareaRef]);
+
     const handleSelectorCloseComplete = React.useCallback((selector: 'model' | 'agent') => {
         const state = useUIStore.getState();
         const reopened = selector === 'model' ? state.isModelSelectorOpen : state.isAgentSelectorOpen;
@@ -488,14 +508,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-        queueMicrotask(() => {
-            if (useUIStore.getState().isModelSelectorOpen || useUIStore.getState().isAgentSelectorOpen) {
-                return;
-            }
-            document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]')
-                ?.focus({ preventScroll: true });
-        });
-    }, []);
+        restoreComposerFocus();
+    }, [restoreComposerFocus]);
+
+    // Base UI Menu returns focus to the trigger by default; hand it the composer
+    // instead so Esc/Enter leave the caret back in the chat input.
+    const resolveComposerFinalFocus = React.useCallback((): HTMLElement | null | false => {
+        const state = useUIStore.getState();
+        if (state.isModelSelectorOpen || state.isAgentSelectorOpen) {
+            return false;
+        }
+        return resolveComposerTextarea(composerTextareaRef);
+    }, [composerTextareaRef]);
 
     React.useEffect(() => {
         if (activeMobilePanel === 'model') {
@@ -1706,8 +1730,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
         const focusMobileComposer = () => {
             requestAnimationFrame(() => {
-                const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                textarea?.focus();
+                focusComposerTextarea(composerTextareaRef);
             });
         };
 
@@ -2063,8 +2086,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             persistAgentModelPreference(resolveLiveAgentName(), targetProviderId, targetModelId, variant);
             closeMobilePanel();
             requestAnimationFrame(() => {
-                const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                textarea?.focus();
+                focusComposerTextarea(composerTextareaRef);
             });
         };
 
@@ -2457,7 +2479,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             align="end"
                             alignOffset={-40}
                             onKeyDownCapture={handleModelShortcutKeyDownCapture}
-                            finalFocus={false}
+                            finalFocus={resolveComposerFinalFocus}
                         >
                             <div className="p-1 border-b border-border/40">
                                 <button
@@ -2844,7 +2866,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     isAgentSelectorInstant && INSTANT_DROPDOWN_CLASS,
                                 )}
                                 onKeyDownCapture={handleAgentCycleShortcut}
-                                finalFocus={false}
+                                finalFocus={resolveComposerFinalFocus}
                             >
                                 <div className="p-2 border-b border-border/40">
                                     <div className="relative">

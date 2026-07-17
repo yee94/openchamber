@@ -5710,6 +5710,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <MemoModelControls
                                         className={cn('flex-1 min-w-0 justify-end')}
+                                        composerTextareaRef={textareaRef}
                                         relocateAgent
                                         agentPortalContainer={agentPortalContainer}
                                     />
@@ -5778,6 +5779,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 {isMobile ? (
                     <MemoModelControls
                         className="hidden"
+                        composerTextareaRef={textareaRef}
                         mobilePanel={mobileControlsPanel}
                         onMobilePanelChange={setMobileControlsPanel}
                     />
