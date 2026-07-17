@@ -44,6 +44,12 @@ export interface ChangesGroupConfig {
   accent?: boolean;
 }
 
+export type ChangesDirectoryToolbarState = {
+  hasDirectories: boolean;
+  allDirectoriesExpanded: boolean;
+  toggleExpandAllDirectories: () => void;
+};
+
 interface ChangesPanelProps {
   groups: ChangesGroupConfig[];
   diffStats: Record<string, { insertions: number; deletions: number }> | undefined;
@@ -54,6 +60,8 @@ interface ChangesPanelProps {
   /** Reverts every changed path across all groups; rendered once for the panel. */
   onRevertAll?: (paths: string[]) => Promise<void> | void;
   onRevertDirectory?: (paths: string[]) => Promise<void> | void;
+  /** Publishes tree expand/collapse controls for an external toolbar (e.g. GitHeader). */
+  onDirectoryToolbarChange?: (state: ChangesDirectoryToolbarState | null) => void;
 }
 
 const CHANGE_LIST_VIRTUALIZE_THRESHOLD = 1000;
@@ -61,6 +69,14 @@ const CHANGE_ROW_ESTIMATE_PX = 34;
 const VISIBLE_PREFETCH_LIMIT = 30;
 
 const ROW_PADDING_CLASSNAME = 'pl-0 pr-2';
+/** Fixed trailing control width so header / directory / file actions share one vertical grid. */
+const TRAILING_SLOT_CLASSNAME = 'flex size-6 shrink-0 items-center justify-center';
+const TRAILING_COUNT_CLASSNAME =
+  'flex size-6 shrink-0 items-center justify-end tabular-nums typography-code text-muted-foreground';
+const TRAILING_ACTION_CLASSNAME =
+  'flex size-6 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50';
+const TRAILING_ICON_BUTTON_CLASSNAME =
+  'flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50';
 
 type PanelRow =
   | { type: 'header'; key: string; groupIndex: number }
@@ -85,16 +101,15 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   onVisiblePathsChange,
   onRevertAll,
   onRevertDirectory,
+  onDirectoryToolbarChange,
 }) => {
   const { t } = useI18n();
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
-  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
   const isTreeView = gitChangesViewMode === 'tree';
 
   const visibleGroups = React.useMemo(() => groups.filter((group) => group.entries.length > 0), [groups]);
 
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const [expandedDirectories, setExpandedDirectories] = React.useState<Set<string>>(new Set());
   const [revertAllOpen, setRevertAllOpen] = React.useState(false);
   const [pendingDirectoryRevert, setPendingDirectoryRevert] = React.useState<PendingDirectoryRevert | null>(null);
@@ -147,10 +162,6 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     visibleGroups.forEach((group, groupIndex) => {
       result.push({ type: 'header', key: `header:${group.id}`, groupIndex });
 
-      if (collapsedGroups.has(group.id)) {
-        return;
-      }
-
       if (isTreeView) {
         const expandedForGroup = new Set<string>();
         expandedDirectories.forEach((key) => {
@@ -199,7 +210,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     }
 
     return result;
-  }, [collapsedGroups, expandedDirectories, isTreeView, onRevertAll, trees, visibleGroups]);
+  }, [expandedDirectories, isTreeView, onRevertAll, trees, visibleGroups]);
 
   const rowCount = rows.length;
   const shouldVirtualize = rowCount >= CHANGE_LIST_VIRTUALIZE_THRESHOLD;
@@ -370,11 +381,10 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
               )}
             />
           </button>
-          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <div className="ml-auto flex shrink-0 items-center">
             {isTreeView ? (
-              <Button
-                variant="ghost"
-                size="xs"
+              <button
+                type="button"
                 onClick={() => {
                   if (allDirectoriesExpanded) {
                     collapseAllDirectories(group.id);
@@ -382,36 +392,34 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
                   }
                   expandAllDirectories(group.id);
                 }}
-                className="size-6 px-0 text-muted-foreground hover:text-foreground"
+                className={TRAILING_ICON_BUTTON_CLASSNAME}
                 aria-label={toggleAllLabel}
                 title={toggleAllLabel}
               >
                 <Icon name="expand-up-down" className="size-3.5" />
-              </Button>
-            ) : null}
-            <div className="flex shrink-0 items-center" role="group" aria-label={t('settings.openchamber.git.changesViewAria')}>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setGitChangesViewMode(isTreeView ? 'flat' : 'tree')}
-                aria-label={toggleViewLabel}
-                title={toggleViewLabel}
-                aria-pressed={isTreeView}
-                className="size-6 px-0 text-muted-foreground hover:text-foreground"
-              >
-                <Icon name={isTreeView ? 'node-tree' : 'list-unordered'} className="size-3.5" />
-              </Button>
-            </div>
-            <Button
-              variant="ghost"
-              size="xs"
+              </button>
+            ) : (
+              <span className={TRAILING_SLOT_CLASSNAME} aria-hidden />
+            )}
+            <button
+              type="button"
+              onClick={() => setGitChangesViewMode(isTreeView ? 'flat' : 'tree')}
+              aria-label={toggleViewLabel}
+              title={toggleViewLabel}
+              aria-pressed={isTreeView}
+              className={TRAILING_ICON_BUTTON_CLASSNAME}
+            >
+              <Icon name={isTreeView ? 'node-tree' : 'list-unordered'} className="size-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={() => group.onActionAll(group.entries.map((entry) => entry.path))}
-              className="size-6 px-0 typography-code font-semibold text-muted-foreground hover:text-foreground"
+              className={TRAILING_ACTION_CLASSNAME}
               aria-label={group.actionAllLabel}
               title={group.actionAllLabel}
             >
               {group.actionSymbol}
-            </Button>
+            </button>
           </div>
         </div>
       );
@@ -424,9 +432,10 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       const isExpanded = expandedDirectories.has(expandedKey(group.id, directory.path));
       const directoryPaths = directory.files.map((file) => file.path);
       const isDirectoryReverting = isRevertingAll || directoryPaths.some((path) => revertingPaths.has(path));
+      const showRevert = group.showRevertActions !== false && !!onRevertDirectory;
       return (
         <div
-          className={cn('group flex items-center gap-1.5 py-1', ROW_PADDING_CLASSNAME)}
+          className={cn('group flex h-8 items-center gap-1.5', ROW_PADDING_CLASSNAME)}
           style={{ paddingLeft: `${depth * TREE_INDENT_PX}px` }}
         >
           <button
@@ -447,39 +456,48 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
             <span className="min-w-0 flex-1 truncate typography-code text-foreground" title={directory.path}>
               {directory.name}
             </span>
-            <span className="ml-auto shrink-0 typography-code text-muted-foreground">{directory.files.length}</span>
           </button>
-          {group.showRevertActions !== false && onRevertDirectory ? (
+          <div className="ml-auto flex shrink-0 items-center">
+            {/* Keep 3 trailing slots: count | secondary | action — aligned with header tools. */}
+            {showRevert ? (
+              <span className={TRAILING_COUNT_CLASSNAME}>{directory.files.length}</span>
+            ) : (
+              <span className={TRAILING_SLOT_CLASSNAME} aria-hidden />
+            )}
+            {showRevert ? (
+              <button
+                type="button"
+                onClick={() => setPendingDirectoryRevert({ path: directory.path, paths: directoryPaths, count: directoryPaths.length })}
+                disabled={isDirectoryReverting}
+                className={TRAILING_ICON_BUTTON_CLASSNAME}
+                aria-label={t('gitView.changes.revertDirectoryAria', { path: directory.path })}
+                title={t('gitView.changes.revertDirectoryTooltip')}
+              >
+                {isDirectoryReverting ? (
+                  <Icon name="loader-4" className="size-3.5 animate-spin" />
+                ) : (
+                  <Icon name="arrow-go-back" className="size-3.5" />
+                )}
+              </button>
+            ) : (
+              <span className={TRAILING_COUNT_CLASSNAME}>{directory.files.length}</span>
+            )}
             <button
               type="button"
-              onClick={() => setPendingDirectoryRevert({ path: directory.path, paths: directoryPaths, count: directoryPaths.length })}
-              disabled={isDirectoryReverting}
-              className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label={t('gitView.changes.revertDirectoryAria', { path: directory.path })}
-              title={t('gitView.changes.revertDirectoryTooltip')}
-            >
-              {isDirectoryReverting ? (
-                <Icon name="loader-4" className="size-3.5 animate-spin" />
-              ) : (
-                <Icon name="arrow-go-back" className="size-3.5" />
+              onClick={() => group.onActionAll(directory.files.map((file) => file.path))}
+              className={TRAILING_ACTION_CLASSNAME}
+              aria-label={t(
+                group.actionSymbol === '+' ? 'gitView.changes.stageDirectoryAria' : 'gitView.changes.unstageDirectoryAria',
+                { path: directory.path }
               )}
+              title={t(
+                group.actionSymbol === '+' ? 'gitView.changes.stageDirectoryAria' : 'gitView.changes.unstageDirectoryAria',
+                { path: directory.path }
+              )}
+            >
+              {group.actionSymbol}
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => group.onActionAll(directory.files.map((file) => file.path))}
-            className="flex size-4 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
-            aria-label={t(
-              group.actionSymbol === '+' ? 'gitView.changes.stageDirectoryAria' : 'gitView.changes.unstageDirectoryAria',
-              { path: directory.path }
-            )}
-            title={t(
-              group.actionSymbol === '+' ? 'gitView.changes.stageDirectoryAria' : 'gitView.changes.unstageDirectoryAria',
-              { path: directory.path }
-            )}
-          >
-            {group.actionSymbol}
-          </button>
+          </div>
         </div>
       );
     },

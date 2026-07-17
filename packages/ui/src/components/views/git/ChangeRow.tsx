@@ -108,7 +108,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
     <button
       type="button"
       onClick={handleActionClick}
-      className="flex size-4 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+      className="flex size-6 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
       aria-label={actionLabel}
       title={actionLabel}
     >
@@ -118,7 +118,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
 
   return (
     <div
-      className={`group flex items-center gap-1.5 py-1 cursor-pointer ${rowPaddingClassName ?? 'px-3'}`}
+      className={`group flex h-8 items-center gap-1.5 cursor-pointer ${rowPaddingClassName ?? 'px-3'}`}
       role="button"
       tabIndex={0}
       onClick={onViewDiff}
@@ -162,7 +162,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
             </span>
           );
         })()}
-        <span className="shrink-0 typography-code">
+        <span className="ml-auto shrink-0 typography-code">
           <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>
           <span className="text-muted-foreground mx-0.5">/</span>
           <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>
@@ -174,19 +174,21 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
                 type="button"
                 onClick={handleRevertClick}
                 disabled={isReverting}
-                className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={t('gitView.changes.revertFileAria', { path: file.path })}
               >
                 {isReverting ? (
-                  <Icon name="loader-4" className="size-3 animate-spin" />
+                  <Icon name="loader-4" className="size-3.5 animate-spin" />
                 ) : (
-                  <Icon name="arrow-go-back" className="size-3" />
+                  <Icon name="arrow-go-back" className="size-3.5" />
                 )}
               </button>
             </TooltipTrigger>
             <TooltipContent sideOffset={8}>{t('gitView.changes.revertFileTooltip')}</TooltipContent>
           </Tooltip>
-        ) : null}
+        ) : (
+          actionAtStart ? null : <span className="size-6 shrink-0" aria-hidden />
+        )}
         {actionAtStart ? null : actionButton}
     </div>
   );
