@@ -78,8 +78,8 @@ const QueuedMessageChip = memo(({ message, isQueueHead, isMobile, onEdit, onSend
             // Translate only (no scaleX/scaleY) so the lifted row keeps its size.
             style={{ transform: CSS.Translate.toString(transform), transition }}
             className={cn(
-                'flex min-w-0 items-center gap-1.5',
-                isMobile ? 'py-0' : 'py-0.5 md:gap-2 md:py-1',
+                'flex min-w-0 items-center',
+                isMobile ? 'min-h-7 gap-1' : 'gap-1.5 py-0.5 md:gap-2 md:py-1',
                 isDragging && 'z-10 opacity-60',
             )}
         >
@@ -90,47 +90,60 @@ const QueuedMessageChip = memo(({ message, isQueueHead, isMobile, onEdit, onSend
                 disabled={isDragDisabled}
                 className={cn(
                     'flex flex-shrink-0 touch-none select-none items-center justify-center text-muted-foreground',
+                    isMobile ? 'size-6' : 'size-auto',
                     isDragDisabled ? 'cursor-default opacity-50' : 'cursor-grab hover:text-foreground active:cursor-grabbing',
                 )}
                 aria-label={t('chat.queuedMessage.reorderAria')}
             >
-                <Icon name="draggable" className="size-3.5 md:size-4" aria-hidden="true" />
+                <Icon name="draggable" className={cn(isMobile ? 'size-3' : 'size-3.5 md:size-4')} aria-hidden="true" />
             </button>
-            <span className="min-w-0 flex-1 truncate typography-micro leading-4 text-foreground md:typography-ui-label">
+            <span className={cn(
+                'min-w-0 flex-1 truncate text-foreground',
+                isMobile ? 'typography-micro leading-none' : 'typography-micro leading-4 md:typography-ui-label',
+            )}>
                 {firstLine || t('chat.queuedMessage.empty')}
                 {attachmentCount > 0 && (
                     <span className="ml-1 text-muted-foreground">{t('chat.queuedMessage.attachments', { count: attachmentCount })}</span>
                 )}
             </span>
-            <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                onClick={() => onEdit(message)}
-                disabled={isReadOnly}
-            >
-                <Icon name="edit" className="h-3 w-3" aria-hidden="true" />
-                {t('chat.queuedMessage.edit')}
-            </Button>
-            <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                onClick={() => onSend(message)}
-                disabled={!canSend}
-            >
-                <Icon name="send-plane" className="h-3 w-3" aria-hidden="true" />
-                {t('chat.queuedMessage.send')}
-            </Button>
-            <button
-                type="button"
-                onClick={() => message.owner && removeFromQueue(message.owner, queueItemID, message.operationID)}
-                disabled={isReadOnly}
-                className="flex items-center justify-center h-6 w-6 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50"
-                aria-label={t('chat.queuedMessage.removeAria')}
-            >
-                <Icon name="close" className="h-4 w-4 text-muted-foreground" />
-            </button>
+            <div className={cn('flex flex-shrink-0 items-center', isMobile ? 'gap-0.5' : 'gap-1.5')}>
+                <Button
+                    type="button"
+                    variant={isMobile ? 'ghost' : 'secondary'}
+                    size="xs"
+                    className={isMobile ? 'h-6 gap-0.5 px-1.5 text-muted-foreground hover:text-foreground' : undefined}
+                    onClick={() => onEdit(message)}
+                    disabled={isReadOnly}
+                >
+                    <Icon name="edit" className="size-3" aria-hidden="true" />
+                    {t('chat.queuedMessage.edit')}
+                </Button>
+                <Button
+                    type="button"
+                    variant={isMobile ? 'ghost' : 'secondary'}
+                    size="xs"
+                    className={isMobile ? 'h-6 gap-0.5 px-1.5 text-muted-foreground hover:text-foreground' : undefined}
+                    onClick={() => onSend(message)}
+                    disabled={!canSend}
+                >
+                    <Icon name="send-plane" className="size-3" aria-hidden="true" />
+                    {t('chat.queuedMessage.send')}
+                </Button>
+                <button
+                    type="button"
+                    onClick={() => message.owner && removeFromQueue(message.owner, queueItemID, message.operationID)}
+                    disabled={isReadOnly}
+                    className={cn(
+                        'flex flex-shrink-0 items-center justify-center text-muted-foreground transition-colors',
+                        'hover:bg-[var(--interactive-hover)] hover:text-foreground',
+                        'disabled:pointer-events-none disabled:opacity-50',
+                        isMobile ? 'size-6 rounded-md' : 'size-6 rounded-full',
+                    )}
+                    aria-label={t('chat.queuedMessage.removeAria')}
+                >
+                    <Icon name="close" className={cn(isMobile ? 'size-3' : 'size-3.5')} aria-hidden="true" />
+                </button>
+            </div>
         </div>
     );
 });
@@ -242,16 +255,30 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
     }
 
     return (
-        <div className={cn('w-full px-0.5', isMobile ? 'pb-1 text-xs' : 'pb-1.5 md:px-1 md:pb-2')}>
+        <div className={cn('w-full px-0.5', isMobile ? 'pb-1' : 'pb-1.5 md:px-1 md:pb-2')}>
             <div className="overflow-hidden rounded-lg border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm md:rounded-xl">
                 <div className={cn(
-                    'flex w-full items-center gap-1.5 text-left',
-                    isMobile ? 'px-2 py-1' : 'px-2.5 py-1.5 md:gap-2 md:px-3 md:py-2',
+                    'flex w-full items-center text-left',
+                    isMobile
+                        ? 'gap-1.5 border-b border-border/40 px-2.5 py-1.5'
+                        : 'gap-1.5 px-2.5 py-1.5 md:gap-2 md:px-3 md:py-2',
                 )}>
-                    <span className="flex-shrink-0 typography-micro font-medium leading-4 text-foreground md:typography-ui-label">
-                        {t('chat.queuedMessage.title', { count: queuedMessages.length })}
+                    <span className={cn(
+                        'flex-shrink-0 font-medium',
+                        isMobile
+                            ? 'typography-micro leading-none text-muted-foreground'
+                            : 'typography-micro leading-4 text-foreground md:typography-ui-label',
+                    )}>
+                        {t('chat.queuedMessage.title')}
                     </span>
-                    <Icon name="time" className="ml-auto size-3.5 text-muted-foreground md:size-4" aria-hidden="true" />
+                    <Icon
+                        name="time"
+                        className={cn(
+                            'ml-auto text-muted-foreground',
+                            isMobile ? 'size-3 opacity-80' : 'size-3.5 md:size-4',
+                        )}
+                        aria-hidden="true"
+                    />
                 </div>
                 <DndContext
                     sensors={sensors}
@@ -263,10 +290,10 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                         strategy={verticalListSortingStrategy}
                     >
                         <div className={cn(
-                            'flex flex-col gap-1 overflow-y-auto',
+                            'flex flex-col overflow-y-auto',
                             isMobile
-                                ? 'max-h-[8rem] px-2 pb-1.5'
-                                : 'max-h-[8rem] px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3',
+                                ? 'max-h-[8rem] gap-0.5 px-1.5 py-1'
+                                : 'max-h-[8rem] gap-1 px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3',
                         )}>
                             {queuedMessages.map((message, index) => (
                                 <QueuedMessageChip

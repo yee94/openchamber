@@ -37,10 +37,15 @@ const BUILTIN_BY_NAME = new Map<string, BuiltInStarter>(BUILTIN_STARTERS.map((s)
 export const getBuiltInStarter = (name: string): BuiltInStarter | undefined => BUILTIN_BY_NAME.get(name);
 
 // Default global starter set (used until the user customizes the global list).
-export const DEFAULT_GLOBAL_STARTERS: readonly DraftStarterRef[] = BUILTIN_STARTERS.map((s) => ({
-    type: 'command' as const,
-    name: s.name,
-}));
+// craft-goal remains pinnable, but is not seeded into the default chip row.
+export const DEFAULT_GLOBAL_STARTERS: readonly DraftStarterRef[] = [
+    { type: 'command', name: 'explore' },
+    { type: 'command', name: 'catch-up' },
+    { type: 'command', name: 'weigh' },
+    { type: 'command', name: 'plan-feature' },
+    { type: 'command', name: 'debug' },
+    { type: 'command', name: 'review' },
+];
 
 // Fallback icons for user-defined starters, matching the Settings sections.
 export const COMMAND_FALLBACK_ICON: IconName = 'terminal-box';

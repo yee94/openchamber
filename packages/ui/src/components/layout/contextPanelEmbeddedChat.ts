@@ -2,6 +2,16 @@ import type { Theme } from '@/types/theme';
 
 export const EMBEDDED_SESSION_CHAT_CLOSE_TAB_EVENT = 'openchamber:close-embedded-session-chat';
 
+/** Parent → child: current active-tab visibility for an embedded session-chat iframe. */
+export const EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT = 'openchamber:embedded-visibility';
+
+/**
+ * Child → parent: iframe finished wiring its visibility listener and needs the
+ * authoritative active-tab state. Parent should re-post visibility for all
+ * chat frames (same pattern as `openchamber:chat-settings-request`).
+ */
+export const EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT = 'openchamber:embedded-visibility-request';
+
 export const isEmbeddedSessionChatSearch = (search: string): boolean => (
   new URLSearchParams(search).get('ocPanel') === 'session-chat'
 );

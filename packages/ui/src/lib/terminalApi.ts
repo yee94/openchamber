@@ -2,6 +2,7 @@ import { getRuntimeUrlResolver } from './runtime-url';
 import { runtimeFetch } from './runtime-fetch';
 import { openRuntimeWebSocket } from './relay/runtime-socket';
 import { type RelayTunnelWebSocket } from './relay/tunnel-client';
+import { refreshRuntimeUrlAuthToken } from './runtime-auth';
 
 interface TerminalWebSocketDescriptor {
   path: string;
@@ -188,28 +189,50 @@ class TerminalTransportManager {
 
     this.subscriptions.set(token, subscription);
     this.activeSubscriptionToken = token;
-    this.boundSessionId = null;
     this.requestedSessionId = sessionId;
     this.ensureConnected();
-    this.startConnectionTimeout(subscription);
-    this.bindActiveSession();
+
+    // Another view may already own this session on the shared socket.
+    // Reuse the live bind instead of tearing it down and racing rebinds.
+    if (
+      this.boundSessionId === sessionId
+      && this.socket
+      && this.socket.readyState === WS_READY_STATE_OPEN
+    ) {
+      subscription.retryCount = 0;
+      subscription.connected = true;
+      subscription.onEvent({ type: 'connected' });
+    } else {
+      this.boundSessionId = null;
+      this.startConnectionTimeout(subscription);
+      this.bindActiveSession();
+    }
 
     return () => {
       this.clearConnectionTimeout(subscription);
       this.subscriptions.delete(token);
+
       if (this.activeSubscriptionToken === token) {
         this.activeSubscriptionToken = null;
       }
-      if (this.boundSessionId === sessionId) {
-        this.boundSessionId = null;
+
+      const hasRemainingForSession = this.hasSubscriptionForSession(sessionId);
+      if (!hasRemainingForSession) {
+        if (this.boundSessionId === sessionId) {
+          this.boundSessionId = null;
+        }
+        if (this.requestedSessionId === sessionId) {
+          this.requestedSessionId = null;
+        }
       }
-      if (this.requestedSessionId === sessionId) {
-        this.requestedSessionId = null;
-      }
+
       if (this.subscriptions.size === 0) {
         this.clearReconnectTimeout();
         this.resetConnection();
+        return;
       }
+
+      this.promoteActiveSubscription();
     };
   }
 
@@ -293,10 +316,81 @@ class TerminalTransportManager {
     return this.subscriptions.get(this.activeSubscriptionToken) ?? null;
   }
 
+  private hasSubscriptionForSession(sessionId: string): boolean {
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId === sessionId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private promoteActiveSubscription(): void {
+    if (this.getActiveSubscription()) {
+      return;
+    }
+
+    const next = this.subscriptions.values().next().value as StreamSubscription | undefined;
+    if (!next) {
+      this.activeSubscriptionToken = null;
+      return;
+    }
+
+    this.activeSubscriptionToken = next.token;
+    this.requestedSessionId = next.sessionId;
+    if (this.boundSessionId !== next.sessionId) {
+      this.boundSessionId = null;
+      this.startConnectionTimeout(next);
+      this.bindActiveSession();
+    } else if (!next.connected) {
+      next.retryCount = 0;
+      next.connected = true;
+      this.clearConnectionTimeout(next);
+      next.onEvent({ type: 'connected' });
+    }
+  }
+
+  private emitToSession(sessionId: string, event: TerminalStreamEvent): void {
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId === sessionId) {
+        subscription.onEvent(event);
+      }
+    }
+  }
+
+  private markSessionConnected(sessionId: string, event: TerminalStreamEvent): void {
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId !== sessionId) {
+        continue;
+      }
+      subscription.retryCount = 0;
+      subscription.connected = true;
+      this.clearConnectionTimeout(subscription);
+      subscription.onEvent(event);
+    }
+  }
+
+  private emitErrorToSession(sessionId: string, error: Error, fatal?: boolean): void {
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId === sessionId) {
+        subscription.connected = false;
+        if (fatal) {
+          this.clearConnectionTimeout(subscription);
+        }
+        subscription.onError?.(error, fatal);
+      }
+    }
+  }
+
   private startConnectionTimeout(subscription: StreamSubscription): void {
     this.clearConnectionTimeout(subscription);
     subscription.connectionTimeoutId = setTimeout(() => {
-      if (this.getActiveSubscription()?.token !== subscription.token || subscription.connected) {
+      if (subscription.connected || !this.subscriptions.has(subscription.token)) {
+        return;
+      }
+
+      // Only the active subscription drives reconnect timeouts for a shared socket.
+      if (this.getActiveSubscription()?.token !== subscription.token) {
         return;
       }
 
@@ -357,7 +451,16 @@ class TerminalTransportManager {
 
     this.clearReconnectTimeout();
 
-    this.openPromise = new Promise<RelayTunnelWebSocket | null>((resolve) => {
+    this.openPromise = (async () => {
+      // Browser WebSocket upgrades cannot carry the runtime Authorization
+      // header. Await the URL token before constructing the socket URL.
+      try {
+        await refreshRuntimeUrlAuthToken();
+      } catch {
+        // Local runtimes without auth can connect without a URL token.
+      }
+
+      return new Promise<RelayTunnelWebSocket | null>((resolve) => {
       let settled = false;
       let connectTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -375,7 +478,7 @@ class TerminalTransportManager {
       };
 
       try {
-        const socket = openRuntimeWebSocket(this.socketUrl);
+        const socket = openRuntimeWebSocket(normalizeWebSocketPath(this.socketUrl));
         socket.binaryType = 'arraybuffer';
 
         socket.onopen = () => {
@@ -420,7 +523,8 @@ class TerminalTransportManager {
           this.scheduleReconnect(new Error('Terminal websocket open failed'));
         }
       }
-    });
+      });
+    })();
   }
 
   private bindActiveSession(): void {
@@ -443,6 +547,7 @@ class TerminalTransportManager {
       return;
     }
 
+    this.promoteActiveSubscription();
     const activeSubscription = this.getActiveSubscription();
     if (!activeSubscription) {
       return;
@@ -455,17 +560,23 @@ class TerminalTransportManager {
 
     if (attempt > maxRetries) {
       this.clearConnectionTimeout(activeSubscription);
-      activeSubscription.onError?.(error, true);
+      this.emitErrorToSession(activeSubscription.sessionId, error, true);
       return;
     }
 
     activeSubscription.retryCount = attempt;
-    activeSubscription.connected = false;
-    activeSubscription.onEvent({
-      type: 'reconnecting',
-      attempt,
-      maxAttempts: maxRetries,
-    });
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId !== activeSubscription.sessionId) {
+        continue;
+      }
+      subscription.connected = false;
+      subscription.retryCount = attempt;
+      subscription.onEvent({
+        type: 'reconnecting',
+        attempt,
+        maxAttempts: maxRetries,
+      });
+    }
     this.startConnectionTimeout(activeSubscription);
 
     const baseDelay = Math.min(initialDelay * Math.pow(2, Math.max(attempt - 1, 0)), maxDelay);
@@ -534,12 +645,12 @@ class TerminalTransportManager {
       return;
     }
 
-    const activeSubscription = this.getActiveSubscription();
-    if (!activeSubscription) {
+    const sessionId = this.boundSessionId ?? this.requestedSessionId ?? this.getActiveSubscription()?.sessionId;
+    if (!sessionId) {
       return;
     }
 
-    activeSubscription.onEvent({ type: 'data', data: text });
+    this.emitToSession(sessionId, { type: 'data', data: text });
   }
 
   private handleControlMessage(bytes: Uint8Array): void {
@@ -565,7 +676,7 @@ class TerminalTransportManager {
         return;
       case 'd': {
         const sessionId = payload.s ?? this.boundSessionId ?? this.requestedSessionId;
-        if (!activeSubscription || !sessionId || sessionId !== activeSubscription.sessionId) {
+        if (!sessionId) {
           return;
         }
 
@@ -574,19 +685,17 @@ class TerminalTransportManager {
         }
 
         if (typeof payload.d === 'string' && payload.d.length > 0) {
-          activeSubscription.onEvent({ type: 'data', data: payload.d });
+          this.emitToSession(sessionId, { type: 'data', data: payload.d });
         }
         return;
       }
       case 'bok': {
-        this.boundSessionId = payload.s ?? this.requestedSessionId;
-        if (!activeSubscription) {
+        const sessionId = payload.s ?? this.requestedSessionId;
+        this.boundSessionId = sessionId;
+        if (!sessionId) {
           return;
         }
-        activeSubscription.retryCount = 0;
-        activeSubscription.connected = true;
-        this.clearConnectionTimeout(activeSubscription);
-        activeSubscription.onEvent({
+        this.markSessionConnected(sessionId, {
           type: 'connected',
           runtime: payload.runtime,
           ptyBackend: payload.ptyBackend,
@@ -594,36 +703,50 @@ class TerminalTransportManager {
         return;
       }
       case 'x': {
-        if (!activeSubscription) {
+        const sessionId = payload.s ?? this.boundSessionId ?? activeSubscription?.sessionId ?? null;
+        if (!sessionId) {
           this.boundSessionId = null;
           return;
         }
 
-        if (payload.s && payload.s !== activeSubscription.sessionId) {
-          return;
+        if (this.boundSessionId === sessionId) {
+          this.boundSessionId = null;
         }
-
-        activeSubscription.connected = false;
-        this.clearConnectionTimeout(activeSubscription);
-        this.boundSessionId = null;
-        this.requestedSessionId = null;
-        this.replayCursorBySession.delete(activeSubscription.sessionId);
-        activeSubscription.onEvent({
-          type: 'exit',
-          exitCode: payload.exitCode,
-          signal: payload.signal ?? null,
-        });
+        if (this.requestedSessionId === sessionId) {
+          this.requestedSessionId = null;
+        }
+        this.replayCursorBySession.delete(sessionId);
+        for (const subscription of this.subscriptions.values()) {
+          if (subscription.sessionId !== sessionId) {
+            continue;
+          }
+          subscription.connected = false;
+          this.clearConnectionTimeout(subscription);
+          subscription.onEvent({
+            type: 'exit',
+            exitCode: payload.exitCode,
+            signal: payload.signal ?? null,
+          });
+        }
         return;
       }
       case 'e': {
         const error = createTransportError(payload.c);
-        const isFatal = payload.f === true || payload.c === 'SESSION_NOT_FOUND';
+        // SESSION_NOT_FOUND is recoverable at the view layer by creating a fresh PTY.
+        const isFatal = payload.f === true;
 
         if (payload.c === 'NOT_BOUND' || payload.c === 'SESSION_NOT_FOUND') {
           this.boundSessionId = null;
         }
 
-        if (activeSubscription) {
+        const sessionId = payload.s ?? this.requestedSessionId ?? activeSubscription?.sessionId ?? null;
+        if (sessionId) {
+          if (payload.c === 'SESSION_NOT_FOUND') {
+            this.emitErrorToSession(sessionId, error, true);
+            return;
+          }
+          this.emitErrorToSession(sessionId, error, isFatal);
+        } else if (activeSubscription) {
           activeSubscription.connected = false;
           if (isFatal) {
             this.clearConnectionTimeout(activeSubscription);
@@ -918,7 +1041,10 @@ export function connectTerminalStream(
   options: ConnectStreamOptions = {}
 ): () => void {
   const globalState = getTerminalTransportGlobalState();
-  if (!isWsTransportSupported(globalState.streamCapability)) {
+  // A restored terminal session has no in-memory create response/capabilities
+  // yet. Current OpenChamber servers expose the default WS endpoint, so use it
+  // for that cold-start path. An explicit non-WS capability keeps SSE fallback.
+  if (globalState.streamCapability && !isWsTransportSupported(globalState.streamCapability)) {
     return connectTerminalStreamViaSse(sessionId, onEvent, onError, options);
   }
 

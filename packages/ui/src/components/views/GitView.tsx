@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-// (dropdown menu used inside IntegrateCommitsSection)
 import {
   Command,
   CommandEmpty,
@@ -42,7 +41,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useDetectedWorktreeMetadata } from '@/hooks/useDetectedWorktreeRoot';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { getSessionWorktreeRepairActions, getMutationBlockingReasons } from '@/sync/session-worktree-contract';
-import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
 import { StashesDialog } from './git/StashesDialog';
@@ -50,11 +48,8 @@ import { ChangesPanel, type ChangesGroupConfig } from './git/ChangesPanel';
 import { CommitSection } from './git/CommitSection';
 import { GitEmptyState } from './git/GitEmptyState';
 import { HistorySection } from './git/HistorySection';
-import { PullRequestSection } from './git/PullRequestSection';
 import { ConflictDialog } from './git/ConflictDialog';
-import { StashDialog } from './git/StashDialog';
 import { InProgressOperationBanner } from './git/InProgressOperationBanner';
-import { BranchIntegrationSection, type OperationLogEntry } from './git/BranchIntegrationSection';
 import { createGitIndexMutationQueue, type GitIndexMutationDirection, type GitIndexMutationQueue } from './git/gitIndexMutationQueue';
 import type { GitRemote } from '@/lib/gitApi';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
@@ -65,8 +60,6 @@ import { useI18n } from '@/lib/i18n';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
-type BranchOperation = 'merge' | 'rebase' | null;
-type ActionTab = 'commit' | 'branch' | 'pr';
 type GitLogDialogMode = 'history' | 'graph';
 type HistoryBranchDivider = {
   insertBeforeIndex: number;
@@ -74,11 +67,7 @@ type HistoryBranchDivider = {
   direction: 'up' | 'down';
 } | null;
 
-const GIT_ACTION_TAB_STORAGE_KEY = 'oc.git.actionTab';
 const GIT_RECONCILE_DELAY_MS = 15000;
-
-const isActionTab = (value: unknown): value is ActionTab =>
-  value === 'commit' || value === 'branch' || value === 'pr';
 
 type GitViewSnapshot = {
   directory?: string;
@@ -517,7 +506,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const [revertingPaths, setRevertingPaths] = React.useState<Set<string>>(new Set());
   const [movingChangePaths, setMovingChangePaths] = React.useState<Set<string>>(new Set());
   const [isRevertingAll, setIsRevertingAll] = React.useState(false);
-  const [integrateRefreshKey, setIntegrateRefreshKey] = React.useState(0);
   const [isGeneratingMessage, setIsGeneratingMessage] = React.useState(false);
   const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>(
     initialSnapshot?.generatedHighlights ?? []
@@ -535,42 +523,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     });
   }, []);
 
-  const repoRootForIntegrate = authoritativeProjectRoot || worktreeMetadata?.projectDirectory || null;
-  const sourceBranchForIntegrate = status?.current || null;
-  const shouldShowIntegrateCommits = React.useMemo(() => {
-    // For PR worktrees from forks we set upstream to a non-origin remote (e.g. pr-<owner>-<repo>).
-    // Re-integrate commits is intended for local scratch branches -> base branch, not fork PR branches.
-    const tracking = status?.tracking;
-    if (!tracking) return true;
-    return tracking.startsWith('origin/');
-  }, [status?.tracking]);
-  const defaultTargetBranch = React.useMemo(() => {
-    const fromMeta = worktreeMetadata?.createdFromBranch;
-    const normalizedFromMeta = typeof fromMeta === 'string' ? fromMeta.trim() : '';
-    const current = typeof status?.current === 'string' ? status.current.trim() : '';
-    const normalizedRoot = typeof rootBranchHint === 'string' ? rootBranchHint.trim() : '';
-
-    if (normalizedFromMeta) {
-      const looksLikeCorruptedSelfTarget =
-        normalizedFromMeta === current &&
-        normalizedFromMeta.startsWith('opencode/') &&
-        normalizedRoot.length > 0 &&
-        normalizedRoot !== normalizedFromMeta;
-
-      if (looksLikeCorruptedSelfTarget) {
-        return normalizedRoot;
-      }
-
-      return normalizedFromMeta;
-    }
-    if (normalizedRoot) {
-      return normalizedRoot;
-    }
-    if (current) {
-      return current;
-    }
-    return 'HEAD';
-  }, [worktreeMetadata?.createdFromBranch, status, rootBranchHint]);
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
@@ -584,25 +536,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
   const [gitLogDialogMode, setGitLogDialogMode] = React.useState<GitLogDialogMode | null>(null);
 
-  const actionTabItems = React.useMemo(() => [
-    { id: 'commit', label: t('gitView.tabs.commit'), icon: <Icon name="git-commit" className="h-3.5 w-3.5" /> },
-    { id: 'branch', label: t('gitView.tabs.update'), icon: <Icon name="git-merge" className="h-3.5 w-3.5" /> },
-    { id: 'pr', label: t('gitView.tabs.pr'), icon: <Icon name="git-pull-request" className="h-3.5 w-3.5" /> },
-  ], [t]);
-  const [actionTab, setActionTab] = React.useState<ActionTab>(() => {
-    if (typeof window === 'undefined') {
-      return 'commit';
-    }
-    const stored = window.localStorage.getItem(GIT_ACTION_TAB_STORAGE_KEY);
-    if (stored === 'worktree') {
-      return 'branch';
-    }
-    return isActionTab(stored) ? stored : 'commit';
-  });
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
-  const [removingRemoteName, setRemovingRemoteName] = React.useState<string | null>(null);
-  const [branchOperation, setBranchOperation] = React.useState<BranchOperation>(null);
-  const [operationLogs, setOperationLogs] = React.useState<OperationLogEntry[]>([]);
   const [conflictDialogOpen, setConflictDialogOpen] = React.useState(false);
   const [conflictFiles, setConflictFiles] = React.useState<string[]>([]);
   const [conflictOperation, setConflictOperation] = React.useState<'merge' | 'rebase'>('merge');
@@ -633,13 +567,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     window.localStorage.removeItem(conflictStorageKey);
   }, [conflictStorageKey]);
 
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    window.localStorage.setItem(GIT_ACTION_TAB_STORAGE_KEY, actionTab);
-  }, [actionTab]);
-
   // Restore conflict state from localStorage on mount
   React.useEffect(() => {
     if (!conflictStorageKey || typeof window === 'undefined' || !currentDirectory) return;
@@ -668,9 +595,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       window.localStorage.removeItem(conflictStorageKey);
     }
   }, [conflictStorageKey, currentDirectory]);
-  const [stashDialogOpen, setStashDialogOpen] = React.useState(false);
-  const [stashDialogOperation, setStashDialogOperation] = React.useState<'merge' | 'rebase'>('merge');
-  const [stashDialogBranch, setStashDialogBranch] = React.useState('');
 
   const handleCopyCommitHash = React.useCallback((hash: string) => {
     void copyTextToClipboard(hash).then((result) => {
@@ -1014,35 +938,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     }
   };
 
-  const handleRemoveRemote = React.useCallback(async (remote: GitRemote) => {
-    if (!currentDirectory) return;
-
-    const remoteName = remote.name.trim();
-    if (!remoteName) {
-      toast.error(t('gitView.toast.remoteNameRequired'));
-      return;
-    }
-    if (remoteName === 'origin') {
-      toast.error(t('gitView.toast.cannotRemoveOriginRemote'));
-      return;
-    }
-
-    setRemovingRemoteName(remoteName);
-    try {
-      await git.removeRemote(currentDirectory, { remote: remoteName });
-      toast.success(t('gitView.toast.removedRemote', { name: remoteName }));
-      await Promise.all([
-        refreshStatusAndBranches(false),
-        refreshRemotes(),
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : `Failed to remove ${remoteName}`;
-      toast.error(message);
-    } finally {
-      setRemovingRemoteName(null);
-    }
-  }, [currentDirectory, git, refreshRemotes, refreshStatusAndBranches, t]);
-
   const handleCommit = async (options: { pushAfter?: boolean } = {}) => {
     if (!currentDirectory) return;
     if (!commitMessage.trim()) {
@@ -1108,7 +1003,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       }
 
       await refreshLog();
-      setIntegrateRefreshKey((v) => v + 1);
     } catch (err) {
       const message = err instanceof Error ? err.message : t('gitView.toast.createCommitFailed');
       toast.error(message);
@@ -1379,39 +1273,8 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return 'main';
   }, [effectiveRemotes, localBranches, rootBranchHint, worktreeMetadata?.createdFromBranch]);
 
-  const updateTargetBranch = React.useMemo(() => {
-    const remoteNames = effectiveRemotes.map((remote) => remote.name);
-    const remoteCandidates = remoteNames.map((remote) => `${remote}/${baseBranch}`);
-    return remoteCandidates.find((candidate) => remoteBranches.includes(candidate)) ?? baseBranch;
-  }, [baseBranch, effectiveRemotes, remoteBranches]);
-
   const stagedCount = stagedChangeEntries.length;
-  const isBusy = isLoading || syncAction !== null || commitAction !== null;
   const currentBranch = status?.current ?? null;
-  const canShowIntegrateCommitsSection = Boolean(
-    worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits
-  );
-  const canShowPullRequestSection = Boolean(
-    currentDirectory && currentBranch
-  );
-  const canShowBranchWorkflows = Boolean(currentBranch);
-  const integrateCommitsProps =
-    canShowIntegrateCommitsSection && repoRootForIntegrate && sourceBranchForIntegrate && worktreeMetadata
-      ? {
-          repoRoot: repoRootForIntegrate,
-          sourceBranch: sourceBranchForIntegrate,
-          worktreeMetadata,
-        }
-      : null;
-  const pullRequestProps = React.useMemo(() => {
-    if (!canShowPullRequestSection || !currentDirectory || !currentBranch) {
-      return null;
-    }
-    return {
-      directory: currentDirectory,
-      branch: currentBranch,
-    };
-  }, [canShowPullRequestSection, currentBranch, currentDirectory]);
 
   React.useEffect(() => {
     if (!currentDirectory || !git || !log?.all?.length || !currentBranch || !baseBranch || currentBranch === baseBranch) {
@@ -1731,170 +1594,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
 
 
-  const isUncommittedChangesError = React.useCallback((error: unknown): boolean => {
-    const message = error instanceof Error ? error.message.toLowerCase() : '';
-    return (
-      message.includes('uncommitted changes') ||
-      message.includes('local changes') ||
-      message.includes('your local changes would be overwritten') ||
-      message.includes('please commit your changes or stash them') ||
-      message.includes('cannot rebase: you have unstaged changes') ||
-      message.includes('error: cannot pull with rebase')
-    );
-  }, []);
-
-  // Helper to add/update operation logs
-  const addOperationLog = React.useCallback((message: string, status: OperationLogEntry['status']) => {
-    setOperationLogs(prev => [...prev, { message, status, timestamp: Date.now() }]);
-  }, []);
-
-  const updateLastLog = React.useCallback((status: OperationLogEntry['status'], message?: string) => {
-    setOperationLogs(prev => {
-      if (prev.length === 0) return prev;
-      const updated = [...prev];
-      updated[updated.length - 1] = {
-        ...updated[updated.length - 1],
-        status,
-        ...(message ? { message } : {}),
-      };
-      return updated;
-    });
-  }, []);
-
-  // Called at start of operation to reset logs
-  const resetOperationLogs = React.useCallback(() => {
-    setOperationLogs([]);
-  }, []);
-
-  // Called when dialog is closed to fully reset state
-  const handleOperationComplete = React.useCallback(() => {
-    setOperationLogs([]);
-    setBranchOperation(null);
-  }, []);
-
-  const resolveIntegrationTarget = React.useCallback((branch: string) => {
-    const trimmed = branch.trim();
-    const knownRemoteNames = new Set(effectiveRemotes.map((remote) => remote.name));
-    const slashIndex = trimmed.indexOf('/');
-
-    if (slashIndex > 0) {
-      const remote = trimmed.slice(0, slashIndex);
-      const remoteBranch = trimmed.slice(slashIndex + 1);
-      if (knownRemoteNames.has(remote) && remoteBranch) {
-        return { branch: trimmed, remote, remoteBranch };
-      }
-    }
-
-    for (const remote of effectiveRemotes) {
-      const remoteCandidate = `${remote.name}/${trimmed}`;
-      if (remoteBranches.includes(remoteCandidate)) {
-        return { branch: remoteCandidate, remote: remote.name, remoteBranch: trimmed };
-      }
-    }
-
-    return { branch: trimmed, remote: null, remoteBranch: null };
-  }, [effectiveRemotes, remoteBranches]);
-
-  const handleMerge = React.useCallback(
-    async (branch: string) => {
-      if (!currentDirectory) return;
-      setBranchOperation('merge');
-      resetOperationLogs();
-
-      const currentBranch = status?.current;
-
-      const target = resolveIntegrationTarget(branch);
-
-      try {
-        if (target.remote && target.remoteBranch) {
-          addOperationLog(`Fetching ${target.remote}/${target.remoteBranch}...`, 'running');
-          await git.gitFetch(currentDirectory, { remote: target.remote, branch: target.remoteBranch });
-          updateLastLog('done', `Fetched ${target.remote}/${target.remoteBranch}`);
-        }
-
-        addOperationLog(`Merging ${target.branch} into ${currentBranch}...`, 'running');
-        const result = await git.merge(currentDirectory, { branch: target.branch });
-
-        if (result.conflict) {
-          updateLastLog('error', `Merge conflicts detected`);
-          setConflictFiles(result.conflictFiles ?? []);
-          setConflictOperation('merge');
-          setConflictDialogOpen(true);
-          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
-        } else {
-          updateLastLog('done', `Merged ${target.branch} into ${currentBranch}`);
-          clearConflictState();
-          addOperationLog('Refreshing repository status...', 'running');
-          await refreshStatusAndBranches();
-          await refreshLog();
-          updateLastLog('done', 'Repository status updated');
-        }
-      } catch (err) {
-        if (isUncommittedChangesError(err)) {
-          updateLastLog('error', 'Uncommitted changes detected');
-          setStashDialogOperation('merge');
-          setStashDialogBranch(target.branch);
-          setStashDialogOpen(true);
-        } else {
-          const message = err instanceof Error ? err.message : `Failed to merge ${target.branch}`;
-          updateLastLog('error', message);
-        }
-      }
-      // Note: branchOperation is cleared when dialog closes via handleOperationComplete
-    },
-    [currentDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
-  );
-
-  const handleRebase = React.useCallback(
-    async (branch: string) => {
-      if (!currentDirectory) return;
-      setBranchOperation('rebase');
-      resetOperationLogs();
-
-      const currentBranch = status?.current;
-
-      const target = resolveIntegrationTarget(branch);
-
-      try {
-        if (target.remote && target.remoteBranch) {
-          addOperationLog(`Fetching ${target.remote}/${target.remoteBranch}...`, 'running');
-          await git.gitFetch(currentDirectory, { remote: target.remote, branch: target.remoteBranch });
-          updateLastLog('done', `Fetched ${target.remote}/${target.remoteBranch}`);
-        }
-
-        addOperationLog(`Rebasing ${currentBranch} onto ${target.branch}...`, 'running');
-        const result = await git.rebase(currentDirectory, { onto: target.branch });
-
-        if (result.conflict) {
-          updateLastLog('error', `Rebase conflicts detected`);
-          setConflictFiles(result.conflictFiles ?? []);
-          setConflictOperation('rebase');
-          setConflictDialogOpen(true);
-          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
-        } else {
-          updateLastLog('done', `Rebased ${currentBranch} onto ${target.branch}`);
-          clearConflictState();
-          addOperationLog('Refreshing repository status...', 'running');
-          await refreshStatusAndBranches();
-          await refreshLog();
-          updateLastLog('done', 'Repository status updated');
-        }
-      } catch (err) {
-        if (isUncommittedChangesError(err)) {
-          updateLastLog('error', 'Uncommitted changes detected');
-          setStashDialogOperation('rebase');
-          setStashDialogBranch(target.branch);
-          setStashDialogOpen(true);
-        } else {
-          const message = err instanceof Error ? err.message : `Failed to rebase onto ${target.branch}`;
-          updateLastLog('error', message);
-        }
-      }
-      // Note: branchOperation is cleared when dialog closes via handleOperationComplete
-    },
-    [currentDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
-  );
-
   const handleAbortConflict = React.useCallback(async () => {
     if (!currentDirectory) return;
 
@@ -2008,91 +1707,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     setConflictDialogOpen(true);
   }, [currentDirectory, status]);
 
-  const handleStashAndRetry = React.useCallback(
-    async (restoreAfter: boolean) => {
-      if (!currentDirectory) return;
-
-      const currentBranch = status?.current;
-      const operation = stashDialogOperation;
-      const branch = stashDialogBranch;
-      const hadStagedChanges = (status?.files ?? []).some(isStagedStatusFile);
-
-      // Stash changes
-      try {
-        await git.stash(currentDirectory, {
-          message: `Auto-stash before ${operation} with ${branch}`,
-          includeUntracked: true,
-        });
-        if (hadStagedChanges) {
-          bumpIndexRevision(currentDirectory);
-        }
-      } catch (stashErr) {
-        const msg = stashErr instanceof Error ? stashErr.message : 'Failed to stash changes';
-        toast.error(msg);
-        return;
-      }
-
-      let operationSucceeded = false;
-      let hasConflict = false;
-
-      try {
-        // Perform the operation
-        if (operation === 'merge') {
-          const result = await git.merge(currentDirectory, { branch });
-          if (result.conflict) {
-            hasConflict = true;
-            setConflictFiles(result.conflictFiles ?? []);
-            setConflictOperation('merge');
-            setConflictDialogOpen(true);
-          } else {
-            operationSucceeded = true;
-            toast.success(t('gitView.toast.mergedIntoBranch', { branch, currentBranch: currentBranch || '' }));
-          }
-        } else {
-          const result = await git.rebase(currentDirectory, { onto: branch });
-          if (result.conflict) {
-            hasConflict = true;
-            setConflictFiles(result.conflictFiles ?? []);
-            setConflictOperation('rebase');
-            setConflictDialogOpen(true);
-          } else {
-            operationSucceeded = true;
-            toast.success(t('gitView.toast.rebasedOntoBranch', { currentBranch: currentBranch || '', branch }));
-          }
-        }
-
-        // Restore stashed changes if requested and operation succeeded
-        if (restoreAfter && operationSucceeded) {
-          try {
-            await git.stashPop(currentDirectory);
-            bumpIndexRevision(currentDirectory);
-            toast.success(t('gitView.toast.stashedRestored'));
-          } catch (popErr) {
-            const popMessage = popErr instanceof Error ? popErr.message : t('gitView.toast.restoreStashFailed');
-            toast.error(popMessage);
-          }
-        } else if (restoreAfter && hasConflict) {
-          toast.info(t('gitView.toast.restoreStashManually'));
-        }
-
-        await refreshStatusAndBranches();
-        await refreshLog();
-      } catch (err) {
-        // If the operation failed (not due to conflicts), try to restore stash
-        if (restoreAfter) {
-          try {
-            await git.stashPop(currentDirectory);
-            bumpIndexRevision(currentDirectory);
-          } catch {
-            // Ignore stash pop errors in this case
-          }
-        }
-        throw err;
-      }
-    },
-    [bumpIndexRevision, currentDirectory, git, status, stashDialogOperation, stashDialogBranch, refreshStatusAndBranches, refreshLog, t]
-  );
-
   const handleLogMaxCountChange = React.useCallback(
     (count: number) => {
       setLogMaxCountLocal(count);
@@ -2205,26 +1819,20 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   return (
     <div className={cn('flex h-full flex-col overflow-hidden')}>
           <GitHeader
-        status={status}
-        localBranches={localBranches}
-        remoteBranches={remoteBranches}
-        branchInfo={branches?.branches}
-        syncAction={syncAction}
-        remotes={effectiveRemotes}
-        onFetch={(remote) => handleSyncAction('fetch', remote)}
-        onSync={(remote) => handleSyncAction('sync', remote)}
-        onRemoveRemote={handleRemoveRemote}
-        removingRemoteName={removingRemoteName}
-        onCheckoutBranch={handleCheckoutBranch}
-        onCreateBranch={handleCreateBranch}
-        onRenameBranch={handleRenameBranch}
+            status={status}
+            localBranches={localBranches}
+            remoteBranches={remoteBranches}
+            branchInfo={branches?.branches}
+            syncAction={syncAction}
+            remotes={effectiveRemotes}
+            onSync={(remote) => handleSyncAction('sync', remote)}
+            onCheckoutBranch={handleCheckoutBranch}
+            onCreateBranch={handleCreateBranch}
+            onRenameBranch={handleRenameBranch}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}
             onOpenGraph={() => setGitLogDialogMode('graph')}
             onOpenStashes={openStashes}
-            actionTabItems={actionTabItems}
-            activeActionTab={actionTab}
-            onSelectActionTab={(tabID) => setActionTab(tabID as ActionTab)}
           />
 
       {/* In-progress operation banner */}
@@ -2250,112 +1858,46 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
               as={ScrollShadow}
               ref={actionPanelScrollRef}
               outerClassName="flex-1 min-h-0"
-              className={cn('px-4', 'pt-1 pb-4')}
+              className={cn('px-4', 'pt-0 pb-4')}
               disableHorizontal
               preventOverscroll
             >
-              {actionTab === 'commit' ? (
-                <div className="flex h-full min-h-0 flex-col gap-3">
-                  {(changeEntries?.length ?? 0) > 0 ? (
-                    <>
-                      <div className="min-h-0 flex-1 overflow-hidden">
-                        <ChangesPanel
-                          groups={changeGroups}
-                          diffStats={status?.diffStats}
-                          revertingPaths={revertingPaths}
-                          isRevertingAll={isRevertingAll}
-                          onVisiblePathsChange={setVisibleChangePaths}
-                          onRevertAll={handleRevertAll}
-                          onRevertDirectory={handleRevertDirectory}
-                          headerBackgroundClassName="bg-background"
-                        />
-                      </div>
-
-                      <CommitSection
-                        stagedCount={stagedCount}
-                        commitMessage={commitMessage}
-                        onCommitMessageChange={setCommitMessage}
-                        generatedHighlights={generatedHighlights}
-                        onInsertHighlights={handleInsertHighlights}
-                        onGenerateMessage={handleGenerateCommitMessage}
-                        isGeneratingMessage={isGeneratingMessage}
-                        onCommit={() => handleCommit({ pushAfter: false })}
-                        onCommitAndPush={() => handleCommit({ pushAfter: true })}
-                        commitAction={commitAction}
-                        hasPendingIndexMutation={hasPendingIndexMutation}
-                        gitmojiEnabled={settingsGitmojiEnabled}
-                        onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+              <div className="flex h-full min-h-0 flex-col gap-2">
+                {(changeEntries?.length ?? 0) > 0 ? (
+                  <>
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                      <ChangesPanel
+                        groups={changeGroups}
+                        diffStats={status?.diffStats}
+                        revertingPaths={revertingPaths}
+                        isRevertingAll={isRevertingAll}
+                        onVisiblePathsChange={setVisibleChangePaths}
+                        onRevertAll={handleRevertAll}
+                        onRevertDirectory={handleRevertDirectory}
+                        headerBackgroundClassName="bg-background"
                       />
-                    </>
-                  ) : (
-                      <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
-                  )}
-                </div>
-              ) : null}
-
-              {actionTab === 'branch' ? (
-                <div className="space-y-4">
-                  {canShowBranchWorkflows ? (
-                    <>
-                      <BranchIntegrationSection
-                        mode="inline"
-                        currentBranch={status?.current}
-                        localBranches={localBranches}
-                        remoteBranches={remoteBranches}
-                        defaultTargetBranch={updateTargetBranch}
-                        onMerge={handleMerge}
-                        onRebase={handleRebase}
-                        disabled={isBusy}
-                        isOperating={branchOperation !== null}
-                        operationLogs={operationLogs}
-                        onOperationComplete={handleOperationComplete}
-                      />
-                      {integrateCommitsProps ? (
-                        <IntegrateCommitsSection
-                          key={integrateCommitsProps.worktreeMetadata.path}
-                          repoRoot={integrateCommitsProps.repoRoot}
-                          sourceBranch={integrateCommitsProps.sourceBranch}
-                          worktreeMetadata={integrateCommitsProps.worktreeMetadata}
-                          localBranches={localBranches}
-                          defaultTargetBranch={defaultTargetBranch}
-                          refreshKey={integrateRefreshKey}
-                          onRefresh={() => {
-                            if (!currentDirectory) return;
-                            fetchStatus(currentDirectory, git);
-                            fetchBranches(currentDirectory, git);
-                            fetchLog(currentDirectory, git, logMaxCountLocal);
-                          }}
-                        />
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="typography-meta text-muted-foreground">{t('gitView.branch.actionsUnavailable')}</p>
-                  )}
-                </div>
-              ) : null}
-
-              {actionTab === 'pr' ? (
-                <div className="space-y-4">
-                  {pullRequestProps ? (
-                    <PullRequestSection
-                      directory={pullRequestProps.directory}
-                      branch={pullRequestProps.branch}
-                      baseBranch={baseBranch}
-                      trackingBranch={status?.tracking ?? undefined}
-                      remotes={remotes}
-                      remoteBranches={remoteBranches}
-                      onGeneratedDescription={scrollActionPanelToBottom}
-                    />
-                  ) : (
-                    <div className="space-y-1">
-                      <div className="typography-ui-header font-semibold text-foreground">{t('gitView.pullRequest.title')}</div>
-                      <div className="typography-micro text-muted-foreground">
-                        {t('gitView.pullRequest.createHint')}
-                      </div>
                     </div>
-                  )}
-                </div>
-              ) : null}
+
+                    <CommitSection
+                      stagedCount={stagedCount}
+                      commitMessage={commitMessage}
+                      onCommitMessageChange={setCommitMessage}
+                      generatedHighlights={generatedHighlights}
+                      onInsertHighlights={handleInsertHighlights}
+                      onGenerateMessage={handleGenerateCommitMessage}
+                      isGeneratingMessage={isGeneratingMessage}
+                      onCommit={() => handleCommit({ pushAfter: false })}
+                      onCommitAndPush={() => handleCommit({ pushAfter: true })}
+                      commitAction={commitAction}
+                      hasPendingIndexMutation={hasPendingIndexMutation}
+                      gitmojiEnabled={settingsGitmojiEnabled}
+                      onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+                    />
+                  </>
+                ) : (
+                  <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
+                )}
+              </div>
             </ScrollableOverlay>
           </div>
         </div>
@@ -2462,14 +2004,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           onClearState={clearConflictState}
         />
       )}
-
-      <StashDialog
-        open={stashDialogOpen}
-        onOpenChange={setStashDialogOpen}
-        operation={stashDialogOperation}
-        targetBranch={stashDialogBranch}
-        onConfirm={handleStashAndRetry}
-      />
 
     </div>
   );

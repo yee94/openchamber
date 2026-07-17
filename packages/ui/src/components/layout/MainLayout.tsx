@@ -54,7 +54,6 @@ export const MainLayout: React.FC = () => {
     const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
     const isMultiRunLauncherOpen = useUIStore((state) => state.isMultiRunLauncherOpen);
     const setMultiRunLauncherOpen = useUIStore((state) => state.setMultiRunLauncherOpen);
-    const multiRunLauncherPrefillPrompt = useUIStore((state) => state.multiRunLauncherPrefillPrompt);
     const { isMobile, isTablet } = useDeviceInfo();
     const rightSidebarAutoClosedRef = React.useRef(false);
     const bottomTerminalAutoClosedRef = React.useRef(false);
@@ -362,7 +361,9 @@ export const MainLayout: React.FC = () => {
             case 'diff':
                 return <React.Suspense fallback={null}><DiffView /></React.Suspense>;
             case 'terminal':
-                return <React.Suspense fallback={null}><TerminalView /></React.Suspense>;
+                return isBottomTerminalOpen
+                    ? null
+                    : <React.Suspense fallback={null}><TerminalView /></React.Suspense>;
             case 'files':
                 return <React.Suspense fallback={null}><FilesView /></React.Suspense>;
             case 'context':
@@ -372,7 +373,7 @@ export const MainLayout: React.FC = () => {
             default:
                 return null;
         }
-    }, [activeMainTab, mobileRightSidebarOpen]);
+    }, [activeMainTab, isBottomTerminalOpen, mobileRightSidebarOpen]);
 
     const isChatActive = activeMainTab === 'chat';
 
@@ -447,7 +448,6 @@ export const MainLayout: React.FC = () => {
                                 <div className="absolute inset-0 z-10 bg-background">
                                     <ErrorBoundary>
                                         <MultiRunLauncher
-                                            initialPrompt={multiRunLauncherPrefillPrompt}
                                             onCreated={() => setMultiRunLauncherOpen(false)}
                                             onCancel={() => setMultiRunLauncherOpen(false)}
                                         />
@@ -567,7 +567,6 @@ export const MainLayout: React.FC = () => {
                         <MultiRunWindow
                             open={isMultiRunLauncherOpen}
                             onOpenChange={setMultiRunLauncherOpen}
-                            initialPrompt={multiRunLauncherPrefillPrompt}
                         />
                     </React.Suspense>
                 </>

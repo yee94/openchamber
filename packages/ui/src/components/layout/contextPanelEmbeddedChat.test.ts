@@ -3,6 +3,8 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
 import {
   buildEmbeddedSessionChatURL,
+  EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT,
+  EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT,
   getOrCreateEmbeddedSessionChatURL,
   isEmbeddedSessionChatSearch,
   getEmbeddedSessionChatOriginSessionId,
@@ -47,6 +49,16 @@ afterAll(() => {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: originalWindow,
+  });
+});
+
+describe('embedded session chat visibility handshake', () => {
+  test('keeps parent/child visibility event names stable', () => {
+    // Child requests after mounting its listener; parent replies with visibility.
+    // Renaming either string without updating both sides reintroduces the stuck
+    // #initial-loading race on iframe open.
+    expect(EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT).toBe('openchamber:embedded-visibility');
+    expect(EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT).toBe('openchamber:embedded-visibility-request');
   });
 });
 

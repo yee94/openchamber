@@ -10,6 +10,7 @@ export const UNASSIGNED_SHORTCUT: ShortcutCombo = '__unassigned__';
 export interface ShortcutAction {
   id: string;
   defaultCombo: ShortcutCombo;
+  defaultAliases?: ReadonlyArray<ShortcutCombo>;
   label: string;
   description?: string;
   customizable?: boolean;
@@ -168,6 +169,34 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     customizable: true,
   },
   {
+    id: 'new_terminal_tab',
+    defaultCombo: 'mod+t',
+    label: 'New terminal tab',
+    description: 'Create a new terminal tab when the terminal is focused',
+    customizable: true,
+  },
+  {
+    id: 'open_new_terminal',
+    defaultCombo: 'mod+shift+backtick',
+    label: 'Open new terminal',
+    description: 'Open the terminal panel and create a new terminal tab',
+    customizable: true,
+  },
+  {
+    id: 'previous_terminal_tab',
+    defaultCombo: 'mod+shift+[',
+    label: 'Previous terminal tab',
+    description: 'Switch to the previous terminal tab when the terminal is focused',
+    customizable: true,
+  },
+  {
+    id: 'next_terminal_tab',
+    defaultCombo: 'mod+shift+]',
+    label: 'Next terminal tab',
+    description: 'Switch to the next terminal tab when the terminal is focused',
+    customizable: true,
+  },
+  {
     id: 'toggle_files',
     defaultCombo: 'mod+shift+f',
     label: 'Toggle files',
@@ -232,6 +261,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   {
     id: 'previous_session',
     defaultCombo: 'mod+shift+[',
+    defaultAliases: ['mod+arrowup'],
     label: 'Previous session',
     description: 'Switch to the previous session',
     customizable: true,
@@ -239,6 +269,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   {
     id: 'next_session',
     defaultCombo: 'mod+shift+]',
+    defaultAliases: ['mod+arrowdown'],
     label: 'Next session',
     description: 'Switch to the next session',
     customizable: true,
@@ -595,6 +626,23 @@ export function getEffectiveShortcutCombo(
   }
 
   return action.defaultCombo;
+}
+
+export function getEffectiveShortcutCombos(
+  actionId: string,
+  overrides?: Record<string, ShortcutCombo>,
+): ReadonlyArray<ShortcutCombo> {
+  const action = getShortcutAction(actionId);
+  if (!action) {
+    return [];
+  }
+
+  const effectiveCombo = getEffectiveShortcutCombo(actionId, overrides);
+  if (effectiveCombo !== action.defaultCombo) {
+    return effectiveCombo ? [effectiveCombo] : [];
+  }
+
+  return [action.defaultCombo, ...(action.defaultAliases ?? [])];
 }
 
 export function isRiskyBrowserShortcut(combo: ShortcutCombo): boolean {

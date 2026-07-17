@@ -380,8 +380,8 @@ const buildSnapshot = (instanceName: string): TraySnapshot => {
         title: session.title || 'Untitled session',
         status: rollupStatus(family),
         branch: directory ? (live.branchByDirectory.get(directory) ?? '') : '',
-        unseen: family.reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0),
-        hasError: family.some((id) => notif.unseenHasError[id] ?? false),
+        unseen: notif.unseenCount[session.id] ?? 0,
+        hasError: notif.unseenHasError[session.id] ?? false,
         directory,
         subtitle: resolveSessionSubtitle(directory, projects, worktreesByProject, live.branchByDirectory),
       };
@@ -389,22 +389,14 @@ const buildSnapshot = (instanceName: string): TraySnapshot => {
 
   const approvals = live.approvals.map((a) => ({ ...a, sessionTitle: titleById.get(a.sessionId) || '' }));
 
-  // Dock badge: count chats (root sessions) with unseen activity over the FULL
-  // cross-project list — not the MAX_SESSIONS-capped `sessions` above — so the
-  // number is accurate even with many projects. A subtask's unseen rolls up to
-  // its root only when the user opted into subtask notifications, matching the
-  // sidebar's needs-attention rule.
+  // Dock badge: count root sessions with unread completion activity over the
+  // full cross-project list, independent of the tray's visible-session cap.
   const ui = useUIStore.getState();
   let dockBadgeCount = 0;
   if (ui.dockBadgeEnabled) {
     for (const session of allSessions) {
       if (!session?.id || session.parentID) continue; // roots only
-      let familyUnseen = notif.unseenCount[session.id] ?? 0;
-      if (familyUnseen === 0 && ui.notifyOnSubtasks) {
-        familyUnseen = collectDescendants(session.id)
-          .reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0);
-      }
-      if (familyUnseen > 0) dockBadgeCount += 1;
+      if ((notif.unseenCount[session.id] ?? 0) > 0) dockBadgeCount += 1;
     }
   }
 

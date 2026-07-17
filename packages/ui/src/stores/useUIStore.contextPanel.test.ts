@@ -165,4 +165,40 @@ describe('useUIStore context panel tabs', () => {
     expect(useUIStore.getState().contextPanelByDirectory[firstDirectory]?.isOpen).toBe(false);
     expect(useUIStore.getState().isRightSidebarOpen).toBe(false);
   });
+
+  test('syncWorkspacePanelsForSessionSwitch hides panels when leaving for a new-session draft', () => {
+    const directory = '/repo';
+    const store = useUIStore.getState();
+
+    store.openContextPanelTab(directory, {
+      mode: 'chat',
+      dedupeKey: 'session:ses_child',
+      label: 'Subagent',
+    });
+    store.setRightSidebarOpen(true);
+    store.setRightSidebarTab('files');
+
+    store.syncWorkspacePanelsForSessionSwitch({
+      previousSessionId: 'ses_a',
+      previousDirectory: directory,
+      nextSessionId: null,
+      nextDirectory: null,
+    });
+
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.isOpen).toBe(false);
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(false);
+    expect(useUIStore.getState().sessionWorkspacePanelById.ses_a?.isRightSidebarOpen).toBe(true);
+    expect(useUIStore.getState().sessionWorkspacePanelById.ses_a?.rightSidebarTab).toBe('files');
+
+    store.syncWorkspacePanelsForSessionSwitch({
+      previousSessionId: null,
+      previousDirectory: null,
+      nextSessionId: 'ses_a',
+      nextDirectory: directory,
+    });
+
+    expect(useUIStore.getState().contextPanelByDirectory[directory]?.isOpen).toBe(true);
+    expect(useUIStore.getState().isRightSidebarOpen).toBe(true);
+    expect(useUIStore.getState().rightSidebarTab).toBe('files');
+  });
 });

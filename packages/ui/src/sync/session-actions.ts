@@ -1844,10 +1844,16 @@ export async function forkSession(sessionId: string, operationId: number, messag
   })
 
   // Extract message text and file attachments for input restoration.
+  // Only restore the composer when forking from a user message — assistant
+  // forks keep conversation context but should not dump model output into input.
   // Only non-synthetic text parts — the server adds file content as synthetic
   // text parts that should not be restored. File parts (images, pasted
   // screenshots) are user-originated and must be restored.
-  const parts = messageId ? state.part[messageId] ?? [] : []
+  const forkSourceMessage = messageId
+    ? (state.message[sessionId] ?? []).find((message) => message.id === messageId)
+    : undefined
+  const shouldRestoreComposer = forkSourceMessage?.role === "user"
+  const parts = shouldRestoreComposer && messageId ? state.part[messageId] ?? [] : []
   let messageText = ""
   const textParts = parts.filter((p) => p.type === "text" && !isSyntheticPart(p))
   messageText = textParts
@@ -1943,8 +1949,8 @@ export async function forkSession(sessionId: string, operationId: number, messag
     if (activeForkCopy?.operationId === operationId) activeForkCopy = null
   }
 
-  // Restore forked message text and file attachments to input
-  if (messageText) {
+  // Restore forked message text and file attachments to input (user messages only)
+  if (shouldRestoreComposer && messageText) {
     useInputStore.setState({
       pendingInputText: messageText,
       pendingInputMode: "replace" as const,
@@ -1952,7 +1958,7 @@ export async function forkSession(sessionId: string, operationId: number, messag
   }
   // A selected message owns its attachment restoration snapshot. A current-session
   // fork preserves the composer's existing resources.
-  if (messageId) restoreFilePartsToInput(fileParts)
+  if (shouldRestoreComposer && messageId) restoreFilePartsToInput(fileParts)
   console.info("[session-fork] forked session is ready", {
     operationId,
     sessionId,

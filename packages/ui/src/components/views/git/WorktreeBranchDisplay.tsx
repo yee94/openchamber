@@ -78,15 +78,15 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
 
   if (isEditing) {
     return (
-      <div className="flex items-center gap-2 rounded-md bg-primary/12 px-2 py-1 h-8">
+      <div className="flex h-6 items-center gap-1.5 rounded-md bg-primary/12 px-1.5">
         <form
-          className="flex w-full items-center gap-2"
+          className="flex w-full items-center gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
             handleSaveEdit();
           }}
         >
-          <Icon name="git-branch" className="size-4 text-primary" />
+          <Icon name="git-branch" className="size-3.5 text-primary" />
           <input
             ref={inputRef}
             value={editBranchName}
@@ -104,9 +104,9 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
             className="shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             {isRenaming ? (
-              <Icon name="loader-4" className="size-4 animate-spin" />
+              <Icon name="loader-4" className="size-3.5 animate-spin" />
             ) : (
-              <Icon name="check" className="size-4" />
+              <Icon name="check" className="size-3.5" />
             )}
           </button>
           <button
@@ -117,7 +117,7 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
             title={t('gitView.branch.renameCancel')}
             className="shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
-            <Icon name="close" className="size-4" />
+            <Icon name="close" className="size-3.5" />
           </button>
         </form>
       </div>
@@ -125,21 +125,21 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
   }
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1 h-8">
-      <Icon name="git-branch" className="size-4 text-primary shrink-0" />
+    <div className="flex h-6 w-full min-w-0 items-center gap-1 px-0">
+      <Icon name="git-branch" className="size-3.5 text-primary shrink-0" />
       <div className="inline-flex min-w-0 max-w-full items-center gap-1">
-        <span className="truncate typography-ui-label font-normal text-foreground">
+        <span className="truncate typography-ui-label font-semibold text-foreground">
           {currentBranch || t('gitView.branch.detachedHead')}
         </span>
         {showEditButton && onRename && currentBranch && (
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 shrink-0"
+            size="xs"
+            className="size-6 p-0 shrink-0"
             onClick={handleStartEdit}
             title={t('gitView.branch.renameTitle')}
           >
-            <Icon name="edit" className="size-4" />
+            <Icon name="edit" className="size-3.5" />
           </Button>
         )}
       </div>

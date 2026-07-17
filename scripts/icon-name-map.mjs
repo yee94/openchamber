@@ -28,6 +28,35 @@ export const ROUNDED_PANEL_LEFT_SVG =
   `<rect width="18" height="18" x="3" y="3" rx="4" /><path d="M9.5 3v18" />`
 
 /**
+ * Message-action glyphs: same 24×24 weight as Lucide, but softer corners /
+ * curves so 14px chrome reads rounder and quieter (not smaller).
+ */
+export const SOFT_TIME_SVG =
+  `<circle cx="12" cy="12" r="9" /><path d="M12 7v5.25l3.25 1.75" />`
+
+export const SOFT_UNDO_SVG =
+  `<path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H12" />`
+
+export const SOFT_EDIT_SVG =
+  `<path d="M15 5.5 18.5 9" /><path d="M4.5 19.5 5.75 14.75 15.25 5.25a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L9.25 18.25Z" />`
+
+export const SOFT_COPY_SVG =
+  `<rect width="14" height="14" x="8" y="8" rx="3.5" ry="3.5" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />`
+
+export const SOFT_GIT_BRANCH_SVG =
+  `<circle cx="18" cy="6" r="2.6" /><circle cx="6" cy="18" r="2.6" /><path d="M6 15.4V3" /><path d="M18 8.6c0 4.6-3.4 7.4-9.4 8" />`
+
+/**
+ * Cartoon hourglass: one closed outline, rounded top/bottom, soft middle.
+ * No caps sticking out, no sand, no open endpoints.
+ */
+export const SOFT_HOURGLASS_SVG =
+  `<path d="M8 3.5h8c.8 0 1.5.7 1.5 1.5 0 2.6-1.8 4.5-3.8 5.9-.4.3-.7.6-.7 1.1s.3.8.7 1.1c2 1.4 3.8 3.3 3.8 5.9 0 .8-.7 1.5-1.5 1.5H8c-.8 0-1.5-.7-1.5-1.5 0-2.6 1.8-4.5 3.8-5.9.4-.3.7-.6.7-1.1s-.3-.8-.7-1.1C8.3 9.5 6.5 7.6 6.5 5c0-.8.7-1.5 1.5-1.5z" />`
+
+export const SOFT_SWAP_SVG =
+  `<path d="M8 7H3v5" /><path d="m3 7 7 7" /><path d="M16 17h5v-5" /><path d="m21 17-7-7" />`
+
+/**
  * Remixicon `PushpinFill` — classic diagonal thumbtack. Lucide's upright `pin`
  * reads poorly as a sidebar pinned marker at 12px.
  */
@@ -49,11 +78,11 @@ export const ICON_NAME_MAP = {
   "archive-stack": { lucide: "archive", fill: false },
   "arrow-down": { lucide: "arrow-down", fill: false },
   "arrow-down-s": { lucide: "chevron-down", fill: false },
-  "arrow-go-back": { lucide: "undo-2", fill: false },
+  "arrow-go-back": { custom: SOFT_UNDO_SVG },
   "arrow-go-forward": { lucide: "redo-2", fill: false },
   "arrow-left": { lucide: "arrow-left", fill: false },
   "arrow-left-long": { lucide: "arrow-left", fill: false },
-  "arrow-left-right": { lucide: "arrow-left-right", fill: false },
+  "arrow-left-right": { custom: SOFT_SWAP_SVG },
   "arrow-left-s": { lucide: "chevron-left", fill: false },
   "arrow-right": { lucide: "arrow-right", fill: false },
   "arrow-right-s": { lucide: "chevron-right", fill: false },
@@ -111,7 +140,7 @@ export const ICON_NAME_MAP = {
   "drag-move-2": { lucide: "grip-vertical", fill: false },
   "draggable": { lucide: "grip-vertical", fill: false },
   "earth": { lucide: "globe", fill: false },
-  "edit": { lucide: "pencil", fill: false },
+  "edit": { custom: SOFT_EDIT_SVG },
   "edit-2": { lucide: "pen", fill: false },
   "emotion-happy": { lucide: "smile", fill: false },
   "equalizer-2": { lucide: "sliders-horizontal", fill: false },
@@ -125,7 +154,7 @@ export const ICON_NAME_MAP = {
   "file-check": { lucide: "file-check", fill: false },
   "file-check-fill": { lucide: "file-check", fill: true },
   "file-code": { lucide: "file-code", fill: false },
-  "file-copy": { lucide: "copy", fill: false },
+  "file-copy": { custom: SOFT_COPY_SVG },
   "file-copy-2": { lucide: "files", fill: false },
   "file-download": { lucide: "file-down", fill: false },
   "file-edit": { lucide: "file-pen", fill: false },
@@ -151,7 +180,7 @@ export const ICON_NAME_MAP = {
   "fullscreen": { lucide: "maximize", fill: false },
   "fullscreen-exit": { lucide: "minimize", fill: false },
   "gamepad": { lucide: "gamepad-2", fill: false },
-  "git-branch": { lucide: "git-branch", fill: false },
+  "git-branch": { custom: SOFT_GIT_BRANCH_SVG },
   "git-close-pull-request": { lucide: "git-pull-request-closed", fill: false },
   "git-commit": { lucide: "git-commit", fill: false },
   "git-merge": { lucide: "git-merge", fill: false },
@@ -166,7 +195,7 @@ export const ICON_NAME_MAP = {
   "heart": { lucide: "heart", fill: false },
   "history": { lucide: "history", fill: false },
   "home": { lucide: "home", fill: false },
-  "hourglass": { lucide: "hourglass", fill: false },
+  "hourglass": { custom: SOFT_HOURGLASS_SVG },
   "hourglass-fill": { lucide: "hourglass", fill: true },
   "image-download": { lucide: "image-down", fill: false },
   "inbox-archive": { lucide: "archive", fill: false },
@@ -258,7 +287,7 @@ export const ICON_NAME_MAP = {
   "terminal-window": { lucide: "square-terminal", fill: false },
   "text": { lucide: "type", fill: false },
   "text-wrap": { lucide: "wrap-text", fill: false },
-  "time": { lucide: "clock", fill: false },
+  "time": { custom: SOFT_TIME_SVG },
   "timer": { lucide: "timer", fill: false },
   "tools": { lucide: "wrench", fill: false },
   "twitter-xfill": { brand: '<path d="M17.6874 3.0625L12.6907 8.77425L8.37045 3.0625H2.11328L9.58961 12.8387L2.50378 20.9375H5.53795L11.0068 14.6886L15.7863 20.9375H21.8885L14.095 10.6342L20.7198 3.0625H17.6874ZM16.6232 19.1225L5.65436 4.78217H7.45745L18.3034 19.1225H16.6232Z" fill="currentColor"/>' },

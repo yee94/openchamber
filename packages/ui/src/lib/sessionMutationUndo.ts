@@ -45,45 +45,50 @@ function showSessionUndoToast(args: {
       "div",
       {
         className:
-          "flex max-w-[calc(100vw-2rem)] items-center gap-2.5 text-foreground",
+          "flex w-full min-w-[min(var(--width),calc(100vw-2rem))] max-w-[calc(100vw-2rem)] items-center gap-2.5 text-foreground",
       },
       React.createElement(
         "span",
-        { className: "min-w-0 flex-1 typography-ui-label font-medium whitespace-nowrap" },
+        { className: "min-w-0 flex-1 text-left typography-ui-label font-medium whitespace-nowrap" },
         args.message,
       ),
-      args.secondaryLabel && args.onSecondary
-        ? React.createElement(
-            Button,
-            {
-              variant: "secondary",
-              size: "sm",
-              className: "session-mutation-undo-action !h-[26px] !min-h-0 !min-w-0 shrink-0 !px-2 !text-[12px]",
-              onClick: () => {
-                args.onSecondary?.()
-                toast.dismiss(id)
-              },
-            },
-            args.secondaryLabel,
-          )
-        : null,
       React.createElement(
-        Button,
-        {
-          variant: "default",
-          size: "sm",
-          className: "session-mutation-undo-action !h-[26px] !min-h-0 !min-w-0 shrink-0 gap-1 !pl-2 !pr-1 !text-[12px]",
-          onClick: () => {
-            args.onPrimary()
-            toast.dismiss(id)
+        "div",
+        { className: "flex shrink-0 items-center gap-1.5" },
+        args.secondaryLabel && args.onSecondary
+          ? React.createElement(
+              Button,
+              {
+                variant: "secondary",
+                size: "sm",
+                className: "session-mutation-undo-action !h-[26px] !min-h-0 !min-w-0 shrink-0 !px-2 !text-[12px]",
+                onClick: () => {
+                  args.onSecondary?.()
+                  toast.dismiss(id)
+                },
+              },
+              args.secondaryLabel,
+            )
+          : null,
+        React.createElement(
+          Button,
+          {
+            variant: "default",
+            size: "sm",
+            className: "session-mutation-undo-action !h-[26px] !min-h-0 !min-w-0 shrink-0 gap-1 !pl-2 !pr-1 !text-[12px]",
+            onClick: () => {
+              args.onPrimary()
+              toast.dismiss(id)
+            },
           },
-        },
-        args.primaryLabel,
-        React.createElement(UndoCountdownRing, { durationMs: args.durationMs }),
+          args.primaryLabel,
+          React.createElement(UndoCountdownRing, { durationMs: args.durationMs }),
+        ),
       ),
     ),
     {
       duration: args.durationMs,
+      className: "session-mutation-undo-toast !max-w-[calc(100vw-2rem)]",
     },
   )
 }

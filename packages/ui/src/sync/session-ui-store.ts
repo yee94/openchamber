@@ -29,7 +29,6 @@ import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
 import { flattenAssistantTextParts } from "@/lib/messages/messageText"
-import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { getWorktreeSetupWaitEnabled } from "@/lib/openchamberConfig"
@@ -208,16 +207,6 @@ type SendMessageOptions = {
   onSendConfirmed?: (messageID: string) => void
 }
 
-type AssistantMessageSessionExecution = {
-  providerID: string
-  modelID: string
-  variant: string
-  agent: string
-  instructions: string
-  createWorktree?: boolean
-  runAsGoal?: boolean
-}
-
 export function notifyConfirmedMessageSent(sessionId: string, messageID: string): void {
   runtimeFetch(`/api/sessions/${sessionId}/message-sent`, {
     method: "POST",
@@ -378,7 +367,6 @@ export type SessionUIState = {
   forkCurrentSession: (sessionId: string) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
   handleSlashRedo: (sessionId: string, options?: { fullUnrevert?: boolean }) => Promise<void>
-  createSessionFromAssistantMessage: (sourceMessageId: string, execution: AssistantMessageSessionExecution) => Promise<void>
 
   // Data access helpers (read from sync)
   getSessionsByDirectory: (directory: string) => Session[]
@@ -1185,6 +1173,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       draftSubmitting: false,
     }
 
+    // Capture before clearing so right-side workspace panels can hide/restore
+    // the same way session-to-session switches do via setCurrentSession().
+    const previousSessionId = get().currentSessionId
+    const previousDirectory = get().currentSessionDirectory
+
     set({
       newSessionDraft: {
         ...nextDraft,
@@ -1194,6 +1187,18 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       error: null,
     })
     setRuntimeInteractiveSessionRequestId(null)
+
+    // Workspace panels (context/subagent/file preview + right sidebar git/files)
+    // are session-correlated. openNewSessionDraft bypasses setCurrentSession, so
+    // it must call the same switch boundary or open panels bleed onto the draft.
+    if (previousSessionId) {
+      useUIStore.getState().syncWorkspacePanelsForSessionSwitch({
+        previousSessionId,
+        previousDirectory,
+        nextSessionId: null,
+        nextDirectory: null,
+      })
+    }
 
     writeRuntimeSessionMemory(runtimeMemoryKey(), { sessionId: null, directory, draft: nextDraft })
     // Clear composer attachments when opening a new session draft.
@@ -2004,129 +2009,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         ? { forkTransition: null }
         : state)
     }
-  },
-
-  // ---------------------------------------------------------------------------
-  // createSessionFromAssistantMessage — reads from sync
-  // ---------------------------------------------------------------------------
-  createSessionFromAssistantMessage: async (sourceMessageId, execution) => {
-    if (!sourceMessageId) return
-    if (!execution?.instructions?.trim()) return
-
-    // Find which session this message belongs to by scanning sync state
-    const state = getDirectoryState()
-    if (!state) return
-
-    let sourceSessionId: string | undefined
-    let sourceMessage: Message | undefined
-
-    for (const [sid, msgs] of Object.entries(state.message ?? {})) {
-      const found = msgs.find((m) => m.id === sourceMessageId)
-      if (found) {
-        sourceSessionId = sid
-        sourceMessage = found
-        break
-      }
-    }
-
-    if (!sourceMessage || sourceMessage.role !== "assistant") return
-
-    const sourceParts = getSyncParts(sourceMessageId)
-    const assistantPlanText = flattenAssistantTextParts(sourceParts)
-    if (!assistantPlanText.trim()) return
-
-    const directory = resolveSessionDirectory(
-      sourceSessionId ?? null,
-      (sid) => get().worktreeMetadata.get(sid),
-    )
-    const sourceWorktreeMetadata = sourceSessionId ? get().worktreeMetadata.get(sourceSessionId) : undefined
-
-    const pID = execution.providerID || useSelectionStore.getState().lastUsedProvider?.providerID
-    const mID = execution.modelID || useSelectionStore.getState().lastUsedProvider?.modelID
-
-    if (!pID || !mID) return
-
-    const sourceDirectory = normalizePath(directory ?? opencodeClient.getDirectory() ?? null)
-    let sessionDirectory = sourceDirectory
-    let createdWorktree: WorktreeMetadata | null = null
-    let createdWorktreeProject: { id: string; path: string } | null = null
-
-    if (execution.createWorktree) {
-      const projects = useProjectsStore.getState().projects
-      const project = resolveProjectForSessionDirectory(
-        projects,
-        get().availableWorktreesByProject,
-        sourceDirectory,
-      ) ?? resolveProjectForSessionDirectory(
-        projects,
-        get().availableWorktreesByProject,
-        sourceWorktreeMetadata?.projectDirectory ?? null,
-      )
-      if (!project?.path) {
-        throw new Error("Project is not registered in OpenChamber")
-      }
-
-      const [branchNameModule, configModule, createModule] = await Promise.all([
-        import("@/lib/git/branchNameGenerator"),
-        import("@/lib/openchamberConfig"),
-        import("@/lib/worktrees/worktreeCreate"),
-      ])
-      const branchName = branchNameModule.generateBranchName()
-      createdWorktreeProject = { id: project.id, path: project.path }
-      const setupCommands = await configModule.getWorktreeSetupCommands(createdWorktreeProject)
-      createdWorktree = await createModule.createWorktreeWithDefaults(createdWorktreeProject, {
-        preferredName: branchName,
-        mode: "new",
-        branchName,
-        worktreeName: branchName,
-        setupCommands,
-        returnAfterDirectoryCreated: true,
-      })
-      sessionDirectory = normalizePath(createdWorktree.path)
-      if (!sessionDirectory) {
-        throw new Error("Worktree create missing name/path")
-      }
-      if (await configModule.getWorktreeSetupWaitEnabled(createdWorktreeProject)) {
-        await waitForWorktreeBootstrap(sessionDirectory)
-      }
-    }
-
-    const session = await get().createSession(undefined, sessionDirectory || null, null)
-    if (!session) {
-      if (createdWorktree && createdWorktreeProject) {
-        const { removeProjectWorktree } = await import("@/lib/worktrees/worktreeManager")
-        await removeProjectWorktree(createdWorktreeProject, createdWorktree, { deleteLocalBranch: true }).catch(() => undefined)
-      }
-      return
-    }
-
-    if (createdWorktree) {
-      get().setWorktreeMetadata(session.id, {
-        ...createdWorktree,
-        kind: "standard",
-      })
-      useDirectoryStore.getState().setDirectory(createdWorktree.path, { showOverlay: false })
-    }
-
-    // "Run as goal" rides the same arm mechanism as the composer target
-    // button: sendMessage consumes the flag, stamps the goal (objective =
-    // the composed fork message) and attaches the goal-mode intro part.
-    // Set explicitly either way so a stray armed flag cannot leak into a
-    // non-goal fork.
-    useSessionGoalArmStore.getState().setArmed(execution.runAsGoal === true)
-
-    await get().sendMessage(
-      composeForkSessionMessage(execution.instructions, assistantPlanText),
-      pID,
-      mID,
-      execution.agent || undefined,
-      undefined,
-      undefined,
-      undefined,
-      execution.variant || undefined,
-      undefined,
-      { sessionId: session.id },
-    )
   },
 
   // ---------------------------------------------------------------------------

@@ -641,7 +641,6 @@ interface UIStore {
 
   theme: 'light' | 'dark' | 'system';
   isMultiRunLauncherOpen: boolean;
-  multiRunLauncherPrefillPrompt: string;
   isSidebarOpen: boolean;
   sidebarWidth: number;
   hasManuallyResizedLeftSidebar: boolean;
@@ -965,7 +964,6 @@ interface UIStore {
   toggleExpandedInput: () => void;
   setExpandedInput: (value: boolean) => void;
   openMultiRunLauncher: () => void;
-  openMultiRunLauncherWithPrompt: (prompt: string) => void;
   setReportUsage: (value: boolean) => void;
   setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
   clearShortcutOverride: (actionId: string) => void;
@@ -981,7 +979,6 @@ export const useUIStore = create<UIStore>()(
 
         theme: 'system',
         isMultiRunLauncherOpen: false,
-        multiRunLauncherPrefillPrompt: '',
         isSidebarOpen: true,
         sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
         hasManuallyResizedLeftSidebar: false,
@@ -2360,24 +2357,12 @@ export const useUIStore = create<UIStore>()(
         },
 
         setMultiRunLauncherOpen: (open) => {
-          set((state) => ({
-            isMultiRunLauncherOpen: open,
-            multiRunLauncherPrefillPrompt: open ? state.multiRunLauncherPrefillPrompt : '',
-          }));
+          set({ isMultiRunLauncherOpen: open });
         },
 
         openMultiRunLauncher: () => {
           set({
             isMultiRunLauncherOpen: true,
-            multiRunLauncherPrefillPrompt: '',
-            isSessionSwitcherOpen: false,
-          });
-        },
-
-        openMultiRunLauncherWithPrompt: (prompt) => {
-          set({
-            isMultiRunLauncherOpen: true,
-            multiRunLauncherPrefillPrompt: prompt,
             isSessionSwitcherOpen: false,
           });
         },

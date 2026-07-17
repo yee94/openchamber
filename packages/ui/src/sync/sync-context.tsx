@@ -1521,15 +1521,19 @@ function handleEvent(
       return
     }
 
-    const isViewed = isViewedInCurrentSession(resolvedDirectory, permission.sessionID)
-    showPermissionNeededToast({
-      permission,
-      directory: resolvedDirectory,
-      isViewed,
-      pendingIds: pendingPermissionToastIds,
-      show: (title, options) => toast.info(title, options),
-      openSession: openSessionFromToast,
-    })
+    const session = store.getState().session.find((candidate) => candidate.id === permission.sessionID)
+      ?? useGlobalSessionsStore.getState().activeSessions.find((candidate) => candidate.id === permission.sessionID)
+    if (session && !(session as Session & { parentID?: string | null }).parentID) {
+      const isViewed = isViewedInCurrentSession(resolvedDirectory, permission.sessionID)
+      showPermissionNeededToast({
+        permission,
+        directory: resolvedDirectory,
+        isViewed,
+        pendingIds: pendingPermissionToastIds,
+        show: (title, options) => toast.info(title, options),
+        openSession: openSessionFromToast,
+      })
+    }
   }
 
   if (payload.type === "permission.replied") {
@@ -1544,21 +1548,25 @@ function handleEvent(
   if (payload.type === "question.asked") {
     const question = payload.properties as QuestionRequest
     const sessionID = question.sessionID
-    const toastKey = getQuestionToastKey(sessionID, question.id)
-    const isViewed = isViewedInCurrentSession(resolvedDirectory, sessionID)
-    if (!isViewed && toastKey && !pendingQuestionToastIds.has(toastKey)) {
-      pendingQuestionToastIds.add(toastKey)
-      const firstQuestion = question.questions?.[0]
-      const title = firstQuestion?.header?.trim() || "Input needed"
-      const description = firstQuestion?.question?.trim() || "Agent is waiting for your response"
-      toast.info(title, {
-        id: `question-${toastKey}`,
-        description,
-        action: {
-          label: "Open session",
-          onClick: () => openSessionFromToast(sessionID, resolvedDirectory),
-        },
-      })
+    const session = store.getState().session.find((candidate) => candidate.id === sessionID)
+      ?? useGlobalSessionsStore.getState().activeSessions.find((candidate) => candidate.id === sessionID)
+    if (session && !(session as Session & { parentID?: string | null }).parentID) {
+      const toastKey = getQuestionToastKey(sessionID, question.id)
+      const isViewed = isViewedInCurrentSession(resolvedDirectory, sessionID)
+      if (!isViewed && toastKey && !pendingQuestionToastIds.has(toastKey)) {
+        pendingQuestionToastIds.add(toastKey)
+        const firstQuestion = question.questions?.[0]
+        const title = firstQuestion?.header?.trim() || "Input needed"
+        const description = firstQuestion?.question?.trim() || "Agent is waiting for your response"
+        toast.info(title, {
+          id: `question-${toastKey}`,
+          description,
+          action: {
+            label: "Open session",
+            onClick: () => openSessionFromToast(sessionID, resolvedDirectory),
+          },
+        })
+      }
     }
   }
 
@@ -1571,25 +1579,21 @@ function handleEvent(
     }
   }
 
-  // Notification dispatch for session turn-complete and error events.
+  // Notification dispatch for top-level session turn-complete events.
   // These are NOT handled by the event reducer — only the notification store.
-  if (payload.type === "session.idle" || payload.type === "session.error") {
-    const props = payload.properties as { sessionID?: string; error?: { message?: string; code?: string } }
+  if (payload.type === "session.idle") {
+    const props = payload.properties as { sessionID?: string }
     const sessionID = props.sessionID
-    // Skip subtask sessions — only top-level sessions generate notifications
     const storeState = store.getState()
-    const session = storeState.session.find((s) => s.id === sessionID)
-    if (session && (session as { parentID?: string }).parentID) {
-      // subtask — skip notification
-    } else if (sessionID) {
+    const session = storeState.session.find((candidate) => candidate.id === sessionID)
+      ?? useGlobalSessionsStore.getState().activeSessions.find((candidate) => candidate.id === sessionID)
+    if (sessionID && session && !(session as Session & { parentID?: string | null }).parentID) {
       appendNotification({
         directory: resolvedDirectory,
         session: sessionID,
         time: Date.now(),
         viewed: isViewedInCurrentSession(resolvedDirectory, sessionID),
-        ...(payload.type === "session.error"
-          ? { type: "error" as const, error: props.error }
-          : { type: "turn-complete" as const }),
+        type: "turn-complete",
       })
     }
   }

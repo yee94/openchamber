@@ -606,7 +606,7 @@ describe('useConfigStore provider persistence', () => {
     expect(state.currentVariant).toBe('high');
   });
 
-  test('applyDefaultModelAgentSelection still honors settings default model override', () => {
+  test('applyDefaultModelAgentSelection prefers per-agent memory over settings default model', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [
@@ -620,9 +620,9 @@ describe('useConfigStore provider persistence', () => {
       settingsDefaultAgent: 'build',
       settingsDefaultModel: 'anthropic/claude-sonnet',
       settingsDefaultVariant: undefined,
-      currentProviderId: 'openai',
-      currentModelId: 'gpt-5.5',
-      currentVariant: 'low',
+      currentProviderId: 'anthropic',
+      currentModelId: 'claude-sonnet',
+      currentVariant: undefined,
       currentAgentName: 'build',
       directoryScoped: {},
     });
@@ -630,8 +630,44 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.getState().applyDefaultModelAgentSelection();
 
     const state = useConfigStore.getState();
-    expect(state.currentProviderId).toBe('anthropic');
-    expect(state.currentModelId).toBe('claude-sonnet');
+    expect(state.currentProviderId).toBe('openai');
+    expect(state.currentModelId).toBe('gpt-5.5');
+    expect(state.currentVariant).toBe('low');
+  });
+
+  test('applyDefaultModelAgentSelection does not use last session model as default', () => {
+    useSelectionStore.setState({
+      lastUsedProvider: { providerID: 'anthropic', modelID: 'claude-sonnet' },
+      sessionAgentSelections: new Map([['ses_old', 'build']]),
+      sessionModelSelections: new Map([
+        ['ses_old', { providerId: 'anthropic', modelId: 'claude-sonnet' }],
+      ]),
+      sessionAgentModelSelections: new Map(),
+    });
+    useConfigStore.setState({
+      activeDirectoryKey: DIRECTORY,
+      providers: [
+        provider('openai', 'gpt-5.5', { low: {}, high: {} }),
+        provider('anthropic', 'claude-sonnet'),
+      ],
+      agents: [testAgent('build', { model: { providerID: 'openai', modelID: 'gpt-5.5' } })],
+      agentModelSelections: {},
+      settingsDefaultAgent: 'build',
+      settingsDefaultModel: undefined,
+      settingsDefaultVariant: undefined,
+      opencodeDefaultModel: undefined,
+      currentProviderId: 'anthropic',
+      currentModelId: 'claude-sonnet',
+      currentVariant: undefined,
+      currentAgentName: 'build',
+      directoryScoped: {},
+    });
+
+    useConfigStore.getState().applyDefaultModelAgentSelection();
+
+    const state = useConfigStore.getState();
+    expect(state.currentProviderId).toBe('openai');
+    expect(state.currentModelId).toBe('gpt-5.5');
   });
 
   test('saveAgentModelSelection persists model and variant per agent', () => {

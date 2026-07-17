@@ -288,15 +288,14 @@ type DefaultAgentModelSelection = {
 // fresh draft (applyDefaultModelAgentSelection), so the two paths stay identical.
 //
 //   Agent: settings.defaultAgent → inherit → opencode default_agent → build → first primary → first
-//   Model: project.defaultModel → settings.defaultModel
-//          → last user manual pick for the resolved agent (agentModelSelections, model+variant)
-//          → inherit last-used model only when inherit agent matches the resolved agent
+//   Model: last user manual pick for the resolved agent (agentModelSelections, model+variant)
+//          → project.defaultModel → settings.defaultModel
 //          → resolved agent's pinned model+variant → opencode config.model
 //          → opencode/big-pickle → first
 //
-// OpenChamber settings defaults win when set. Otherwise the user's last per-agent manual
-// selection wins over OpenCode agent pins / global defaults — agent-level user choice is
-// sticky across new sessions even when OpenCode ships a different default for that agent.
+// Per-agent manual memory is first-class config-store state (directory-scoped), not derived
+// from any session's last model. It wins over project/settings defaults and OpenCode pins so
+// a user's last pick for that agent sticks on every new draft.
 const resolveDefaultAgentModelSelection = ({
     agents,
     providers,
@@ -308,8 +307,6 @@ const resolveDefaultAgentModelSelection = ({
     opencodeDefaultModel,
     agentModelSelections,
     inheritAgentName,
-    inheritProviderId,
-    inheritModelId,
 }: {
     agents: Agent[];
     providers: ProviderWithModelList[];
@@ -321,8 +318,6 @@ const resolveDefaultAgentModelSelection = ({
     opencodeDefaultModel?: string;
     agentModelSelections?: { [agentName: string]: AgentModelSelection };
     inheritAgentName?: string;
-    inheritProviderId?: string;
-    inheritModelId?: string;
 }): DefaultAgentModelSelection => {
     if (agents.length === 0) {
         return { agentName: undefined };
@@ -372,37 +367,24 @@ const resolveDefaultAgentModelSelection = ({
     let modelId: string | undefined;
     let variant: string | undefined;
 
+    // Per-agent last user manual selection (model + variant). Highest priority — config-store
+    // global preference for this agent, never reconstructed from a session's last model.
+    const saved = agentModelSelections?.[resolvedAgent.name];
+    if (saved && hasProviderModel(providers, saved.providerId, saved.modelId)) {
+        providerId = saved.providerId;
+        modelId = saved.modelId;
+        variant = resolveVariant(providerId, modelId, saved.variant);
+    }
+
     const effectiveDefaultModel = projectDefaultModel || settingsDefaultModel;
 
-    if (effectiveDefaultModel) {
+    if (!providerId && effectiveDefaultModel) {
         const parsed = parseModelString(effectiveDefaultModel);
         if (parsed && hasProviderModel(providers, parsed.providerId, parsed.modelId)) {
             providerId = parsed.providerId;
             modelId = parsed.modelId;
             variant = resolveVariant(providerId, modelId, projectDefaultModel ? undefined : settingsDefaultVariant);
         }
-    }
-
-    // Per-agent last user manual selection (model + variant). Beats OpenCode defaults.
-    if (!providerId) {
-        const saved = agentModelSelections?.[resolvedAgent.name];
-        if (saved
-            && hasProviderModel(providers, saved.providerId, saved.modelId)) {
-            providerId = saved.providerId;
-            modelId = saved.modelId;
-            variant = resolveVariant(providerId, modelId, saved.variant);
-        }
-    }
-
-    // Only inherit the previous session's model when it was for the same agent.
-    // Cross-agent inherit would clobber build's remembered model with plan's last pick.
-    if (!providerId
-        && inheritAgentName === resolvedAgent.name
-        && inheritProviderId
-        && inheritModelId
-        && hasProviderModel(providers, inheritProviderId, inheritModelId)) {
-        providerId = inheritProviderId;
-        modelId = inheritModelId;
     }
 
     if (!providerId
@@ -2271,7 +2253,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                             // Resolve agent + model via the shared cascade:
                             //   settings.defaultAgent → opencode default_agent → build → first primary → first
-                            //   settings.defaultModel → per-agent last user pick → agent pin → opencode/big-pickle → first
+                            //   per-agent last user pick → settings.defaultModel → agent pin → opencode/big-pickle → first
                             const resolvedDefault = resolveDefaultAgentModelSelection({
                                 agents: safeAgents,
                                 providers,
@@ -2605,8 +2587,8 @@ export const useConfigStore = create<ConfigStore>()(
                             }
                         }
 
-                        // Last user manual pick for this agent across sessions (model + variant).
-                        // Beats OpenCode agent pins / global defaults when settings have no override.
+                        // Last user manual pick for this agent (config-store, not session-derived).
+                        // Highest priority after same-session continuity.
                         if (
                             rememberedAgentModel
                             && hasProviderModel(providers, rememberedAgentModel.providerId, rememberedAgentModel.modelId)
@@ -2621,6 +2603,22 @@ export const useConfigStore = create<ConfigStore>()(
                                 ),
                             );
                             return;
+                        }
+
+                        // Settings / project default model.
+                        if (settingsDefaultModel) {
+                            const parsed = parseModelString(settingsDefaultModel);
+                            if (parsed) {
+                                const settingsProvider = providers.find((p) => p.id === parsed.providerId);
+                                if (settingsProvider?.models.some((m) => m.id === parsed.modelId)) {
+                                    applyResolvedModelSelection(
+                                        parsed.providerId,
+                                        parsed.modelId,
+                                        resolveVariantForModel(parsed.providerId, parsed.modelId, [agent?.variant]),
+                                    );
+                                    return;
+                                }
+                            }
                         }
 
                         // Agent config pin (may include OpenCode-provided defaults).
@@ -2640,30 +2638,14 @@ export const useConfigStore = create<ConfigStore>()(
                             }
                         }
 
-                        // If the agent has no preferred model, use settings default.
-                        if (settingsDefaultModel) {
-                            const parsed = parseModelString(settingsDefaultModel);
-                            if (parsed) {
-                                const settingsProvider = providers.find((p) => p.id === parsed.providerId);
-                                if (settingsProvider?.models.some((m) => m.id === parsed.modelId)) {
-                                    applyResolvedModelSelection(
-                                        parsed.providerId,
-                                        parsed.modelId,
-                                        resolveVariantForModel(parsed.providerId, parsed.modelId, [agent?.variant]),
-                                    );
-                                    return;
-                                }
-                            }
-                        }
-
                         // Otherwise keep the current valid model selection unchanged.
                     }
                 },
 
                 // Re-applies the same priority cascade used at app startup (see loadAgents):
-                //   agent: settings.defaultAgent → build → first primary → first agent
-                //   model: project.defaultModel → settings.defaultModel → per-agent last user pick
-                //          → same-agent inherit → agent pin → opencode/big-pickle → first
+                //   agent: settings.defaultAgent → last session agent → build → first primary → first
+                //   model: per-agent last user pick → project/settings default → agent pin
+                //          → opencode/big-pickle → first
                 // Used when entering a fresh draft session so model/agent reset to defaults
                 // instead of sticking to the previously open session's selection.
                 applyDefaultModelAgentSelection: (options) => {
@@ -2683,7 +2665,6 @@ export const useConfigStore = create<ConfigStore>()(
                     }
 
                     const selState = useSelectionStore.getState();
-                    const lastSel = selState.lastUsedProvider;
                     const lastAgentEntry = selState.sessionAgentSelections.size > 0
                         ? Array.from(selState.sessionAgentSelections).at(-1)?.[1]
                         : undefined;
@@ -2704,8 +2685,6 @@ export const useConfigStore = create<ConfigStore>()(
                         opencodeDefaultModel,
                         agentModelSelections,
                         inheritAgentName: lastAgentEntry,
-                        inheritProviderId: lastSel?.providerID,
-                        inheritModelId: lastSel?.modelID,
                     });
 
                     if (!resolvedAgentName) {

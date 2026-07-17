@@ -1,7 +1,6 @@
 import type { Session } from '@opencode-ai/sdk/v2';
 
 import type { ProjectEntry } from '@/lib/api/types';
-import { useUIStore } from '@/stores/useUIStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useNotificationStore } from '@/sync/notification-store';
@@ -13,7 +12,7 @@ import { useNotificationStore } from '@/sync/notification-store';
  * background/activate, writes it to the shared App Group, and reloads the widget timelines
  * (see SceneDelegate.writeWidgetSnapshot). Mirrors the sidebar's attention logic so the
  * widget's "needs attention" mark matches the in-app unread dot exactly:
- *   needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks)
+ *   needsAttention = unseenCount > 0 for top-level sessions
  */
 
 export interface MobileWidgetSession {
@@ -66,7 +65,6 @@ const projectLabelForDirectory = (directory: string | null, projects: ProjectEnt
 export const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
   const sessions = useGlobalSessionsStore.getState().activeSessions;
   const unseenBySession = useNotificationStore.getState().index.session.unseenCount;
-  const notifyOnSubtasks = useUIStore.getState().notifyOnSubtasks;
   const projects = useProjectsStore.getState().projects;
 
   let attentionCount = 0;
@@ -75,7 +73,7 @@ export const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
   for (const session of sessions) {
     const isSubtask = parentIdOf(session) !== null;
     const unseenCount = unseenBySession[session.id] ?? 0;
-    const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
+    const needsAttention = unseenCount > 0 && !isSubtask;
     if (needsAttention) {
       attentionCount += 1;
     }

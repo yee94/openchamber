@@ -23,7 +23,7 @@ import type { ModelMetadata } from '@/types';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { opencodeClient } from '@/lib/opencode/client';
-import { shouldLoadAvailableProviders } from './providerAvailability';
+import { filterMethodsWithIndex, shouldLoadAvailableProviders } from './providerAvailability';
 import { QuotaCredentials } from './QuotaCredentials';
 
 const formatCompactNumber = (value: number) => new Intl.NumberFormat(getCurrentIntlLocale(), {
@@ -160,9 +160,9 @@ export const ProvidersPage: React.FC = () => {
   const [apiKeyInputs, setApiKeyInputs] = React.useState<Record<string, string>>({});
   const [authBusyKey, setAuthBusyKey] = React.useState<string | null>(null);
   const [modelQuery, setModelQuery] = React.useState('');
-  const [pendingOAuth, setPendingOAuth] = React.useState<{ providerId: string; methodIndex: number } | null>(null);
+  const [pendingOAuth, setPendingOAuth] = React.useState<{ providerId: string; methodIndex: number; mode: 'auto' | 'code' } | null>(null);
   const [oauthCodes, setOauthCodes] = React.useState<Record<string, string>>({});
-  const [oauthDetails, setOauthDetails] = React.useState<Record<string, { url?: string; instructions?: string; userCode?: string }>>({});
+  const [oauthDetails, setOauthDetails] = React.useState<Record<string, { url?: string; instructions?: string; userCode?: string; mode: 'auto' | 'code' }>>({});
   const [availableProviders, setAvailableProviders] = React.useState<ProviderOption[]>([]);
   const [availableLoading, setAvailableLoading] = React.useState(false);
   const [availableError, setAvailableError] = React.useState<string | null>(null);
@@ -180,10 +180,6 @@ export const ProvidersPage: React.FC = () => {
   }, [providers, selectedProviderId, setSelectedProvider]);
 
   React.useEffect(() => {
-    if (!isAddMode) {
-      return;
-    }
-
     let isMounted = true;
 
     const loadAuthMethods = async () => {
@@ -211,7 +207,7 @@ export const ProvidersPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAddMode, t]);
+  }, [t]);
 
   React.useEffect(() => {
     if (!shouldLoadAvailableProviders(isAddMode)) {
@@ -362,6 +358,7 @@ export const ProvidersPage: React.FC = () => {
 
   const handleOAuthStart = async (providerId: string, methodIndex: number) => {
     const busyKey = `oauth:${providerId}:${methodIndex}`;
+    let autoCompleting = false;
     setAuthBusyKey(busyKey);
 
     try {
@@ -390,6 +387,7 @@ export const ProvidersPage: React.FC = () => {
         (typeof dataRecord.code === 'string' && dataRecord.code) ||
         (typeof dataRecord.userCode === 'string' && dataRecord.userCode) ||
         undefined;
+      const mode = dataRecord.method === 'auto' ? 'auto' : 'code';
 
       if (!urlCandidate && !instructions && !userCode) {
         throw new Error(t('settings.providers.page.toast.oauthDetailsMissing'));
@@ -402,25 +400,32 @@ export const ProvidersPage: React.FC = () => {
           url: urlCandidate,
           instructions,
           userCode,
+          mode,
         },
       }));
 
       if (urlCandidate) {
         void openExternalUrl(urlCandidate);
       }
-      setPendingOAuth({ providerId, methodIndex });
+      setPendingOAuth({ providerId, methodIndex, mode });
       toast.message(t('settings.providers.page.toast.completeOAuthInBrowser'));
+      if (mode === 'auto') {
+        autoCompleting = true;
+        void handleOAuthComplete(providerId, methodIndex);
+      }
     } catch (error) {
       console.error('Failed to start OAuth flow:', error);
       toast.error(t('settings.providers.page.toast.oauthStartFailed'));
     } finally {
-      setAuthBusyKey(null);
+      if (!autoCompleting) {
+        setAuthBusyKey(null);
+      }
     }
   };
 
-  const handleOAuthComplete = async (providerId: string, methodIndex: number) => {
+  const handleOAuthComplete = async (providerId: string, methodIndex: number, codeOverride?: string) => {
     const codeKey = `${providerId}:${methodIndex}`;
-    const code = oauthCodes[codeKey]?.trim();
+    const code = codeOverride ?? oauthCodes[codeKey]?.trim();
 
     const busyKey = `oauth-complete:${providerId}:${methodIndex}`;
     setAuthBusyKey(busyKey);
@@ -660,7 +665,8 @@ export const ProvidersPage: React.FC = () => {
 
                   {(() => {
                     const candidateAuthMethods = authMethodsByProvider[candidateProviderId] ?? [];
-                    const candidateOAuthMethods = candidateAuthMethods.filter(
+                    const candidateOAuthMethods = filterMethodsWithIndex(
+                      candidateAuthMethods,
                       (method) => normalizeAuthType(method) === 'oauth'
                     );
 
@@ -670,11 +676,11 @@ export const ProvidersPage: React.FC = () => {
 
                     return (
                       <div className="space-y-4 border-t border-[var(--surface-subtle)] pt-2">
-                        {candidateOAuthMethods.map((method, index) => {
+                        {candidateOAuthMethods.map(({ method, methodIndex }, index) => {
                           const methodLabel = method.label || method.name || t('settings.providers.page.auth.oauthMethodFallback', { index: String(index + 1) });
-                          const codeKey = `${candidateProviderId}:${index}`;
+                          const codeKey = `${candidateProviderId}:${methodIndex}`;
                           const isPending =
-                            pendingOAuth?.providerId === candidateProviderId && pendingOAuth?.methodIndex === index;
+                            pendingOAuth?.providerId === candidateProviderId && pendingOAuth?.methodIndex === methodIndex;
 
                           return (
                             <div key={`${candidateProviderId}-${methodLabel}`} className="space-y-3">
@@ -691,8 +697,11 @@ export const ProvidersPage: React.FC = () => {
                                   variant="outline"
                                   size="xs"
                                   className="!font-normal"
-                                  onClick={() => handleOAuthStart(candidateProviderId, index)}
-                                  disabled={authBusyKey === `oauth:${candidateProviderId}:${index}`}
+                                  onClick={() => handleOAuthStart(candidateProviderId, methodIndex)}
+                                  disabled={
+                                    authBusyKey === `oauth:${candidateProviderId}:${methodIndex}` ||
+                                    authBusyKey === `oauth-complete:${candidateProviderId}:${methodIndex}`
+                                  }
                                 >
                                   {t('settings.providers.page.actions.connect')}
                                 </Button>
@@ -721,7 +730,7 @@ export const ProvidersPage: React.FC = () => {
                                 </div>
                               )}
 
-                              {isPending && (
+                              {isPending && pendingOAuth?.mode === 'code' && (
                                 <div className="flex items-center gap-2 mt-2">
                                   <Input
                                     value={oauthCodes[codeKey] ?? ''}
@@ -737,10 +746,10 @@ export const ProvidersPage: React.FC = () => {
                                   <Button
                                     size="xs"
                                     className="!font-normal"
-                                    onClick={() => handleOAuthComplete(candidateProviderId, index)}
-                                    disabled={authBusyKey === `oauth-complete:${candidateProviderId}:${index}`}
+                                    onClick={() => handleOAuthComplete(candidateProviderId, methodIndex)}
+                                    disabled={authBusyKey === `oauth-complete:${candidateProviderId}:${methodIndex}`}
                                   >
-                                    {authBusyKey === `oauth-complete:${candidateProviderId}:${index}` ? t('settings.providers.page.actions.saving') : t('settings.providers.page.actions.complete')}
+                                    {authBusyKey === `oauth-complete:${candidateProviderId}:${methodIndex}` ? t('settings.providers.page.actions.saving') : t('settings.providers.page.actions.complete')}
                                   </Button>
                                 </div>
                               )}
@@ -773,7 +782,10 @@ export const ProvidersPage: React.FC = () => {
 
   const providerModels = Array.isArray(selectedProvider.models) ? selectedProvider.models : [];
   const providerAuthMethods = authMethodsByProvider[selectedProvider.id] ?? [];
-  const oauthAuthMethods = providerAuthMethods.filter((method) => normalizeAuthType(method) === 'oauth');
+  const oauthAuthMethods = filterMethodsWithIndex(
+    providerAuthMethods,
+    (method) => normalizeAuthType(method) === 'oauth'
+  );
 
   const filteredModels = providerModels.filter((model) => {
     const name = typeof model?.name === 'string' ? model.name : '';
@@ -863,11 +875,11 @@ export const ProvidersPage: React.FC = () => {
 
                 {oauthAuthMethods.length > 0 && (
                   <div className="space-y-4 border-t border-[var(--surface-subtle)] pt-2">
-                    {oauthAuthMethods.map((method, index) => {
+                    {oauthAuthMethods.map(({ method, methodIndex }, index) => {
                       const methodLabel = method.label || method.name || t('settings.providers.page.auth.oauthMethodFallback', { index: String(index + 1) });
-                      const codeKey = `${selectedProvider.id}:${index}`;
+                      const codeKey = `${selectedProvider.id}:${methodIndex}`;
                       const isPending =
-                        pendingOAuth?.providerId === selectedProvider.id && pendingOAuth?.methodIndex === index;
+                        pendingOAuth?.providerId === selectedProvider.id && pendingOAuth?.methodIndex === methodIndex;
 
                       return (
                         <div key={`${selectedProvider.id}-${methodLabel}`} className="space-y-3">
@@ -884,8 +896,11 @@ export const ProvidersPage: React.FC = () => {
                               variant="outline"
                               size="xs"
                               className="!font-normal"
-                              onClick={() => handleOAuthStart(selectedProvider.id, index)}
-                              disabled={authBusyKey === `oauth:${selectedProvider.id}:${index}`}
+                              onClick={() => handleOAuthStart(selectedProvider.id, methodIndex)}
+                              disabled={
+                                authBusyKey === `oauth:${selectedProvider.id}:${methodIndex}` ||
+                                authBusyKey === `oauth-complete:${selectedProvider.id}:${methodIndex}`
+                              }
                             >
                               {t('settings.providers.page.actions.connect')}
                             </Button>
@@ -914,7 +929,7 @@ export const ProvidersPage: React.FC = () => {
                             </div>
                           )}
 
-                          {isPending && (
+                          {isPending && pendingOAuth?.mode === 'code' && (
                             <div className="flex items-center gap-2 mt-2">
                               <Input
                                 value={oauthCodes[codeKey] ?? ''}
@@ -930,10 +945,10 @@ export const ProvidersPage: React.FC = () => {
                               <Button
                                 size="xs"
                                 className="!font-normal"
-                                onClick={() => handleOAuthComplete(selectedProvider.id, index)}
-                                disabled={authBusyKey === `oauth-complete:${selectedProvider.id}:${index}`}
+                                onClick={() => handleOAuthComplete(selectedProvider.id, methodIndex)}
+                                disabled={authBusyKey === `oauth-complete:${selectedProvider.id}:${methodIndex}`}
                               >
-                                {authBusyKey === `oauth-complete:${selectedProvider.id}:${index}` ? t('settings.providers.page.actions.saving') : t('settings.providers.page.actions.complete')}
+                                {authBusyKey === `oauth-complete:${selectedProvider.id}:${methodIndex}` ? t('settings.providers.page.actions.saving') : t('settings.providers.page.actions.complete')}
                               </Button>
                             </div>
                           )}

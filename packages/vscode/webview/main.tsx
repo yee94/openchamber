@@ -1510,7 +1510,6 @@ onCommand('windowFocusChanged', (payload) => {
 });
 
 const readyNotificationCooldowns = new Map<string, number>();
-const errorNotificationCooldowns = new Map<string, number>();
 const READY_NOTIFICATION_COOLDOWN_MS = 5000;
 const DEFAULT_NOTIFICATION_MESSAGE_MAX_LENGTH = 250;
 let notificationSettingsSyncPromise: Promise<void> | null = null;
@@ -1705,6 +1704,8 @@ window.addEventListener('openchamber:vscode-notification-event', (event) => {
       return;
     }
     const requireHidden = settings.notificationMode !== 'always';
+    const session = await opencodeClient.getSession(sessionId, getNotificationDirectory(record)).catch(() => undefined);
+    if (!session || session.parentID) return;
     const messageId = getPayloadString(info?.id);
     const error = properties.error;
     const errorMessage = getPayloadString(
@@ -1727,15 +1728,12 @@ window.addEventListener('openchamber:vscode-notification-event', (event) => {
     const isError = type === 'session.error' || finish === 'error';
 
     if (isCompletion) {
-      const session = await opencodeClient.getSession(sessionId, getNotificationDirectory(record)).catch(() => undefined);
-      if (!session) return;
-      const isSubtask = Boolean(session?.parentID);
-      if (isSubtask ? !settings.notifyOnSubtasks : !settings.notifyOnCompletion) return;
+      if (!settings.notifyOnCompletion) return;
       const now = Date.now();
       const lastAt = readyNotificationCooldowns.get(sessionId) ?? 0;
       if (now - lastAt < READY_NOTIFICATION_COOLDOWN_MS) return;
       readyNotificationCooldowns.set(sessionId, now);
-      const template = getNotificationTemplate(settings, isSubtask ? 'subtask' : 'completion', { title: '{agent_name} is ready', message: '{model_name} completed the task' });
+      const template = getNotificationTemplate(settings, 'completion', { title: '{agent_name} is ready', message: '{model_name} completed the task' });
       const title = resolveTemplate(template.title, variables) || 'Agent is ready';
       const body = resolveTemplate(template.message, variables);
       showOpenChamberNotification({
@@ -1748,20 +1746,6 @@ window.addEventListener('openchamber:vscode-notification-event', (event) => {
     }
 
     if (isError) {
-      if (!settings.notifyOnError) return;
-      const now = Date.now();
-      const lastAt = errorNotificationCooldowns.get(sessionId) ?? 0;
-      if (now - lastAt < READY_NOTIFICATION_COOLDOWN_MS) return;
-      errorNotificationCooldowns.set(sessionId, now);
-      const template = getNotificationTemplate(settings, 'error', { title: 'Tool error', message: '{last_message}' });
-      const title = resolveTemplate(template.title, variables) || 'Tool error';
-      const body = resolveTemplate(template.message, variables);
-      showOpenChamberNotification({
-        title,
-        body: shouldApplyTemplateMessage(template.message, body, variables) ? body : 'An error occurred',
-        sessionId,
-        requireHidden,
-      });
       return;
     }
 

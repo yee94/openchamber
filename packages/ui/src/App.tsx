@@ -55,7 +55,11 @@ import { MCP_OAUTH_CALLBACK_PATH } from '@/components/sections/mcp/mcpOAuth';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { useI18n } from '@/lib/i18n';
 import { applyMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
-import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
+import {
+  EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT,
+  EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT,
+  isEmbeddedSessionChat,
+} from '@/components/layout/contextPanelEmbeddedChat';
 import { SyncAppEffects } from '@/apps/AppEffects';
 import { resetAppForRuntimeEndpointChange } from '@/apps/runtimeEndpointReset';
 import { useAppFontEffects } from '@/apps/useAppFontEffects';
@@ -597,7 +601,7 @@ function App({ apis }: AppProps) {
       }
 
       const data = event.data as { type?: unknown; payload?: EmbeddedVisibilityPayload };
-      if (data?.type !== 'openchamber:embedded-visibility') {
+      if (data?.type !== EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT) {
         return;
       }
 
@@ -610,6 +614,15 @@ function App({ apis }: AppProps) {
 
     scopedWindow.__openchamberSetEmbeddedVisibility = applyVisibility;
     window.addEventListener('message', handleMessage);
+
+    // Parent may have pushed visibility on iframe onLoad before this listener
+    // existed. Request a re-sync so we don't stay stuck on #initial-loading.
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        { type: EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT },
+        window.location.origin,
+      );
+    }
 
     return () => {
       window.removeEventListener('message', handleMessage);

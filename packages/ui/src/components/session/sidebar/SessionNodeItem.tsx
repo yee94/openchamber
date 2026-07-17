@@ -290,7 +290,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     expandedParents,
     hasSessionSearchQuery,
     normalizedSessionSearchQuery,
-    notifyOnSubtasks,
     editingId,
     setEditingId,
     editTitle,
@@ -488,7 +487,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const isSubtaskSession = Boolean((resolvedSession as Session & { parentID?: string | null }).parentID);
   const isPinnedContext = renderContext === 'pinned';
   const unseenCount = useSessionUnseenCount(session.id);
-  const needsAttention = unseenCount > 0 && (!isSubtaskSession || notifyOnSubtasks);
+  const needsAttention = unseenCount > 0 && !isSubtaskSession;
   const sessionTimestamp = getSessionActivityUpdatedAt(resolvedSession) || Date.now();
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);

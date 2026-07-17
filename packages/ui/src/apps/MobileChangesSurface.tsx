@@ -518,7 +518,6 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         <SyncActions
           syncAction={syncAction}
           remotes={effectiveRemotes}
-          onFetch={(remote) => void handleSyncAction('fetch', remote)}
           onSync={(remote) => void handleSyncAction('sync', remote)}
           disabled={commitAction !== null || isLoadingStatus}
           aheadCount={status?.ahead ?? 0}

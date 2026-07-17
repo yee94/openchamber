@@ -308,6 +308,26 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     isMenuVisibleRef.current = false;
   }, []);
 
+  // Cached session views stay mounted via React.Activity; the menu portals to
+  // document.body, so it must be dismissed when the active session changes.
+  const previousSessionIdRef = React.useRef(currentSessionId);
+  React.useEffect(() => {
+    if (previousSessionIdRef.current === currentSessionId) {
+      return;
+    }
+    previousSessionIdRef.current = currentSessionId;
+
+    const selection = window.getSelection();
+    const container = containerRef.current;
+    if (selection && container) {
+      const range = getSelectionRangeWithinContainer(selection, container);
+      if (range) {
+        selection.removeAllRanges();
+      }
+    }
+    hideMenu();
+  }, [containerRef, currentSessionId, hideMenu]);
+
   const getDesktopClampedX = React.useCallback((anchorX: number) => {
     if (typeof window === 'undefined') {
       return anchorX;

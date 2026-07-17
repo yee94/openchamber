@@ -9,7 +9,7 @@ import {
 import { Icon } from "@/components/icon/Icon";
 import { useUIStore } from "@/stores/useUIStore";
 import {
-  getEffectiveShortcutCombo,
+  getEffectiveShortcutCombos,
   getShortcutAction,
   getModifierLabel,
   formatShortcutForDisplay,
@@ -33,7 +33,9 @@ type ShortcutSection = {
 
 const renderShortcut = (id: string, fallbackCombo: string, overrides: Record<string, string>) => {
   const action = getShortcutAction(id);
-  return action ? formatShortcutForDisplay(getEffectiveShortcutCombo(id, overrides)) : fallbackCombo;
+  return action
+    ? getEffectiveShortcutCombos(id, overrides).map(formatShortcutForDisplay)
+    : fallbackCombo;
 };
 
 export const HelpDialog: React.FC = () => {
@@ -208,6 +210,30 @@ export const HelpDialog: React.FC = () => {
           keys: '',
         },
         {
+          id: 'new_terminal_tab',
+          descriptionKey: 'helpDialog.item.newTerminalTab',
+          icon: "terminal-box",
+          keys: '',
+        },
+        {
+          id: 'open_new_terminal',
+          descriptionKey: 'helpDialog.item.openNewTerminal',
+          icon: "terminal-box",
+          keys: '',
+        },
+        {
+          id: 'previous_terminal_tab',
+          descriptionKey: 'helpDialog.item.previousTerminalTab',
+          icon: "arrow-left",
+          keys: '',
+        },
+        {
+          id: 'next_terminal_tab',
+          descriptionKey: 'helpDialog.item.nextTerminalTab',
+          icon: "arrow-right",
+          keys: '',
+        },
+        {
           id: 'toggle_bottom_panel',
           descriptionKey: 'helpDialog.item.toggleBottomPanel',
           icon: "window",
@@ -350,7 +376,7 @@ export const HelpDialog: React.FC = () => {
                 <ul className="space-y-0.5 typography-meta">
                   <li>
                     • {t('helpDialog.proTips.commandPalette', {
-                      shortcut: renderShortcut('open_command_palette', `${mod} P`, shortcutOverrides),
+                      shortcut: formatShortcutForDisplay(getEffectiveShortcutCombos('open_command_palette', shortcutOverrides)[0] ?? ''),
                     })}
                   </li>
                   <li>

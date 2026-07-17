@@ -10,11 +10,10 @@ import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { canUseElectronDesktopIPC, invokeDesktop, isVSCodeRuntime } from '@/lib/desktop';
 import { showOpenCodeStatus } from '@/lib/openCodeStatus';
-import { eventMatchesShortcut, eventMatchesZoomShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
+import { eventMatchesShortcut, eventMatchesZoomShortcut, getEffectiveShortcutCombo, getEffectiveShortcutCombos, normalizeCombo } from '@/lib/shortcuts';
 import { readEmbeddedThemeSearchParams } from '@/contexts/theme-embedded-bootstrap';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useTerminalStore } from '@/stores/useTerminalStore';
 import { getCycledPrimaryAgentName } from '@/components/chat/mobileControlsUtils';
 import { navigateAdjacentSession } from '@/sync/session-navigation';
 import { resetWebviewZoom, zoomWebviewIn, zoomWebviewOut } from '@/lib/webviewZoom';
@@ -23,6 +22,12 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { activateSidebarNumberedSession } from '@/sync/sidebar-numbered-navigation';
+import {
+  closeActiveTerminalTab,
+  createAndActivateTerminalTab,
+  openAndCreateTerminalTab,
+  switchTerminalTab,
+} from '@/lib/terminalTabShortcuts';
 import {
   EMBEDDED_SESSION_CHAT_CLOSE_TAB_EVENT,
   isEmbeddedSessionChatSearch,
@@ -181,12 +186,14 @@ export const useKeyboardShortcuts = () => {
 
   React.useEffect(() => {
     const combo = (actionId: string) => getEffectiveShortcutCombo(actionId, shortcutOverrides);
+    const combos = (actionId: string) => getEffectiveShortcutCombos(actionId, shortcutOverrides);
     const isTerminalEventTarget = (target: EventTarget | null) => {
       if (!(target instanceof Element)) {
         return false;
       }
 
       return Boolean(
+        target.closest('[data-terminal-view="true"]') ||
         target.closest('.terminal-viewport-container') ||
         target.getAttribute('data-terminal-hidden-input') === 'true'
       );
@@ -422,22 +429,55 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (eventMatchesShortcut(e, combo('close_context_panel_tab'))) {
+      // VS Code-style terminal tab ops only apply outside the VS Code host runtime.
+      if (!isVSCodeRuntime() && eventMatchesShortcut(e, combo('new_terminal_tab'))) {
         const directory = resolveEffectiveDirectory();
-        const directoryState = directory
-          ? useTerminalStore.getState().getDirectoryState(directory)
-          : undefined;
-        const activeTabId = directoryState?.activeTabId ?? null;
-
-        if (!directory || !directoryState || !activeTabId) {
+        if (!directory || !createAndActivateTerminalTab(directory)) {
           return;
         }
 
         e.preventDefault();
         e.stopPropagation();
-        void useTerminalStore.getState().closeTab(directory, activeTabId);
+        return;
+      }
 
-        if (directoryState.tabs.length === 1) {
+      if (!isVSCodeRuntime() && eventMatchesShortcut(e, combo('previous_terminal_tab'))) {
+        const directory = resolveEffectiveDirectory();
+        if (!directory || !switchTerminalTab(directory, -1)) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      if (!isVSCodeRuntime() && eventMatchesShortcut(e, combo('next_terminal_tab'))) {
+        const directory = resolveEffectiveDirectory();
+        if (!directory || !switchTerminalTab(directory, 1)) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('close_context_panel_tab'))) {
+        const directory = resolveEffectiveDirectory();
+        if (!directory) {
+          return;
+        }
+
+        const { closed, wasLastTab } = closeActiveTerminalTab(directory);
+        if (!closed) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (wasLastTab) {
           const uiState = useUIStore.getState();
           uiState.setBottomTerminalOpen(false);
           if (uiState.activeMainTab === 'terminal') {
@@ -828,13 +868,13 @@ export const useKeyboardShortcuts = () => {
         );
       };
 
-      if (eventMatchesShortcut(e, combo('previous_session'))) {
+      if (combos('previous_session').some((shortcut) => eventMatchesShortcut(e, shortcut))) {
         e.preventDefault();
         navigateSession(-1);
         return;
       }
 
-      if (eventMatchesShortcut(e, combo('next_session'))) {
+      if (combos('next_session').some((shortcut) => eventMatchesShortcut(e, shortcut))) {
         e.preventDefault();
         navigateSession(1);
         return;
@@ -857,6 +897,19 @@ export const useKeyboardShortcuts = () => {
         }
         e.preventDefault();
         toggleBottomTerminal();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('open_new_terminal'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile || isVSCodeRuntime()) {
+          return;
+        }
+        const directory = resolveEffectiveDirectory();
+        if (!directory || !openAndCreateTerminalTab(directory)) {
+          return;
+        }
+        e.preventDefault();
         return;
       }
 

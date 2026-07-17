@@ -110,7 +110,6 @@ export const createNotificationTriggerRuntime = (deps) => {
   const pushPermissionDebounceTimers = new Map();
   const notifiedPermissionRequests = new Set();
   const lastReadyNotificationAt = new Map();
-  const lastErrorNotificationAt = new Map();
 
   const sessionParentIdCache = new Map();
   const SESSION_PARENT_CACHE_TTL_MS = 60 * 1000;
@@ -219,6 +218,11 @@ export const createNotificationTriggerRuntime = (deps) => {
       current = parent;
     }
     return false;
+  };
+
+  const isSubtaskSession = async (sessionId, directory) => {
+    const parentID = await fetchSessionParentId(sessionId, directory);
+    return typeof parentID === 'string' && parentID.length > 0;
   };
 
   const extractSessionIdFromPayload = (payload) => {
@@ -332,19 +336,16 @@ export const createNotificationTriggerRuntime = (deps) => {
 
     if (payload.type === 'message.updated') {
       const info = payload.properties?.info;
+      if (
+        sessionId
+        && info?.role === 'assistant'
+        && (info?.finish === 'stop' || info?.finish === 'error')
+        && await isSubtaskSession(sessionId, notificationDirectory)
+      ) {
+        return;
+      }
       if (info?.role === 'assistant' && info?.finish === 'stop' && sessionId) {
         const settings = await readSettingsFromDisk();
-
-        if (settings.notifyOnSubtasks === false) {
-          const parentIDFromPayload = getParentIdFromPayload(payload);
-          const parentID = parentIDFromPayload
-            ? parentIDFromPayload
-            : await fetchSessionParentId(sessionId, notificationDirectory);
-
-          if (parentID !== null) {
-            return;
-          }
-        }
 
         if (settings.notifyOnCompletion === false) {
           return;
@@ -374,10 +375,7 @@ export const createNotificationTriggerRuntime = (deps) => {
 
         try {
           const templates = settings.notificationTemplates || {};
-          const isSubtask = await fetchSessionParentId(sessionId, notificationDirectory);
-          const completionTemplate = isSubtask && settings.notifyOnSubtasks !== false
-            ? (templates.subtask || templates.completion || { title: '{agent_name} is ready', message: '{model_name} completed the task' })
-            : (templates.completion || { title: '{agent_name} is ready', message: '{model_name} completed the task' });
+          const completionTemplate = templates.completion || { title: '{agent_name} is ready', message: '{model_name} completed the task' };
 
           const variables = await buildTemplateVariables(payload, sessionId);
           sessionName = typeof variables.session_name === 'string' ? variables.session_name : sessionName;
@@ -431,80 +429,13 @@ export const createNotificationTriggerRuntime = (deps) => {
         );
       }
 
-      if (info?.role === 'assistant' && info?.finish === 'error' && sessionId) {
-        const settings = await readSettingsFromDisk();
-        if (settings.notifyOnError === false) return;
-
-        const now = Date.now();
-        const lastAt = lastErrorNotificationAt.get(sessionId) ?? 0;
-        if (now - lastAt < PUSH_READY_COOLDOWN_MS) return;
-        lastErrorNotificationAt.set(sessionId, now);
-
-        if (settings.notificationMode !== 'always' && getIsWindowFocused?.()) {
-          return;
-        }
-
-        let title = 'Tool error';
-        let body = 'An error occurred';
-        let sessionName = '';
-
-        try {
-          const variables = await buildTemplateVariables(payload, sessionId);
-          sessionName = typeof variables.session_name === 'string' ? variables.session_name : sessionName;
-          const errorMessageId = info?.id;
-          let lastMessage = extractLastMessageText(payload);
-          if (!lastMessage) {
-            lastMessage = await fetchLastAssistantMessageText(sessionId, errorMessageId);
-          }
-
-          variables.last_message = await prepareNotificationLastMessage({
-            message: lastMessage,
-            settings,
-          });
-
-          const errorTemplate = (settings.notificationTemplates || {}).error || { title: 'Tool error', message: '{last_message}' };
-          const resolvedTitle = resolveNotificationTemplate(errorTemplate.title, variables);
-          const resolvedBody = resolveNotificationTemplate(errorTemplate.message, variables);
-          if (resolvedTitle) title = resolvedTitle;
-          if (shouldApplyResolvedTemplateMessage(errorTemplate.message, resolvedBody, variables)) body = resolvedBody;
-        } catch (error) {
-          console.warn('[Notification] Error template resolution failed, using defaults:', error?.message || error);
-        }
-
-        if (settings.nativeNotificationsEnabled) {
-          const notificationPayload = {
-            title,
-            body,
-            tag: `error-${sessionId}`,
-            kind: 'error',
-            sessionId,
-            directory: notificationDirectory,
-            requireHidden: settings.notificationMode !== 'always',
-          };
-          const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
-          broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });
-        }
-
-        await fanoutPush(
-          {
-            title,
-            body,
-            tag: `error-${sessionId}`,
-            data: {
-              url: buildSessionDeepLinkUrl(sessionId),
-              sessionId,
-              sessionName,
-              type: 'error',
-            },
-          },
-          { requireNoSse: true },
-        );
-      }
-
       return;
     }
 
     if (payload.type === 'question.asked' && sessionId) {
+      if (await isSubtaskSession(sessionId, notificationDirectory)) {
+        return;
+      }
       const existingTimer = pushQuestionDebounceTimers.get(sessionId);
       if (existingTimer) {
         clearTimeout(existingTimer);
@@ -603,6 +534,9 @@ export const createNotificationTriggerRuntime = (deps) => {
     }
 
     if (payload.type === 'permission.asked' && sessionId) {
+      if (await isSubtaskSession(sessionId, notificationDirectory)) {
+        return;
+      }
       const requestId = payload.properties?.id ?? payload.properties?.requestID ?? payload.properties?.requestId;
       const permission = payload.properties?.permission;
       const requestKey = typeof requestId === 'string' ? `${sessionId}:${requestId}` : null;

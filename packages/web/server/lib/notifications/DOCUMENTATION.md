@@ -45,8 +45,8 @@ This module provides notification message preparation utilities for the web serv
 - Returned API:
   - `maybeSendPushForTrigger(payload)`
 - Owns:
-  - completion/error/question/permission trigger routing; permission suppression consults the authoritative permission-auto-accept runtime
-  - session parent cache for subtask suppression
+  - top-level completion/question/permission trigger routing; completion is the sole task-status notification and child sessions are suppressed
+  - session parent cache for child-session suppression
   - template resolution and fallback behavior
   - native notification fanout and web push payload fanout
   - push suppression while any fresh UI visibility heartbeat reports a focused client

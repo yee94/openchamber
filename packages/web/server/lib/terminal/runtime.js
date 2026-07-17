@@ -489,15 +489,32 @@ export function createTerminalRuntime({
   const idleSweepInterval = setInterval(() => {
     const now = Date.now();
     for (const [sessionId, session] of terminalSessions.entries()) {
-      if (now - session.lastActivity > TERMINAL_IDLE_TIMEOUT) {
-        console.log(`Cleaning up idle terminal session: ${sessionId}`);
-        try {
-          killTerminalProcess(session.ptyProcess, 'term');
-        } catch (error) {
-
-        }
-        terminalSessions.delete(sessionId);
+      if (now - session.lastActivity <= TERMINAL_IDLE_TIMEOUT) {
+        continue;
       }
+
+      // Keep sessions alive while a client still has them open (WS bind or SSE).
+      let hasLiveClient = session.clients && session.clients.size > 0;
+      if (!hasLiveClient) {
+        for (const wsConnection of terminalWsConnections) {
+          if (wsConnection.boundSessionId === sessionId) {
+            hasLiveClient = true;
+            break;
+          }
+        }
+      }
+      if (hasLiveClient) {
+        session.lastActivity = now;
+        continue;
+      }
+
+      console.log(`Cleaning up idle terminal session: ${sessionId}`);
+      try {
+        killTerminalProcess(session.ptyProcess, 'term');
+      } catch (error) {
+
+      }
+      terminalSessions.delete(sessionId);
     }
   }, 5 * 60 * 1000);
 

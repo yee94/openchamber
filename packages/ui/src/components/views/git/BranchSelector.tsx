@@ -166,15 +166,15 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-8 min-w-0 max-w-full justify-start gap-1.5 px-2 py-1"
+              size="xs"
+              className="h-6 min-w-0 max-w-full justify-start gap-1 px-0 hover:bg-transparent"
               disabled={disabled}
             >
-              <Icon name="git-branch" className="size-4 text-primary" />
-              <span className="min-w-0 truncate font-medium text-left">
+              <Icon name="git-branch" className="size-3.5 text-primary" />
+              <span className="min-w-0 truncate typography-ui-label font-semibold text-left text-foreground">
                 {currentBranch || t('gitView.branch.detachedHead')}
               </span>
-              <Icon name="arrow-down-s" className="size-4 opacity-60" />
+              <Icon name="arrow-down-s" className="size-3 shrink-0 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

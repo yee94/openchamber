@@ -108,6 +108,7 @@ import {
     findAttachmentCitationRanges,
     getAttachmentCitationIconPath,
     isInlineAttachmentCitation,
+    removeAttachmentCitations,
     resolveAttachmentCitationDeletion,
 } from './attachmentCitations';
 import { getFileMentionAutocompleteQuery, type FileMentionAutocompleteInputSource } from './fileMentionAutocompleteState';
@@ -2753,8 +2754,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
         }
 
+        // Plain arrow keys navigate autocomplete; mod+arrow is reserved for session switching.
+        const isPlainArrowKey = (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.metaKey && !e.ctrlKey;
         if (showCommandAutocomplete && commandRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab' || isPlainArrowKey) {
                 e.preventDefault();
                 e.stopPropagation();
                 commandRef.current.handleKeyDown(e.key);
@@ -2763,7 +2766,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         if (showSkillAutocomplete && skillRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab' || isPlainArrowKey) {
                 e.preventDefault();
                 e.stopPropagation();
                 skillRef.current.handleKeyDown(e.key);
@@ -2772,7 +2775,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         if (showSnippetAutocomplete && snippetRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab' || isPlainArrowKey) {
                 e.preventDefault();
                 e.stopPropagation();
                 snippetRef.current.handleKeyDown(e.key);
@@ -2781,7 +2784,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         if (showFileMention && mentionRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab' || isPlainArrowKey) {
                 e.preventDefault();
                 e.stopPropagation();
                 mentionRef.current.handleKeyDown(e.key);
@@ -2870,7 +2873,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
         }
 
-        if (e.key === 'ArrowUp' && canNavigateHistoryUp && userMessageHistory.length > 0) {
+        // History recall is bare ↑/↓ only; mod+arrow switches sessions.
+        if (e.key === 'ArrowUp' && !e.metaKey && !e.ctrlKey && canNavigateHistoryUp && userMessageHistory.length > 0) {
             e.preventDefault();
             if (historyIndex === -1) {
                 // Entering history mode - save current input as draft
@@ -2891,7 +2895,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return;
         }
 
-        if (e.key === 'ArrowDown' && canNavigateHistoryDown && historyIndex >= 0) {
+        if (e.key === 'ArrowDown' && !e.metaKey && !e.ctrlKey && canNavigateHistoryDown && historyIndex >= 0) {
             e.preventDefault();
             if (historyIndex === 0) {
                 // Exit history mode - restore draft
@@ -3288,6 +3292,24 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         updateAutocompleteState(nextValue, cursorPosition, inputSource, text);
     }, [adjustTextareaHeight, message, updateAutocompleteState]);
+
+    const handleAttachedFileRemove = React.useCallback((file: AttachedFile) => {
+        removeAttachedFile(file.id);
+        if (!isInlineAttachmentCitation(file)) {
+            return;
+        }
+
+        const nextMessage = removeAttachmentCitations(message, [file.filename]);
+        if (nextMessage === message) {
+            return;
+        }
+
+        setMessage(nextMessage);
+        requestAnimationFrame(() => {
+            adjustTextareaHeight();
+        });
+        updateAutocompleteState(nextMessage, Math.min(textareaRef.current?.selectionStart ?? nextMessage.length, nextMessage.length));
+    }, [adjustTextareaHeight, message, removeAttachedFile, updateAutocompleteState]);
 
     const clearDropTextSuppression = React.useCallback(() => {
         suppressNextFileDropTextInsertRef.current = false;
@@ -4812,7 +4834,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 </div>
             ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
-                <AttachedFilesList onShowPopup={handleShowAttachmentPopup} />
+                <AttachedFilesList onShowPopup={handleShowAttachmentPopup} onRemoveAttachedFile={handleAttachedFileRemove} />
                 <QueuedMessageChips
                     onEditMessage={handleQueuedMessageEdit}
                     onSendMessage={handleQueuedMessageSend}
@@ -5017,16 +5039,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     }
                                 }}
                             >
-                                <SelectTrigger
-                                    size="sm"
-                                    className={cn(
-                                        'h-auto min-h-6 min-w-0 w-fit max-w-[42vw] sm:max-w-[18rem] border-transparent bg-transparent px-2.5 py-1',
-                                        SELECTOR_CHIP_HOVER_CLASS,
-                                    )}
-                                >
-                                    <SelectValue>
-                                        {renderProjectLabelWithIcon(selectedDraftProject)}
-                                    </SelectValue>
+                                <SelectTrigger asChild size="sm">
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            'group relative inline-flex h-6 min-w-0 w-fit max-w-[42vw] items-center rounded-lg !border-0 px-1.5 py-1 pr-1.5 typography-micro font-medium text-foreground/80 transition-[padding] hover:pr-5 focus-visible:pr-5 data-[popup-open]:pr-5 sm:max-w-[18rem]',
+                                            SELECTOR_CHIP_HOVER_CLASS,
+                                        )}
+                                    >
+                                        <SelectValue>
+                                            {renderProjectLabelWithIcon(selectedDraftProject)}
+                                        </SelectValue>
+                                        <Icon
+                                            name="arrow-down-s"
+                                            className="pointer-events-none absolute right-1 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[popup-open]:opacity-100"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
                                 </SelectTrigger>
                                 <SelectContent fitContent>
                                     <Input
@@ -5082,16 +5111,24 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 value={selectedDraftDirectory ?? draftBranchItems[0]?.value ?? normalizePath(selectedDraftProject.path) ?? ''}
                                 onValueChange={handleDraftDirectoryChange}
                             >
-                                <SelectTrigger
-                                    size="sm"
-                                    className={cn(
-                                        'h-auto min-h-6 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-2.5 py-1',
-                                        SELECTOR_CHIP_HOVER_CLASS,
-                                    )}
-                                >
-                                    <SelectValue>
-                                        {selectedDraftBranchLabel ?? t('chat.chatInput.branch')}
-                                    </SelectValue>
+                                <SelectTrigger asChild size="sm">
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            'group relative inline-flex h-6 min-w-0 w-fit max-w-[48vw] items-center rounded-lg !border-0 px-1.5 py-1 pr-1.5 typography-micro font-medium text-foreground/80 transition-[padding] hover:pr-5 focus-visible:pr-5 data-[popup-open]:pr-5 sm:max-w-[20rem]',
+                                            SELECTOR_CHIP_HOVER_CLASS,
+                                        )}
+                                    >
+                                        <SelectValue>
+                                            <Icon name="git-branch" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                            <span className="truncate">{selectedDraftBranchLabel ?? t('chat.chatInput.branch')}</span>
+                                        </SelectValue>
+                                        <Icon
+                                            name="arrow-down-s"
+                                            className="pointer-events-none absolute right-1 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[popup-open]:opacity-100"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
                                 </SelectTrigger>
                                 <SelectContent className="w-max min-w-48">
                                     {projectRootBranchOption ? (
@@ -5413,7 +5450,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             </div>
                         ) : null}
                         <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
-                            <AttachedVSCodeFileChips onShowPopup={handleShowAttachmentPopup} />
+                            <AttachedVSCodeFileChips onShowPopup={handleShowAttachmentPopup} onRemoveAttachedFile={handleAttachedFileRemove} />
                             <ActiveEditorFileSuggestion />
                         </div>
                         <div className={cn("relative overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>

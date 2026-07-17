@@ -42,6 +42,7 @@ import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { buildCommandPaletteFileSearchKey, scoreCommandPaletteFiles } from './commandPaletteFilesState';
+import { openAndCreateTerminalTab } from '@/lib/terminalTabShortcuts';
 
 type CommandEntry = {
   id: string;
@@ -210,6 +211,19 @@ export const CommandPalette: React.FC = () => {
         onSelect: run(() => toggleBottomTerminal()),
       },
       {
+        id: 'new-terminal-tab',
+        title: t('commandPalette.item.newTerminalTab'),
+        icon: <Icon name="add" className="mr-2 h-4 w-4" />,
+        shortcutId: 'open_new_terminal',
+        searchText: t('commandPalette.item.newTerminalTab'),
+        onSelect: run(() => {
+          if (!effectiveDirectory) {
+            return;
+          }
+          openAndCreateTerminalTab(effectiveDirectory);
+        }),
+      },
+      {
         id: 'context-usage',
         title: t('commandPalette.item.showContextUsage'),
         icon: <Icon name="pie-chart" className="mr-2 h-4 w-4" />,
@@ -256,6 +270,7 @@ export const CommandPalette: React.FC = () => {
     toggleRightSidebar,
     toggleBottomTerminal,
     currentDirectory,
+    effectiveDirectory,
     openContextOverview,
     setSettingsDialogOpen,
     activeProject?.id,

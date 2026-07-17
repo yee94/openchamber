@@ -15,11 +15,7 @@ import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
-import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialog';
-import { ForkSessionDialog, type ForkSessionExecution } from '@/components/session/ForkSessionDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
-import { ICON_STROKE_WIDTH_MEDIUM } from '@/components/icon/Icon';
 import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
 import {
     emitStreamingHapticEvent,
@@ -30,16 +26,13 @@ import {
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
-import { flattenAssistantTextParts, suggestPlanTitleFromText } from '@/lib/messages/messageText';
-import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executionMeta';
+import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { TextSelectionMenu } from './TextSelectionMenu';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useChatSurfaceMode } from '@/components/chat/useChatSurfaceMode';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
 import { formatTimestampForDisplay } from './timeFormat';
 import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
@@ -47,8 +40,6 @@ import { StaticToolRow } from './parts/ProgressiveGroup';
 import { getToolRowBlockClass, TOOL_ROW_CHIP_GEOMETRY_CLASS } from './parts/toolRowChrome';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
-import { createProjectPlanFile } from '@/lib/openchamberConfig';
-import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import { extractLoopbackUrls } from '@/lib/url';
@@ -1196,13 +1187,10 @@ const AssistantMessageBody = React.memo(({
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts]);
     const assistantPlanText = React.useMemo(() => flattenAssistantTextParts(assistantTextParts), [assistantTextParts]);
-    const suggestedPlanTitle = React.useMemo(() => suggestPlanTitleFromText(assistantPlanText), [assistantPlanText]);
 
     const openContextPreview = useUIStore((state) => state.openContextPreview);
     const isVSCode = isVSCodeRuntime();
     const isMiniChatSurface = chatSurfaceMode === 'mini-chat';
-    const canUseProjectPlanActions = !isVSCode && !isMiniChatSurface && !isMobile;
-    const canShowMultiRunAction = !isVSCode && !isMiniChatSurface && !isMobile;
 
     const messagePreviewUrl = React.useMemo(() => {
         if (isVSCode || isMobile || isMiniChatSurface) {
@@ -1236,11 +1224,10 @@ const AssistantMessageBody = React.memo(({
         return null;
     }, [assistantTextParts, isMobile, isMiniChatSurface, isVSCode, toolParts]);
 
-    const createSessionFromAssistantMessage = useSessionUIStore((state) => state.createSessionFromAssistantMessage);
+    const forkFromMessage = useSessionUIStore((state) => state.forkFromMessage);
+    const forkTransition = useSessionUIStore((state) => state.forkTransition);
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const getDirectoryForSession = useSessionUIStore((state) => state.getDirectoryForSession);
-    const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
-    const projects = useProjectsStore((state) => state.projects);
     const effectiveDirectory = useEffectiveDirectory();
     const isReviewSessionView = reviewTransferDirection === 'review-to-original';
     const effectiveReviewTransferDirection = (!isMobile && !isVSCode) ? reviewTransferDirection : null;
@@ -1272,10 +1259,7 @@ const AssistantMessageBody = React.memo(({
             },
         };
     }, [assistantPlanText, effectiveDirectory, effectiveReviewTransferDirection, sessionId, t]);
-    const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState(false);
-    const [isSavingPlan, setIsSavingPlan] = React.useState(false);
-    const [isForkDialogOpen, setIsForkDialogOpen] = React.useState(false);
-    const [isForkSubmitting, setIsForkSubmitting] = React.useState(false);
+    const [isForkPending, setIsForkPending] = React.useState(false);
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const collapsibleThinkingBlocks = useUIStore((state) => state.collapsibleThinkingBlocks);
     const showSplitAssistantMessageActions = useUIStore((state) => state.showSplitAssistantMessageActions);
@@ -1285,19 +1269,6 @@ const AssistantMessageBody = React.memo(({
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const hasStopFinish = messageFinish === 'stop';
     const effectiveStreamPhase: StreamPhase = hasStopFinish ? 'completed' : streamPhase;
-
-    const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-    const currentProjectRef = React.useMemo(() => {
-        if (!canUseProjectPlanActions) {
-            return null;
-        }
-
-        const directory = effectiveDirectory
-            ?? (currentSessionId ? getDirectoryForSession(currentSessionId) : null)
-            ?? '';
-        const resolved = resolveProjectForSessionDirectory(projects, availableWorktreesByProject, directory);
-        return resolved ? { id: resolved.id, path: resolved.path } : null;
-    }, [availableWorktreesByProject, canUseProjectPlanActions, currentSessionId, effectiveDirectory, getDirectoryForSession, projects]);
 
     const hasTools = toolParts.length > 0;
 
@@ -1460,90 +1431,20 @@ const AssistantMessageBody = React.memo(({
     const hasCopyableText = Boolean(hasTextContent) && !awaitingMessageCompletion;
 
     const handleForkClick = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
+        async (event: React.MouseEvent<HTMLButtonElement>) => {
             event.stopPropagation();
             event.preventDefault();
-            if (!createSessionFromAssistantMessage || !assistantPlanText.trim()) {
+            if (!sessionId || !messageId || isForkPending || forkTransition) {
                 return;
             }
-            setIsForkDialogOpen(true);
-        },
-        [createSessionFromAssistantMessage, assistantPlanText]
-    );
-
-    const handleConfirmFork = React.useCallback(
-        async (execution: ForkSessionExecution) => {
-            if (!createSessionFromAssistantMessage) {
-                return;
-            }
-            setIsForkSubmitting(true);
+            setIsForkPending(true);
             try {
-                await createSessionFromAssistantMessage(messageId, execution);
-                setIsForkDialogOpen(false);
+                await forkFromMessage(sessionId, messageId);
             } finally {
-                setIsForkSubmitting(false);
+                setIsForkPending(false);
             }
         },
-        [createSessionFromAssistantMessage, messageId]
-    );
-
-    const handleForkMultiRunClick = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            event.preventDefault();
-
-            if (!assistantPlanText.trim()) {
-                return;
-            }
-
-            const prefilledPrompt = `${MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT}\n\n${assistantPlanText}`;
-            openMultiRunLauncherWithPrompt(prefilledPrompt);
-        },
-        [assistantPlanText, openMultiRunLauncherWithPrompt]
-    );
-
-    const handleSaveAsPlanClick = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            event.preventDefault();
-            if (!assistantPlanText.trim()) {
-                return;
-            }
-            setIsPlanDialogOpen(true);
-        },
-        [assistantPlanText]
-    );
-
-    const handleConfirmSaveAsPlan = React.useCallback(
-        async (title: string) => {
-            if (!assistantPlanText.trim()) {
-                return;
-            }
-            if (!currentProjectRef) {
-                toast.error(t('chat.messageBody.toast.noProject'));
-                return;
-            }
-
-            setIsSavingPlan(true);
-            try {
-                const created = await createProjectPlanFile(currentProjectRef, {
-                    title,
-                    body: assistantPlanText,
-                });
-                if (!created) {
-                    toast.error(t('chat.messageBody.toast.savePlanFailed'));
-                    return;
-                }
-                window.dispatchEvent(new CustomEvent('openchamber:project-plan-saved', {
-                    detail: { projectId: currentProjectRef.id },
-                }));
-                setIsPlanDialogOpen(false);
-                toast.success(t('chat.messageBody.toast.planSaved'));
-            } finally {
-                setIsSavingPlan(false);
-            }
-        },
-        [assistantPlanText, currentProjectRef, t]
+        [forkFromMessage, forkTransition, isForkPending, messageId, sessionId]
     );
 
     const activityPartsForTurn = React.useMemo(() => {
@@ -1947,27 +1848,6 @@ const AssistantMessageBody = React.memo(({
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.openPreview')}</TooltipContent>
                 </Tooltip>
             ) : null}
-            {canUseProjectPlanActions && !isReviewSessionView ? (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            disabled={!hasCopyableText || !currentProjectRef}
-                            className={cn(
-                                MESSAGE_ACTION_ICON_BUTTON_CLASS,
-                                (!hasCopyableText || !currentProjectRef) && 'opacity-50'
-                            )}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={handleSaveAsPlanClick}
-                        >
-                            <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="booklet" className={MESSAGE_ACTION_ICON_CLASS} />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.saveAsPlan')}</TooltipContent>
-                </Tooltip>
-            ) : null}
             {!isMiniChatSurface && !isReviewSessionView ? <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
@@ -1975,31 +1855,23 @@ const AssistantMessageBody = React.memo(({
                         size="icon"
                         variant="ghost"
                         className={MESSAGE_ACTION_ICON_BUTTON_CLASS}
+                        aria-label={t('chat.messageBody.actions.forkAria')}
+                        aria-busy={isForkPending}
+                        disabled={isForkPending || Boolean(forkTransition)}
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={handleForkClick}
+                        onClick={(event) => {
+                            void handleForkClick(event);
+                        }}
                     >
-                        <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="chat-new" className={MESSAGE_ACTION_ICON_CLASS} />
+                        <Icon
+                            weight={MESSAGE_ACTION_ICON_WEIGHT}
+                            name={isForkPending ? 'loader-4' : 'git-branch'}
+                            className={cn(MESSAGE_ACTION_ICON_CLASS, isForkPending && 'animate-spin')}
+                        />
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.startNewSession')}</TooltipContent>
+                <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.fork')}</TooltipContent>
             </Tooltip> : null}
-            {canShowMultiRunAction && !isReviewSessionView ? (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className={MESSAGE_ACTION_ICON_BUTTON_CLASS}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={handleForkMultiRunClick}
-                        >
-                            <ArrowsMerge className={MESSAGE_ACTION_ICON_CLASS} strokeWidth={ICON_STROKE_WIDTH_MEDIUM} />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.startNewMultiRun')}</TooltipContent>
-                </Tooltip>
-            ) : null}
         </>
     );
  
@@ -2014,25 +1886,6 @@ const AssistantMessageBody = React.memo(({
               style={CONTAIN_LAYOUT_STYLE}
           >
               <TextSelectionMenu containerRef={messageContentRef} />
-             {canUseProjectPlanActions && isPlanDialogOpen ? (
-                 <SaveProjectPlanDialog
-                     open={isPlanDialogOpen}
-                     onOpenChange={setIsPlanDialogOpen}
-                     initialTitle={suggestedPlanTitle}
-                     sourceText={assistantPlanText}
-                     saving={isSavingPlan}
-                     onSave={handleConfirmSaveAsPlan}
-                 />
-             ) : null}
-             {isForkDialogOpen ? (
-                 <ForkSessionDialog
-                     open={isForkDialogOpen}
-                     onOpenChange={setIsForkDialogOpen}
-                     projectDirectory={effectiveDirectory ?? null}
-                     submitting={isForkSubmitting}
-                     onConfirm={handleConfirmFork}
-                 />
-             ) : null}
               <div>
                  <div
                      // 不用 overflow-hidden：工具行 -mx 洗底需要画进列 gutter，否则圆角会被裁成直角

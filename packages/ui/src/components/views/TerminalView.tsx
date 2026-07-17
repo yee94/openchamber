@@ -56,13 +56,15 @@ const STREAM_OPTIONS = {
     connectionTimeoutMs: 10_000,
 };
 
+// Reopening a persisted terminal can race server/relay startup. Give it a longer
+// window and more retries so a live PTY is not killed by a short connect timeout.
 const REHYDRATED_STREAM_OPTIONS = {
     retry: {
-        ...STREAM_OPTIONS.retry,
-        initialDelayMs: 200,
-        maxDelayMs: 500,
+        maxRetries: 8,
+        initialDelayMs: 400,
+        maxDelayMs: 8_000,
     },
-    connectionTimeoutMs: 1_500,
+    connectionTimeoutMs: 15_000,
 };
 
 const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
@@ -339,7 +341,8 @@ export const TerminalView: React.FC = () => {
             directory: string,
             tabId: string,
             terminalId: string,
-            streamOptions = STREAM_OPTIONS
+            streamOptions = STREAM_OPTIONS,
+            recreateOnFatalConnection = false
         ) => {
             if (activeTerminalIdRef.current === terminalId) {
                 return;
@@ -431,6 +434,21 @@ export const TerminalView: React.FC = () => {
                         if (!fatal) {
                             setConnectionError(null);
                             setIsFatalError(false);
+                            return;
+                        }
+
+                        // Stale session IDs after server restart should recreate, not
+                        // permanently disconnect the open terminal tab.
+                        const isMissingSession = /session not found/i.test(error.message);
+                        if (isMissingSession || recreateOnFatalConnection) {
+                            setIsReconnectPending(false);
+                            setConnectionError(null);
+                            setIsFatalError(false);
+                            setConnecting(directory, tabId, true);
+                            clearBuffer(directory, tabId);
+                            setTabLifecycle(directory, tabId, 'idle');
+                            setTabSessionId(directory, tabId, null);
+                            disconnectStream();
                             return;
                         }
 
@@ -589,7 +607,8 @@ export const TerminalView: React.FC = () => {
                 directory,
                 tabId,
                 terminalId,
-                isRehydratedSession ? REHYDRATED_STREAM_OPTIONS : STREAM_OPTIONS
+                isRehydratedSession ? REHYDRATED_STREAM_OPTIONS : STREAM_OPTIONS,
+                isRehydratedSession
             );
         };
 
@@ -1089,7 +1108,10 @@ export const TerminalView: React.FC = () => {
     );
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
+        <div
+            data-terminal-view="true"
+            className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]"
+        >
             <div className={cn('app-region-no-drag sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] text-xs', isTouchTerminal ? 'px-3 py-1.5' : 'pl-3 pr-1.5 py-1')}>
                 {enableTabs && directoryTerminalState ? (
                     <div className="flex items-center gap-2 pl-1 pr-1">

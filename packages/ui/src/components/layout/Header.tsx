@@ -159,7 +159,7 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
             type="button"
             className={cn(
               DESKTOP_HEADER_ICON_BUTTON_CLASS,
-              'h-7 w-7 overflow-hidden rounded-full border border-border/60 bg-muted/80 p-0'
+              'h-6 w-6 overflow-hidden rounded-full border border-border/60 bg-muted/80 p-0'
             )}
             title={githubLogin ? t('header.github.connectedWithLogin', { login: githubLogin }) : t('header.github.connected')}
             disabled={isSwitchingGitHubAccount}
@@ -235,7 +235,7 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
 
   return (
     <div
-      className="app-region-no-drag flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
+      className="app-region-no-drag flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
       title={githubLogin ? t('header.github.connectedWithLogin', { login: githubLogin }) : t('header.github.connected')}
     >
       {githubAvatarUrl ? (
@@ -2126,7 +2126,9 @@ export const Header: React.FC<HeaderProps> = ({
         title={t('header.actions.rightSidebarWithShortcut', { shortcut: shortcutLabel('toggle_right_sidebar') })}
         ariaLabel={t('header.actions.toggleRightSidebarAria')}
         onClick={toggleRightSidebar}
-        Icon={'layout-right'}
+        className="app-region-no-drag group inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:bg-interactive-hover hover:text-foreground transition-colors"
+        Icon="layout-left-rounded"
+        iconClassName="size-4 -scale-x-100 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground"
       />
       <DesktopGitHubControl
         isMobile={isMobile}

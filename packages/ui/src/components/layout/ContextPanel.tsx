@@ -30,6 +30,8 @@ import { OpenChamberLogo } from "@/components/ui/OpenChamberLogo";
 import { invokeDesktopCommand } from '@/lib/desktopNative';
 import {
   EMBEDDED_SESSION_CHAT_CLOSE_TAB_EVENT,
+  EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT,
+  EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT,
   getOrCreateEmbeddedSessionChatURL,
   type EmbeddedSessionChatURLCacheEntry,
 } from './contextPanelEmbeddedChat';
@@ -2421,7 +2423,7 @@ export const ContextPanel: React.FC = () => {
 
       frameWindow.postMessage(
         {
-          type: 'openchamber:embedded-visibility',
+          type: EMBEDDED_SESSION_CHAT_VISIBILITY_EVENT,
           payload,
         },
         window.location.origin,
@@ -2459,6 +2461,12 @@ export const ContextPanel: React.FC = () => {
         postChatSettingsSyncToEmbeddedChat();
         return;
       }
+      if (data?.type === EMBEDDED_SESSION_CHAT_VISIBILITY_REQUEST_EVENT) {
+        // Child finished wiring its listener after parent onLoad may already
+        // have pushed a visibility message into the void — re-send current state.
+        postEmbeddedVisibilityToChats();
+        return;
+      }
       if (data?.type !== 'openchamber:cycle-theme-request') {
         return;
       }
@@ -2471,7 +2479,7 @@ export const ContextPanel: React.FC = () => {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [closeContextPanelTab, directoryKey, postChatSettingsSyncToEmbeddedChat, setThemeMode, themeMode]);
+  }, [closeContextPanelTab, directoryKey, postChatSettingsSyncToEmbeddedChat, postEmbeddedVisibilityToChats, setThemeMode, themeMode]);
 
   React.useLayoutEffect(() => {
     const hasAnyChatTab = tabs.some((tab) => tab.mode === 'chat');

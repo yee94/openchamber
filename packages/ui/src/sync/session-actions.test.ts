@@ -376,6 +376,33 @@ describe("forkSession input restoration", () => {
     expect(inputState.pendingInputText).not.toContain("/fork")
   })
 
+  test("does not restore composer when forking from an assistant message", async () => {
+    const sourceSession = { id: "session-a", title: "Source", time: { created: 1 } } as Session
+    const selectedMessage = { id: "message-a", sessionID: "session-a", role: "assistant", time: { created: 1 } } as Message
+    inputState.pendingInputText = "existing draft"
+    inputState.attachedFiles = [{ url: "file:///existing.txt", mimeType: "text/plain", filename: "existing.txt" }]
+    const sessionStore = createStore({}, {
+      session: [sourceSession],
+      message: { "session-a": [selectedMessage] },
+      session_status: { "session-a": { type: "idle" } },
+      part: {
+        "message-a": [
+          { id: "text-a", messageID: "message-a", type: "text", text: "assistant answer that must not enter the composer" },
+        ] as Part[],
+      },
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const { forkSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    await forkSession("session-a", 2, "message-a")
+
+    expect(replyCalls.find((call) => call.method === "session.fork")?.params.messageID).toBe("message-a")
+    expect(clearAttachedFilesCalls).toBe(0)
+    expect(inputState.pendingInputText).toBe("existing draft")
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///existing.txt", mimeType: "text/plain", filename: "existing.txt" }])
+  })
+
   test("hydrates source session from global store when child store has no session row", async () => {
     const sourceSession = {
       id: "session-a",
