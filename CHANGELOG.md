@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.23] - 2026-07-18
+
+- **Git workspace:** streamline branch, sync, history, stash, stage, and revert controls with pinned headers and aligned actions across tree and flat change views.
+- **Async workflows:** add runtime-scoped query caching, cancellation, pagination, stale-result protection, and cache resets across web, desktop, mobile, and VS Code surfaces.
+- **Chat and navigation:** restore composer focus after model or agent selection, refine queued-message controls and terminal shortcuts, improve message forking, and remove citations when attachments are deleted.
+- **Session reliability:** hide temporary SmartFetch secondary sessions from live and indexed session lists while preserving pagination and clearing existing summaries.
+- **Files and integrations:** improve mobile file browsing, GitHub issue and pull request search, scheduled tasks, diagrams, PWA detection, server text-to-speech, provider state, and quota refresh behavior.
+
 ## [1.16.22] - 2026-07-17
 
 - **Mobile composer:** tighten queued, reverted, and auto-review controls with smaller typography and denser spacing while preserving touch targets.

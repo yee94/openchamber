@@ -178,15 +178,17 @@ mock.module("./session-ui-store", () => ({
 }))
 
 // Mock useInputStore
+type RestoredAttachment = { url: string; mimeType: string; filename: string }
+
 const inputState = {
   pendingInputText: "",
   pendingInputMode: "normal" as const,
-  attachedFiles: [],
+  attachedFiles: [] as RestoredAttachment[],
   clearAttachedFiles: () => {
     clearAttachedFilesCalls += 1
     inputState.attachedFiles = []
   },
-  addRestoredAttachment: (attachment: never) => {
+  addRestoredAttachment: (attachment: RestoredAttachment) => {
     inputState.attachedFiles = [...inputState.attachedFiles, attachment]
   },
 }
