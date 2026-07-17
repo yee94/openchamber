@@ -123,6 +123,37 @@ describe('listGlobalSessionPages', () => {
     expect(session.summary).toEqual({ additions: 5, deletions: 3, files: 2 })
   })
 
+  test('excludes SmartFetch secondary sessions while continuing pagination', async () => {
+    const calls: Array<{ cursor?: number }> = []
+    const apiClient = {
+      experimental: {
+        session: {
+          list: async (options: { cursor?: number }) => {
+            calls.push(options)
+            if (options.cursor === undefined) {
+              return {
+                data: [
+                  { id: 'ses_temporary_1', title: 'smartfetch-secondary', time: { created: 1, updated: 2 } },
+                  { id: 'ses_temporary_2', title: 'smartfetch-secondary', time: { created: 2, updated: 1 } },
+                ],
+                response: { headers: new Headers({ 'x-next-cursor': '1' }) },
+              }
+            }
+            return {
+              data: [{ id: 'ses_visible', title: 'Visible session', time: { created: 3, updated: 0 } }],
+              response: { headers: new Headers() },
+            }
+          },
+        },
+      },
+    } as unknown as OpencodeClient
+
+    const sessions = await listGlobalSessionPages(apiClient, { archived: false, pageSize: 2 })
+
+    expect(sessions.map((session) => session.id)).toEqual(['ses_visible'])
+    expect(calls).toHaveLength(2)
+  })
+
   test('paginates through all session-list pages', async () => {
     const calls: Array<Record<string, unknown>> = []
     const apiClient = {

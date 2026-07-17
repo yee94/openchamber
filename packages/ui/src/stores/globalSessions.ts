@@ -10,6 +10,11 @@ export type GlobalSessionRecord = Session & {
     } | null;
 };
 
+const HIDDEN_SESSION_TITLES = new Set(['smartfetch-secondary']);
+
+export const isVisibleGlobalSession = (session: Pick<Session, 'title'>): boolean =>
+    !HIDDEN_SESSION_TITLES.has(session.title);
+
 const toNumber = (value: string | null): number | null => {
     if (!value) {
         return null;
@@ -103,7 +108,7 @@ export async function listGlobalSessionPages(
             : Math.max(0, options.maxItems - all.length);
         if (remaining === 0) break;
         const requestLimit = Math.min(options.pageSize, remaining);
-        const { response, payload } = await retry(async () => {
+        const { response, payload: page } = await retry(async () => {
             const timeoutSignal = options.timeoutMs === undefined
                 ? undefined
                 : AbortSignal.timeout(options.timeoutMs);
@@ -126,7 +131,9 @@ export async function listGlobalSessionPages(
                     .map((session) => stripSessionListDetails(session) as GlobalSessionRecord),
             };
         }, { attempts: options.retryAttempts ?? 3, delay: 500 });
-        if (payload.length === 0) break;
+        if (page.length === 0) break;
+
+        const payload = page.filter(isVisibleGlobalSession);
 
         let appended = 0;
         for (const session of payload) {
@@ -141,21 +148,18 @@ export async function listGlobalSessionPages(
         if (options.maxItems !== undefined && all.length >= options.maxItems) break;
 
         // Stop on partial page — nothing more to fetch.
-        if (payload.length < requestLimit) break;
+        if (page.length < requestLimit) break;
 
         // Prefer server header; fall back to last session's `time.updated`
         // (cursor semantics on server = "updated strictly before this timestamp").
         const headerCursor = toNumber(readResponseHeader(response, "x-next-cursor"));
-        const lastUpdated = payload[payload.length - 1]?.time?.updated;
+        const lastUpdated = page[page.length - 1]?.time?.updated;
         const nextCursor = headerCursor
             ?? (typeof lastUpdated === "number" && Number.isFinite(lastUpdated) ? lastUpdated : undefined);
 
         if (nextCursor === undefined) break;
         // Loop guard: cursor must move backwards in time.
         if (cursor !== undefined && nextCursor >= cursor) break;
-        // Every id in this page already seen — stop to avoid spinning.
-        if (appended === 0) break;
-
         cursor = nextCursor;
     }
 

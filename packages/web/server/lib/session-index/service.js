@@ -5,6 +5,9 @@ const require = createRequire(import.meta.url);
 
 const SCHEMA_VERSION = 5;
 const MAX_ROOT_SESSIONS = 20;
+const HIDDEN_SESSION_TITLES = new Set(['smartfetch-secondary']);
+
+const isVisibleSession = (session) => !HIDDEN_SESSION_TITLES.has(session?.title);
 
 const normalizeDirectory = (value) => {
   if (typeof value !== 'string') return null;
@@ -29,7 +32,7 @@ const runtimeKeyFor = (runtimeConfig) => {
 };
 
 const toSummary = (session, fallbackDirectory) => {
-  if (!session || typeof session.id !== 'string' || !session.id) return null;
+  if (!session || !isVisibleSession(session) || typeof session.id !== 'string' || !session.id) return null;
   const directory = normalizeDirectory(session.directory ?? session.project?.worktree ?? fallbackDirectory);
   if (!directory) return null;
   return {
@@ -237,6 +240,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
   });
 
   const upsert = db.transaction((session, now = Date.now(), options = {}) => {
+    if (!isVisibleSession(session)) return remove(session?.id);
     const summary = toSummary(session);
     if (!summary) return false;
     const key = runtimeKey();
@@ -305,25 +309,27 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
           has_children AS hasChildren
         FROM session_summary WHERE runtime_key = ? AND directory = ?
         ORDER BY activity_updated_at DESC, id DESC
-      `).all(key, directory.directory).map((session) => ({
-        id: session.id,
-        title: session.title,
-        directory: directory.directory,
-        time: { created: session.createdAt, updated: session.updatedAt, ...(session.archivedAt ? { archived: session.archivedAt } : {}) },
-        metadata: {
-          openchamber: {
-            titleRefresh: { activityUpdatedAt: session.activityUpdatedAt },
-            sessionStatus: { type: session.status ?? 'idle', changedAt: session.statusChangedAt },
+      `).all(key, directory.directory)
+        .map((session) => ({
+          id: session.id,
+          title: session.title,
+          directory: directory.directory,
+          time: { created: session.createdAt, updated: session.updatedAt, ...(session.archivedAt ? { archived: session.archivedAt } : {}) },
+          metadata: {
+            openchamber: {
+              titleRefresh: { activityUpdatedAt: session.activityUpdatedAt },
+              sessionStatus: { type: session.status ?? 'idle', changedAt: session.statusChangedAt },
+            },
           },
-        },
-        ...(session.parentID ? { parentID: session.parentID } : {}),
-        ...(session.hasChildren ? { hasChildren: true } : {}),
-      })),
+          ...(session.parentID ? { parentID: session.parentID } : {}),
+          ...(session.hasChildren ? { hasChildren: true } : {}),
+        }))
+        .filter(isVisibleSession),
     }));
     return { directories };
   };
 
-  const remove = (sessionID) => {
+  function remove(sessionID) {
     if (typeof sessionID !== 'string' || !sessionID) return false;
     const key = runtimeKey();
     const parent = parentForChild.get(key, sessionID);
@@ -339,7 +345,7 @@ export const createSessionIndexService = ({ dbPath, getRuntimeConfig = () => nul
       );
     }
     return result.changes > 0;
-  };
+  }
 
   const touchActivity = (sessionID, observedAt) => {
     if (typeof sessionID !== 'string' || !sessionID) return false;

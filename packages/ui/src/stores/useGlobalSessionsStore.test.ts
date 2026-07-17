@@ -93,6 +93,15 @@ describe('useGlobalSessionsStore', () => {
     expect(listCalls).toHaveLength(2);
   });
 
+  test('removes a SmartFetch secondary session received through a live update', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildSession('https://share.example/temporary', {
+      id: 'ses_temporary',
+      title: 'smartfetch-secondary',
+    }));
+
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+  });
+
   test('starts with three cold directory summaries before adaptive recovery', async () => {
     type ListResult = { data: Session[]; error: undefined; response: Response };
     const resolvers: Array<(value: ListResult) => void> = [];

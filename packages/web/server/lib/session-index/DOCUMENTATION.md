@@ -8,6 +8,9 @@ development index without changing settings or authentication storage.
 `service.js` exclusively owns the WAL database and stores at most the
 newest 20 root-session summaries per runtime and directory. It never stores
 messages, attachments, permissions, provider data, or model metadata.
+Sessions titled `smartfetch-secondary` are temporary SmartFetch model calls;
+the index excludes them from every snapshot and clears prior summaries when a
+matching session update arrives.
 
 The server-side global OpenCode event subscriber writes session summary events
 directly into this index. User `message.updated` events and `session.idle`

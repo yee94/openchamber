@@ -95,6 +95,25 @@ describe('Electron session index', () => {
     service.close();
   });
 
+  it('excludes SmartFetch secondary sessions and clears existing summaries', () => {
+    const runtimeRef = { value: 'http://runtime-a.test' };
+    const service = createService(runtimeRef);
+    const temporary = { ...session('ses_temporary', 11), title: 'smartfetch-secondary' };
+
+    service.replaceDirectory({
+      directory: '/repo',
+      sessions: [session('ses_visible', 12), temporary],
+      cursor: null,
+      hasMore: false,
+    });
+    expect(service.snapshot().directories[0].sessions.map((item) => item.id)).toEqual(['ses_visible']);
+
+    service.upsert(session('ses_existing', 10));
+    service.upsert({ ...temporary, id: 'ses_existing' });
+    expect(service.snapshot().directories[0].sessions.map((item) => item.id)).toEqual(['ses_visible']);
+    service.close();
+  });
+
   it('orders by user activity without changing the OpenCode updated time', () => {
     const runtimeRef = { value: 'http://runtime-a.test' };
     const service = createService(runtimeRef);

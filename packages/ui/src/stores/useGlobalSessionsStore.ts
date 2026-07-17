@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
 import { opencodeClient } from '@/lib/opencode/client';
-import { listGlobalSessionPages } from '@/stores/globalSessions';
+import { isVisibleGlobalSession, listGlobalSessionPages } from '@/stores/globalSessions';
 import { getReviewTransferDirection, type ReviewTransferDirection } from '@/lib/reviewFlow';
 import { getOriginalSessionID, getReviewSessionID } from '@/lib/sessionReviewMetadata';
 import { resetOpenCodeReadiness, waitForOpenCodeReadiness } from '@/lib/runtime-readiness';
@@ -1247,6 +1247,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 
   upsertSession: (session) => {
+    if (!isVisibleGlobalSession(session)) {
+      get().removeSessions([session.id]);
+      return;
+    }
     set((state) => {
       const existingSession = state.activeSessions.find((candidate) => candidate.id === session.id)
         ?? state.archivedSessions.find((candidate) => candidate.id === session.id)
