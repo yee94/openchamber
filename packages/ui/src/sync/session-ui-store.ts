@@ -23,7 +23,7 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
-import { useCommandsStore } from "@/stores/useCommandsStore"
+import { readCommandsSnapshot } from "@/queries/commandQueries"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
@@ -130,7 +130,7 @@ export function routeMessage(params: {
 
     const dirState = getDirectoryState(requestDirectory)
     const syncCommands = dirState?.command ?? []
-    const storeCommands = useCommandsStore.getState().commands
+    const storeCommands = readCommandsSnapshot(requestDirectory ?? null)
 
     // OpenCode registers every skill as a command (source: "skill"), but the
     // commands store filters skills out and the synced command list is only

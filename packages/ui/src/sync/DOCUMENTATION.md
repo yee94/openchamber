@@ -225,8 +225,9 @@ becoming the cached startup result consumed by the session coordinator.
 - TanStack Query owns runtime-scoped pull server state. Query keys begin with
   transport identity and append feature scope such as directory or quota
   provider. A transport identity change clears the Query client.
-- Agents and commands cache by transport identity plus configuration directory.
-  A metadata refresh failure retains the prior complete snapshot for that key.
+- Agents cache and command queries scope by transport identity plus configuration
+  directory. A command metadata refresh failure retains the prior complete query
+  snapshot for that key.
 - Quota runtime reset clears rendered results, fetch state, errors, and active
   refresh generations. Provider refreshes commit independently, preserving
   successful provider results while exposing a failed provider error.

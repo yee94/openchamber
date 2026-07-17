@@ -18,6 +18,12 @@ export const queryKeys = {
   runtime: (): readonly [string] => [getRuntimeTransportIdentity()],
   scoped: <T extends ReadonlyArray<unknown>>(...parts: T): readonly [string, ...T] => [getRuntimeTransportIdentity(), ...parts],
   quota: (providerId: QuotaProviderId): readonly [string, QuotaProviderId] => [getRuntimeTransportIdentity(), providerId],
+  commands: {
+    list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'commands', string | null] => [transport, 'commands', directory],
+  },
+  agents: {
+    list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'agents', string | null] => [transport, 'agents', directory],
+  },
 };
 
 export const fetchQuotaProvider = async (

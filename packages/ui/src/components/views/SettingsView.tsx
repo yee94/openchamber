@@ -3,6 +3,8 @@ import { cn, getModifierLabel } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
+import { readAgentsSnapshot } from '@/queries/agentQueries';
+import { readCommandsSnapshot, useCommandsQuery } from '@/queries/commandQueries';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
@@ -288,6 +290,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const settingsSlug = resolveSettingsSlug(settingsPageRaw);
+  const commandsQuery = useCommandsQuery({ enabled: settingsSlug === 'commands' });
+  const { refetch: refetchCommands } = commandsQuery;
+
+  React.useEffect(() => {
+    if (settingsSlug === 'commands') {
+      void refetchCommands();
+    }
+  }, [refetchCommands, settingsSlug]);
 
   const [mobileStage, setMobileStage] = React.useState<MobileStage>(initialMobileStage);
   const autoNavSlugRef = React.useRef<string | null>(null);
@@ -413,7 +423,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'commands') {
-      void useCommandsStore.getState().loadCommands();
       return;
     }
     if (settingsSlug === 'mcp') {
@@ -533,7 +542,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const prepareSettingsSearchTarget = React.useCallback((result: SettingsSearchResult): string => {
     if (result.id.startsWith('agents.')) {
       const store = useAgentsStore.getState();
-      const name = nextUniqueName('new-agent', store.agents.map((agent) => agent.name));
+      const name = nextUniqueName('new-agent', readAgentsSnapshot().map((agent) => agent.name));
       store.setAgentDraft({ name, scope: 'user' });
       store.setSelectedAgent(name);
       return result.id === 'agents.create' ? 'agents.name' : result.id;
@@ -541,7 +550,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
     if (result.id.startsWith('commands.')) {
       const store = useCommandsStore.getState();
-      const name = nextUniqueName('new-command', store.commands.map((command) => command.name));
+      const name = nextUniqueName('new-command', readCommandsSnapshot().map((command) => command.name));
       store.setCommandDraft({ name, scope: 'user' });
       store.setSelectedCommand(name);
       return result.id === 'commands.create' ? 'commands.name' : result.id;

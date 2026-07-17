@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
-import { useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
+import { useCommandsQuery, type CommandConfig, type CommandScope } from '@/queries/commandQueries';
+import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ModelSelector } from '../agents/ModelSelector';
 import { AgentSelector } from './AgentSelector';
@@ -23,23 +24,21 @@ export const CommandsPage: React.FC = () => {
   const { t } = useI18n();
   const {
     selectedCommandName,
-    getCommandByName,
     createCommand,
     updateCommand,
-    commands,
     commandDraft,
     setCommandDraft,
   } = useCommandsStore(useShallow((s) => ({
     selectedCommandName: s.selectedCommandName,
-    getCommandByName: s.getCommandByName,
     createCommand: s.createCommand,
     updateCommand: s.updateCommand,
-    commands: s.commands,
     commandDraft: s.commandDraft,
     setCommandDraft: s.setCommandDraft,
   })));
 
-  const selectedCommand = selectedCommandName ? getCommandByName(selectedCommandName) : null;
+  const commandsQuery = useCommandsQuery();
+  const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
+  const selectedCommand = selectedCommandName ? commands.find((command) => command.name === selectedCommandName) : null;
   const isNewCommand = Boolean(commandDraft && commandDraft.name === selectedCommandName && !selectedCommand);
 
   const [draftName, setDraftName] = React.useState('');

@@ -26,7 +26,6 @@ These are the most performance-sensitive.
 - `useGitStore.ts`
 - `useGitHubPrStatusStore.ts`
 - `useFilesViewTabsStore.ts`
-- `useCommandsStore.ts`
 
 These stores act like centralized keyed caches. UI should consume narrow slices from them instead of re-fetching the same data in multiple places.
 
@@ -36,14 +35,17 @@ such as directory, and `queryKeys.quota()` appends the provider. A runtime
 transport identity change clears the Query client, so cached data never crosses
 runtime transports.
 
-`useCommandsStore` loads the official command catalog through the OpenCode SDK,
+`commandQueries.ts` owns the official command catalog through the OpenCode SDK,
 then resolves OpenChamber-owned scope metadata with one batched runtime request.
 Never restore the per-command metadata `Promise.all` path: large command catalogs
-otherwise create an N+1 preflight/request storm during cold startup.
+otherwise create an N+1 preflight/request storm during cold startup. `useCommandsStore`
+only owns command selection, drafts, and mutation actions.
 
-Agents and commands cache entries use transport identity plus configuration
-directory. A metadata failure retains the prior complete snapshot for that key;
-the incomplete refresh never replaces it.
+Agent and command queries use transport identity plus configuration directory.
+Metadata failures retain the prior complete query snapshot for that key; the
+failed refresh leaves that snapshot available. `useAgentsStore` owns agent
+selection, drafts, and mutation actions while `agentQueries.ts` owns agent server
+state and metadata enrichment. `useConfigStore` retains SDK agent ownership.
 
 `useQuotaStore` keeps UI settings and rendered provider results. Runtime reset
 clears quota results, fetch state, errors, and active refresh generations.

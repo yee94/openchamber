@@ -8,7 +8,6 @@ import { routeMessage, useSessionUIStore, materializeOpenDraftSession } from './
 import { setActionRefs, setOptimisticRefs } from './session-actions';
 import { setSyncRefs } from './sync-refs';
 import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from './input-store';
 import { newSessionDraftKey, sessionDraftKey } from './input-draft-types';
@@ -444,7 +443,6 @@ describe('routeMessage skill invocation', () => {
 
     // The sync command list and the commands store both exclude user skills,
     // so they start empty here — the skill is only known to the skills store.
-    useCommandsStore.setState({ commands: [] });
     useSkillsStore.setState({ skills: [] });
 
     originalSendCommand = opencodeClient.sendCommand;

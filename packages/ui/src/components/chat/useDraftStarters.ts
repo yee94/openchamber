@@ -2,7 +2,7 @@ import React from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
-import { useCommandsStore } from '@/stores/useCommandsStore';
+import { useCommandsQuery } from '@/queries/commandQueries';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -61,7 +61,9 @@ export function useDraftStarters(): UseDraftStartersResult {
     const { t } = useI18n();
     const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
     const globalRaw = useUIStore((s) => s.globalDraftStarters);
-    const commands = useCommandsStore((s) => s.commands);
+    const commandsQuery = useCommandsQuery();
+    const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
+    const { refetch: refetchCommands } = commandsQuery;
     const skills = useSkillsStore((s) => s.skills);
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
     const projects = useProjectsStore((s) => s.projects);
@@ -91,14 +93,13 @@ export function useDraftStarters(): UseDraftStartersResult {
     }, [projectRef?.id]);
 
     const ensureLoaded = React.useCallback(() => {
-        void useCommandsStore.getState().loadCommands?.();
+        void refetchCommands();
         void useSkillsStore.getState().loadSkills?.();
-    }, []);
+    }, [refetchCommands]);
 
     // Preload commands and skills on mount so that pinned command/skill starters
     // resolve immediately without requiring the user to open the add dialog first.
-    // Both loaders are TTL-cached and in-flight-deduped, so this is a cheap no-op
-    // if they were already loaded.
+    // Both loaders coalesce matching in-flight requests, so this shares an active refresh.
     React.useEffect(() => {
         ensureLoaded();
     }, [ensureLoaded]);

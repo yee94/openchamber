@@ -2,7 +2,7 @@ import React from 'react';
 import { cn, fuzzyMatch } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionMessages } from '@/sync/sync-context';
-import { useCommandsStore } from '@/stores/useCommandsStore';
+import { useCommandsQuery } from '@/queries/commandQueries';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
@@ -86,8 +86,9 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const commandsWithMetadata = useCommandsStore((s) => s.commands);
-  const refreshCommands = useCommandsStore((s) => s.loadCommands);
+  const commandsQuery = useCommandsQuery();
+  const commandsWithMetadata = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
+  const isCommandsFetching = commandsQuery.isFetching;
   const skills = useSkillsStore((s) => s.skills);
   const refreshSkills = useSkillsStore((s) => s.loadSkills);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -119,14 +120,12 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   }, [onClose]);
 
   React.useEffect(() => {
-    // Force refresh to get latest project context when mounting
-    void refreshCommands();
     void refreshSkills();
-  }, [refreshCommands, refreshSkills]);
+  }, [refreshSkills]);
 
   React.useEffect(() => {
     const loadCommands = async () => {
-      setLoading(true);
+      setLoading(isCommandsFetching);
       try {
         const skillNames = new Set(skills.map((skill) => skill.name));
         const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
@@ -297,7 +296,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     };
 
     loadCommands();
-  }, [searchQuery, hasMessagesInCurrentSession, hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, skills, t]);
+  }, [searchQuery, hasMessagesInCurrentSession, hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, isCommandsFetching, skills, t]);
 
   React.useEffect(() => {
     setSelectedIndex(0);

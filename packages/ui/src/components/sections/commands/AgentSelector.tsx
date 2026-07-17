@@ -7,6 +7,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAgentsStore, filterVisibleAgents } from '@/stores/useAgentsStore';
+import { useAgentsQuery } from '@/queries/agentQueries';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -34,13 +35,13 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     const { t } = useI18n();
     const { isReady, isUnavailable } = useOpenCodeReadiness();
     const configAgents = useConfigStore((state) => state.agents);
-    const agentsStoreAgents = useAgentsStore((state) => state.agents);
     const loadAgentsStore = useAgentsStore((state) => state.loadAgents);
     const loadConfigAgents = useConfigStore((state) => state.loadAgents);
+    const { data: queriedAgents = [] } = useAgentsQuery();
     const rawAgents = React.useMemo(() => {
         if (Array.isArray(configAgents) && configAgents.length > 0) return configAgents;
-        return Array.isArray(agentsStoreAgents) ? agentsStoreAgents : [];
-    }, [configAgents, agentsStoreAgents]);
+        return queriedAgents;
+    }, [configAgents, queriedAgents]);
     const agents = React.useMemo(() => {
         const visible = filterVisibleAgents(rawAgents);
         return filter ? visible.filter(filter) : visible;

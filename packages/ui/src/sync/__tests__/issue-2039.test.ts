@@ -123,12 +123,8 @@ mock.module("@/stores/useSessionFoldersStore", () => ({
   },
 }))
 
-mock.module("@/stores/useCommandsStore", () => ({
-  useCommandsStore: {
-    getState: () => ({
-      commands: [],
-    }),
-  },
+mock.module("@/queries/commandQueries", () => ({
+  readCommandsSnapshot: () => [],
 }))
 
 mock.module("@/stores/useSkillsStore", () => ({

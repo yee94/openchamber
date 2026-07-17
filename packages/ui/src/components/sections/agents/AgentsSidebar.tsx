@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useAgentsStore, isAgentBuiltIn, isAgentHidden, type AgentScope, type AgentDraft } from '@/stores/useAgentsStore';
+import { useAgentsQuery } from '@/queries/agentQueries';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import type { Agent } from '@opencode-ai/sdk/v2';
@@ -112,7 +113,6 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
   const {
     selectedAgentName,
-    agents,
     setSelectedAgent,
     setAgentDraft,
     createAgent,
@@ -120,13 +120,13 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     loadAgents,
   } = useAgentsStore(useShallow((s) => ({
     selectedAgentName: s.selectedAgentName,
-    agents: s.agents,
     setSelectedAgent: s.setSelectedAgent,
     setAgentDraft: s.setAgentDraft,
     createAgent: s.createAgent,
     deleteAgent: s.deleteAgent,
     loadAgents: s.loadAgents,
-  })));
+  }))); 
+  const { data: agents = [] } = useAgentsQuery();
 
   React.useEffect(() => {
     loadAgents();

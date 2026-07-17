@@ -18,7 +18,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { useCommandsStore, isCommandBuiltIn, type Command } from '@/stores/useCommandsStore';
+import { isCommandBuiltIn, useCommandsStore } from '@/stores/useCommandsStore';
+import { useCommandsQuery, type Command } from '@/queries/commandQueries';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -42,28 +43,25 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
 
   const {
     selectedCommandName,
-    commands,
     setSelectedCommand,
     setCommandDraft,
     createCommand,
     deleteCommand,
-    loadCommands,
   } = useCommandsStore(useShallow((s) => ({
     selectedCommandName: s.selectedCommandName,
-    commands: s.commands,
     setSelectedCommand: s.setSelectedCommand,
     setCommandDraft: s.setCommandDraft,
     createCommand: s.createCommand,
     deleteCommand: s.deleteCommand,
-    loadCommands: s.loadCommands,
-  })));
+  }))); 
+  const commandsQuery = useCommandsQuery();
+  const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
   const skills = useSkillsStore((s) => s.skills);
   const loadSkills = useSkillsStore((s) => s.loadSkills);
 
   React.useEffect(() => {
-    loadCommands();
     loadSkills();
-  }, [loadCommands, loadSkills]);
+  }, [loadSkills]);
 
   const skillNames = React.useMemo(() => new Set(skills.map((skill) => skill.name)), [skills]);
   const commandOnlyItems = React.useMemo(
