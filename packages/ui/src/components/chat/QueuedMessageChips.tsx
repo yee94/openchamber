@@ -20,6 +20,7 @@ import { useInputStore } from '@/sync/input-store';
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useUIStore } from '@/stores/useUIStore';
 import { Icon } from "@/components/icon/Icon";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -30,11 +31,12 @@ type BoundQueueScope = Extract<QueueScope, { state: 'bound' }>;
 interface QueuedMessageChipProps {
     message: QueuedMessage;
     isQueueHead: boolean;
+    isMobile: boolean;
     onEdit: (message: QueuedMessage) => void;
     onSend: (message: QueuedMessage) => void;
 }
 
-const QueuedMessageChip = memo(({ message, isQueueHead, onEdit, onSend }: QueuedMessageChipProps) => {
+const QueuedMessageChip = memo(({ message, isQueueHead, isMobile, onEdit, onSend }: QueuedMessageChipProps) => {
     const { t } = useI18n();
     const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
     const status = message.status ?? 'queued';
@@ -75,7 +77,11 @@ const QueuedMessageChip = memo(({ message, isQueueHead, onEdit, onSend }: Queued
             ref={setNodeRef}
             // Translate only (no scaleX/scaleY) so the lifted row keeps its size.
             style={{ transform: CSS.Translate.toString(transform), transition }}
-            className={cn('flex min-w-0 items-center gap-1.5 py-0.5 md:gap-2 md:py-1', isDragging && 'z-10 opacity-60')}
+            className={cn(
+                'flex min-w-0 items-center gap-1.5',
+                isMobile ? 'py-0' : 'py-0.5 md:gap-2 md:py-1',
+                isDragging && 'z-10 opacity-60',
+            )}
         >
             <button
                 type="button"
@@ -141,6 +147,7 @@ const subscribeRuntimeTransport = (notify: () => void) => subscribeRuntimeEndpoi
 
 export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: QueuedMessageChipsProps) => {
     const { t } = useI18n();
+    const isMobile = useUIStore((state) => state.isMobile);
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const fallbackDirectory = useEffectiveDirectory();
     const currentSessionDirectory = useSessionUIStore(
@@ -235,9 +242,12 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
     }
 
     return (
-        <div className="w-full px-0.5 pb-1.5 md:px-1 md:pb-2">
+        <div className={cn('w-full px-0.5', isMobile ? 'pb-1 text-xs' : 'pb-1.5 md:px-1 md:pb-2')}>
             <div className="overflow-hidden rounded-lg border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm md:rounded-xl">
-                <div className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left md:gap-2 md:px-3 md:py-2">
+                <div className={cn(
+                    'flex w-full items-center gap-1.5 text-left',
+                    isMobile ? 'px-2 py-1' : 'px-2.5 py-1.5 md:gap-2 md:px-3 md:py-2',
+                )}>
                     <span className="flex-shrink-0 typography-micro font-medium leading-4 text-foreground md:typography-ui-label">
                         {t('chat.queuedMessage.title', { count: queuedMessages.length })}
                     </span>
@@ -252,12 +262,18 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                         items={queuedMessages.map((message) => message.queueItemID ?? message.id)}
                         strategy={verticalListSortingStrategy}
                     >
-                        <div className="flex max-h-[8rem] flex-col gap-1 overflow-y-auto px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3">
+                        <div className={cn(
+                            'flex flex-col gap-1 overflow-y-auto',
+                            isMobile
+                                ? 'max-h-[8rem] px-2 pb-1.5'
+                                : 'max-h-[8rem] px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3',
+                        )}>
                             {queuedMessages.map((message, index) => (
                                 <QueuedMessageChip
                                     key={message.queueItemID ?? message.id}
                                     message={message}
                                     isQueueHead={index === 0}
+                                    isMobile={isMobile}
                                     onEdit={handleEdit}
                                     onSend={handleSend}
                                 />

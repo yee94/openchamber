@@ -174,6 +174,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [copiedMessage, setCopiedMessage] = React.useState(false);
+    const [pendingMessageAction, setPendingMessageAction] = React.useState<'revert' | 'fork' | null>(null);
+    const pendingMessageActionRef = React.useRef<'revert' | 'fork' | null>(null);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(() => readExpandedToolsCache(message.info.id));
     const [collapsedTools, setCollapsedTools] = React.useState<Set<string>>(() => readCollapsedToolsCache(message.info.id));
     const [popupContent, setPopupContent] = React.useState<ToolPopupContent>({
@@ -729,18 +731,25 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return true;
     }, [isUser, messageTextContent]);
 
-    const handleRevert = React.useCallback(() => {
-        if (!sessionId || !message.info.id) return;
-        revertToMessage(sessionId, message.info.id);
+    const handleRevert = React.useCallback(async () => {
+        if (!sessionId || !message.info.id || pendingMessageActionRef.current) return;
+        pendingMessageActionRef.current = 'revert';
+        setPendingMessageAction('revert');
+        try {
+            await revertToMessage(sessionId, message.info.id);
+        } finally {
+            pendingMessageActionRef.current = null;
+            setPendingMessageAction(null);
+        }
     }, [sessionId, message.info.id, revertToMessage]);
 
     const handleEdit = React.useCallback(() => {
-        if (!sessionId || !message.info.id) return;
+        if (!sessionId || !message.info.id || pendingMessageActionRef.current) return;
         editMessagePreservingChanges(sessionId, message.info.id);
     }, [editMessagePreservingChanges, message.info.id, sessionId]);
 
     // NEW: Fork handler
-    const handleFork = React.useCallback(() => {
+    const handleFork = React.useCallback(async () => {
         console.info('[session-fork] message action clicked', {
             sessionId,
             messageId: message.info.id,
@@ -752,7 +761,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             });
             return;
         }
-        forkFromMessage(sessionId, message.info.id);
+        if (pendingMessageActionRef.current) return;
+        pendingMessageActionRef.current = 'fork';
+        setPendingMessageAction('fork');
+        try {
+            await forkFromMessage(sessionId, message.info.id);
+        } finally {
+            pendingMessageActionRef.current = null;
+            setPendingMessageAction(null);
+        }
     }, [sessionId, message.info.id, forkFromMessage]);
 
     const handleToggleTool = React.useCallback((toolId: string) => {
@@ -1032,6 +1049,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 onEdit={handleEdit}
                                                 onRevert={handleRevert}
                                                 onFork={isUser ? handleFork : undefined}
+                                                pendingMessageAction={pendingMessageAction}
                                                 errorMessage={assistantErrorText}
                                                 errorVariant={assistantErrorVariant}
                                                 userActionsMode={useExternalUserActionsRow ? 'external-content' : 'inline'}
@@ -1067,6 +1085,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 onEdit={handleEdit}
                                                 onRevert={handleRevert}
                                                 onFork={isUser ? handleFork : undefined}
+                                                pendingMessageAction={pendingMessageAction}
                                                 errorMessage={assistantErrorText}
                                                 errorVariant={assistantErrorVariant}
                                                 userActionsMode="external-actions"

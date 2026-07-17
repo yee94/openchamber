@@ -453,8 +453,9 @@ interface MessageBodyProps {
     agentMention?: AgentMentionInfo;
     turnGroupingContext?: TurnGroupingContext;
     onEdit?: () => void;
-    onRevert?: () => void;
-    onFork?: () => void;
+    onRevert?: () => Promise<void>;
+    onFork?: () => Promise<void>;
+    pendingMessageAction?: 'revert' | 'fork' | null;
     errorMessage?: string;
     errorVariant?: 'error' | 'info';
     userActionsMode?: 'inline' | 'external-content' | 'external-actions';
@@ -480,7 +481,7 @@ const writeRevealedToolIds = (messageId: string, value: Set<string>): void => {
     revealedToolIdsByMessage.set(messageId, new Set(value));
 };
 
-const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onEdit, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
+const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onEdit, onRevert, onFork, pendingMessageAction, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
     messageId: string;
     parts: Part[];
     messageCreatedAt?: number | null;
@@ -493,8 +494,9 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
     onShowPopup: (content: ToolPopupContent) => void;
     agentMention?: AgentMentionInfo;
     onEdit?: () => void;
-    onRevert?: () => void;
-    onFork?: () => void;
+    onRevert?: () => Promise<void>;
+    onFork?: () => Promise<void>;
+    pendingMessageAction?: 'revert' | 'fork' | null;
     userActionsMode?: 'inline' | 'external-content' | 'external-actions';
     stickyUserHeaderEnabled?: boolean;
 }) => {
@@ -630,13 +632,19 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
                                 size="icon"
                                 className={MESSAGE_ACTION_ICON_BUTTON_CLASS}
                                 aria-label={t('chat.messageBody.actions.revertAria')}
+                                aria-busy={pendingMessageAction === 'revert'}
+                                disabled={Boolean(pendingMessageAction)}
                                 onPointerDown={(event) => event.stopPropagation()}
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    onRevert();
+                                    void onRevert();
                                 }}
                             >
-                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="arrow-go-back" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon
+                                    weight={MESSAGE_ACTION_ICON_WEIGHT}
+                                    name={pendingMessageAction === 'revert' ? 'loader-4' : 'arrow-go-back'}
+                                    className={cn(MESSAGE_ACTION_ICON_CLASS, pendingMessageAction === 'revert' && 'animate-spin')}
+                                />
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.revert')}</TooltipContent>
@@ -651,6 +659,7 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
                                 size="icon"
                                 className={MESSAGE_ACTION_ICON_BUTTON_CLASS}
                                 aria-label={t('chat.messageBody.actions.editAria')}
+                                disabled={Boolean(pendingMessageAction)}
                                 onPointerDown={(event) => event.stopPropagation()}
                                 onClick={(event) => {
                                     event.stopPropagation();
@@ -672,13 +681,19 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
                                 size="icon"
                                 className={MESSAGE_ACTION_ICON_BUTTON_CLASS}
                                 aria-label={t('chat.messageBody.actions.forkAria')}
+                                aria-busy={pendingMessageAction === 'fork'}
+                                disabled={Boolean(pendingMessageAction)}
                                 onPointerDown={(event) => event.stopPropagation()}
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    effectiveOnFork();
+                                    void effectiveOnFork();
                                 }}
                             >
-                                <Icon weight={MESSAGE_ACTION_ICON_WEIGHT} name="git-branch" className={MESSAGE_ACTION_ICON_CLASS} />
+                                <Icon
+                                    weight={MESSAGE_ACTION_ICON_WEIGHT}
+                                    name={pendingMessageAction === 'fork' ? 'loader-4' : 'git-branch'}
+                                    className={cn(MESSAGE_ACTION_ICON_CLASS, pendingMessageAction === 'fork' && 'animate-spin')}
+                                />
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.fork')}</TooltipContent>
@@ -2165,6 +2180,7 @@ const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
                 onEdit={props.onEdit}
                 onRevert={props.onRevert}
                 onFork={props.onFork}
+                pendingMessageAction={props.pendingMessageAction}
                 userActionsMode={props.userActionsMode}
                 stickyUserHeaderEnabled={props.stickyUserHeaderEnabled}
             />

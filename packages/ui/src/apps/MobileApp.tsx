@@ -1907,7 +1907,7 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
         onClick={() => onOpenChange((currentOpen) => !currentOpen)}
         style={{ touchAction: 'manipulation' }}
       >
-        <Icon name="apps-2-ai" className="size-5" />
+        <ContextProgressIcon percentage={contextDisplay?.percentage ?? 0} />
       </button>
       <SessionMetadataOverlay
         open={open}

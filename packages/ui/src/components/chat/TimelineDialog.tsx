@@ -46,7 +46,8 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     const { isMobile, isTablet } = useDeviceInfo();
     const alwaysShowActions = isMobile || isTablet;
 
-    const [forkingMessageId, setForkingMessageId] = React.useState<string | null>(null);
+    const [pendingAction, setPendingAction] = React.useState<{ type: 'revert' | 'fork'; messageId: string } | null>(null);
+    const pendingActionRef = React.useRef(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [selectedIndex, setSelectedIndex] = React.useState(0);
     const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
@@ -209,15 +210,20 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
         }
     }, [filteredMessages, navigateToMessage, selectedIndex]);
 
-    // Handle fork with loading state and session refresh
-    const handleFork = async (messageId: string) => {
-        if (!currentSessionId) return;
-        setForkingMessageId(messageId);
+    const handleMessageAction = async (type: 'revert' | 'fork', messageId: string) => {
+        if (!currentSessionId || pendingActionRef.current) return;
+        pendingActionRef.current = true;
+        setPendingAction({ type, messageId });
         try {
-            await forkFromMessage(currentSessionId, messageId);
+            if (type === 'revert') {
+                await revertToMessage(currentSessionId, messageId);
+            } else {
+                await forkFromMessage(currentSessionId, messageId);
+            }
             onOpenChange(false);
         } finally {
-            setForkingMessageId(null);
+            pendingActionRef.current = false;
+            setPendingAction(null);
         }
     };
 
@@ -329,38 +335,47 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                                             <div className={cn("gap-1", alwaysShowActions ? "flex" : "hidden group-hover:flex")}>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <button
+                                                        <Button
                                                             type="button"
-                                                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                                                            onClick={async (e) => {
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-5 text-muted-foreground hover:text-foreground"
+                                                            aria-busy={pendingAction?.type === 'revert' && pendingAction.messageId === message.info.id}
+                                                            disabled={pendingAction !== null}
+                                                            onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                await revertToMessage(currentSessionId, message.info.id);
-                                                                onOpenChange(false);
+                                                                void handleMessageAction('revert', message.info.id);
                                                             }}
                                                         >
-                                                            <Icon name="arrow-go-back" className="h-4 w-4" />
-                                                        </button>
+                                                            <Icon
+                                                                name={pendingAction?.type === 'revert' && pendingAction.messageId === message.info.id ? 'loader-4' : 'arrow-go-back'}
+                                                                className={cn('h-4 w-4', pendingAction?.type === 'revert' && pendingAction.messageId === message.info.id && 'animate-spin')}
+                                                            />
+                                                        </Button>
                                                     </TooltipTrigger>
                                                     <TooltipContent sideOffset={6}>{t('chat.timeline.actions.revertFromHere')}</TooltipContent>
                                                 </Tooltip>
 
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <button
+                                                        <Button
                                                             type="button"
-                                                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-5 text-muted-foreground hover:text-foreground"
+                                                            aria-busy={pendingAction?.type === 'fork' && pendingAction.messageId === message.info.id}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                handleFork(message.info.id);
+                                                                void handleMessageAction('fork', message.info.id);
                                                             }}
-                                                            disabled={forkingMessageId === message.info.id}
+                                                            disabled={pendingAction !== null}
                                                         >
-                                                            {forkingMessageId === message.info.id ? (
+                                                            {pendingAction?.type === 'fork' && pendingAction.messageId === message.info.id ? (
                                                                 <Icon name="loader-4" className="h-4 w-4 animate-spin" />
                                                             ) : (
                                                                 <Icon name="git-branch" className="h-4 w-4" />
                                                             )}
-                                                        </button>
+                                                        </Button>
                                                     </TooltipTrigger>
                                                     <TooltipContent sideOffset={6}>{t('chat.timeline.actions.forkFromHere')}</TooltipContent>
                                                 </Tooltip>

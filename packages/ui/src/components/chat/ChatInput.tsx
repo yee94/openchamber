@@ -332,6 +332,7 @@ type RevertedMessageDockProps = {
 
 const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ sessionId, directory }) => {
     const { t } = useI18n();
+    const isMobile = useUIStore((state) => state.isMobile);
     const revertToMessage = useSessionUIStore((s) => s.revertToMessage);
     const forkFromMessage = useSessionUIStore((s) => s.forkFromMessage);
     const handleSlashRedo = useSessionUIStore((s) => s.handleSlashRedo);
@@ -394,11 +395,17 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
     if (!sessionId || items.length === 0) return null;
 
     return (
-        <div className="pb-2 w-full px-1">
-            <div className="rounded-xl border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm overflow-hidden">
+        <div className={cn('w-full px-1', isMobile ? 'pb-1 text-xs' : 'pb-2')}>
+            <div className={cn(
+                'border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm overflow-hidden',
+                isMobile ? 'rounded-lg' : 'rounded-xl',
+            )}>
                 <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--interactive-hover)] transition-colors"
+                    className={cn(
+                        'flex w-full items-center text-left hover:bg-[var(--interactive-hover)] transition-colors',
+                        isMobile ? 'gap-1.5 px-2 py-1' : 'gap-2 px-3 py-2',
+                    )}
                     onClick={() => setCollapsed((value) => !value)}
                     aria-expanded={!collapsed}
                 >
@@ -407,14 +414,17 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
                     </span>
                     <Icon
                         name="arrow-down-s"
-                        className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", !collapsed && "rotate-180")}
+                        className={cn("ml-auto text-muted-foreground transition-transform", isMobile ? 'size-3.5' : 'size-4', !collapsed && "rotate-180")}
                         aria-hidden="true"
                     />
                 </button>
                 {!collapsed && (
-                    <div className="px-3 pb-3 flex flex-col gap-1.5 max-h-[10.5rem] overflow-y-auto">
+                    <div className={cn(
+                        'flex flex-col overflow-y-auto',
+                        isMobile ? 'max-h-[8rem] gap-1 px-2 pb-1.5' : 'max-h-[10.5rem] gap-1.5 px-3 pb-3',
+                    )}>
                         {items.map((item) => (
-                            <div key={item.id} className="flex min-w-0 items-center gap-2 py-1">
+                            <div key={item.id} className={cn('flex min-w-0 items-center', isMobile ? 'gap-1.5' : 'gap-2 py-1')}>
                                 <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">
                                     {item.text}
                                 </span>

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.22] - 2026-07-17
+
+- **Mobile composer:** tighten queued, reverted, and auto-review controls with smaller typography and denser spacing while preserving touch targets.
+- **Mobile context:** replace the session metadata app icon with a live context-usage progress ring while preserving the existing metadata panel interaction.
+- **Message actions:** show pending feedback and prevent duplicate revert or fork actions in message controls and the timeline.
+
 ## [1.16.21] - 2026-07-16
 
 - **Sessions:** add undoable archive and delete actions with a recovery window, plus archived-session browsing and restore controls.

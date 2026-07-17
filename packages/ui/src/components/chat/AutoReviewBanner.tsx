@@ -8,6 +8,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { cn } from '@/lib/utils';
 
 export const AutoReviewBanner = memo(() => {
   const { t } = useI18n();
@@ -19,6 +20,7 @@ export const AutoReviewBanner = memo(() => {
   }, [currentSessionId]));
   const stopRun = useAutoReviewStore((state) => state.stopRun);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
+  const isMobile = useUIStore((state) => state.isMobile);
 
   if (!currentSessionId || !run || run.status !== 'running') {
     return null;
@@ -38,10 +40,16 @@ export const AutoReviewBanner = memo(() => {
   };
 
   return (
-    <div className="pb-2 w-full px-1">
-      <div className="rounded-xl border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm overflow-hidden">
-        <div className="flex w-full items-center gap-2 px-3 py-2 text-left">
-          <Icon name="loader-4" className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+    <div className={cn('w-full px-1', isMobile ? 'pb-1 text-xs' : 'pb-2')}>
+      <div className={cn(
+        'border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm overflow-hidden',
+        isMobile ? 'rounded-lg' : 'rounded-xl',
+      )}>
+        <div className={cn(
+          'flex w-full items-center text-left',
+          isMobile ? 'gap-1.5 px-2 py-1' : 'gap-2 px-3 py-2',
+        )}>
+          <Icon name="loader-4" className={cn('animate-spin text-muted-foreground', isMobile ? 'size-3.5' : 'size-4')} aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <span className="typography-ui-label font-medium text-foreground">
               {t('chat.autoReview.title')}
