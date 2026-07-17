@@ -24,7 +24,27 @@ export const queryKeys = {
   agents: {
     list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'agents', string | null] => [transport, 'agents', directory],
   },
+  plugins: {
+    list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'plugins', 'list', string | null] => [transport, 'plugins', 'list', directory],
+    registry: (
+      directory: string | null,
+      specs: readonly string[],
+      force = false,
+      transport = getRuntimeTransportIdentity(),
+    ): readonly [string, 'plugins', 'registry', string | null, readonly string[], boolean] => [
+      transport,
+      'plugins',
+      'registry',
+      directory,
+      normalizePluginRegistrySpecs(specs),
+      force,
+    ],
+    file: (directory: string | null, id: string, transport = getRuntimeTransportIdentity()): readonly [string, 'plugins', 'file', string | null, string] => [transport, 'plugins', 'file', directory, id],
+  },
 };
+
+export const normalizePluginRegistrySpecs = (specs: readonly string[]): string[] =>
+  Array.from(new Set(specs.map((spec) => spec.trim()).filter(Boolean))).sort();
 
 export const fetchQuotaProvider = async (
   providerId: QuotaProviderId,
