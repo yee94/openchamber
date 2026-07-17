@@ -1,5 +1,4 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import type { GitRemote } from '@/lib/gitApi';
@@ -51,13 +50,11 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="xs"
           onClick={handleSync}
           disabled={isPrimaryDisabled}
-          className="size-6 px-0 text-muted-foreground hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={t('gitView.sync.syncChanges')}
         >
           {syncAction === 'sync' ? (
@@ -65,7 +62,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
           ) : (
             <Icon name="refresh" className="size-3.5" />
           )}
-        </Button>
+        </button>
       </TooltipTrigger>
       <TooltipContent sideOffset={8}>{tooltipLabel}</TooltipContent>
     </Tooltip>

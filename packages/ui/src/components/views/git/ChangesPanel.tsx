@@ -44,12 +44,6 @@ export interface ChangesGroupConfig {
   accent?: boolean;
 }
 
-export type ChangesDirectoryToolbarState = {
-  hasDirectories: boolean;
-  allDirectoriesExpanded: boolean;
-  toggleExpandAllDirectories: () => void;
-};
-
 interface ChangesPanelProps {
   groups: ChangesGroupConfig[];
   diffStats: Record<string, { insertions: number; deletions: number }> | undefined;
@@ -60,8 +54,11 @@ interface ChangesPanelProps {
   /** Reverts every changed path across all groups; rendered once for the panel. */
   onRevertAll?: (paths: string[]) => Promise<void> | void;
   onRevertDirectory?: (paths: string[]) => Promise<void> | void;
-  /** Publishes tree expand/collapse controls for an external toolbar (e.g. GitHeader). */
-  onDirectoryToolbarChange?: (state: ChangesDirectoryToolbarState | null) => void;
+  /**
+   * Extra trailing toolbar icons (branch / sync / repo) rendered only on the first
+   * sticky group header, before the stage/unstage-all action.
+   */
+  headerActions?: React.ReactNode;
 }
 
 const CHANGE_LIST_VIRTUALIZE_THRESHOLD = 1000;
@@ -69,14 +66,17 @@ const CHANGE_ROW_ESTIMATE_PX = 34;
 const VISIBLE_PREFETCH_LIMIT = 30;
 
 const ROW_PADDING_CLASSNAME = 'pl-0 pr-2';
-/** Fixed trailing control width so header / directory / file actions share one vertical grid. */
-const TRAILING_SLOT_CLASSNAME = 'flex size-6 shrink-0 items-center justify-center';
+/**
+ * Equal-width trailing icon track.
+ * Every child occupies exactly 1.5rem so header / directory / file columns share one grid.
+ */
+const TRAILING_RAIL_CLASSNAME = 'ml-auto grid shrink-0 grid-flow-col auto-cols-[1.5rem] items-center justify-end';
 const TRAILING_COUNT_CLASSNAME =
-  'flex size-6 shrink-0 items-center justify-end tabular-nums typography-code text-muted-foreground';
+  'flex size-6 items-center justify-center tabular-nums typography-code text-muted-foreground';
 const TRAILING_ACTION_CLASSNAME =
-  'flex size-6 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex size-6 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50';
 const TRAILING_ICON_BUTTON_CLASSNAME =
-  'flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50';
 
 type PanelRow =
   | { type: 'header'; key: string; groupIndex: number }
@@ -101,15 +101,17 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   onVisiblePathsChange,
   onRevertAll,
   onRevertDirectory,
-  onDirectoryToolbarChange,
+  headerActions,
 }) => {
   const { t } = useI18n();
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
+  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
   const isTreeView = gitChangesViewMode === 'tree';
 
   const visibleGroups = React.useMemo(() => groups.filter((group) => group.entries.length > 0), [groups]);
 
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const [expandedDirectories, setExpandedDirectories] = React.useState<Set<string>>(new Set());
   const [revertAllOpen, setRevertAllOpen] = React.useState(false);
   const [pendingDirectoryRevert, setPendingDirectoryRevert] = React.useState<PendingDirectoryRevert | null>(null);
@@ -162,6 +164,10 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     visibleGroups.forEach((group, groupIndex) => {
       result.push({ type: 'header', key: `header:${group.id}`, groupIndex });
 
+      if (collapsedGroups.has(group.id)) {
+        return;
+      }
+
       if (isTreeView) {
         const expandedForGroup = new Set<string>();
         expandedDirectories.forEach((key) => {
@@ -210,9 +216,16 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     }
 
     return result;
-  }, [expandedDirectories, isTreeView, onRevertAll, trees, visibleGroups]);
+  }, [collapsedGroups, expandedDirectories, isTreeView, onRevertAll, trees, visibleGroups]);
 
-  const rowCount = rows.length;
+  // Pin the first group header outside the scroll container so it truly sticks.
+  const pinnedGroup = visibleGroups[0] ?? null;
+  const scrollRows = React.useMemo(() => {
+    if (!pinnedGroup) return rows;
+    return rows.filter((row) => !(row.type === 'header' && row.groupIndex === 0));
+  }, [pinnedGroup, rows]);
+
+  const rowCount = scrollRows.length;
   const shouldVirtualize = rowCount >= CHANGE_LIST_VIRTUALIZE_THRESHOLD;
   const rowVirtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rowCount,
@@ -220,7 +233,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => CHANGE_ROW_ESTIMATE_PX,
     overscan: 12,
-    getItemKey: (index) => rows[index]?.key ?? index,
+    getItemKey: (index) => scrollRows[index]?.key ?? index,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   // First VISIBLE row index drives the visible-path prefetch window (the
@@ -250,7 +263,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
 
     if (!shouldVirtualize) {
       const paths: string[] = [];
-      for (const row of rows) {
+      for (const row of scrollRows) {
         if (row.type === 'file') {
           paths.push(row.file.path);
           if (paths.length >= VISIBLE_PREFETCH_LIMIT) break;
@@ -261,7 +274,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
     }
 
     onVisiblePathsChange(
-      rows
+      scrollRows
         .slice(
           visibleStartIndex,
           visibleStartIndex + Math.ceil((scrollRef.current?.clientHeight ?? 0) / CHANGE_ROW_ESTIMATE_PX) + VISIBLE_PREFETCH_LIMIT
@@ -270,7 +283,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
         .filter((value): value is string => Boolean(value))
         .slice(0, VISIBLE_PREFETCH_LIMIT)
     );
-  }, [onVisiblePathsChange, rowCount, rows, shouldVirtualize, visibleStartIndex]);
+  }, [onVisiblePathsChange, rowCount, scrollRows, shouldVirtualize, visibleStartIndex]);
 
   const toggleGroupCollapsed = React.useCallback((groupId: string) => {
     setCollapsedGroups((previous) => {
@@ -344,7 +357,8 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   }, [isPendingDirectoryReverting, onRevertDirectory, pendingDirectoryRevert]);
 
   const renderHeader = React.useCallback(
-    (group: ChangesGroupConfig, isFirst: boolean) => {
+    (group: ChangesGroupConfig, options: { pinned?: boolean; showToolbar?: boolean } = {}) => {
+      const { pinned = false, showToolbar = false } = options;
       const collapsed = collapsedGroups.has(group.id);
       const count = group.entries.length;
       const groupDirectoryKeys = directoryKeysByGroup.get(group.id) ?? [];
@@ -359,10 +373,12 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       return (
         <div
           className={cn(
-            'sticky top-0 z-10 flex h-8 items-center gap-0.5',
+            'flex h-8 items-center gap-0',
+            pinned ? 'shrink-0' : 'sticky top-0 z-10',
             headerBackgroundClassName,
             ROW_PADDING_CLASSNAME,
-            !isFirst && 'mt-1 border-t border-border/40'
+            // Section headers always keep vertical breathing room from content above.
+            !pinned && 'mt-3'
           )}
         >
           <button
@@ -381,7 +397,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
               )}
             />
           </button>
-          <div className="ml-auto flex shrink-0 items-center">
+          <div className={TRAILING_RAIL_CLASSNAME}>
             {isTreeView ? (
               <button
                 type="button"
@@ -398,9 +414,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
               >
                 <Icon name="expand-up-down" className="size-3.5" />
               </button>
-            ) : (
-              <span className={TRAILING_SLOT_CLASSNAME} aria-hidden />
-            )}
+            ) : null}
             <button
               type="button"
               onClick={() => setGitChangesViewMode(isTreeView ? 'flat' : 'tree')}
@@ -411,6 +425,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
             >
               <Icon name={isTreeView ? 'node-tree' : 'list-unordered'} className="size-3.5" />
             </button>
+            {showToolbar ? headerActions : null}
             <button
               type="button"
               onClick={() => group.onActionAll(group.entries.map((entry) => entry.path))}
@@ -424,7 +439,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
         </div>
       );
     },
-    [collapseAllDirectories, collapsedGroups, directoryKeysByGroup, expandAllDirectories, expandedDirectories, headerBackgroundClassName, isTreeView, setGitChangesViewMode, t, toggleGroupCollapsed]
+    [collapseAllDirectories, collapsedGroups, directoryKeysByGroup, expandAllDirectories, expandedDirectories, headerActions, headerBackgroundClassName, isTreeView, setGitChangesViewMode, t, toggleGroupCollapsed]
   );
 
   const renderDirectory = React.useCallback(
@@ -435,7 +450,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       const showRevert = group.showRevertActions !== false && !!onRevertDirectory;
       return (
         <div
-          className={cn('group flex h-8 items-center gap-1.5', ROW_PADDING_CLASSNAME)}
+          className={cn('group flex h-8 items-center', ROW_PADDING_CLASSNAME)}
           style={{ paddingLeft: `${depth * TREE_INDENT_PX}px` }}
         >
           <button
@@ -457,13 +472,9 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
               {directory.name}
             </span>
           </button>
-          <div className="ml-auto flex shrink-0 items-center">
-            {/* Keep 3 trailing slots: count | secondary | action — aligned with header tools. */}
-            {showRevert ? (
-              <span className={TRAILING_COUNT_CLASSNAME}>{directory.files.length}</span>
-            ) : (
-              <span className={TRAILING_SLOT_CLASSNAME} aria-hidden />
-            )}
+          {/* count | revert? | action — equal 1.5rem slots, right-aligned; no empty gap when revert is hidden */}
+          <div className={TRAILING_RAIL_CLASSNAME}>
+            <span className={TRAILING_COUNT_CLASSNAME}>{directory.files.length}</span>
             {showRevert ? (
               <button
                 type="button"
@@ -479,9 +490,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
                   <Icon name="arrow-go-back" className="size-3.5" />
                 )}
               </button>
-            ) : (
-              <span className={TRAILING_COUNT_CLASSNAME}>{directory.files.length}</span>
-            )}
+            ) : null}
             <button
               type="button"
               onClick={() => group.onActionAll(directory.files.map((file) => file.path))}
@@ -505,7 +514,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   );
 
   const renderRow = React.useCallback(
-    (row: PanelRow, isFirstRow: boolean) => {
+    (row: PanelRow) => {
       if (row.type === 'revert-all') {
         return (
           <div className={cn('flex justify-end py-2', ROW_PADDING_CLASSNAME)}>
@@ -527,7 +536,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       if (!group) return null;
 
       if (row.type === 'header') {
-        return renderHeader(group, isFirstRow);
+        return renderHeader(group, { showToolbar: false });
       }
 
       if (row.type === 'directory') {
@@ -559,19 +568,24 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   // it belongs to the same group (so headers never get a spurious top border).
   const showDivider = React.useCallback(
     (index: number): boolean => {
-      const row = rows[index];
-      const previous = rows[index - 1];
+      const row = scrollRows[index];
+      const previous = scrollRows[index - 1];
       if (!row || !previous) return false;
       if (row.type !== 'file' && row.type !== 'directory') return false;
       if (previous.type !== 'file' && previous.type !== 'directory') return false;
       return previous.groupIndex === row.groupIndex;
     },
-    [rows]
+    [scrollRows]
   );
 
   return (
     <>
       <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+        {pinnedGroup ? (
+          <div className={cn('shrink-0', headerBackgroundClassName)}>
+            {renderHeader(pinnedGroup, { pinned: true, showToolbar: true })}
+          </div>
+        ) : null}
         <ScrollShadow
           ref={scrollRef}
           className="overlay-scrollbar-target overlay-scrollbar-container min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto"
@@ -581,7 +595,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
               {/* Absolutely positioned rows: variable-height rows can drift from
                   the computed total height under flow stacking until measured. */}
               {virtualRows.map((item) => {
-                const row = rows[item.index];
+                const row = scrollRows[item.index];
                 if (!row) return null;
                 return (
                   <div
@@ -600,14 +614,14 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
                         'before:pointer-events-none before:absolute before:left-0 before:right-2 before:top-0 before:border-t before:border-border/60'
                     )}
                   >
-                    {renderRow(row, item.index === 0)}
+                    {renderRow(row)}
                   </div>
                 );
               })}
             </div>
           ) : (
             <div role="list" aria-label={t('gitView.changes.changedFilesAria')}>
-              {rows.map((row, index) => (
+              {scrollRows.map((row, index) => (
                 <div
                   key={row.key}
                   className={cn(
@@ -616,7 +630,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
                       'before:pointer-events-none before:absolute before:left-0 before:right-2 before:top-0 before:border-t before:border-border/60'
                   )}
                 >
-                  {renderRow(row, index === 0)}
+                  {renderRow(row)}
                 </div>
               ))}
             </div>

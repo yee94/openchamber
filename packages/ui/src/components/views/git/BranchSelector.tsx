@@ -33,6 +33,8 @@ interface BranchSelectorProps {
   onCreate: (name: string, remote?: GitRemote) => Promise<void>;
   remotes?: GitRemote[];
   disabled?: boolean;
+  /** Icon-only trigger; branch name shown in tooltip. */
+  iconOnly?: boolean;
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
@@ -57,6 +59,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   onCreate,
   remotes = [],
   disabled = false,
+  iconOnly = false,
 }) => {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = React.useState(false);
@@ -159,31 +162,45 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     }
   }, [isOpen]);
 
+  const branchLabel = currentBranch || t('gitView.branch.detachedHead');
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-6 min-w-0 max-w-full justify-start gap-1 px-0 hover:bg-transparent"
-              disabled={disabled}
-            >
-              <Icon name="git-branch" className="size-3.5 text-primary" />
-              <span className="min-w-0 truncate typography-ui-label font-semibold text-left text-foreground">
-                {currentBranch || t('gitView.branch.detachedHead')}
-              </span>
-              <Icon name="arrow-down-s" className="size-3 shrink-0 text-muted-foreground" />
-            </Button>
+            {iconOnly ? (
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={disabled}
+                aria-label={branchLabel}
+              >
+                <Icon name="git-branch" className="size-3.5" />
+              </button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="h-6 min-w-0 max-w-full justify-start gap-1 px-0 hover:bg-transparent"
+                disabled={disabled}
+                aria-label={branchLabel}
+              >
+                <Icon name="git-branch" className="size-3.5 text-primary" />
+                <span className="min-w-0 truncate typography-ui-label font-semibold text-left text-foreground">
+                  {branchLabel}
+                </span>
+                <Icon name="arrow-down-s" className="size-3 shrink-0 text-muted-foreground" />
+              </Button>
+            )}
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent sideOffset={8}>
-          {t('gitView.branch.currentBranchTooltip')}
+          {iconOnly ? branchLabel : t('gitView.branch.currentBranchTooltip')}
         </TooltipContent>
       </Tooltip>
 
-      <DropdownMenuContent align="start" className="w-72 p-0 max-h-[60vh] flex flex-col">
+      <DropdownMenuContent align={iconOnly ? 'end' : 'start'} className="w-72 p-0 max-h-[60vh] flex flex-col">
         <Command className="h-full min-h-0">
           <CommandInput
             placeholder={t('gitView.branch.searchPlaceholder')}

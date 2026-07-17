@@ -74,19 +74,6 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
           isMobile={isMobile}
         />
 
-        {gitmojiEnabled && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenGitmojiPicker}
-            className="w-fit"
-            type="button"
-          >
-            <Icon name="emotion-happy" className="size-4" />
-            {t('gitView.commit.addGitmoji')}
-          </Button>
-        )}
-
         <div className="@container/commit-actions flex items-center gap-2 min-w-0">
           <Button
             variant="outline"
@@ -109,6 +96,24 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             )}
             <span className="commit-actions__label">{t('gitView.commit.generate')}</span>
           </Button>
+
+          {gitmojiEnabled ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onOpenGitmojiPicker}
+                  aria-label={t('gitView.commit.addGitmoji')}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Icon name="emotion-happy" className="size-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>{t('gitView.commit.addGitmoji')}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
 
           <div className="flex-1" />
 

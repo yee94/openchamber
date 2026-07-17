@@ -108,7 +108,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
     <button
       type="button"
       onClick={handleActionClick}
-      className="flex size-6 shrink-0 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+      className="flex size-6 items-center justify-center rounded typography-code font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
       aria-label={actionLabel}
       title={actionLabel}
     >
@@ -118,7 +118,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
 
   return (
     <div
-      className={`group flex h-8 items-center gap-1.5 cursor-pointer ${rowPaddingClassName ?? 'px-3'}`}
+      className={`group flex h-8 items-center cursor-pointer ${rowPaddingClassName ?? 'px-3'}`}
       role="button"
       tabIndex={0}
       onClick={onViewDiff}
@@ -126,70 +126,74 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
       style={indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined}
     >
         {actionAtStart ? actionButton : null}
-        <span
-          className="typography-code font-semibold w-3.5 text-center uppercase"
-          style={{ color: descriptor.color }}
-          title={indicatorLabel}
-          aria-label={indicatorLabel}
-        >
-          {descriptor.code}
-        </span>
-        <FileTypeIcon filePath={file.path} className="size-3 shrink-0" />
-        {(() => {
-          const lastSlash = file.path.lastIndexOf('/');
-          if (lastSlash === -1) {
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span
+            className="typography-code font-semibold w-3.5 shrink-0 text-center uppercase"
+            style={{ color: descriptor.color }}
+            title={indicatorLabel}
+            aria-label={indicatorLabel}
+          >
+            {descriptor.code}
+          </span>
+          <FileTypeIcon filePath={file.path} className="size-3 shrink-0" />
+          {(() => {
+            const lastSlash = file.path.lastIndexOf('/');
+            if (lastSlash === -1) {
+              return (
+                <span
+                  className="min-w-0 flex-1 truncate typography-code text-foreground"
+                  style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
+                  title={file.path}
+                >
+                  {file.path}
+                </span>
+              );
+            }
+            const dir = file.path.slice(0, lastSlash);
+            const name = file.path.slice(lastSlash);
             return (
-              <span
-                className="flex-1 min-w-0 truncate typography-code text-foreground"
-                style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-                title={file.path}
-              >
-                {file.path}
+              <span className="flex min-w-0 flex-1 items-baseline overflow-hidden" title={file.path}>
+                <span
+                  className="min-w-0 truncate typography-code text-muted-foreground"
+                  style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
+                >
+                  {dir}
+                </span>
+                <span className="flex-shrink-0 typography-code"><span className="text-muted-foreground">/</span><span className="text-foreground">{name.slice(1)}</span></span>
               </span>
             );
-          }
-          const dir = file.path.slice(0, lastSlash);
-          const name = file.path.slice(lastSlash);
-          return (
-            <span className="flex-1 min-w-0 flex items-baseline overflow-hidden" title={file.path}>
-              <span
-                className="min-w-0 truncate typography-code text-muted-foreground"
-                  style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-              >
-                {dir}
-              </span>
-              <span className="flex-shrink-0 typography-code"><span className="text-muted-foreground">/</span><span className="text-foreground">{name.slice(1)}</span></span>
-            </span>
-          );
-        })()}
-        <span className="ml-auto shrink-0 typography-code">
-          <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>
-          <span className="text-muted-foreground mx-0.5">/</span>
-          <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>
-        </span>
-        {showRevert ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleRevertClick}
-                disabled={isReverting}
-                className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label={t('gitView.changes.revertFileAria', { path: file.path })}
-              >
-                {isReverting ? (
-                  <Icon name="loader-4" className="size-3.5 animate-spin" />
-                ) : (
-                  <Icon name="arrow-go-back" className="size-3.5" />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent sideOffset={8}>{t('gitView.changes.revertFileTooltip')}</TooltipContent>
-          </Tooltip>
-        ) : (
-          actionAtStart ? null : <span className="size-6 shrink-0" aria-hidden />
+          })()}
+          <span className="shrink-0 typography-code tabular-nums">
+            <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>
+            <span className="text-muted-foreground mx-0.5">/</span>
+            <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>
+          </span>
+        </div>
+        {actionAtStart ? null : (
+          <div className="ml-auto grid shrink-0 grid-flow-col auto-cols-[1.5rem] items-center justify-end">
+            {showRevert ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleRevertClick}
+                    disabled={isReverting}
+                    className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={t('gitView.changes.revertFileAria', { path: file.path })}
+                  >
+                    {isReverting ? (
+                      <Icon name="loader-4" className="size-3.5 animate-spin" />
+                    ) : (
+                      <Icon name="arrow-go-back" className="size-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={8}>{t('gitView.changes.revertFileTooltip')}</TooltipContent>
+              </Tooltip>
+            ) : null}
+            {actionButton}
+          </div>
         )}
-        {actionAtStart ? null : actionButton}
     </div>
   );
 });

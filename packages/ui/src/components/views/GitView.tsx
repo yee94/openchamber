@@ -42,7 +42,16 @@ import { useDetectedWorktreeMetadata } from '@/hooks/useDetectedWorktreeRoot';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { getSessionWorktreeRepairActions, getMutationBlockingReasons } from '@/sync/session-worktree-contract';
 
-import { GitHeader } from './git/GitHeader';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { BranchSelector } from './git/BranchSelector';
+import { WorktreeBranchDisplay } from './git/WorktreeBranchDisplay';
+import { SyncActions } from './git/SyncActions';
 import { StashesDialog } from './git/StashesDialog';
 import { ChangesPanel, type ChangesGroupConfig } from './git/ChangesPanel';
 import { CommitSection } from './git/CommitSection';
@@ -1816,25 +1825,71 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     );
   }
 
+  const gitHeaderActions = status ? (
+    <>
+      {worktreeMetadata ? (
+        <WorktreeBranchDisplay
+          currentBranch={status.current}
+          onRename={handleRenameBranch}
+          iconOnly
+        />
+      ) : (
+        <BranchSelector
+          currentBranch={status.current}
+          localBranches={localBranches}
+          remoteBranches={remoteBranches}
+          branchInfo={branches?.branches}
+          onCheckout={handleCheckoutBranch}
+          onCreate={handleCreateBranch}
+          remotes={effectiveRemotes}
+          iconOnly
+        />
+      )}
+      <SyncActions
+        syncAction={syncAction}
+        remotes={effectiveRemotes}
+        onSync={(remote) => handleSyncAction('sync', remote)}
+        disabled={!status}
+        aheadCount={status.ahead}
+        behindCount={status.behind}
+        trackingRemoteName={status.tracking?.split('/')[0]}
+        hasUncommittedChanges={(status.files?.length ?? 0) > 0}
+      />
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+                aria-label={t('gitView.header.repositoryViews')}
+              >
+                <Icon name="git-repository" className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={8}>{t('gitView.header.repositoryViews')}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setGitLogDialogMode('history')}>
+            <Icon name="history" className="size-4" />
+            {t('gitView.history.title')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setGitLogDialogMode('graph')}>
+            <Icon name="git-merge" className="size-4" />
+            {t('gitView.graph.title')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={openStashes}>
+            <Icon name="archive-stack" className="size-4" />
+            {t('gitView.stashes.title')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  ) : null;
+
   return (
     <div className={cn('flex h-full flex-col overflow-hidden')}>
-          <GitHeader
-            status={status}
-            localBranches={localBranches}
-            remoteBranches={remoteBranches}
-            branchInfo={branches?.branches}
-            syncAction={syncAction}
-            remotes={effectiveRemotes}
-            onSync={(remote) => handleSyncAction('sync', remote)}
-            onCheckoutBranch={handleCheckoutBranch}
-            onCreateBranch={handleCreateBranch}
-            onRenameBranch={handleRenameBranch}
-            isWorktreeMode={!!worktreeMetadata}
-            onOpenHistory={() => setGitLogDialogMode('history')}
-            onOpenGraph={() => setGitLogDialogMode('graph')}
-            onOpenStashes={openStashes}
-          />
-
       {/* In-progress operation banner */}
       {currentDirectory && (
         (status?.mergeInProgress?.head) ||
@@ -1858,7 +1913,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
               as={ScrollShadow}
               ref={actionPanelScrollRef}
               outerClassName="flex-1 min-h-0"
-              className={cn('px-4', 'pt-0 pb-4')}
+              className={cn('px-4', 'pt-2 pb-4')}
               disableHorizontal
               preventOverscroll
             >
@@ -1875,6 +1930,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
                         onRevertAll={handleRevertAll}
                         onRevertDirectory={handleRevertDirectory}
                         headerBackgroundClassName="bg-background"
+                        headerActions={gitHeaderActions}
                       />
                     </div>
 
@@ -1895,7 +1951,17 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
                     />
                   </>
                 ) : (
-                  <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
+                  <>
+                    <div className="mb-1 flex h-8 shrink-0 items-center bg-background pr-2">
+                      <span className="min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
+                        {t('gitView.empty.cleanTitle')}
+                      </span>
+                      <div className="ml-auto grid shrink-0 grid-flow-col auto-cols-[1.5rem] items-center justify-end">
+                        {gitHeaderActions}
+                      </div>
+                    </div>
+                    <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
+                  </>
                 )}
               </div>
             </ScrollableOverlay>

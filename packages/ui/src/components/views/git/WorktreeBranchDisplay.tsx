@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 
@@ -7,6 +8,8 @@ interface WorktreeBranchDisplayProps {
   currentBranch: string | null | undefined;
   onRename?: (oldName: string, newName: string) => Promise<void>;
   showEditButton?: boolean;
+  /** Icon-only trigger; branch name shown in tooltip. */
+  iconOnly?: boolean;
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
@@ -26,6 +29,7 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
   currentBranch,
   onRename,
   showEditButton = true,
+  iconOnly = false,
 }) => {
   const { t } = useI18n();
   const [isEditing, setIsEditing] = React.useState(false);
@@ -124,12 +128,33 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
     );
   }
 
+  const branchLabel = currentBranch || t('gitView.branch.detachedHead');
+
+  if (iconOnly) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleStartEdit}
+            disabled={!currentBranch || !onRename}
+            aria-label={branchLabel}
+          >
+            <Icon name="git-branch" className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent sideOffset={8}>{branchLabel}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <div className="flex h-6 w-full min-w-0 items-center gap-1 px-0">
       <Icon name="git-branch" className="size-3.5 text-primary shrink-0" />
       <div className="inline-flex min-w-0 max-w-full items-center gap-1">
         <span className="truncate typography-ui-label font-semibold text-foreground">
-          {currentBranch || t('gitView.branch.detachedHead')}
+          {branchLabel}
         </span>
         {showEditButton && onRename && currentBranch && (
           <Button
