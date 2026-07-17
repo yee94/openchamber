@@ -9,6 +9,7 @@ import {
     isInlineAttachmentCitation,
     isCodeSelectionFilePart,
     isGenericImageFilename,
+    removeAttachmentCitations,
     resolveAttachmentCitationDeletion,
 } from '../attachmentCitations';
 
@@ -83,6 +84,13 @@ describe('attachment citations', () => {
             'desktop [desktop.jpg] link [desktop.jpg](https://example.com) missing [other.jpg]',
             ['desktop.jpg'],
         )).toEqual([{ start: 8, end: 21 }]);
+    });
+
+    test('removes every citation for a removed attachment', () => {
+        expect(removeAttachmentCitations(
+            'compare [image-1.png] against [image-2.png], then revisit [image-1.png]',
+            ['image-1.png'],
+        )).toBe('compare against [image-2.png], then revisit');
     });
 
     test('removes code-selection line suffixes from file-type icon paths', () => {

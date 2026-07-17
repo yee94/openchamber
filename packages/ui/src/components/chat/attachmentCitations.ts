@@ -245,6 +245,27 @@ export const findAttachmentCitationRanges = (text: string, filenames: string[]):
     return ranges;
 };
 
+export const removeAttachmentCitations = (text: string, filenames: string[]): string => {
+    const ranges = findAttachmentCitationRanges(text, filenames);
+    let nextText = text;
+
+    for (let index = ranges.length - 1; index >= 0; index -= 1) {
+        const range = ranges[index];
+        let start = range.start;
+        let end = range.end;
+
+        if (end < nextText.length && /\s/.test(nextText[end])) {
+            end += 1;
+        } else if (start > 0 && /\s/.test(nextText[start - 1])) {
+            start -= 1;
+        }
+
+        nextText = `${nextText.slice(0, start)}${nextText.slice(end)}`;
+    }
+
+    return nextText;
+};
+
 const getWordDeletionRange = (
     text: string,
     key: AttachmentCitationDeletionIntent['key'],

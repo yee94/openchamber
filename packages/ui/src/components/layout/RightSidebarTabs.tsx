@@ -187,6 +187,7 @@ export const RightSidebarTabs: React.FC = () => {
           onSelect={handleTabSelect}
           layoutMode="fit"
           variant="active-pill"
+          activePillLowercase={false}
           className="h-full"
         />
       </div>

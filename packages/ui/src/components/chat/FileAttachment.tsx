@@ -362,9 +362,10 @@ VSCodeFileChip.displayName = 'VSCodeFileChip';
 
 interface AttachedFilesListProps {
   onShowPopup?: (content: ToolPopupContent) => void;
+  onRemoveAttachedFile?: (file: AttachedFile) => void;
 }
 
-export const AttachedVSCodeFileChips = memo(({ onShowPopup }: AttachedFilesListProps) => {
+export const AttachedVSCodeFileChips = memo(({ onShowPopup, onRemoveAttachedFile }: AttachedFilesListProps) => {
   const attachedFiles = useInputStore((state) => state.attachedFiles);
   const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
 
@@ -384,7 +385,7 @@ export const AttachedVSCodeFileChips = memo(({ onShowPopup }: AttachedFilesListP
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {images.map((file, index) => (
-        <ImagePreview key={file.id} file={file} onRemove={() => removeAttachedFile(file.id)} onShowPopup={onShowPopup} gallery={imageGallery} index={index} />
+        <ImagePreview key={file.id} file={file} onRemove={() => onRemoveAttachedFile?.(file) ?? removeAttachedFile(file.id)} onShowPopup={onShowPopup} gallery={imageGallery} index={index} />
       ))}
       {otherFiles.map((file) => (
         <VSCodeFileChip key={file.id} file={file} onRemove={() => removeAttachedFile(file.id)} />
@@ -395,7 +396,7 @@ export const AttachedVSCodeFileChips = memo(({ onShowPopup }: AttachedFilesListP
 
 AttachedVSCodeFileChips.displayName = 'AttachedVSCodeFileChips';
 
-export const AttachedFilesList = memo(({ onShowPopup }: AttachedFilesListProps) => {
+export const AttachedFilesList = memo(({ onShowPopup, onRemoveAttachedFile }: AttachedFilesListProps) => {
   const attachedFiles = useInputStore((state) => state.attachedFiles);
   const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
 
@@ -421,7 +422,7 @@ export const AttachedFilesList = memo(({ onShowPopup }: AttachedFilesListProps) 
             <ImagePreview
               key={file.id}
               file={file}
-              onRemove={() => removeAttachedFile(file.id)}
+              onRemove={() => onRemoveAttachedFile?.(file) ?? removeAttachedFile(file.id)}
               onShowPopup={onShowPopup}
               gallery={imageGallery}
               index={index}

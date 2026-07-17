@@ -348,7 +348,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
       return (
         <div
           className={cn(
-            'sticky top-0 z-10 flex items-center gap-1.5 py-1.5',
+            'sticky top-0 z-10 flex h-8 items-center gap-0.5',
             headerBackgroundClassName,
             ROW_PADDING_CLASSNAME,
             !isFirst && 'mt-1 border-t border-border/40'
@@ -370,8 +370,8 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
               )}
             />
           </button>
-          {isTreeView ? (
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            {isTreeView ? (
               <Button
                 variant="ghost"
                 size="xs"
@@ -382,38 +382,37 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
                   }
                   expandAllDirectories(group.id);
                 }}
-                className="h-6 gap-1 px-1.5 typography-code text-muted-foreground hover:text-foreground"
+                className="size-6 px-0 text-muted-foreground hover:text-foreground"
                 aria-label={toggleAllLabel}
                 title={toggleAllLabel}
               >
-                <Icon name="expand-up-down" className="size-3" />
-                {toggleAllLabel}
+                <Icon name="expand-up-down" className="size-3.5" />
+              </Button>
+            ) : null}
+            <div className="flex shrink-0 items-center" role="group" aria-label={t('settings.openchamber.git.changesViewAria')}>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setGitChangesViewMode(isTreeView ? 'flat' : 'tree')}
+                aria-label={toggleViewLabel}
+                title={toggleViewLabel}
+                aria-pressed={isTreeView}
+                className="size-6 px-0 text-muted-foreground hover:text-foreground"
+              >
+                <Icon name={isTreeView ? 'node-tree' : 'list-unordered'} className="size-3.5" />
               </Button>
             </div>
-          ) : null}
-          <div className="flex shrink-0 items-center" role="group" aria-label={t('settings.openchamber.git.changesViewAria')}>
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => setGitChangesViewMode(isTreeView ? 'flat' : 'tree')}
-              aria-label={toggleViewLabel}
-              title={toggleViewLabel}
-              aria-pressed={isTreeView}
-              className="size-6 bg-transparent p-0 text-muted-foreground hover:text-foreground"
+              onClick={() => group.onActionAll(group.entries.map((entry) => entry.path))}
+              className="size-6 px-0 typography-code font-semibold text-muted-foreground hover:text-foreground"
+              aria-label={group.actionAllLabel}
+              title={group.actionAllLabel}
             >
-              <Icon name={isTreeView ? 'node-tree' : 'list-unordered'} className="size-3.5" />
+              {group.actionSymbol}
             </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => group.onActionAll(group.entries.map((entry) => entry.path))}
-            className="size-6 bg-transparent p-0 typography-code font-semibold text-muted-foreground hover:text-foreground"
-            aria-label={group.actionAllLabel}
-            title={group.actionAllLabel}
-          >
-            {group.actionSymbol}
-          </Button>
         </div>
       );
     },
