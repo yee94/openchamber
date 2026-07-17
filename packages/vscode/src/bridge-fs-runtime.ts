@@ -254,7 +254,7 @@ export async function handleFsBridgeMessage(
     }
 
     case 'api:fs:read': {
-      const target = (payload as { path: string })?.path;
+      const { path: target, optional = false } = (payload as { path: string; optional?: boolean }) || {};
       if (!target) {
         return { id, type, success: false, error: 'Path is required' };
       }
@@ -266,8 +266,26 @@ export async function handleFsBridgeMessage(
 
       try {
         const content = await fs.promises.readFile(resolution.resolvedPath, 'utf8');
-        return { id, type, success: true, data: { content, path: deps.normalizeFsPath(resolution.resolvedPath) } };
+        return {
+          id,
+          type,
+          success: true,
+          data: {
+            content,
+            path: deps.normalizeFsPath(resolution.resolvedPath),
+            ...(optional ? { exists: true } : {}),
+          },
+        };
       } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (optional && err?.code === 'ENOENT') {
+          return {
+            id,
+            type,
+            success: true,
+            data: { content: '', path: deps.normalizeFsPath(resolution.resolvedPath), exists: false },
+          };
+        }
         const message = error instanceof Error ? error.message : 'Failed to read file';
         return { id, type, success: false, error: message };
       }

@@ -7,9 +7,11 @@ import { readAgentsSnapshot } from '@/queries/agentQueries';
 import { readCommandsSnapshot, useCommandsQuery } from '@/queries/commandQueries';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { readMcpConfigsSnapshot } from '@/queries/mcpQueries';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { queryClient } from '@/lib/queryRuntime';
+import { readInstalledSkillsSnapshot, refreshInstalledSkillsQuery, resolveInstalledSkillsQueryDirectory } from '@/queries/installedSkillsQueries';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -426,7 +428,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'mcp') {
-      void useMcpConfigStore.getState().loadMcpConfigs();
       return;
     }
     if (settingsSlug === 'plugins') {
@@ -434,8 +435,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
-      void useSkillsStore.getState().loadSkills();
-      void useSkillsCatalogStore.getState().loadCatalog();
+      void refreshInstalledSkillsQuery(queryClient, resolveInstalledSkillsQueryDirectory());
     }
     if (settingsSlug === 'snippets') {
       void useSnippetsStore.getState().loadSnippets();
@@ -558,7 +558,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
     if (result.id.startsWith('mcp.')) {
       const store = useMcpConfigStore.getState();
-      const name = nextUniqueName('new-mcp-server', store.mcpServers.map((server) => server.name));
+      const name = nextUniqueName('new-mcp-server', readMcpConfigsSnapshot().map((server) => server.name));
       store.setMcpDraft({
         name,
         scope: 'user',
@@ -588,10 +588,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
 
     if (result.id.startsWith('skills.')) {
-      const store = useSkillsStore.getState();
-      const name = nextUniqueName('new-skill', store.skills.map((skill) => skill.name));
-      store.setSkillDraft({ name, scope: 'user', source: 'opencode', description: '', instructions: '' });
-      store.setSelectedSkill(name);
+      const installedSkillsSnapshot = readInstalledSkillsSnapshot(queryClient);
+      const skillsStore = useSkillsStore.getState();
+      const name = nextUniqueName('new-skill', installedSkillsSnapshot.map((skill) => skill.name));
+      skillsStore.setSkillDraft({ name, scope: 'user', source: 'opencode', description: '', instructions: '' });
+      skillsStore.setSelectedSkill(name);
       return result.id === 'skills.create' ? 'skills.basic-information' : result.id;
     }
 

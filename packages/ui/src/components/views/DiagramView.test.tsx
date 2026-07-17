@@ -16,6 +16,14 @@ let pendingDiagramFile: string | null = null;
 let readFile: (path: string) => Promise<{ content: string }> = async () => ({ content: '' });
 let writeFile: (path: string, content: string) => Promise<void> = async () => undefined;
 let editorXml = '';
+let effectiveDirectory: string | undefined = '/project';
+let transport = 'runtime-a';
+type QuerySnapshot = { data?: string; isPending: boolean; isError: boolean };
+const querySnapshots = new Map<string, QuerySnapshot>();
+const startedQueries = new Set<string>();
+const cacheOperations: string[] = [];
+
+const queryKey = (scopeDirectory: string | null, path: string | null) => `${transport}:${scopeDirectory}:${path}`;
 
 const shallowEqualDeps = (left?: unknown[], right?: unknown[]): boolean => (
   Boolean(left && right)
@@ -97,7 +105,43 @@ mock.module('@/components/diagram', () => ({
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: () => null }));
 mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ files: { readFile, writeFile } }) }));
+mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () => effectiveDirectory }));
 mock.module('@/lib/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+mock.module('@/lib/runtime-switch', () => ({ getRuntimeTransportIdentity: () => transport }));
+mock.module('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    cancelQueries: async () => { cacheOperations.push('cancel'); },
+    setQueryData: (key: readonly unknown[], content: string) => {
+      cacheOperations.push('set');
+      querySnapshots.set(`${key[0]}:${key[3]}:${key[4]}`, { data: content, isPending: false, isError: false });
+    },
+  }),
+}));
+mock.module('@/queries/fileQueries', () => ({
+  fileContentQueryKey: (input: { scopeDirectory: string | null; path: string | null }, snapshotTransport: string) => [snapshotTransport, 'files', 'content', input.scopeDirectory, input.path],
+  useFileContentQuery: (
+    input: { scopeDirectory: string | null; path: string | null },
+    options: { enabled?: boolean },
+  ): QuerySnapshot => {
+    const key = queryKey(input.scopeDirectory, input.path);
+    const enabled = Boolean(options.enabled && input.path);
+    ReactMock.useEffect(() => {
+      if (!enabled || startedQueries.has(key) || !input.path) return;
+      startedQueries.add(key);
+      void readFile(input.path).then(
+        (result) => querySnapshots.set(key, { data: result.content, isPending: false, isError: false }),
+        () => querySnapshots.set(key, { isPending: false, isError: true }),
+      );
+    }, [enabled, key]);
+    return querySnapshots.get(key) ?? { isPending: enabled, isError: false };
+  },
+  setFileContentSnapshot: (
+    client: { setQueryData: (key: readonly unknown[], content: string) => void },
+    input: { scopeDirectory: string | null; path: string | null },
+    snapshotTransport: string,
+    content: string,
+  ) => client.setQueryData([snapshotTransport, 'files', 'content', input.scopeDirectory, input.path], content),
+}));
 mock.module('@/stores/useUIStore', () => {
   const store = (selector: (state: { pendingDiagramFile: string | null }) => unknown) => selector({ pendingDiagramFile });
   store.getState = () => ({
@@ -133,6 +177,11 @@ const resetHarness = () => {
   readFile = async () => ({ content: '' });
   writeFile = async () => undefined;
   editorXml = '';
+  effectiveDirectory = '/project';
+  transport = 'runtime-a';
+  querySnapshots.clear();
+  startedQueries.clear();
+  cacheOperations.length = 0;
 };
 
 const deferred = <T,>() => {
@@ -175,15 +224,21 @@ describe('DiagramView file loading', () => {
     pendingDiagramFile = '/second.drawio';
     renderComponent(DiagramView);
     flushEffects();
+    renderComponent(DiagramView);
+    flushEffects();
 
     second.resolve({ content: '<second />' });
     await Promise.resolve();
     await Promise.resolve();
+    renderComponent(DiagramView);
+    flushEffects();
     expect(getEditorXml(renderComponent(DiagramView))).toBe('<second />');
 
     first.resolve({ content: '<first />' });
     await Promise.resolve();
     await Promise.resolve();
+    renderComponent(DiagramView);
+    flushEffects();
     expect(getEditorXml(renderComponent(DiagramView))).toBe('<second />');
   });
 
@@ -218,6 +273,8 @@ describe('DiagramView file loading', () => {
     flushEffects();
     await Promise.resolve();
     await Promise.resolve();
+    renderComponent(DiagramView);
+    flushEffects();
     editorXml = '<a saved />';
     getSaveButton(renderComponent(DiagramView))?.onClick?.();
     await Promise.resolve();
@@ -225,13 +282,41 @@ describe('DiagramView file loading', () => {
     pendingDiagramFile = '/b.drawio';
     renderComponent(DiagramView);
     flushEffects();
+    renderComponent(DiagramView);
+    flushEffects();
     await Promise.resolve();
     await Promise.resolve();
+    renderComponent(DiagramView);
+    flushEffects();
     expect(getEditorXml(renderComponent(DiagramView))).toBe('<b />');
 
     save.resolve();
     await Promise.resolve();
     await Promise.resolve();
     expect(getEditorXml(renderComponent(DiagramView))).toBe('<b />');
+  });
+
+  test('updates the active diagram query snapshot after a successful save', async () => {
+    resetHarness();
+    readFile = async () => ({ content: '<diagram />' });
+
+    pendingDiagramFile = '/diagram.drawio';
+    renderComponent(DiagramView);
+    flushEffects();
+    renderComponent(DiagramView);
+    flushEffects();
+    await Promise.resolve();
+    renderComponent(DiagramView);
+    flushEffects();
+
+    editorXml = '<saved />';
+    getSaveButton(renderComponent(DiagramView))?.onClick?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(querySnapshots.get(queryKey('/project', '/diagram.drawio'))?.data).toBe('<saved />');
+    expect(cacheOperations).toEqual(['cancel', 'set']);
   });
 });

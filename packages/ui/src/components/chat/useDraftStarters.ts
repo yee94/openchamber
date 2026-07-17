@@ -3,7 +3,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { useCommandsQuery } from '@/queries/commandQueries';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getProjectDraftStarters, saveProjectDraftStarters } from '@/lib/openchamberConfig';
@@ -64,7 +64,9 @@ export function useDraftStarters(): UseDraftStartersResult {
     const commandsQuery = useCommandsQuery();
     const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
     const { refetch: refetchCommands } = commandsQuery;
-    const skills = useSkillsStore((s) => s.skills);
+    const skillsQuery = useInstalledSkillsQuery();
+    const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
+    const { refetch: refetchSkills } = skillsQuery;
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
     const projects = useProjectsStore((s) => s.projects);
 
@@ -94,8 +96,8 @@ export function useDraftStarters(): UseDraftStartersResult {
 
     const ensureLoaded = React.useCallback(() => {
         void refetchCommands();
-        void useSkillsStore.getState().loadSkills?.();
-    }, [refetchCommands]);
+        void refetchSkills();
+    }, [refetchCommands, refetchSkills]);
 
     // Preload commands and skills on mount so that pinned command/skill starters
     // resolve immediately without requiring the user to open the add dialog first.

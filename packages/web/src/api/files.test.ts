@@ -59,4 +59,37 @@ describe('createWebFilesAPI', () => {
       headers: { 'x-opencode-directory': '/current-workspace' },
     });
   });
+
+  it('parses optional read existence headers and disables caching', async () => {
+    const { createWebFilesAPI } = await import('./files');
+    const api = createWebFilesAPI({ urls, getDirectory: () => '/current-workspace' });
+
+    runtimeFetchMock.mockResolvedValueOnce(new Response('', {
+      headers: { 'x-openchamber-file-exists': 'false' },
+    }));
+    await expect(api.readFile?.('/current-workspace/missing.txt', { optional: true, directory: '/worktree-a' }))
+      .resolves.toEqual({ content: '', path: '/current-workspace/missing.txt', exists: false });
+
+    expect(runtimeFetchMock).toHaveBeenLastCalledWith('/api/fs/read', {
+      query: new URLSearchParams({ path: '/current-workspace/missing.txt', optional: 'true' }),
+      cache: 'no-store',
+      headers: { 'x-opencode-directory': '/worktree-a' },
+    });
+
+    runtimeFetchMock.mockResolvedValueOnce(new Response('', {
+      headers: { 'x-openchamber-file-exists': 'true' },
+    }));
+    await expect(api.readFile?.('/current-workspace/empty.txt', { optional: true }))
+      .resolves.toEqual({ content: '', path: '/current-workspace/empty.txt', exists: true });
+  });
+
+  it('fails optional reads when the server omits the authoritative existence header', async () => {
+    const { createWebFilesAPI } = await import('./files');
+    const api = createWebFilesAPI({ urls, getDirectory: () => '/current-workspace' });
+
+    runtimeFetchMock.mockResolvedValueOnce(new Response(''));
+
+    await expect(api.readFile?.('/current-workspace/file.txt', { optional: true }))
+      .rejects.toThrow('Optional file read requires an existence response header');
+  });
 });

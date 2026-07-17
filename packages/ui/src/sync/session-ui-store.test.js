@@ -7,7 +7,8 @@ import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore, materializeOpenDraftSession } from './session-ui-store';
 import { setActionRefs, setOptimisticRefs } from './session-actions';
 import { setSyncRefs } from './sync-refs';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { queryClient } from '@/lib/queryRuntime';
+import { installedSkillsQueryOptions } from '@/queries/installedSkillsQueries';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from './input-store';
 import { newSessionDraftKey, sessionDraftKey } from './input-draft-types';
@@ -441,9 +442,7 @@ describe('routeMessage skill invocation', () => {
     setOptimisticRefs(() => {}, () => {});
     useConfigStore.setState({ isConnected: true });
 
-    // The sync command list and the commands store both exclude user skills,
-    // so they start empty here — the skill is only known to the skills store.
-    useSkillsStore.setState({ skills: [] });
+    queryClient.removeQueries({ queryKey: installedSkillsQueryOptions('/skills/project').queryKey });
 
     originalSendCommand = opencodeClient.sendCommand;
     originalSendMessage = opencodeClient.sendMessage;
@@ -460,13 +459,11 @@ describe('routeMessage skill invocation', () => {
   afterEach(() => {
     opencodeClient.sendCommand = originalSendCommand;
     opencodeClient.sendMessage = originalSendMessage;
-    useSkillsStore.setState({ skills: [] });
+    queryClient.removeQueries({ queryKey: installedSkillsQueryOptions('/skills/project').queryKey });
   });
 
   test('invokes a user-installed skill as a command', async () => {
-    useSkillsStore.setState({
-      skills: [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }],
-    });
+    queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }]);
 
     await routeMessage({
       sessionId: 'session-skill',
@@ -482,9 +479,7 @@ describe('routeMessage skill invocation', () => {
   });
 
   test('forwards trailing arguments to the skill command', async () => {
-    useSkillsStore.setState({
-      skills: [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }],
-    });
+    queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }]);
 
     await routeMessage({
       sessionId: 'session-skill',

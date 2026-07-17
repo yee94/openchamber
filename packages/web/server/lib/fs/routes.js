@@ -809,11 +809,15 @@ export const registerFsRoutes = (app, dependencies) => {
           console.warn(`Read retry exhausted for ${canonicalPath}: stat reported ${stats.size} bytes but content is empty`);
         }
       }
+      if (optional) {
+        res.setHeader('x-openchamber-file-exists', 'true');
+      }
       return res.type('text/plain').send(content);
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
         if (optional) {
+          res.setHeader('x-openchamber-file-exists', 'false');
           return res.type('text/plain').send('');
         }
         return res.status(404).json({ error: 'File not found' });

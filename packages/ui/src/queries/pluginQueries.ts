@@ -108,7 +108,7 @@ export const pluginFileQueryOptions = (
   };
 };
 
-export const usePluginsListQuery = (options: { enabled?: boolean } = {}) => {
+export const usePluginsQuery = (options: { enabled?: boolean } = {}) => {
   const activeProjectPath = useProjectsStore((state) => state.getActiveProject?.()?.path ?? null);
   return useQuery({
     ...pluginsListQueryOptions(normalizeDirectory(activeProjectPath) ?? normalizeDirectory(opencodeClient.getDirectory())),
@@ -118,12 +118,11 @@ export const usePluginsListQuery = (options: { enabled?: boolean } = {}) => {
 
 export const usePluginRegistryQuery = (
   specs: readonly string[],
-  options: { enabled?: boolean; force?: boolean } = {},
+  force = false,
 ) => {
   const activeProjectPath = useProjectsStore((state) => state.getActiveProject?.()?.path ?? null);
   return useQuery({
-    ...pluginRegistryQueryOptions(normalizeDirectory(activeProjectPath) ?? normalizeDirectory(opencodeClient.getDirectory()), specs, options.force),
-    enabled: options.enabled,
+    ...pluginRegistryQueryOptions(normalizeDirectory(activeProjectPath) ?? normalizeDirectory(opencodeClient.getDirectory()), specs, force),
   });
 };
 
@@ -135,7 +134,7 @@ export const usePluginFileQuery = (id: string, options: { enabled?: boolean } = 
   });
 };
 
-export const readPluginsListSnapshot = (
+export const readPluginsSnapshot = (
   directory: string | null = resolveConfigQueryDirectory(),
   transport = getRuntimeTransportIdentity(),
 ): PluginsList => queryClient.getQueryData<PluginsList>(pluginsListQueryKey(normalizeDirectory(directory), transport)) ?? { entries: [], files: [] };
@@ -154,7 +153,7 @@ export const readPluginFileSnapshot = (
   transport = getRuntimeTransportIdentity(),
 ): PluginFileContent | undefined => queryClient.getQueryData<PluginFileContent>(pluginFileQueryKey(normalizeDirectory(directory), id, transport));
 
-export const refreshPluginsListQuery = async (
+export const refreshPluginsQuery = async (
   client: Pick<QueryClient, 'fetchQuery' | 'getQueryData'>,
   directory: string | null,
   transport: string,
@@ -167,17 +166,17 @@ export const refreshPluginsListQuery = async (
 };
 
 export const refreshPluginRegistryQuery = async (
-  client: Pick<QueryClient, 'fetchQuery' | 'getQueryData'>,
+  client: Pick<QueryClient, 'setQueryData'> = queryClient,
   directory: string | null,
   specs: readonly string[],
-  force = false,
-  transport = getRuntimeTransportIdentity(),
 ): Promise<Record<string, RegistryResult>> => {
   const normalizedDirectory = normalizeDirectory(directory);
-  if (getRuntimeTransportIdentity() !== transport) {
-    return client.getQueryData<Record<string, RegistryResult>>(pluginRegistryQueryKey(normalizedDirectory, specs, force, transport)) ?? {};
-  }
-  return client.fetchQuery({ ...pluginRegistryQueryOptions(normalizedDirectory, specs, force, transport), staleTime: 0 });
+  const transport = getRuntimeTransportIdentity();
+  const data = await pluginRegistryQueryOptions(normalizedDirectory, specs, true, transport).queryFn({
+    signal: new AbortController().signal,
+  });
+  client.setQueryData(pluginRegistryQueryKey(normalizedDirectory, specs, false, transport), data);
+  return data;
 };
 
 export const refreshPluginFileQuery = async (

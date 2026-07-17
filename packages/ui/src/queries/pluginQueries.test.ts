@@ -28,7 +28,7 @@ const {
   pluginsListQueryOptions,
   readPluginRegistrySnapshot,
   refreshPluginRegistryQuery,
-  refreshPluginsListQuery,
+  refreshPluginsQuery,
 } = await import('./pluginQueries');
 const { queryClient, queryKeys } = await import('@/lib/queryRuntime');
 
@@ -80,16 +80,42 @@ describe('pluginQueries', () => {
     expect(Object.keys(registry)).toHaveLength(2);
   });
 
-  test('registry failure keeps the prior complete snapshot', async () => {
+  test('registry partial failure keeps the prior complete snapshot', async () => {
+    const specs = Array.from({ length: 50 }, (_, index) => `plugin-${index}-${'x'.repeat(20)}@1.0.0`);
+    fetchImpl = async (input) => {
+      const spec = new URL(`http://localhost${input}`).searchParams.get('specs')?.split(',')[0] ?? '';
+      return jsonResponse({ results: [{ kind: 'npm-ok', spec, name: spec, currentVersion: null, latestVersion: null, versions: [], hasUpdate: false }] });
+    };
+    await refreshPluginRegistryQuery(queryClient, activeProjectPath, specs);
+
+    let calls = 0;
+    fetchImpl = async (input) => {
+      calls += 1;
+      if (calls === 2) return jsonResponse({}, { status: 500 });
+      const spec = new URL(`http://localhost${input}`).searchParams.get('specs')?.split(',')[0] ?? '';
+      return jsonResponse({ results: [{ kind: 'npm-ok', spec, name: spec, currentVersion: null, latestVersion: null, versions: [], hasUpdate: false }] });
+    };
+
+    await expect(queryClient.fetchQuery({ ...pluginRegistryQueryOptions(activeProjectPath, specs, false, runtimeKey), staleTime: 0, retry: false })).rejects.toThrow('Failed to load plugin registry info');
+
+    expect(readPluginRegistrySnapshot(activeProjectPath, specs, false, runtimeKey)[specs[0]]?.kind).toBe('npm-ok');
+  });
+
+  test('forced registry refresh writes its result to the standard observer key', async () => {
+    const specs = ['plugin@1.0.0'];
     fetchImpl = async () => jsonResponse({
-      results: [{ kind: 'npm-ok', spec: 'plugin-a', name: 'plugin-a', currentVersion: null, latestVersion: null, versions: [], hasUpdate: false }],
+      results: [{ kind: 'npm-ok', spec: specs[0], name: 'plugin', currentVersion: '1.0.0', latestVersion: '2.0.0', versions: ['1.0.0', '2.0.0'], hasUpdate: true }],
     });
-    await refreshPluginRegistryQuery(queryClient, activeProjectPath, ['plugin-a'], false, runtimeKey);
-    fetchImpl = async () => jsonResponse({}, { status: 500 });
 
-    await expect(queryClient.fetchQuery({ ...pluginRegistryQueryOptions(activeProjectPath, ['plugin-a'], false, runtimeKey), staleTime: 0, retry: false })).rejects.toThrow('Failed to load plugin registry info');
+    await refreshPluginRegistryQuery(queryClient, activeProjectPath, specs);
 
-    expect(readPluginRegistrySnapshot(activeProjectPath, ['plugin-a'], false, runtimeKey)['plugin-a']?.kind).toBe('npm-ok');
+    expect(fetchCalls[0]?.input).toContain('refresh=true');
+    const refreshed = readPluginRegistrySnapshot(activeProjectPath, specs, false, runtimeKey)[specs[0]];
+    expect(refreshed?.kind).toBe('npm-ok');
+    if (refreshed?.kind === 'npm-ok') {
+      expect(refreshed.latestVersion).toBe('2.0.0');
+    }
+    expect(readPluginRegistrySnapshot(activeProjectPath, specs, true, runtimeKey)).toEqual({});
   });
 
   test('file request reads directory-scoped content and forwards its signal', async () => {
@@ -107,13 +133,13 @@ describe('pluginQueries', () => {
   test('matching list refreshes share one flight and inactive runtimes retain their snapshot', async () => {
     let resolveResponse: ((response: Response) => void) | undefined;
     fetchImpl = async () => new Promise<Response>((resolve) => { resolveResponse = resolve; });
-    const first = refreshPluginsListQuery(queryClient, activeProjectPath, runtimeKey);
-    const second = refreshPluginsListQuery(queryClient, activeProjectPath, runtimeKey);
+    const first = refreshPluginsQuery(queryClient, activeProjectPath, runtimeKey);
+    const second = refreshPluginsQuery(queryClient, activeProjectPath, runtimeKey);
     resolveResponse?.(jsonResponse({ entries: [], files: [] }));
     await Promise.all([first, second]);
 
     runtimeKey = 'runtime-b';
-    await refreshPluginsListQuery(queryClient, activeProjectPath, 'runtime-a');
+    await refreshPluginsQuery(queryClient, activeProjectPath, 'runtime-a');
 
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]?.init?.signal).toBeInstanceOf(AbortSignal);

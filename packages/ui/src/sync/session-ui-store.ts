@@ -24,7 +24,8 @@ import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { readCommandsSnapshot } from "@/queries/commandQueries"
-import { useSkillsStore } from "@/stores/useSkillsStore"
+import { queryClient } from "@/lib/queryRuntime"
+import { readInstalledSkillsSnapshot } from "@/queries/installedSkillsQueries"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -139,7 +140,7 @@ export function routeMessage(params: {
     // content) instead of being sent as a literal "/name" message (#1605).
     const isCommand = syncCommands.find((c) => c.name === cmdName)
       || storeCommands.find((c) => c.name === cmdName)
-      || useSkillsStore.getState().skills.some((s) => s.name === cmdName)
+      || readInstalledSkillsSnapshot(queryClient, requestDirectory ?? useDirectoryStore.getState().currentDirectory).some((skill) => skill.name === cmdName)
 
     if (isCommand) {
       return optimisticSend({

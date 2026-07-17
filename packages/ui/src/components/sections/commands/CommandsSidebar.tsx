@@ -20,7 +20,7 @@ import {
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { isCommandBuiltIn, useCommandsStore } from '@/stores/useCommandsStore';
 import { useCommandsQuery, type Command } from '@/queries/commandQueries';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { cn } from '@/lib/utils';
@@ -56,12 +56,13 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   }))); 
   const commandsQuery = useCommandsQuery();
   const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
-  const skills = useSkillsStore((s) => s.skills);
-  const loadSkills = useSkillsStore((s) => s.loadSkills);
+  const skillsQuery = useInstalledSkillsQuery();
+  const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
+  const { refetch: refetchSkills } = skillsQuery;
 
   React.useEffect(() => {
-    loadSkills();
-  }, [loadSkills]);
+    void refetchSkills();
+  }, [refetchSkills]);
 
   const skillNames = React.useMemo(() => new Set(skills.map((skill) => skill.name)), [skills]);
   const commandOnlyItems = React.useMemo(

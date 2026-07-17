@@ -1,6 +1,5 @@
 import React from 'react';
 import { File as PierreFile } from '@pierre/diffs/react';
-import { CancelledError, useQuery } from '@tanstack/react-query';
 
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -20,11 +19,11 @@ import { useI18n } from '@/lib/i18n';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { getImageMimeType, getLanguageFromExtension, isImageFile } from '@/lib/toolHelpers';
-import type { FileListEntry, FileSearchResult } from '@/lib/api/types';
+import type { FileSearchResult } from '@/lib/api/types';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
-import { queryKeys } from '@/lib/queryRuntime';
+import { useFileContentQuery, useFileDirectoryQuery, useFileSearchQuery } from '@/queries/fileQueries';
 import { cn } from '@/lib/utils';
 
 type MobileFilesRoute =
@@ -90,9 +89,6 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
   const root = normalizePath(useEffectiveDirectory() ?? null);
   const [route, setRoute] = React.useState<MobileFilesRoute>(() => ({ type: 'browser', directory: root }));
   const [query, setQuery] = React.useState('');
-  const directoryLoadRequestIdRef = React.useRef(0);
-  const fileLoadRequestIdRef = React.useRef(0);
-  const searchIntentRef = React.useRef('');
 
   React.useEffect(() => {
     if (!root) return;
@@ -108,49 +104,35 @@ export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose 
   const debouncedQuery = useDebouncedValue(query, 250);
   const normalizedQuery = query.trim();
   const normalizedDebouncedQuery = debouncedQuery.trim();
-  searchIntentRef.current = browserDirectory ? `${browserDirectory}\0${query}` : '';
 
-  const directoryQuery = useQuery({
-    queryKey: queryKeys.scoped('mobile-files-directory', browserDirectory),
+  const directoryQuery = useFileDirectoryQuery({
+    scopeDirectory: root,
+    directory: browserDirectory,
+  }, {
     enabled: Boolean(browserDirectory),
     refetchOnMount: 'always',
-    queryFn: async (): Promise<FileListEntry[]> => {
-      const requestId = directoryLoadRequestIdRef.current + 1;
-      directoryLoadRequestIdRef.current = requestId;
-      const result = await files.listDirectory(browserDirectory);
-      if (directoryLoadRequestIdRef.current !== requestId) throw new CancelledError({ silent: true });
-      return result.entries.slice().sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-    },
   });
 
-  const searchQuery = useQuery({
-    queryKey: queryKeys.scoped('mobile-files-search', browserDirectory, normalizedDebouncedQuery, 40),
+  const searchQuery = useFileSearchQuery({
+    directory: browserDirectory,
+    query: normalizedDebouncedQuery,
+    maxResults: 40,
+  }, {
     enabled: Boolean(browserDirectory && normalizedDebouncedQuery),
-    queryFn: async (): Promise<FileSearchResult[]> => {
-      const intent = `${browserDirectory}\0${debouncedQuery}`;
-      const results = await files.search({ directory: browserDirectory, query: normalizedDebouncedQuery, maxResults: 40 });
-      if (searchIntentRef.current !== intent) throw new CancelledError({ silent: true });
-      return results;
-    },
   });
 
   const shouldReadFile = Boolean(filePath && files.readFile && (!isImageFile(filePath) || filePath.toLowerCase().endsWith('.svg')));
-  const fileQuery = useQuery({
-    queryKey: queryKeys.scoped('mobile-files-content', filePath, MAX_MOBILE_FILE_CHARS),
+  const fileQuery = useFileContentQuery({
+    scopeDirectory: root,
+    path: filePath,
+  }, {
     enabled: shouldReadFile,
-    queryFn: async (): Promise<string> => {
-      const requestId = fileLoadRequestIdRef.current + 1;
-      fileLoadRequestIdRef.current = requestId;
-      const result = await files.readFile!(filePath);
-      if (fileLoadRequestIdRef.current !== requestId) throw new CancelledError({ silent: true });
-      return result.content;
-    },
   });
 
-  const entries = directoryQuery.data ?? [];
+  const entries = directoryQuery.data?.entries.slice().sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  }) ?? [];
   const directoryError = directoryQuery.error
     ? directoryQuery.error instanceof Error ? directoryQuery.error.message : t('mobile.files.error.listFailed')
     : null;

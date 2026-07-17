@@ -429,6 +429,45 @@ describe('fs read', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Read retry exhausted for /repo/file.txt'));
     warn.mockRestore();
   });
+
+  it('signals optional missing files while preserving an empty plain-text body', async () => {
+    const missing = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const handler = registerRead({
+      realpath: vi.fn(async (targetPath) => {
+        if (targetPath === '/repo/missing.txt') throw missing;
+        return targetPath;
+      }),
+    });
+
+    const res = await callRead(handler, { path: '/repo/missing.txt', optional: 'true' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('');
+    expect(res.getHeader('x-openchamber-file-exists')).toBe('false');
+  });
+
+  it('signals optional empty files as existing', async () => {
+    const handler = registerRead({
+      stat: vi.fn(async () => ({ isFile: () => true, size: 0 })),
+      readFile: vi.fn(async () => ''),
+    });
+
+    const res = await callRead(handler, { path: '/repo/empty.txt', optional: 'true' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('');
+    expect(res.getHeader('x-openchamber-file-exists')).toBe('true');
+  });
+
+  it('keeps regular missing-file reads at 404', async () => {
+    const missing = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const handler = registerRead({ realpath: vi.fn(async () => { throw missing; }) });
+
+    const res = await callRead(handler, { path: '/repo/missing.txt' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: 'File not found' });
+  });
 });
 
 describe('fs exec git-read cache', () => {

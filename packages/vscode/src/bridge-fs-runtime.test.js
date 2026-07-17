@@ -33,6 +33,12 @@ mock.module('vscode', () => ({
   window: {},
 }));
 
+const readFileMock = mock();
+mock.module('fs', () => ({
+  promises: { readFile: readFileMock },
+  default: { promises: { readFile: readFileMock } },
+}));
+
 const { clearGitReadCacheForTests, handleFsBridgeMessage } = await import('./bridge-fs-runtime');
 
 const deps = {
@@ -84,5 +90,38 @@ describe('bridge fs exec git read cache', () => {
     await handleFsBridgeMessage({ id: '2', type: 'api:fs:exec', payload: { commands: [command], cwd } }, deps);
 
     expect(execCalls).toHaveLength(2);
+  });
+});
+
+describe('bridge fs optional read', () => {
+  beforeEach(() => {
+    readFileMock.mockReset();
+    deps.resolveFileReadPath.mockReset();
+  });
+
+  it('distinguishes a missing optional file from an empty existing file', async () => {
+    deps.resolveFileReadPath.mockResolvedValue({ ok: true, resolvedPath: '/workspace/plan.md' });
+    const missing = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    readFileMock.mockRejectedValueOnce(missing).mockResolvedValueOnce('');
+
+    const missingResult = await handleFsBridgeMessage({
+      id: 'missing',
+      type: 'api:fs:read',
+      payload: { path: '/workspace/plan.md', optional: true },
+    }, deps);
+    const emptyResult = await handleFsBridgeMessage({
+      id: 'empty',
+      type: 'api:fs:read',
+      payload: { path: '/workspace/plan.md', optional: true },
+    }, deps);
+
+    expect(missingResult).toMatchObject({
+      success: true,
+      data: { content: '', path: '/workspace/plan.md', exists: false },
+    });
+    expect(emptyResult).toMatchObject({
+      success: true,
+      data: { content: '', path: '/workspace/plan.md', exists: true },
+    });
   });
 });

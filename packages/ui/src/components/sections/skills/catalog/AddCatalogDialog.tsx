@@ -27,6 +27,13 @@ import type { DesktopSettings, SkillCatalogConfig } from '@/lib/desktop';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useI18n } from '@/lib/i18n';
+import { queryClient } from '@/lib/queryRuntime';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import {
+  refreshSkillsCatalogSourceQuery,
+  refreshSkillsCatalogSourcesQuery,
+  resolveSkillsCatalogQueryDirectory,
+} from '@/queries/skillsCatalogQueries';
 
 const generateCatalogId = () => `custom:${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -84,8 +91,6 @@ interface AddCatalogDialogProps {
 export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpenChange }) => {
   const { t } = useI18n();
   const scanRepo = useSkillsCatalogStore((s) => s.scanRepo);
-  const loadCatalog = useSkillsCatalogStore((s) => s.loadCatalog);
-  const loadSource = useSkillsCatalogStore((s) => s.loadSource);
   const setSelectedSource = useSkillsCatalogStore((s) => s.setSelectedSource);
   const isScanning = useSkillsCatalogStore((s) => s.isScanning);
   const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId);
@@ -103,11 +108,13 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
   const [identityOptions, setIdentityOptions] = React.useState<IdentityOption[]>([]);
   const [gitIdentityId, setGitIdentityId] = React.useState<string | null>(null);
   const scanRequestIdRef = React.useRef(0);
+  const scanScopeRef = React.useRef<{ directory: string | null; transport: string } | null>(null);
 
   const invalidateScan = React.useCallback((options?: { clearIdentity?: boolean }) => {
     scanRequestIdRef.current += 1;
     setScanOk(false);
     setScanCount(null);
+    scanScopeRef.current = null;
     if (options?.clearIdentity) {
       setIdentityOptions([]);
       setGitIdentityId(null);
@@ -123,6 +130,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
     setSubpath('');
     setScanCount(null);
     setScanOk(false);
+    scanScopeRef.current = null;
     setIdentityOptions([]);
     setGitIdentityId(null);
     void loadDefaultGitIdentityId();
@@ -160,14 +168,16 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
     setScanCount(null);
     const requestId = scanRequestIdRef.current + 1;
     scanRequestIdRef.current = requestId;
+    const directory = resolveSkillsCatalogQueryDirectory();
+    const transport = getRuntimeTransportIdentity();
 
     const result = await scanRepo({
       source: trimmedSource,
       subpath: subpath.trim() || undefined,
       gitIdentityId: gitIdentityId || undefined,
-    });
+    }, { directory });
 
-    if (scanRequestIdRef.current !== requestId) {
+    if (scanRequestIdRef.current !== requestId || getRuntimeTransportIdentity() !== transport || resolveSkillsCatalogQueryDirectory() !== directory) {
       return;
     }
 
@@ -207,6 +217,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
 
     setIdentityOptions([]);
     setScanOk(true);
+    scanScopeRef.current = { directory, transport };
     toast.success(t('settings.skills.catalog.shared.toast.foundSkills', { count }));
   };
 
@@ -225,7 +236,11 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
       return;
     }
 
-    if (!scanOk) {
+    const currentDirectory = resolveSkillsCatalogQueryDirectory();
+    const currentTransport = getRuntimeTransportIdentity();
+    if (!scanOk || scanScopeRef.current?.directory !== currentDirectory || scanScopeRef.current?.transport !== currentTransport) {
+      setScanOk(false);
+      scanScopeRef.current = null;
       toast.error(t('settings.skills.catalog.add.toast.scanBeforeAdd'));
       return;
     }
@@ -244,15 +259,20 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
     };
 
     const updated = [...existingCatalogs, next];
+    const directory = resolveSkillsCatalogQueryDirectory();
+    const transport = getRuntimeTransportIdentity();
 
     try {
       await updateDesktopSettings({ skillCatalogs: updated });
       setExistingCatalogs(updated);
       toast.success(t('settings.skills.catalog.add.toast.catalogAdded'));
-      await loadCatalog({ refresh: true });
-      await loadSource(next.id, { refresh: true });
-      setSelectedSource(next.id);
-      onOpenChange(false);
+      await queryClient.invalidateQueries({ queryKey: [transport, 'skillsCatalog', 'sources'], exact: false });
+      await refreshSkillsCatalogSourcesQuery(queryClient, directory, transport);
+      await refreshSkillsCatalogSourceQuery(queryClient, directory, next.id, transport);
+      if (getRuntimeTransportIdentity() === transport) {
+        setSelectedSource(next.id);
+        onOpenChange(false);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('settings.skills.catalog.add.toast.saveFailed'));
     }

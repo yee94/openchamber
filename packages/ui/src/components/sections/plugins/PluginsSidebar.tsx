@@ -18,6 +18,11 @@ import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSide
 import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSidebarItem';
 import { useI18n } from '@/lib/i18n';
 import {
+  refreshPluginRegistryQuery,
+  resolveConfigQueryDirectory,
+  usePluginRegistryQuery,
+} from '@/queries/pluginQueries';
+import {
   usePluginsStore,
   type PluginEntry,
   type PluginFile,
@@ -42,7 +47,7 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({
 }) => {
   const { t } = useI18n();
 
-  const { entries, files, selectedId, setSelected, deleteEntry, deleteFile, loadPlugins } =
+  const { entries, files, selectedId, setSelected, deleteEntry, deleteFile, loadPlugins, updateEntry } =
     usePluginsStore(
       useShallow((s) => ({
         entries: s.entries,
@@ -52,13 +57,13 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({
         deleteEntry: s.deleteEntry,
         deleteFile: s.deleteFile,
         loadPlugins: s.loadPlugins,
+        updateEntry: s.updateEntry,
       })),
     );
 
-  const registryInfo = usePluginsStore((s) => s.registryInfo);
-  const isLoadingRegistry = usePluginsStore((s) => s.isLoadingRegistry);
-  const loadRegistryInfo = usePluginsStore((s) => s.loadRegistryInfo);
-  const updateToLatest = usePluginsStore((s) => s.updateToLatest);
+  const specs = React.useMemo(() => entries.map((entry) => entry.spec), [entries]);
+  const { data, isFetching } = usePluginRegistryQuery(specs, false);
+  const registryInfo = React.useMemo(() => data ?? {}, [data]);
 
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -131,7 +136,7 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({
         return;
       }
       const latest = info.latestVersion;
-      const result = await updateToLatest(id);
+      const result = await updateEntry(id, { spec: `${info.name}@${latest}` });
       if (result.ok) {
         toast.success(
           t('settings.plugins.toast.updatedToLatest', { version: latest }),
@@ -140,17 +145,17 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({
         toast.error(t('settings.plugins.toast.refreshFailed'));
       }
     },
-    [entries, registryInfo, t, updateToLatest],
+    [entries, registryInfo, t, updateEntry],
   );
 
   const handleRefresh = React.useCallback(async () => {
     toast.info(t('settings.plugins.toast.refreshing'));
     try {
-      await loadRegistryInfo({ force: true });
+      await refreshPluginRegistryQuery(undefined, resolveConfigQueryDirectory(), specs);
     } catch {
       toast.error(t('settings.plugins.toast.refreshFailed'));
     }
-  }, [loadRegistryInfo, t]);
+  }, [specs, t]);
 
   const handleDelete = React.useCallback(async () => {
     if (!deleteTarget) return;
@@ -201,7 +206,7 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({
         title={
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 flex-1 truncate">{entry.spec}</span>
-            <RegistryBadge spec={entry.spec} />
+            <RegistryBadge info={info} />
           </span>
         }
         metadata={
@@ -293,14 +298,14 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({
                   size="icon"
                   className="h-7 w-7 -my-1 text-muted-foreground"
                   onClick={() => void handleRefresh()}
-                  disabled={isLoadingRegistry}
+                  disabled={isFetching}
                   aria-label={t('settings.plugins.sidebar.actions.refresh')}
                   title={t('settings.plugins.sidebar.actions.refresh')}
                 >
                   <Icon
                     name="refresh"
                     className={
-                      isLoadingRegistry ? 'size-4 animate-spin' : 'size-4'
+                      isFetching ? 'size-4 animate-spin' : 'size-4'
                     }
                   />
                 </Button>

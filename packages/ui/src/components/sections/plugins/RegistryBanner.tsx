@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
+import { usePluginRegistryQuery } from '@/queries/pluginQueries';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 
 interface RegistryBannerProps {
@@ -12,8 +13,9 @@ interface RegistryBannerProps {
 
 export const RegistryBanner: React.FC<RegistryBannerProps> = ({ entryId, spec }) => {
   const { t } = useI18n();
-  const info = usePluginsStore((s) => s.registryInfo[spec]);
-  const updateToLatest = usePluginsStore((s) => s.updateToLatest);
+  const { data } = usePluginRegistryQuery([spec]);
+  const info = data?.[spec];
+  const updateEntry = usePluginsStore((s) => s.updateEntry);
 
   const [isUpdating, setIsUpdating] = React.useState(false);
 
@@ -28,7 +30,7 @@ export const RegistryBanner: React.FC<RegistryBannerProps> = ({ entryId, spec })
     const handleUpdate = async () => {
       setIsUpdating(true);
       try {
-        const result = await updateToLatest(entryId);
+        const result = await updateEntry(entryId, { spec: `${info.name}@latest` });
         if (result.ok) {
           toast.success(
             t('settings.plugins.toast.updatedToLatest', { version: latest }),

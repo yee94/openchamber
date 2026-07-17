@@ -26,6 +26,17 @@ import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import type { SkillsCatalogItem } from '@/lib/api/types';
+import { queryClient } from '@/lib/queryRuntime';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import {
+  FALLBACK_SKILLS_CATALOG_SOURCES,
+  flattenSkillsCatalogSourcePages,
+  refreshSkillsCatalogSourceQuery,
+  refreshSkillsCatalogSourcesQuery,
+  resolveSkillsCatalogQueryDirectory,
+  useSkillsCatalogSourceInfiniteQuery,
+  useSkillsCatalogSourcesQuery,
+} from '@/queries/skillsCatalogQueries';
 
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -69,34 +80,16 @@ const loadSettings = async (): Promise<DesktopSettings | null> => {
 export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onModeChange, showModeTabs = true }) => {
   const { t } = useI18n();
   const {
-    sources,
-    itemsBySource,
     selectedSourceId,
     setSelectedSource,
-    loadCatalog,
-    loadSource,
-    loadMoreClawdHub,
-    isLoadingCatalog,
-    isLoadingSource,
-    isLoadingMore,
-    loadedSourceIds,
-    clawdhubHasMoreBySource,
-    lastCatalogError,
   } = useSkillsCatalogStore(useShallow((s) => ({
-    sources: s.sources,
-    itemsBySource: s.itemsBySource,
     selectedSourceId: s.selectedSourceId,
     setSelectedSource: s.setSelectedSource,
-    loadCatalog: s.loadCatalog,
-    loadSource: s.loadSource,
-    loadMoreClawdHub: s.loadMoreClawdHub,
-    isLoadingCatalog: s.isLoadingCatalog,
-    isLoadingSource: s.isLoadingSource,
-    isLoadingMore: s.isLoadingMore,
-    loadedSourceIds: s.loadedSourceIds,
-    clawdhubHasMoreBySource: s.clawdhubHasMoreBySource,
-    lastCatalogError: s.lastCatalogError,
   })));
+  const sourcesQuery = useSkillsCatalogSourcesQuery();
+  const sources = sourcesQuery.data ?? FALLBACK_SKILLS_CATALOG_SOURCES;
+  const effectiveSelectedSourceId = sources.some((source) => source.id === selectedSourceId) ? selectedSourceId : null;
+  const sourceQuery = useSkillsCatalogSourceInfiniteQuery(effectiveSelectedSourceId ?? '', { enabled: Boolean(effectiveSelectedSourceId) });
 
   const [search, setSearch] = React.useState('');
   const [addCatalogOpen, setAddCatalogOpen] = React.useState(false);
@@ -104,24 +97,27 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   const [installItem, setInstallItem] = React.useState<SkillsCatalogItem | null>(null);
   const [isRemovingCatalog, setIsRemovingCatalog] = React.useState(false);
   const [isRemoveCatalogDialogOpen, setIsRemoveCatalogDialogOpen] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [refreshError, setRefreshError] = React.useState<Error | null>(null);
 
   React.useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
-
-  React.useEffect(() => {
-    if (!selectedSourceId) {
+    if (!sourcesQuery.data && sourcesQuery.isFetching) {
       return;
     }
-    if (!loadedSourceIds[selectedSourceId]) {
-      void loadSource(selectedSourceId);
+    if (!sources.some((source) => source.id === selectedSourceId)) {
+      setSelectedSource(sources[0]?.id ?? null);
     }
-  }, [selectedSourceId, loadedSourceIds, loadSource]);
+  }, [selectedSourceId, setSelectedSource, sources, sourcesQuery.data, sourcesQuery.isFetching]);
+
+  const queryDirectory = resolveSkillsCatalogQueryDirectory();
+  const transport = getRuntimeTransportIdentity();
+  React.useEffect(() => {
+    setRefreshError(null);
+  }, [effectiveSelectedSourceId, queryDirectory, transport]);
 
   const items = React.useMemo(() => {
-    if (!selectedSourceId) return [];
-    return itemsBySource[selectedSourceId] || [];
-  }, [itemsBySource, selectedSourceId]);
+    return flattenSkillsCatalogSourcePages(sourceQuery.data?.pages ?? []);
+  }, [sourceQuery.data]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -134,29 +130,74 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     });
   }, [items, search]);
 
-  const selectedSource = React.useMemo(() => sources.find((s) => s.id === selectedSourceId) || null, [sources, selectedSourceId]);
+  const selectedSource = React.useMemo(() => sources.find((s) => s.id === effectiveSelectedSourceId) || null, [sources, effectiveSelectedSourceId]);
 
-  const isCustomSource = Boolean(selectedSourceId && selectedSourceId.startsWith('custom:'));
+  const isCustomSource = Boolean(effectiveSelectedSourceId && effectiveSelectedSourceId.startsWith('custom:'));
   const isClawdHubSource = selectedSource?.source === 'clawdhub:registry' || selectedSource?.sourceType === 'clawdhub';
-  const hasMoreClawdHub = Boolean(
-    selectedSourceId && (clawdhubHasMoreBySource[selectedSourceId] ?? true)
-  );
+  const isLoadingCatalog = sourcesQuery.isLoading && !sourcesQuery.data;
+  const isLoadingSource = sourceQuery.isLoading && !sourceQuery.data;
+  const isLoadingMore = sourceQuery.isFetchingNextPage;
+  const lastCatalogError = refreshError ?? sourcesQuery.error ?? sourceQuery.error;
 
   const removeSelectedCatalog = async () => {
-    if (!selectedSourceId || !isCustomSource) {
+    if (!effectiveSelectedSourceId || !isCustomSource) {
       return;
     }
 
+    const directory = resolveSkillsCatalogQueryDirectory();
+    const transport = getRuntimeTransportIdentity();
     setIsRemovingCatalog(true);
+    setRefreshError(null);
     try {
       const settings = await loadSettings();
       const catalogs = (Array.isArray(settings?.skillCatalogs) ? settings?.skillCatalogs : []) as SkillCatalogConfig[];
-      const updated = catalogs.filter((c) => c.id !== selectedSourceId);
+      const updated = catalogs.filter((c) => c.id !== effectiveSelectedSourceId);
       await updateDesktopSettings({ skillCatalogs: updated });
-      await loadCatalog({ refresh: true });
-      setIsRemoveCatalogDialogOpen(false);
+      queryClient.setQueriesData({ queryKey: [transport, 'skillsCatalog', 'sources'], exact: false }, (data: typeof sources | undefined) =>
+        data?.filter((source) => source.id !== effectiveSelectedSourceId),
+      );
+      queryClient.removeQueries({
+        queryKey: [transport, 'skillsCatalog', 'source'],
+        exact: false,
+        predicate: (query) => query.queryKey[4] === effectiveSelectedSourceId,
+      });
+      if (getRuntimeTransportIdentity() === transport) {
+        setSelectedSource(null);
+        setIsRemoveCatalogDialogOpen(false);
+      }
+      await refreshSkillsCatalogSourcesQuery(queryClient, directory, transport);
+    } catch (error) {
+      if (getRuntimeTransportIdentity() === transport && resolveSkillsCatalogQueryDirectory() === directory) {
+        setRefreshError(error instanceof Error ? error : new Error(String(error)));
+      }
     } finally {
       setIsRemovingCatalog(false);
+    }
+  };
+
+  const refreshCatalog = async () => {
+    const directory = resolveSkillsCatalogQueryDirectory();
+    const transport = getRuntimeTransportIdentity();
+    const sourceId = effectiveSelectedSourceId;
+    setIsRefreshing(true);
+    setRefreshError(null);
+    try {
+      if (sourceId) {
+        await refreshSkillsCatalogSourceQuery(queryClient, directory, sourceId, transport);
+      } else {
+        await refreshSkillsCatalogSourcesQuery(queryClient, directory, transport);
+      }
+    } catch (error) {
+      const currentSourceId = useSkillsCatalogStore.getState().selectedSourceId;
+      if (
+        getRuntimeTransportIdentity() === transport
+        && resolveSkillsCatalogQueryDirectory() === directory
+        && currentSourceId === sourceId
+      ) {
+        setRefreshError(error instanceof Error ? error : new Error(String(error)));
+      }
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -196,7 +237,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           <section className="px-2 pb-2 pt-0 space-y-0">
             <div className="flex flex-wrap items-center gap-2 py-1.5">
               <Select
-                value={selectedSourceId || ''}
+                value={effectiveSelectedSourceId || ''}
                 onValueChange={(v) => setSelectedSource(v)}
               >
                 <SelectTrigger className="w-fit">
@@ -217,17 +258,11 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 variant="outline"
                 size="xs"
                 className="!font-normal h-6 w-6 px-0"
-                onClick={() => {
-                  if (selectedSourceId) {
-                    void loadSource(selectedSourceId, { refresh: true });
-                  } else {
-                    void loadCatalog({ refresh: true });
-                  }
-                }}
-                disabled={isLoadingCatalog || isLoadingSource}
+                onClick={() => void refreshCatalog()}
+                disabled={isRefreshing}
                 title={t('settings.skills.catalog.page.actions.refreshTitle')}
               >
-                <Icon name="refresh" className={cn("h-3.5 w-3.5", (isLoadingCatalog || isLoadingSource) && "animate-spin")} />
+                <Icon name="refresh" className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
               </Button>
 
               {isCustomSource && (
@@ -369,13 +404,13 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
             )}
           </section>
 
-          {isClawdHubSource && hasMoreClawdHub && !isLoadingSource && filtered.length > 0 && (
+          {isClawdHubSource && sourceQuery.hasNextPage && !isLoadingSource && filtered.length > 0 && (
             <div className="flex justify-center mt-2 px-2">
               <Button
                 variant="outline"
                 size="xs"
                 className="!font-normal"
-                onClick={() => void loadMoreClawdHub()}
+                onClick={() => void sourceQuery.fetchNextPage()}
                 disabled={isLoadingMore}
               >
                 {isLoadingMore ? t('settings.skills.catalog.page.loading.more') : t('settings.skills.catalog.page.actions.loadMoreSkills')}

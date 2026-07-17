@@ -24,6 +24,20 @@ export const queryKeys = {
   agents: {
     list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'agents', string | null] => [transport, 'agents', directory],
   },
+  skills: {
+    list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'skills', string | null] => [transport, 'skills', directory],
+  },
+  skillsCatalog: {
+    sources: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'skillsCatalog', 'sources', string | null] => [transport, 'skillsCatalog', 'sources', normalizeQueryDirectory(directory)],
+    source: (directory: string | null, sourceId: string, transport = getRuntimeTransportIdentity()): readonly [string, 'skillsCatalog', 'source', string | null, string] => [transport, 'skillsCatalog', 'source', normalizeQueryDirectory(directory), sourceId],
+  },
+  mcp: {
+    configs: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'mcp', 'configs', string | null] => [transport, 'mcp', 'configs', normalizeQueryDirectory(directory)],
+    status: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'mcp', 'status', string | null] => [transport, 'mcp', 'status', normalizeQueryDirectory(directory)],
+  },
+  github: {
+    auth: (transport = getRuntimeTransportIdentity()): readonly [string, 'github', 'auth'] => [transport, 'github', 'auth'],
+  },
   plugins: {
     list: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'plugins', 'list', string | null] => [transport, 'plugins', 'list', directory],
     registry: (
@@ -41,10 +55,121 @@ export const queryKeys = {
     ],
     file: (directory: string | null, id: string, transport = getRuntimeTransportIdentity()): readonly [string, 'plugins', 'file', string | null, string] => [transport, 'plugins', 'file', directory, id],
   },
+  files: {
+    directory: (
+      scopeDirectory: string | null | undefined,
+      directory: string | null | undefined,
+      respectGitignore: boolean | undefined,
+      transport = getRuntimeTransportIdentity(),
+    ): readonly [string, 'files', 'directory', string | null, string | null, boolean] => [
+      transport,
+      'files',
+      'directory',
+      normalizeQueryPath(scopeDirectory),
+      normalizeQueryPath(directory),
+      Boolean(respectGitignore),
+    ],
+    search: (
+      directory: string | null | undefined,
+      query: string,
+      maxResults: number | undefined,
+      includeHidden: boolean | undefined,
+      respectGitignore: boolean | undefined,
+      transport = getRuntimeTransportIdentity(),
+    ): readonly [string, 'files', 'search', string | null, string, number | null, boolean, boolean] => [
+      transport,
+      'files',
+      'search',
+      normalizeQueryPath(directory),
+      query.trim(),
+      maxResults ?? null,
+      Boolean(includeHidden),
+      Boolean(respectGitignore),
+    ],
+    content: (
+      scopeDirectory: string | null | undefined,
+      path: string | null | undefined,
+      options: FileQueryReadOptions | undefined,
+      transport = getRuntimeTransportIdentity(),
+    ): FileQueryReadKey => fileQueryReadKey('content', scopeDirectory, path, options, transport),
+    stat: (
+      scopeDirectory: string | null | undefined,
+      path: string | null | undefined,
+      options: FileQueryReadOptions | undefined,
+      transport = getRuntimeTransportIdentity(),
+    ): FileQueryReadKey => fileQueryReadKey('stat', scopeDirectory, path, options, transport),
+  },
+  plans: {
+    resolved: (
+      mode: 'target' | 'session',
+      sessionId: string | null | undefined,
+      scopeDirectory: string | null | undefined,
+      targetPath: string | null | undefined,
+      repoPath: string | null | undefined,
+      homePath: string | null | undefined,
+      transport = getRuntimeTransportIdentity(),
+    ): readonly [string, 'plans', 'resolved', 'target' | 'session', string | null, string | null, string | null, string | null, string | null] => [
+      transport,
+      'plans',
+      'resolved',
+      mode,
+      sessionId?.trim() || null,
+      normalizeQueryPath(scopeDirectory),
+      normalizeQueryPath(targetPath),
+      normalizeQueryPath(repoPath),
+      normalizeQueryPath(homePath),
+    ],
+  },
 };
 
 export const normalizePluginRegistrySpecs = (specs: readonly string[]): string[] =>
   Array.from(new Set(specs.map((spec) => spec.trim()).filter(Boolean))).sort();
+
+const normalizeQueryDirectory = (directory: string | null | undefined): string | null => directory?.trim() || null;
+
+export type FileQueryReadOptions = {
+  allowOutsideWorkspace?: boolean;
+  outsideFileGrant?: string;
+  optional?: boolean;
+  directory?: string;
+};
+
+type FileQueryReadKey = readonly [
+  string,
+  'files',
+  'content' | 'stat',
+  string | null,
+  string | null,
+  boolean,
+  string | null,
+  boolean,
+  string | null,
+];
+
+const normalizeQueryPath = (path: string | null | undefined): string | null => {
+  if (typeof path !== 'string') return null;
+  const normalized = path.trim().replace(/\\/g, '/');
+  if (!normalized) return null;
+  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+};
+
+const fileQueryReadKey = (
+  resource: 'content' | 'stat',
+  scopeDirectory: string | null | undefined,
+  path: string | null | undefined,
+  options: FileQueryReadOptions | undefined,
+  transport: string,
+): FileQueryReadKey => [
+  transport,
+  'files',
+  resource,
+  normalizeQueryPath(scopeDirectory),
+  normalizeQueryPath(path),
+  Boolean(options?.allowOutsideWorkspace),
+  options?.outsideFileGrant ?? null,
+  Boolean(options?.optional),
+  normalizeQueryPath(options?.directory),
+];
 
 export const fetchQuotaProvider = async (
   providerId: QuotaProviderId,

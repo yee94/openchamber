@@ -9,6 +9,10 @@ import {
 } from "@/lib/configUpdate";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { runtimeFetch } from "@/lib/runtime-fetch";
+import { queryClient } from '@/lib/queryRuntime';
+import { refreshInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
+import { invalidateSkillsCatalogQueries } from '@/queries/skillsCatalogQueries';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
 
 import { opencodeClient } from '@/lib/opencode/client';
 
@@ -109,6 +113,10 @@ export interface SkillConfig {
   supportingFiles?: Array<{ path: string; content: string }>;
 }
 
+interface SkillsMutationOptions {
+  directory?: string | null;
+}
+
 export interface PendingFile {
   path: string;
   content: string;
@@ -140,9 +148,9 @@ interface SkillsStore {
   setSkillDraft: (draft: SkillDraft | null) => void;
   loadSkills: () => Promise<boolean>;
   getSkillDetail: (name: string) => Promise<SkillDetail | null>;
-  createSkill: (config: SkillConfig) => Promise<boolean>;
-  updateSkill: (name: string, config: Partial<SkillConfig>) => Promise<boolean>;
-  deleteSkill: (name: string) => Promise<boolean>;
+  createSkill: (config: SkillConfig, options?: SkillsMutationOptions) => Promise<boolean>;
+  updateSkill: (name: string, config: Partial<SkillConfig>, options?: SkillsMutationOptions) => Promise<boolean>;
+  deleteSkill: (name: string, options?: SkillsMutationOptions) => Promise<boolean>;
   getSkillByName: (name: string) => DiscoveredSkill | undefined;
   
   // Supporting files
@@ -166,6 +174,14 @@ const skillsLoadInFlight = new Map<string, Promise<boolean>>();
 
 const getSkillsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_SKILLS_CACHE_KEY;
+};
+
+const resolveMutationDirectory = (options?: SkillsMutationOptions): string | null => {
+  if (options && Object.prototype.hasOwnProperty.call(options, 'directory')) {
+    return typeof options.directory === 'string' ? options.directory.trim() || null : null;
+  }
+  const directory = getCurrentDirectory();
+  return typeof directory === 'string' ? directory.trim() || null : null;
 };
 
 export const invalidateSkillsLoadCache = (directory: string | null = getCurrentDirectory()) => {
@@ -276,7 +292,7 @@ export const useSkillsStore = create<SkillsStore>()(
           }
         },
 
-        createSkill: async (config: SkillConfig) => {
+        createSkill: async (config: SkillConfig, options) => {
           startConfigUpdate("Creating skill...");
           let requiresReload = false;
           try {
@@ -290,7 +306,8 @@ export const useSkillsStore = create<SkillsStore>()(
             if (config.source) skillConfig.source = config.source;
             if (config.supportingFiles) skillConfig.supportingFiles = config.supportingFiles;
 
-            const currentDirectory = getCurrentDirectory();
+            const currentDirectory = resolveMutationDirectory(options);
+            const transport = getRuntimeTransportIdentity();
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : '';
 
             const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(config.name)}${queryParams}`, {
@@ -312,11 +329,15 @@ export const useSkillsStore = create<SkillsStore>()(
               await refreshSkillsAfterOpenCodeRestart({
                 message: payload?.message,
                 delayMs: payload?.reloadDelayMs,
+                directory: currentDirectory,
+                transportIdentity: transport,
               });
               return true;
             }
 
             const loaded = await get().loadSkills();
+            await refreshInstalledSkillsQuery(queryClient, currentDirectory, transport);
+            await invalidateSkillsCatalogQueries(queryClient, currentDirectory, transport);
             if (loaded) {
               emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
             }
@@ -330,7 +351,7 @@ export const useSkillsStore = create<SkillsStore>()(
           }
         },
 
-        updateSkill: async (name: string, config: Partial<SkillConfig>) => {
+        updateSkill: async (name: string, config: Partial<SkillConfig>, options) => {
           startConfigUpdate("Updating skill...");
           let requiresReload = false;
           try {
@@ -341,7 +362,8 @@ export const useSkillsStore = create<SkillsStore>()(
             if (config.supportingFiles !== undefined) skillConfig.supportingFiles = config.supportingFiles;
             if (config.targetPath !== undefined) skillConfig.targetPath = config.targetPath;
 
-            const currentDirectory = getCurrentDirectory();
+            const currentDirectory = resolveMutationDirectory(options);
+            const transport = getRuntimeTransportIdentity();
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : '';
 
             const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(name)}${queryParams}`, {
@@ -363,11 +385,15 @@ export const useSkillsStore = create<SkillsStore>()(
               await refreshSkillsAfterOpenCodeRestart({
                 message: payload?.message,
                 delayMs: payload?.reloadDelayMs,
+                directory: currentDirectory,
+                transportIdentity: transport,
               });
               return true;
             }
 
             const loaded = await get().loadSkills();
+            await refreshInstalledSkillsQuery(queryClient, currentDirectory, transport);
+            await invalidateSkillsCatalogQueries(queryClient, currentDirectory, transport);
             if (loaded) {
               emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
             }
@@ -381,11 +407,12 @@ export const useSkillsStore = create<SkillsStore>()(
           }
         },
 
-        deleteSkill: async (name: string) => {
+        deleteSkill: async (name: string, options) => {
           startConfigUpdate("Deleting skill...");
           let requiresReload = false;
           try {
-            const currentDirectory = getCurrentDirectory();
+            const currentDirectory = resolveMutationDirectory(options);
+            const transport = getRuntimeTransportIdentity();
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : '';
 
             const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(name)}${queryParams}`, {
@@ -405,11 +432,15 @@ export const useSkillsStore = create<SkillsStore>()(
               await refreshSkillsAfterOpenCodeRestart({
                 message: payload?.message,
                 delayMs: payload?.reloadDelayMs,
+                directory: currentDirectory,
+                transportIdentity: transport,
               });
               return true;
             }
 
             const loaded = await get().loadSkills();
+            await refreshInstalledSkillsQuery(queryClient, currentDirectory, transport);
+            await invalidateSkillsCatalogQueries(queryClient, currentDirectory, transport);
             if (loaded) {
               emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
             }
@@ -550,7 +581,11 @@ async function waitForOpenCodeConnection(delayMs?: number) {
   throw lastError || new Error("OpenCode did not become ready in time");
 }
 
-export async function refreshSkillsAfterOpenCodeRestart(options?: { message?: string; delayMs?: number }) {
+export async function refreshSkillsAfterOpenCodeRestart(options?: { message?: string; delayMs?: number; directory?: string | null; transportIdentity?: string }) {
+  const directory = options && 'directory' in options
+    ? options.directory?.trim() || null
+    : getCurrentDirectory();
+  const transport = options?.transportIdentity ?? getRuntimeTransportIdentity();
   try {
     updateConfigUpdateMessage(options?.message || "Refreshing skills…");
   } catch {
@@ -559,10 +594,14 @@ export async function refreshSkillsAfterOpenCodeRestart(options?: { message?: st
 
   try {
     await waitForOpenCodeConnection(options?.delayMs);
+    if (getRuntimeTransportIdentity() !== transport) return;
     updateConfigUpdateMessage("Refreshing skills…");
     const skillsStore = useSkillsStore.getState();
-    invalidateSkillsLoadCache();
+    invalidateSkillsLoadCache(directory);
     const loaded = await skillsStore.loadSkills();
+    if (getRuntimeTransportIdentity() !== transport) return;
+    await refreshInstalledSkillsQuery(queryClient, directory, transport);
+    await invalidateSkillsCatalogQueries(queryClient, directory, transport);
     if (loaded) {
       emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
     }

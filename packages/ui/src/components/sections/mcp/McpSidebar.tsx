@@ -10,8 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { useMcpConfigStore, type McpDraft, type McpServerConfig } from '@/stores/useMcpConfigStore';
 import { useShallow } from 'zustand/react/shallow';
-import { useMcpStore } from '@/stores/useMcpStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { isMobileDeviceViaCSS } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
@@ -25,6 +23,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useI18n } from '@/lib/i18n';
+import { queryClient } from '@/lib/queryRuntime';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import {
+  refreshMcpStatusQuery,
+  resolveMcpConfigQueryDirectory,
+  useMcpConfigsQuery,
+  useMcpStatusQuery,
+  type McpServerWithScope,
+} from '@/queries/mcpQueries';
+
+const EMPTY_MCP_SERVERS: McpServerWithScope[] = [];
 
 interface McpSidebarProps {
   onItemSelect?: () => void;
@@ -64,20 +73,19 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
   const { t } = useI18n();
   const bgClass = 'bg-background';
 
-  const { mcpServers, selectedMcpName, setSelectedMcp, setMcpDraft, loadMcpConfigs, deleteMcp } =
+  const { selectedMcpName, setSelectedMcp, setMcpDraft, deleteMcp } =
     useMcpConfigStore(useShallow((s) => ({
-      mcpServers: s.mcpServers,
       selectedMcpName: s.selectedMcpName,
       setSelectedMcp: s.setSelectedMcp,
       setMcpDraft: s.setMcpDraft,
-      loadMcpConfigs: s.loadMcpConfigs,
       deleteMcp: s.deleteMcp,
     })));
 
-  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const mcpStatus = useMcpStore((state) => state.getStatusForDirectory(currentDirectory ?? null));
-  const refreshStatus = useMcpStore((state) => state.refresh);
-  const getErrorForDirectory = useMcpStore((state) => state.getErrorForDirectory);
+  const mcpDirectory = resolveMcpConfigQueryDirectory();
+  const configsQuery = useMcpConfigsQuery(mcpDirectory);
+  const statusQuery = useMcpStatusQuery(mcpDirectory);
+  const mcpServers = configsQuery.data ?? EMPTY_MCP_SERVERS;
+  const mcpStatus = statusQuery.data ?? {};
 
   const [deleteTarget, setDeleteTarget] = React.useState<McpServerConfig | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -94,28 +102,22 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
     [mcpServers]
   );
 
-  React.useEffect(() => {
-    void loadMcpConfigs();
-  }, [loadMcpConfigs]);
-
   const handleRefresh = React.useCallback(() => {
     if (isRefreshingStatus) return;
 
     setIsRefreshingStatus(true);
     const minSpinPromise = new Promise((resolve) => setTimeout(resolve, 500));
 
+    const transport = getRuntimeTransportIdentity();
     Promise.all([
-      refreshStatus({ directory: currentDirectory, silent: true }),
+      refreshMcpStatusQuery(queryClient, mcpDirectory, transport),
       minSpinPromise,
-    ]).then(() => {
-      const error = getErrorForDirectory(currentDirectory);
-      if (error) {
-        toast.error(error);
-      }
+    ]).catch((error) => {
+      toast.error(error instanceof Error ? error.message : String(error));
     }).finally(() => {
       setIsRefreshingStatus(false);
     });
-  }, [currentDirectory, getErrorForDirectory, isRefreshingStatus, refreshStatus]);
+  }, [isRefreshingStatus, mcpDirectory]);
 
   const handleCreateNew = () => {
     const baseName = 'new-mcp-server';
@@ -150,7 +152,10 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
-    const result = await deleteMcp(deleteTarget.name);
+    const result = await deleteMcp(deleteTarget.name, {
+      directory: resolveMcpConfigQueryDirectory(),
+      transportIdentity: getRuntimeTransportIdentity(),
+    });
     if (result.ok) {
       if (result.reloadFailed) {
         toast.warning(result.message || `MCP server "${deleteTarget.name}" deleted, but OpenCode reload failed`, {
@@ -214,7 +219,11 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
 
       {/* List */}
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
-        {mcpServers.length === 0 ? (
+        {configsQuery.isError && !configsQuery.data ? (
+          <div className="py-12 px-4 text-center typography-meta text-[var(--status-error)]">
+            {configsQuery.error.message}
+          </div>
+        ) : mcpServers.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="plug" className="mx-auto mb-3 h-10 w-10 opacity-50" />
             <p className="typography-ui-label font-medium">{t('settings.mcp.sidebar.empty.title')}</p>
@@ -228,7 +237,11 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
                   {t('settings.mcp.sidebar.group.projectServers')}
                 </div>
                 {projectServers.map((server) => {
-                  const runtimeStatus = mcpStatus[server.name];
+                  const runtimeStatus = mcpStatus[server.name] ?? (
+                    statusQuery.isError && !statusQuery.data
+                      ? { status: 'failed' as const, error: statusQuery.error.message }
+                      : undefined
+                  );
                   const tone = statusToneFromMcp(runtimeStatus?.status);
                   const isSelected = selectedMcpName === server.name;
                   const isMobile = isMobileDeviceViaCSS();
@@ -291,7 +304,11 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
                   {t('settings.mcp.sidebar.group.userServers')}
                 </div>
                 {userServers.map((server) => {
-                  const runtimeStatus = mcpStatus[server.name];
+                  const runtimeStatus = mcpStatus[server.name] ?? (
+                    statusQuery.isError && !statusQuery.data
+                      ? { status: 'failed' as const, error: statusQuery.error.message }
+                      : undefined
+                  );
                   const tone = statusToneFromMcp(runtimeStatus?.status);
                   const isSelected = selectedMcpName === server.name;
                   const isMobile = isMobileDeviceViaCSS();

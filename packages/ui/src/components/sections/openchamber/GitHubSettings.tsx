@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useGitHubAuthQuery } from '@/queries/githubAuthQueries';
 import type { GitHubAuthStatus } from '@/lib/api/types';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
@@ -38,9 +39,10 @@ export const GitHubSettings: React.FC = () => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
   const runtimeGitHub = getRegisteredRuntimeAPIs()?.github;
-  const status = useGitHubAuthStore((state) => state.status);
-  const isLoading = useGitHubAuthStore((state) => state.isLoading);
-  const hasChecked = useGitHubAuthStore((state) => state.hasChecked);
+  const authQuery = useGitHubAuthQuery();
+  const status = authQuery.data ?? null;
+  const isLoading = authQuery.isLoading && !authQuery.data;
+  const hasChecked = authQuery.isFetched;
   const refreshStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const setStatus = useGitHubAuthStore((state) => state.setStatus);
 
@@ -52,10 +54,11 @@ export const GitHubSettings: React.FC = () => {
   const [flow, setFlow] = React.useState<DeviceFlowStartResponse | null>(null);
   const [pollIntervalMs, setPollIntervalMs] = React.useState<number | null>(null);
   const pollTimerRef = React.useRef<number | null>(null);
+  const flowStartedAtRef = React.useRef(0);
 
   const stopPolling = React.useCallback(() => {
     if (pollTimerRef.current != null) {
-      window.clearInterval(pollTimerRef.current);
+      window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
     setPollIntervalMs(null);
@@ -98,6 +101,7 @@ export const GitHubSettings: React.FC = () => {
           })();
 
       setFlow(payload);
+      flowStartedAtRef.current = Date.now();
       setPollIntervalMs(Math.max(1, payload.interval) * 1000);
 
       const url = payload.verificationUriComplete || payload.verificationUri;
@@ -139,36 +143,52 @@ export const GitHubSettings: React.FC = () => {
       return;
     }
 
-    pollTimerRef.current = window.setInterval(() => {
-      void (async () => {
-        try {
-          const result = await pollOnce(flow.deviceCode);
-            if (result.connected) {
-              toast.success(t('settings.github.page.toast.connected'));
-              setFlow(null);
-              stopPolling();
-              await refreshStatus(runtimeGitHub, { force: true });
-              return;
-            }
+    let cancelled = false;
+    const deadline = flowStartedAtRef.current + flow.expiresIn * 1000;
+    const poll = async () => {
+      if (Date.now() >= deadline) {
+        toast.error(t('settings.github.page.toast.authorizationFailed'));
+        setFlow(null);
+        stopPolling();
+        return;
+      }
 
-          if (result.status === 'slow_down') {
-            setPollIntervalMs((prev) => (prev ? prev + 5000 : 5000));
-          }
-
-          if (result.status === 'expired_token' || result.status === 'access_denied') {
-            toast.error(result.error || t('settings.github.page.toast.authorizationFailed'));
-            setFlow(null);
-            stopPolling();
-          }
-        } catch (error) {
-          console.warn('GitHub polling failed:', error);
+      try {
+        const result = await pollOnce(flow.deviceCode);
+        if (cancelled) return;
+        if (result.connected) {
+          toast.success(t('settings.github.page.toast.connected'));
+          setFlow(null);
+          stopPolling();
+          await refreshStatus(runtimeGitHub, { force: true });
+          return;
         }
-      })();
-    }, pollIntervalMs);
+
+        if (result.status === 'slow_down') {
+          setPollIntervalMs((prev) => (prev ? prev + 5000 : 5000));
+          return;
+        }
+
+        if (result.status === 'expired_token' || result.status === 'access_denied') {
+          toast.error(result.error || t('settings.github.page.toast.authorizationFailed'));
+          setFlow(null);
+          stopPolling();
+          return;
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('GitHub polling failed:', error);
+      }
+
+      pollTimerRef.current = window.setTimeout(() => void poll(), pollIntervalMs);
+    };
+
+    pollTimerRef.current = window.setTimeout(() => void poll(), pollIntervalMs);
 
     return () => {
+      cancelled = true;
       if (pollTimerRef.current != null) {
-        window.clearInterval(pollTimerRef.current);
+        window.clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
       }
     };
@@ -258,6 +278,14 @@ export const GitHubSettings: React.FC = () => {
 
   if (isLoading) {
     return null;
+  }
+
+  if (authQuery.isError && !authQuery.data) {
+    return (
+      <div className="mb-8 px-1 typography-meta text-[var(--status-error)]">
+        {authQuery.error.message}
+      </div>
+    );
   }
 
   const connected = Boolean(status?.connected);

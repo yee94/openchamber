@@ -79,7 +79,8 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { useGitBranches, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { queryClient } from '@/lib/queryRuntime';
+import { readInstalledSkillsSnapshot, useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useCommandsQuery } from '@/queries/commandQueries';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -1192,7 +1193,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // matching /tokens in the composer, the same way confirmed @files are.
     const commandsQuery = useCommandsQuery();
     const availableCommands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
-    const availableSkills = useSkillsStore((s) => s.skills);
+    const installedSkillsQuery = useInstalledSkillsQuery();
+    const availableSkills = React.useMemo(() => installedSkillsQuery.data ?? [], [installedSkillsQuery.data]);
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
             'init', 'review', 'undo', 'redo', 'fork', 'timeline', 'model', 'compact', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'goal', 'catch-up', 'debug', 'weigh', 'explore',
@@ -1930,7 +1932,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         let primaryAttachments: AttachedFile[] = [];
         let agentMentionName: string | undefined;
         const additionalParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [];
-        const availableSkillNames = new Set(useSkillsStore.getState().skills.map((skill) => skill.name));
+        const availableSkillNames = new Set(readInstalledSkillsSnapshot(queryClient, currentDirectory).map((skill) => skill.name));
         const mentionedSkillNames: string[] = [];
         const addMentionedSkills = (text: string) => {
             for (const name of collectInlineSkillMentions(text, availableSkillNames)) {
