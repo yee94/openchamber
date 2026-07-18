@@ -55,6 +55,7 @@ interface MobileWindowMotionProps {
   id: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  keepMounted?: boolean;
   presentation?: MobileWindowMotionPresentation;
   edge?: MobileWindowMotionEdge;
   children: React.ReactNode;
@@ -66,7 +67,7 @@ interface MobileWindowMotionProps {
 }
 
 export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
-  id, open, onOpenChange, presentation = 'sheet', edge = 'bottom', children, className, scrimClassName, surfaceClassName, dismissGesture = false, ariaLabel,
+  id, open, onOpenChange, keepMounted = false, presentation = 'sheet', edge = 'bottom', children, className, scrimClassName, surfaceClassName, dismissGesture = false, ariaLabel,
 }) => {
   const overlayRootRef = React.useRef<HTMLElement | null>(null);
   const scrimRef = React.useRef<HTMLDivElement | null>(null);
@@ -85,13 +86,15 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
   const interactionActiveRef = React.useRef(false);
   const previousControlledOpenRef = React.useRef(open);
   const mountedRef = React.useRef(false);
+  const activeRef = React.useRef(open);
   const controllerActionsRef = React.useRef<MobileWindowMotionController | null>(null);
   const [mounted, setMounted] = React.useState(open);
+  const [active, setActive] = React.useState(open);
   const [mode, setMode] = React.useState<MobileWindowMotionMode>('standard');
   const [motionActive, setMotionActive] = React.useState(false);
   const isPreview = mode === 'interactive-present';
   const topId = React.useSyncExternalStore(mobileWindowStack.subscribe, mobileWindowStack.getSnapshot, mobileWindowStack.getSnapshot);
-  const isTop = !isPreview && topId === id;
+  const isTop = active && !isPreview && topId === id;
   const dismissGestureRef = useMobileWindowMotionDismissGesture({
     motionId: id,
     edge,
@@ -102,6 +105,12 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
     surfaceRef.current = surface;
     dismissGestureRef(surface);
   }, [dismissGestureRef]);
+
+  const deactivate = React.useCallback(() => {
+    activeRef.current = false;
+    setActive(false);
+    if (!keepMounted) setMounted(false);
+  }, [keepMounted]);
 
   openRef.current = open;
   onOpenChangeRef.current = onOpenChange;
@@ -187,6 +196,9 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
     mountedRef.current = mounted;
     if (mounted) applyFrame(pendingProgressRef.current);
   }, [applyFrame, mounted]);
+  React.useLayoutEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   React.useEffect(() => {
     cancelReconcileFrame();
@@ -194,30 +206,34 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
       pendingProgressRef.current = progressRef.current;
       setMounted(true);
     }
+    if (open && !activeRef.current) {
+      activeRef.current = true;
+      setActive(true);
+    }
     if (mountedRef.current && modeRef.current === 'standard') {
       settle(getMobileWindowMotionControlledTarget(open), () => {
-        if (!openRef.current && modeRef.current === 'standard') setMounted(false);
+        if (!openRef.current && modeRef.current === 'standard') deactivate();
       });
     }
-  }, [cancelReconcileFrame, open, settle]);
+  }, [cancelReconcileFrame, deactivate, open, settle]);
   React.useLayoutEffect(() => {
     if (!mounted || modeRef.current !== 'standard' || reconcileFrameRef.current !== null) return;
     settle(open ? 1 : 0, () => {
-      if (!openRef.current && modeRef.current === 'standard') setMounted(false);
+      if (!openRef.current && modeRef.current === 'standard') deactivate();
     });
-  }, [mounted, open, settle]);
+  }, [deactivate, mounted, open, settle]);
 
   React.useEffect(() => {
-    if (!mounted || isPreview) return;
+    if (!active || isPreview) return;
     window.dispatchEvent(new Event('oc:mobile-overlay-opened'));
     return () => { window.dispatchEvent(new Event('oc:mobile-overlay-closed')); };
-  }, [isPreview, mounted]);
+  }, [active, isPreview]);
   React.useEffect(() => {
-    if (!mounted || isPreview) return;
+    if (!active || isPreview) return;
     return mobileWindowStack.add({ id, onClose: () => onOpenChangeRef.current(false) }, document.body);
-  }, [id, isPreview, mounted]);
+  }, [active, id, isPreview]);
   React.useEffect(() => {
-    if (!mounted || isPreview || !isTop) return;
+    if (!active || isPreview || !isTop) return;
     const surface = surfaceRef.current;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     (surface?.querySelector<HTMLElement>(FOCUSABLE) ?? surface)?.focus();
@@ -235,11 +251,11 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
       document.removeEventListener('keydown', onKeyDown);
       previous?.focus();
     };
-  }, [isPreview, isTop, mounted]);
+  }, [active, isPreview, isTop]);
 
   controllerActionsRef.current = {
     begin: (operation) => {
-      if (operation === 'dismiss' && (!mountedRef.current || modeRef.current === 'interactive-present')) return false;
+      if (operation === 'dismiss' && (!activeRef.current || modeRef.current === 'interactive-present')) return false;
       cancelReconcileFrame();
       interruptMotion();
       interactionGenerationRef.current += 1;
@@ -251,6 +267,8 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
       setMotionActive(true);
       if (operation === 'present') {
         pendingProgressRef.current = progressRef.current;
+        activeRef.current = true;
+        setActive(true);
         setMounted(true);
       }
       return true;
@@ -277,6 +295,7 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
       settle(target, () => {
         if (generation !== interactionGenerationRef.current) return;
         if (finish === 'commit') onOpenChangeRef.current(operation === 'present');
+        if (operation === 'present' && finish === 'cancel' && !openRef.current) deactivate();
         modeRef.current = 'standard';
         setMode('standard');
         reconcileFrameRef.current = window.requestAnimationFrame(() => {
@@ -284,7 +303,7 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
           if (generation !== interactionGenerationRef.current) return;
           const desired = getMobileWindowMotionControlledTarget(openRef.current);
           settle(desired, () => {
-            if (generation === interactionGenerationRef.current && !openRef.current) setMounted(false);
+            if (generation === interactionGenerationRef.current && !openRef.current) deactivate();
           });
         });
       });
@@ -293,11 +312,18 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
       cancelReconcileFrame();
       interactionGenerationRef.current += 1;
       interactionActiveRef.current = false;
-      modeRef.current = 'standard';
-      setMode('standard');
+      const interruptedPresentation = modeRef.current === 'interactive-present' && !openRef.current;
+      if (!interruptedPresentation) {
+        modeRef.current = 'standard';
+        setMode('standard');
+      }
       interruptMotion();
       settle(getMobileWindowMotionControlledTarget(openRef.current), () => {
-        if (!openRef.current && modeRef.current === 'standard') setMounted(false);
+        if (!openRef.current) deactivate();
+        if (interruptedPresentation) {
+          modeRef.current = 'standard';
+          setMode('standard');
+        }
       });
     },
   };
@@ -331,10 +357,11 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
   const content = (
     <div
       ref={scrimRef}
-      className={cn('oc-mobile-window-motion oc-keyboard-inset-surface fixed inset-0 z-[60] flex flex-col bg-[rgb(0_0_0_/_0.45)]', motionActive && 'oc-mobile-window-motion-active', scrimClassName, className)}
+      className={cn('oc-mobile-window-motion oc-keyboard-inset-surface fixed inset-0 z-[60] flex flex-col bg-[rgb(0_0_0_/_0.45)]', motionActive && 'oc-mobile-window-motion-active', !active && !isPreview && 'pointer-events-none invisible', scrimClassName, className)}
+      data-mobile-overlay-active={String(active)}
       role={isPreview ? undefined : 'dialog'} aria-label={isPreview ? undefined : ariaLabel}
-      aria-modal={isTop ? 'true' : undefined} aria-hidden={isPreview || !isTop || undefined} inert={isPreview || !isTop || undefined}
-      onClick={() => { if (!isPreview && isTop) onOpenChangeRef.current(false); }}
+      aria-modal={active && isTop ? 'true' : undefined} aria-hidden={isPreview || !active || !isTop || undefined} inert={isPreview || !active || !isTop || undefined}
+      onClick={() => { if (active && !isPreview && isTop) onOpenChangeRef.current(false); }}
     >
       <div ref={setSurfaceRef} tabIndex={-1} className={cn(getMobileWindowMotionSurfaceLayout(presentation, edge), surfaceClassName)} style={{ contain: 'layout paint style' }} onClick={(event) => event.stopPropagation()}>
         {children}

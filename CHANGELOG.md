@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.25] - 2026-07-18
+
+- **Mobile sessions:** preserve the session window's rendered elements, scroll position, project filter, expanded worktree groups, and pagination state across presentations while continuing to refresh authoritative session data.
+
 ## [1.16.24] - 2026-07-18
 
 - **Shared data layer:** migrate agents, commands, installed skills, MCP, GitHub authentication, plugins, skills catalogs, files, and plans to runtime-scoped TanStack Query caches with cancellation, retries, request sharing, bounded freshness, and stale-result protection.

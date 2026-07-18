@@ -67,6 +67,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { COMPOSER_ICON_HOVER_CLASS, SELECTOR_CHIP_HOVER_CLASS } from '@/components/chat/message/parts/toolRowChrome';
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { hasActiveMobileOverlay, MOBILE_OVERLAY_ACTIVE_ATTRIBUTE } from '@/components/ui/MobileOverlayPresence';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { GitHubIssuePickerDialog } from '@/components/session/GitHubIssuePickerDialog';
 import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog';
@@ -4453,8 +4454,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }, 30);
     }, [setExpandedInput]);
 
-    // Watch the shared overlay portal root: any mounted MobileOverlayPanel
-    // (sessions sheet, model/agent panels, draft pickers, ...) counts as busy.
+    // Watch the shared overlay portal root: active panels (sessions sheet,
+    // model/agent panels, draft pickers, ...) count as busy. Retained hidden
+    // panels opt out through their explicit active attribute.
     // Observing the host catches overlays whose open-state lives in other
     // components without threading their state here.
     React.useEffect(() => {
@@ -4467,10 +4469,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             document.body.appendChild(host);
         }
         const hostEl = host;
-        const update = () => setMobileOverlayHostBusy(hostEl.childElementCount > 0);
+        const update = () => setMobileOverlayHostBusy(hasActiveMobileOverlay(hostEl.children));
         update();
         const observer = new MutationObserver(update);
-        observer.observe(hostEl, { childList: true });
+        observer.observe(hostEl, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: [MOBILE_OVERLAY_ACTIVE_ATTRIBUTE],
+        });
         return () => observer.disconnect();
     }, [isMobile]);
 
