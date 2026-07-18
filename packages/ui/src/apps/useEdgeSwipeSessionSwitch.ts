@@ -9,7 +9,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
  * Horizontal touch-swipe gesture to switch sessions in the mobile chat.
  *
  * The listeners live on the chat container, while gesture starts are accepted
- * only from a chat surface marked with `data-session-swipe-surface`:
+ * only from the mobile composer marked with `data-session-swipe-surface`:
  *
  * - Left  swipe → step +1 (next / older session)
  * - Right swipe → step -1 (prev / newer session)
@@ -111,7 +111,7 @@ export interface SwipeProgress {
   direction: Exclude<SwipeDirection, null>;
   /** Commit progress, clamped from 0 to 1. */
   progress: number;
-  /** Finger travel clamped to the visual feedback range. */
+  /** Raw horizontal finger travel in CSS pixels. */
   offsetX: number;
   /** Whether a session exists in this direction. */
   canSwitch: boolean;
@@ -148,7 +148,7 @@ export const evaluateSwipeProgress = (
   return {
     direction,
     progress: Math.min(absDx / MIN_DISTANCE, 1),
-    offsetX: Math.sign(dx) * Math.min(absDx, 48),
+    offsetX: dx,
     canSwitch: available[direction],
   };
 };
@@ -279,7 +279,7 @@ export const useEdgeSwipeSessionSwitch = (
       progressActive = true;
       onProgressRef.current?.(progress);
       if (progress.progress === 1 && progress.canSwitch && !hapticTriggered) {
-        hapticTriggered = triggerMobileHaptic();
+        hapticTriggered = triggerMobileHaptic('medium');
       }
     };
 
@@ -307,7 +307,7 @@ export const useEdgeSwipeSessionSwitch = (
 
       const step = direction === 'prev' ? -1 : 1;
       if (switchByStep(step)) {
-        if (!hapticTriggered) triggerMobileHaptic();
+        if (!hapticTriggered) triggerMobileHaptic('medium');
         suppressNextClick = true;
         if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);
         clickResetTimer = window.setTimeout(() => {

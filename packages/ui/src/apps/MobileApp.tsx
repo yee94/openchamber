@@ -2208,8 +2208,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   );
   useDeepLinkHandlers(deepLinkHandlers);
 
-  // Edge swipe (left/right screen edge → centre) switches between sessions, with a directional
-  // slide+fade on the chat content so it's obvious the session changed.
+  // A horizontal swipe beginning on the mobile composer switches sessions.
   const chatMainRef = React.useRef<HTMLElement>(null);
   const chatAnimRef = React.useRef<HTMLDivElement>(null);
   const previousSessionPlaceholderRef = React.useRef<HTMLDivElement>(null);
@@ -2241,9 +2240,11 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return;
     }
 
-    chat.getAnimations().forEach((animation) => animation.cancel());
+    if (!chat.style.willChange) {
+      chat.getAnimations().forEach((animation) => animation.cancel());
+    }
     chat.style.willChange = 'transform, opacity';
-    chat.style.transform = `translate3d(${progress.offsetX * 0.22}px, 0, 0)`;
+    chat.style.transform = `translate3d(${progress.offsetX}px, 0, 0)`;
     chat.style.opacity = String(1 - progress.progress * 0.08);
     const placeholder = progress.direction === 'prev' ? previous : next;
     const hiddenPlaceholder = progress.direction === 'prev' ? next : previous;
@@ -2542,7 +2543,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             >
               {t('helpDialog.item.nextSession')}
             </div>
-            <div ref={chatAnimRef} data-session-swipe-surface="true" className="h-full w-full">
+            <div ref={chatAnimRef} className="h-full w-full">
               <ErrorBoundary>
                 <ChatView />
               </ErrorBoundary>

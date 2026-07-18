@@ -148,11 +148,11 @@ describe('evaluateSwipeProgress', () => {
     });
   });
 
-  test('clamps committed visual progress and reports unavailable direction', () => {
+  test('preserves raw finger travel and reports unavailable direction', () => {
     expect(evaluateSwipeProgress(baseSwipe({ endX: 100, endY: 303 }), { prev: true, next: false })).toEqual({
       direction: 'next',
       progress: 1,
-      offsetX: -48,
+      offsetX: -100,
       canSwitch: false,
     });
   });

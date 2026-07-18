@@ -138,8 +138,10 @@ async function getHapticsModuleCached(): Promise<typeof import('@capacitor/hapti
   }
 }
 
-/** Fires one light haptic while the Capacitor mobile app is visible and active. */
-export function triggerMobileHaptic(): boolean {
+type MobileHapticStrength = 'light' | 'medium';
+
+/** Fires one haptic while the Capacitor mobile app is visible and active. */
+export function triggerMobileHaptic(strength: MobileHapticStrength = 'light'): boolean {
   if (!isCapacitorMobileNative()) return false;
   if (document.visibilityState !== 'visible' || !document.documentElement.classList.contains('oc-native-app-active')) return false;
 
@@ -149,28 +151,29 @@ export function triggerMobileHaptic(): boolean {
 
   void getHapticsModuleCached().then((mod) => {
     if (!mod) return;
-    return mod.Haptics.impact({ style: mod.ImpactStyle.Light }).catch(() => undefined);
+    const style = strength === 'medium' ? mod.ImpactStyle.Medium : mod.ImpactStyle.Light;
+    return mod.Haptics.impact({ style }).catch(() => undefined);
   });
   return true;
 }
 
 const MOBILE_PRESS_TARGET_SELECTOR = 'button, [role="button"]';
 
-/** Adds light feedback after enabled mobile controls complete a real user click. */
+/** Adds immediate feedback when an enabled mobile control is pressed. */
 export function useMobilePressHaptics(): void {
   React.useEffect(() => {
     if (!isCapacitorMobileNative()) return;
 
-    const handleClick = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
       if (!event.isTrusted || !(event.target instanceof Element)) return;
       const control = event.target.closest<HTMLElement>(MOBILE_PRESS_TARGET_SELECTOR);
       if (!control) return;
       if (control.matches(':disabled, [aria-disabled="true"], [data-mobile-press-feedback="none"]')) return;
-      triggerMobileHaptic();
+      triggerMobileHaptic('medium');
     };
 
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 }
 
