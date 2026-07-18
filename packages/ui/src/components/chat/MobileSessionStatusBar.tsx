@@ -491,12 +491,6 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     }
   }, [filterProjectId, hasPinnedSessions, setFilterProjectId]);
 
-  React.useEffect(() => {
-    if (open) return;
-    setExpandedWorktreeGroups(new Set());
-    setVisibleCountByGroup(new Map());
-  }, [open]);
-
   const selectedProject = React.useMemo(
     () => filterProjectId && filterProjectId !== PINNED_SESSION_FILTER_ID
       ? projects.find((project) => project.id === filterProjectId) ?? null
@@ -925,6 +919,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         id={MOBILE_SESSIONS_WINDOW_ID}
         open={open}
         onOpenChange={setOpen}
+        keepMounted
         presentation="sheet"
         edge="bottom"
         dismissGesture
