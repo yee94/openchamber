@@ -54,6 +54,7 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SessionStartupCoordinator } from '@/components/session/SessionStartupCoordinator';
+import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
 import { SyncProvider, useCurrentSessionEntity, useParentSession, useSessionMessages } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
@@ -2083,6 +2084,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const [isMcpRefreshing, setIsMcpRefreshing] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [updateOpen, setUpdateOpen] = React.useState(false);
+  const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   const [overflowOpen, setOverflowOpen] = React.useState(false);
   // When set, the Changes surface opens directly into the per-file diff for this path.
@@ -2098,6 +2100,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const setSelectedMcp = useMcpConfigStore((state) => state.setSelectedMcp);
   const gitStatus = useGitStatus(normalizePath(currentDirectory) || null);
   const dirtyChangeCount = gitStatus?.files?.length ?? 0;
+
+  React.useEffect(() => sessionEvents.onDirectoryRequest(() => setDirectoryDialogOpen(true)), []);
 
   // iPad (Capacitor): sessions live in a persistent full-height left sidebar
   // and Changes/Files in a right sidebar, instead of phone sheets/surfaces.
@@ -2278,6 +2282,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     || instancesOpen
     || settingsOpen
     || updateOpen
+    || directoryDialogOpen
     || overflowOpen;
   const handleHeaderSwipeOpen = React.useCallback(() => {
     getMobileWindowMotionController(MOBILE_SESSIONS_WINDOW_ID)?.finish('commit');
@@ -2321,6 +2326,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       setOverflowOpen(false);
       return true;
     }
+    if (directoryDialogOpen) {
+      setDirectoryDialogOpen(false);
+      return true;
+    }
     if (mobileSessionPanelOpen) {
       setMobileSessionPanelOpen(false);
       return true;
@@ -2355,7 +2364,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return true;
     }
     return false;
-  }, [changesOpen, closeChanges, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSession, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, updateOpen]);
+  }, [changesOpen, closeChanges, directoryDialogOpen, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSession, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, updateOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
 
@@ -2638,6 +2647,12 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             </div>
           </aside>
         ) : null}
+
+        <DirectoryExplorerDialog
+          open={directoryDialogOpen}
+          onOpenChange={setDirectoryDialogOpen}
+          forceMobile
+        />
 
         <MobileOverflowMenu
           open={overflowOpen}
