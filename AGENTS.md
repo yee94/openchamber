@@ -63,6 +63,15 @@ Release artifacts and repository links use `yee94/openchamber`. Electron is the 
 - One failed entity must not erase or block unrelated complete entities.
 - Runtime-specific differences must be intentional and visible in code.
 
+## UI State and Runtime Ownership
+
+- TanStack Query owns runtime-scoped pull server state.
+- `@reactuses/core` owns standard browser, DOM, event, timer, observer, and storage interaction Hooks.
+- Zustand and component state own UI selections, drafts, and mutation orchestration.
+- `RuntimeAPIs`, `runtimeFetch`, and relay transports own cross-runtime and realtime boundaries.
+- Use `useEffect` to synchronize external systems. Calculate derived values during render and trigger mutations from event handlers.
+- `@reactuses/core` requires explicit authorization before installation; the repository currently has no installed dependency.
+
 ## Session Index and Performance Invariants
 
 - The runtime session index is SQLite-backed and owns durable cold-start session summaries.
@@ -92,7 +101,7 @@ Project skills live under `.agents/skills/*/SKILL.md`. Before editing, load ever
 |---|---|
 | Any source, dependency, export, build-config, generated-asset, package-contract, or module-ownership change | `openchamber-change-discipline` |
 | CLI commands, prompts, terminal output, non-TTY, `--quiet`, or `--json` behavior | `clack-cli-patterns` |
-| Shared UI data access, OpenCode SDK, `RuntimeAPIs`, runtime fetch/auth/URLs, bridges/proxies, runtime switching, or server API routes | `ui-api-decoupling` |
+| Shared UI data access, React Hooks, `@tanstack/react-query`, query keys/cache/invalidation, `@reactuses/core`, browser Hooks, OpenCode SDK, `RuntimeAPIs`, runtime fetch/auth/URLs, bridges/proxies, runtime switching, or server API routes | `ui-api-decoupling` |
 | Electron main/preload, IPC, native UI, updater, deep links, SSH/tunnels, packaging, or child processes | `desktop-shell` |
 | Session sync, bootstrap/reconnect, reducers, polling, optimistic state, queues, live status, reconciliation, or directory-scoped caches | `sync-state-invariants` |
 | Render/store/event hot paths, large lists, caching/indexing, high CPU/memory, lag, jank, freezes, or performance regressions | `performance-engineering` |

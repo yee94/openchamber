@@ -28,6 +28,46 @@ describe('file drop references', () => {
         ]);
     });
 
+    test('ignores Markdown and JSX closing fragments', () => {
+        expect(parseFileDropReferences('Dropped files:\n/>\nMore details')).toEqual([]);
+        expect(parseFileDropReferences('/>')).toEqual([]);
+    });
+
+    test('treats text/plain as one direct file reference', () => {
+        const transfer = {
+            getData: (type: string) => {
+                if (type === 'text/plain') {
+                    return 'Notes:\n/tmp/one.txt\n/>\n/tmp/two.txt';
+                }
+                return '';
+            },
+        } as Pick<DataTransfer, 'getData'>;
+
+        expect(collectFileDropReferences(transfer)).toEqual([]);
+
+        const pathTransfer = {
+            getData: (type: string) => type === 'text/plain' ? '/tmp/one.txt' : '',
+        } as Pick<DataTransfer, 'getData'>;
+
+        expect(collectFileDropReferences(pathTransfer)).toEqual(['/tmp/one.txt']);
+    });
+
+    test('reads structured VS Code payloads without parsing plain JSON text', () => {
+        const payload = JSON.stringify({ resources: ['file:///Users/yee/project', '/tmp/notes.md'] });
+        const transfer = {
+            getData: (type: string) => type === 'CodeFiles' ? payload : '',
+        } as Pick<DataTransfer, 'getData'>;
+        const plainTransfer = {
+            getData: (type: string) => type === 'text/plain' ? payload : '',
+        } as Pick<DataTransfer, 'getData'>;
+
+        expect(collectFileDropReferences(transfer)).toEqual([
+            'file:///Users/yee/project',
+            '/tmp/notes.md',
+        ]);
+        expect(collectFileDropReferences(plainTransfer)).toEqual([]);
+    });
+
     test('reads every supported transfer type', () => {
         const transfer = {
             getData: (type: string) => type === 'text/uri-list'

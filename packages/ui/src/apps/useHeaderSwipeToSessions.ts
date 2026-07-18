@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { evaluateSwipeThresholdHaptic, triggerMobileHaptic } from '@/hooks/streamingHaptics';
+
 /**
  * Phone-only content right-swipe gesture to open the session panel.
  *
@@ -10,14 +12,14 @@ import React from 'react';
  * - Disabled when any overlay (sessions sheet, settings, files, etc.) is
  *   already open so the gesture doesn't stack sheets or compete with
  *   overlay dismiss gestures.
- * - Interactive controls (buttons, links, inputs) and horizontally-scrollable
- *   ancestors are excluded so the gesture never fights scrolling or steals
- *   taps from the header's own toolbar buttons.
- * - Only `touchstart` / `touchend` are observed (both passive), so this
- *   never blocks scrolling.
+ * - Tappable content remains a click candidate until horizontal intent wins.
+ * - The listener runs in capture phase so nested tools cannot interrupt an
+ *   already-recognized swipe.
  */
 
 const MAX_OFF_AXIS_RATIO = 0.55; // |dy| must stay below |dx| × this
+const INTENT_DISTANCE = 8;
+const THRESHOLD_HYSTERESIS = 8;
 
 // ---------------------------------------------------------------------------
 // Pure helpers — exported for targeted testing
@@ -36,8 +38,8 @@ export interface HeaderSwipeInput {
   viewportWidth: number;
   /** whether the gesture is disabled (iPad or overlay open) */
   disabled: boolean;
-  /** whether the touch started on an interactive / horizontally-scrollable target */
-  startedOnInteractive: boolean;
+  /** whether the touch started on the composer or a horizontally-scrollable target */
+  startedOnExcludedTarget: boolean;
 }
 
 interface HeaderSwipeResult {
@@ -52,14 +54,14 @@ interface HeaderSwipeResult {
  */
 export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult => {
   if (input.disabled) return { open: false };
-  if (input.startedOnInteractive) return { open: false };
+  if (input.startedOnExcludedTarget) return { open: false };
 
   const dx = input.endX - input.startX;
   const dy = input.endY - input.startY;
 
   // Must be a horizontal rightward swipe (left-to-right)
   if (dx <= 0) return { open: false };
-  if (Math.abs(dx) <= input.viewportWidth / 2) return { open: false };
+  if (Math.abs(dx) < input.viewportWidth / 2) return { open: false };
 
   // Suppress off-axis (vertical) gestures so diagonal scrolls don't open the sheet
   if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return { open: false };
@@ -70,32 +72,6 @@ export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult 
 // ---------------------------------------------------------------------------
 // Interactive / scrollable exclusion helpers
 // ---------------------------------------------------------------------------
-
-const INTERACTIVE_SELECTORS = [
-  'a[href]',
-  'button',
-  'input',
-  'select',
-  'textarea',
-  '[contenteditable="true"]',
-  '[role="button"]',
-  '[role="combobox"]',
-  '[role="link"]',
-  '[role="dialog"]',
-  '[role="listbox"]',
-  '[role="menu"]',
-  '[role="menuitem"]',
-  '[role="option"]',
-  '[role="textbox"]',
-  '[data-radix-popper-content-wrapper]',
-].join(',');
-
-const isInteractiveTarget = (element: Element | null): boolean => {
-  if (!element) return false;
-  if (element.closest('[data-session-swipe-surface="true"]')) return true;
-  return element.matches(INTERACTIVE_SELECTORS)
-    || element.closest(INTERACTIVE_SELECTORS) !== null;
-};
 
 const hasHorizontallyScrollableAncestor = (element: Element | null): boolean => {
   let current: Element | null = element;
@@ -110,9 +86,10 @@ const hasHorizontallyScrollableAncestor = (element: Element | null): boolean => 
   return false;
 };
 
-const isSwallowTarget = (touch: Touch): boolean => {
+const isExcludedTarget = (touch: Touch): boolean => {
   const element = document.elementFromPoint(touch.clientX, touch.clientY);
-  return isInteractiveTarget(element) || hasHorizontallyScrollableAncestor(element);
+  return Boolean(element?.closest('[data-session-swipe-surface="true"]'))
+    || hasHorizontallyScrollableAncestor(element);
 };
 
 // ---------------------------------------------------------------------------
@@ -122,6 +99,12 @@ const isSwallowTarget = (touch: Touch): boolean => {
 interface HeaderSwipeToSessionsOptions {
   /** Called when a qualifying swipe is detected. */
   onOpen: () => void;
+  /** Mounts the sessions surface when horizontal intent is first recognized. */
+  onPreviewStart?: () => void;
+  /** Closes a mounted preview when the gesture is cancelled. */
+  onPreviewCancel?: () => void;
+  /** Drives the mounted sessions surface while the finger moves. */
+  onProgress?: (progress: number | null) => void;
   /** Whether the gesture is currently disabled (iPad or overlay open). */
   disabled: boolean;
 }
@@ -132,6 +115,12 @@ export const useHeaderSwipeToSessions = (
 ): void => {
   const onOpenRef = React.useRef(options.onOpen);
   onOpenRef.current = options.onOpen;
+  const onPreviewStartRef = React.useRef(options.onPreviewStart);
+  onPreviewStartRef.current = options.onPreviewStart;
+  const onPreviewCancelRef = React.useRef(options.onPreviewCancel);
+  onPreviewCancelRef.current = options.onPreviewCancel;
+  const onProgressRef = React.useRef(options.onProgress);
+  onProgressRef.current = options.onProgress;
   const disabledRef = React.useRef(options.disabled);
   disabledRef.current = options.disabled;
 
@@ -142,7 +131,43 @@ export const useHeaderSwipeToSessions = (
     let tracking = false;
     let startX = 0;
     let startY = 0;
-    let startedOnInteractive = false;
+    let startedOnExcludedTarget = false;
+    let horizontalIntent = false;
+    let previewStarted = false;
+    let thresholdReached = false;
+    let thresholdHapticDelivered = false;
+    let latestDistance = 0;
+    let viewportWidth = 0;
+
+    const updateThreshold = (distance: number) => {
+      const enterThreshold = viewportWidth / 2;
+      const transition = evaluateSwipeThresholdHaptic({
+        thresholdReached,
+        distance,
+        enterDistance: enterThreshold,
+        cancelDistance: enterThreshold - THRESHOLD_HYSTERESIS,
+        available: true,
+      });
+      thresholdReached = transition.thresholdReached;
+      if (transition.event === 'enter') thresholdHapticDelivered = triggerMobileHaptic('medium', { bypassCadence: true });
+      if (transition.event === 'cancel') {
+        triggerMobileHaptic('light', { bypassCadence: true });
+        thresholdHapticDelivered = false;
+      }
+    };
+
+    const finishPreview = (commit: boolean) => {
+      onProgressRef.current?.(null);
+      if (thresholdReached && !commit) triggerMobileHaptic('light', { bypassCadence: true });
+      thresholdReached = false;
+      thresholdHapticDelivered = false;
+      if (commit) {
+        onOpenRef.current();
+      } else if (previewStarted) {
+        onPreviewCancelRef.current?.();
+      }
+      previewStarted = false;
+    };
 
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) {
@@ -158,43 +183,86 @@ export const useHeaderSwipeToSessions = (
       tracking = true;
       startX = touch.clientX;
       startY = touch.clientY;
-      startedOnInteractive = isSwallowTarget(touch);
+      viewportWidth = window.innerWidth;
+      startedOnExcludedTarget = isExcludedTarget(touch);
+      horizontalIntent = false;
+      previewStarted = false;
+      thresholdReached = false;
+      thresholdHapticDelivered = false;
+      latestDistance = 0;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!tracking || startedOnExcludedTarget) return;
+      if (event.touches.length !== 1) {
+        if (horizontalIntent) finishPreview(false);
+        tracking = false;
+        return;
+      }
+      const touch = event.touches[0];
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+
+      if (!horizontalIntent) {
+        const absDx = Math.abs(dx);
+        if (absDx < INTENT_DISTANCE) return;
+        if (dx <= 0 || Math.abs(dy) > absDx * MAX_OFF_AXIS_RATIO) {
+          tracking = false;
+          return;
+        }
+        horizontalIntent = true;
+        previewStarted = true;
+        onPreviewStartRef.current?.();
+      }
+
+      if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) {
+        finishPreview(false);
+        horizontalIntent = false;
+        tracking = false;
+        return;
+      }
+
+      event.preventDefault();
+      latestDistance = Math.max(0, dx);
+      updateThreshold(latestDistance);
+      onProgressRef.current?.(Math.min(latestDistance / (viewportWidth / 2), 1));
     };
 
     const onTouchEnd = (event: TouchEvent) => {
       if (!tracking) return;
       tracking = false;
-      if (disabledRef.current) return;
-
+      if (!horizontalIntent) return;
+      event.preventDefault();
       const touch = event.changedTouches[0];
-      if (!touch) return;
-
-      const { open } = evaluateHeaderSwipe({
+      if (touch) latestDistance = Math.max(0, touch.clientX - startX);
+      const commit = touch ? evaluateHeaderSwipe({
         startX,
         startY,
         endX: touch.clientX,
         endY: touch.clientY,
-        viewportWidth: window.innerWidth,
-        disabled: disabledRef.current,
-        startedOnInteractive,
-      });
-
-      if (open) {
-        onOpenRef.current();
-      }
+        viewportWidth,
+        disabled: false,
+        startedOnExcludedTarget: false,
+      }).open : false;
+      if (commit && !thresholdHapticDelivered) triggerMobileHaptic('medium', { bypassCadence: true });
+      finishPreview(commit);
     };
 
     const onTouchCancel = () => {
+      if (horizontalIntent) finishPreview(false);
       tracking = false;
     };
 
-    element.addEventListener('touchstart', onTouchStart, { passive: true });
-    element.addEventListener('touchend', onTouchEnd, { passive: true });
-    element.addEventListener('touchcancel', onTouchCancel, { passive: true });
+    element.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+    element.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+    element.addEventListener('touchend', onTouchEnd, { passive: false, capture: true });
+    element.addEventListener('touchcancel', onTouchCancel, { passive: true, capture: true });
     return () => {
-      element.removeEventListener('touchstart', onTouchStart);
-      element.removeEventListener('touchend', onTouchEnd);
-      element.removeEventListener('touchcancel', onTouchCancel);
+      if (previewStarted) finishPreview(false);
+      element.removeEventListener('touchstart', onTouchStart, true);
+      element.removeEventListener('touchmove', onTouchMove, true);
+      element.removeEventListener('touchend', onTouchEnd, true);
+      element.removeEventListener('touchcancel', onTouchCancel, true);
     };
   }, [ref]);
 };

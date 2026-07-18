@@ -1,6 +1,6 @@
 ---
 name: ui-api-decoupling
-description: Use when creating or modifying OpenChamber shared UI data access, OpenCode SDK calls, `RuntimeAPIs`, runtime fetch/auth/URLs, authenticated browser assets, bridges/proxies, runtime switching, or server API routes.
+description: Use when creating or modifying OpenChamber shared UI data access, React Hooks, `@tanstack/react-query`, query keys/cache/invalidation, `@reactuses/core`, browser Hooks, OpenCode SDK calls, `RuntimeAPIs`, runtime fetch/auth/URLs, authenticated browser assets, bridges/proxies, runtime switching, or server API routes.
 ---
 
 # UI API Decoupling
@@ -11,6 +11,66 @@ description: Use when creating or modifying OpenChamber shared UI data access, O
 - OpenChamber-owned HTTP capabilities use `RuntimeAPIs` where runtime-specific behavior exists, otherwise explicit OpenChamber routes through `runtimeFetch`.
 - Browser/realtime consumers use shared runtime URL/socket helpers.
 - Shared UI never hardcodes localhost, ports, API origins, credentials, or one runtime's transport assumptions.
+
+## State Ownership
+
+| State or boundary | Owner |
+|---|---|
+| Runtime-scoped pull server state | TanStack Query |
+| Standard browser, DOM, event, timer, observer, and storage interaction | `@reactuses/core` |
+| UI selection, draft, and mutation orchestration | Zustand or component state |
+| Realtime push state | Sync and relay transport |
+| Cross-runtime capability and HTTP boundary | `RuntimeAPIs` and `runtimeFetch` |
+
+Use `useEffect` for external-system synchronization. Calculate derived values during render. Trigger mutations from event handlers. Load `sync-state-invariants` for synchronization lifecycles and `performance-engineering` for high-volume or hot paths.
+
+## TanStack Query
+
+### Layering
+
+- Define a query-options factory for each resource, a React `useQuery` Hook for component consumers, and imperative snapshot, ensure, and refresh functions for non-React consumers.
+- Build every query key from transport identity, then normalized directory, path, provider, and request options that affect the result.
+- Pass the query `signal` through every SDK or runtime request. Let `queryFn` throw transport failures.
+- Treat an unknown cache entry as incomplete: ensure or fetch it before evaluating an empty result.
+- Capture transport identity and scope when starting a mutation. Apply precise `setQueryData` updates and targeted invalidation on completion.
+- Clear the `QueryClient` when runtime identity changes.
+- Bind paginated requests to a generation and cursor; discard stale completions from an earlier generation.
+- Components use declarative Hooks. Non-React paths use the `QueryClient` imperative API.
+
+### Mutation and Cache Semantics
+
+- Preserve the previous snapshot through a failed refresh and expose the failure separately from a successful empty response.
+- Update Diagram and Plan cache entries after confirmed write success. Serialize Plan writes by document identity and drain each identity in order.
+- Carry the VS Code directory through query options, keys, and transport calls.
+
+## `@reactuses/core`
+
+- Add and use `@reactuses/core` after explicit dependency authorization. Import Hooks as named exports from the package root.
+- Reuse its standard Hooks for browser, DOM, events, timers, observers, storage, debouncing, and stable callbacks after verifying the installed version's exports, SSR fallback, cleanup behavior, and return shape.
+- Project-appropriate candidates include `useEventListener`, `useClickOutside`, `useResizeObserver`, `useScrollLock`, `useMediaQuery`, `useNetwork`, `useDebounce`, `useDebounceFn`, `useTimeoutFn`, `useInterval`, and `useEvent`.
+- Keep server state in TanStack Query, global UI/app state in Zustand, and IPC/SSE behavior in runtime and sync modules.
+
+## Refactor Patterns
+
+- Query owns pull state for Agents, Commands, Skills, MCP, Plugins, GitHub, Files, and Plans. Store-owned loaders and effects retain UI synchronization responsibilities.
+- Stores retain UI state and mutation orchestration.
+- Batch metadata requests to remove per-entity metadata fanout.
+- Ensure the slash-command query before reading a cold cache.
+- Preserve prior snapshots across failures and represent successful empty results distinctly.
+- Apply Diagram and Plan cache updates after confirmed writes; serialize Plan operations by document identity.
+- Pass VS Code directories through the complete query and transport path.
+
+## Anti-Patterns
+
+| Pattern | Required implementation |
+|---|---|
+| Store loader or component effect fetches pull state | Query options factory, `useQuery`, and imperative Query helpers |
+| Cache read treats an unknown entry as empty | Ensure or fetch before interpreting the result |
+| Mutation refreshes every resource | Capture transport and scope, then update or invalidate the affected query key |
+| Refresh failure clears displayed data | Preserve the prior snapshot and surface the failure |
+| Per-entity metadata requests | Batch metadata by resource scope |
+| Plan writes complete out of order | Serialize and drain by document identity |
+| Runtime or directory switch reuses cached identity | Key by normalized scope and clear the `QueryClient` on runtime change |
 
 ## Classify First
 
@@ -90,4 +150,9 @@ Review runtime base URL, auth, SDK clients, terminal/realtime transports, stores
 - Every applicable runtime has implementation or explicit unsupported behavior.
 - Runtime switching cannot reuse stale endpoint/auth/cache state.
 - Privileged Electron/extension behavior is enforced outside the renderer.
+- Focused query tests cover query keys, option factories, signals, cache updates, invalidation, mutation refresh, and cold-cache and warm-cache reads.
+- Failed refreshes preserve stale snapshots, and successful empty responses clear state intentionally.
+- Runtime and directory switch tests include VS Code directory propagation.
+- Affected paths cover Web, VS Code, and mobile parity.
+- Load `sync-state-invariants` for realtime reconciliation tests and `performance-engineering` for batching or high-frequency performance validation.
 - Focused transport, bridge, proxy, auth, and runtime tests pass; static type/lint checks alone are insufficient.

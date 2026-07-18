@@ -1107,13 +1107,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
 
                                 if (tool === 'todowrite' || tool === 'todoread') {
                                     return (
-                                        renderTodoOutput(popup.content, {
-                                            total: t('chat.todo.total'),
-                                            inProgress: t('chat.todo.inProgress'),
-                                            pending: t('chat.todo.pending'),
-                                            completed: t('chat.todo.completed'),
-                                            cancelled: t('chat.todo.cancelled'),
-                                        }) || (
+                                        renderTodoOutput(popup.content) || (
                                             <WorkerHighlightedCode
                                                 language="json"
                                                 code={popup.content}

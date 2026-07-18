@@ -22,7 +22,7 @@ const base = (
   endY: 35,
   viewportWidth: 180,
   disabled: false,
-  startedOnInteractive: false,
+  startedOnExcludedTarget: false,
   ...overrides,
 });
 
@@ -53,8 +53,8 @@ describe('evaluateHeaderSwipe', () => {
     expect(evaluateHeaderSwipe(base({ startX: 100, endX: 189, viewportWidth: 180 })).open).toBe(false);
   });
 
-  test('rejects swipe exactly at half the viewport', () => {
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 190, viewportWidth: 180 })).open).toBe(false);
+  test('accepts swipe exactly at half the viewport', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 190, viewportWidth: 180 })).open).toBe(true);
   });
 
   test('accepts swipe beyond half the viewport', () => {
@@ -89,7 +89,7 @@ describe('evaluateHeaderSwipe', () => {
   // -----------------------------------------------------------------------
   // Interactive target gate
   // -----------------------------------------------------------------------
-  test('rejects when started on interactive element', () => {
-    expect(evaluateHeaderSwipe(base({ startedOnInteractive: true })).open).toBe(false);
+  test('rejects when started on an excluded target', () => {
+    expect(evaluateHeaderSwipe(base({ startedOnExcludedTarget: true })).open).toBe(false);
   });
 });

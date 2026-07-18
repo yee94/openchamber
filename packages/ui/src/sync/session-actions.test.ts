@@ -188,6 +188,9 @@ const inputState = {
     clearAttachedFilesCalls += 1
     inputState.attachedFiles = []
   },
+  setAttachedFiles: (attachments: RestoredAttachment[]) => {
+    inputState.attachedFiles = attachments
+  },
   addRestoredAttachment: (attachment: RestoredAttachment) => {
     inputState.attachedFiles = [...inputState.attachedFiles, attachment]
   },

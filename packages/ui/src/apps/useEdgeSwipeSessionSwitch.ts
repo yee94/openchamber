@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 
-import { triggerMobileHaptic } from '@/hooks/streamingHaptics';
+import { evaluateSwipeThresholdHaptic, triggerMobileHaptic } from '@/hooks/streamingHaptics';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
@@ -31,6 +31,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 
 const MIN_DISTANCE = 64; // px of dominant-axis travel required to commit a switch
 const MAX_OFF_AXIS_RATIO = 0.6; // off-axis must stay below dominant-axis × this
+const THRESHOLD_HYSTERESIS = 8;
 
 // ---------------------------------------------------------------------------
 // Interactive / scrollable exclusion helpers
@@ -230,7 +231,8 @@ export const useEdgeSwipeSessionSwitch = (
     let startY = 0;
     let startedOnSwallowTarget = false;
     let available = { prev: false, next: false };
-    let hapticTriggered = false;
+    let thresholdReached = false;
+    let thresholdHapticDelivered = false;
     let progressActive = false;
     let suppressNextClick = false;
     let clickResetTimer: number | null = null;
@@ -256,12 +258,22 @@ export const useEdgeSwipeSessionSwitch = (
       startY = touch.clientY;
       startedOnSwallowTarget = isSwallowTarget(touch);
       available = availableDirections();
-      hapticTriggered = false;
+      thresholdReached = false;
+      thresholdHapticDelivered = false;
       progressActive = false;
     };
 
     const onTouchMove = (event: TouchEvent) => {
-      if (!tracking || startedOnSwallowTarget || event.touches.length !== 1) return;
+      if (!tracking || startedOnSwallowTarget) return;
+      if (event.touches.length !== 1) {
+        tracking = false;
+        if (thresholdReached) triggerMobileHaptic('light', { bypassCadence: true });
+        thresholdReached = false;
+        thresholdHapticDelivered = false;
+        if (progressActive) onProgressRef.current?.(null);
+        progressActive = false;
+        return;
+      }
       const touch = event.touches[0];
       const progress = evaluateSwipeProgress({
         startX,
@@ -271,6 +283,11 @@ export const useEdgeSwipeSessionSwitch = (
       }, available);
 
       if (!progress) {
+        if (thresholdReached) {
+          thresholdReached = false;
+          triggerMobileHaptic('light', { bypassCadence: true });
+          thresholdHapticDelivered = false;
+        }
         if (progressActive) onProgressRef.current?.(null);
         progressActive = false;
         return;
@@ -278,23 +295,46 @@ export const useEdgeSwipeSessionSwitch = (
 
       progressActive = true;
       onProgressRef.current?.(progress);
-      if (progress.progress === 1 && progress.canSwitch && !hapticTriggered) {
-        hapticTriggered = triggerMobileHaptic('medium');
+      const distance = Math.abs(progress.offsetX);
+      const transition = evaluateSwipeThresholdHaptic({
+        thresholdReached,
+        distance,
+        enterDistance: MIN_DISTANCE,
+        cancelDistance: MIN_DISTANCE - THRESHOLD_HYSTERESIS,
+        available: progress.canSwitch,
+      });
+      thresholdReached = transition.thresholdReached;
+      if (transition.event === 'enter') thresholdHapticDelivered = triggerMobileHaptic('medium', { bypassCadence: true });
+      if (transition.event === 'cancel') {
+        triggerMobileHaptic('light', { bypassCadence: true });
+        thresholdHapticDelivered = false;
       }
     };
 
     const onTouchEnd = (event: TouchEvent) => {
       if (!tracking) return;
       tracking = false;
-      if (progressActive) onProgressRef.current?.(null);
-      progressActive = false;
       if (startedOnSwallowTarget) return;
 
       const touch = event.changedTouches[0];
-      if (!touch) return;
+      if (!touch) {
+        if (thresholdReached) triggerMobileHaptic('light', { bypassCadence: true });
+        thresholdReached = false;
+        thresholdHapticDelivered = false;
+        if (progressActive) onProgressRef.current?.(null);
+        progressActive = false;
+        return;
+      }
 
       const target = document.elementFromPoint(touch.clientX, touch.clientY);
-      if (hasScrollableAncestorInDirection(target, true)) return;
+      if (hasScrollableAncestorInDirection(target, true)) {
+        if (thresholdReached) triggerMobileHaptic('light', { bypassCadence: true });
+        thresholdReached = false;
+        thresholdHapticDelivered = false;
+        if (progressActive) onProgressRef.current?.(null);
+        progressActive = false;
+        return;
+      }
 
       const direction = evaluateSwipeDirection({
         startX,
@@ -303,11 +343,18 @@ export const useEdgeSwipeSessionSwitch = (
         endY: touch.clientY,
       });
 
-      if (!direction) return;
+      if (!direction) {
+        if (thresholdReached) triggerMobileHaptic('light', { bypassCadence: true });
+        thresholdReached = false;
+        thresholdHapticDelivered = false;
+        if (progressActive) onProgressRef.current?.(null);
+        progressActive = false;
+        return;
+      }
 
       const step = direction === 'prev' ? -1 : 1;
       if (switchByStep(step)) {
-        if (!hapticTriggered) triggerMobileHaptic('medium');
+        if (!thresholdHapticDelivered) triggerMobileHaptic('medium', { bypassCadence: true });
         suppressNextClick = true;
         if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);
         clickResetTimer = window.setTimeout(() => {
@@ -315,11 +362,20 @@ export const useEdgeSwipeSessionSwitch = (
           clickResetTimer = null;
         }, 500);
         onSwitchRef.current?.(direction);
+      } else if (thresholdReached) {
+        triggerMobileHaptic('light', { bypassCadence: true });
       }
+      thresholdReached = false;
+      thresholdHapticDelivered = false;
+      if (progressActive) onProgressRef.current?.(null);
+      progressActive = false;
     };
 
     const onTouchCancel = () => {
       tracking = false;
+      if (thresholdReached) triggerMobileHaptic('light', { bypassCadence: true });
+      thresholdReached = false;
+      thresholdHapticDelivered = false;
       if (progressActive) onProgressRef.current?.(null);
       progressActive = false;
     };

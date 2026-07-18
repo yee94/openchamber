@@ -12,9 +12,6 @@ import { createInputDraftDurabilityCoordinator, type InputDraftDurabilityCoordin
 import { cloneDraftRecord, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDurableURL, parseDraftRecord, type DraftAttachmentMetadata, type DraftKey, type DraftMention, type DraftRecord, type DraftSyntheticPart } from "./input-draft-types"
 
 const FILE_URI_PREFIX = "file://"
-const pendingVSCodeSelectionKeys = new Set<string>()
-let attachmentReadGeneration = 0
-
 const encodeFilePath = (filepath: string): string => {
   let normalized = filepath.replace(/\\/g, "/")
   if (/^[A-Za-z]:/.test(normalized)) {
@@ -184,6 +181,9 @@ export type InputState = {
    */
   pendingPresetSubmit: string | null
   attachedFiles: AttachedFile[]
+  /** Legacy composer attachment views scoped to the current durable draft owner. */
+  attachmentBuckets: Record<string, AttachedFile[]>
+  activeAttachmentDraft: DraftKey | null
   activeEditorFile: VSCodeActiveEditorFile | null
 
   setPendingInputText: (text: string | null, mode?: "replace" | "append" | "append-inline") => void
@@ -192,6 +192,7 @@ export type InputState = {
   consumePendingPresetSubmit: () => string | null
   setPendingSyntheticParts: (parts: SyntheticContextPart[] | null) => void
   consumePendingSyntheticParts: () => SyntheticContextPart[] | null
+  setActiveAttachmentDraft: (key: DraftKey | null) => void
   addAttachedFile: (file: File) => Promise<void>
   removeAttachedFile: (id: string) => void
   setAttachedFiles: (files: AttachedFile[]) => void
@@ -221,6 +222,8 @@ export const createInputStore = (services: InputDraftServices = {}) => {
   let seeded = false
   let seedPromise: Promise<InputDraftDurabilityResult> | undefined
   const dirtyKeys = new Set<string>()
+  const attachmentReadGeneration = new Map<string, number>()
+  const pendingVSCodeSelectionKeys = new Set<string>()
   const store = create<InputState>()((set, get) => {
     const bump = (id: string) => keyEpoch.set(id, (keyEpoch.get(id) ?? 0) + 1)
     const invalidateAttachmentHydration = (...ids: string[]) => {
@@ -346,6 +349,17 @@ export const createInputStore = (services: InputDraftServices = {}) => {
         if (value !== undefined) views[attachment.attachmentRefID] = await makeView(attachment, value)
       }
       return views
+    }
+    const attachmentBucketID = (key: DraftKey | null): string => key ? draftKeyString(key) : "legacy-unowned"
+    const attachmentReadEpoch = (id: string): number => attachmentReadGeneration.get(id) ?? 0
+    const bumpAttachmentReadEpoch = (id: string): void => { attachmentReadGeneration.set(id, attachmentReadEpoch(id) + 1) }
+    const updateAttachmentBucket = (id: string, change: (files: AttachedFile[]) => AttachedFile[], invalidateReads = false): void => {
+      if (invalidateReads) bumpAttachmentReadEpoch(id)
+      set((state) => {
+        const files = change(state.attachmentBuckets[id] ?? [])
+        const buckets = { ...state.attachmentBuckets, [id]: files }
+        return { attachmentBuckets: buckets, ...(attachmentBucketID(state.activeAttachmentDraft) === id ? { attachedFiles: files } : {}) }
+      })
     }
     return ({
   drafts: {},
@@ -823,6 +837,8 @@ export const createInputStore = (services: InputDraftServices = {}) => {
   pendingSyntheticParts: null,
   pendingPresetSubmit: null,
   attachedFiles: [],
+  attachmentBuckets: { "legacy-unowned": [] },
+  activeAttachmentDraft: null,
   activeEditorFile: null,
 
   setPendingInputText: (text, mode = "replace") =>
@@ -854,16 +870,26 @@ export const createInputStore = (services: InputDraftServices = {}) => {
     return pendingSyntheticParts
   },
 
+  setActiveAttachmentDraft: (key) => {
+    const id = attachmentBucketID(key)
+    set((state) => ({
+      activeAttachmentDraft: key,
+      attachedFiles: state.attachmentBuckets[id] ?? [],
+      attachmentBuckets: state.attachmentBuckets[id] ? state.attachmentBuckets : { ...state.attachmentBuckets, [id]: [] },
+    }))
+  },
+
   addAttachedFile: async (file: File) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const generation = attachmentReadGeneration
+    const bucketID = attachmentBucketID(get().activeAttachmentDraft)
+    const generation = attachmentReadEpoch(bucketID)
     let dataUrl: string
     try {
       dataUrl = await readFileAsDataUrl(file)
     } catch {
       return
     }
-    if (generation !== attachmentReadGeneration) return
+    if (generation !== attachmentReadEpoch(bucketID)) return
     const attached: AttachedFile = {
       id,
       file,
@@ -873,25 +899,24 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       size: file.size,
       source: "local",
     }
-    set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+    updateAttachmentBucket(bucketID, (files) => [...files, attached])
   },
 
   removeAttachedFile: (id) =>
-    set((s) => ({ attachedFiles: s.attachedFiles.filter((f) => f.id !== id) })),
+    updateAttachmentBucket(attachmentBucketID(get().activeAttachmentDraft), (files) => files.filter((file) => file.id !== id)),
 
   setAttachedFiles: (files) => {
-    attachmentReadGeneration += 1
-    set({ attachedFiles: files })
+    updateAttachmentBucket(attachmentBucketID(get().activeAttachmentDraft), () => files, true)
   },
 
   clearAttachedFiles: () => {
-    attachmentReadGeneration += 1
-    set({ attachedFiles: [] })
+    updateAttachmentBucket(attachmentBucketID(get().activeAttachmentDraft), () => [], true)
   },
 
   addVSCodeFileAttachment: (path: string, name: string, fileSize: number | null) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const isDuplicate = get().attachedFiles.some(
+    const bucketID = attachmentBucketID(get().activeAttachmentDraft)
+    const isDuplicate = (get().attachmentBuckets[bucketID] ?? []).some(
       (f) => f.source === 'vscode' && f.vscodeSource === 'file' && (f.vscodePath || '') === path
     )
     if (isDuplicate) return
@@ -910,14 +935,15 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       vscodePath: path,
       vscodeSource: 'file',
     }
-    set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+    updateAttachmentBucket(bucketID, (files) => [...files, attached])
   },
 
   addVSCodeSelectionAttachment: async (path: string, file: File) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const generation = attachmentReadGeneration
-    const selectionKey = getVSCodeSelectionKey(path, file.name)
-    const isDuplicate = get().attachedFiles.some(
+    const bucketID = attachmentBucketID(get().activeAttachmentDraft)
+    const generation = attachmentReadEpoch(bucketID)
+    const selectionKey = `${bucketID}\u0000${getVSCodeSelectionKey(path, file.name)}`
+    const isDuplicate = (get().attachmentBuckets[bucketID] ?? []).some(
       (f) => f.source === 'vscode' && f.vscodeSource === 'selection' && f.filename === file.name && f.vscodePath === path
     )
     if (isDuplicate || pendingVSCodeSelectionKeys.has(selectionKey)) return
@@ -930,7 +956,7 @@ export const createInputStore = (services: InputDraftServices = {}) => {
     } finally {
       pendingVSCodeSelectionKeys.delete(selectionKey)
     }
-    if (generation !== attachmentReadGeneration) return
+    if (generation !== attachmentReadEpoch(bucketID)) return
     const attached: AttachedFile = {
       id,
       file,
@@ -942,7 +968,7 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       vscodePath: path,
       vscodeSource: 'selection',
     }
-    set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+    updateAttachmentBucket(bucketID, (files) => [...files, attached])
   },
 
   addCodeSelectionAttachment: async (path, label, text) => {
@@ -971,7 +997,7 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       source: "local",
       serverPath: url,
     }
-    set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+    updateAttachmentBucket(attachmentBucketID(get().activeAttachmentDraft), (files) => [...files, attached])
   },
 })
   })

@@ -21,8 +21,19 @@ export const statusBarPopoverHeaderTitleClassName =
 export const statusBarPopoverHeaderMetaClassName =
     'text-xs tabular-nums leading-4 text-muted-foreground md:text-[0.8125rem] md:leading-5';
 
+export const todoListClassName =
+    'm-0 list-none divide-y divide-[var(--surface-subtle)] p-0';
+
 export const statusBarPopoverListClassName =
-    'm-0 max-h-[min(22rem,50vh)] list-none divide-y divide-[var(--surface-subtle)] overflow-y-auto p-0';
+    `${todoListClassName} max-h-[min(22rem,50vh)] overflow-y-auto`;
+
+export const todoToolListClassName = `${todoListClassName} w-full`;
+
+export const todoToolScrollOptions = {
+    className: 'p-0',
+    maxHeightClass: 'max-h-[46vh]',
+    disableHorizontal: true,
+} as const;
 
 export const statusBarPopoverRowClassName =
     'px-3 py-2 text-xs leading-4 md:py-2.5 md:text-[0.8125rem] md:leading-5';

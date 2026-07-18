@@ -56,8 +56,8 @@ import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedC
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
 const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-1.5 mb-0.5 flex items-center justify-start gap-1.5';
-/** 移动端：正文与底栏再拉开一点，避免贴死. */
-const INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME = 'mt-3 mb-0.5 flex items-center justify-start gap-1.5';
+/** 移动端：保持正文与操作栏的紧凑节奏. */
+const INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME = 'mt-1.5 mb-0.5 flex items-center justify-start gap-1.5';
 /** Icon-only message-footer actions — ~14px glyphs in 24px hit; medium stroke. */
 const MESSAGE_ACTION_ICON_BUTTON_CLASS =
   'size-6! p-0 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50';
@@ -67,7 +67,7 @@ const MESSAGE_ACTION_ICON_CLASS = 'size-3.5!';
  * 移动端 -ml 抵消 size-6 按钮图标居中内缩，与正文左对齐.
  */
 const MESSAGE_FOOTER_ROW_CLASS = 'mt-1.5 mb-0.5 flex flex-wrap items-center gap-3';
-const MESSAGE_FOOTER_ROW_MOBILE_CLASS = 'mt-3 mb-0.5 flex flex-wrap items-center gap-3 -ml-[5px]';
+const MESSAGE_FOOTER_ROW_MOBILE_CLASS = 'mt-1.5 mb-0.5 flex flex-wrap items-center gap-3 -ml-[5px]';
 const MESSAGE_ACTION_GROUP_CLASS = 'flex items-center gap-2';
 /** Duration / timestamp — 与操作图标同色；字略小，行高贴齐图标高度保持垂直对齐. */
 const MESSAGE_FOOTER_META_GROUP_CLASS = 'flex items-center gap-2 text-muted-foreground';

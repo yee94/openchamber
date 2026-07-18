@@ -3,15 +3,14 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { cn } from "@/lib/utils";
 import { useDirectorySync } from "@/sync/sync-context";
 import type { Todo } from "@opencode-ai/sdk/v2/client";
+import { TodoItemRow } from "./TodoItemRow";
 
 // Compat aliases for old TodoItem shape
 type TodoItem = Todo & { id?: string };
-type TodoStatus = string;
 import { useUIStore } from "@/stores/useUIStore";
 import { useTodosPersistStore } from "@/stores/useTodosPersistStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -20,7 +19,6 @@ import {
   statusBarPopoverHeaderMetaClassName,
   statusBarPopoverHeaderTitleClassName,
   statusBarPopoverListClassName,
-  statusBarPopoverRowClassName,
   statusBarPopoverStyle,
   statusBarTriggerClassName,
   statusBarTriggerIconClassName,
@@ -29,73 +27,6 @@ import {
 } from "./statusBarPopover";
 
 const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "status-row" };
-
-const statusConfig: Record<TodoStatus, { textClassName: string }> = {
-  in_progress: {
-    textClassName: "text-foreground",
-  },
-  pending: {
-    textClassName: "text-foreground",
-  },
-  completed: {
-    textClassName: "text-muted-foreground line-through",
-  },
-  cancelled: {
-    textClassName: "text-muted-foreground line-through",
-  },
-};
-
-const statusLabelKey: Record<TodoStatus, string> = {
-  in_progress: "chat.statusRow.todo.status.inProgress",
-  pending: "chat.statusRow.todo.status.pending",
-  completed: "chat.statusRow.todo.status.completed",
-  cancelled: "chat.statusRow.todo.status.cancelled",
-};
-
-interface TodoItemRowProps {
-  todo: TodoItem;
-  isActive: boolean;
-  activeRef?: React.Ref<HTMLLIElement>;
-}
-
-const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo, isActive, activeRef }) => {
-  const { t } = useI18n();
-  const config = statusConfig[todo.status] || statusConfig.pending;
-  const statusKey = statusLabelKey[todo.status] ?? statusLabelKey.pending;
-
-  const statusIcon =
-    todo.status === "in_progress" ? (
-      <Icon name="record-circle" className="h-3.5 w-3.5 text-[var(--status-info)]"  aria-hidden="true"/>
-    ) : todo.status === "completed" ? (
-      <Icon name="checkbox-circle" className="h-3.5 w-3.5 text-[var(--status-success)]"  aria-hidden="true"/>
-    ) : (
-      <Icon name="time" className="h-3.5 w-3.5 text-muted-foreground"  aria-hidden="true"/>
-    );
-
-  return (
-    <li
-      ref={activeRef}
-      aria-current={isActive ? "step" : undefined}
-      className={cn(
-        "group relative grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5",
-        statusBarPopoverRowClassName,
-        isActive && "bg-[var(--surface-muted)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-[var(--status-info)]",
-      )}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="flex size-4 items-center justify-center">{statusIcon}</span>
-        </TooltipTrigger>
-        <TooltipContent side="left" sideOffset={6}>
-          {t(statusKey as never)}
-        </TooltipContent>
-      </Tooltip>
-      <span className="min-w-0 flex-1">
-        <span className={cn("block", config.textClassName)}>{todo.content}</span>
-      </span>
-    </li>
-  );
-};
 
 const EMPTY_TODOS: TodoItem[] = [];
 

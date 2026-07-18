@@ -2119,8 +2119,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 inputState.consumePendingInputText();
             }
             setMessage((currentText) => mergeFailedComposerText(inputSnapshot.message, currentText));
+            inputState.setAttachedFiles(mergeFailedAttachments(inputAttachmentsSnapshot, inputState.attachedFiles));
             useInputStore.setState((state) => ({
-                attachedFiles: mergeFailedAttachments(inputAttachmentsSnapshot, state.attachedFiles),
                 pendingSyntheticParts: syntheticParts
                     ? [...syntheticParts, ...(state.pendingSyntheticParts ?? []).filter((part) => !syntheticParts.includes(part))]
                     : state.pendingSyntheticParts,
@@ -4601,6 +4601,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             // that closed the keyboard, drag) — the fallback path handles it.
             if (mobileComposerBusyRef.current) return;
             mobileExpandIntentRef.current = null;
+            // WebKit keeps its native caret layer after the keyboard hides unless
+            // the textarea releases focus before the compact composer unmounts.
+            textareaRef.current?.blur();
             flushSync(() => {
                 setMobileComposerExpanded(false);
                 setExpandedInput(false);

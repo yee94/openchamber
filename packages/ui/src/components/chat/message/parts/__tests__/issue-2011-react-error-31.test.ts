@@ -1,4 +1,7 @@
+import React from 'react';
 import { describe, test, expect } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { I18nProvider } from '@/lib/i18n';
 import { coerceToText, renderTodoOutput } from '../../toolRenderers';
 
 describe('coerceToText (issue #2011)', () => {
@@ -96,5 +99,25 @@ describe('renderTodoOutput (issue #2011)', () => {
         ]);
         const result = renderTodoOutput(output, labels);
         expect(result).not.toBeNull();
+    });
+
+    test('renders a flat list in source order without label headings', () => {
+        const output = JSON.stringify([
+            { id: '1', content: 'Pending first', status: 'pending' },
+            { id: '2', content: 'Completed second', status: 'completed' },
+            { id: '3', content: 'Cancelled third', status: 'cancelled' },
+            { id: '4', content: 'Active fourth', status: 'in_progress' },
+            { id: '5', content: 'Active fifth', status: 'in_progress' },
+        ]);
+        const result = renderTodoOutput(output, { ...labels, total: 'Injected todo title' });
+        const markup = renderToStaticMarkup(React.createElement(I18nProvider, null, result));
+
+        expect(markup).not.toContain('Injected todo title');
+        expect(markup.indexOf('Pending first')).toBeLessThan(markup.indexOf('Completed second'));
+        expect(markup.indexOf('Completed second')).toBeLessThan(markup.indexOf('Cancelled third'));
+        expect(markup.indexOf('Cancelled third')).toBeLessThan(markup.indexOf('Active fourth'));
+        expect(markup).toContain('line-through');
+        expect(markup).toContain('#oc-checkbox-circle');
+        expect(markup.match(/aria-current="step"/g)?.length).toBe(1);
     });
 });

@@ -966,6 +966,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     if (id) {
       get().closeNewSessionDraft()
     }
+    useInputStore.getState().setActiveAttachmentDraft(
+      id ? sessionDraftKey({ transportIdentity: getRuntimeTransportIdentity() }, id) : null,
+    )
 
     const key = runtimeMemoryKey()
     activeSessionByRuntime.set(key, id)
@@ -1093,6 +1096,13 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       pendingChangesBarDismissed: new Map(),
       stagedMessageEdit: null,
     })
+    useInputStore.getState().setActiveAttachmentDraft(
+      restoredSessionId
+        ? sessionDraftKey({ transportIdentity: getRuntimeTransportIdentity() }, restoredSessionId)
+        : restoredDraft.open && restoredDraft.draftID
+          ? newSessionDraftKey({ transportIdentity: getRuntimeTransportIdentity() }, restoredDraft.draftID)
+          : null,
+    )
     if (restoredSessionId) {
       setActiveSession(restoredDirectory ?? opencodeClient.getDirectory() ?? "", restoredSessionId)
     } else {
@@ -1225,6 +1235,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     }
 
     writeRuntimeSessionMemory(runtimeMemoryKey(), { sessionId: null, directory, draft: nextDraft })
+    useInputStore.getState().setActiveAttachmentDraft(
+      newSessionDraftKey({ transportIdentity: getRuntimeTransportIdentity() }, nextDraft.draftID!),
+    )
     // Clear composer attachments when opening a new session draft.
     // Attachments from the previous session (e.g. restored by revert) must
     // not bleed into the new session's input.

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   evaluateHaptics,
+  evaluateSwipeThresholdHaptic,
   isCapacitorMobileNative,
   isCapacitorNativePlatform,
   shouldTriggerHaptic,
@@ -53,6 +54,43 @@ describe('haptic cadence', () => {
   test('allows haptics every 20ms', () => {
     expect(shouldTriggerHaptic(100, 119)).toBe(false);
     expect(shouldTriggerHaptic(100, 120)).toBe(true);
+  });
+});
+
+describe('swipe threshold haptics', () => {
+  test('emits once when entering and once when cancelling with hysteresis', () => {
+    const entered = evaluateSwipeThresholdHaptic({
+      thresholdReached: false,
+      distance: 64,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: true,
+    });
+    expect(entered).toEqual({ thresholdReached: true, event: 'enter' });
+    expect(evaluateSwipeThresholdHaptic({
+      thresholdReached: true,
+      distance: 60,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: true,
+    })).toEqual({ thresholdReached: true, event: null });
+    expect(evaluateSwipeThresholdHaptic({
+      thresholdReached: true,
+      distance: 56,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: true,
+    })).toEqual({ thresholdReached: false, event: 'cancel' });
+  });
+
+  test('cancels when the swipe direction becomes unavailable', () => {
+    expect(evaluateSwipeThresholdHaptic({
+      thresholdReached: true,
+      distance: 80,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: false,
+    })).toEqual({ thresholdReached: false, event: 'cancel' });
   });
 });
 

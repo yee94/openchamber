@@ -7,6 +7,16 @@
   --font-scale: 1;
 }
 
+:root.oc-session-swipe-preview [data-session-swipe-overlay="true"] {
+  opacity: var(--oc-session-swipe-progress, 0) !important;
+  transition: none !important;
+}
+
+:root.oc-session-swipe-preview [data-session-swipe-panel="true"] {
+  transform: translateY(calc((1 - var(--oc-session-swipe-progress, 0)) * 100%)) !important;
+  transition: none !important;
+}
+
 @media (max-width: 1024px) {
 :root.mobile-pointer:not(.desktop-runtime) {
     --is-mobile: 1;

@@ -63,6 +63,13 @@ import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { DualLimitLru } from '@/lib/dualLimitLru';
 import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
+import { todoToolListClassName, todoToolScrollOptions } from '@/components/chat/statusBarPopover';
+import {
+    getToolExpandedContentClassName,
+    getToolScrollableSectionPaddingClassName,
+    MOBILE_SHELL_CODE_LINE_HEIGHT,
+    TOOL_EXPANDED_TIMELINE_CLASS_NAME,
+} from './toolExpandedLayout';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -840,6 +847,7 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, currentDi
 
 interface ToolScrollableSectionProps {
     children: React.ReactNode;
+    isMobile?: boolean;
     maxHeightClass?: string;
     className?: string;
     outerClassName?: string;
@@ -848,6 +856,7 @@ interface ToolScrollableSectionProps {
 
 const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
     children,
+    isMobile = false,
     maxHeightClass = 'max-h-[60vh]',
     className,
     outerClassName,
@@ -856,10 +865,12 @@ const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
     <div className={cn('w-full min-w-0 flex-none overflow-hidden', outerClassName)}>
         <ScrollShadow
             className={cn(
-                'tool-output-surface p-2 rounded-xl w-full min-w-0',
+                'tool-output-surface rounded-xl w-full min-w-0',
+                getToolScrollableSectionPaddingClassName(isMobile),
                 maxHeightClass,
                 disableHorizontal ? 'overflow-y-auto overflow-x-hidden' : 'overflow-auto',
                 className,
+                isMobile && getToolScrollableSectionPaddingClassName(true),
             )}
         >
             <div className="w-full min-w-0">
@@ -899,7 +910,8 @@ const ToolScrollableTextOutput: React.FC<{
     part: ToolPartType;
     metadata: Record<string, unknown> | undefined;
     input: Record<string, unknown> | undefined;
-}> = ({ output, part, metadata, input }) => {
+    isMobile?: boolean;
+}> = ({ output, part, metadata, input, isMobile = false }) => {
     const { t } = useI18n();
     const renderedOutput = getToolOutputText(output, part, metadata);
     const outputLanguage = getToolOutputLanguage(output, part, metadata, input);
@@ -1007,7 +1019,10 @@ const ToolScrollableTextOutput: React.FC<{
             <WorkerHighlightedCode
                 language={outputLanguage}
                 code={renderedOutput}
-                style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                style={{
+                    ...TOOL_COLLAPSED_CUSTOM_STYLE,
+                    ...(isMobile && part.tool === 'bash' ? { lineHeight: MOBILE_SHELL_CODE_LINE_HEIGHT } : {}),
+                }}
                 codeStyle={CODE_TAG_PROPS.style}
                 wrap
             />
@@ -1546,6 +1561,7 @@ interface ToolExpandedContentProps {
     state: ToolStateUnion;
     currentDirectory: string;
     isExpanded: boolean;
+    isMobile: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
 }
 
@@ -1554,6 +1570,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     state,
     currentDirectory,
     isExpanded,
+    isMobile,
     onShowPopup,
 }) => {
     const { t } = useI18n();
@@ -1631,6 +1648,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         options?: { maxHeightClass?: string; className?: string; disableHorizontal?: boolean; outerClassName?: string }
     ) => (
         <ToolScrollableSection
+            isMobile={isMobile}
             maxHeightClass={options?.maxHeightClass}
             className={options?.className}
             disableHorizontal={options?.disableHorizontal}
@@ -1802,6 +1820,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                     part={part}
                     metadata={metadata}
                     input={input}
+                    isMobile={isMobile}
                 />,
                 {
                     className: part.tool === 'bash' ? 'p-1 rounded-none' : 'p-1',
@@ -1819,7 +1838,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     if (isTodoTool) {
         if (state.status === 'error' && 'error' in state) {
             return (
-                <div className="relative flex flex-col gap-2 pr-2 pb-2 pt-2 pl-4">
+                <div className={getToolExpandedContentClassName(isMobile, 'todo-error')}>
                     <div className="typography-meta font-medium text-muted-foreground/80">{t('chat.toolPart.error')}</div>
                     <div className="typography-meta p-2 rounded-xl border" style={{
                         backgroundColor: 'var(--status-error-background)',
@@ -1832,16 +1851,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             );
         }
 
-        const todoOutput = renderTodoOutput(todoContent, {
-            total: t('chat.todo.total'),
-            inProgress: t('chat.todo.inProgress'),
-            pending: t('chat.todo.pending'),
-            completed: t('chat.todo.completed'),
-            cancelled: t('chat.todo.cancelled'),
-        }, { unstyled: true });
+        const todoOutput = renderTodoOutput(todoContent, undefined, { listClassName: todoToolListClassName });
 
         return (
-            <div className="relative flex flex-col gap-2 pr-2 pb-2 pt-2 pl-4">
+            <div className={getToolExpandedContentClassName(isMobile, 'todo')}>
                 {renderScrollableBlock(
                     todoOutput ?? (
                         <ToolScrollableTextOutput
@@ -1849,9 +1862,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                             part={part}
                             metadata={metadata}
                             input={input}
+                            isMobile={isMobile}
                         />
                     ),
-                    { className: 'p-2', maxHeightClass: 'max-h-[46vh]' },
+                    todoToolScrollOptions,
                 )}
             </div>
         );
@@ -1859,9 +1873,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
     return (
         <div
-            className={cn(
-                'relative flex flex-col gap-2 pr-2 pb-2 pt-2 pl-4'
-            )}
+            className={getToolExpandedContentClassName(isMobile, 'default', part.tool === 'bash')}
         >
             {part.tool === 'question' ? (
                 renderResultContent()
@@ -1871,7 +1883,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                         <div>
                             {renderScrollableBlock(
                                 part.tool === 'bash' ? (
-                                    <pre className="tool-input-text whitespace-pre-wrap break-words typography-code text-muted-foreground/90 m-0 p-0">
+                                    <pre
+                                        className="tool-input-text whitespace-pre-wrap break-words typography-code text-muted-foreground/90 m-0 p-0"
+                                        style={isMobile ? { lineHeight: MOBILE_SHELL_CODE_LINE_HEIGHT } : undefined}
+                                    >
                                         {inputTextContent}
                                     </pre>
                                 ) : isWriteLikeTool && writeLikeInputPatch ? (
@@ -2682,7 +2697,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 >
                     {shouldRenderExpandedContent ? (
                         <div
-                            className="relative ml-2 pl-3"
+                            className={TOOL_EXPANDED_TIMELINE_CLASS_NAME}
                         >
                             <span
                                 aria-hidden="true"
@@ -2694,6 +2709,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                 state={state}
                                 currentDirectory={currentDirectory}
                                 isExpanded={isExpanded}
+                                isMobile={isMobile}
                                 onShowPopup={onShowPopup}
                             />
                         </div>

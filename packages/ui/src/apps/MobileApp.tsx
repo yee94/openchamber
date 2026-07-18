@@ -14,7 +14,12 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ChatView } from '@/components/views/ChatView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import {
+  MobileOverlayPanel,
+  SESSION_SWIPE_PREVIEW_CANCEL_EVENT,
+  SESSION_SWIPE_PREVIEW_COMMIT_EVENT,
+  SESSION_SWIPE_PREVIEW_START_EVENT,
+} from '@/components/ui/MobileOverlayPanel';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -575,6 +580,11 @@ const useNativeMobileLifecycle = (onResume: () => void): void => {
 
     void import('@capacitor/app').then(async ({ App }) => {
       if (disposed) return;
+      const initialState = await App.getState().catch(() => null);
+      if (disposed) return;
+      if (initialState) {
+        document.documentElement.classList.toggle('oc-native-app-active', initialState.isActive);
+      }
       const state = await App.addListener('appStateChange', ({ isActive }) => {
         document.documentElement.classList.toggle('oc-native-app-active', isActive);
         if (!isActive) {
@@ -2211,8 +2221,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // A horizontal swipe beginning on the mobile composer switches sessions.
   const chatMainRef = React.useRef<HTMLElement>(null);
   const chatAnimRef = React.useRef<HTMLDivElement>(null);
-  const previousSessionPlaceholderRef = React.useRef<HTMLDivElement>(null);
-  const nextSessionPlaceholderRef = React.useRef<HTMLDivElement>(null);
+  const previousSessionHolderRef = React.useRef<HTMLDivElement>(null);
+  const nextSessionHolderRef = React.useRef<HTMLDivElement>(null);
   const swipeDirectionRef = React.useRef<'prev' | 'next' | null>(null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
@@ -2225,18 +2235,18 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, []);
   const renderSwipeProgress = React.useCallback((progress: SwipeProgress | null) => {
     const chat = chatAnimRef.current;
-    const previous = previousSessionPlaceholderRef.current;
-    const next = nextSessionPlaceholderRef.current;
+    const previous = previousSessionHolderRef.current;
+    const next = nextSessionHolderRef.current;
     if (!chat || !previous || !next) return;
 
     if (!progress) {
       chat.style.transform = '';
       chat.style.opacity = '';
       chat.style.willChange = '';
-      previous.style.opacity = '0';
-      previous.style.transform = 'translate3d(-12px, -50%, 0)';
-      next.style.opacity = '0';
-      next.style.transform = 'translate3d(12px, -50%, 0)';
+      previous.style.transform = '';
+      previous.style.willChange = '';
+      next.style.transform = '';
+      next.style.willChange = '';
       return;
     }
 
@@ -2246,11 +2256,14 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     chat.style.willChange = 'transform, opacity';
     chat.style.transform = `translate3d(${progress.offsetX}px, 0, 0)`;
     chat.style.opacity = String(1 - progress.progress * 0.08);
-    const placeholder = progress.direction === 'prev' ? previous : next;
-    const hiddenPlaceholder = progress.direction === 'prev' ? next : previous;
-    hiddenPlaceholder.style.opacity = '0';
-    placeholder.style.opacity = String((progress.canSwitch ? 0.35 : 0.18) + progress.progress * 0.65);
-    placeholder.style.transform = `translate3d(${progress.offsetX * 0.12}px, -50%, 0) scale(${0.96 + progress.progress * 0.04})`;
+    previous.style.willChange = 'transform';
+    next.style.willChange = 'transform';
+    previous.style.transform = `translate3d(${progress.offsetX}px, 0, 0)`;
+    next.style.transform = `translate3d(${progress.offsetX}px, 0, 0)`;
+    const visibleHolder = progress.direction === 'prev' ? previous : next;
+    Array.from(visibleHolder.children).forEach((child) => {
+      if (child instanceof HTMLElement) child.style.opacity = progress.canSwitch ? '1' : '0.35';
+    });
   }, []);
   useEdgeSwipeSessionSwitch(chatMainRef, {
     onSwitch: recordSwipeDirection,
@@ -2270,12 +2283,41 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     || updateOpen
     || overflowOpen;
   const handleHeaderSwipeOpen = React.useCallback(() => {
+    window.dispatchEvent(new Event(SESSION_SWIPE_PREVIEW_COMMIT_EVENT));
     setMobileSessionPanelOpen(true);
   }, [setMobileSessionPanelOpen]);
+  const handleHeaderSwipePreviewStart = React.useCallback(() => {
+    document.documentElement.classList.add('oc-session-swipe-preview');
+    document.documentElement.style.setProperty('--oc-session-swipe-progress', '0');
+    window.dispatchEvent(new Event(SESSION_SWIPE_PREVIEW_START_EVENT));
+    setMobileSessionPanelOpen(true);
+  }, [setMobileSessionPanelOpen]);
+  const handleHeaderSwipePreviewCancel = React.useCallback(() => {
+    document.documentElement.classList.remove('oc-session-swipe-preview');
+    document.documentElement.style.removeProperty('--oc-session-swipe-progress');
+    window.dispatchEvent(new Event(SESSION_SWIPE_PREVIEW_CANCEL_EVENT));
+    setMobileSessionPanelOpen(false);
+  }, [setMobileSessionPanelOpen]);
+  const renderHeaderSwipeProgress = React.useCallback((progress: number | null) => {
+    if (progress === null) {
+      document.documentElement.classList.remove('oc-session-swipe-preview');
+      document.documentElement.style.removeProperty('--oc-session-swipe-progress');
+      return;
+    }
+    document.documentElement.style.setProperty('--oc-session-swipe-progress', String(progress));
+  }, []);
   useHeaderSwipeToSessions(chatMainRef, {
     onOpen: handleHeaderSwipeOpen,
+    onPreviewStart: handleHeaderSwipePreviewStart,
+    onPreviewCancel: handleHeaderSwipePreviewCancel,
+    onProgress: renderHeaderSwipeProgress,
     disabled: headerSwipeDisabled,
   });
+
+  React.useEffect(() => () => {
+    document.documentElement.classList.remove('oc-session-swipe-preview');
+    document.documentElement.style.removeProperty('--oc-session-swipe-progress');
+  }, []);
 
   React.useLayoutEffect(() => {
     const direction = swipeDirectionRef.current;
@@ -2528,22 +2570,30 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
           </div>
           <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
             <div
-              ref={previousSessionPlaceholderRef}
+              ref={previousSessionHolderRef}
               aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 z-20 rounded-full border border-border/70 bg-background/90 px-3 py-1.5 typography-meta font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm"
-              style={{ transform: 'translate3d(-12px, -50%, 0)' }}
+              className="pointer-events-none absolute inset-y-0 -left-full flex w-full items-center justify-end gap-3 bg-background pr-4"
             >
-              {t('helpDialog.item.previousSession')}
+              <span className="typography-micro font-medium tracking-wide text-muted-foreground/60">
+                {t('helpDialog.item.previousSession')}
+              </span>
+              <span className="flex size-11 items-center justify-center rounded-full border border-border/70 bg-[var(--surface-elevated)] text-foreground shadow-sm">
+                <Icon name="arrow-left" className="size-5" />
+              </span>
             </div>
             <div
-              ref={nextSessionPlaceholderRef}
+              ref={nextSessionHolderRef}
               aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-1/2 z-20 rounded-full border border-border/70 bg-background/90 px-3 py-1.5 typography-meta font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm"
-              style={{ transform: 'translate3d(12px, -50%, 0)' }}
+              className="pointer-events-none absolute inset-y-0 left-full flex w-full items-center justify-start gap-3 bg-background pl-4"
             >
-              {t('helpDialog.item.nextSession')}
+              <span className="flex size-11 items-center justify-center rounded-full border border-border/70 bg-[var(--surface-elevated)] text-foreground shadow-sm">
+                <Icon name="arrow-right" className="size-5" />
+              </span>
+              <span className="typography-micro font-medium tracking-wide text-muted-foreground/60">
+                {t('helpDialog.item.nextSession')}
+              </span>
             </div>
-            <div ref={chatAnimRef} className="h-full w-full">
+            <div ref={chatAnimRef} className="relative h-full w-full bg-background">
               <ErrorBoundary>
                 <ChatView />
               </ErrorBoundary>

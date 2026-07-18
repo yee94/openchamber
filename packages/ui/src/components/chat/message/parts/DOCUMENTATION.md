@@ -49,6 +49,10 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - Shared icon mapping for tool names (`getToolIcon`).
   - Used by both `ProgressiveGroup.tsx` and `ToolPart.tsx`.
 
+- `../../TodoItemRow.tsx`
+  - Owns the shared task-row presentation used by the StatusRow task popover and Todo tool output.
+  - Keeps status icons, active styling, dividers, responsive type, wrapping, and completed/cancelled treatment aligned.
+
 - `toolRowChrome.ts`
   - Shared Codex-style rounded chip classes for interactive tool / reasoning headers.
   - Hover-only wash matches sidebar session-row hover (`surface-foreground` color-mix); idle rows stay flush.
@@ -76,6 +80,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 - `read` and `skill` are **static navigation tools** and render via `StaticToolRow`.
 - `edit` / `multiedit` / `write` stay in `ToolPart` for title + path + diff-stats chrome, but are **non-expandable file navigation**: click opens the current turn's file diff and scrolls to the first changed line. VS Code opens its native patch diff. `apply_patch` opens the Changes panel scoped to the current turn, so every file changed by the patch is available as a diff. No chevron / expanded diff body.
 - Every other tool, including search/fetch, OpenCode built-ins, custom tools, plugins, and MCP tools, is **expandable** and renders through `ToolPart`.
+- Mobile expandable tools share one compact content boundary: the timeline shell keeps the common rail inset, content shells remove their extra horizontal padding, and scroll surfaces use zero padding. Todo keeps its list dividers and zero-padding list surface through the same shared layout rules. Mobile Shell input and highlighted output use a `1.25rem` line height with a tighter gap between the two blocks; desktop spacing remains unchanged.
 - `ToolPart` defers expanded content after a user toggle, preventing large tool input/output payloads from mounting during the initial chat render.
 - Virtualized history uses a `MarkdownHydrationProvider` per stable turn entry. The newest visible turns are released first, from bottom to top; upward scrolling additionally preloads only the nearest three mounted turns above the viewport.
 - Historical Markdown/tool hydration state updates run in React transitions. Hiding the owning `Activity` cancels queued frame work and aborts the Markdown pipeline before subsequent blocks can parse or commit.

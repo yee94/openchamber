@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test"
 import { useInputStore } from "./input-store"
+import { sessionDraftKey } from "./input-draft-types"
 
 class MockFileReader {
   result: string | ArrayBuffer | null = null
@@ -50,7 +51,11 @@ describe("input-store attachments", () => {
       pendingInputMode: "replace",
       pendingSyntheticParts: null,
       activeEditorFile: null,
+      attachmentBuckets: { "legacy-unowned": [] },
+      activeAttachmentDraft: null,
+      attachedFiles: [],
     })
+    useInputStore.getState().setActiveAttachmentDraft(null)
     useInputStore.getState().setAttachedFiles([])
   })
 
@@ -134,5 +139,52 @@ describe("input-store attachments", () => {
     await secondAdd
 
     expect(useInputStore.getState().attachedFiles.map((attached) => attached.filename)).toEqual(["hello.txt"])
+  })
+
+  testWithMockFileReader("keeps a delayed attachment in its source session bucket across a session switch", async () => {
+    const sessionA = sessionDraftKey({ transportIdentity: "runtime-input-test" }, "ses_a")
+    const sessionB = sessionDraftKey({ transportIdentity: "runtime-input-test" }, "ses_b")
+    useInputStore.getState().setActiveAttachmentDraft(sessionA)
+
+    const addPromise = useInputStore.getState().addAttachedFile(new File(["a"], "a.txt", { type: "text/plain" }))
+    useInputStore.getState().setActiveAttachmentDraft(sessionB)
+    resolveReader(pendingReaders[0], "data:text/plain;base64,YQ==")
+    await addPromise
+
+    expect(useInputStore.getState().attachedFiles).toEqual([])
+    useInputStore.getState().setActiveAttachmentDraft(sessionA)
+    expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["a.txt"])
+  })
+
+  testWithMockFileReader("isolates attachments between active session buckets", async () => {
+    const sessionA = sessionDraftKey({ transportIdentity: "runtime-input-test" }, "ses_a")
+    const sessionB = sessionDraftKey({ transportIdentity: "runtime-input-test" }, "ses_b")
+    useInputStore.getState().setActiveAttachmentDraft(sessionA)
+    const addA = useInputStore.getState().addAttachedFile(new File(["a"], "a.txt", { type: "text/plain" }))
+    resolveReader(pendingReaders[0], "data:text/plain;base64,YQ==")
+    await addA
+
+    useInputStore.getState().setActiveAttachmentDraft(sessionB)
+    const addB = useInputStore.getState().addAttachedFile(new File(["b"], "b.txt", { type: "text/plain" }))
+    resolveReader(pendingReaders[1], "data:text/plain;base64,Yg==")
+    await addB
+
+    expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["b.txt"])
+    useInputStore.getState().setActiveAttachmentDraft(sessionA)
+    expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["a.txt"])
+  })
+
+  testWithMockFileReader("invalidates delayed reads when the source session bucket is cleared", async () => {
+    const sessionA = sessionDraftKey({ transportIdentity: "runtime-input-test" }, "ses_a")
+    const sessionB = sessionDraftKey({ transportIdentity: "runtime-input-test" }, "ses_b")
+    useInputStore.getState().setActiveAttachmentDraft(sessionA)
+    const addPromise = useInputStore.getState().addAttachedFile(new File(["a"], "a.txt", { type: "text/plain" }))
+    useInputStore.getState().clearAttachedFiles()
+    useInputStore.getState().setActiveAttachmentDraft(sessionB)
+    resolveReader(pendingReaders[0], "data:text/plain;base64,YQ==")
+    await addPromise
+
+    useInputStore.getState().setActiveAttachmentDraft(sessionA)
+    expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 })

@@ -70,6 +70,7 @@ export function renderMobileApp(apis: RuntimeAPIs) {
   // runtime uses also doesn't display inside a WKWebView.)
   const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
   const isNativeShell = capacitor?.isNativePlatform?.() === true || window.location.protocol === 'capacitor:';
+  if (isNativeShell) document.documentElement.classList.add('oc-native-app-active');
   const resolvedApis = isNativeShell
     ? { ...apis, notifications: { notifyAgentCompletion: async () => false, canNotify: () => false } }
     : apis;

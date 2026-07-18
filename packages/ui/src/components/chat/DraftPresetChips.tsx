@@ -341,7 +341,7 @@ export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, cl
                     className={cn(
                         'flex min-w-0 flex-1 flex-wrap items-center justify-center gap-x-0.5 gap-y-0.5',
                         !expanded && CHIP_ROW_MAX_H,
-                        !expanded && 'overflow-hidden',
+                        !expanded && 'overflow-clip',
                     )}
                 >
                     {global.length > 0 ? (

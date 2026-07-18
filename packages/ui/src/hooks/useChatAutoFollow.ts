@@ -96,6 +96,8 @@ const ANIMATION_GUARD_MS = 350;
 // growth stops (capped by MAX_MS), or instantly on any real user scroll gesture.
 const ENTRY_STICK_QUIESCENCE_MS = 600;
 const ENTRY_STICK_MAX_MS = 8000;
+const FORCE_BOTTOM_WATCHDOG_FRAMES = 24;
+const FORCE_BOTTOM_TOLERANCE_PX = 2;
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -183,6 +185,9 @@ export const useChatAutoFollow = ({
     // px while still inside the TTL is OUR write, not the user's.
     const autoRef = React.useRef<{ top: number; time: number } | null>(null);
     const autoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const forceBottomGenerationRef = React.useRef(0);
+    const forceBottomFrameRef = React.useRef<number | null>(null);
+    const forceBottomTouchCleanupRef = React.useRef<(() => void) | null>(null);
 
     // Timestamp until which a tracked height animation is in flight (see
     // ANIMATION_GUARD_MS). 0 = no animation guard active.
@@ -320,6 +325,61 @@ export const useChatAutoFollow = ({
     }, []);
 
     // ── core scroll primitives ───────────────────────────────────────────────
+    const cancelForcedBottom = React.useCallback(() => {
+        forceBottomGenerationRef.current += 1;
+        if (forceBottomFrameRef.current !== null && typeof window !== 'undefined') {
+            window.cancelAnimationFrame(forceBottomFrameRef.current);
+            forceBottomFrameRef.current = null;
+        }
+        forceBottomTouchCleanupRef.current?.();
+        forceBottomTouchCleanupRef.current = null;
+    }, []);
+
+    const forceBottomDefeatingMomentum = React.useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+
+        cancelForcedBottom();
+        const generation = forceBottomGenerationRef.current;
+        const previousOverflow = el.style.overflow;
+        const previousScrollBehavior = el.style.scrollBehavior;
+        el.style.scrollBehavior = 'auto';
+        el.style.overflow = 'hidden';
+        el.scrollTop = el.scrollHeight;
+        void el.scrollHeight;
+        el.style.overflow = previousOverflow;
+        el.style.scrollBehavior = previousScrollBehavior;
+
+        const pin = () => {
+            markAuto(el);
+            el.scrollTop = el.scrollHeight;
+            lastScrollTopRef.current = el.scrollTop;
+        };
+        pin();
+        updateOverflowAndButton();
+
+        if (typeof window === 'undefined') return;
+        let frames = 0;
+        const cancelOnUserTouch = () => cancelForcedBottom();
+        el.addEventListener('touchstart', cancelOnUserTouch, { passive: true, once: true });
+        forceBottomTouchCleanupRef.current = () => el.removeEventListener('touchstart', cancelOnUserTouch);
+
+        const watch = () => {
+            if (generation !== forceBottomGenerationRef.current) return;
+            if (distanceFromBottom(el) > FORCE_BOTTOM_TOLERANCE_PX) pin();
+            frames += 1;
+            if (frames >= FORCE_BOTTOM_WATCHDOG_FRAMES) {
+                forceBottomFrameRef.current = null;
+                forceBottomTouchCleanupRef.current?.();
+                forceBottomTouchCleanupRef.current = null;
+                updateOverflowAndButton();
+                return;
+            }
+            forceBottomFrameRef.current = window.requestAnimationFrame(watch);
+        };
+        forceBottomFrameRef.current = window.requestAnimationFrame(watch);
+    }, [cancelForcedBottom, markAuto, updateOverflowAndButton]);
+
     const scrollToBottomNow = React.useCallback((behavior: ScrollBehavior) => {
         const el = scrollRef.current;
         if (!el) return;
@@ -371,8 +431,16 @@ export const useChatAutoFollow = ({
 
     // ── public scroll API (mapped onto the primitives) ───────────────────────
     const goToBottom = React.useCallback((mode: 'instant' | 'smooth' = 'instant') => {
-        scrollToBottom(true, mode === 'smooth' ? 'smooth' : 'auto');
-    }, [scrollToBottom]);
+        setStateValue('following');
+        endEntryStick();
+        if (mode === 'instant') {
+            forceBottomDefeatingMomentum();
+            return;
+        }
+        cancelForcedBottom();
+        scrollToBottom(true, 'smooth');
+        updateOverflowAndButton();
+    }, [cancelForcedBottom, endEntryStick, forceBottomDefeatingMomentum, scrollToBottom, setStateValue, updateOverflowAndButton]);
 
     const scrollToBottomOnSend = React.useCallback(() => {
         // Single movement to the just-sent message. Force re-pins to the bottom
@@ -382,16 +450,18 @@ export const useChatAutoFollow = ({
     }, [scrollToBottom]);
 
     const releaseAutoFollow = React.useCallback(() => {
+        cancelForcedBottom();
         setStateValue('released');
         updateOverflowAndButton();
-    }, [setStateValue, updateOverflowAndButton]);
+    }, [cancelForcedBottom, setStateValue, updateOverflowAndButton]);
 
     const releaseFromUserIntent = React.useCallback(() => {
         // A genuine user gesture (wheel/touch/key/scrollbar) cancels the entry
         // window immediately so we never fight the user's read position.
+        cancelForcedBottom();
         endEntryStick();
         stop();
-    }, [endEntryStick, stop]);
+    }, [cancelForcedBottom, endEntryStick, stop]);
 
     // ── per-session snapshot persistence (kept; restore still goes to bottom) ─
     const flushSave = React.useCallback(() => {
@@ -473,12 +543,13 @@ export const useChatAutoFollow = ({
         lastSessionIdRef.current = currentSessionId;
         MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
         flushSave();
+        cancelForcedBottom();
         autoRef.current = null;
         // Drop any pending restore request inherited from a different session.
         if (pendingInitialRestoreRef.current && pendingInitialRestoreRef.current !== currentSessionId) {
             pendingInitialRestoreRef.current = null;
         }
-    }, [currentSessionId, flushSave]);
+    }, [cancelForcedBottom, currentSessionId, flushSave]);
 
     // When work begins and we are still following, pin to the bottom so the
     // first streaming frame does not paint mid-history.
@@ -791,6 +862,7 @@ export const useChatAutoFollow = ({
                 clearTimeout(autoTimerRef.current);
                 autoTimerRef.current = null;
             }
+            cancelForcedBottom();
             endEntryStick();
             flushSave();
             if (saveTimerRef.current !== null) {
@@ -798,7 +870,7 @@ export const useChatAutoFollow = ({
                 saveTimerRef.current = null;
             }
         };
-    }, [endEntryStick, flushSave]);
+    }, [cancelForcedBottom, endEntryStick, flushSave]);
 
     React.useEffect(() => {
         if (!onActiveTurnChange) return;

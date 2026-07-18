@@ -109,6 +109,24 @@ export function shouldTriggerHaptic(lastTriggeredAt: number, now: number): boole
   return now - lastTriggeredAt >= HAPTIC_MIN_INTERVAL_MS;
 }
 
+export type SwipeThresholdHapticEvent = 'enter' | 'cancel' | null;
+
+export function evaluateSwipeThresholdHaptic(input: {
+  thresholdReached: boolean;
+  distance: number;
+  enterDistance: number;
+  cancelDistance: number;
+  available: boolean;
+}): { thresholdReached: boolean; event: SwipeThresholdHapticEvent } {
+  if (!input.thresholdReached && input.available && input.distance >= input.enterDistance) {
+    return { thresholdReached: true, event: 'enter' };
+  }
+  if (input.thresholdReached && (!input.available || input.distance <= input.cancelDistance)) {
+    return { thresholdReached: false, event: 'cancel' };
+  }
+  return { thresholdReached: input.thresholdReached, event: null };
+}
+
 // ---------------------------------------------------------------------------
 // Dynamic import cache – prevents repeated imports of the Capacitor plugin
 // ---------------------------------------------------------------------------
@@ -141,12 +159,15 @@ async function getHapticsModuleCached(): Promise<typeof import('@capacitor/hapti
 type MobileHapticStrength = 'light' | 'medium';
 
 /** Fires one haptic while the Capacitor mobile app is visible and active. */
-export function triggerMobileHaptic(strength: MobileHapticStrength = 'light'): boolean {
+export function triggerMobileHaptic(
+  strength: MobileHapticStrength = 'light',
+  options?: { bypassCadence?: boolean },
+): boolean {
   if (!isCapacitorMobileNative()) return false;
   if (document.visibilityState !== 'visible' || !document.documentElement.classList.contains('oc-native-app-active')) return false;
 
   const now = Date.now();
-  if (!shouldTriggerHaptic(lastHapticAt, now)) return false;
+  if (!options?.bypassCadence && !shouldTriggerHaptic(lastHapticAt, now)) return false;
   lastHapticAt = now;
 
   void getHapticsModuleCached().then((mod) => {
@@ -159,12 +180,13 @@ export function triggerMobileHaptic(strength: MobileHapticStrength = 'light'): b
 
 const MOBILE_PRESS_TARGET_SELECTOR = 'button, [role="button"]';
 
-/** Adds immediate feedback when an enabled mobile control is pressed. */
+/** Adds feedback when an enabled mobile control completes a tap. */
 export function useMobilePressHaptics(): void {
   React.useEffect(() => {
     if (!isCapacitorMobileNative()) return;
+    void getHapticsModuleCached();
 
-    const handlePointerDown = (event: PointerEvent) => {
+    const handleClick = (event: MouseEvent) => {
       if (!event.isTrusted || !(event.target instanceof Element)) return;
       const control = event.target.closest<HTMLElement>(MOBILE_PRESS_TARGET_SELECTOR);
       if (!control) return;
@@ -172,8 +194,8 @@ export function useMobilePressHaptics(): void {
       triggerMobileHaptic('medium');
     };
 
-    document.addEventListener('pointerdown', handlePointerDown, { passive: true });
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
   }, []);
 }
 

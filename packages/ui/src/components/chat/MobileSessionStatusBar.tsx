@@ -602,6 +602,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       onClose={() => setOpen(false)}
       title={t('mobile.sessions.search.section.sessions')}
       renderHeader={renderHeader}
+      gesturePreview="session-swipe"
       className="h-[72vh]"
       contentMaxHeightClassName="max-h-full"
     >

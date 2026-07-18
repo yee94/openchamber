@@ -1650,8 +1650,8 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
     useInputStore.setState({
       pendingInputText: prevInputText,
       pendingInputMode: prevInputMode,
-      attachedFiles: prevInputAttachments,
     })
+    useInputStore.getState().setAttachedFiles(prevInputAttachments)
     throw err
   }
 }

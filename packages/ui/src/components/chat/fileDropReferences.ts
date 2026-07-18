@@ -16,7 +16,7 @@ const isLikelyAbsolutePath = (value: string): boolean => (
 
 const toLikelyFileDropReference = (value: string): string | null => {
     const trimmed = value.trim().replace(/^['"]+|['"]+$/g, '');
-    if (!trimmed || /[\r\n]/.test(trimmed)) {
+    if (!trimmed || trimmed === '/>' || /[\r\n]/.test(trimmed)) {
         return null;
     }
 
@@ -53,7 +53,15 @@ const collectStringLeaves = (input: unknown, output: Set<string>, depth = 0): vo
     }
 };
 
-export const parseFileDropReferences = (rawPayload: string): string[] => {
+type FileDropReferenceParseOptions = {
+    allowMultipleLines?: boolean;
+    allowStructuredPayload?: boolean;
+};
+
+export const parseFileDropReferences = (
+    rawPayload: string,
+    { allowMultipleLines = true, allowStructuredPayload = true }: FileDropReferenceParseOptions = {},
+): string[] => {
     const extracted = new Set<string>();
 
     const addCandidatesFromText = (value: string): void => {
@@ -63,25 +71,29 @@ export const parseFileDropReferences = (rawPayload: string): string[] => {
             return;
         }
 
-        for (const line of value.split(/\r?\n/)) {
-            const candidate = toLikelyFileDropReference(line);
-            if (candidate) {
-                extracted.add(candidate);
+        if (allowMultipleLines) {
+            for (const line of value.split(/\r?\n/)) {
+                const candidate = toLikelyFileDropReference(line);
+                if (candidate) {
+                    extracted.add(candidate);
+                }
             }
         }
     };
 
     addCandidatesFromText(rawPayload);
 
-    try {
-        const parsed = JSON.parse(rawPayload) as unknown;
-        const leaves = new Set<string>();
-        collectStringLeaves(parsed, leaves);
-        for (const leaf of leaves) {
-            addCandidatesFromText(leaf);
+    if (allowStructuredPayload) {
+        try {
+            const parsed = JSON.parse(rawPayload) as unknown;
+            const leaves = new Set<string>();
+            collectStringLeaves(parsed, leaves);
+            for (const leaf of leaves) {
+                addCandidatesFromText(leaf);
+            }
+        } catch {
+            // Ignore non-JSON payloads.
         }
-    } catch {
-        // Ignore non-JSON payloads.
     }
 
     return Array.from(extracted);
@@ -101,7 +113,12 @@ export const collectFileDropReferences = (dataTransfer: Pick<DataTransfer, 'getD
             continue;
         }
 
-        for (const candidate of parseFileDropReferences(rawPayload)) {
+        const parseOptions = dataType === 'text/plain'
+            ? { allowMultipleLines: false, allowStructuredPayload: false }
+            : dataType === 'text/uri-list'
+                ? { allowStructuredPayload: false }
+                : undefined;
+        for (const candidate of parseFileDropReferences(rawPayload, parseOptions)) {
             extracted.add(candidate);
         }
     }
