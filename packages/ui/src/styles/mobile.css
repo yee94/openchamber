@@ -7,14 +7,22 @@
   --font-scale: 1;
 }
 
-:root.oc-session-swipe-preview [data-session-swipe-overlay="true"] {
-  opacity: var(--oc-session-swipe-progress, 0) !important;
-  transition: none !important;
+@property --oc-session-swipe-progress {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
 }
 
-:root.oc-session-swipe-preview [data-session-swipe-panel="true"] {
+[data-session-swipe-overlay="true"].oc-session-swipe-preview {
+  opacity: var(--oc-session-swipe-progress, 0) !important;
+  transition: none !important;
+  will-change: opacity;
+}
+
+[data-session-swipe-panel="true"].oc-session-swipe-preview {
   transform: translateY(calc((1 - var(--oc-session-swipe-progress, 0)) * 100%)) !important;
   transition: none !important;
+  will-change: transform;
 }
 
 @media (max-width: 1024px) {

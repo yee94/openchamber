@@ -2224,6 +2224,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const previousSessionHolderRef = React.useRef<HTMLDivElement>(null);
   const nextSessionHolderRef = React.useRef<HTMLDivElement>(null);
   const swipeDirectionRef = React.useRef<'prev' | 'next' | null>(null);
+  const sessionSwipeProgressRef = React.useRef<number | null>(null);
+  const sessionSwipeProgressFrameRef = React.useRef<number | null>(null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const parentSession = useParentSession(currentSessionId);
@@ -2286,26 +2288,61 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     window.dispatchEvent(new Event(SESSION_SWIPE_PREVIEW_COMMIT_EVENT));
     setMobileSessionPanelOpen(true);
   }, [setMobileSessionPanelOpen]);
+  const clearHeaderSwipePreview = React.useCallback(() => {
+    sessionSwipeProgressRef.current = null;
+    if (sessionSwipeProgressFrameRef.current !== null) {
+      window.cancelAnimationFrame(sessionSwipeProgressFrameRef.current);
+      sessionSwipeProgressFrameRef.current = null;
+    }
+    document.querySelectorAll<HTMLElement>('[data-session-swipe-overlay="true"], [data-session-swipe-panel="true"]')
+      .forEach((element) => {
+        element.classList.remove('oc-session-swipe-preview');
+        element.style.removeProperty('--oc-session-swipe-progress');
+      });
+  }, []);
+  const scheduleHeaderSwipeProgress = React.useCallback(() => {
+    if (sessionSwipeProgressFrameRef.current !== null) return;
+
+    const applyProgress = () => {
+      sessionSwipeProgressFrameRef.current = null;
+      const progress = sessionSwipeProgressRef.current;
+      if (progress === null) return;
+
+      const overlay = document.querySelector<HTMLElement>('[data-session-swipe-overlay="true"]');
+      const panel = document.querySelector<HTMLElement>('[data-session-swipe-panel="true"]');
+      if (!overlay || !panel) {
+        sessionSwipeProgressFrameRef.current = window.requestAnimationFrame(applyProgress);
+        return;
+      }
+
+      const value = String(progress);
+      overlay.classList.add('oc-session-swipe-preview');
+      panel.classList.add('oc-session-swipe-preview');
+      overlay.style.setProperty('--oc-session-swipe-progress', value);
+      panel.style.setProperty('--oc-session-swipe-progress', value);
+    };
+
+    sessionSwipeProgressFrameRef.current = window.requestAnimationFrame(applyProgress);
+  }, []);
   const handleHeaderSwipePreviewStart = React.useCallback(() => {
-    document.documentElement.classList.add('oc-session-swipe-preview');
-    document.documentElement.style.setProperty('--oc-session-swipe-progress', '0');
+    sessionSwipeProgressRef.current = 0;
     window.dispatchEvent(new Event(SESSION_SWIPE_PREVIEW_START_EVENT));
     setMobileSessionPanelOpen(true);
-  }, [setMobileSessionPanelOpen]);
+    scheduleHeaderSwipeProgress();
+  }, [scheduleHeaderSwipeProgress, setMobileSessionPanelOpen]);
   const handleHeaderSwipePreviewCancel = React.useCallback(() => {
-    document.documentElement.classList.remove('oc-session-swipe-preview');
-    document.documentElement.style.removeProperty('--oc-session-swipe-progress');
+    clearHeaderSwipePreview();
     window.dispatchEvent(new Event(SESSION_SWIPE_PREVIEW_CANCEL_EVENT));
     setMobileSessionPanelOpen(false);
-  }, [setMobileSessionPanelOpen]);
+  }, [clearHeaderSwipePreview, setMobileSessionPanelOpen]);
   const renderHeaderSwipeProgress = React.useCallback((progress: number | null) => {
     if (progress === null) {
-      document.documentElement.classList.remove('oc-session-swipe-preview');
-      document.documentElement.style.removeProperty('--oc-session-swipe-progress');
+      clearHeaderSwipePreview();
       return;
     }
-    document.documentElement.style.setProperty('--oc-session-swipe-progress', String(progress));
-  }, []);
+    sessionSwipeProgressRef.current = progress;
+    scheduleHeaderSwipeProgress();
+  }, [clearHeaderSwipePreview, scheduleHeaderSwipeProgress]);
   useHeaderSwipeToSessions(chatMainRef, {
     onOpen: handleHeaderSwipeOpen,
     onPreviewStart: handleHeaderSwipePreviewStart,
@@ -2314,10 +2351,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     disabled: headerSwipeDisabled,
   });
 
-  React.useEffect(() => () => {
-    document.documentElement.classList.remove('oc-session-swipe-preview');
-    document.documentElement.style.removeProperty('--oc-session-swipe-progress');
-  }, []);
+  React.useEffect(() => clearHeaderSwipePreview, [clearHeaderSwipePreview]);
 
   React.useLayoutEffect(() => {
     const direction = swipeDirectionRef.current;
