@@ -6,6 +6,7 @@
 import { create } from "zustand"
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import { getRuntimeGeneration, getRuntimeTransportIdentity } from "@/lib/runtime-switch"
+import { createUuid } from "@/lib/uuid"
 import { createDefaultInputDraftMetadataSink, createInputDraftMetadataPersistenceCoordinator, createInputDraftMetadataRepository, type InputDraftMetadataErrorCode, type InputDraftMetadataMigration, type InputDraftMetadataPersistenceCoordinator, type InputDraftMetadataRepository, type InputDraftMetadataSink, type LegacyInputDraft } from "./input-draft-metadata-store"
 import { createInputDraftBlobStore, type DraftBlobErrorCode, type InputDraftBlobStore } from "./input-draft-blob-store"
 import { createInputDraftDurabilityCoordinator, type InputDraftDurabilityCoordinator, type InputDraftDurabilityResult } from "./input-draft-durability-coordinator"
@@ -247,7 +248,7 @@ export const createInputStore = (services: InputDraftServices = {}) => {
         draftMissingAttachmentRefIDs: { ...state.draftMissingAttachmentRefIDs, [id]: (state.draftMissingAttachmentRefIDs[id] ?? []).filter((ref) => live.has(ref)) },
       }
     }
-    const createID = (): string => services.createID?.() ?? crypto.randomUUID()
+    const createID = (): string => services.createID?.() ?? createUuid()
     const makeView = async (attachment: DraftAttachmentMetadata, value: Blob | string): Promise<AttachedFile> => {
       const file = value instanceof File ? value : new File([value], attachment.filename, { type: attachment.mimeType })
       return { id: attachment.attachmentID, file, dataUrl: typeof value === "string" ? value : await readFileAsDataUrl(file), mimeType: attachment.mimeType, filename: attachment.filename, size: attachment.size, source: attachment.source, ...(attachment.serverPath ? { serverPath: attachment.serverPath } : {}), ...(attachment.vscodePath ? { vscodePath: attachment.vscodePath } : {}), ...(attachment.vscodeSource ? { vscodeSource: attachment.vscodeSource } : {}) }

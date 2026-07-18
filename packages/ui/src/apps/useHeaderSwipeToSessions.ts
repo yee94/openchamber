@@ -5,7 +5,7 @@ import { evaluateSwipeThresholdHaptic, triggerMobileHaptic } from '@/hooks/strea
 /**
  * Phone-only content right-swipe gesture to open the session panel.
  *
- * A horizontal left-to-right swipe across more than half the viewport opens
+ * A horizontal left-to-right swipe across roughly one third of the viewport opens
  * the session panel.
  *
  * - Only active on phone (not iPad), gated by the caller via `disabled`.
@@ -20,6 +20,7 @@ import { evaluateSwipeThresholdHaptic, triggerMobileHaptic } from '@/hooks/strea
 const MAX_OFF_AXIS_RATIO = 0.55; // |dy| must stay below |dx| × this
 const INTENT_DISTANCE = 8;
 const THRESHOLD_HYSTERESIS = 8;
+const OPEN_DISTANCE_RATIO = 0.35;
 
 // ---------------------------------------------------------------------------
 // Pure helpers — exported for targeted testing
@@ -61,7 +62,7 @@ export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult 
 
   // Must be a horizontal rightward swipe (left-to-right)
   if (dx <= 0) return { open: false };
-  if (Math.abs(dx) < input.viewportWidth / 2) return { open: false };
+  if (Math.abs(dx) < input.viewportWidth * OPEN_DISTANCE_RATIO) return { open: false };
 
   // Suppress off-axis (vertical) gestures so diagonal scrolls don't open the sheet
   if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return { open: false };
@@ -140,7 +141,7 @@ export const useHeaderSwipeToSessions = (
     let viewportWidth = 0;
 
     const updateThreshold = (distance: number) => {
-      const enterThreshold = viewportWidth / 2;
+      const enterThreshold = viewportWidth * OPEN_DISTANCE_RATIO;
       const transition = evaluateSwipeThresholdHaptic({
         thresholdReached,
         distance,
@@ -225,7 +226,7 @@ export const useHeaderSwipeToSessions = (
       event.preventDefault();
       latestDistance = Math.max(0, dx);
       updateThreshold(latestDistance);
-      onProgressRef.current?.(Math.min(latestDistance / (viewportWidth / 2), 1));
+      onProgressRef.current?.(Math.min(latestDistance / (viewportWidth * OPEN_DISTANCE_RATIO), 1));
     };
 
     const onTouchEnd = (event: TouchEvent) => {

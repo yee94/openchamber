@@ -25,6 +25,7 @@ import { adoptRelayTunnel, isRelayModeActive } from '@/lib/relay/runtime-tunnel'
 import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { createUuid } from '@/lib/uuid';
 
 const MOBILE_CONNECTIONS_STORAGE_KEY = 'openchamber.mobile.connections.v1';
 const MOBILE_SECURE_STORAGE_PREFIX = 'openchamber.mobile.';
@@ -39,13 +40,13 @@ const getMobileDeviceId = (): string => {
   try {
     const existing = window.localStorage.getItem(MOBILE_DEVICE_ID_STORAGE_KEY);
     if (existing && existing.trim()) return existing.trim();
-    const generated = crypto.randomUUID();
+    const generated = createUuid();
     window.localStorage.setItem(MOBILE_DEVICE_ID_STORAGE_KEY, generated);
     return generated;
   } catch {
     // localStorage unavailable — fall back to an ephemeral id (dedupe degrades to
     // per-session, never worse than today's no-dedupe behavior).
-    return crypto.randomUUID();
+    return createUuid();
   }
 };
 
@@ -587,7 +588,7 @@ const upsertConnectionInList = (
   );
   const native = isCapacitorApp();
   const next: MobileSavedConnection = {
-    id: draft.id || existing?.id || crypto.randomUUID(),
+    id: draft.id || existing?.id || createUuid(),
     label: draft.label,
     candidates: draft.candidates,
     lastUsedAt: Date.now(),
@@ -1351,7 +1352,7 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
       if (result.status === 'needs-login') {
         persistMetadata({ id: saved?.id, label, candidates });
         setPendingConnection({
-          id: saved?.id ?? crypto.randomUUID(),
+          id: saved?.id ?? createUuid(),
           label,
           candidates,
           relay: relayCandidateOf({ candidates }) ?? undefined,

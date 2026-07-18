@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { createUuid } from '@/lib/uuid';
 import { TodoSendDialog, type TodoSendExecution } from './TodoSendDialog';
 
 const TODO_PANEL_MIN_ITEMS = 5;
@@ -103,10 +104,7 @@ const toPlanListItem = async (
 };
 
 const createTodoId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `todo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return createUuid();
 };
 
 const sortTodosWithCompletedLast = (items: OpenChamberProjectTodoItem[]): OpenChamberProjectTodoItem[] => [

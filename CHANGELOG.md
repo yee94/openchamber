@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
 - **Plugins, skills catalogs, and GitHub:** add shared authentication snapshots, resilient catalog pagination and deduplication, bounded source requests, registry normalization, and mutation-driven cache invalidation across Settings and picker dialogs.
 - **Web and VS Code parity:** add batched configuration metadata routes, project-directory forwarding for agents, commands, skills, catalogs, and files, plus an optional-read contract across the Web server, VS Code bridge, and local filesystem proxy.
 - **Routing and chat reliability:** keep valid session deep links stable after startup, reconcile stale session directories from the authoritative index, close text-selection menus synchronously during session switches, and refine composer leader-key hints.
+- **Mobile windows:** add a shared motion and stacking system for top, bottom, left, and right overlays, with edge-aware dismissal, nested-scroll ownership, final-frame settlement, focus management, and near 1:1 touch tracking.
+- **Mobile sessions:** group sessions by project root and worktree with branch labels, bounded expansion and remote pagination, add worktree creation, close the panel consistently after navigation, and reduce the header-swipe opening distance to 35% of the viewport.
+- **Localization:** detect supported browser language preferences at startup, including regional Traditional Chinese and Portuguese variants, while preserving explicit locale selections.
+- **Runtime compatibility:** generate WebView-compatible UUID v4 identifiers for drafts, queued messages, folders, plans, todos, remote instances, and connection metadata when the native random UUID API is unavailable.
+- **Release integrity:** keep GitHub Releases in draft until the complete Desktop, Android, VSIX, blockmap, and update-manifest inventory passes validation, including a combined dual-architecture macOS update manifest.
 
 ## [1.16.23] - 2026-07-18
 

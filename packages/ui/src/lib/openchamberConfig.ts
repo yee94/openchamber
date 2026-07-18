@@ -11,6 +11,7 @@ import { isVSCodeRuntime } from './desktop';
 import { sanitizeStarterRefs, type DraftStarterRef } from './draftStarters';
 import { createProjectIdFromPath } from './projectId';
 import { runtimeFetch } from './runtime-fetch';
+import { createUuid } from './uuid';
 
 type ProjectRef = { id: string; path: string };
 
@@ -497,10 +498,7 @@ const sanitizePlanTitle = (value: string): string => {
 };
 
 const createProjectPlanId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return createUuid();
 };
 
 const getProjectStorageDirectory = async (project: ProjectRef): Promise<string | null> => {

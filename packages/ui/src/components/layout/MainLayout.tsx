@@ -29,6 +29,7 @@ import { DiffView } from '@/components/views/DiffView';
 import { FilesView } from '@/components/views/FilesView';
 import { GitView } from '@/components/views/GitView';
 import { PlanView } from '@/components/views/PlanView';
+import { MobileSessionStatusBar } from '@/components/chat/MobileSessionStatusBar';
 
 // Heavy views loaded on-demand to reduce initial bundle parse time.
 const TerminalView = lazyWithChunkRecovery(() => import('@/components/views/TerminalView').then(m => ({ default: m.TerminalView })));
@@ -501,6 +502,9 @@ export const MainLayout: React.FC = () => {
                             </ErrorBoundary>
                         </div>
                     )}
+                    <ErrorBoundary>
+                        <MobileSessionStatusBar />
+                    </ErrorBoundary>
                 </DrawerProvider>
             ) : (
                 <>

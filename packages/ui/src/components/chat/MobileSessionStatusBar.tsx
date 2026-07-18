@@ -1,20 +1,34 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllSessionStatuses, useAllLiveSessions } from '@/sync/sync-context';
-import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore, refreshGlobalSessionsForDirectories } from '@/stores/useGlobalSessionsStore';
+import {
+  loadMoreGlobalSessionsForDirectory,
+  mergeLiveSessionWithGlobalSession,
+  useGlobalSessionsStore,
+  refreshGlobalSessionsForDirectories,
+} from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import type { Session } from '@opencode-ai/sdk/v2';
 import type { ProjectEntry } from '@/lib/api/types';
+import type { WorktreeMetadata } from '@/types/worktree';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { Icon } from "@/components/icon/Icon";
+import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
 import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
+import { Button } from '@/components/ui/button';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useNotificationStore } from '@/sync/notification-store';
 import { useI18n } from '@/lib/i18n';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { MobileWindowMotion } from '@/components/ui/MobileWindowMotion';
+import {
+  MOBILE_SESSIONS_WINDOW_ID,
+} from '@/components/ui/MobileWindowMotionRegistry';
 
 interface MobileSessionStatusBarProps {
   onSessionSwitch?: (sessionId: string) => void;
@@ -48,9 +62,9 @@ function useAllProjectSessions(): Session[] {
   }, [globalActiveSessions, liveSessions]);
 }
 
-const MAX_RECENT_SESSIONS = 25;
 const PINNED_SESSION_FILTER_ID = '__pinned_sessions__';
-
+const DEFAULT_GROUP_SESSION_COUNT = 3;
+const GROUP_SESSION_INCREMENT = 7;
 // Normalize path for comparison
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -67,12 +81,21 @@ const sessionDirectory = (session: Session): string => {
   return normalize(record.directory ?? record.project?.worktree ?? '');
 };
 
-// Prefix-match used to group a session under a project root or worktree.
-const pathBelongsToRoot = (path: string, root: string): boolean => {
-  const p = normalize(path);
-  const r = normalize(root);
-  return Boolean(p && r && (p === r || p.startsWith(`${r}/`)));
+const getTopLevelSessionCount = (sessions: Session[]): number => {
+  const ids = new Set(sessions.map((session) => session.id));
+  return sessions.filter((session) => {
+    const parentID = (session as { parentID?: string | null }).parentID;
+    return !parentID || !ids.has(parentID);
+  }).length;
 };
+
+interface ProjectSessionGroup {
+  key: string;
+  directory: string;
+  label: string;
+  worktree: WorktreeMetadata | null;
+  sessions: SessionWithStatus[];
+}
 
 function useSessionGrouping(
   sessions: Session[],
@@ -238,8 +261,8 @@ function useProjectStatus(
   }, [getSessionsByDirectory, availableWorktreesByProject, sessionStatus, notifUnseenCounts, currentSessionId]);
 }
 
-// Resolves the project's root directories (root + known worktrees) for
-// prefix-matching sessions, mirroring the dedicated MobileSessionsSheet.
+// Resolves the project's root directories (root + known worktrees) for exact
+// directory matching, mirroring the dedicated MobileSessionsSheet.
 function useProjectRootsResolver() {
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
 
@@ -292,12 +315,14 @@ function UnreadIndicator({ count }: { count: number }) {
 function SessionItem({
   session,
   isCurrent,
+  contextLabel,
   getSessionTitle,
   onClick,
   needsAttention,
 }: {
   session: SessionWithStatus;
   isCurrent: boolean;
+  contextLabel?: string;
   getSessionTitle: (s: Session) => string;
   onClick: () => void;
   needsAttention: (sessionId: string) => boolean;
@@ -321,11 +346,18 @@ function SessionItem({
         />
       </span>
 
-      <span className={cn(
-        "flex-1 truncate text-[15px] leading-tight",
-        isCurrent ? "font-semibold text-[var(--surface-foreground)]" : "text-[var(--surface-foreground)]"
-      )}>
-        {getSessionTitle(session)}
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className={cn(
+          "truncate text-[15px] leading-tight",
+          isCurrent ? "font-semibold text-[var(--surface-foreground)]" : "text-[var(--surface-foreground)]"
+        )}>
+          {getSessionTitle(session)}
+        </span>
+        {contextLabel ? (
+          <span className="truncate text-[12px] leading-none text-[var(--surface-mutedForeground)]">
+            {contextLabel}
+          </span>
+        ) : null}
       </span>
 
       {(session._runningChildrenCount ?? 0) > 0 && (
@@ -415,6 +447,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   onSessionSwitch,
 }) => {
   const { t } = useI18n();
+  const { git } = useRuntimeAPIs();
   const { currentTheme } = useThemeSystem();
   const isMobile = useUIStore((state) => state.isMobile);
   const sessions = useAllProjectSessions();
@@ -426,13 +459,23 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const setOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
 
   const projects = useProjectsStore((state) => state.projects);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
+  const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const activePaginationByDirectory = useGlobalSessionsStore((state) => state.activePaginationByDirectory);
 
   const { sessions: sortedSessions, totalRunning, totalUnread } = useSessionGrouping(sessions, sessionStatus);
   const { getSessionTitle, needsAttention } = useSessionHelpers();
   const getProjectStatus = useProjectStatus(sessions, sessionStatus, currentSessionId);
   const resolveProjectRoots = useProjectRootsResolver();
-
+  const [expandedWorktreeGroups, setExpandedWorktreeGroups] = React.useState<Set<string>>(new Set());
+  const [visibleCountByGroup, setVisibleCountByGroup] = React.useState<Map<string, number>>(new Map());
+  const [rootBranchesByProject, setRootBranchesByProject] = React.useState<Map<string, string>>(new Map());
+  const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
+  const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
+  const worktreeTargetCacheRef = React.useRef<{ git: typeof git; path: string; isGitRepository: boolean } | null>(null);
+  const [worktreeTargetIsGitRepository, setWorktreeTargetIsGitRepository] = React.useState(false);
   // Project filter persists across sheet openings. The pinned sentinel shares
   // the same state slot because it is a list scope alongside project scopes.
   const filterProjectId = useUIStore((state) => state.mobileSessionFilterProjectId);
@@ -448,13 +491,83 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     }
   }, [filterProjectId, hasPinnedSessions, setFilterProjectId]);
 
+  React.useEffect(() => {
+    if (open) return;
+    setExpandedWorktreeGroups(new Set());
+    setVisibleCountByGroup(new Map());
+  }, [open]);
+
+  const selectedProject = React.useMemo(
+    () => filterProjectId && filterProjectId !== PINNED_SESSION_FILTER_ID
+      ? projects.find((project) => project.id === filterProjectId) ?? null
+      : null,
+    [filterProjectId, projects],
+  );
+
+  const worktreeTargetProject = React.useMemo(
+    () => selectedProject ?? projects.find((project) => project.id === activeProjectId) ?? null,
+    [activeProjectId, projects, selectedProject],
+  );
+
+  React.useEffect(() => {
+    const path = normalize(worktreeTargetProject?.path ?? '');
+    if (!open || !path) {
+      setWorktreeTargetIsGitRepository(false);
+      return;
+    }
+    const cached = worktreeTargetCacheRef.current;
+    if (cached?.git === git && cached.path === path) {
+      setWorktreeTargetIsGitRepository(cached.isGitRepository);
+      return;
+    }
+    let cancelled = false;
+    setWorktreeTargetIsGitRepository(false);
+    void git.checkIsGitRepository(path)
+      .then((isGitRepository) => {
+        if (cancelled) return;
+        worktreeTargetCacheRef.current = { git, path, isGitRepository };
+        setWorktreeTargetIsGitRepository(isGitRepository);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        worktreeTargetCacheRef.current = { git, path, isGitRepository: false };
+        setWorktreeTargetIsGitRepository(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [git, open, worktreeTargetProject]);
+
+  React.useEffect(() => {
+    if (!open || projects.length === 0) return;
+    let cancelled = false;
+    void Promise.all(projects.map(async (project) => ({
+      projectId: project.id,
+      branch: await getRootBranch(project.path).catch(() => null),
+    }))).then((entries) => {
+      if (cancelled) return;
+      setRootBranchesByProject((previous) => {
+        const next = new Map(previous);
+        for (const entry of entries) {
+          const branch = entry.branch?.trim();
+          if (branch && branch !== 'HEAD') next.set(entry.projectId, branch);
+          if (entry.branch === 'HEAD') next.delete(entry.projectId);
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projects]);
+
   const visibleSessionDirectories = React.useMemo(() => {
     if (filterProjectId && filterProjectId !== PINNED_SESSION_FILTER_ID) {
       const project = projects.find((candidate) => candidate.id === filterProjectId);
-      return project ? [project.path] : [];
+      return project ? resolveProjectRoots(project) : [];
     }
-    return projects.map((project) => project.path);
-  }, [filterProjectId, projects]);
+    return projects.flatMap(resolveProjectRoots);
+  }, [filterProjectId, projects, resolveProjectRoots]);
 
   // The panel requests bounded snapshots for the project roots it renders.
   React.useEffect(() => {
@@ -467,8 +580,8 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     return formatDirectoryName(project.path) || project.path;
   }, []);
 
-  // Filter sessions by the selected project (root + worktrees), using the
-  // store's canonical directory keying.
+  // Filter sessions by exact project/worktree directory keys so adjacent or
+  // nested worktree paths remain separate groups.
   const filteredSessions = React.useMemo(() => {
     if (!filterProjectId) return sortedSessions;
     if (filterProjectId === PINNED_SESSION_FILTER_ID) {
@@ -479,30 +592,70 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     const roots = resolveProjectRoots(project);
     return sortedSessions.filter((session) => {
       const dir = sessionDirectory(session);
-      return roots.some((root) => pathBelongsToRoot(dir, root));
+      return roots.some((root) => normalize(root) === dir);
     });
   }, [sortedSessions, filterProjectId, pinnedSessionIds, projects, resolveProjectRoots]);
 
-  // The All and Pinned scopes expose their complete result sets. Project scopes
-  // retain the compact mobile cap.
-  const visibleSessions = React.useMemo(
-    () => filterProjectId === null || filterProjectId === PINNED_SESSION_FILTER_ID
-      ? filteredSessions
-      : filteredSessions.slice(0, MAX_RECENT_SESSIONS),
-    [filterProjectId, filteredSessions],
-  );
+  const projectSessionGroups = React.useMemo<ProjectSessionGroup[]>(() => {
+    if (!selectedProject) return [];
+    const projectRoot = normalize(selectedProject.path);
+    const worktrees = availableWorktreesByProject.get(projectRoot) ?? [];
+    const groups: ProjectSessionGroup[] = [{
+      key: `${selectedProject.id}::${projectRoot}`,
+      directory: projectRoot,
+      label: formatProjectLabel(selectedProject),
+      worktree: null,
+      sessions: [],
+    }];
+    for (const worktree of worktrees) {
+      const directory = normalize(worktree.path);
+      if (!directory || directory === projectRoot || groups.some((group) => group.directory === directory)) continue;
+      groups.push({
+        key: `${selectedProject.id}::${directory}`,
+        directory,
+        label: worktree.branch || worktree.label || formatDirectoryName(directory),
+        worktree,
+        sessions: [],
+      });
+    }
+    const groupByDirectory = new Map(groups.map((group) => [group.directory, group]));
+    for (const session of filteredSessions) {
+      groupByDirectory.get(sessionDirectory(session))?.sessions.push(session);
+    }
+    return groups;
+  }, [availableWorktreesByProject, filteredSessions, formatProjectLabel, selectedProject]);
 
-  const handleSessionClick = (session: SessionWithStatus) => {
-    setCurrentSession(session.id, sessionDirectory(session) || null);
-    onSessionSwitch?.(session.id);
+  const sessionContextLabel = React.useCallback((session: Session): string | undefined => {
+    const directory = sessionDirectory(session);
+    for (const project of projects) {
+      const projectRoot = normalize(project.path);
+      const projectLabel = formatProjectLabel(project);
+      if (directory === projectRoot) {
+        const branch = rootBranchesByProject.get(project.id);
+        return branch ? `${projectLabel} · ${branch}` : projectLabel;
+      }
+      const worktree = (availableWorktreesByProject.get(projectRoot) ?? [])
+        .find((candidate) => normalize(candidate.path) === directory);
+      if (worktree) return worktree.branch ? `${projectLabel} · ${worktree.branch}` : projectLabel;
+    }
+    return formatDirectoryName(directory) || directory || undefined;
+  }, [availableWorktreesByProject, formatProjectLabel, projects, rootBranchesByProject]);
+
+  const closeSessionPanel = React.useCallback(() => {
     setOpen(false);
-  };
+  }, [setOpen]);
+
+  const handleSessionClick = React.useCallback((session: SessionWithStatus) => {
+    closeSessionPanel();
+    void setCurrentSession(session.id, sessionDirectory(session) || null);
+    onSessionSwitch?.(session.id);
+  }, [closeSessionPanel, onSessionSwitch, setCurrentSession]);
 
   // "+" — start a new session draft. Target the project selected in the filter;
   // for "All", use the most recently active session's directory, falling back to
   // the store's own default target when there are no sessions.
   const handleNewChat = React.useCallback(() => {
-    setOpen(false);
+    closeSessionPanel();
     if (filterProjectId) {
       const project = projects.find((p) => p.id === filterProjectId);
       if (project) {
@@ -517,11 +670,167 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     })[0];
     const directory = mostRecent ? sessionDirectory(mostRecent) : '';
     openNewSessionDraft(directory ? { directoryOverride: directory } : undefined);
-  }, [filterProjectId, projects, sessions, openNewSessionDraft, setOpen]);
+  }, [closeSessionPanel, filterProjectId, projects, sessions, openNewSessionDraft]);
+
+  const handleNewWorktree = React.useCallback(() => {
+    if (!worktreeTargetProject || !worktreeTargetIsGitRepository) return;
+    setActiveProjectIdOnly(worktreeTargetProject.id);
+    setWorktreeDialogProjectId(worktreeTargetProject.id);
+    setNewWorktreeDialogOpen(true);
+  }, [setActiveProjectIdOnly, worktreeTargetIsGitRepository, worktreeTargetProject]);
+
+  const toggleWorktreeGroup = React.useCallback((groupKey: string) => {
+    setExpandedWorktreeGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+    setVisibleCountByGroup((previous) => {
+      if (!previous.has(groupKey)) return previous;
+      const next = new Map(previous);
+      next.delete(groupKey);
+      return next;
+    });
+  }, []);
+
+  const showMoreGroupSessions = React.useCallback((group: ProjectSessionGroup) => {
+    const currentVisibleCount = visibleCountByGroup.get(group.key) ?? DEFAULT_GROUP_SESSION_COUNT;
+    const nextVisibleCount = currentVisibleCount + GROUP_SESSION_INCREMENT;
+    setVisibleCountByGroup((previous) => {
+      const next = new Map(previous);
+      next.set(group.key, (previous.get(group.key) ?? DEFAULT_GROUP_SESSION_COUNT) + GROUP_SESSION_INCREMENT);
+      return next;
+    });
+    if (nextVisibleCount < group.sessions.length) return;
+    const pagination = useGlobalSessionsStore.getState().activePaginationByDirectory.get(group.directory);
+    if (pagination?.hasMore && !pagination.loadingMore) {
+      void loadMoreGlobalSessionsForDirectory(group.directory);
+    }
+  }, [visibleCountByGroup]);
+
+  const showFewerGroupSessions = React.useCallback((groupKey: string) => {
+    setVisibleCountByGroup((previous) => {
+      if (!previous.has(groupKey)) return previous;
+      const next = new Map(previous);
+      next.delete(groupKey);
+      return next;
+    });
+  }, []);
+
+  const renderProjectGroup = React.useCallback((group: ProjectSessionGroup) => {
+    const isRoot = group.worktree === null;
+    const expanded = isRoot || expandedWorktreeGroups.has(group.key);
+    const visibleCount = visibleCountByGroup.get(group.key) ?? DEFAULT_GROUP_SESSION_COUNT;
+    const visibleSessions = group.sessions.slice(0, visibleCount);
+    const pagination = activePaginationByDirectory.get(group.directory);
+    const showMore = visibleSessions.length < group.sessions.length || pagination?.hasMore === true;
+    const showFewer = group.sessions.length > DEFAULT_GROUP_SESSION_COUNT
+      && visibleCount > DEFAULT_GROUP_SESSION_COUNT;
+    const branch = isRoot && selectedProject ? rootBranchesByProject.get(selectedProject.id) : null;
+    const groupLabel = group.label;
+
+    return (
+      <section key={group.key} className="overflow-hidden rounded-xl">
+        {isRoot ? (
+          <div className="flex min-h-12 items-center gap-2 px-3 py-2 text-left">
+            <Icon name="folder-open" className="size-4 shrink-0 text-[var(--surface-mutedForeground)]" />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-[14px] font-semibold text-[var(--surface-foreground)]">{groupLabel}</span>
+              {branch ? (
+                <span className="flex min-w-0 items-center gap-1 text-[12px] text-[var(--surface-mutedForeground)]">
+                  <Icon name="git-branch" className="size-3 shrink-0" />
+                  <span className="truncate">{branch}</span>
+                </span>
+              ) : null}
+            </span>
+            <span className="shrink-0 text-[12px] tabular-nums text-[var(--surface-mutedForeground)]">
+              {getTopLevelSessionCount(group.sessions)}
+            </span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => toggleWorktreeGroup(group.key)}
+            aria-expanded={expanded}
+            aria-label={expanded
+              ? t('sessions.sidebar.group.collapseAria', { label: groupLabel })
+              : t('sessions.sidebar.group.expandAria', { label: groupLabel })}
+            className="flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <Icon
+              name="arrow-down-s"
+              className={cn('size-4 shrink-0 text-[var(--surface-mutedForeground)] transition-transform', expanded ? 'rotate-0' : '-rotate-90')}
+            />
+            <Icon name="node-tree" className="size-4 shrink-0 text-[var(--surface-mutedForeground)]" />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--surface-foreground)]">{groupLabel}</span>
+            <span className="shrink-0 text-[12px] tabular-nums text-[var(--surface-mutedForeground)]">
+              {getTopLevelSessionCount(group.sessions)}
+            </span>
+          </button>
+        )}
+
+        {expanded ? (
+          <div className={cn('pb-1', !isRoot && 'pl-4')}>
+            {visibleSessions.map((session) => (
+              <SessionItem
+                key={session.id}
+                session={session}
+                isCurrent={session.id === currentSessionId}
+                getSessionTitle={getSessionTitle}
+                onClick={() => handleSessionClick(session)}
+                needsAttention={needsAttention}
+              />
+            ))}
+            {showMore || showFewer ? (
+              <div className="flex min-h-10 items-center gap-2 py-1 pr-3 pl-8">
+                {showMore ? (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={pagination?.loadingMore === true}
+                    onClick={() => showMoreGroupSessions(group)}
+                    className="text-muted-foreground/70 hover:text-foreground"
+                  >
+                    {t('sessions.sidebar.group.showMore')}
+                  </Button>
+                ) : null}
+                {showFewer ? (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => showFewerGroupSessions(group.key)}
+                    className="text-muted-foreground/70 hover:text-foreground"
+                  >
+                    {t('sessions.sidebar.group.showFewer')}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    );
+  }, [
+    activePaginationByDirectory,
+    currentSessionId,
+    expandedWorktreeGroups,
+    getSessionTitle,
+    handleSessionClick,
+    needsAttention,
+    rootBranchesByProject,
+    selectedProject,
+    showFewerGroupSessions,
+    showMoreGroupSessions,
+    t,
+    toggleWorktreeGroup,
+    visibleCountByGroup,
+  ]);
 
   const renderHeader = React.useCallback(() => (
     <div className="shrink-0">
-      <div className="flex justify-center pt-2.5 pb-1">
+      <div className="flex min-h-8 justify-center pt-2.5">
         <div className="h-1 w-9 rounded-full bg-[color-mix(in_srgb,var(--surface-mutedForeground)_40%,transparent)]" />
       </div>
 
@@ -532,18 +841,32 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         <div className="flex items-center gap-3">
           <RunningIndicator count={totalRunning} />
           <UnreadIndicator count={totalUnread} />
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleNewChat}
             aria-label={t('mobile.sessions.newChat')}
-            className="flex size-8 items-center justify-center rounded-full text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]"
+            className="text-[var(--surface-mutedForeground)]"
             style={{ touchAction: 'manipulation' }}
           >
             <Icon name="add" className="h-5 w-5" />
-          </button>
+          </Button>
+          {worktreeTargetIsGitRepository && worktreeTargetProject ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleNewWorktree}
+              aria-label={t('sessions.sidebar.project.actions.newWorktree')}
+              title={t('sessions.sidebar.project.actions.newWorktree')}
+              className="text-[var(--surface-mutedForeground)]"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <Icon name="node-tree" className="size-4" />
+            </Button>
+          ) : null}
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={closeSessionPanel}
             className="flex size-8 items-center justify-center rounded-full text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]"
             style={{ touchAction: 'manipulation' }}
           >
@@ -590,40 +913,84 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         </div>
       )}
     </div>
-  ), [t, totalRunning, totalUnread, projects, hasPinnedSessions, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, setOpen]);
+  ), [t, totalRunning, totalUnread, projects, hasPinnedSessions, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, handleNewWorktree, closeSessionPanel, worktreeTargetIsGitRepository, worktreeTargetProject]);
 
   if (!isMobile) {
     return null;
   }
 
   return (
-    <MobileOverlayPanel
-      open={open}
-      onClose={() => setOpen(false)}
-      title={t('mobile.sessions.search.section.sessions')}
-      renderHeader={renderHeader}
-      gesturePreview="session-swipe"
-      className="h-[72vh]"
-      contentMaxHeightClassName="max-h-full"
-    >
-      <div className="flex min-h-full flex-col gap-0.5">
-        {visibleSessions.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center py-10 text-[13px] text-[var(--surface-mutedForeground)]">
-            <span>{t('chat.mobileStatus.noSessionsInProject')}</span>
-          </div>
-        ) : (
-          visibleSessions.map((session) => (
-            <SessionItem
-              key={session.id}
-              session={session}
-              isCurrent={session.id === currentSessionId}
-              getSessionTitle={getSessionTitle}
-              onClick={() => handleSessionClick(session)}
-              needsAttention={needsAttention}
-            />
-          ))
-        )}
-      </div>
-    </MobileOverlayPanel>
+    <>
+      <MobileWindowMotion
+        id={MOBILE_SESSIONS_WINDOW_ID}
+        open={open}
+        onOpenChange={setOpen}
+        presentation="sheet"
+        edge="bottom"
+        dismissGesture
+        ariaLabel={t('mobile.sessions.sheet.title')}
+        surfaceClassName="h-[72vh]"
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+          {renderHeader()}
+          <ScrollableOverlay
+            useScrollShadow
+            disableHorizontal
+            preventOverscroll
+            outerClassName="min-h-0 max-h-full flex-1"
+            className="px-2 py-2 pwa-overlay-scroll"
+          >
+            <div className="flex min-h-full flex-col gap-0.5">
+              {selectedProject ? (
+                <>
+                  {projectSessionGroups.map(renderProjectGroup)}
+                  {projectSessionGroups.every((group) => group.sessions.length === 0) ? (
+                    <div className="flex flex-1 items-center justify-center py-8 text-[13px] text-[var(--surface-mutedForeground)]">
+                      <span>{t('chat.mobileStatus.noSessionsInProject')}</span>
+                    </div>
+                  ) : null}
+                </>
+              ) : filteredSessions.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center py-10 text-[13px] text-[var(--surface-mutedForeground)]">
+                  <span>{t('chat.mobileStatus.noSessionsInProject')}</span>
+                </div>
+              ) : (
+                filteredSessions.map((session) => (
+                  <SessionItem
+                    key={session.id}
+                    session={session}
+                    isCurrent={session.id === currentSessionId}
+                    contextLabel={sessionContextLabel(session)}
+                    getSessionTitle={getSessionTitle}
+                    onClick={() => handleSessionClick(session)}
+                    needsAttention={needsAttention}
+                  />
+                ))
+              )}
+            </div>
+          </ScrollableOverlay>
+        </div>
+      </MobileWindowMotion>
+      <NewWorktreeDialog
+        open={newWorktreeDialogOpen}
+        onOpenChange={(value) => {
+          setNewWorktreeDialogOpen(value);
+          if (!value) setWorktreeDialogProjectId(null);
+        }}
+        onWorktreeCreated={(worktreePath, options) => {
+          setNewWorktreeDialogOpen(false);
+          setOpen(false);
+          if (options?.sessionId) {
+            void setCurrentSession(options.sessionId, worktreePath);
+          } else if (worktreeDialogProjectId) {
+            openNewSessionDraft({
+              selectedProjectId: worktreeDialogProjectId,
+              directoryOverride: worktreePath,
+              preserveDirectoryOverride: true,
+            });
+          }
+        }}
+      />
+    </>
   );
 };

@@ -11,6 +11,9 @@ project(':capacitor-mlkit-barcode-scanning').projectDir = new File('../../../nod
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../../../node_modules/.bun/@capacitor+app@8.1.0+767ac80cbab8ae50/node_modules/@capacitor/app/android')
 
+include ':capacitor-haptics'
+project(':capacitor-haptics').projectDir = new File('../../../node_modules/.bun/@capacitor+haptics@8.0.2+767ac80cbab8ae50/node_modules/@capacitor/haptics/android')
+
 include ':capacitor-keyboard'
 project(':capacitor-keyboard').projectDir = new File('../../../node_modules/.bun/@capacitor+keyboard@8.0.5+767ac80cbab8ae50/node_modules/@capacitor/keyboard/android')
 

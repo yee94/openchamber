@@ -4,6 +4,7 @@ import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import type { AttachedFile } from './types/sessionTypes';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { ascendingId } from '@/sync/message-id';
+import { createUuid } from '@/lib/uuid';
 
 export type FollowUpBehavior = 'steer' | 'queue';
 export type QueueItemStatus = 'queued' | 'sending' | 'retrying' | 'reconciling' | 'unresolved' | 'failed';
@@ -63,7 +64,7 @@ interface MessageQueueActions {
 }
 type Store = MessageQueueState & MessageQueueActions;
 type Persisted = { queuedMessages?: Record<string, QueuedMessage[]>; followUpBehavior?: FollowUpBehavior; queueModeEnabled?: boolean };
-const createID = (prefix: string) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+const createID = (prefix: string) => `${prefix}-${createUuid()}`;
 const recoveryFor = (item: QueuedMessage): QueueRecoveryPayload => ({ content: item.content, attachments: item.attachments, sendConfig: item.sendConfig });
 const sameIdentity = (item: QueueItem, identity: Identity) => item.queueItemID === identity.queueItemID && item.operationID === identity.operationID && (!identity.messageID || item.messageID === identity.messageID);
 const locked = (item: QueueItem) => item.status === 'sending' || item.status === 'reconciling';

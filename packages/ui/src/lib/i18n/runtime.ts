@@ -23,16 +23,22 @@ type StoredLocale = {
   locale?: unknown;
 };
 
-export function normalizeLocale(value: string | undefined | null): Locale {
+function matchSupportedLocale(value: string | undefined | null): Locale | undefined {
   if (!value) {
-    return DEFAULT_LOCALE;
+    return undefined;
   }
 
   const normalized = value.toLowerCase().replace(/_/g, '-');
-  if (normalized === 'zh-cn' || normalized === 'zh-hans' || normalized.startsWith('zh-hans-')) {
-    return 'zh-CN';
-  }
-  if (normalized === 'zh-tw' || normalized === 'zh-hant' || normalized.startsWith('zh-hant-')) {
+  if (
+    normalized === 'zh-tw'
+    || normalized.startsWith('zh-tw-')
+    || normalized === 'zh-hk'
+    || normalized.startsWith('zh-hk-')
+    || normalized === 'zh-mo'
+    || normalized.startsWith('zh-mo-')
+    || normalized === 'zh-hant'
+    || normalized.startsWith('zh-hant-')
+  ) {
     return 'zh-TW';
   }
   if (normalized.startsWith('zh')) {
@@ -50,7 +56,7 @@ export function normalizeLocale(value: string | undefined | null): Locale {
   if (normalized === 'es' || normalized.startsWith('es-')) {
     return 'es';
   }
-  if (normalized === 'pt' || normalized === 'pt-br' || normalized.startsWith('pt-br-')) {
+  if (normalized === 'pt' || normalized.startsWith('pt-')) {
     return 'pt-BR';
   }
   if (normalized === 'ko' || normalized.startsWith('ko-')) {
@@ -62,7 +68,11 @@ export function normalizeLocale(value: string | undefined | null): Locale {
   if (normalized === 'pl' || normalized.startsWith('pl-')) {
     return 'pl';
   }
-  return DEFAULT_LOCALE;
+  return undefined;
+}
+
+export function normalizeLocale(value: string | undefined | null): Locale {
+  return matchSupportedLocale(value) ?? DEFAULT_LOCALE;
 }
 
 function readStoredLocale(): Locale | undefined {
@@ -98,6 +108,20 @@ export function detectInitialLocale(): Locale {
   const stored = readStoredLocale();
   if (stored) {
     return stored;
+  }
+
+  if (typeof navigator !== 'undefined') {
+    try {
+      const preferredLocales = [...(navigator.languages ?? []), navigator.language];
+      for (const preferredLocale of preferredLocales) {
+        const matched = matchSupportedLocale(preferredLocale);
+        if (matched) {
+          return matched;
+        }
+      }
+    } catch {
+      return DEFAULT_LOCALE;
+    }
   }
 
   return DEFAULT_LOCALE;

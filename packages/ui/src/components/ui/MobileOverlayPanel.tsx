@@ -13,12 +13,7 @@ interface MobileOverlayPanelProps {
   className?: string;
   contentMaxHeightClassName?: string;
   renderHeader?: (closeButton: React.ReactNode) => React.ReactNode;
-  gesturePreview?: 'session-swipe';
 }
-
-export const SESSION_SWIPE_PREVIEW_START_EVENT = 'oc:session-swipe-preview-start';
-export const SESSION_SWIPE_PREVIEW_COMMIT_EVENT = 'oc:session-swipe-preview-commit';
-export const SESSION_SWIPE_PREVIEW_CANCEL_EVENT = 'oc:session-swipe-preview-cancel';
 
 const OVERLAY_ROOT_ID = 'mobile-overlay-root';
 // Entrance animation: classic slide up from the bottom + scrim fade.
@@ -45,11 +40,9 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   className,
   contentMaxHeightClassName,
   renderHeader,
-  gesturePreview,
 }) => {
   const overlayRootRef = React.useRef<HTMLElement | null>(null);
   const [entered, setEntered] = React.useState(false);
-  const [gesturePreviewActive, setGesturePreviewActive] = React.useState(false);
   // True once the enter transition has finished. While entering, the panel's
   // keyboard-inset bottom anchor must NOT animate: opening an overlay usually
   // closes the keyboard at the same moment, and a transitioning `bottom` under
@@ -60,20 +53,6 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   if (typeof document !== 'undefined' && !overlayRootRef.current) {
     overlayRootRef.current = ensureOverlayRoot();
   }
-
-  React.useEffect(() => {
-    if (gesturePreview !== 'session-swipe') return;
-    const start = () => setGesturePreviewActive(true);
-    const finish = () => setGesturePreviewActive(false);
-    window.addEventListener(SESSION_SWIPE_PREVIEW_START_EVENT, start);
-    window.addEventListener(SESSION_SWIPE_PREVIEW_COMMIT_EVENT, finish);
-    window.addEventListener(SESSION_SWIPE_PREVIEW_CANCEL_EVENT, finish);
-    return () => {
-      window.removeEventListener(SESSION_SWIPE_PREVIEW_START_EVENT, start);
-      window.removeEventListener(SESSION_SWIPE_PREVIEW_COMMIT_EVENT, finish);
-      window.removeEventListener(SESSION_SWIPE_PREVIEW_CANCEL_EVENT, finish);
-    };
-  }, [gesturePreview]);
 
   // Replay the enter transition on each open (rise + scrim fade).
   React.useEffect(() => {
@@ -99,15 +78,15 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   // considers the gesture active — a deferred focus() would not raise the
   // keyboard in an installed PWA.
   React.useLayoutEffect(() => {
-    if (!open || gesturePreviewActive) return;
+    if (!open) return;
     window.dispatchEvent(new Event('oc:mobile-overlay-opened'));
     return () => {
       window.dispatchEvent(new Event('oc:mobile-overlay-closed'));
     };
-  }, [gesturePreviewActive, open]);
+  }, [open]);
 
   React.useEffect(() => {
-    if (!open || gesturePreviewActive) {
+    if (!open) {
       return;
     }
     const previousOverflow = document.body.style.overflow;
@@ -122,7 +101,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [gesturePreviewActive, open, onClose]);
+  }, [open, onClose]);
 
   if (!open || !overlayRootRef.current) {
     return null;
@@ -137,10 +116,8 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
         !enterSettled && 'oc-keyboard-inset-snap',
         entered ? 'opacity-100' : 'opacity-0',
       )}
-      role={gesturePreviewActive ? undefined : 'dialog'}
-      aria-modal={gesturePreviewActive ? undefined : 'true'}
-      aria-hidden={gesturePreviewActive ? 'true' : undefined}
-      data-session-swipe-overlay={gesturePreview === 'session-swipe' ? 'true' : undefined}
+      role="dialog"
+      aria-modal="true"
       onClick={onClose}
     >
         <div
@@ -153,7 +130,6 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             transform: entered ? 'none' : 'translateY(100%)',
             transition: `transform ${ENTER_DURATION_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
           }}
-          data-session-swipe-panel={gesturePreview === 'session-swipe' ? 'true' : undefined}
           onClick={(event) => event.stopPropagation()}
         >
         {(() => {

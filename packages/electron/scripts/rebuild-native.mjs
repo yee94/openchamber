@@ -146,6 +146,13 @@ const resolveElectronNodeGyp = () => {
   return nodeGypPath;
 };
 
+const getNativeBuildEnvironment = () => {
+  const sensitiveName = /(TOKEN|SECRET|PASSWORD|API_KEY|KEYSTORE|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE|CERT)/i;
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !sensitiveName.test(name)),
+  );
+};
+
 const rebuildBetterSqliteForElectron = () => {
   // @electron/rebuild cannot follow Bun's workspace symlink into the web
   // package, so it reports success while leaving better-sqlite3 on the host
@@ -159,14 +166,16 @@ const rebuildBetterSqliteForElectron = () => {
     `--target=${electronVersion}`,
     `--arch=${process.env.ELECTRON_BUILDER_ARCH || process.arch}`,
     '--dist-url=https://electronjs.org/headers',
+    '--loglevel=error',
   ], {
     cwd: packageDir,
     env: {
-      ...process.env,
+      ...getNativeBuildEnvironment(),
       npm_config_runtime: 'electron',
       npm_config_target: electronVersion,
       npm_config_arch: process.env.ELECTRON_BUILDER_ARCH || process.arch,
       npm_config_disturl: 'https://electronjs.org/headers',
+      npm_config_loglevel: 'error',
     },
     stdio: 'inherit',
   });

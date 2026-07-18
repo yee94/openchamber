@@ -13,8 +13,13 @@ import { useI18n } from '@/lib/i18n';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { mergeLiveSessionWithGlobalSession, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import {
+  loadMoreGlobalSessionsForDirectory,
+  mergeLiveSessionWithGlobalSession,
+  useGlobalSessionsStore,
+} from '@/stores/useGlobalSessionsStore';
 import { useMobileSessionExpansionStore } from '@/stores/useMobileSessionExpansionStore';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -70,6 +75,7 @@ type ProjectNode = {
 };
 
 const SESSIONS_PER_BUCKET = 3;
+const SESSIONS_PAGE_SIZE = 7;
 
 // Left padding for session rows so the title's first letter aligns with its
 // parent label. Root/project-level sessions align with the project label;
@@ -372,9 +378,10 @@ const PaginationRow: React.FC<{
   indent: number;
   showMore: boolean;
   showFewer: boolean;
+  loadingMore?: boolean;
   onShowMore?: () => void;
   onShowFewer?: () => void;
-}> = ({ indent, showMore, showFewer, onShowMore, onShowFewer }) => {
+}> = ({ indent, showMore, showFewer, loadingMore = false, onShowMore, onShowFewer }) => {
   const { t } = useI18n();
   if (!showMore && !showFewer) return null;
   return (
@@ -385,8 +392,12 @@ const PaginationRow: React.FC<{
       {showMore ? (
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+          className={cn(
+            'inline-flex items-center gap-1.5 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-60',
+            loadingMore && 'animate-pulse',
+          )}
           onClick={onShowMore}
+          disabled={loadingMore}
         >
           <Icon name="arrow-down-s" className="size-4" />
           <span className="typography-micro">{t('sessions.sidebar.group.showMore')}</span>
@@ -411,6 +422,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const { git } = useRuntimeAPIs();
   const liveSessions = useAllLiveSessions();
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
+  const activePaginationByDirectory = useGlobalSessionsStore((state) => state.activePaginationByDirectory);
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -437,6 +449,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
   const [worktreesByProject, setWorktreesByProject] = React.useState<Map<string, WorktreeMetadata[]>>(new Map());
   const [gitProjectPaths, setGitProjectPaths] = React.useState<Set<string>>(new Set());
+  const [rootBranchesByProject, setRootBranchesByProject] = React.useState<Map<string, string>>(new Map());
   // Per-bucket count of sessions revealed past the default page. Ephemeral —
   // resets when the sheet closes or when a group/project is toggled. Expand
   // state itself lives in useMobileSessionTreeStore (persisted).
@@ -482,10 +495,15 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           const path = normalizePath(project.path);
           if (!path) return null;
           const isGitRepo = await git.checkIsGitRepository(path).catch(() => false);
-          const worktrees = isGitRepo
-            ? await listProjectWorktrees({ id: project.id, path }).catch(() => [])
-            : [];
-          return [path, worktrees, isGitRepo] as const;
+          let worktrees: WorktreeMetadata[] = [];
+          let rootBranch: string | null = null;
+          if (isGitRepo) {
+            [worktrees, rootBranch] = await Promise.all([
+              listProjectWorktrees({ id: project.id, path }).catch(() => []),
+              getRootBranch(path).catch(() => null),
+            ]);
+          }
+          return { id: project.id, path, worktrees, isGitRepo, rootBranch };
         }),
       );
       if (cancelled) return;
@@ -493,12 +511,25 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       const nextGitProjectPaths = new Set<string>();
       for (const entry of entries) {
         if (entry) {
-          next.set(entry[0], entry[1]);
-          if (entry[2]) nextGitProjectPaths.add(entry[0]);
+          next.set(entry.path, entry.worktrees);
+          if (entry.isGitRepo) nextGitProjectPaths.add(entry.path);
         }
       }
       setWorktreesByProject(next);
       setGitProjectPaths(nextGitProjectPaths);
+      setRootBranchesByProject((previous) => {
+        const branches = new Map<string, string>();
+        for (const entry of entries) {
+          if (!entry?.isGitRepo) continue;
+          const branch = entry.rootBranch?.trim();
+          if (branch && branch !== 'HEAD') branches.set(entry.id, branch);
+          else if (entry.rootBranch === null) {
+            const previousBranch = previous.get(entry.id);
+            if (previousBranch) branches.set(entry.id, previousBranch);
+          }
+        }
+        return branches;
+      });
     };
     void run();
     return () => {
@@ -641,12 +672,33 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     });
   };
 
-  const showMoreBucketSessions = (bucketKey: string, currentVisibleCount: number) => {
+  const showMoreBucketSessions = (
+    bucketKey: string,
+    directory: string,
+    currentVisibleCount: number,
+    totalSessions: number,
+  ) => {
+    const currentLimit = Math.max(SESSIONS_PER_BUCKET, currentVisibleCount);
+    const nextVisibleCount = currentLimit + SESSIONS_PAGE_SIZE;
     setVisibleCountByBucket((previous) => {
       const next = new Map(previous);
-      next.set(bucketKey, currentVisibleCount + SESSIONS_PER_BUCKET);
+      const current = Math.max(
+        SESSIONS_PER_BUCKET,
+        previous.get(bucketKey) ?? SESSIONS_PER_BUCKET,
+        currentVisibleCount,
+      );
+      next.set(bucketKey, current + SESSIONS_PAGE_SIZE);
       return next;
     });
+    if (nextVisibleCount < totalSessions) return;
+    const normalizedBucketDirectory = normalizePath(directory);
+    if (!normalizedBucketDirectory) return;
+    const pagination = useGlobalSessionsStore
+      .getState()
+      .activePaginationByDirectory.get(normalizedBucketDirectory);
+    if (pagination?.hasMore && !pagination.loadingMore) {
+      void loadMoreGlobalSessionsForDirectory(normalizedBucketDirectory);
+    }
   };
 
   // Paginated, tree-aware list of a bucket's sessions: top-level sessions paginate,
@@ -675,6 +727,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     const visibleCount = visibleCountByBucket.get(bucketKey) ?? SESSIONS_PER_BUCKET;
     const visibleRoots = roots.slice(0, visibleCount);
     const remaining = roots.length - visibleRoots.length;
+    const pagination = activePaginationByDirectory.get(normalizePath(bucket.path));
+    const hasRemoteSessions = pagination?.hasMore === true;
+    const isLoadingRemoteSessions = pagination?.loadingMore === true;
     // Show fewer whenever the rendered list is past the default page, even if
     // more remain — so "more" and "fewer" can appear together for fold / load-more.
     const canShowFewer = roots.length > SESSIONS_PER_BUCKET
@@ -723,9 +778,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         {visibleRoots.map((session) => renderNode(session, indent))}
         <PaginationRow
           indent={indent}
-          showMore={remaining > 0}
+          showMore={remaining > 0 || hasRemoteSessions}
           showFewer={canShowFewer}
-          onShowMore={() => showMoreBucketSessions(bucketKey, visibleRoots.length)}
+          loadingMore={isLoadingRemoteSessions}
+          onShowMore={() => showMoreBucketSessions(bucketKey, bucket.path, visibleRoots.length, roots.length)}
           onShowFewer={() => resetBucketVisibleCount(bucketKey)}
         />
       </div>
@@ -863,6 +919,21 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       </Button>
     ) : null;
 
+  const activeProject = projectsMeta.find((project) => project.id === activeProjectId) ?? null;
+  const newWorktreeButton = activeProject?.isGitRepo ? (
+    <Button
+      type="button"
+      variant="chip"
+      size="sm"
+      aria-label={t('sessions.sidebar.project.actions.newWorktree')}
+      title={t('sessions.sidebar.project.actions.newWorktree')}
+      onClick={() => handleNewWorktree(activeProject.id)}
+      style={{ touchAction: 'manipulation' }}
+    >
+      <Icon name="node-tree" className="size-4" />
+    </Button>
+  ) : null;
+
   const addProjectButton = (
     <Button
       type="button"
@@ -881,6 +952,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     newChatButton || addProjectButton ? (
       <>
         {newChatButton}
+        {newWorktreeButton}
         {addProjectButton}
       </>
     ) : null;
@@ -1037,8 +1109,16 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                         style={{ touchAction: 'manipulation' }}
                       >
                         <MobileProjectIcon project={node.project} />
-                        <span className="block min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
-                          {node.project.label}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="block truncate typography-ui-label font-semibold text-foreground">
+                            {node.project.label}
+                          </span>
+                          {rootBranchesByProject.get(node.project.id) ? (
+                            <span className="flex min-w-0 items-center gap-1 typography-micro text-muted-foreground">
+                              <Icon name="git-branch" className="size-3 shrink-0" />
+                              <span className="truncate">{rootBranchesByProject.get(node.project.id)}</span>
+                            </span>
+                          ) : null}
                         </span>
                         {node.isActive ? <ActiveDot ariaLabel={t('mobile.sessions.activeProjectAria')} /> : null}
                         <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">

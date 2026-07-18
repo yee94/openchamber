@@ -43,16 +43,14 @@ import {
 } from '@/components/sections/projects/ProjectSettingsSubsection';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { createUuid } from '@/lib/uuid';
 
 type EditableProjectAction = OpenChamberProjectAction;
 
 const AUTO_SAVE_DELAY_MS = 450;
 
 const createActionId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `action_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  return createUuid();
 };
 
 const createEmptyAction = (): EditableProjectAction => ({

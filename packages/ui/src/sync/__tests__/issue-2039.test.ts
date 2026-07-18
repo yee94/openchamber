@@ -124,6 +124,7 @@ mock.module("@/stores/useSessionFoldersStore", () => ({
 }))
 
 mock.module("@/queries/commandQueries", () => ({
+  commandQueryOptions: () => ({ queryKey: ["test-runtime", "commands", null] }),
   readCommandsSnapshot: () => [],
 }))
 
@@ -161,7 +162,9 @@ mock.module("../selection-store", () => ({
 mock.module("@/lib/runtime-switch", () => ({
   getRuntimeApiBaseUrl: () => "",
   getRuntimeKey: () => "test-runtime",
+  getRuntimeTransportIdentity: () => "test-runtime",
   initializeRuntimeEndpoint: () => undefined,
+  isRuntimeEndpointIdentityChange: () => false,
   subscribeRuntimeEndpointChanged: () => () => undefined,
   switchRuntimeEndpoint: () => undefined,
 }))
@@ -216,6 +219,7 @@ mock.module("../input-store", () => ({
       captureDraftRuntime: () => ({ transportIdentity: "runtime-issue-2039", generation: 1 }),
       getDraft: () => undefined,
       finalizeDraftOwnership,
+      setActiveAttachmentDraft: () => undefined,
     }),
   },
 }))

@@ -10,7 +10,7 @@ type I18nState = {
   locale: Locale;
   dictionary: I18nDictionary;
   loadingLocale: Locale | null;
-  setLocale: (locale: Locale) => void;
+  setLocale: (locale: Locale, persist?: boolean) => void;
 };
 
 const dictionaries = new Map<Locale, I18nDictionary>([[DEFAULT_LOCALE, enDict]]);
@@ -53,14 +53,16 @@ export const useI18nStore = create<I18nState>()((set, get) => ({
   locale: DEFAULT_LOCALE,
   dictionary: enDict,
   loadingLocale: null,
-  setLocale: (locale) => {
+  setLocale: (locale, persist = true) => {
     const current = get();
     const cached = dictionaries.get(locale);
     if (current.locale === locale && current.loadingLocale !== locale && cached) {
       return;
     }
 
-    writeStoredLocale(locale);
+    if (persist) {
+      writeStoredLocale(locale);
+    }
 
     set({
       locale,
@@ -87,7 +89,7 @@ export const useI18nStore = create<I18nState>()((set, get) => ({
 }));
 
 export function initializeLocale(): void {
-  useI18nStore.getState().setLocale(detectInitialLocale());
+  useI18nStore.getState().setLocale(detectInitialLocale(), false);
 }
 
 export function formatMessage(dictionary: I18nDictionary, key: I18nKey, params?: I18nParams): string {

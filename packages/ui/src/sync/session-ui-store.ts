@@ -33,6 +33,7 @@ import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraft
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { getWorktreeSetupWaitEnabled } from "@/lib/openchamberConfig"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
+import { createUuid } from "@/lib/uuid"
 import { ascendingId } from "./message-id"
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import type { ConversationCreateWithPromptResult, ConversationCreateWithPromptInput } from "@/lib/api/types"
@@ -1188,8 +1189,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const nextDraft: NewSessionDraftState = {
       open: true,
       draftID: existingDraft.open && !existingDraft.draftSubmitting
-        ? existingDraft.draftID ?? crypto.randomUUID()
-        : crypto.randomUUID(),
+        ? existingDraft.draftID ?? createUuid()
+        : createUuid(),
       selectedProjectId: selectedProject?.id ?? null,
       directoryOverride: directory,
       permissionAutoAcceptEnabled: options?.permissionAutoAcceptEnabled === true,

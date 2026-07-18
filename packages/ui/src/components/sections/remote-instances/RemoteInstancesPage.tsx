@@ -60,6 +60,7 @@ import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { getDesktopLanAddress, isDesktopLocalOriginActive, isDesktopShell } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { createUuid } from '@/lib/uuid';
 
 const randomPort = (): number => {
   return Math.floor(20000 + Math.random() * 30000);
@@ -243,9 +244,7 @@ type HeaderDraft = {
 };
 
 const createHeaderDraft = (name = '', value = ''): HeaderDraft => ({
-  id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `header-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  id: createUuid(),
   name,
   value,
 });
@@ -507,9 +506,7 @@ export const RemoteInstancesPage: React.FC = () => {
       return;
     }
     const url = resolved.persistedUrl;
-    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `host-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const id = createUuid();
     const host: DesktopHost = {
       id,
       label: directLabel.trim() || redactSensitiveUrl(url),
@@ -621,9 +618,7 @@ export const RemoteInstancesPage: React.FC = () => {
       return;
     }
 
-    const makeId = (): string => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `host-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const makeId = (): string => createUuid();
 
     // Persist EVERY transport the link carried, not just the one that answered
     // the redeem — a multi-transport host connects directly on the home network

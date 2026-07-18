@@ -28,7 +28,7 @@ const base = (
 
 describe('evaluateHeaderSwipe', () => {
   // -----------------------------------------------------------------------
-  // Happy path: clean rightward swipe across more than half the viewport
+  // Happy path: clean rightward swipe across the open threshold
   // -----------------------------------------------------------------------
   test('opens on clean horizontal rightward swipe', () => {
     expect(evaluateHeaderSwipe(base()).open).toBe(true);
@@ -47,18 +47,18 @@ describe('evaluateHeaderSwipe', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Half-viewport threshold
+  // 35%-viewport threshold
   // -----------------------------------------------------------------------
-  test('rejects swipe below half the viewport', () => {
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 189, viewportWidth: 180 })).open).toBe(false);
+  test('rejects swipe below the open threshold', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 162, viewportWidth: 180 })).open).toBe(false);
   });
 
-  test('accepts swipe exactly at half the viewport', () => {
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 190, viewportWidth: 180 })).open).toBe(true);
+  test('accepts swipe exactly at the open threshold', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 163, viewportWidth: 180 })).open).toBe(true);
   });
 
-  test('accepts swipe beyond half the viewport', () => {
-    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 191, viewportWidth: 180 })).open).toBe(true);
+  test('accepts swipe beyond the open threshold', () => {
+    expect(evaluateHeaderSwipe(base({ startX: 100, endX: 164, viewportWidth: 180 })).open).toBe(true);
   });
 
   // -----------------------------------------------------------------------

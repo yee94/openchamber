@@ -47,7 +47,6 @@ import { useChatSurfaceMode } from './useChatSurfaceMode';
 import type { ToolPopupContent } from './message/types';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
-import { MobileSessionStatusBar } from './MobileSessionStatusBar';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -5434,7 +5433,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         />
                     )}
                     {/* Positioning context for the dictation overlay: covers the
-                        text area + footer exactly, excluding MobileSessionStatusBar. */}
+                        text area + footer exactly. */}
                     <div
                         className={cn(
                             'relative flex flex-col transition-opacity duration-200',
@@ -5813,8 +5812,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     />
                 ) : null}
                 </div>
-                {/* Mobile session panel: slide-up overlay opened by the mobile shell. */}
-                {isMobile && <MobileSessionStatusBar />}
                 {/* Hidden host for the model/agent/variant bottom sheets. Kept
                     outside the pill conditional so an open panel survives (and
                     stays visible over) the collapsed composer. */}

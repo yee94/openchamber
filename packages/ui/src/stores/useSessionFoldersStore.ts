@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware';
 import { getDeferredSafeStorage } from './utils/safeStorage';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { createUuid } from '@/lib/uuid';
 
 // --- Types ---
 
@@ -228,10 +229,7 @@ const persistState = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<str
 };
 
 const createFolderId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return createUuid();
 };
 
 const syncCollapsedAfterFolderCleanup = (

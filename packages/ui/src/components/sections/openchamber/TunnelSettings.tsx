@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/url';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { formatTimeForPreference } from '@/lib/timeFormat';
+import { createUuid } from '@/lib/uuid';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 
 type TunnelState =
@@ -339,10 +340,7 @@ const sanitizePresets = (value: unknown): ManagedRemoteTunnelPreset[] => {
 };
 
 const createPresetId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return createUuid();
 };
 
 export const TunnelSettings: React.FC = () => {
