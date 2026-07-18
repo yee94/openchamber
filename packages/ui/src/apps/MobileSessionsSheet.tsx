@@ -1242,7 +1242,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           )}
         </ScrollShadow>
 
-        <DirectoryExplorerDialog open={directoryDialogOpen} onOpenChange={setDirectoryDialogOpen} />
+        <DirectoryExplorerDialog open={directoryDialogOpen} onOpenChange={setDirectoryDialogOpen} forceMobile />
         <NewWorktreeDialog
           open={newWorktreeDialogOpen}
           onOpenChange={(value) => {
