@@ -25,6 +25,41 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
     return projects.find((project) => project.id === projectID) || null;
   };
 
+  app.get('/api/openchamber/scheduled-tasks', async (_req, res) => {
+    let projects;
+
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      projects = sanitizeProjects(settings?.projects || []);
+    } catch {
+      console.error('[ScheduledTasks] failed to read projects for scheduled task list');
+      return res.status(500).json({ error: 'Failed to load scheduled tasks' });
+    }
+
+    const results = await Promise.all(projects.map(async (project) => {
+      try {
+        const tasks = await projectConfigRuntime.listScheduledTasks(project.id);
+        return { tasks: tasks.map((task) => ({ projectId: project.id, task })) };
+      } catch {
+        console.error(`[ScheduledTasks] failed to load scheduled tasks for project ${project.id}`);
+        return { failedProjectId: project.id };
+      }
+    }));
+
+    const tasks = [];
+    const failedProjectIds = [];
+
+    for (const result of results) {
+      if (result.failedProjectId) {
+        failedProjectIds.push(result.failedProjectId);
+      } else {
+        tasks.push(...result.tasks);
+      }
+    }
+
+    return res.json({ tasks, failedProjectIds });
+  });
+
   app.get('/api/projects/:projectId/scheduled-tasks', async (req, res) => {
     const projectID = parseProjectID(req);
     if (!projectID) {

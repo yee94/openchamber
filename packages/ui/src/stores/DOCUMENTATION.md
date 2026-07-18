@@ -272,18 +272,17 @@ failed, and confirmed removal; persisted `sending` entries hydrate as
 
 Sending and reconciling items remain immutable while dispatch ownership or
 delivery status is unresolved. The v3 auto-send owner tracks dispatch flights
-by exact scope, queue item, operation, and message identity; live `sending`
+by exact scope, queue item, and operation identity plus one scope-level flight through POST promise settlement. The message ID matches the current attempt during confirmation and reconciliation; live `sending`
 heads outside that registry recover into reconciling (same as v4). Queued heads and due
 retrying heads auto-dispatch only with an authoritative scoped `idle` status.
 Failed and unresolved entries are terminal queue states and require explicit
-manual Send, Edit, or Remove. Manual Send resets failed, retrying, and unresolved
-heads through `resetQueueItemForDispatch` before one new send attempt. Reconciliation persists
+manual Send, Edit, or Remove. Manual Send may select any recoverable row, atomically promote it to the scoped head, and dispatch it with a fresh identity; automatic dispatch remains FIFO. A scope with sending or reconciling work accepts no second dispatch. Reconciliation persists
 its check count, deadline, and `nextCheckAt`; in-flight requests own no timer,
 while the global scheduler wakes once at the earliest persisted next check. A
 max-check or deadline terminal result becomes unresolved and triggers no auto
 POST.
 Legacy migration preserves known bound owners and places unresolved entries in
-an unbound legacy scope until an explicit bulk send bind. Legacy rows remain
+an unbound legacy scope until an explicit bulk send bind at the dispatch boundary. Legacy rows remain
 visible in that scope. Queue UI selects one scope or one item at a time; it
 avoids broad ledger subscriptions, cross-scope scans in render paths, and
 selector allocations that amplify queue updates.

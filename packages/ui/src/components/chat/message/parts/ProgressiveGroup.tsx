@@ -399,6 +399,7 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
         <div className={getToolRowBlockClass(isMobile)}>
             <ToolPart
                 part={activity.part as ToolPartType}
+                messageId={activity.messageId}
                 isExpanded={isExpanded}
                 onToggle={handleToggle}
                 isMobile={isMobile}
@@ -431,6 +432,7 @@ const MemoExpandableToolRow = React.memo(ExpandableToolRow, (prev, next) => {
         && prev.animateTailText === next.animateTailText
         && prev.animateRows === next.animateRows
         && prev.activity.id === next.activity.id
+        && prev.activity.messageId === next.activity.messageId
         && prev.activity.kind === next.activity.kind
         && prev.activity.endedAt === next.activity.endedAt
         && areRenderRelevantPartsEqual([prev.activity.part], [next.activity.part]);

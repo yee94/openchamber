@@ -403,6 +403,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     // Display name a paired device shows for THIS server (issuing machine's
     // hostname), distinct from the per-device pairing label typed by the operator.
     getServerLabel = () => 'OpenChamber',
+    authorizeManagedOpenCodeBridgeRequest = () => false,
   } = dependencies;
   const PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
   const PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS = 10;
@@ -593,6 +594,9 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   };
 
   const requireApiAuth = async (req, res, next) => {
+    if (authorizeManagedOpenCodeBridgeRequest(req) === true) {
+      return next();
+    }
     // Preview proxy requests carry a target-scoped capability token that the
     // preview proxy validates against the registered target id/TTL. Let those
     // requests reach that stricter check instead of failing the global UI auth

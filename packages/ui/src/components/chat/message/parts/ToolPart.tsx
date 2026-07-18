@@ -104,6 +104,7 @@ type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknow
 
 interface ToolPartProps {
     part: ToolPartType;
+    messageId?: string;
     isExpanded: boolean;
     onToggle: (toolId: string) => void;
     isMobile: boolean;
@@ -1941,6 +1942,7 @@ ToolExpandedContent.displayName = 'ToolExpandedContent';
 
 const ToolPartContent: React.FC<ToolPartProps> = ({
     part,
+    messageId,
     isExpanded,
     onToggle,
     isMobile,
@@ -2331,21 +2333,16 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             return;
         }
 
-        if (part.tool === 'apply_patch' && currentDirectory && !runtime?.runtime.isVSCode) {
+        if (part.tool === 'apply_patch' && mobileActions) {
             e.stopPropagation();
-            const files = Array.isArray(metadata?.files) ? metadata.files : [];
-            const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined;
-            const targetPath = firstFile?.relativePath || firstFile?.filePath;
+            mobileActions.openTurnDiff(messageId);
+            return;
+        }
 
-            if (isMobile && targetPath) {
-                navigateToDiff(targetPath, false, 'turn');
-                return;
-            }
-
-            if (!isMobile) {
-                openContextPanelTab(currentDirectory, { mode: 'diff', diffScope: 'turn' });
-                return;
-            }
+        if (part.tool === 'apply_patch' && currentDirectory && !mobileActions && !isMobile && !runtime?.runtime.isVSCode) {
+            e.stopPropagation();
+            openContextPanelTab(currentDirectory, { mode: 'diff', diffScope: 'turn' });
+            return;
         }
 
         let filePath: unknown;
@@ -2823,6 +2820,7 @@ const ToolPart: React.FC<ToolPartProps> = (props) => {
 
 export default React.memo(ToolPart, (prev, next) => {
     return areRenderRelevantPartsEqual([prev.part], [next.part])
+        && prev.messageId === next.messageId
         && prev.isExpanded === next.isExpanded
         && prev.isMobile === next.isMobile
         && prev.alwaysShowActions === next.alwaysShowActions

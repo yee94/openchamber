@@ -565,6 +565,22 @@ describe('core-routes', () => {
 
     expect(requireAuth).toHaveBeenCalledTimes(1);
   });
+
+  it('uses the injected managed bridge authorization callback before UI auth', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, res) => res.status(401).send('Unauthorized'));
+    registerAuthAndAccessRoutes(app, {
+      express,
+      tunnelAuthController: { classifyRequestScope: () => 'local', requireTunnelSession: vi.fn(), getTunnelSessionFromRequest: vi.fn(), clearTunnelSessionCookie: vi.fn(), exchangeBootstrapToken: vi.fn() },
+      uiAuthController: { requireAuth, handleSessionStatus: vi.fn(), handleSessionCreate: vi.fn(), handlePasskeyStatus: vi.fn(), handlePasskeyAuthenticationOptions: vi.fn(), handlePasskeyAuthenticationVerify: vi.fn(), handlePasskeyRegistrationOptions: vi.fn(), handlePasskeyRegistrationVerify: vi.fn(), handlePasskeyList: vi.fn(), handlePasskeyRevoke: vi.fn(), handleResetAuth: vi.fn() },
+      readSettingsFromDiskMigrated: vi.fn(async () => ({})), normalizeTunnelSessionTtlMs: vi.fn(),
+      authorizeManagedOpenCodeBridgeRequest: (req) => req.originalUrl === '/api/openchamber/scheduled-tasks/bridge' && req.method === 'POST',
+    });
+    app.post('/api/openchamber/scheduled-tasks/bridge', (_req, res) => res.json({ reached: true }));
+    await request(app).post('/api/openchamber/scheduled-tasks/bridge').expect(200, { reached: true });
+    await request(app).post('/api/other').expect(401);
+    expect(requireAuth).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('client auth routes', () => {

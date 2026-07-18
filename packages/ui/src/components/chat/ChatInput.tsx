@@ -17,7 +17,7 @@ import { useInputStore } from '@/sync/input-store';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
 import { useDirectorySync, useUserMessageHistory } from '@/sync/sync-context';
-import { getAllSyncSessionMap, getSyncMessages } from '@/sync/sync-refs';
+import { getAllSyncSessionMap, getSyncMessages, getSyncParts, getSyncSessions } from '@/sync/sync-refs';
 import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { appendInlineComments } from '@/lib/messages/inlineComments';
@@ -116,7 +116,17 @@ import {
     removeAttachmentCitations,
     resolveAttachmentCitationDeletion,
 } from './attachmentCitations';
-import { getFileMentionAutocompleteQuery, type FileMentionAutocompleteInputSource } from './fileMentionAutocompleteState';
+import {
+    buildSessionMentionInstruction,
+    collectSessionMentionIds,
+    findSessionMentionRanges,
+    getFileMentionAutocompleteQuery,
+    getSessionMentionToken,
+    replaceSessionMentionTokens,
+    resolveSessionMentionDeletion,
+    type FileMentionAutocompleteInputSource,
+    type SessionMentionContext,
+} from './fileMentionAutocompleteState';
 import {
     collectFileDropReferences,
     isAbsoluteFileDropPath,
@@ -132,6 +142,19 @@ import { consumeImmediateCommandText } from './immediateCommandTextConsumption';
 import { runImmediateSessionCommand } from './immediateSessionCommandAction';
 import { admitChatInputQueueMessageAndConsumeResources } from './queueAdmission';
 import { shouldShowPermissionAutoAcceptControl, togglePermissionAutoAccept } from './permissionAutoAccept';
+import {
+    createPastedTextReference,
+    expandPastedTextReferences,
+    findPastedTextReferenceRanges,
+    insertPastedTextReference,
+    mergePastedTextReferences,
+    parsePastedTextDraft,
+    prunePastedTextReferences,
+    resolvePastedTextReferenceDeletion,
+    serializePastedTextDraft,
+    shouldCompactPastedText,
+    type PastedTextReference,
+} from './pastedTextReferences';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const COMPOSER_TEXT_LAYOUT_CLASS = 'box-border w-full whitespace-pre-wrap break-words px-3 typography-markdown [font-family:inherit] [font-style:inherit] [font-weight:inherit] leading-[inherit] tracking-[inherit] md:typography-ui-label';
@@ -853,24 +876,26 @@ const getDraftKey = (sessionId: string | null): string =>
     `openchamber_chat_input_draft_${sessionId ?? 'new'}`;
 
 // Helper to safely read from localStorage for a given session
-const getStoredDraft = (sessionId: string | null): string => {
+const getStoredDraft = (sessionId: string | null): { text: string; references: PastedTextReference[] } => {
     try {
-        return localStorage.getItem(getDraftKey(sessionId)) ?? '';
+        const stored = localStorage.getItem(getDraftKey(sessionId));
+        return stored ? parsePastedTextDraft(stored) ?? { text: '', references: [] } : { text: '', references: [] };
     } catch {
-        return '';
+        return { text: '', references: [] };
     }
 };
 
 // Helper to safely write/clear a per-session draft
-const saveStoredDraft = (sessionId: string | null, draft: string): void => {
+const saveStoredDraft = (sessionId: string | null, draft: string, references: PastedTextReference[]): boolean => {
     try {
         if (draft) {
-            localStorage.setItem(getDraftKey(sessionId), draft);
+            localStorage.setItem(getDraftKey(sessionId), serializePastedTextDraft({ text: draft, references }));
         } else {
             localStorage.removeItem(getDraftKey(sessionId));
         }
+        return true;
     } catch {
-        // Ignore localStorage errors
+        return false;
     }
 };
 
@@ -909,6 +934,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const { t } = useI18n();
     // Track if we restored a draft on mount (for text selection)
     const initialDraftRef = React.useRef<string | null>(null);
+    const initialStoredDraftRef = React.useRef<{ text: string; references: PastedTextReference[] } | null>(null);
     // Track initial session ID (captured at mount time for draft restoration)
     const initialSessionIdRef = React.useRef<string | null>(null);
     const [message, setMessage] = React.useState(() => {
@@ -916,11 +942,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const sessionId = useSessionUIStore.getState().currentSessionId;
         initialSessionIdRef.current = sessionId;
         const draft = getStoredDraft(sessionId);
-        if (draft) {
-            initialDraftRef.current = draft;
+        initialStoredDraftRef.current = draft;
+        if (draft.text) {
+            initialDraftRef.current = draft.text;
         }
-        return draft;
+        return draft.text;
     });
+    const [pastedTextReferences, setPastedTextReferences] = React.useState<PastedTextReference[]>(() => (
+        prunePastedTextReferences(initialDraftRef.current ?? '', initialStoredDraftRef.current?.references ?? [])
+    ));
     const [attachmentPopup, setAttachmentPopup] = React.useState<ToolPopupContent>({
         open: false,
         title: '',
@@ -930,7 +960,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const confirmedMentionsRef = React.useRef<Set<string>>(loadConfirmedMentions(initialSessionIdRef.current));
     // Helper: check if a mention path looks like a file/folder (has path separators, extension, or was explicitly confirmed)
     const isConfirmedFilePath = (text: string): boolean =>
-        text.includes('/') || text.includes('\\') || text.includes('.') || confirmedMentionsRef.current.has(text);
+        !text.startsWith('session:')
+        && (text.includes('/') || text.includes('\\') || text.includes('.') || confirmedMentionsRef.current.has(text));
     const [inputMode, setInputMode] = React.useState<'normal' | 'shell'>('normal');
     const [isDragging, setIsDragging] = React.useState(false);
     const [isInternalDrag, setIsInternalDrag] = React.useState(false);
@@ -987,6 +1018,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // Message history navigation state (up/down arrow to recall previous messages)
     const [historyIndex, setHistoryIndex] = React.useState(-1); // -1 = not browsing, 0+ = index from most recent
     const [draftMessage, setDraftMessage] = React.useState(''); // Preserves input when entering history mode
+    const [draftPastedTextReferences, setDraftPastedTextReferences] = React.useState<PastedTextReference[]>([]);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const cursorPosRef = React.useRef(0);
     const previousMessageLengthRef = React.useRef(message.length);
@@ -1004,11 +1036,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
     // Ref to track current message value without triggering re-renders in effects
     const messageRef = React.useRef(message);
+    const pastedTextReferencesRef = React.useRef(pastedTextReferences);
+    const nextPastedTextReferenceIndexRef = React.useRef(
+        Math.max(1, ...pastedTextReferences.map((reference) => reference.index + 1)),
+    );
     const draftPersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const skipNextDraftPersistRef = React.useRef(false);
     const lastPersistedDraftRef = React.useRef<Map<string, string>>(new Map());
     const currentSessionIdForDraftRef = React.useRef<string | null>(null);
     const pendingPastedAttachmentFilenamesRef = React.useRef<Set<string>>(new Set());
+    const updatePastedTextReferences = React.useCallback((references: PastedTextReference[]) => {
+        pastedTextReferencesRef.current = references;
+        for (const reference of references) {
+            nextPastedTextReferenceIndexRef.current = Math.max(nextPastedTextReferenceIndexRef.current, reference.index + 1);
+        }
+        setPastedTextReferences(references);
+    }, []);
 
     // TODO: port sendMessage to session-actions (complex — creates sessions, handles attachments, etc.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1247,7 +1290,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     start: slashStart,
                     end: slashStart + 1 + name.length,
                     style: 'mentionCommand',
-                    className: 'text-[var(--status-warning)]',
+                    className: 'text-[var(--chat-composer-skill)]',
                     priority: 102,
                     skillName,
                 }
@@ -1293,6 +1336,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return [];
         }
         const ranges: MentionRange[] = [];
+        for (const sessionRange of findSessionMentionRanges(message)) {
+            const session = getAllSyncSessionMap().get(sessionRange.id);
+            ranges.push({
+                start: sessionRange.start,
+                end: sessionRange.end,
+                kind: 'session',
+                label: session?.title || sessionRange.id,
+            });
+        }
         const mentionRegex = /@([^\s]+)/g;
         let match: RegExpExecArray | null;
         while ((match = mentionRegex.exec(message)) !== null) {
@@ -1303,6 +1355,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const charBefore = start > 0 ? message[start - 1] : null;
             const isBoundary = !charBefore || /(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore);
             if (!isBoundary || mention.length === 0) {
+                continue;
+            }
+            if (mention.startsWith('session:')) {
                 continue;
             }
             if (knownAgentNames.has(mention.toLowerCase())) {
@@ -1337,6 +1392,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         });
     }, [inputMode, message, sendableAttachedFiles]);
 
+    const pastedTextReferenceRanges = React.useMemo(() => (
+        inputMode === 'shell' ? [] : findPastedTextReferenceRanges(message, pastedTextReferences)
+    ), [inputMode, message, pastedTextReferences]);
+
     // Combined source-mode highlight: markdown syntax + @mentions. Returns null
     // when there's nothing to highlight so the overlay stays off for plain text.
     const highlightedComposerContent = React.useMemo(() => {
@@ -1350,9 +1409,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             ...composerCommandRanges,
             ...composerSnippetRanges,
             ...attachmentCitationRanges,
+            ...pastedTextReferenceRanges.map(({ start, end }) => ({ start, end, style: 'mentionPaste' as const })),
         ];
         return buildHighlightParts(message, ranges);
-    }, [attachmentCitationRanges, composerCommandRanges, composerSnippetRanges, composerMentionRanges, inputMode, message]);
+    }, [attachmentCitationRanges, composerCommandRanges, composerSnippetRanges, composerMentionRanges, inputMode, message, pastedTextReferenceRanges]);
 
     const sanitizeAttachmentsForSend = React.useCallback(
         (files: AttachedFile[] | undefined): AttachedFile[] => (files ?? [])
@@ -1568,17 +1628,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [message]);
 
     React.useEffect(() => {
+        pastedTextReferencesRef.current = pastedTextReferences;
+    }, [pastedTextReferences]);
+
+    React.useEffect(() => {
         currentSessionIdForDraftRef.current = currentSessionId;
     }, [currentSessionId]);
 
-    const persistDraftImmediately = React.useCallback((sessionId: string | null, draft: string) => {
+    const persistDraftImmediately = React.useCallback((sessionId: string | null, draft: string, references = pastedTextReferencesRef.current) => {
         const key = getDraftKey(sessionId);
+        const activePastedTextReferences = prunePastedTextReferences(draft, references);
+        const persistedSnapshot = serializePastedTextDraft({ text: draft, references: activePastedTextReferences });
         const lastPersisted = lastPersistedDraftRef.current.get(key);
-        if (lastPersisted === draft) {
+        if (lastPersisted === persistedSnapshot) {
             return;
         }
 
-        saveStoredDraft(sessionId, draft);
+        if (!saveStoredDraft(sessionId, draft, activePastedTextReferences)) return;
         // Only persist confirmed mentions that are actually present in the draft text
         const activeMentions = new Set<string>();
         for (const mention of confirmedMentionsRef.current) {
@@ -1588,7 +1654,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
         confirmedMentionsRef.current = activeMentions;
         saveConfirmedMentions(sessionId, activeMentions);
-        lastPersistedDraftRef.current.set(key, draft);
+        lastPersistedDraftRef.current.set(key, persistedSnapshot);
     }, []);
 
     const clearPendingDraftPersist = React.useCallback(() => {
@@ -1611,6 +1677,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!persistChatDraft) {
             // Setting disabled - clear the restored draft
             setMessage('');
+            updatePastedTextReferences([]);
             try {
                 localStorage.removeItem(getDraftKey(initialSessionIdRef.current));
             } catch {
@@ -1622,7 +1689,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 textareaRef.current?.select();
             });
         }
-    }, [persistChatDraft]);
+    }, [persistChatDraft, updatePastedTextReferences]);
 
     // Handle session switching: save draft for old session, restore draft for new session
     const prevSessionIdRef = React.useRef(currentSessionId);
@@ -1631,6 +1698,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const oldSessionId = prevSessionIdRef.current;
             prevSessionIdRef.current = currentSessionId;
             setInputMode('normal');
+            setHistoryIndex(-1);
+            setDraftMessage('');
+            setDraftPastedTextReferences([]);
             clearPendingDraftPersist();
             skipNextDraftPersistRef.current = true;
 
@@ -1639,9 +1709,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 persistDraftImmediately(oldSessionId, messageRef.current);
                 // Restore draft for the session we're entering
                 const newDraft = getStoredDraft(currentSessionId);
-                setMessage(newDraft);
+                setMessage(newDraft.text);
+                messageRef.current = newDraft.text;
+                updatePastedTextReferences(prunePastedTextReferences(newDraft.text, newDraft.references));
                 confirmedMentionsRef.current = loadConfirmedMentions(currentSessionId);
-                if (newDraft) {
+                if (newDraft.text) {
                     requestAnimationFrame(() => {
                         textareaRef.current?.select();
                     });
@@ -1649,10 +1721,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             } else {
                 // Persist disabled: clear input without saving
                 setMessage('');
+                updatePastedTextReferences([]);
                 confirmedMentionsRef.current = new Set();
             }
         }
-    }, [clearPendingDraftPersist, currentSessionId, persistChatDraft, persistDraftImmediately]);
+    }, [clearPendingDraftPersist, currentSessionId, persistChatDraft, persistDraftImmediately, updatePastedTextReferences]);
 
     // Welcome/new-session drafts own desktop focus so every entry path (including
     // Cmd+N and restored drafts) lands in the composer after its DOM commits.
@@ -1678,7 +1751,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     React.useEffect(() => {
         if (!persistChatDraft) {
             clearPendingDraftPersist();
-            persistDraftImmediately(currentSessionId, '');
+            persistDraftImmediately(currentSessionId, '', []);
             return;
         }
 
@@ -1689,22 +1762,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         clearPendingDraftPersist();
         const draftSnapshot = message;
+        const pastedTextReferencesSnapshot = pastedTextReferences;
         const sessionSnapshot = currentSessionId;
         draftPersistTimerRef.current = setTimeout(() => {
             draftPersistTimerRef.current = null;
-            persistDraftImmediately(sessionSnapshot, draftSnapshot);
+            persistDraftImmediately(sessionSnapshot, draftSnapshot, pastedTextReferencesSnapshot);
         }, CHAT_DRAFT_PERSIST_DEBOUNCE_MS);
 
         return () => {
             clearPendingDraftPersist();
         };
-    }, [clearPendingDraftPersist, currentSessionId, message, persistChatDraft, persistDraftImmediately]);
+    }, [clearPendingDraftPersist, currentSessionId, message, pastedTextReferences, persistChatDraft, persistDraftImmediately]);
 
     React.useEffect(() => {
         return () => {
             clearPendingDraftPersist();
             if (persistChatDraft) {
-                persistDraftImmediately(currentSessionIdForDraftRef.current, messageRef.current);
+                persistDraftImmediately(currentSessionIdForDraftRef.current, messageRef.current, pastedTextReferencesRef.current);
             }
         };
     }, [clearPendingDraftPersist, persistChatDraft, persistDraftImmediately]);
@@ -1735,15 +1809,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const pending = consumePendingInputText();
             if (pending) {
                 if (pending.mode === 'append') {
-                    setMessage((prev) => {
-                        const next = pending.text;
-                        if (!next.trim()) return prev;
-                        return appendWithLineBreaks(prev, next);
-                    });
+                    if (!pending.text.trim()) return;
+                    const result = appendWithLineBreaks(messageRef.current, pending.text);
+                    messageRef.current = result;
+                    updatePastedTextReferences(prunePastedTextReferences(result, pastedTextReferencesRef.current));
+                    setMessage(result);
                 } else if (pending.mode === 'append-inline') {
-                    setMessage((prev) => appendInlineText(prev, pending.text));
+                    const result = appendInlineText(messageRef.current, pending.text);
+                    messageRef.current = result;
+                    updatePastedTextReferences(prunePastedTextReferences(result, pastedTextReferencesRef.current));
+                    setMessage(result);
                 } else {
                     setMessage(pending.text);
+                    messageRef.current = pending.text;
+                    updatePastedTextReferences([]);
                 }
                 // Focus textarea after setting message
                 setTimeout(() => {
@@ -1751,7 +1830,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 }, 0);
             }
         }
-    }, [pendingInputText, consumePendingInputText]);
+    }, [pendingInputText, consumePendingInputText, updatePastedTextReferences]);
 
     const hasContent = message.trim().length > 0 || sendableAttachedFiles.length > 0 || hasDrafts;
     const hasQueuedMessages = queuedMessages.length > 0;
@@ -1763,6 +1842,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const currentMessage = textareaRef.current?.value ?? message;
         return {
             message: currentMessage,
+            references: prunePastedTextReferences(currentMessage, pastedTextReferencesRef.current),
             hasContent: currentMessage.trim().length > 0 || sendableAttachedFiles.length > 0 || hasDrafts,
         };
     }, [hasDrafts, message, sendableAttachedFiles.length]);
@@ -1784,7 +1864,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId) return;
 
-        const resourcePolicy = preservesComposerResources(inputSnapshot.message, inputMode);
+        const logicalMessage = expandPastedTextReferences(inputSnapshot.message, inputSnapshot.references);
+        const resourcePolicy = preservesComposerResources(logicalMessage, inputMode);
         if (resourcePolicy) {
             void handleSubmitRef.current();
             return;
@@ -1792,7 +1873,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         const drafts = [...useInlineCommentDraftStore.getState().getDrafts(currentSessionId)].sort((a, b) => a.createdAt - b.createdAt);
 
-        let messageToQueue = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
+        let messageToQueue = logicalMessage.replace(/^\n+|\n+$/g, '');
         if (drafts.length > 0) {
             messageToQueue = appendInlineComments(messageToQueue, drafts);
         }
@@ -1817,7 +1898,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }),
             drafts,
             consumeDraft: (draft) => removeInlineCommentDraft(currentSessionId, draft.id),
-            consumeBody: () => setMessage(''),
+            consumeBody: () => {
+                setMessage('');
+                messageRef.current = '';
+                updatePastedTextReferences([]);
+            },
             consumeAttachments: () => {
                 if (attachmentsToQueue.length > 0) {
                     clearAttachedFiles();
@@ -1831,14 +1916,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t]);
+    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t, updatePastedTextReferences]);
 
     const handleQueuedMessageEdit = React.useCallback((content: string) => {
         setMessage(content);
+        messageRef.current = content;
+        updatePastedTextReferences([]);
         setTimeout(() => {
             textareaRef.current?.focus();
         }, 0);
-    }, []);
+    }, [updatePastedTextReferences]);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
         if (currentSessionId && currentQueueScope) {
@@ -1867,13 +1954,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const inputSnapshot = options?.presetText != null
             ? {
                 message: options.presetText,
+                references: prunePastedTextReferences(options.presetText, pastedTextReferencesRef.current),
                 hasContent: options.presetText.trim().length > 0 || sendableAttachedFiles.length > 0 || hasDrafts,
             }
             : getCurrentInputSnapshot();
         const inputAttachmentsSnapshot = attachedFiles;
-        const normalizedInput = inputSnapshot.message.trimStart();
+        const submissionSessionId = currentSessionId;
+        const logicalInputMessage = expandPastedTextReferences(inputSnapshot.message, inputSnapshot.references);
+        const normalizedInput = logicalInputMessage.trimStart();
         const localCommand = getLocalChatCommand(normalizedInput, inputMode);
-        const resourcePolicy = preservesComposerResources(inputSnapshot.message, inputMode);
+        const resourcePolicy = preservesComposerResources(logicalInputMessage, inputMode);
         const isModelCommand = inputMode === 'normal' && /^\/model(?:\s|$)/i.test(normalizedInput);
 
         if (!queuedOnly && isModelCommand) {
@@ -1886,9 +1976,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 useUIStore.getState().setModelSelectorOpen(true);
             }
             return;
-        }
-        if (!queuedOnly && !resourcePolicy && currentSessionId && currentQueueScope) {
-            useMessageQueueStore.getState().bindLegacyQueue(legacyQueueScope(currentSessionId), currentQueueScope);
         }
         if (!queuedOnly && localCommand && localCommand !== 'model') {
             // Local command handlers run below with their existing business actions.
@@ -1962,9 +2049,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const additionalParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [];
         const availableSkillNames = new Set(readInstalledSkillsSnapshot(queryClient, currentDirectory).map((skill) => skill.name));
         const mentionedSkillNames: string[] = [];
+        const mentionedSessionIds: string[] = [];
         const addMentionedSkills = (text: string) => {
             for (const name of collectInlineSkillMentions(text, availableSkillNames)) {
                 if (!mentionedSkillNames.includes(name)) mentionedSkillNames.push(name);
+            }
+        };
+        const addMentionedSessions = (text: string) => {
+            for (const id of collectSessionMentionIds(text)) {
+                if (!mentionedSessionIds.includes(id)) mentionedSessionIds.push(id);
             }
         };
 
@@ -1978,6 +2071,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const { sanitizedText: queuedText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
             const expandedQueuedText = expandCodeSelectionCitations(queuedText, queuedMsg.attachments);
             addMentionedSkills(expandedQueuedText);
+            addMentionedSessions(expandedQueuedText);
 
             // Use agent mention from first message that has one
             if (!agentMentionName && mention?.name) {
@@ -2003,12 +2097,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         // Add current input (skip for queued-only auto-send)
         if (!queuedOnly && inputSnapshot.hasContent) {
-            const messageToSend = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
+            const messageToSend = logicalInputMessage.replace(/^\n+|\n+$/g, '');
             const { sanitizedText, mention } = parseAgentMentions(messageToSend, agents);
             const { sanitizedText: messageText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
             const attachmentsToSend = sanitizeAttachmentsForSend(sendableAttachedFiles);
             const expandedMessageText = expandCodeSelectionCitations(messageText, sendableAttachedFiles);
             addMentionedSkills(expandedMessageText);
+            addMentionedSessions(expandedMessageText);
 
             if (!agentMentionName && mention?.name) {
                 agentMentionName = mention.name;
@@ -2082,6 +2177,36 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             });
         }
 
+        if (mentionedSessionIds.length > 0) {
+            const sessionDirectory = currentSessionId
+                ? useSessionUIStore.getState().getDirectoryForSession(currentSessionId) || currentDirectory
+                : currentDirectory;
+            const sessionById = new Map(getSyncSessions(sessionDirectory).map((session) => [session.id, session]));
+            const sessionLabels = new Map(Array.from(sessionById, ([id, session]) => [id, session.title || id]));
+            const contexts: SessionMentionContext[] = mentionedSessionIds.flatMap((sessionId) => {
+                const session = sessionById.get(sessionId);
+                if (!session) return [];
+
+                const messages = getSyncMessages(sessionId, sessionDirectory).flatMap((messageInfo) => {
+                    const text = getSyncParts(messageInfo.id, sessionDirectory)
+                        .filter((part) => part.type === 'text' && !isSyntheticPart(part))
+                        .map((part) => 'text' in part && typeof part.text === 'string' ? part.text : '')
+                        .filter(Boolean)
+                        .join('\n');
+                    return text ? [{ role: messageInfo.role, text }] : [];
+                });
+                return [{ id: session.id, title: session.title || session.id, messages }];
+            });
+            const sessionMentionInstruction = buildSessionMentionInstruction(contexts);
+            if (sessionMentionInstruction) {
+                additionalParts.push({ text: sessionMentionInstruction, synthetic: true });
+            }
+            primaryText = replaceSessionMentionTokens(primaryText, sessionLabels);
+            for (const part of additionalParts) {
+                if (!part.synthetic) part.text = replaceSessionMentionTokens(part.text, sessionLabels);
+            }
+        }
+
         if (!primaryText && primaryAttachments.length === 0 && additionalParts.length === 0) return;
 
         // Clear queue and input
@@ -2097,9 +2222,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
         if (!queuedOnly && !resourcePolicy) {
             setMessage('');
+            messageRef.current = '';
+            updatePastedTextReferences([]);
             confirmedMentionsRef.current.clear();
             // Clear per-session draft on submit
-            saveStoredDraft(currentSessionId, '');
+            saveStoredDraft(currentSessionId, '', []);
             saveConfirmedMentions(currentSessionId, confirmedMentionsRef.current);
             // Reset message history navigation state
             setHistoryIndex(-1);
@@ -2141,11 +2268,29 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 return;
             }
 
+            if (submissionSessionId && useSessionUIStore.getState().currentSessionId !== submissionSessionId) {
+                if (!persistChatDraft) return;
+                const storedDraft = getStoredDraft(submissionSessionId);
+                const restoredText = mergeFailedComposerText(inputSnapshot.message, storedDraft.text);
+                const restoredReferences = prunePastedTextReferences(
+                    restoredText,
+                    mergePastedTextReferences(inputSnapshot.references, storedDraft.references),
+                );
+                saveStoredDraft(submissionSessionId, restoredText, restoredReferences);
+                return;
+            }
+
             const inputState = useInputStore.getState();
             if (inputState.pendingInputText === inputSnapshot.message) {
                 inputState.consumePendingInputText();
             }
-            setMessage((currentText) => mergeFailedComposerText(inputSnapshot.message, currentText));
+            const restoredText = mergeFailedComposerText(inputSnapshot.message, messageRef.current);
+            messageRef.current = restoredText;
+            updatePastedTextReferences(prunePastedTextReferences(
+                restoredText,
+                mergePastedTextReferences(inputSnapshot.references, pastedTextReferencesRef.current),
+            ));
+            setMessage(restoredText);
             inputState.setAttachedFiles(mergeFailedAttachments(inputAttachmentsSnapshot, inputState.attachedFiles));
             useInputStore.setState((state) => ({
                 pendingSyntheticParts: syntheticParts
@@ -2625,6 +2770,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         skipNextDraftPersistRef.current = true;
         setMessage('');
         messageRef.current = '';
+        updatePastedTextReferences([]);
         confirmedMentionsRef.current.clear();
         saveConfirmedMentions(currentSessionId, confirmedMentionsRef.current);
         persistDraftImmediately(currentSessionId, '');
@@ -2652,6 +2798,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         currentSessionId,
         inputMode,
         persistDraftImmediately,
+        updatePastedTextReferences,
     ]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -2692,6 +2839,39 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const textarea = textareaRef.current;
             const selectionStart = textarea?.selectionStart ?? message.length;
             const selectionEnd = textarea?.selectionEnd ?? message.length;
+            const pastedTextDeletion = resolvePastedTextReferenceDeletion(
+                message,
+                pastedTextReferences,
+                { key: e.key, selectionStart, selectionEnd, altKey: e.altKey },
+            );
+            if (pastedTextDeletion) {
+                const normalizedDeletion = normalizeReferenceDeletionWhitespace(pastedTextDeletion.text, pastedTextDeletion.caret);
+                e.preventDefault();
+                setMessage(normalizedDeletion.text);
+                messageRef.current = normalizedDeletion.text;
+                updatePastedTextReferences(prunePastedTextReferences(normalizedDeletion.text, pastedTextReferencesRef.current));
+                requestAnimationFrame(() => {
+                    textareaRef.current?.setSelectionRange(normalizedDeletion.caret, normalizedDeletion.caret);
+                    adjustTextareaHeight();
+                });
+                updateAutocompleteState(normalizedDeletion.text, normalizedDeletion.caret);
+                return;
+            }
+            const sessionMentionDeletion = resolveSessionMentionDeletion(message, e.key, selectionStart, selectionEnd);
+            if (sessionMentionDeletion) {
+                const normalizedDeletion = normalizeReferenceDeletionWhitespace(sessionMentionDeletion.text, sessionMentionDeletion.caret);
+                e.preventDefault();
+                setMessage(normalizedDeletion.text);
+                requestAnimationFrame(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.selectionStart = normalizedDeletion.caret;
+                        textareaRef.current.selectionEnd = normalizedDeletion.caret;
+                    }
+                    adjustTextareaHeight();
+                });
+                updateAutocompleteState(normalizedDeletion.text, normalizedDeletion.caret);
+                return;
+            }
             const citationDeletion = resolveAttachmentCitationDeletion(
                 message,
                 attachedFiles
@@ -2930,13 +3110,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             if (historyIndex === -1) {
                 // Entering history mode - save current input as draft
                 setDraftMessage(message);
+                setDraftPastedTextReferences(pastedTextReferencesRef.current);
                 setHistoryIndex(0);
                 setMessage(userMessageHistory[0]);
+                messageRef.current = userMessageHistory[0];
+                updatePastedTextReferences([]);
             } else if (historyIndex < userMessageHistory.length - 1) {
                 // Navigate to older message
                 const newIndex = historyIndex + 1;
                 setHistoryIndex(newIndex);
                 setMessage(userMessageHistory[newIndex]);
+                messageRef.current = userMessageHistory[newIndex];
+                updatePastedTextReferences([]);
             }
             // Move cursor to start after history navigation
             requestAnimationFrame(() => {
@@ -2952,12 +3137,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 // Exit history mode - restore draft
                 setHistoryIndex(-1);
                 setMessage(draftMessage);
+                messageRef.current = draftMessage;
+                updatePastedTextReferences(prunePastedTextReferences(draftMessage, draftPastedTextReferences));
                 setDraftMessage('');
+                setDraftPastedTextReferences([]);
             } else {
                 // Navigate to newer message
                 const newIndex = historyIndex - 1;
                 setHistoryIndex(newIndex);
                 setMessage(userMessageHistory[newIndex]);
+                messageRef.current = userMessageHistory[newIndex];
+                updatePastedTextReferences([]);
             }
             return;
         }
@@ -3320,6 +3510,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const textarea = textareaRef.current;
         if (!textarea) {
             const nextValue = message + text;
+            messageRef.current = nextValue;
             setMessage(nextValue);
             updateAutocompleteState(nextValue, nextValue.length, inputSource, text);
             requestAnimationFrame(() => adjustTextareaHeight());
@@ -3329,6 +3520,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const start = textarea.selectionStart ?? message.length;
         const end = textarea.selectionEnd ?? message.length;
         const nextValue = `${message.substring(0, start)}${text}${message.substring(end)}`;
+        messageRef.current = nextValue;
+        textarea.value = nextValue;
         setMessage(nextValue);
         const cursorPosition = start + text.length;
 
@@ -3437,6 +3630,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 removeAttachedFile(file.id);
             }
         }
+        updatePastedTextReferences(prunePastedTextReferences(value, pastedTextReferencesRef.current));
         const cursorPosition = e.target.selectionStart ?? value.length;
         const pastedInsertedText = nativeInputEvent?.inputType?.startsWith('insertFromPaste')
             ? getInsertedTextFromChange(messageRef.current, value)
@@ -3454,6 +3648,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const nextCursor = Math.max(0, cursorPosition - 1);
             setInputMode('shell');
             setMessage(shellCommand);
+            messageRef.current = shellCommand;
             adjustTextareaHeight();
             setShowCommandAutocomplete(false);
             setShowSkillAutocomplete(false);
@@ -3468,6 +3663,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         setMessage(value);
+        messageRef.current = value;
         adjustTextareaHeight();
         updateAutocompleteState(value, cursorPosition, inputSource, pastedInsertedText);
     };
@@ -3563,6 +3759,31 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             })();
         const pastedText = e.clipboardData.getData('text');
         if (imageFiles.length === 0) {
+            if (inputMode === 'normal' && shouldCompactPastedText(pastedText)) {
+                e.preventDefault();
+                const textarea = textareaRef.current;
+                const selectionStart = textarea?.selectionStart ?? message.length;
+                const selectionEnd = textarea?.selectionEnd ?? message.length;
+                const reference = createPastedTextReference(
+                    pastedText,
+                    message,
+                    pastedTextReferencesRef.current,
+                    ({ index, count }) => t('chat.chatInput.pastedTextReference', { index, count }),
+                    nextPastedTextReferenceIndexRef.current,
+                );
+                const next = insertPastedTextReference(message, selectionStart, selectionEnd, reference.token);
+                nextPastedTextReferenceIndexRef.current = reference.index + 1;
+                updatePastedTextReferences([...prunePastedTextReferences(next.text, pastedTextReferencesRef.current), reference]);
+                messageRef.current = next.text;
+                if (textareaRef.current) textareaRef.current.value = next.text;
+                setMessage(next.text);
+                requestAnimationFrame(() => {
+                    textareaRef.current?.setSelectionRange(next.caret, next.caret);
+                    adjustTextareaHeight();
+                });
+                updateAutocompleteState(next.text, next.caret);
+                return;
+            }
             if (pastedText.includes('@')) {
                 markFileMentionPasteSuppression();
             }
@@ -3589,14 +3810,30 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const textarea = textareaRef.current;
         const selectionStart = textarea?.selectionStart ?? message.length;
         const selectionEnd = textarea?.selectionEnd ?? message.length;
-        const insertionContent = pastedText
-            ? `${pastedText}${/\s$/.test(pastedText) ? '' : ' '}${citationText}`
+        const pastedTextReference = inputMode === 'normal' && shouldCompactPastedText(pastedText)
+            ? createPastedTextReference(
+                pastedText,
+                message,
+                pastedTextReferencesRef.current,
+                ({ index, count }) => t('chat.chatInput.pastedTextReference', { index, count }),
+                nextPastedTextReferenceIndexRef.current,
+            )
+            : null;
+        const insertionContent = pastedTextReference
+            ? `${pastedTextReference.token} ${citationText}`
+            : pastedText
+                ? `${pastedText}${/\s$/.test(pastedText) ? '' : ' '}${citationText}`
             : citationText;
         const insertionText = withReferenceInsertionBoundaries(
             insertionContent,
             message.slice(0, selectionStart),
             message.slice(selectionEnd),
         );
+        const insertedMessage = `${message.slice(0, selectionStart)}${insertionText}${message.slice(selectionEnd)}`;
+        if (pastedTextReference) {
+            nextPastedTextReferenceIndexRef.current = pastedTextReference.index + 1;
+            updatePastedTextReferences([...prunePastedTextReferences(insertedMessage, pastedTextReferencesRef.current), pastedTextReference]);
+        }
         insertTextAtSelection(insertionText, getFileMentionInputSourceForInsertedText(insertionText));
 
         for (let index = 0; index < imageFiles.length; index += 1) {
@@ -3612,7 +3849,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 pendingPastedAttachmentFilenamesRef.current.delete(filename);
             }
         }
-    }, [addAttachedFile, addDroppedPathsAsMentions, attachedFiles, adjustTextareaHeight, currentSessionId, inputMode, markFileMentionPasteSuppression, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState]);
+    }, [addAttachedFile, addDroppedPathsAsMentions, attachedFiles, adjustTextareaHeight, currentSessionId, inputMode, markFileMentionPasteSuppression, message, newSessionDraftOpen, insertTextAtSelection, setMessage, t, updateAutocompleteState, updatePastedTextReferences]);
 
     const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
 
@@ -3707,6 +3944,33 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         setShowFileMention(false);
         setMentionQuery('');
 
+        textareaRef.current?.focus();
+    };
+
+    const handleSessionSelect = (session: { id: string }) => {
+        const textarea = textareaRef.current;
+        const cursorPosition = textarea?.selectionStart ?? message.length;
+        const textBeforeCursor = message.substring(0, cursorPosition);
+        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+        const mentionToken = getSessionMentionToken(session.id);
+        const mentionStart = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
+        const before = message.substring(0, mentionStart);
+        const after = message.substring(cursorPosition);
+        const insertion = withReferenceInsertionBoundaries(`@${mentionToken}`, before, after);
+        const newMessage = `${before}${insertion}${after}`;
+        const nextCursor = before.length + insertion.length;
+
+        setMessage(newMessage);
+        requestAnimationFrame(() => {
+            if (textareaRef.current) {
+                textareaRef.current.selectionStart = nextCursor;
+                textareaRef.current.selectionEnd = nextCursor;
+            }
+            adjustTextareaHeight();
+            updateAutocompleteState(newMessage, nextCursor);
+        });
+        setShowFileMention(false);
+        setMentionQuery('');
         textareaRef.current?.focus();
     };
 
@@ -5474,6 +5738,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             searchQuery={mentionQuery}
                             onFileSelect={handleFileSelect}
                             onAgentSelect={handleAgentSelect}
+                            onSessionSelect={handleSessionSelect}
                             onClose={() => setShowFileMention(false)}
                             style={isDesktopExpanded && autocompleteOverlayPosition
                                 ? {
@@ -5535,7 +5800,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             key={`${index}-${part.text.length}`}
                                             className={part.className}
                                         >
-                                            {part.attachmentName ? (
+                                            {part.sessionLabel ? (
+                                                <>
+                                                    <span className="invisible">{part.text}</span>
+                                                    <span className="absolute inset-x-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 overflow-hidden text-[var(--primary-base)]">
+                                                        <Icon name="chat-4" className="size-3 shrink-0" />
+                                                        <span className="min-w-0 truncate">{part.sessionLabel}</span>
+                                                    </span>
+                                                </>
+                                            ) : part.attachmentName ? (
                                                 <>
                                                     <span className="relative inline-block align-baseline text-transparent">
                                                         [
@@ -5548,7 +5821,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                 <>
                                                     <span className="relative inline-block align-baseline text-transparent">
                                                         /
-                                                        <Icon name="book-open" className="pointer-events-none absolute right-[0.25em] top-1/2 size-[1em] -translate-y-1/2 text-[var(--status-warning)]" aria-hidden="true" />
+                                                        <Icon name="book-open" className="pointer-events-none absolute right-[0.25em] top-1/2 size-[1em] -translate-y-1/2 text-[var(--chat-composer-skill)]" aria-hidden="true" />
                                                     </span>
                                                     <span>{part.text.slice(1)}</span>
                                                 </>
@@ -5600,6 +5873,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                     .map((file) => file.filename),
                                             ),
                                             ...findSkillMentionRanges(message, availableSkillNames.keys()),
+                                            ...findSessionMentionRanges(message),
+                                            ...pastedTextReferenceRanges,
                                         ],
                                     );
                                     if (

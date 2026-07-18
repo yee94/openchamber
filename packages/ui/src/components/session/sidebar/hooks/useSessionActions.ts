@@ -36,7 +36,7 @@ type Args = {
   setIsSessionSearchOpen: (open: boolean) => void;
   setActiveProjectIdOnly: (id: string) => void;
   setDirectory: (directory: string, options?: { showOverlay?: boolean }) => void;
-  setActiveMainTab: (tab: MainTab) => void;
+  setActiveMainTab: (tab: MainTab) => boolean;
   setSessionSwitcherOpen: (open: boolean) => void;
   setCurrentSession: (sessionId: string | null, directoryHint?: string | null) => void;
   updateSessionTitle: (id: string, title: string) => Promise<void>;
@@ -85,8 +85,11 @@ export const useSessionActions = (args: Args) => {
         args.setDirectory(sessionDirectory, { showOverlay: false });
       }
 
+      if (!args.setActiveMainTab('chat')) {
+        return;
+      }
+
       if (args.mobileVariant) {
-        args.setActiveMainTab('chat');
         args.setSessionSwitcherOpen(false);
       }
 

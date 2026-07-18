@@ -11,6 +11,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `packages/web/server/lib/opencode/cli-entry-runtime.js`: CLI entrypoint runtime that detects direct execution, parses CLI options, and starts server bootstrap.
 - `packages/web/server/lib/opencode/routes.js`: OpenCode/provider settings and auth-related route registration.
 - `packages/web/server/lib/opencode/lifecycle.js`: OpenCode process lifecycle runtime (startup, restart, readiness, health monitoring).
+- `packages/web/server/lib/opencode/managed-capabilities-runtime.js`: managed-child scheduled-task resources, config injection, rotating bridge identity, and bridge authorization.
 - `packages/web/server/lib/opencode/env-runtime.js`: OpenCode CLI/binary resolution and shell environment runtime.
 - `packages/web/server/lib/opencode/env-config.js`: OpenCode-related environment variable parsing and validation (host/port/hostname).
 - `packages/web/server/lib/opencode/hmr-state-runtime.js`: HMR-persistent runtime state initialization, auth-state bootstrap, and HMR sync helpers.
@@ -126,6 +127,11 @@ This module provides OpenCode server integration utilities for the web server ru
   - `isExecutable(filePath)`
   - `searchPathFor(binaryName)`
   - `clearResolvedOpenCodeBinary()`
+
+## Public exports (managed-capabilities-runtime.js)
+- `createManagedCapabilitiesRuntime(dependencies?)`: returns resource publishing, bridge-origin, child-environment, identity, and bridge-authorization APIs for managed OpenCode only.
+- `mergeManagedOpenCodeConfig({ configContent, pluginUrl, instructionsUrl })`: merges injected plugin/instructions URLs with stable deduplication.
+- `SCHEDULED_TASK_BRIDGE_PATH`: scheduled-task bridge route path.
 
 ## Public exports (env-config.js)
 - `resolveOpenCodeEnvConfig(options?)`: resolves and validates OpenCode host/port/hostname environment configuration.

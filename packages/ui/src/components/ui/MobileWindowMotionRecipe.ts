@@ -27,6 +27,28 @@ export const clampMobileWindowMotionProgress = (progress: number): number => (
   Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0))
 );
 
+export const getNearestMobileWindowMotionSnapPoint = (
+  height: number,
+  viewportHeight: number,
+  snapPoints: readonly number[],
+): number => {
+  const safeViewportHeight = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 1;
+  const heightRatio = Math.max(0, Number.isFinite(height) ? height : 0) / safeViewportHeight;
+  let nearest = clampMobileWindowMotionProgress(snapPoints[0] ?? 1);
+  let nearestDistance = Math.abs(heightRatio - nearest);
+
+  for (let index = 1; index < snapPoints.length; index += 1) {
+    const candidate = clampMobileWindowMotionProgress(snapPoints[index] ?? nearest);
+    const distance = Math.abs(heightRatio - candidate);
+    if (distance < nearestDistance) {
+      nearest = candidate;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+};
+
 export const getMobileWindowMotionFrame = (
   edge: MobileWindowMotionEdge,
   progress: number,

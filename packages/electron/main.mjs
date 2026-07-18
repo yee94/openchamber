@@ -4528,7 +4528,7 @@ const buildMacMenu = () => {
         { label: 'Open Files Sidebar', accelerator: 'Cmd+Shift+F', registerAccelerator: false, click: () => dispatchAction('open-right-sidebar-files') },
         { type: 'separator' },
         { label: 'Toggle Bottom Panel', accelerator: 'Cmd+J', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
-        { label: 'Toggle Terminal', accelerator: 'Cmd+`', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
+        { label: 'Toggle Terminal', accelerator: 'Ctrl+`', registerAccelerator: false, click: () => dispatchAction('toggle-terminal') },
         { label: 'Toggle Terminal Expanded', accelerator: 'Cmd+Shift+J', registerAccelerator: false, click: () => dispatchAction('toggle-terminal-expanded') },
         { type: 'separator' },
         { label: 'Light Theme', click: () => dispatchAction('theme-light') },

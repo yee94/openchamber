@@ -10,6 +10,7 @@ type MobileWindowMotionDismissEdge = MobileWindowMotionEdge;
 export interface MobileWindowMotionDismissGestureConfig {
   disabled?: boolean;
   scrollContainerSelector?: string;
+  reservedTargetSelector?: string;
   intentDistance?: number;
   maxOffAxisRatio?: number;
   commitDistanceRatio?: number;
@@ -206,6 +207,11 @@ export const useMobileWindowMotionDismissGesture = (
       cancelGesture();
       const current = optionsRef.current;
       if (current.disabled || event.touches.length !== 1) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const reservedTarget = current.reservedTargetSelector
+        ? target?.closest(current.reservedTargetSelector)
+        : null;
+      if (reservedTarget && wrapper.contains(reservedTarget)) return;
       const touch = event.touches[0];
       const scrollContainer = findDismissScrollContainer(
         wrapper,

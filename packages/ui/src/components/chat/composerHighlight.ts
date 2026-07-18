@@ -4,8 +4,8 @@
  * The composer renders a transparent <textarea> on top of a mirror <div>
  * (see ChatInput.tsx). The div paints the colored text the user sees while the
  * textarea owns the caret and selection. For the two layers to stay aligned the
- * overlay may only use styles that DO NOT change glyph advance width:
- * color, text-decoration and background. Font weight / style / family / size
+ * overlay may only use paint styles that DO NOT change glyph advance width:
+ * color, text-decoration, background and border-radius. Font weight / style / family / size
  * would shift the text and make the highlight drift from the caret, so they are
  * intentionally avoided here.
  *
@@ -27,24 +27,26 @@ type HighlightStyle =
     | 'blockquote'
     | 'listMarker';
 
-type MentionKind = 'file' | 'agent';
+type MentionKind = 'file' | 'agent' | 'session';
 
 export interface HighlightRange {
     start: number;
     end: number;
-    style: HighlightStyle | 'mentionFile' | 'mentionAgent' | 'mentionCommand' | 'mentionSnippet';
+    style: HighlightStyle | 'mentionFile' | 'mentionAgent' | 'mentionSession' | 'mentionCommand' | 'mentionSnippet' | 'mentionPaste';
     /**
      * Optional explicit class, used by syntax highlighting where the style is
      * resolved dynamically (per language token) rather than from a fixed enum.
      * When set it overrides STYLE_CLASS[style]. Must remain metric-safe
-     * (color / decoration / background only).
+     * (paint-only styles that preserve glyph advance).
      */
     className?: string;
     /** Optional explicit priority; falls back to STYLE_PRIORITY[style]. */
     priority?: number;
     /** Filename rendered as an inline attachment tag with its file-type icon. */
     attachmentName?: string;
-    /** Skill name rendered as an inline skill tag with its book icon. */
+    /** Session title rendered over the stable session mention token. */
+    sessionLabel?: string;
+    /** Skill name rendered as an inline skill reference with its book icon. */
     skillName?: string;
 }
 
@@ -52,12 +54,14 @@ export interface MentionRange {
     start: number;
     end: number;
     kind: MentionKind;
+    label?: string;
 }
 
 export interface HighlightPart {
     text: string;
     className: string;
     attachmentName?: string;
+    sessionLabel?: string;
     skillName?: string;
 }
 
@@ -86,8 +90,10 @@ type AnyStyle = HighlightRange['style'];
 const STYLE_PRIORITY: Record<AnyStyle, number> = {
     mentionFile: 100,
     mentionAgent: 100,
+    mentionSession: 100,
     mentionCommand: 100,
     mentionSnippet: 100,
+    mentionPaste: 100,
     code: 90,
     codeFence: 90,
     link: 80,
@@ -98,12 +104,14 @@ const STYLE_PRIORITY: Record<AnyStyle, number> = {
     marker: 10,
 };
 
-// Color / decoration / background only — never anything that affects layout.
+// Paint-only styles — never anything that affects layout.
 const STYLE_CLASS: Record<AnyStyle, string> = {
     mentionFile: 'text-[var(--status-info)]',
     mentionAgent: 'text-[var(--status-success)]',
+    mentionSession: 'relative inline-block text-transparent',
     mentionCommand: 'text-[var(--primary)]',
     mentionSnippet: 'text-[var(--status-warning)]',
+    mentionPaste: 'text-[var(--status-info)]',
     code: 'rounded-[3px] bg-[var(--surface-subtle)] text-[var(--markdown-inline-code)]',
     codeFence: 'bg-[var(--surface-subtle)] text-[var(--markdown-inline-code)]',
     link: 'text-[var(--status-info)] underline',
@@ -335,12 +343,13 @@ export function buildHighlightParts(
             : DEFAULT_CLASS;
         const segText = text.slice(segStart, segEnd);
         const attachmentName = bestRange?.attachmentName;
+        const sessionLabel = bestRange?.sessionLabel;
         const skillName = bestRange?.skillName;
         const last = parts[parts.length - 1];
-        if (last && last.className === className && last.attachmentName === attachmentName && last.skillName === skillName) {
+        if (last && last.className === className && last.attachmentName === attachmentName && last.sessionLabel === sessionLabel && last.skillName === skillName) {
             last.text += segText;
         } else {
-            parts.push({ text: segText, className, attachmentName, skillName });
+            parts.push({ text: segText, className, attachmentName, sessionLabel, skillName });
         }
     }
 
@@ -433,6 +442,11 @@ export function mentionRangesToHighlightRanges(mentions: MentionRange[]): Highli
     return mentions.map((mention) => ({
         start: mention.start,
         end: mention.end,
-        style: mention.kind === 'file' ? 'mentionFile' : 'mentionAgent',
+        style: mention.kind === 'file'
+            ? 'mentionFile'
+            : mention.kind === 'session'
+                ? 'mentionSession'
+                : 'mentionAgent',
+        sessionLabel: mention.kind === 'session' ? mention.label : undefined,
     }));
 }

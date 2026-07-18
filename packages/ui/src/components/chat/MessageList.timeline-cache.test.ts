@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 
+import { createSessionViewKey } from './sessionViewCache';
+
 mock.module('./markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: '' }));
 mock.module('./ChatMessage', () => ({ default: () => null }));
 mock.module('./message/renderCompare', () => ({
@@ -46,12 +48,18 @@ describe('TanStack timeline snapshot cache', () => {
     test('keeps snapshots isolated by virtualizer key', () => {
         const cache = createTanstackTimelineSnapshotCache<string>(16);
         const keys = ['turn:1'];
+        const sessionKey = 'ses_1';
+        const primaryKey = createSessionViewKey({ runtimeKey: 'runtime-a', directory: '/repo/a', sessionId: sessionKey });
+        const alternateDirectoryKey = createSessionViewKey({ runtimeKey: 'runtime-a', directory: '/repo/b', sessionId: sessionKey });
+        const alternateRuntimeKey = createSessionViewKey({ runtimeKey: 'runtime-b', directory: '/repo/a', sessionId: sessionKey });
 
-        cache.write('primary:ses_1', keys, ['primary-snapshot']);
-        cache.write('panel:ses_1', keys, ['panel-snapshot']);
+        cache.write(primaryKey, keys, ['primary-snapshot']);
+        cache.write(alternateDirectoryKey, keys, ['alternate-directory-snapshot']);
+        cache.write(alternateRuntimeKey, keys, ['alternate-runtime-snapshot']);
 
-        expect(cache.read('primary:ses_1', keys)).toEqual(['primary-snapshot']);
-        expect(cache.read('panel:ses_1', keys)).toEqual(['panel-snapshot']);
+        expect(cache.read(primaryKey, keys)).toEqual(['primary-snapshot']);
+        expect(cache.read(alternateDirectoryKey, keys)).toEqual(['alternate-directory-snapshot']);
+        expect(cache.read(alternateRuntimeKey, keys)).toEqual(['alternate-runtime-snapshot']);
     });
 
     test('keeps session domain identity when virtualizer identity changes', () => {

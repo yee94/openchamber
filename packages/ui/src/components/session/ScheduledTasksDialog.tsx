@@ -1,21 +1,18 @@
 import * as React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
 import type { IconName } from "@/components/icon/icons";
-import { useUIStore } from '@/stores/useUIStore';
-import { formatTimeForPreference } from '@/lib/timeFormat';
-import type { TimeFormatPreference } from '@/stores/useUIStore';
+import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { cn, formatDirectoryName } from '@/lib/utils';
@@ -24,7 +21,9 @@ import type { ProjectEntry } from '@/lib/api/types';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import {
   deleteScheduledTask,
-  fetchScheduledTasks,
+  fetchGlobalScheduledTasks,
+  type GlobalScheduledTask,
+  type GlobalScheduledTasksResponse,
   runScheduledTaskNow,
   upsertScheduledTask,
   type ScheduledTask,
@@ -32,6 +31,7 @@ import {
 } from '@/lib/scheduledTasksApi';
 import { ScheduledTaskEditorDialog } from './ScheduledTaskEditorDialog';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { queryClient, queryKeys } from '@/lib/queryRuntime';
 
 const scheduleTimes = (task: ScheduledTask): string[] => {
@@ -101,13 +101,6 @@ const formatSchedule = (task: ScheduledTask, t: ReturnType<typeof useI18n>['t'])
   return t('sessions.scheduledTasks.dialog.schedule.cron', { cron: task.schedule.cron || '' });
 };
 
-const formatClockTime = (value: number | undefined, timeFormatPreference: TimeFormatPreference): string => {
-  if (!value || !Number.isFinite(value)) {
-    return '';
-  }
-  return formatTimeForPreference(value, timeFormatPreference);
-};
-
 const formatRelativeTime = (value: number | undefined, t: ReturnType<typeof useI18n>['t']): string => {
   if (!value || !Number.isFinite(value)) {
     return '';
@@ -170,122 +163,130 @@ const toneStyle = (tone: StatusTone): React.CSSProperties => {
   };
 };
 
+type TaskIdentity = { projectId: string; taskId: string };
+
+const taskIdentityKey = ({ projectId, taskId }: TaskIdentity) => `${projectId}:${taskId}`;
+const globalScheduledTasksQueryKey = queryKeys.scoped('scheduled-tasks');
+
+let mobileCloseRequest: (() => boolean) | null = null;
+
+const requestScheduledTasksDialogClose = (): boolean => {
+  if (mobileCloseRequest) return mobileCloseRequest();
+  useUIStore.getState().setScheduledTasksDialogOpen(false);
+  return true;
+};
+
+const replaceProjectTasks = (
+  current: GlobalScheduledTasksResponse | undefined,
+  projectId: string,
+  tasks: ScheduledTask[],
+): GlobalScheduledTasksResponse => ({
+  tasks: [
+    ...(current?.tasks.filter((entry) => entry.projectId !== projectId) ?? []),
+    ...tasks.map((task) => ({ projectId, task })),
+  ],
+  failedProjectIds: current?.failedProjectIds.filter((id) => id !== projectId) ?? [],
+});
+
 export function ScheduledTasksDialog() {
   const { t } = useI18n();
   const open = useUIStore((state) => state.isScheduledTasksDialogOpen);
   const setOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);
   const isMobile = useUIStore((state) => state.isMobile);
-  const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
+  if (!isMobile) return null;
+
+  return (
+    <MobileOverlayPanel
+      open={open}
+      title={t('sessions.scheduledTasks.dialog.title')}
+      onClose={() => requestScheduledTasksDialogClose()}
+      className="h-[min(92dvh,760px)] max-w-none sm:max-w-2xl"
+      contentMaxHeightClassName="max-h-none"
+      renderHeader={() => null}
+      containedBody
+    >
+      <ScheduledTasksWorkspace presentation="mobile-panel" open={open} onOpenChange={setOpen} />
+    </MobileOverlayPanel>
+  );
+}
+
+type WorkspaceFilter = 'all' | 'active' | 'paused';
+type WorkspaceEditorMode = 'closed' | 'create' | 'edit';
+
+export function ScheduledTasksWorkspace({
+  presentation = 'workspace',
+  open = true,
+  onOpenChange,
+}: {
+  presentation?: 'workspace' | 'mobile-panel';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
+  const { t } = useI18n();
+  const reduceMotion = useReducedMotion();
+  const isMobile = useUIStore((state) => state.isMobile);
+  const setMainTabGuard = useUIStore((state) => state.setMainTabGuard);
   const projects = useProjectsStore((state) => state.projects);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
+  const preferredProjectID = activeProject?.id || projects[0]?.id || '';
+  const [createProjectID, setCreateProjectID] = React.useState(preferredProjectID);
+  const [selectedTaskIdentity, setSelectedTaskIdentity] = React.useState<TaskIdentity | null>(null);
+  const [editorMode, setEditorMode] = React.useState<WorkspaceEditorMode>('closed');
+  const [filter, setFilter] = React.useState<WorkspaceFilter>('all');
+  const [search, setSearch] = React.useState('');
+  const [draftDirty, setDraftDirty] = React.useState(false);
+  const [mutatingTaskIdentity, setMutatingTaskIdentity] = React.useState<string | null>(null);
+  const [contextMenuTaskIdentity, setContextMenuTaskIdentity] = React.useState<string | null>(null);
+  const [dropdownMenuTaskIdentity, setDropdownMenuTaskIdentity] = React.useState<string | null>(null);
+  const isMobilePanel = presentation === 'mobile-panel';
 
-  const [selectedProjectID, setSelectedProjectID] = React.useState<string>('');
-  const [editorOpen, setEditorOpen] = React.useState(false);
-  const [editorTask, setEditorTask] = React.useState<ScheduledTask | null>(null);
-  const [mutatingTaskID, setMutatingTaskID] = React.useState<string | null>(null);
-  const wasOpenRef = React.useRef(false);
+  React.useEffect(() => {
+    if (projects.some((project) => project.id === createProjectID)) return;
+    setCreateProjectID(preferredProjectID);
+  }, [createProjectID, preferredProjectID, projects]);
 
-  const selectedProject = React.useMemo(
-    () => projects.find((project) => project.id === selectedProjectID) || null,
-    [projects, selectedProjectID],
-  );
-
-  const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
-    const displayLabel = formatDirectoryName(project.path);
-    const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
-    const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
-    const fallback = <Icon name={iconName ?? 'folder'} className="h-3.5 w-3.5" style={iconColor ? { color: iconColor } : undefined} />;
-    return (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        <span
-          className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-muted-foreground"
-        >
-          {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
-        </span>
-        <span className="truncate">{displayLabel}</span>
-      </span>
-    );
-  }, []);
-
-  const tasksQueryKey = queryKeys.scoped('scheduled-tasks', selectedProjectID);
   const tasksQuery = useQuery({
-    queryKey: tasksQueryKey,
-    enabled: open && Boolean(selectedProjectID),
+    queryKey: globalScheduledTasksQueryKey,
+    enabled: open,
     refetchOnMount: 'always',
-    queryFn: () => fetchScheduledTasks(selectedProjectID),
-    select: (nextTasks) => [...nextTasks].sort((a, b) => {
-        if (a.enabled !== b.enabled) {
-          return a.enabled ? -1 : 1;
+    queryFn: fetchGlobalScheduledTasks,
+    select: (response) => ({
+      ...response,
+      tasks: [...response.tasks].sort((a, b) => {
+        if (a.task.enabled !== b.task.enabled) {
+          return a.task.enabled ? -1 : 1;
         }
-        const byName = a.name.localeCompare(b.name);
-        if (byName !== 0) {
-          return byName;
-        }
-        return (a.state?.nextRunAt || Number.MAX_SAFE_INTEGER) - (b.state?.nextRunAt || Number.MAX_SAFE_INTEGER);
+        return a.task.name.localeCompare(b.task.name);
       }),
+    }),
   });
-  const tasks = tasksQuery.data ?? [];
-  const loading = tasksQuery.isLoading;
+  const tasks = React.useMemo(() => tasksQuery.data?.tasks ?? [], [tasksQuery.data]);
+  const failedProjectIds = tasksQuery.data?.failedProjectIds ?? [];
+  const selectedTaskEntry = React.useMemo(
+    () => selectedTaskIdentity
+      ? tasks.find(({ projectId, task }) => projectId === selectedTaskIdentity.projectId && task.id === selectedTaskIdentity.taskId) ?? null
+      : null,
+    [selectedTaskIdentity, tasks],
+  );
+  const selectedTask = selectedTaskEntry?.task ?? null;
+
   React.useEffect(() => {
     if (tasksQuery.error) {
       toast.error(tasksQuery.error instanceof Error ? tasksQuery.error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed'));
     }
   }, [tasksQuery.error, t]);
-  const invalidateTasks = React.useCallback(async (projectID: string) => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.scoped('scheduled-tasks', projectID) });
-  }, []);
-  const saveTaskMutation = useMutation({
-    mutationFn: ({ projectID, taskDraft }: { projectID: string; taskDraft: Partial<ScheduledTask> }) => upsertScheduledTask(projectID, taskDraft),
-    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
-  });
-  const toggleTaskMutation = useMutation({
-    mutationFn: ({ projectID, task }: { projectID: string; task: ScheduledTask }) => upsertScheduledTask(projectID, task),
-    onMutate: ({ projectID, task }) => {
-      queryClient.setQueryData<ScheduledTask[]>(queryKeys.scoped('scheduled-tasks', projectID), (current = []) =>
-        current.map((item) => item.id === task.id ? task : item),
-      );
-    },
-    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
-  });
-  const deleteTaskMutation = useMutation({
-    mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => deleteScheduledTask(projectID, taskID),
-    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
-  });
-  const runTaskMutation = useMutation({
-    mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => runScheduledTaskNow(projectID, taskID),
-    onSettled: async (_data, _error, { projectID }) => invalidateTasks(projectID),
-  });
 
   React.useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false;
-      return;
-    }
-    const preferredProjectID = activeProject?.id || projects[0]?.id || '';
-    if (wasOpenRef.current && preferredProjectID === selectedProjectID) {
-      return;
-    }
-    wasOpenRef.current = true;
-    setSelectedProjectID(preferredProjectID);
-  }, [open, activeProject, projects, selectedProjectID]);
-
-  React.useEffect(() => {
-    if (!open) {
-      return;
-    }
     let timeoutID: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = subscribeOpenchamberEvents((event) => {
       if (event.type !== 'scheduled-task-ran') {
-        return;
-      }
-      if (event.projectId !== selectedProjectID) {
         return;
       }
       if (timeoutID) {
         clearTimeout(timeoutID);
       }
       timeoutID = setTimeout(() => {
-        void invalidateTasks(selectedProjectID);
+        void queryClient.invalidateQueries({ queryKey: globalScheduledTasksQueryKey });
       }, 400);
     });
     return () => {
@@ -294,323 +295,607 @@ export function ScheduledTasksDialog() {
       }
       unsubscribe();
     };
-  }, [open, selectedProjectID, invalidateTasks]);
+  }, []);
+
+  React.useEffect(() => {
+    if (editorMode === 'edit' && selectedTaskIdentity && !selectedTaskEntry && tasksQuery.isSuccess) {
+      setSelectedTaskIdentity(null);
+      setEditorMode('closed');
+    }
+  }, [editorMode, selectedTaskEntry, selectedTaskIdentity, tasksQuery.isSuccess]);
+
+  const saveTaskMutation = useMutation({
+    mutationFn: ({ projectID, taskDraft }: { projectID: string; taskDraft: Partial<ScheduledTask> }) => upsertScheduledTask(projectID, taskDraft),
+    onSuccess: (nextTasks, { projectID }) => {
+      queryClient.setQueryData<GlobalScheduledTasksResponse>(globalScheduledTasksQueryKey, (current) => replaceProjectTasks(current, projectID, nextTasks));
+    },
+  });
+  const deleteTaskMutation = useMutation({
+    mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => deleteScheduledTask(projectID, taskID),
+    onSuccess: (nextTasks, { projectID }) => {
+      queryClient.setQueryData<GlobalScheduledTasksResponse>(globalScheduledTasksQueryKey, (current) => replaceProjectTasks(current, projectID, nextTasks));
+    },
+  });
+  const runTaskMutation = useMutation({
+    mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => runScheduledTaskNow(projectID, taskID),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: globalScheduledTasksQueryKey });
+    },
+  });
+  const toggleTaskMutation = useMutation({
+    mutationFn: ({ projectID, task }: { projectID: string; task: ScheduledTask }) => upsertScheduledTask(projectID, task),
+    onMutate: ({ projectID, task }) => {
+      const previousTasks = queryClient.getQueryData<GlobalScheduledTasksResponse>(globalScheduledTasksQueryKey);
+      queryClient.setQueryData<GlobalScheduledTasksResponse>(globalScheduledTasksQueryKey, (current) => current ? {
+        ...current,
+        tasks: current.tasks.map((item) => item.projectId === projectID && item.task.id === task.id ? { projectId: projectID, task } : item),
+      } : current);
+      return { previousTasks };
+    },
+    onSuccess: (nextTasks, { projectID }) => {
+      queryClient.setQueryData<GlobalScheduledTasksResponse>(globalScheduledTasksQueryKey, (current) => replaceProjectTasks(current, projectID, nextTasks));
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(globalScheduledTasksQueryKey, context.previousTasks);
+      }
+    },
+  });
+
+  const confirmDraftChange = React.useCallback(() => (
+    !draftDirty || window.confirm(t('sessions.scheduledTasks.workspace.confirm.discardChanges'))
+  ), [draftDirty, t]);
+
+  React.useEffect(() => {
+    if (!draftDirty) {
+      setMainTabGuard(null);
+      return;
+    }
+    const guard = (nextTab: MainTab) => (
+      nextTab === 'scheduled' || window.confirm(t('sessions.scheduledTasks.workspace.confirm.discardChanges'))
+    );
+    setMainTabGuard(guard);
+    return () => {
+      if (useUIStore.getState().mainTabGuard === guard) {
+        setMainTabGuard(null);
+      }
+    };
+  }, [draftDirty, setMainTabGuard, t]);
+
+  const handleSelectTask = React.useCallback((entry: GlobalScheduledTask) => {
+    const identity = { projectId: entry.projectId, taskId: entry.task.id };
+    if (taskIdentityKey(identity) === (selectedTaskIdentity ? taskIdentityKey(selectedTaskIdentity) : '') && editorMode === 'edit') {
+      return;
+    }
+    if (!confirmDraftChange()) {
+      return;
+    }
+    setSelectedTaskIdentity(identity);
+    setEditorMode('edit');
+    setDraftDirty(false);
+  }, [confirmDraftChange, editorMode, selectedTaskIdentity]);
+
+  const handleCreate = React.useCallback(() => {
+    if (!createProjectID || !confirmDraftChange()) {
+      return;
+    }
+    setSelectedTaskIdentity(null);
+    setEditorMode('create');
+    setDraftDirty(false);
+  }, [confirmDraftChange, createProjectID]);
+
+  const handleCancelEditor = React.useCallback((nextOpen: boolean) => {
+    if (nextOpen || !confirmDraftChange()) {
+      return;
+    }
+    setSelectedTaskIdentity(null);
+    setEditorMode('closed');
+    setDraftDirty(false);
+  }, [confirmDraftChange]);
+
+  const requestClose = React.useCallback(() => {
+    if (editorMode !== 'closed') {
+      handleCancelEditor(false);
+      return true;
+    }
+    onOpenChange?.(false);
+    return true;
+  }, [editorMode, handleCancelEditor, onOpenChange]);
+
+  React.useEffect(() => {
+    if (!isMobilePanel || !open) return;
+    mobileCloseRequest = requestClose;
+    const handleCloseRequest = () => requestClose();
+    window.addEventListener('oc:scheduled-tasks-close-request', handleCloseRequest);
+    return () => {
+      if (mobileCloseRequest === requestClose) mobileCloseRequest = null;
+      window.removeEventListener('oc:scheduled-tasks-close-request', handleCloseRequest);
+    };
+  }, [isMobilePanel, open, requestClose]);
 
   const handleSaveTask = React.useCallback(async (taskDraft: Partial<ScheduledTask>) => {
-    if (!selectedProjectID) {
+    const projectID = selectedTaskIdentity?.projectId || createProjectID;
+    if (!projectID) {
       throw new Error(t('sessions.scheduledTasks.dialog.error.chooseProjectFirst'));
     }
-    await saveTaskMutation.mutateAsync({ projectID: selectedProjectID, taskDraft });
+    const previousIDs = new Set(tasks.filter((entry) => entry.projectId === projectID).map((entry) => entry.task.id));
+    const nextTasks = await saveTaskMutation.mutateAsync({ projectID, taskDraft });
+    const savedTask = taskDraft.id
+      ? nextTasks.find((task) => task.id === taskDraft.id)
+      : nextTasks.find((task) => !previousIDs.has(task.id));
+    const fallbackTask = [...nextTasks]
+      .filter((task) => task.name === taskDraft.name)
+      .sort((a, b) => (b.state?.updatedAt || 0) - (a.state?.updatedAt || 0))[0];
+    const nextSelectedTask = savedTask || fallbackTask;
+    if (nextSelectedTask) {
+      setSelectedTaskIdentity({ projectId: projectID, taskId: nextSelectedTask.id });
+      setEditorMode('edit');
+    }
+    setDraftDirty(false);
     toast.success(t('sessions.scheduledTasks.dialog.toast.saved'));
-  }, [selectedProjectID, saveTaskMutation, t]);
+    return nextSelectedTask;
+  }, [createProjectID, saveTaskMutation, selectedTaskIdentity, t, tasks]);
 
-  const handleToggleEnabled = React.useCallback(async (task: ScheduledTask, enabled: boolean) => {
-    if (!selectedProjectID) {
+  const handleDeleteTask = React.useCallback(async (entry: GlobalScheduledTask) => {
+    const { projectId, task } = entry;
+    if (!window.confirm(t('sessions.scheduledTasks.dialog.confirm.deleteTask', { taskName: task.name }))) {
       return;
     }
-    setMutatingTaskID(task.id);
+    setMutatingTaskIdentity(taskIdentityKey({ projectId, taskId: task.id }));
     try {
-      await toggleTaskMutation.mutateAsync({ projectID: selectedProjectID, task: { ...task, enabled } });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.updateFailed'));
-    } finally {
-      setMutatingTaskID(null);
-    }
-  }, [selectedProjectID, toggleTaskMutation, t]);
-
-  const handleDeleteTask = React.useCallback(async (task: ScheduledTask) => {
-    if (!selectedProjectID) {
-      return;
-    }
-    const confirmed = window.confirm(t('sessions.scheduledTasks.dialog.confirm.deleteTask', { taskName: task.name }));
-    if (!confirmed) {
-      return;
-    }
-
-    setMutatingTaskID(task.id);
-    try {
-      await deleteTaskMutation.mutateAsync({ projectID: selectedProjectID, taskID: task.id });
+      await deleteTaskMutation.mutateAsync({ projectID: projectId, taskID: task.id });
+      const deletedTaskIdentity = taskIdentityKey({ projectId, taskId: task.id });
+      if (selectedTaskIdentity && taskIdentityKey(selectedTaskIdentity) === deletedTaskIdentity) {
+        setSelectedTaskIdentity(null);
+        setEditorMode('closed');
+        setDraftDirty(false);
+      }
       toast.success(t('sessions.scheduledTasks.dialog.toast.deleted'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.deleteFailed'));
     } finally {
-      setMutatingTaskID(null);
+      setMutatingTaskIdentity(null);
     }
-  }, [selectedProjectID, deleteTaskMutation, t]);
+  }, [deleteTaskMutation, selectedTaskIdentity, t]);
 
-  const handleRunNow = React.useCallback(async (task: ScheduledTask) => {
-    if (!selectedProjectID) {
-      return;
-    }
-    setMutatingTaskID(task.id);
+  const handleRunTask = React.useCallback(async ({ projectId, task }: GlobalScheduledTask) => {
+    setMutatingTaskIdentity(taskIdentityKey({ projectId, taskId: task.id }));
     try {
-      await runTaskMutation.mutateAsync({ projectID: selectedProjectID, taskID: task.id });
+      await runTaskMutation.mutateAsync({ projectID: projectId, taskID: task.id });
       toast.success(t('sessions.scheduledTasks.dialog.toast.started'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.runFailed'));
     } finally {
-      setMutatingTaskID(null);
+      setMutatingTaskIdentity(null);
     }
-  }, [selectedProjectID, runTaskMutation, t]);
+  }, [runTaskMutation, t]);
 
-  const projectSelector = (
-    <div className="flex flex-col items-start gap-1">
-      <span className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.dialog.project.label')}</span>
-      <Select
-        value={selectedProjectID || '__none'}
-        onValueChange={(value) => {
-          const nextProjectID = value === '__none' ? '' : value;
-          setSelectedProjectID(nextProjectID);
-        }}
-      >
-        <SelectTrigger className={isMobile ? 'w-full' : undefined}>
-          {selectedProject ? (
-            <SelectValue>{renderProjectLabel(selectedProject)}</SelectValue>
-          ) : (
-            <SelectValue placeholder={t('sessions.scheduledTasks.dialog.project.placeholder')} />
-          )}
-        </SelectTrigger>
-        <SelectContent>
-          {projects.length === 0 ? <SelectItem value="__none">{t('sessions.scheduledTasks.dialog.project.empty')}</SelectItem> : null}
-          {projects.map((project) => (
-            <SelectItem key={project.id} value={project.id}>
-              {renderProjectLabel(project)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
+  const handleToggleTask = React.useCallback(async ({ projectId, task }: GlobalScheduledTask, enabled: boolean) => {
+    setMutatingTaskIdentity(taskIdentityKey({ projectId, taskId: task.id }));
+    try {
+      await toggleTaskMutation.mutateAsync({ projectID: projectId, task: { ...task, enabled } });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.updateFailed'));
+    } finally {
+      setMutatingTaskIdentity(null);
+    }
+  }, [t, toggleTaskMutation]);
 
-  const openNewTaskEditor = () => {
-    setEditorTask(null);
-    setEditorOpen(true);
-  };
+  const filteredTasks = React.useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    return tasks.filter(({ task }) => {
+      if (filter === 'active' && !task.enabled) {
+        return false;
+      }
+      if (filter === 'paused' && task.enabled) {
+        return false;
+      }
+      return !normalizedSearch
+        || task.name.toLocaleLowerCase().includes(normalizedSearch)
+        || formatSchedule(task, t).toLocaleLowerCase().includes(normalizedSearch);
+    });
+  }, [filter, search, t, tasks]);
 
-  const tasksContent = (
-    <div className="space-y-4">
-      {!isMobile ? (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {projectSelector}
-          <Button onClick={openNewTaskEditor} disabled={!selectedProjectID}>
-            <Icon name="add" className="mr-1 h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.newTask')}
-          </Button>
-        </div>
-      ) : (
-        projectSelector
-      )}
-
-      <div className="min-h-[280px]">
-      {loading ? (
-        <div className="flex items-center gap-2 typography-meta text-muted-foreground">
-          <Icon name="loader-4" className="h-4 w-4 animate-spin" /> {t('sessions.scheduledTasks.dialog.loading')}
-        </div>
-      ) : tasksQuery.error ? (
-        <div className="rounded-lg border border-dashed border-border p-4 typography-meta text-muted-foreground">
-          {tasksQuery.error instanceof Error ? tasksQuery.error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed')}
-        </div>
-      ) : tasks.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-4 typography-meta text-muted-foreground">
-          {selectedProjectID ? t('sessions.scheduledTasks.dialog.empty.noTasks') : t('sessions.scheduledTasks.dialog.empty.selectProject')}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {tasks.map((task) => {
-            const isBusy = mutatingTaskID === task.id;
-            const status = (task.state?.lastStatus || 'idle') as ScheduledTaskStatus;
-            const meta = STATUS_META[status];
-            const statusLabel = status === 'success'
-              ? t('sessions.scheduledTasks.dialog.status.success')
-              : status === 'error'
-                ? t('sessions.scheduledTasks.dialog.status.error')
-                : status === 'running'
-                  ? t('sessions.scheduledTasks.dialog.status.running')
-                  : t('sessions.scheduledTasks.dialog.status.idle');
-            const nextAt = task.state?.nextRunAt;
-            const lastAt = task.state?.lastRunAt;
-
-            return (
-              <div
-                key={task.id}
-                className={cn(
-                  'rounded-lg border border-border p-4 transition-opacity',
-                  !task.enabled && 'opacity-60',
-                )}
-              >
-                <div className="min-w-0">
-                  <div className="typography-ui-header truncate font-semibold text-foreground">
-                    {task.name}
-                  </div>
-                  <div className="typography-micro truncate text-muted-foreground">
-                    {formatSchedule(task, t)}
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 typography-micro text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon name="timer" className="h-3.5 w-3.5" />
-                    <span className="font-medium text-foreground">{t('sessions.scheduledTasks.dialog.nextRun.label')}</span>
-                    {nextAt ? (
-                      <>
-                        <span className="text-foreground">{formatRelativeTime(nextAt, t)}</span>
-                        <span className="text-muted-foreground/50">·</span>
-                        <span>{formatClockTime(nextAt, timeFormatPreference)}</span>
-                      </>
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon name="history" className="h-3.5 w-3.5" />
-                    <span className="font-medium text-foreground">{t('sessions.scheduledTasks.dialog.lastRun.label')}</span>
-                    {status === 'running' ? (
-                      <span
-                        className="inline-flex items-center gap-1"
-                        style={{ color: 'var(--status-warning)' }}
-                      >
-                        <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
-                        {t('sessions.scheduledTasks.dialog.lastRun.runningNow')}
-                      </span>
-                    ) : lastAt ? (
-                      <>
-                        {meta.tone !== 'muted' ? (
-                          <span
-                            className="inline-flex items-center gap-1"
-                            style={{ color: `var(--status-${meta.tone})` }}
-                          >
-                            <Icon name={meta.Icon} className="h-3.5 w-3.5" />
-                            {statusLabel}
-                          </span>
-                        ) : null}
-                        <span className="text-muted-foreground/50">·</span>
-                        <span>{formatRelativeTime(lastAt, t)}</span>
-                      </>
-                    ) : (
-                      <span>{t('sessions.scheduledTasks.dialog.lastRun.never')}</span>
-                    )}
-                  </span>
-                </div>
-
-                {task.state?.lastError ? (
-                  <div
-                    className="mt-3 flex items-start gap-2 rounded-md border p-2 typography-micro"
-                    style={toneStyle('error')}
-                  >
-                    <Icon name="error-warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span className="min-w-0 break-words">{task.state.lastError}</span>
-                  </div>
-                ) : null}
-
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                  <label
-                    className={cn(
-                      'inline-flex cursor-pointer items-center gap-2 typography-micro font-medium',
-                      task.enabled ? 'text-foreground' : 'text-muted-foreground',
-                      isBusy && 'cursor-not-allowed opacity-50',
-                    )}
-                  >
-                    <Checkbox
-                      checked={task.enabled}
-                      onChange={(enabled) => void handleToggleEnabled(task, enabled)}
-                      ariaLabel={task.enabled
-                        ? t('sessions.scheduledTasks.dialog.taskToggle.pauseAria', { taskName: task.name })
-                        : t('sessions.scheduledTasks.dialog.taskToggle.enableAria', { taskName: task.name })}
-                      disabled={isBusy}
-                    />
-                    {task.enabled ? t('sessions.scheduledTasks.dialog.taskToggle.enabled') : t('sessions.scheduledTasks.dialog.taskToggle.paused')}
-                  </label>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleRunNow(task)}
-                      disabled={isBusy}
-                    >
-                      <Icon name="play" className="h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.runNow')}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditorTask(task);
-                        setEditorOpen(true);
-                      }}
-                      disabled={isBusy}
-                      aria-label={t('sessions.scheduledTasks.dialog.actions.editAria', { taskName: task.name })}
-                    >
-                      <Icon name="edit-2" className="h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.edit')}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => void handleDeleteTask(task)}
-                      disabled={isBusy}
-                      aria-label={t('sessions.scheduledTasks.dialog.actions.deleteAria', { taskName: task.name })}
-                    >
-                      <Icon name="delete-bin" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      </div>
-    </div>
-  );
+  const renderWorkspaceProjectLabel = React.useCallback((project: ProjectEntry) => {
+    const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+    const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+    const fallback = <Icon name={iconName ?? 'folder'} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />;
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="flex size-4 shrink-0 items-center justify-center overflow-hidden text-muted-foreground">
+          {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
+        </span>
+        <span className="truncate">{formatDirectoryName(project.path)}</span>
+      </span>
+    );
+  }, []);
+  const editorProjectOptions = projects.map((project) => ({
+    id: project.id,
+    label: renderWorkspaceProjectLabel(project),
+  }));
 
   return (
-    <>
-      {isMobile ? (
-        <MobileOverlayPanel
-          open={open}
-          title={t('sessions.scheduledTasks.dialog.title')}
-          onClose={() => setOpen(false)}
-          contentMaxHeightClassName="max-h-[min(80vh,640px)]"
-          renderHeader={(closeButton) => (
-            <div className="flex flex-col gap-1 border-b border-border/40 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="typography-ui-label font-semibold text-foreground">{t('sessions.scheduledTasks.dialog.title')}</h2>
-                {closeButton}
-              </div>
-              <p className="typography-micro text-muted-foreground">
-                {t('sessions.scheduledTasks.dialog.description')}
-              </p>
-            </div>
-          )}
-          footer={(
+    <div className={cn('relative flex h-full min-h-0 overflow-hidden bg-background', isMobilePanel && 'flex-col')} data-presentation={presentation}>
+      {isMobilePanel ? (
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/40 px-2">
+          {editorMode !== 'closed' ? (
             <Button
-              className="w-full"
-              onClick={openNewTaskEditor}
-              disabled={!selectedProjectID}
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-11 shrink-0 rounded-lg"
+              onClick={requestClose}
+              aria-label={t('sessions.scheduledTasks.editor.actions.cancel')}
             >
-              <Icon name="add" className="mr-1 h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.newTask')}
+              <Icon name="arrow-left" className="size-5" />
             </Button>
+          ) : null}
+          <h2 className="min-w-0 flex-1 truncate px-1 typography-ui-label font-semibold text-foreground">
+            {editorMode === 'edit'
+              ? t('sessions.scheduledTasks.editor.title.edit')
+              : editorMode === 'create'
+                ? t('sessions.scheduledTasks.editor.title.new')
+                : t('sessions.scheduledTasks.dialog.title')}
+          </h2>
+          {editorMode === 'edit' && selectedTaskEntry ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-11 shrink-0 rounded-lg"
+                  disabled={Boolean(mutatingTaskIdentity)}
+                  aria-label={t('sessions.scheduledTasks.dialog.actions.moreAria', { taskName: selectedTaskEntry.task.name })}
+                >
+                  <Icon name="more-2" className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-40">
+                <DropdownMenuItem className="min-h-11" onSelect={() => void handleRunTask(selectedTaskEntry)}>
+                  <Icon name="play" className="size-4" />
+                  {t('sessions.scheduledTasks.dialog.actions.runNow')}
+                </DropdownMenuItem>
+                <DropdownMenuItem className="min-h-11" onSelect={() => void handleToggleTask(selectedTaskEntry, !selectedTaskEntry.task.enabled)}>
+                  <Icon name={selectedTaskEntry.task.enabled ? 'pause' : 'play'} className="size-4" />
+                  {selectedTaskEntry.task.enabled
+                    ? t('sessions.scheduledTasks.dialog.actions.pause')
+                    : t('sessions.scheduledTasks.dialog.actions.resume')}
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" className="min-h-11" onSelect={() => void handleDeleteTask(selectedTaskEntry)}>
+                  <Icon name="delete-bin" className="size-4" />
+                  {t('sessions.scheduledTasks.dialog.actions.delete')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : editorMode === 'closed' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-11 shrink-0 rounded-lg"
+              onClick={requestClose}
+              aria-label={t('mobile.surface.closeAria')}
+            >
+              <Icon name="close" className="size-5" />
+            </Button>
+          ) : (
+            <span className="size-11 shrink-0" aria-hidden="true" />
           )}
-        >
-          {tasksContent}
-        </MobileOverlayPanel>
-      ) : (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{t('sessions.scheduledTasks.dialog.title')}</DialogTitle>
-              <DialogDescription>{t('sessions.scheduledTasks.dialog.description')}</DialogDescription>
-            </DialogHeader>
+        </header>
+      ) : null}
+      <section className={cn('min-w-0 flex-1 flex-col overflow-hidden transition-[width] duration-300 ease-out', isMobilePanel && editorMode !== 'closed' ? 'hidden' : 'flex')}>
+        <header className={cn('shrink-0', isMobilePanel ? 'px-3 pb-3 pt-3' : 'px-4 pb-5 pt-4 sm:px-6')}>
+          <div className="mx-auto w-full max-w-4xl">
+          <div className={cn('flex items-center justify-between', isMobilePanel ? 'gap-2' : 'gap-3')}>
+            <div className={cn('flex items-center gap-1', isMobilePanel && 'min-w-0 flex-1')} role="group" aria-label={t('sessions.scheduledTasks.dialog.title')}>
+              {(['all', 'active', 'paused'] as const).map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'active:scale-[0.97] overflow-hidden rounded-xl border-0 bg-transparent text-muted-foreground shadow-none transition-[color,background-color,transform] duration-150 ease-out motion-reduce:transition-none',
+                    isMobilePanel ? 'h-11 min-h-11 min-w-0 flex-1 px-2' : '!h-9 !min-h-9 px-3',
+                    filter === value
+                      ? 'text-foreground hover:bg-transparent hover:text-foreground'
+                      : 'hover:bg-interactive-hover/40 hover:text-foreground',
+                  )}
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {filter === value ? (
+                    <motion.span
+                      layoutId="scheduled-task-filter-pill"
+                      className="absolute inset-0 rounded-xl bg-[var(--surface-elevated)]"
+                      transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                  ) : null}
+                  <span className="relative z-[1]">{t(`sessions.scheduledTasks.workspace.filters.${value}`)}</span>
+                </Button>
+              ))}
+            </div>
+            <div className="flex min-w-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                className={cn(
+                  'shrink-0 rounded-full bg-foreground text-background transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-foreground/90 hover:text-background hover:shadow-sm active:scale-[0.97] motion-reduce:transition-none',
+                  isMobilePanel ? 'size-11 min-h-11 px-0 min-[400px]:w-auto min-[400px]:px-3.5' : '!h-9 !min-h-9 px-3.5',
+                )}
+                onClick={handleCreate}
+                disabled={!createProjectID}
+                aria-label={t('sessions.scheduledTasks.dialog.actions.create')}
+              >
+                <Icon name="add" className="h-4 w-4" /> <span className={cn(isMobilePanel && 'hidden min-[400px]:inline')}>{t('sessions.scheduledTasks.dialog.actions.create')}</span>
+              </Button>
+            </div>
+          </div>
+          <div className={cn('group relative w-full', isMobilePanel ? 'mt-3' : 'mt-7')}>
+            <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-[color,transform] duration-150 ease-out group-focus-within:scale-105 group-focus-within:text-foreground motion-reduce:transition-none" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t('sessions.scheduledTasks.workspace.search.placeholder')}
+              className={cn(
+                'rounded-full bg-[var(--surface-elevated)] pl-10 pr-4 ring-1 ring-inset ring-border/50 transition-[background-color,box-shadow,color] duration-200 ease-out hover:[&:not(:focus)]:ring-border focus:bg-[var(--surface-elevated)] focus:shadow-sm focus:ring-2 focus:ring-[var(--interactive-focus-ring)] motion-reduce:transition-none',
+                isMobilePanel ? 'h-11 min-h-11' : '!h-9 !min-h-9',
+              )}
+            />
+          </div>
+          </div>
+        </header>
 
-            {tasksContent}
-          </DialogContent>
-        </Dialog>
-      )}
+        <div className={cn('min-h-0 flex-1 overflow-y-auto', isMobilePanel ? 'overscroll-none px-3 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'px-6 pb-6 [scrollbar-gutter:stable]')}>
+          <div className="mx-auto w-full max-w-4xl border-t border-border/40 pt-4">
+          {failedProjectIds.length > 0 ? (
+            <div className="mb-3 rounded-xl border p-3 typography-meta" style={toneStyle('warning')}>
+              {t('sessions.scheduledTasks.workspace.partialLoadWarning')}
+            </div>
+          ) : null}
+          {tasksQuery.isLoading ? (
+            <div className="flex items-center gap-2 px-4 py-3 typography-meta text-muted-foreground">
+              <Icon name="loader-4" className="h-4 w-4 animate-spin" /> {t('sessions.scheduledTasks.dialog.loading')}
+            </div>
+          ) : tasksQuery.error ? (
+            <div className="rounded-xl border border-dashed border-border p-4 typography-meta text-muted-foreground">
+              {tasksQuery.error instanceof Error ? tasksQuery.error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed')}
+            </div>
+          ) : (
+            <AnimatePresence initial={false} mode="popLayout">
+              {filteredTasks.length === 0 ? (
+                <motion.div
+                  key="empty"
+                  initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className="rounded-xl border border-dashed border-border p-4 typography-meta text-muted-foreground"
+                >
+                  {tasks.length > 0 ? t('sessions.scheduledTasks.workspace.search.noResults') : t('sessions.scheduledTasks.dialog.empty.noTasks')}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="tasks"
+                  initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-1"
+                >
+                  <AnimatePresence initial={false} mode="popLayout">
+                  {filteredTasks.map((entry) => {
+                const { projectId, task } = entry;
+                const identityKey = taskIdentityKey({ projectId, taskId: task.id });
+                const selected = editorMode === 'edit' && selectedTaskIdentity !== null && taskIdentityKey(selectedTaskIdentity) === identityKey;
+                const nextAt = task.state?.nextRunAt;
+                const status = (task.state?.lastStatus || 'idle') as ScheduledTaskStatus;
+                const meta = STATUS_META[status];
+                const isBusy = mutatingTaskIdentity === identityKey;
+                const renderMenuItems = (Item: React.ElementType) => (
+                  <>
+                    <Item
+                      className={cn(isMobilePanel && 'min-h-11')}
+                      onClick={(event: React.MouseEvent) => {
+                        event.stopPropagation();
+                        void handleRunTask(entry);
+                      }}
+                      disabled={isBusy}
+                    >
+                      <Icon name="play" className="size-4" />
+                      {t('sessions.scheduledTasks.dialog.actions.runNow')}
+                    </Item>
+                    <Item
+                      className={cn(isMobilePanel && 'min-h-11')}
+                      onClick={(event: React.MouseEvent) => {
+                        event.stopPropagation();
+                        void handleToggleTask(entry, !task.enabled);
+                      }}
+                      disabled={isBusy}
+                    >
+                      <Icon name={task.enabled ? 'pause' : 'play'} className="size-4" />
+                      {task.enabled
+                        ? t('sessions.scheduledTasks.dialog.actions.pause')
+                        : t('sessions.scheduledTasks.dialog.actions.resume')}
+                    </Item>
+                    <Item
+                      onClick={(event: React.MouseEvent) => {
+                        event.stopPropagation();
+                        void handleDeleteTask(entry);
+                      }}
+                      disabled={isBusy}
+                      className={cn('text-destructive focus:text-destructive', isMobilePanel && 'min-h-11')}
+                    >
+                      <Icon name="delete-bin" className="size-4" />
+                      {t('sessions.scheduledTasks.dialog.actions.delete')}
+                    </Item>
+                  </>
+                );
+                return (
+                  <motion.div
+                    key={identityKey}
+                    layout="position"
+                    initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                  <ContextMenu
+                    open={contextMenuTaskIdentity === identityKey}
+                    onOpenChange={(open) => {
+                      if (open) {
+                        setDropdownMenuTaskIdentity(null);
+                      }
+                      setContextMenuTaskIdentity(open ? identityKey : null);
+                    }}
+                  >
+                    <div className="group flex w-full items-center gap-1">
+                    <ContextMenuTrigger
+                      render={(
+                        <button
+                          type="button"
+                          onClick={() => handleSelectTask(entry)}
+                          onContextMenu={!isMobilePanel && !isMobile ? (event) => {
+                            event.preventDefault();
+                            setDropdownMenuTaskIdentity(null);
+                            setContextMenuTaskIdentity(identityKey);
+                          } : undefined}
+                          className={cn(
+                            'flex min-h-11 min-w-0 flex-1 items-center rounded-xl border py-3 text-left outline-none transition-[background-color,border-color,box-shadow,transform,opacity] duration-150 ease-out active:scale-[0.995] focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] motion-reduce:transition-none',
+                            isMobilePanel ? 'gap-2.5 px-3' : 'gap-3 px-4',
+                            selected
+                              ? 'border-border/50 bg-[var(--surface-elevated)] shadow-sm'
+                              : 'border-transparent hover:bg-interactive-hover',
+                            !task.enabled && 'opacity-65',
+                          )}
+                          aria-pressed={selected}
+                        />
+                      )}
+                    >
+                    <span
+                      className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-[border-color,color,background-color] duration-150 motion-reduce:transition-none"
+                      style={task.enabled && meta.tone !== 'muted' ? { color: `var(--status-${meta.tone})` } : undefined}
+                    >
+                      <AnimatePresence initial={false} mode="wait">
+                        <motion.span
+                          key={`${task.enabled}-${status}`}
+                          initial={reduceMotion ? false : { opacity: 0, scale: 0.72 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.72 }}
+                          transition={{ duration: reduceMotion ? 0 : 0.15 }}
+                          className="flex"
+                        >
+                          <Icon name={task.enabled ? meta.Icon : 'pause'} className={cn('size-3.5', meta.spin && task.enabled && 'animate-spin')} />
+                        </motion.span>
+                      </AnimatePresence>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate typography-ui-label font-medium">{task.name}</span>
+                      <span className={cn('mt-0.5 min-w-0 gap-1 typography-micro text-muted-foreground', isMobilePanel ? 'flex flex-col items-start' : 'flex items-center')}>
+                        <span className="truncate">{formatSchedule(task, t)}</span>
+                        <span className={cn('shrink-0 text-muted-foreground/50', isMobilePanel && 'hidden')}>·</span>
+                        <span className="shrink-0 truncate">
+                          {nextAt ? formatRelativeTime(nextAt, t) : '—'}
+                        </span>
+                      </span>
+                    </span>
+                    </ContextMenuTrigger>
+                    <DropdownMenu
+                      open={dropdownMenuTaskIdentity === identityKey}
+                      onOpenChange={(open) => {
+                        if (open) {
+                          setContextMenuTaskIdentity(null);
+                        }
+                        setDropdownMenuTaskIdentity(open ? identityKey : null);
+                      }}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            'shrink-0 rounded-lg text-muted-foreground transition-[opacity,transform,background-color] duration-150 ease-out active:scale-95 data-[popup-open]:bg-interactive-hover motion-reduce:transition-none',
+                            isMobilePanel
+                              ? 'size-11'
+                              : 'size-8 translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 data-[popup-open]:translate-x-0 data-[popup-open]:opacity-100',
+                            selected && 'opacity-100',
+                          )}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={t('sessions.scheduledTasks.dialog.actions.moreAria', { taskName: task.name })}
+                        >
+                          <Icon name="more-2" className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-40 motion-reduce:transition-none" onClick={(event) => event.stopPropagation()}>
+                        {renderMenuItems(DropdownMenuItem)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    </div>
+                    <ContextMenuContent className="min-w-40 motion-reduce:transition-none">
+                      {renderMenuItems(ContextMenuItem)}
+                    </ContextMenuContent>
+                  </ContextMenu>
+                  </motion.div>
+                );
+                  })}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
+          </div>
+        </div>
+      </section>
 
-      <ScheduledTaskEditorDialog
-        open={editorOpen}
-        task={editorTask}
-        onOpenChange={setEditorOpen}
-        onSave={handleSaveTask}
-      />
-    </>
+      {!isMobile ? (
+        <AnimatePresence initial={false}>
+          {editorMode !== 'closed' ? (
+          <motion.div
+            key="scheduled-task-details"
+            initial={reduceMotion ? { opacity: 1, width: 0 } : { opacity: 0, width: 0, x: 24 }}
+            animate={{ opacity: 1, width: '36vw', x: 0 }}
+            exit={reduceMotion ? { opacity: 0, width: 0 } : { opacity: 0, width: 0, x: 24 }}
+            transition={{ duration: reduceMotion ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+            className="h-full min-h-0 max-w-[480px] shrink-0 overflow-hidden"
+          >
+            <aside className="h-full min-h-0 w-[36vw] min-w-[380px] max-w-[480px] border-l border-border/60 bg-background">
+              <ScheduledTaskEditorDialog
+                open
+                presentation="panel"
+                task={editorMode === 'edit' ? selectedTask : null}
+                onOpenChange={handleCancelEditor}
+                onSave={handleSaveTask}
+                onDirtyChange={setDraftDirty}
+                onRun={async () => { if (selectedTaskEntry) await handleRunTask(selectedTaskEntry); }}
+                onDelete={async () => { if (selectedTaskEntry) await handleDeleteTask(selectedTaskEntry); }}
+                onToggleEnabled={async (_task, enabled) => { if (selectedTaskEntry) await handleToggleTask(selectedTaskEntry, enabled); }}
+                actionBusy={Boolean(mutatingTaskIdentity)}
+                projectID={selectedTaskIdentity?.projectId || createProjectID}
+                projectOptions={editorProjectOptions}
+                onProjectChange={editorMode === 'create' ? setCreateProjectID : undefined}
+              />
+            </aside>
+          </motion.div>
+          ) : null}
+        </AnimatePresence>
+      ) : editorMode !== 'closed' ? (
+        <ScheduledTaskEditorDialog
+          open
+          presentation={isMobilePanel ? 'mobile-panel' : undefined}
+          task={editorMode === 'edit' ? selectedTask : null}
+          onOpenChange={handleCancelEditor}
+          onSave={handleSaveTask}
+          onDirtyChange={setDraftDirty}
+          onRun={async () => { if (selectedTaskEntry) await handleRunTask(selectedTaskEntry); }}
+          onDelete={async () => { if (selectedTaskEntry) await handleDeleteTask(selectedTaskEntry); }}
+          onToggleEnabled={async (_task, enabled) => { if (selectedTaskEntry) await handleToggleTask(selectedTaskEntry, enabled); }}
+          actionBusy={Boolean(mutatingTaskIdentity)}
+          projectID={selectedTaskIdentity?.projectId || createProjectID}
+          projectOptions={editorProjectOptions}
+          onProjectChange={editorMode === 'create' ? setCreateProjectID : undefined}
+        />
+      ) : null}
+    </div>
   );
 }

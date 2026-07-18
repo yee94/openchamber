@@ -32,6 +32,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       setupProxy,
       scheduleOpenCodeApiDetection,
       bootstrapOpenCodeAtStartup,
+      setManagedOpenCodeBridgeOrigin,
       staticRoutesRuntime,
       process,
       crypto,
@@ -99,7 +100,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
 
     setupProxy(app);
     scheduleOpenCodeApiDetection();
-    void bootstrapOpenCodeAtStartup();
 
     if (apiOnly) {
       staticRoutesRuntime.registerApiOnlyFallbackRoutes(app);
@@ -132,6 +132,10 @@ export const createStartupPipelineRuntime = (dependencies) => {
       onTunnelReady,
     });
     tunnelRuntimeContext.setActivePort(startupResult.activePort);
+    if (typeof setManagedOpenCodeBridgeOrigin === 'function') {
+      setManagedOpenCodeBridgeOrigin(`http://127.0.0.1:${startupResult.activePort}`);
+    }
+    void bootstrapOpenCodeAtStartup();
 
     serverStartupRuntime.attachProcessHandlers({ attachSignals });
 

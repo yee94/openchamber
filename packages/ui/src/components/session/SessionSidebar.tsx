@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell } from '@/lib/desktop';
@@ -349,6 +351,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const reorderProjectsById = useProjectsStore((state) => state.reorderProjectsById);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const activeMainTab = useUIStore((state) => state.activeMainTab);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
   const setSettingsDialogOpen = useUIStore(
     (state) => state.setSettingsDialogOpen,
@@ -356,6 +359,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
   const setSessionSwitcherOpen = useUIStore(
     (state) => state.setSessionSwitcherOpen,
+  );
+  const setScheduledTasksDialogOpen = useUIStore(
+    (state) => state.setScheduledTasksDialogOpen,
   );
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
@@ -770,6 +776,33 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
     setSettingsDialogOpen(true);
   }, [mobileVariant, setSessionSwitcherOpen, setSettingsDialogOpen]);
+
+  const handleNewTask = React.useCallback(() => {
+    setActiveMainTab("chat");
+    openNewSessionDraft();
+    if (mobileVariant) {
+      setSessionSwitcherOpen(false);
+    }
+  }, [
+    mobileVariant,
+    openNewSessionDraft,
+    setActiveMainTab,
+    setSessionSwitcherOpen,
+  ]);
+
+  const handleOpenScheduledTasks = React.useCallback(() => {
+    if (!mobileVariant) {
+      setActiveMainTab("scheduled");
+      return;
+    }
+    setScheduledTasksDialogOpen(true);
+    setSessionSwitcherOpen(false);
+  }, [
+    mobileVariant,
+    setActiveMainTab,
+    setScheduledTasksDialogOpen,
+    setSessionSwitcherOpen,
+  ]);
 
   const showSidebarUpdateButton =
     updateStore.available &&
@@ -2408,6 +2441,40 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     !isVSCode && !hasSessionSearchQuery ? (
       <>
         {showBrandInContent ? <SidebarBrandMark /> : null}
+        <div className="space-y-0.5 py-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full justify-start font-normal",
+              mobileVariant && "h-11",
+            )}
+            onClick={handleNewTask}
+          >
+            <Icon name="chat-new" className="size-4 text-muted-foreground" />
+            <span className="truncate">
+              {t("sessions.scheduledTasks.dialog.actions.newTask")}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full justify-start font-normal",
+              activeMainTab === "scheduled" && "bg-interactive-selection text-interactive-selection-foreground",
+              mobileVariant && "h-11",
+            )}
+            onClick={handleOpenScheduledTasks}
+          >
+            <Icon
+              name="time"
+              className="size-4 text-muted-foreground"
+            />
+            <span className="truncate">
+              {t("sessions.sidebar.header.actions.scheduledTasks")}
+            </span>
+          </Button>
+        </div>
         {pinnedItems.length > 0 ? (
           <SidebarPinnedSessions
             items={pinnedItems}
@@ -2472,7 +2539,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       <SidebarProjectsList
         topContent={topContent}
-        hasLeadingSection={pinnedItems.length > 0}
+        hasLeadingSection={topContent !== null && pinnedItems.length > 0}
         headerAccessory={pinnedItems.length === 0 ? displayModeMenu : null}
         sectionsForRender={sectionsForSidebarRender}
         projectSections={projectSections}

@@ -60,6 +60,10 @@
     --text-micro: 0.8125rem !important;
   }
 
+  :root.mobile-pointer:not(.desktop-runtime) .markdown-content ul > li::before {
+    left: -1rem;
+  }
+
   /* Additional override for elements using typography classes */
   :root.mobile-pointer:not(.desktop-runtime) .typography-markdown,
   :root.mobile-pointer:not(.desktop-runtime) .typography-code,
@@ -517,7 +521,8 @@
     margin-bottom: 0;
   }
 
-  .pwa-overlay-panel .pwa-overlay-scroll {
+  .pwa-overlay-panel .pwa-overlay-scroll,
+  .oc-mobile-surface-shell .pwa-overlay-scroll {
     padding-bottom: calc(var(--oc-safe-area-bottom-visual, 0px) + 12px);
   }
 }
@@ -698,6 +703,11 @@
     - var(--oc-keyboard-inset, 0px)
     - max(0.75rem, env(safe-area-inset-top))
   );
+}
+
+:root.oc-capacitor-app .pwa-overlay-panel .pwa-overlay-scroll,
+:root.oc-capacitor-app .oc-mobile-surface-shell .pwa-overlay-scroll {
+  padding-bottom: calc(var(--oc-safe-area-bottom-visual, 0px) + 12px);
 }
 
 /* Full-screen scroll views (e.g. the connect/login screen) live outside the app

@@ -1,0 +1,1 @@
+Use `scheduled_task` only for an explicit scheduled-task request. Ask a clarifying question for ambiguous schedules. Use the current session model by default, and return the created task result after create.

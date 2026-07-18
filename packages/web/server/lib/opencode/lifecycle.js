@@ -38,6 +38,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     buildAugmentedPath,
     buildManagedOpenCodePath,
     getManagedOpenCodeShellEnvSnapshot,
+    managedCapabilitiesRuntime = null,
     getActiveSessionCount = () => 0,
   } = deps;
 
@@ -281,6 +282,8 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    managedCapabilitiesRuntime?.recordManagedChildPid(child.pid);
+    state.managedCapabilityIdentity = managedCapabilitiesRuntime?.getCapabilityIdentity?.() ?? null;
 
     const url = await new Promise((resolve, reject) => {
       let stdout = '';
@@ -484,18 +487,22 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       : {};
 
     try {
+      const childEnv = {
+        ...shellEnv,
+        ...process.env,
+        PATH: envPath,
+        OPENCODE_SERVER_PASSWORD: openCodePassword,
+      };
+      const managedEnv = managedCapabilitiesRuntime
+        ? await managedCapabilitiesRuntime.prepareManagedChildEnv(childEnv)
+        : childEnv;
       const serverInstance = await createManagedOpenCodeServerProcess({
         hostname: env.ENV_CONFIGURED_OPENCODE_HOSTNAME,
         port: spawnPort,
         timeout: 30000,
         cwd: state.openCodeWorkingDirectory,
         shellEnvKeysCount: Object.keys(shellEnv).length,
-        env: {
-          ...shellEnv,
-          ...process.env,
-          PATH: envPath,
-          OPENCODE_SERVER_PASSWORD: openCodePassword,
-        },
+        env: managedEnv,
       });
 
       if (!serverInstance || !serverInstance.url) {
@@ -797,8 +804,17 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       }
 
       syncFromHmrState();
-      if (await isOpenCodeProcessHealthy()) {
+      if (managedCapabilitiesRuntime && state.managedCapabilityIdentity) {
+        managedCapabilitiesRuntime.setCapabilityIdentity(state.managedCapabilityIdentity);
+      }
+      const reusableManagedChild = managedCapabilitiesRuntime
+        ? managedCapabilitiesRuntime.hasValidIdentity()
+        : true;
+      if (await isOpenCodeProcessHealthy() && reusableManagedChild) {
         console.log(`[HMR] Reusing existing OpenCode process on port ${state.openCodePort}`);
+      } else if (state.openCodeProcess && !state.isExternalOpenCode && await isOpenCodeProcessHealthy()) {
+        console.log('[HMR] Restarting managed OpenCode because scheduled-task capability identity is stale');
+        await restartOpenCode();
       } else if (env.ENV_SKIP_OPENCODE_START && env.ENV_EFFECTIVE_PORT) {
         const label = env.ENV_CONFIGURED_OPENCODE_HOST ? env.ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${env.ENV_EFFECTIVE_PORT}`;
         console.log(`Using external OpenCode server at ${label} (skip-start mode)`);

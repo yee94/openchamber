@@ -24,6 +24,7 @@ export const createHmrStateRuntime = (dependencies) => {
         userProvidedOpenCodePassword: undefined,
         openCodeAuthPassword: null,
         openCodeAuthSource: null,
+        managedCapabilityIdentity: null,
       };
     }
     return globalThisLike[stateKey];
@@ -65,6 +66,7 @@ export const createHmrStateRuntime = (dependencies) => {
     hmrState.openCodeWorkingDirectory = runtime.openCodeWorkingDirectory;
     hmrState.openCodeAuthPassword = runtime.openCodeAuthPassword;
     hmrState.openCodeAuthSource = runtime.openCodeAuthSource;
+    hmrState.managedCapabilityIdentity = runtime.managedCapabilityIdentity ?? null;
   };
 
   const restoreRuntimeFromState = ({ hmrState, userProvidedOpenCodePassword }) => {
@@ -78,6 +80,7 @@ export const createHmrStateRuntime = (dependencies) => {
       openCodeWorkingDirectory: hmrState.openCodeWorkingDirectory,
       openCodeAuthPassword: auth.openCodeAuthPassword,
       openCodeAuthSource: auth.openCodeAuthSource,
+      managedCapabilityIdentity: hmrState.managedCapabilityIdentity ?? null,
     };
   };
 

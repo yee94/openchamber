@@ -62,18 +62,21 @@ interface MobileWindowMotionProps {
   className?: string;
   scrimClassName?: string;
   surfaceClassName?: string;
+  surfaceElementRef?: React.Ref<HTMLDivElement>;
   dismissGesture?: boolean | MobileWindowMotionDismissGestureConfig;
+  onExitComplete?: () => void;
   ariaLabel: string;
 }
 
 export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
-  id, open, onOpenChange, keepMounted = false, presentation = 'sheet', edge = 'bottom', children, className, scrimClassName, surfaceClassName, dismissGesture = false, ariaLabel,
+  id, open, onOpenChange, keepMounted = false, presentation = 'sheet', edge = 'bottom', children, className, scrimClassName, surfaceClassName, surfaceElementRef, dismissGesture = false, onExitComplete, ariaLabel,
 }) => {
   const overlayRootRef = React.useRef<HTMLElement | null>(null);
   const scrimRef = React.useRef<HTMLDivElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
   const openRef = React.useRef(open);
   const onOpenChangeRef = React.useRef(onOpenChange);
+  const onExitCompleteRef = React.useRef(onExitComplete);
   const progressRef = React.useRef(0);
   const pendingProgressRef = React.useRef(0);
   const frameRef = React.useRef<number | null>(null);
@@ -104,16 +107,24 @@ export const MobileWindowMotion: React.FC<MobileWindowMotionProps> = ({
   const setSurfaceRef = React.useCallback((surface: HTMLDivElement | null) => {
     surfaceRef.current = surface;
     dismissGestureRef(surface);
-  }, [dismissGestureRef]);
+    if (typeof surfaceElementRef === 'function') {
+      surfaceElementRef(surface);
+    } else if (surfaceElementRef && typeof surfaceElementRef === 'object') {
+      (surfaceElementRef as React.MutableRefObject<HTMLDivElement | null>).current = surface;
+    }
+  }, [dismissGestureRef, surfaceElementRef]);
 
   const deactivate = React.useCallback(() => {
+    if (!activeRef.current) return;
     activeRef.current = false;
     setActive(false);
     if (!keepMounted) setMounted(false);
+    onExitCompleteRef.current?.();
   }, [keepMounted]);
 
   openRef.current = open;
   onOpenChangeRef.current = onOpenChange;
+  onExitCompleteRef.current = onExitComplete;
   if (typeof document !== 'undefined' && !overlayRootRef.current) overlayRootRef.current = ensureOverlayRoot();
 
   const applyFrame = React.useCallback((progress: number) => {

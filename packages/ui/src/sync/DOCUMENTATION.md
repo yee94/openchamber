@@ -199,6 +199,13 @@ becoming the cached startup result consumed by the session coordinator.
   commits a shared transport response into its own store.
 - Older history is user-driven pagination (`loadMore`) only. Desktop and VS Code
   must not automatically prepend a 100-message page after initial render.
+- Composer session mentions list only other sessions whose message state is
+  already materialized in the current directory store. Sending a mention reads
+  that bounded local message/part snapshot and adds a size-limited hidden context
+  part; opening the mention menu and sending perform no referenced-session fetch.
+  The composer stores a stable `@session:<id>` token and renders it as an atomic
+  chat icon plus colored session title. Visible sent text resolves the token to
+  `@<session title>`.
 - A rejected shared request is removed from the coordinator so the next
   explicit/reactive attempt can retry; failure must never be cached as an empty
   authoritative history.
@@ -302,7 +309,7 @@ becoming the cached startup result consumed by the session coordinator.
   the next persistent check time, which drives the single global scheduler wake.
 Exhausted checks or a reached deadline resolve to editable `unresolved` items.
 Auto-send never re-POSTs unresolved heads (ambiguous delivery). Explicit manual
-Send resets the head to `queued` and POSTs once more; Edit and Remove still
+Send may select any recoverable row, atomically promote it to the scoped head, and POST once; automatic dispatch retains FIFO head selection. Edit and Remove still
 release the terminal state without another POST. `running` auto-review runs
 block queue drain only when their stable `runtimeKey` matches the active runtime;
 legacy records without a runtime key allow drain. Completed, stopped, and error
@@ -327,8 +334,8 @@ missing message materialization preserves the idle path.
   `/fork`, `/undo`, and `/redo`) consume only their command text before awaiting
   their action, clear the source session's legacy text draft synchronously, and
   preserve attachments, inline drafts, synthetic parts, linked context, and
-  queue state. Legacy queue rows remain visible in their legacy scope until an
-  explicit send path performs a bulk bind into the active bound scope.
+  queue state. Legacy queue rows remain visible in their legacy scope until a
+  manual dispatch path performs a safe bulk bind into the active bound scope.
 
 ## Session action rules
 
@@ -432,7 +439,7 @@ production queue admission and atomic queue cutover.
 ### Queue dispatcher execution invariants
 
 `useQueuedMessageAutoSend.ts` owns the v3 dispatch flight registry keyed by the
-exact scope, queue item, and operation identity. Admission message IDs are
+exact scope, queue item, and operation identity plus one scope-level flight that lasts through POST promise settlement. Admission message IDs are
 candidates. Before every real POST, v3 reads the current largest scoped `msg_`
 message ID, rotates to a fresh ID above that floor, and durably enters `sending`
 as one barrier. Ambiguous delivery retains that fresh ID for reconciliation;
@@ -442,7 +449,7 @@ automatic dispatches share one POST flight; reconciliation queries retain their
 separate scheduler flight. Payload acquisition returns a monotonic token; each non-confirmed path
 releases its own token. Durable confirmation removes queue and send references
 before one best-effort notification. The planner exposes one head and one
-nearest wake per scope; Lane 4 owns session busy and blocked eligibility.
+nearest wake per scope; it observes scope flights so confirmation before POST settlement never starts a following row. Lane 4 must preserve manual arbitrary-row promotion, scope single-flight, and automatic FIFO eligibility at cutover.
 Each queued dispatch passes its verified bound-scope directory through the
 session send target, optimistic route, and OpenCode request. Duplicate session
 IDs retain their exact queue-owner directory across manual and automatic

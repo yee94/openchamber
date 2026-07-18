@@ -1729,6 +1729,7 @@ const AssistantMessageBody = React.memo(({
                                 <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
                                     <ToolPart
                                         part={toolPart}
+                                        messageId={messageId}
                                         isExpanded={expandedTools.has(toolPart.id)}
                                         onToggle={onToggleTool}
                                         isMobile={isMobile}

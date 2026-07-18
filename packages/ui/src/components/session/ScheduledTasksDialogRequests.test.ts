@@ -4,12 +4,119 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 describe('ScheduledTasksDialog queries', () => {
-  test('scopes cached tasks and mutation invalidation by runtime and project', async () => {
+  test('keeps one global query and one scheduled-task business UI', async () => {
     const content = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'ScheduledTasksDialog.tsx'), 'utf8');
-    expect(content).toContain("queryKeys.scoped('scheduled-tasks', selectedProjectID)");
-    expect(content).toContain('useQuery({');
+    expect(content).toContain("const globalScheduledTasksQueryKey = queryKeys.scoped('scheduled-tasks')");
+    expect(content).toContain('queryKey: globalScheduledTasksQueryKey');
+    expect(content).toContain('queryFn: fetchGlobalScheduledTasks');
+    expect(content.match(/useQuery\(\{/g)).toHaveLength(1);
+    expect(content.match(/export function ScheduledTasksWorkspace/g)).toHaveLength(1);
     expect(content).toContain('useMutation({');
-    expect(content).toContain("queryKeys.scoped('scheduled-tasks', projectID)");
     expect(content).toContain('tasksQuery.error ? (');
+  });
+
+  test('uses the global endpoint and preserves unrelated project records after project mutations', async () => {
+    const directory = dirname(fileURLToPath(import.meta.url));
+    const [content, apiContent] = await Promise.all([
+      readFile(join(directory, 'ScheduledTasksDialog.tsx'), 'utf8'),
+      readFile(join(directory, '../../lib/scheduledTasksApi.ts'), 'utf8'),
+    ]);
+    expect(apiContent).toContain("runtimeFetch('/api/openchamber/scheduled-tasks')");
+    expect(apiContent).toContain('export type GlobalScheduledTasksResponse');
+    expect(content).toContain('const replaceProjectTasks =');
+    expect(content).toContain('current?.tasks.filter((entry) => entry.projectId !== projectId)');
+    expect(content).toContain('item.projectId === projectID && item.task.id === task.id');
+  });
+
+  test('uses the workspace inside the mobile overlay without project list filtering', async () => {
+    const directory = dirname(fileURLToPath(import.meta.url));
+    const [content, editorContent] = await Promise.all([
+      readFile(join(directory, 'ScheduledTasksDialog.tsx'), 'utf8'),
+      readFile(join(directory, 'ScheduledTaskEditorDialog.tsx'), 'utf8'),
+    ]);
+    expect(content).toContain('<MobileOverlayPanel');
+    expect(content).toContain('<ScheduledTasksWorkspace presentation="mobile-panel" open={open} onOpenChange={setOpen} />');
+    expect(content).toContain('containedBody');
+    expect(content).not.toContain('fetchScheduledTasks(');
+    expect(content).not.toContain('selectedProjectID');
+    expect(content).not.toContain('projectSelector');
+    expect(editorContent).toContain('{projectOptions.length > 0 ? (');
+    expect(editorContent).toContain('disabled={!onProjectChange}');
+  });
+
+  test('uses composite identities, shows partial failures, and refreshes every task-run event', async () => {
+    const content = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'ScheduledTasksDialog.tsx'), 'utf8');
+    expect(content).toContain('const taskIdentityKey = ({ projectId, taskId }: TaskIdentity)');
+    expect(content).toContain('key={identityKey}');
+    expect(content).toContain('projectId: projectID, task');
+    expect(content).toContain("event.type !== 'scheduled-task-ran'");
+    expect(content).toContain("t('sessions.scheduledTasks.workspace.partialLoadWarning')");
+    expect(content).toContain('setSelectedTaskIdentity({ projectId: projectID, taskId: nextSelectedTask.id })');
+  });
+
+  test('shares short enabled-state action labels between task dropdown and context menus', async () => {
+    const content = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'ScheduledTasksDialog.tsx'), 'utf8');
+    expect(content).toContain('const renderMenuItems = (Item: React.ElementType) =>');
+    expect(content).toContain('void handleToggleTask(entry, !task.enabled)');
+    expect(content).toContain("task.enabled ? 'pause' : 'play'");
+    expect(content).toContain("t('sessions.scheduledTasks.dialog.actions.pause')");
+    expect(content).toContain("t('sessions.scheduledTasks.dialog.actions.resume')");
+    expect(content).toContain('{renderMenuItems(DropdownMenuItem)}');
+    expect(content).toContain('{renderMenuItems(ContextMenuItem)}');
+  });
+
+  test('keeps the selected task editor open when deleting a different composite task identity', async () => {
+    const content = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'ScheduledTasksDialog.tsx'), 'utf8');
+    expect(content).toContain('const deletedTaskIdentity = taskIdentityKey({ projectId, taskId: task.id });');
+    expect(content).toContain('taskIdentityKey(selectedTaskIdentity) === deletedTaskIdentity');
+    expect(content).toContain('}, [deleteTaskMutation, selectedTaskIdentity, t]);');
+  });
+
+  test('keeps workspace controls and rows on shared axes with reduced-motion-aware transitions', async () => {
+    const directory = dirname(fileURLToPath(import.meta.url));
+    const [workspaceContent, editorContent] = await Promise.all([
+      readFile(join(directory, 'ScheduledTasksDialog.tsx'), 'utf8'),
+      readFile(join(directory, 'ScheduledTaskEditorDialog.tsx'), 'utf8'),
+    ]);
+    expect(workspaceContent.match(/mx-auto w-full max-w-4xl/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(workspaceContent).toContain('layoutId="scheduled-task-filter-pill"');
+    expect(workspaceContent).toContain('<AnimatePresence initial={false} mode="popLayout">');
+    expect(workspaceContent).toContain('key="empty"');
+    expect(workspaceContent).toContain('key="tasks"');
+    expect(workspaceContent).toContain('exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}');
+    expect(workspaceContent).toContain('h-11 min-h-11 rounded-full bg-[var(--surface-elevated)] pl-10 pr-4');
+    expect(workspaceContent).toContain("initial={reduceMotion ? { opacity: 1, width: 0 } : { opacity: 0, width: 0, x: 24 }}");
+    expect(workspaceContent).toContain('motion-reduce:transition-none');
+    expect(editorContent).toContain('motion-reduce:animate-none');
+    expect(editorContent).toContain('groupedCardClassName');
+  });
+
+  test('exposes the scheduled tasks overlay from the dedicated mobile menu', async () => {
+    const content = await readFile(join(dirname(fileURLToPath(import.meta.url)), '../../apps/MobileApp.tsx'), 'utf8');
+    expect(content).toContain("key: 'scheduled'");
+    expect(content).toContain("icon: 'time'");
+    expect(content).toContain("label: t('sessions.sidebar.header.actions.scheduledTasks')");
+    expect(content).toContain('onSelect: () => setScheduledTasksDialogOpen(true)');
+    expect(content).toContain('|| scheduledTasksDialogOpen');
+    expect(content).toContain('if (scheduledTasksDialogOpen) {');
+    expect(content).toContain("window.dispatchEvent(new Event('oc:scheduled-tasks-close-request'));");
+    expect(content).toContain('<ScheduledTasksDialog />');
+  });
+
+  test('keeps the mobile editor contained and routes close requests through its draft guard', async () => {
+    const directory = dirname(fileURLToPath(import.meta.url));
+    const [workspaceContent, overlayContent, mobileAppContent] = await Promise.all([
+      readFile(join(directory, 'ScheduledTasksDialog.tsx'), 'utf8'),
+      readFile(join(directory, '../ui/MobileOverlayPanel.tsx'), 'utf8'),
+      readFile(join(directory, '../../apps/MobileApp.tsx'), 'utf8'),
+    ]);
+    expect(workspaceContent).toContain("presentation?: 'workspace' | 'mobile-panel'");
+    expect(workspaceContent).toContain("presentation={isMobilePanel ? 'panel' : undefined}");
+    expect(workspaceContent).toContain('if (editorMode !== \'closed\')');
+    expect(workspaceContent).toContain('handleCancelEditor(false)');
+    expect(workspaceContent).toContain("window.addEventListener('oc:scheduled-tasks-close-request', handleCloseRequest)");
+    expect(overlayContent).toContain('containedBody?: boolean');
+    expect(overlayContent).toContain("'min-h-0 flex-1 overflow-hidden'");
+    expect(mobileAppContent).toContain("window.dispatchEvent(new Event('oc:scheduled-tasks-close-request'));");
   });
 });

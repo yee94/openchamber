@@ -439,6 +439,7 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
   private generateChatColors(chat: Record<string, string>, theme: Theme): string[] {
     const vars: string[] = [];
     const chatBackground = chat.background || theme.colors.surface.background;
+    const composerSkill = chat.composerSkill || this.getDefaultComposerSkillColor(theme);
 
     vars.push(`  --chat-background: ${chatBackground};`);
     vars.push(`  --chat-user-message: ${chat.userMessage || theme.colors.surface.foreground};`);
@@ -448,6 +449,7 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     vars.push(`  --chat-timestamp: ${chat.timestamp || theme.colors.surface.mutedForeground};`);
     vars.push(`  --chat-divider: ${chat.divider || theme.colors.interactive.border};`);
     vars.push(`  --chat-typing: ${chat.typing || theme.colors.surface.mutedForeground};`);
+    vars.push(`  --chat-composer-skill: ${composerSkill};`);
 
     return vars;
   }
@@ -463,8 +465,15 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     vars.push(`  --chat-timestamp: ${theme.colors.surface.mutedForeground};`);
     vars.push(`  --chat-divider: ${theme.colors.interactive.border};`);
     vars.push(`  --chat-typing: ${theme.colors.surface.mutedForeground};`);
+    vars.push(`  --chat-composer-skill: ${this.getDefaultComposerSkillColor(theme)};`);
 
     return vars;
+  }
+
+  private getDefaultComposerSkillColor(theme: Theme): string {
+    return theme.metadata.variant === 'dark'
+      ? this.lighten(theme.colors.status.warning, 25)
+      : theme.colors.status.warning;
   }
 
   private generateToolColors(tools: Theme['colors']['tools'], theme: Theme): string[] {

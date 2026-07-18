@@ -103,7 +103,6 @@ export function SidebarPinnedSessions({
     <div className="pb-1">
       <SidebarSectionHeader
         title={t('directoryTree.section.pinned')}
-        isFirst
         onToggle={() => setCollapsed((value) => !value)}
         expanded={!collapsed}
         accessory={headerAccessory}

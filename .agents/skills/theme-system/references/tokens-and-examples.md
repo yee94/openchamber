@@ -43,6 +43,10 @@ Each family may expose foreground, background, and border variants.
 
 Primary means “act”; selection means “currently active.” Do not use primary to mark ordinary selected tabs or rows.
 
+### Chat
+
+- `chat.composerSkill`: Skill mentions rendered in the chat composer
+
 ### Syntax
 
 Use `syntax.*` only for code display: code backgrounds/text, keywords, strings, and diff highlights. Never use syntax colors for ordinary UI chrome.

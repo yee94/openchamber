@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getEffectiveShortcutCombos } from './shortcuts';
+import { getEffectiveShortcutCombo, getEffectiveShortcutCombos } from './shortcuts';
+
+describe('getEffectiveShortcutCombo', () => {
+  test('uses Ctrl+backtick as the default terminal shortcut', () => {
+    expect(getEffectiveShortcutCombo('toggle_terminal')).toBe('ctrl+backtick');
+  });
+});
 
 describe('getEffectiveShortcutCombos', () => {
   test('returns the default session navigation shortcut and its alias', () => {

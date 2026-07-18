@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { updateBrowserURL } from './serializeRoute';
 import type { AppRouteState } from './serializeRoute';
+import { parseRoute } from './parseRoute';
 import { isEmbeddedSessionChat, resetEmbeddedSessionChatCache } from '@/components/layout/contextPanelEmbeddedChat';
 
 const originalWindow = globalThis.window;
@@ -96,6 +97,21 @@ describe('updateBrowserURL embedded-session-chat guard', () => {
 
     const writtenURL = historyOf().lastURL ?? '';
     expect(writtenURL).toContain('session=ses_main');
+  });
+});
+
+describe('scheduled tasks route', () => {
+  test('round-trips through URL serialization and parsing', () => {
+    const state: AppRouteState = {
+      ...sessionState('ses_main'),
+      tab: 'scheduled',
+    };
+
+    updateBrowserURL(state, { replace: true, force: true });
+
+    expect(historyOf().lastURL).toContain('tab=scheduled');
+    expect(historyOf().lastURL).not.toContain('session=');
+    expect(parseRoute(new URLSearchParams('tab=scheduled')).tab).toBe('scheduled');
   });
 });
 

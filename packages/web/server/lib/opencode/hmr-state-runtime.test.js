@@ -21,4 +21,12 @@ describe('hmr state runtime', () => {
 
     expect(runtime.getOrCreateHmrState().openCodeWorkingDirectory).toBe('/Users/example');
   });
+
+  it('synchronizes managed capability identity across HMR state', () => {
+    const runtime = createRuntime();
+    const state = runtime.getOrCreateHmrState();
+    const identity = { version: '1', origin: 'http://127.0.0.1:3000', token: 'a'.repeat(64), childPid: 42 };
+    runtime.syncStateFromRuntime(state, { managedCapabilityIdentity: identity });
+    expect(runtime.restoreRuntimeFromState({ hmrState: state, userProvidedOpenCodePassword: null }).managedCapabilityIdentity).toEqual(identity);
+  });
 });

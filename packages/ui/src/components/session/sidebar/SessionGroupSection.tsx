@@ -1129,7 +1129,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
       ) : null}
       {(remainingCount > 0 || hasRemoteSessions || canShowLess) ? (
         <div
-          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'flex w-full items-center gap-3')}
+          className={cn(SIDEBAR_MUTED_HINT_CLASS, 'flex w-full items-center gap-3 text-muted-foreground/60')}
           style={{ paddingLeft: getSidebarRowPaddingLeft(contentDepth) }}
         >
           {remainingCount > 0 || hasRemoteSessions ? (
@@ -1138,7 +1138,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
               onClick={() => showMoreGroupSessions(groupKey, baseVisibleSessions.length, totalSessions)}
               disabled={isLoadingRemoteSessions}
               className={cn(
-                'text-left hover:text-foreground hover:underline disabled:pointer-events-none',
+                'text-left transition-colors hover:text-muted-foreground/80 disabled:pointer-events-none',
                 isLoadingRemoteSessions && 'animate-pulse',
               )}
             >
@@ -1149,7 +1149,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
             <button
               type="button"
               onClick={() => resetGroupSessionLimit(groupKey)}
-              className="text-left hover:text-foreground hover:underline"
+              className="text-left transition-colors hover:text-muted-foreground/80"
             >
               {t('sessions.sidebar.group.showFewer')}
             </button>

@@ -149,7 +149,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'toggle_terminal',
-    defaultCombo: 'mod+backtick',
+    defaultCombo: 'ctrl+backtick',
     label: 'Toggle terminal',
     description: 'Toggle the integrated terminal',
     customizable: true,

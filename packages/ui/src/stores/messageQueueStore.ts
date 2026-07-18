@@ -182,11 +182,14 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
     let dispatched: QueueItem | null = null;
     set((state) => {
       const queue = state.queuedMessages[key];
-      const item = queue?.[0] as QueueItem | undefined;
+      const index = manual
+        ? queue?.findIndex((candidate) => queueScopeKey((candidate as QueueItem).owner) === key && sameIdentity(candidate as QueueItem, expectedIdentity)) ?? -1
+        : 0;
+      const item = index >= 0 ? queue?.[index] as QueueItem | undefined : undefined;
       const eligible = item?.status === 'queued'
         || (item?.status === 'retrying' && (manual || (item.nextAttemptAt ?? 0) <= now))
         || (manual && (item?.status === 'failed' || item?.status === 'unresolved'));
-      if (!item || queueScopeKey(item.owner) !== key || !sameIdentity(item, expectedIdentity) || !eligible) return state;
+      if (!item || queueScopeKey(item.owner) !== key || !sameIdentity(item, expectedIdentity) || !eligible || queue?.some((candidate) => locked(candidate as QueueItem))) return state;
       dispatched = {
         ...item,
         messageID: freshMessageID,
@@ -200,7 +203,8 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
         reconciliationNextCheckAt: undefined,
       };
       const nextQueue = queue.slice();
-      nextQueue[0] = dispatched;
+      nextQueue.splice(index, 1);
+      nextQueue.unshift(dispatched);
       return { queuedMessages: { ...state.queuedMessages, [key]: nextQueue } };
     });
     return dispatched;

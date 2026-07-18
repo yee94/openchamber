@@ -24,6 +24,12 @@ import {
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
+type DiffLoadState = {
+  key: string | null;
+  loading: boolean;
+  error: string | null;
+  resolved: boolean;
+};
 
 const normalizePath = (value?: string | null): string => (value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
 
@@ -51,9 +57,11 @@ type MobileChangesSurfaceProps = {
   initialDiffPath?: string | null;
   initialDiffStaged?: boolean;
   initialDiffTargetLine?: number | null;
+  /** Let an owning modal render the title and close control for a directly opened diff. */
+  hideDiffHeader?: boolean;
 };
 
-export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onClose, initialDiffPath, initialDiffStaged = false, initialDiffTargetLine = null }) => {
+export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onClose, initialDiffPath, initialDiffStaged = false, initialDiffTargetLine = null, hideDiffHeader = false }) => {
   const { t } = useI18n();
   const { git } = useRuntimeAPIs();
   const currentDirectory = normalizePath(useEffectiveDirectory() ?? null);
@@ -93,7 +101,12 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   const [visibleChangePaths, setVisibleChangePaths] = React.useState<string[]>([]);
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
-  const [diffLoadError, setDiffLoadError] = React.useState<string | null>(null);
+  const [diffLoadState, setDiffLoadState] = React.useState<DiffLoadState>({
+    key: null,
+    loading: false,
+    error: null,
+    resolved: false,
+  });
   const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
 
   const changeEntries = React.useMemo(() => {
@@ -133,6 +146,21 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     if (route.type !== 'diff') return null;
     return changeEntries.find((entry) => entry.path === route.path) ?? null;
   }, [changeEntries, route]);
+
+  const activeDiffRequestKey = route.type === 'diff' && currentDirectory
+    ? `${currentDirectory}\u0000${diffCacheKey(route.path, route.staged)}`
+    : null;
+  const hasActiveDiffLoadState = diffLoadState.key === activeDiffRequestKey;
+  const selectedDiffLoading = Boolean(
+    activeDiffRequestKey
+    && !selectedDiff
+    && (!hasActiveDiffLoadState || diffLoadState.loading),
+  );
+  const selectedDiffError = hasActiveDiffLoadState ? diffLoadState.error : null;
+  const selectedFileExists = Boolean(
+    selectedFileEntry
+    || (hasActiveDiffLoadState && diffLoadState.resolved),
+  );
 
   const refreshStatusAndBranches = React.useCallback(async (showErrors = true) => {
     if (!currentDirectory) return;
@@ -193,17 +221,26 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
 
   React.useEffect(() => {
     if (route.type !== 'diff') {
-      setDiffLoadError(null);
+      setDiffLoadState({ key: null, loading: false, error: null, resolved: false });
       return;
     }
     const cacheKey = diffCacheKey(route.path, route.staged);
-    if (!currentDirectory || getDiff(currentDirectory, cacheKey)) {
-      setDiffLoadError(null);
+    if (!currentDirectory || !activeDiffRequestKey) {
+      setDiffLoadState({ key: null, loading: false, error: null, resolved: false });
+      return;
+    }
+    if (getDiff(currentDirectory, cacheKey)) {
+      setDiffLoadState((current) => ({
+        key: activeDiffRequestKey,
+        loading: false,
+        error: null,
+        resolved: (current.key === activeDiffRequestKey && current.resolved) || Boolean(selectedFileEntry),
+      }));
       return;
     }
 
     let cancelled = false;
-    setDiffLoadError(null);
+    setDiffLoadState({ key: activeDiffRequestKey, loading: true, error: null, resolved: false });
     void git.getGitFileDiff(currentDirectory, { path: route.path, staged: route.staged || undefined })
       .then((response) => {
         if (cancelled) return;
@@ -212,16 +249,21 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
           modified: response.modified ?? '',
           isBinary: response.isBinary,
         });
+        setDiffLoadState((current) => current.key === activeDiffRequestKey
+          ? { ...current, loading: false, error: null, resolved: true }
+          : current);
       })
       .catch((error) => {
         if (cancelled) return;
-        setDiffLoadError(error instanceof Error ? error.message : String(error));
+        setDiffLoadState((current) => current.key === activeDiffRequestKey
+          ? { ...current, loading: false, error: error instanceof Error ? error.message : String(error), resolved: false }
+          : current);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, diffRetryNonce, getDiff, git, route, setDiff]);
+  }, [activeDiffRequestKey, currentDirectory, diffRetryNonce, getDiff, git, route, selectedFileEntry, setDiff]);
 
   const handleSyncAction = async (action: Exclude<SyncAction, null>, remote?: GitRemote) => {
     if (!currentDirectory) return;
@@ -446,25 +488,27 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
 
   const renderListState = (state: React.ReactNode) => (
     <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 px-3 text-foreground">
-        {onClose ? (
-          <button
-            type="button"
-            className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={t('mobile.surface.closeAria')}
-            onClick={onClose}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <Icon name="close" className="size-5" />
-          </button>
-        ) : null}
-        <div className="min-w-0 flex-1 px-1">
-          <h2 className="typography-ui-label text-foreground">{t('mobile.nav.changes')}</h2>
-          <p className="truncate typography-micro text-muted-foreground">
-            {status?.current || currentDirectory || ''}
-          </p>
-        </div>
-      </header>
+      {hideDiffHeader ? null : (
+        <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 px-3 text-foreground">
+          {onClose ? (
+            <button
+              type="button"
+              className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label={t('mobile.surface.closeAria')}
+              onClick={onClose}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <Icon name="close" className="size-5" />
+            </button>
+          ) : null}
+          <div className="min-w-0 flex-1 px-1">
+            <h2 className="typography-ui-label text-foreground">{t('mobile.nav.changes')}</h2>
+            <p className="truncate typography-micro text-muted-foreground">
+              {status?.current || currentDirectory || ''}
+            </p>
+          </div>
+        </header>
+      )}
       <div className="min-h-0 flex-1">{state}</div>
     </div>
   );
@@ -486,11 +530,13 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
       <MobileDiffDetail
         path={route.path}
         diff={selectedDiff}
-        fileExists={Boolean(selectedFileEntry)}
-        error={diffLoadError}
+        fileExists={selectedFileExists}
+        error={selectedDiffError}
+        loading={selectedDiffLoading}
         targetLine={route.targetLine}
         onBack={() => setRoute({ type: 'list' })}
         onRetry={() => setDiffRetryNonce((value) => value + 1)}
+        hideHeader={hideDiffHeader}
       />
     );
   }
@@ -587,32 +633,34 @@ const MobileDiffDetail: React.FC<{
   diff: { original: string; modified: string; isBinary?: boolean } | null;
   fileExists: boolean;
   error: string | null;
+  loading: boolean;
   targetLine: number | null;
   onBack: () => void;
   onRetry: () => void;
-}> = ({ path, diff, fileExists, error, targetLine, onBack, onRetry }) => {
+  hideHeader?: boolean;
+}> = ({ path, diff, fileExists, error, loading, targetLine, onBack, onRetry, hideHeader = false }) => {
   const { t } = useI18n();
   const language = React.useMemo(() => getLanguageFromExtension(path) || 'text', [path]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-3 border-b border-border/50 px-3 text-foreground">
-        <button
-          type="button"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label={t('header.actions.backAria')}
-          onClick={onBack}
-        >
-          <Icon name="arrow-left" className="size-5" />
-        </button>
-        <div className="min-w-0 flex-1 px-2">
-          <h2 className="truncate typography-ui-header text-foreground">{path}</h2>
-        </div>
-      </header>
+      {hideHeader ? null : (
+        <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-3 border-b border-border/50 px-3 text-foreground">
+          <button
+            type="button"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={t('header.actions.backAria')}
+            onClick={onBack}
+          >
+            <Icon name="arrow-left" className="size-5" />
+          </button>
+          <div className="min-w-0 flex-1 px-2">
+            <h2 className="truncate typography-ui-header text-foreground">{path}</h2>
+          </div>
+        </header>
+      )}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {!fileExists ? (
-          <MobileChangesState icon message={t('mobile.changes.diffDetail.missingTitle')} description={t('mobile.changes.diffDetail.missingDescription')} />
-        ) : error ? (
+        {error ? (
           <div className="flex h-full items-center justify-center px-6 text-center">
             <div className="flex max-w-sm flex-col items-center gap-3">
               <p className="typography-ui-label font-semibold text-foreground">{t('mobile.changes.diffDetail.loadFailed')}</p>
@@ -620,6 +668,10 @@ const MobileDiffDetail: React.FC<{
               <Button type="button" size="sm" variant="outline" onClick={onRetry}>{t('diffView.actions.retry')}</Button>
             </div>
           </div>
+        ) : loading ? (
+          <MobileChangesState loading message={t('diffView.state.loadingDiff')} />
+        ) : !fileExists ? (
+          <MobileChangesState icon message={t('mobile.changes.diffDetail.missingTitle')} description={t('mobile.changes.diffDetail.missingDescription')} />
         ) : !diff ? (
           <MobileChangesState loading message={t('diffView.state.loadingDiff')} />
         ) : diff.isBinary ? (
@@ -628,7 +680,7 @@ const MobileDiffDetail: React.FC<{
           <MobileChangesState icon message={t('mobile.changes.diffDetail.imageUnavailable')} />
         ) : (
           <ScrollShadow
-            className="h-full overflow-y-auto overflow-x-hidden p-3"
+            className="h-full overflow-y-auto overflow-x-hidden p-3 pwa-overlay-scroll"
             data-diff-virtual-root
             data-diff-virtual-content
           >

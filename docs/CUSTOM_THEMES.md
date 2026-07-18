@@ -168,7 +168,8 @@ OpenChamber supports user-defined themes. Drop a JSON file into the themes direc
       "assistantMessage": "#CECDC3",
       "assistantMessageBackground": "#100F0F",
       "timestamp": "#878580",
-      "divider": "#343331"
+      "divider": "#343331",
+      "composerSkill": "#ffefa8"
     },
     "tools": {
       "background": "#1C1B1A50",

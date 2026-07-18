@@ -14,6 +14,7 @@ import { HelpDialog } from '../ui/HelpDialog';
 import { OpenCodeStatusDialog } from '../ui/OpenCodeStatusDialog';
 import { SessionSidebar } from '@/components/session/SessionSidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
+import { ScheduledTasksWorkspace } from '@/components/session/ScheduledTasksDialog';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
 import { MultiRunLauncher } from '@/components/multirun';
 import { DrawerProvider } from '@/contexts/DrawerContext';
@@ -377,6 +378,7 @@ export const MainLayout: React.FC = () => {
     }, [activeMainTab, isBottomTerminalOpen, mobileRightSidebarOpen]);
 
     const isChatActive = activeMainTab === 'chat';
+    const isScheduledTasksActive = activeMainTab === 'scheduled';
 
     return (
         <DiffWorkerProvider>
@@ -522,8 +524,18 @@ export const MainLayout: React.FC = () => {
                             <SessionSidebar />
                         </Sidebar>
                         <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden bg-background" data-page-scroll-lock="true">
-                            <Header />
-                            <div className="relative flex flex-1 min-h-0 overflow-hidden bg-background" data-page-scroll-lock="true">
+                            {isScheduledTasksActive ? (
+                                <main className="flex-1 overflow-hidden bg-background" data-page-scroll-lock="true">
+                                    <ErrorBoundary>
+                                        <React.Suspense fallback={null}>
+                                            <ScheduledTasksWorkspace />
+                                        </React.Suspense>
+                                    </ErrorBoundary>
+                                </main>
+                            ) : (
+                                <>
+                                    <Header />
+                                    <div className="relative flex flex-1 min-h-0 overflow-hidden bg-background" data-page-scroll-lock="true">
                                 <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden border-t border-border/50 bg-background" data-page-scroll-lock="true">
                                     <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
                                         <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">
@@ -556,7 +568,9 @@ export const MainLayout: React.FC = () => {
                                 >
                                     <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
                                 </RightSidebar>
-                            </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
 

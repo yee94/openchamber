@@ -20,7 +20,7 @@ const ExecutionModelIcon: React.FC<{
     return (
         <span role="img" aria-label={label} className="relative inline-flex size-4 shrink-0 items-center justify-center">
             <Icon name="brain-ai-3" className="size-4" />
-            <ModelLogo modelId={modelId} providerId={providerId} alt={label} className="absolute inset-0 size-4 bg-[var(--surface-elevated)]" />
+            <ModelLogo modelId={modelId} providerId={providerId} alt={label} className="absolute inset-0 size-4" />
         </span>
     );
 };
@@ -52,12 +52,10 @@ export const ReadOnlyPromptBanner: React.FC<ReadOnlyPromptBannerProps> = (props)
                     <div className="mt-2 flex min-w-0 flex-wrap gap-x-4 gap-y-2 border-t border-border/70 pt-2 typography-meta">
                         <div className="flex min-w-0 flex-1 basis-36 items-center gap-2">
                             <AgentAvatar name={props.agentName} size={16} label={agentLabel} />
-                            <span className="shrink-0 text-muted-foreground">{t('chat.leaderKey.action.agent')}</span>
                             <span className="min-w-0 truncate text-foreground" title={agentName}>{agentName}</span>
                         </div>
                         <div className="flex min-w-0 flex-1 basis-36 items-center gap-2">
                             <ExecutionModelIcon providerId={props.providerId} modelId={props.modelId} label={modelLabel} />
-                            <span className="shrink-0 text-muted-foreground">{t('chat.leaderKey.action.model')}</span>
                             <span className="min-w-0 truncate text-foreground" title={modelName}>{modelName}</span>
                         </div>
                     </div>

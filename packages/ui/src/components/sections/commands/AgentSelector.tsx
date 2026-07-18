@@ -14,6 +14,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
+import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { useI18n } from '@/lib/i18n';
 import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
 
@@ -23,6 +24,7 @@ interface AgentSelectorProps {
     className?: string;
     filter?: (agent: Agent) => boolean;
     dropdownPortalToBody?: boolean;
+    showIcon?: boolean;
 }
 
 export const AgentSelector: React.FC<AgentSelectorProps> = ({
@@ -31,6 +33,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     className,
     filter,
     dropdownPortalToBody = false,
+    showIcon = true,
 }) => {
     const { t } = useI18n();
     const { isReady, isUnavailable } = useOpenCodeReadiness();
@@ -85,8 +88,11 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             closeMobilePanel();
                         }}
                     >
-                        <span className={cn('typography-meta', !agentName ? 'font-medium' : 'text-muted-foreground')}>
-                            {t('settings.commands.agentSelector.notSelected')}
+                        <span className="flex items-center gap-2">
+                            <AgentAvatar name="default" size={16} />
+                            <span className={cn('typography-meta', !agentName ? 'font-medium' : 'text-muted-foreground')}>
+                                {t('settings.commands.agentSelector.notSelected')}
+                            </span>
                         </span>
                         {!agentName && <div className="h-2 w-2 rounded-full bg-primary" />}
                     </button>
@@ -106,13 +112,16 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                                     closeMobilePanel();
                                 }}
                             >
-                                <div className="flex flex-col">
-                                    <span className="typography-meta font-medium">{agent.name}</span>
-                                    {agent.description && (
-                                        <span className="typography-micro text-muted-foreground">
-                                            {agent.description}
-                                        </span>
-                                    )}
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <AgentAvatar name={agent.name} size={16} />
+                                    <div className="flex min-w-0 flex-col">
+                                        <span className="typography-meta font-medium">{agent.name}</span>
+                                        {agent.description && (
+                                            <span className="typography-micro text-muted-foreground">
+                                                {agent.description}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 {isSelected && (
                                     <div className="h-2 w-2 rounded-full bg-primary" />
@@ -146,7 +155,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             </>
                         ) : (
                             <>
-                                <Icon name="robot-2" className="h-3.5 w-3.5 text-muted-foreground" />
+                                {showIcon ? <AgentAvatar name={agentName || 'default'} size={14} /> : null}
                                 <span className="typography-meta font-medium text-foreground">
                                     {agentName || t('settings.commands.agentSelector.selectAgentPlaceholder')}
                                 </span>
@@ -172,7 +181,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             'flex items-center gap-2 px-2 rounded-lg bg-interactive-selection/20 border border-border/20 cursor-pointer hover:bg-interactive-hover/30 h-6 w-fit',
                             className
                         )}>
-                            <Icon name="robot-2" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                            {showIcon ? <AgentAvatar name={agentName || 'default'} size={14} /> : null}
                             <span className="typography-micro font-medium whitespace-nowrap">
                                 {agentName || t('settings.commands.agentSelector.notSelected')}
                             </span>
@@ -184,6 +193,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             className="typography-meta"
                             onSelect={() => handleAgentChange('')}
                         >
+                            <AgentAvatar name="default" size={14} />
                             <span className="text-muted-foreground">{t('settings.commands.agentSelector.notSelected')}</span>
                         </DropdownMenuItem>
                         {agents.map((agent) => (
@@ -192,6 +202,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                                 className="typography-meta"
                                 onSelect={() => handleAgentChange(agent.name)}
                             >
+                                <AgentAvatar name={agent.name} size={14} />
                                 <span className="font-medium">{agent.name}</span>
                             </DropdownMenuItem>
                         ))}

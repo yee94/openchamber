@@ -43,6 +43,16 @@ describe('buildHighlightParts', () => {
             { text: '/beta', className: 'text-[var(--primary)]', attachmentName: undefined, skillName: 'beta' },
         ]);
     });
+
+    test('renders pasted text references with metric-safe informational text', () => {
+        const ranges: HighlightRange[] = [{ start: 6, end: 15, style: 'mentionPaste' }];
+
+        expect(buildHighlightParts('hello [Paste 5] world', ranges)).toEqual([
+            { text: 'hello ', className: 'text-foreground', attachmentName: undefined, skillName: undefined },
+            { text: '[Paste 5]', className: 'text-[var(--status-info)]', attachmentName: undefined, skillName: undefined },
+            { text: ' world', className: 'text-foreground', attachmentName: undefined, skillName: undefined },
+        ]);
+    });
 });
 
 describe('resolveSkillMentionDeletion', () => {

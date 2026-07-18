@@ -26,6 +26,8 @@ const selection = (sessionId: string, directory: string, runtimeKey = 'runtime-a
     directory,
 });
 
+const MEBIBYTE = 1024 * 1024;
+
 describe('sessionViewCache', () => {
     test('includes the directory in the cache key', () => {
         expect(createSessionViewKey(selection('session-1', '/repo/a')))
@@ -46,6 +48,21 @@ describe('sessionViewCache', () => {
 
         expect(revisitedA.map((entry) => entry.sessionId)).toEqual(['b', 'a']);
         expect(revisitedA[1]).toBe(aEntry);
+    });
+
+    test('retains two maximum-size constrained views and evicts the third by LRU', () => {
+        const cacheLimits = limits(2, 32 * MEBIBYTE);
+        const maximumViewBytes = 16 * MEBIBYTE;
+        const withA = reconcileSessionViewCache([], selection('a', '/repo'), cacheLimits, maximumViewBytes);
+        const aEntry = withA[0];
+        const withB = reconcileSessionViewCache(withA, selection('b', '/repo'), cacheLimits, maximumViewBytes);
+        const revisitedA = reconcileSessionViewCache(withB, selection('a', '/repo'), cacheLimits, maximumViewBytes);
+        const withC = reconcileSessionViewCache(revisitedA, selection('c', '/repo'), cacheLimits, maximumViewBytes);
+
+        expect(revisitedA.map((entry) => entry.sessionId)).toEqual(['b', 'a']);
+        expect(revisitedA[1]).toBe(aEntry);
+        expect(withC.map((entry) => entry.sessionId)).toEqual(['a', 'c']);
+        expect(withC[0]).toBe(aEntry);
     });
 
     test('evicts the least recently used inactive view at the count limit', () => {

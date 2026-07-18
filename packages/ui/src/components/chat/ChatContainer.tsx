@@ -91,7 +91,7 @@ const DESKTOP_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
 };
 const CONSTRAINED_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
     maxEntries: 2,
-    maxEstimatedBytes: 20 * MEBIBYTE,
+    maxEstimatedBytes: 32 * MEBIBYTE,
 };
 const subscribeRuntimeKey = (notify: () => void): (() => void) => {
     return subscribeRuntimeEndpointChanged(() => notify());
@@ -176,6 +176,7 @@ type HydratingToolSkeletonRow = {
 
 type ChatViewportProps = {
     currentSessionId: string;
+    virtualizerKey: string;
     isDesktopExpandedInput: boolean;
     isMobile: boolean;
     stickyUserHeader: boolean;
@@ -214,6 +215,7 @@ type ChatViewportProps = {
 
 const ChatViewport = React.memo(({
     currentSessionId,
+    virtualizerKey,
     isDesktopExpandedInput,
     isMobile,
     stickyUserHeader,
@@ -378,6 +380,7 @@ const ChatViewport = React.memo(({
                         <MessageList
                             ref={messageListRef}
                             sessionKey={currentSessionId}
+                            virtualizerKey={virtualizerKey}
                             disableStaging={pendingRevealWork}
                             messages={renderedMessages}
                             sessionIsWorking={sessionIsWorking}
@@ -428,6 +431,7 @@ const ChatViewport = React.memo(({
     );
 }, (prev, next) => {
     return prev.currentSessionId === next.currentSessionId
+        && prev.virtualizerKey === next.virtualizerKey
         && prev.isDesktopExpandedInput === next.isDesktopExpandedInput
         && prev.isMobile === next.isMobile
         && prev.stickyUserHeader === next.stickyUserHeader
@@ -1332,6 +1336,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 			<ChatViewport
 				key={currentSessionId}
 				currentSessionId={currentSessionId}
+                virtualizerKey={sessionViewKey ?? currentSessionId}
                 isDesktopExpandedInput={isDesktopExpandedInput}
                 isMobile={isMobile}
                 stickyUserHeader={stickyUserHeader}
@@ -1422,6 +1427,7 @@ const SessionViewLoadingPlaceholder: React.FC = () => (
 
 const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: string }> = ({ runtimeKey, ...props }) => {
     const chatSurfaceMode = useChatSurfaceMode();
+    const syncDirectory = useSyncDirectory();
     const selectedSession = useSessionUIStore(
         useShallow((state) => ({
             sessionId: state.currentSessionId,
@@ -1435,9 +1441,9 @@ const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: st
         return {
             runtimeKey,
             sessionId: selectedSession.sessionId,
-            directory: selectedSession.directory,
+            directory: selectedSession.directory ?? syncDirectory,
         };
-    }, [runtimeKey, selectedSession.directory, selectedSession.sessionId]);
+    }, [runtimeKey, selectedSession.directory, selectedSession.sessionId, syncDirectory]);
     const selectionIntent = React.useMemo(
         () => createSessionViewRenderIntent(selectedSessionView),
         [selectedSessionView],
@@ -1538,6 +1544,7 @@ const RuntimeScopedChatContainer: React.FC<ChatContainerProps & { runtimeKey: st
                 committedSelectionIntentRef.current !== scheduledIntent
                 || committedSelectionKeyRef.current !== scheduledSelectionKey
                 || current.activeIntent !== scheduledIntent
+                || key !== scheduledSelectionKey
             ) {
                 return current;
             }

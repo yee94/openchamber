@@ -20,36 +20,30 @@ import { useInputStore } from '@/sync/input-store';
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useQueueScopeDispatchFlight } from '@/hooks/useQueuedMessageAutoSend';
 import { useUIStore } from '@/stores/useUIStore';
 import { Icon } from "@/components/icon/Icon";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { mergeQueuedMessageScopes, popQueuedMessageForEdit } from './queuedMessageChipsState';
+import { canSendQueuedMessage, mergeQueuedMessageScopes, popQueuedMessageForEdit } from './queuedMessageChipsState';
 
 type BoundQueueScope = Extract<QueueScope, { state: 'bound' }>;
 
 interface QueuedMessageChipProps {
     message: QueuedMessage;
-    isQueueHead: boolean;
+    hasDispatchLock: boolean;
     isMobile: boolean;
     onEdit: (message: QueuedMessage) => void;
     onSend: (message: QueuedMessage) => void;
 }
 
-const QueuedMessageChip = memo(({ message, isQueueHead, isMobile, onEdit, onSend }: QueuedMessageChipProps) => {
+const QueuedMessageChip = memo(({ message, hasDispatchLock, isMobile, onEdit, onSend }: QueuedMessageChipProps) => {
     const { t } = useI18n();
     const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
     const status = message.status ?? 'queued';
     const isReadOnly = status === 'sending' || status === 'reconciling';
     const isDragDisabled = message.owner?.state === 'unbound-legacy' || isReadOnly;
-    // Head items in a recoverable terminal/retry state can be force-sent.
-    // Locked in-flight states stay disabled until recover/reconcile finishes.
-    const canSend = isQueueHead && !isReadOnly && (
-      status === 'queued'
-      || status === 'retrying'
-      || status === 'failed'
-      || status === 'unresolved'
-    );
+    const canSend = canSendQueuedMessage(message, hasDispatchLock);
     const queueItemID = message.queueItemID ?? message.id;
     const recovery = message.failure?.recovery;
     const visibleContent = recovery?.content ?? message.content;
@@ -205,9 +199,13 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
         () => mergeQueuedMessageScopes(legacyQueuedMessages, boundQueuedMessages),
         [boundQueuedMessages, legacyQueuedMessages],
     );
+    const hasScopeDispatchFlight = useQueueScopeDispatchFlight(queueScope);
+    const hasDispatchLock = React.useMemo(
+        () => hasScopeDispatchFlight || queuedMessages.some((item) => item.status === 'sending' || item.status === 'reconciling'),
+        [hasScopeDispatchFlight, queuedMessages],
+    );
     const popToInput = useMessageQueueStore((state) => state.popToInput);
     const reorderQueue = useMessageQueueStore((state) => state.reorderQueue);
-    const bindLegacyQueue = useMessageQueueStore((state) => state.bindLegacyQueue);
 
     const sensors = useSensors(
         // Desktop: drag after a small move so other clicks still register.
@@ -243,12 +241,8 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
     }, [popToInput, onEditMessage]);
 
     const handleSend = React.useCallback((message: QueuedMessage) => {
-        if (message.owner?.state === 'unbound-legacy') {
-            if (!queueScope) return;
-            bindLegacyQueue(message.owner, queueScope);
-        }
         onSendMessage(message.queueItemID ?? message.id);
-    }, [bindLegacyQueue, onSendMessage, queueScope]);
+    }, [onSendMessage]);
 
     if (queuedMessages.length === 0 || !queueScope) {
         return null;
@@ -295,11 +289,11 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                                 ? 'max-h-[8rem] gap-0.5 px-1.5 py-1'
                                 : 'max-h-[8rem] gap-1 px-2.5 pb-2 md:max-h-[10.5rem] md:gap-1.5 md:px-3 md:pb-3',
                         )}>
-                            {queuedMessages.map((message, index) => (
+                            {queuedMessages.map((message) => (
                                 <QueuedMessageChip
                                     key={message.queueItemID ?? message.id}
                                     message={message}
-                                    isQueueHead={index === 0}
+                                    hasDispatchLock={hasDispatchLock}
                                     isMobile={isMobile}
                                     onEdit={handleEdit}
                                     onSend={handleSend}

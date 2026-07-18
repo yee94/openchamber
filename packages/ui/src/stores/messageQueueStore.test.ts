@@ -100,6 +100,25 @@ describe('messageQueueStore scoped ledger', () => {
     actions.markQueueItemDefinitiveFailure(a, started!);
     expect(actions.beginQueueItemDispatch(a, { queueItemID: first.queueItemID, operationID: first.operationID, messageID: fresh }, 'msg_ffffffffffffABCDEFGHIJKLMO', true)?.status).toBe('sending');
   });
+  test('manual dispatch atomically promotes a recoverable later item while automatic dispatch remains FIFO', () => {
+    const first = add(); const second = add(); const actions = useMessageQueueStore.getState();
+    const secondIdentity = { queueItemID: second.queueItemID, operationID: second.operationID, messageID: second.messageID };
+    expect(actions.beginQueueItemDispatch(a, secondIdentity, 'msg_ffffffffffffABCDEFGHIJKLMN', false)).toBeNull();
+    const started = actions.beginQueueItemDispatch(a, secondIdentity, 'msg_ffffffffffffABCDEFGHIJKLMN', true);
+    expect(started?.queueItemID).toBe(second.queueItemID);
+    expect(actions.getQueueForScope(a).map((item) => item.queueItemID)).toEqual([second.queueItemID, first.queueItemID]);
+    actions.confirmQueueItem(a, started!);
+    expect(actions.getQueueForScope(a).map((item) => item.queueItemID)).toEqual([first.queueItemID]);
+  });
+  test('a sending or reconciling row blocks another manual dispatch in its scope', () => {
+    const first = add(); const second = add(); const actions = useMessageQueueStore.getState();
+    const firstIdentity = { queueItemID: first.queueItemID, operationID: first.operationID, messageID: first.messageID };
+    const fresh = 'msg_ffffffffffffABCDEFGHIJKLMN';
+    actions.beginQueueItemDispatch(a, firstIdentity, fresh, true);
+    expect(actions.beginQueueItemDispatch(a, { queueItemID: second.queueItemID, operationID: second.operationID, messageID: second.messageID }, 'msg_ffffffffffffABCDEFGHIJKLMO', true)).toBeNull();
+    actions.markQueueItemReconciling(a, { ...firstIdentity, messageID: fresh });
+    expect(actions.beginQueueItemDispatch(a, { queueItemID: second.queueItemID, operationID: second.operationID, messageID: second.messageID }, 'msg_ffffffffffffABCDEFGHIJKLMP', true)).toBeNull();
+  });
   test('begins due retries automatically and persisted queued rows with a rotated ID', () => {
     const item = add(); const actions = useMessageQueueStore.getState(); const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID };
     actions.markQueueItemSendAttempt(a, identity); actions.markQueueItemPreDispatchRetry(a, identity, 20);

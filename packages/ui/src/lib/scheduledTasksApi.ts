@@ -36,6 +36,16 @@ export type ScheduledTask = {
   };
 };
 
+export type GlobalScheduledTask = {
+  projectId: string;
+  task: ScheduledTask;
+};
+
+export type GlobalScheduledTasksResponse = {
+  tasks: GlobalScheduledTask[];
+  failedProjectIds: string[];
+};
+
 const parseErrorMessage = async (response: Response, fallback: string) => {
   try {
     const parsed = await response.json();
@@ -67,6 +77,18 @@ export const fetchScheduledTasks = async (projectID: string): Promise<ScheduledT
     return [];
   }
   return parsed.tasks as ScheduledTask[];
+};
+
+export const fetchGlobalScheduledTasks = async (): Promise<GlobalScheduledTasksResponse> => {
+  const response = await runtimeFetch('/api/openchamber/scheduled-tasks');
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, 'Failed to load scheduled tasks'));
+  }
+  const parsed = await response.json().catch(() => null);
+  return {
+    tasks: Array.isArray(parsed?.tasks) ? parsed.tasks as GlobalScheduledTask[] : [],
+    failedProjectIds: Array.isArray(parsed?.failedProjectIds) ? parsed.failedProjectIds.filter((id: unknown): id is string => typeof id === 'string') : [],
+  };
 };
 
 export const upsertScheduledTask = async (projectID: string, task: Partial<ScheduledTask>): Promise<ScheduledTask[]> => {

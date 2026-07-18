@@ -575,6 +575,7 @@ interface MultiFileDiffEntryProps {
     loadFullFiles?: boolean;
     initialDiffData?: DiffData | null;
     focusLine?: number | null;
+    showFileActions?: boolean;
 }
 
 const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
@@ -595,6 +596,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     loadFullFiles = false,
     initialDiffData = null,
     focusLine = null,
+    showFileActions = true,
 }) => {
     const { t } = useI18n();
     const { git } = useRuntimeAPIs();
@@ -922,17 +924,19 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                                 wrapLines={wrapLines}
                                 focusLine={focusLine}
                             />
-                            <div className="pointer-events-none absolute bottom-3 right-3 z-20">
-                                <div className="pointer-events-auto">
-                                    <FileDiffActions
-                                        filePath={file.path}
-                                        staged={staged}
-                                        busyAction={fileAction}
-                                        disabled={fileAction !== null}
-                                        onAction={handleFileAction}
-                                    />
+                            {showFileActions ? (
+                                <div className="pointer-events-none absolute bottom-3 right-3 z-20">
+                                    <div className="pointer-events-auto">
+                                        <FileDiffActions
+                                            filePath={file.path}
+                                            staged={staged}
+                                            busyAction={fileAction}
+                                            disabled={fileAction !== null}
+                                            onAction={handleFileAction}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            ) : null}
                         </>
                     ) : null}
                 </div>
@@ -947,6 +951,8 @@ interface DiffViewProps {
     pinSelectedFileHeaderToTopOnNavigate?: boolean;
     showOpenInEditorAction?: boolean;
     diffScope?: DiffScope;
+    /** Assistant message whose preceding user message owns the requested turn snapshot. */
+    turnMessageId?: string | null;
     onDiffScopeChange?: (scope: Extract<DiffScope, 'working' | 'staged' | 'turn'>) => void;
     targetFilePath?: string | null;
     /** Render diff content flush with the container edges (no outer padding). */
@@ -965,6 +971,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     pinSelectedFileHeaderToTopOnNavigate = false,
     showOpenInEditorAction = false,
     diffScope = 'all',
+    turnMessageId = null,
     onDiffScopeChange,
     targetFilePath = null,
     targetLine = null,
@@ -1050,13 +1057,18 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }, []);
 
     const lastTurnDiffs = React.useMemo(() => {
-        for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
+        let startIndex = sessionMessages.length - 1;
+        if (turnMessageId) {
+            startIndex = sessionMessages.findIndex((message) => message.id === turnMessageId);
+            if (startIndex < 0) return [];
+        }
+        for (let index = startIndex; index >= 0; index -= 1) {
             const message = sessionMessages[index] as { role?: string; summary?: { diffs?: unknown } };
             if (message.role !== 'user') continue;
             return listTurnDiffs(message.summary?.diffs);
         }
         return [];
-    }, [sessionMessages]);
+    }, [sessionMessages, turnMessageId]);
 
     const lastTurnDiffData = React.useMemo(() => {
         const map = new Map<string, DiffData>();
@@ -1613,7 +1625,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     <ScrollableOverlay
                         ref={diffScrollRef}
                         outerClassName="min-h-0 h-full"
-                        className="[overflow-anchor:none] pb-16"
+                        className="[overflow-anchor:none] pb-16 pwa-overlay-scroll"
                         disableHorizontal
                         observeMutations={false}
                         preventOverscroll
@@ -1642,6 +1654,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                     loadFullFiles={loadFullFiles}
                                     initialDiffData={activeDiffScope === 'turn' ? lastTurnDiffData.get(file.path) ?? null : null}
                                     focusLine={file.path === (targetFilePath?.trim() || displayFile) ? (targetLine ?? displayFocusLine) : null}
+                                    showFileActions={activeDiffScope !== 'turn'}
                                 />
                             ))}
                         </div>

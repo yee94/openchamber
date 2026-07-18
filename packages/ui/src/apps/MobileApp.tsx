@@ -12,9 +12,11 @@ import { Button } from '@/components/ui/button';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ChatView } from '@/components/views/ChatView';
+import { DiffView } from '@/components/views/DiffView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { MobileResizableSheet } from '@/components/ui/MobileResizableSheet';
 import { getMobileWindowMotionController, MOBILE_SESSIONS_WINDOW_ID } from '@/components/ui/MobileWindowMotionRegistry';
 import { MobileSessionStatusBar } from '@/components/chat/MobileSessionStatusBar';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
@@ -55,6 +57,7 @@ import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SessionStartupCoordinator } from '@/components/session/SessionStartupCoordinator';
 import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
+import { ScheduledTasksDialog } from '@/components/session/ScheduledTasksDialog';
 import { SyncProvider, useCurrentSessionEntity, useParentSession, useSessionMessages } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
@@ -90,6 +93,8 @@ const MOBILE_SETTINGS_PAGES = [
   'voice',
   'about',
 ] as const;
+const MOBILE_DIRECT_DIFF_WINDOW_ID = 'mobile-direct-diff';
+const MOBILE_TURN_DIFF_WINDOW_ID = 'mobile-turn-diff';
 
 type MobileAppProps = {
   apis: RuntimeAPIs;
@@ -670,7 +675,7 @@ const getProjectLabel = (path: string): string => {
 };
 
 type OverflowItem = {
-  key: 'new-session' | 'files' | 'changes' | 'mcp' | 'instances' | 'update' | 'settings';
+  key: 'new-session' | 'files' | 'changes' | 'scheduled' | 'mcp' | 'instances' | 'update' | 'settings';
   icon?: IconName;
   iconNode?: React.ReactNode;
   label: string;
@@ -2077,8 +2082,12 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   useMobilePressHaptics();
   const mobileSessionPanelOpen = useUIStore((state) => state.mobileSessionPanelOpen);
   const setMobileSessionPanelOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
+  const scheduledTasksDialogOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
+  const setScheduledTasksDialogOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);
   const [filesOpen, setFilesOpen] = React.useState(false);
   const [changesOpen, setChangesOpen] = React.useState(false);
+  const [turnDiffOpen, setTurnDiffOpen] = React.useState(false);
+  const [turnDiffMessageId, setTurnDiffMessageId] = React.useState<string | null>(null);
   const [mcpOpen, setMcpOpen] = React.useState(false);
   const [instancesOpen, setInstancesOpen] = React.useState(false);
   const [isMcpRefreshing, setIsMcpRefreshing] = React.useState(false);
@@ -2109,7 +2118,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const orientation = useOrientation();
   const isPortrait = orientation === 'portrait';
   const [ipadSidebarOpen, setIpadSidebarOpen] = React.useState(isIPad && !isPortrait);
-  const [ipadRightPanel, setIpadRightPanel] = React.useState<'files' | 'changes' | null>(null);
+  const [ipadRightPanel, setIpadRightPanel] = React.useState<'files' | 'changes' | 'turn-diff' | null>(null);
 
   const toggleIpadSidebar = React.useCallback(() => {
     const willOpen = !ipadSidebarOpen;
@@ -2120,6 +2129,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, [ipadSidebarOpen, isPortrait]);
 
   const openFilesSurface = React.useCallback(() => {
+    setTurnDiffOpen(false);
+    setTurnDiffMessageId(null);
     if (isIPad) {
       setPendingChangesDiff(null);
       setIpadRightPanel('files');
@@ -2130,6 +2141,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, [isIPad, isPortrait]);
 
   const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean; targetLine?: number } | null = null) => {
+    setTurnDiffOpen(false);
+    setTurnDiffMessageId(null);
     setPendingChangesDiff(diff);
     if (isIPad) {
       setIpadRightPanel('changes');
@@ -2137,6 +2150,18 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return;
     }
     setChangesOpen(true);
+  }, [isIPad, isPortrait]);
+
+  const openTurnDiffSurface = React.useCallback((messageId?: string) => {
+    setPendingChangesDiff(null);
+    setChangesOpen(false);
+    setTurnDiffMessageId(messageId ?? null);
+    if (isIPad) {
+      setIpadRightPanel('turn-diff');
+      if (isPortrait) setIpadSidebarOpen(false);
+      return;
+    }
+    setTurnDiffOpen(true);
   }, [isIPad, isPortrait]);
 
   const closeIpadRightPanel = React.useCallback(() => {
@@ -2155,7 +2180,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   // Keep the right panel's content mounted through the width-collapse
   // animation; drop it once the panel is fully closed.
-  const lastIpadRightPanelRef = React.useRef<'files' | 'changes'>('changes');
+  const lastIpadRightPanelRef = React.useRef<'files' | 'changes' | 'turn-diff'>('changes');
   if (ipadRightPanel) lastIpadRightPanelRef.current = ipadRightPanel;
   const [ipadRightContentMounted, setIpadRightContentMounted] = React.useState(false);
   React.useEffect(() => {
@@ -2177,18 +2202,23 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       openChanges: ({ diffPath, staged, targetLine } = {}) => {
         openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, targetLine } : null);
       },
+      openTurnDiff: openTurnDiffSurface,
       openFiles: () => openFilesSurface(),
       openSettings: () => {
         setSettingsInitialMobileStage('nav');
         setSettingsOpen(true);
       },
     }),
-    [openChangesSurface, openFilesSurface],
+    [openChangesSurface, openFilesSurface, openTurnDiffSurface],
   );
 
   const closeChanges = React.useCallback(() => {
     setChangesOpen(false);
     setPendingChangesDiff(null);
+  }, []);
+
+  const closeTurnDiff = React.useCallback(() => {
+    setTurnDiffOpen(false);
   }, []);
 
   // Expose the shell's panel-opening actions to the deep-link layer so openchamber:// URLs
@@ -2278,6 +2308,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     || mobileSessionPanelOpen
     || filesOpen
     || changesOpen
+    || turnDiffOpen
+    || scheduledTasksDialogOpen
     || mcpOpen
     || instancesOpen
     || settingsOpen
@@ -2330,12 +2362,20 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       setDirectoryDialogOpen(false);
       return true;
     }
+    if (scheduledTasksDialogOpen) {
+      window.dispatchEvent(new Event('oc:scheduled-tasks-close-request'));
+      return true;
+    }
     if (mobileSessionPanelOpen) {
       setMobileSessionPanelOpen(false);
       return true;
     }
     if (filesOpen) {
       setFilesOpen(false);
+      return true;
+    }
+    if (turnDiffOpen) {
+      closeTurnDiff();
       return true;
     }
     if (changesOpen) {
@@ -2364,7 +2404,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return true;
     }
     return false;
-  }, [changesOpen, closeChanges, directoryDialogOpen, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSession, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, updateOpen]);
+  }, [changesOpen, closeChanges, closeTurnDiff, directoryDialogOpen, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSession, scheduledTasksDialogOpen, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, turnDiffOpen, updateOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
 
@@ -2447,6 +2487,12 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         );
       }
       items.push({
+        key: 'scheduled',
+        icon: 'time',
+        label: t('sessions.sidebar.header.actions.scheduledTasks'),
+        onSelect: () => setScheduledTasksDialogOpen(true),
+      });
+      items.push({
         key: 'mcp',
         iconNode: <McpIcon className="size-5 shrink-0 text-muted-foreground" />,
         label: t('mobile.menu.mcp'),
@@ -2479,7 +2525,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       });
       return items;
     },
-    [dirtyChangeCount, isIPad, openChangesSurface, openFilesSurface, openNewSessionDraft, showCapacitorOnlyFeatures, showUpdateItem, t],
+    [dirtyChangeCount, isIPad, openChangesSurface, openFilesSurface, openNewSessionDraft, setScheduledTasksDialogOpen, showCapacitorOnlyFeatures, showUpdateItem, t],
   );
 
   return (
@@ -2550,7 +2596,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
               onOpenSessions={() => (isIPad ? toggleIpadSidebar() : setMobileSessionPanelOpen(true))}
               onOpenMenu={() => setOverflowOpen(true)}
               surfaceShortcuts={isIPad ? {
-              activePanel: ipadRightPanel,
+              activePanel: ipadRightPanel === 'turn-diff' ? 'changes' : ipadRightPanel,
               changesDirty: dirtyChangeCount > 0,
               onToggleFiles: () => toggleIpadRightPanel('files'),
               onToggleChanges: () => toggleIpadRightPanel('changes'),
@@ -2634,6 +2680,28 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 <ErrorBoundary>
                   {renderedIpadRightPanel === 'files' ? (
                     <MobileFilesSurface onClose={closeIpadRightPanel} />
+                  ) : renderedIpadRightPanel === 'turn-diff' ? (
+                    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+                      <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 border-b border-border/40 px-3">
+                        <h2 className="min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
+                          {t('mobile.nav.changes')}
+                        </h2>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={closeIpadRightPanel}
+                          aria-label={t('mobile.surface.closeAria')}
+                          className="shrink-0 text-muted-foreground"
+                          style={{ touchAction: 'manipulation' }}
+                        >
+                          <Icon name="close" className="size-5" />
+                        </Button>
+                      </header>
+                      <div className="min-h-0 flex-1 overflow-hidden">
+                        <DiffView hideStackedFileSidebar diffScope="turn" turnMessageId={turnDiffMessageId} flushContent />
+                      </div>
+                    </div>
                   ) : (
                     <MobileChangesSurface
                       onClose={closeIpadRightPanel}
@@ -2661,6 +2729,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
           rightOffset={isIPad && ipadRightPanel ? rightResize.width : 0}
         />
 
+        <ScheduledTasksDialog />
+
         {/* Mounted only while open (like the sessions sheet) so each surface
             computes its safe-area / fixed-position layout fresh on open. Keeping
             them always-mounted left a stale startup layout, which made the
@@ -2678,7 +2748,54 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
           </MobileSurfaceShell>
         ) : null}
 
-        {changesOpen ? (
+        <MobileResizableSheet
+            id={MOBILE_TURN_DIFF_WINDOW_ID}
+            open={turnDiffOpen}
+            onOpenChange={(nextOpen) => {
+              if (!nextOpen) closeTurnDiff();
+            }}
+            title={(
+              <h2 className="truncate typography-ui-label font-semibold text-foreground">
+                {t('mobile.nav.changes')}
+              </h2>
+            )}
+            ariaLabel={t('mobile.nav.changes')}
+            closeAriaLabel={t('mobile.surface.closeAria')}
+            resizeAriaLabel={t('mobile.changes.sheet.resizeAria')}
+            initiallyExpanded
+          >
+            <ErrorBoundary>
+              <DiffView hideStackedFileSidebar diffScope="turn" turnMessageId={turnDiffMessageId} flushContent />
+            </ErrorBoundary>
+        </MobileResizableSheet>
+
+        {changesOpen && pendingChangesDiff ? (
+          <MobileResizableSheet
+            id={MOBILE_DIRECT_DIFF_WINDOW_ID}
+            open
+            onOpenChange={(nextOpen) => {
+              if (!nextOpen) closeChanges();
+            }}
+            title={(
+              <h2 className="truncate typography-ui-label font-semibold text-foreground">
+                {pendingChangesDiff.path}
+              </h2>
+            )}
+            ariaLabel={t('mobile.menu.changes')}
+            closeAriaLabel={t('mobile.surface.closeAria')}
+            resizeAriaLabel={t('mobile.changes.sheet.resizeAria')}
+            initiallyExpanded
+          >
+            <ErrorBoundary>
+              <MobileChangesSurface
+                initialDiffPath={pendingChangesDiff.path}
+                initialDiffStaged={pendingChangesDiff.staged}
+                initialDiffTargetLine={pendingChangesDiff.targetLine ?? null}
+                hideDiffHeader
+              />
+            </ErrorBoundary>
+          </MobileResizableSheet>
+        ) : changesOpen ? (
           <MobileSurfaceShell
             open
             onClose={closeChanges}

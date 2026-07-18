@@ -16,3 +16,8 @@ export const popQueuedMessageForEdit = (
     if (!message.owner) return null;
     return popToInput(message.owner, message.queueItemID ?? message.id, message.operationID);
 };
+
+export const canSendQueuedMessage = (message: QueuedMessage, hasDispatchLock: boolean): boolean => {
+    const status = message.status ?? 'queued';
+    return !hasDispatchLock && (status === 'queued' || status === 'retrying' || status === 'failed' || status === 'unresolved');
+};

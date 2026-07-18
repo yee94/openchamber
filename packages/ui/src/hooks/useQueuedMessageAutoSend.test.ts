@@ -69,6 +69,23 @@ describe('queued dispatch and scheduler', () => {
     complete?.();
     await manual;
   });
+  test('manual Send posts a later bound row and keeps the original head queued behind it', async () => {
+    const first = add() as QueueItem; const second = add() as QueueItem;
+    await dispatchQueuedMessage('session-a', { scope: scope(), queueItemID: second.queueItemID, manual: true });
+    expect(calls).toBe(1);
+    expect(useMessageQueueStore.getState().getQueueForScope(scope()).map((item) => item.queueItemID)).toEqual([first.queueItemID]);
+  });
+  test('two rapid manual rows in one scope create one POST and retain the second target', async () => {
+    add(); const second = add() as QueueItem;
+    let complete: (() => void) | undefined;
+    send = () => new Promise<void>((resolve) => { complete = resolve; });
+    const firstFlight = dispatchQueuedMessage('session-a', { scope: scope(), manual: true });
+    const secondFlight = dispatchQueuedMessage('session-a', { scope: scope(), queueItemID: second.queueItemID, manual: true });
+    expect(calls).toBe(1);
+    expect(useMessageQueueStore.getState().getQueueForScope(scope()).some((item) => item.queueItemID === second.queueItemID)).toBe(true);
+    complete?.();
+    await Promise.all([firstFlight, secondFlight]);
+  });
   test('pre-dispatch and definitive completion clear the dispatch flight with their durable states', async () => {
     const item = add() as QueueItem;
     const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID };
@@ -105,6 +122,22 @@ describe('queued dispatch and scheduler', () => {
     completeFirst?.(); completeSecond?.();
     await Promise.all([firstFlight, secondFlight]);
   });
+  test('a scope flight blocks the planner after confirmation until the POST promise settles', async () => {
+    const first = add() as QueueItem; const second = add() as QueueItem;
+    let complete: (() => void) | undefined;
+    send = () => new Promise<void>((resolve) => { complete = resolve; });
+    const flight = dispatchQueuedMessage('session-a', { scope: scope(), manual: true });
+    const confirmation = (sendOptions as { onSendConfirmed?: (messageID: string) => void }).onSendConfirmed;
+    confirmation?.((useMessageQueueStore.getState().getQueueForScope(scope())[0] as QueueItem).messageID);
+    const plan = planQueueScheduler({ queuedMessages: { scope: useMessageQueueStore.getState().getQueueForScope(scope()) }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: Date.now() });
+    expect(first.queueItemID).toBeTruthy(); expect(plan.dispatchScopes).toEqual([]);
+    expect(useMessageQueueStore.getState().getQueueForScope(scope())[0]?.queueItemID).toBe(second.queueItemID);
+    await dispatchQueuedMessage('session-a', { scope: scope(), queueItemID: second.queueItemID, manual: true });
+    expect(calls).toBe(1); expect(useMessageQueueStore.getState().getQueueForScope(scope())[0]?.queueItemID).toBe(second.queueItemID);
+    complete?.();
+    await flight;
+    expect(planQueueScheduler({ queuedMessages: { scope: useMessageQueueStore.getState().getQueueForScope(scope()) }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: Date.now() }).dispatchScopes).toEqual([second.owner]);
+  });
   test('current-runtime running auto-review blocks its authoritative idle queue', () => {
     const item = add() as QueueItem;
     const blockedSessions = getAutoReviewBlockedSessions({ 'session-a': { status: 'running', runtimeKey: 'runtime-a' } }, runtimeKey);
@@ -140,7 +173,24 @@ describe('queued dispatch and scheduler', () => {
   test('scheduler examines one head per 1000 scopes', () => { const queues: Record<string, QueueItem[]> = {}; for (let index = 0; index < 1000; index += 1) { const owner = { ...scope(), directory: `/project-${index}` }; queues[String(index)] = [{ ...(add() as QueueItem), owner }]; } const plan = planQueueScheduler({ queuedMessages: queues, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: 0 }); expect(plan.inspectedScopeCount).toBe(1000); expect(plan.dispatchScopes).toHaveLength(1000); });
   test('reconciling in-flight heads create neither queries nor wake timers', () => { const item = { ...(add() as QueueItem), status: 'reconciling' as const }; const key = `scope:${item.queueItemID}`; const plan = planQueueScheduler({ queuedMessages: { scope: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set([key]), blockedSessions: new Set(), now: 0 }); expect(plan.queryOperations).toEqual([]); expect(plan.nextWakeAt).toBe(undefined); });
   test('reconciliation misses persist one next check and resolves after three checks without POST operations', () => { const item = add() as QueueItem; const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState(); actions.markQueueItemSendAttempt(scope(), identity); actions.markQueueItemReconciling(scope(), identity); actions.recordQueueItemReconciliationCheck(scope(), identity); let current = actions.getQueueForScope(scope())[0] as QueueItem; let plan = planQueueScheduler({ queuedMessages: { scope: [current] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: current.reconciliationNextCheckAt! - 1 }); expect(plan.queryOperations).toEqual([]); expect(plan.nextWakeAt).toBe(current.reconciliationNextCheckAt); actions.recordQueueItemReconciliationCheck(scope(), identity); actions.recordQueueItemReconciliationCheck(scope(), identity); current = actions.getQueueForScope(scope())[0] as QueueItem; plan = planQueueScheduler({ queuedMessages: { scope: [current] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: Date.now() }); expect(plan.resolveOperations).toHaveLength(1); expect(plan.dispatchScopes).toEqual([]); });
-  test('manual dispatch binds the legacy head before sending with a fresh message ID', async () => { const legacy = useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy', sendConfig: { providerID: 'p', modelID: 'm' } }); add(); await dispatchQueuedMessage('session-a', { delivery: 'steer' }); expect((sendOptions as { messageID?: string }).messageID! > legacy.messageID).toBe(true); });
+  test('manual dispatch bulk binds and sends a later legacy row with a fresh message ID', async () => { useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy-first', sendConfig: { providerID: 'p', modelID: 'm' } }); const legacy = useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy-second', sendConfig: { providerID: 'p', modelID: 'm' } }); add(); await dispatchQueuedMessage('session-a', { delivery: 'steer', queueItemID: legacy.queueItemID }); expect(calls).toBe(1); expect((sendOptions as { messageID?: string }).messageID! > legacy.messageID).toBe(true); });
+  test('an obsolete runtime manual legacy dispatch preserves its legacy owner and avoids POST', async () => {
+    const staleScope = scope(); const legacyScope = legacyQueueScope('session-a'); const legacy = useMessageQueueStore.getState().addToQueue(legacyScope, { content: 'legacy', sendConfig: { providerID: 'p', modelID: 'm' } });
+    runtimeIdentity = 'runtime-b'; runtimeGeneration = 2;
+    await dispatchQueuedMessage('session-a', { scope: staleScope, queueItemID: legacy.queueItemID, manual: true });
+    expect(calls).toBe(0); expect(useMessageQueueStore.getState().getQueueForScope(legacyScope)).toEqual([legacy]); expect(useMessageQueueStore.getState().getQueueForScope(staleScope)).toEqual([]);
+  });
+  test('a reconciling bound row keeps a manual legacy target in its legacy scope', async () => {
+    const bound = add() as QueueItem; const legacyScope = legacyQueueScope('session-a'); const legacy = useMessageQueueStore.getState().addToQueue(legacyScope, { content: 'legacy', sendConfig: { providerID: 'p', modelID: 'm' } }); const actions = useMessageQueueStore.getState();
+    actions.markQueueItemSendAttempt(scope(), bound); actions.markQueueItemReconciling(scope(), bound);
+    await dispatchQueuedMessage('session-a', { scope: scope(), queueItemID: legacy.queueItemID, manual: true });
+    expect(calls).toBe(0); expect(useMessageQueueStore.getState().getQueueForScope(legacyScope)).toEqual([legacy]);
+  });
+  test('a main-queue dispatch without an explicit scope binds and sends the legacy head', async () => {
+    const legacy = useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy', sendConfig: { providerID: 'p', modelID: 'm' } });
+    await dispatchQueuedMessage('session-a');
+    expect(calls).toBe(1); expect((sendOptions as { messageID?: string }).messageID! > legacy.messageID).toBe(true); expect(useMessageQueueStore.getState().getQueueForScope(legacyQueueScope('session-a'))).toEqual([]);
+  });
   test('scheduler skips legacy scopes', () => { const item = useMessageQueueStore.getState().addToQueue(legacyQueueScope('session-a'), { content: 'legacy' }) as QueueItem; const plan = planQueueScheduler({ queuedMessages: { legacy: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions: new Set(), now: 0 }); expect(plan.inspectedScopeCount).toBe(0); expect(plan.queryOperations).toEqual([]); });
   test('reconciliation notifies then confirms one matching scoped item', async () => { const item = add() as QueueItem; useMessageQueueStore.getState().markQueueItemSendAttempt(scope(), item); useMessageQueueStore.getState().markQueueItemReconciling(scope(), item); records = [{ info: { id: item.messageID } }]; await reconcileQueuedMessage({ scope: scope(), item: useMessageQueueStore.getState().getQueueForScope(scope())[0] as QueueItem, key: 'key' }); expect(confirmations).toBe(1); expect(useMessageQueueStore.getState().getQueueForScope(scope())).toEqual([]); });
   test('reconciliation queries receive an AbortSignal and stop at the persisted deadline', async () => { const item = add() as QueueItem; const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID }; const actions = useMessageQueueStore.getState(); actions.markQueueItemSendAttempt(scope(), identity); actions.markQueueItemReconciling(scope(), identity); const reconciling = actions.getQueueForScope(scope())[0] as QueueItem; const expired = { ...reconciling, reconciliationDeadlineAt: Date.now() }; useMessageQueueStore.setState({ queuedMessages: { [queueScopeKey(scope())]: [expired] } }); let signal: AbortSignal | undefined; let timeoutMs: number | undefined; fetchRecords = (_sessionID, _messageID, _directory, options) => new Promise((resolve) => { signal = options?.signal; timeoutMs = options?.timeoutMs; options?.signal?.addEventListener('abort', () => resolve(null), { once: true }); }); await reconcileQueuedMessage({ scope: scope(), item: expired, key: 'key' }); expect(signal).toBeDefined(); expect(signal?.aborted).toBe(true); expect(timeoutMs).toBe(0); });
@@ -180,6 +230,13 @@ describe('queued dispatch and scheduler', () => {
     expect(calls).toBe(0);
     await dispatchQueuedMessage('session-a', { scope: scope(), manual: true });
     expect(calls).toBe(1);
+  });
+  test('a failed manually promoted row remains at the queue head', async () => {
+    add(); const second = add() as QueueItem;
+    failure = 'definitive-rejection'; send = () => Promise.reject(new Error('rejected'));
+    await dispatchQueuedMessage('session-a', { scope: scope(), queueItemID: second.queueItemID, manual: true });
+    const head = useMessageQueueStore.getState().getQueueForScope(scope())[0] as QueueItem;
+    expect(head.queueItemID).toBe(second.queueItemID); expect(head.status).toBe('failed');
   });
   test('exact scope lookup prevents a same-session queue in another directory from posting', async () => {
     const otherScope = { ...scope(), directory: '/other-project' };

@@ -27,6 +27,11 @@ import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { MobileWindowMotion } from '@/components/ui/MobileWindowMotion';
 import {
+  MOBILE_SHEET_EXPANDED_SNAP,
+  useMobileSheetSnap,
+} from '@/components/ui/useMobileSheetSnap';
+import { MobileSheetSnapHandle } from '@/components/ui/MobileSheetSnapHandle';
+import {
   MOBILE_SESSIONS_WINDOW_ID,
 } from '@/components/ui/MobileWindowMotionRegistry';
 
@@ -457,6 +462,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const open = useUIStore((state) => state.mobileSessionPanelOpen);
   const setOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
+  const sessionSheetSnap = useMobileSheetSnap({ onDismiss: () => setOpen(false) });
 
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
@@ -824,9 +830,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
 
   const renderHeader = React.useCallback(() => (
     <div className="shrink-0">
-      <div className="flex min-h-8 justify-center pt-2.5">
-        <div className="h-1 w-9 rounded-full bg-[color-mix(in_srgb,var(--surface-mutedForeground)_40%,transparent)]" />
-      </div>
+      <MobileSheetSnapHandle controller={sessionSheetSnap} ariaLabel={t('mobile.sessions.sheet.resizeAria')} />
 
       <div className="flex items-center justify-between gap-2 px-4 pb-2">
         <h2 className="text-[16px] font-semibold text-[var(--surface-foreground)]">
@@ -861,6 +865,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
           <button
             type="button"
             onClick={closeSessionPanel}
+            aria-label={t('mobile.surface.closeAria')}
             className="flex size-8 items-center justify-center rounded-full text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]"
             style={{ touchAction: 'manipulation' }}
           >
@@ -907,7 +912,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         </div>
       )}
     </div>
-  ), [t, totalRunning, totalUnread, projects, hasPinnedSessions, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, handleNewWorktree, closeSessionPanel, worktreeTargetIsGitRepository, worktreeTargetProject]);
+  ), [t, totalRunning, totalUnread, projects, hasPinnedSessions, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, handleNewWorktree, closeSessionPanel, worktreeTargetIsGitRepository, worktreeTargetProject, sessionSheetSnap]);
 
   if (!isMobile) {
     return null;
@@ -922,9 +927,11 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         keepMounted
         presentation="sheet"
         edge="bottom"
-        dismissGesture
+        dismissGesture={{ reservedTargetSelector: '[data-mobile-sheet-snap-handle]' }}
         ariaLabel={t('mobile.sessions.sheet.title')}
-        surfaceClassName="h-[72vh]"
+        surfaceClassName={sessionSheetSnap.snapPoint === MOBILE_SHEET_EXPANDED_SNAP ? 'h-[98dvh] max-h-[98dvh]' : 'h-[72dvh] max-h-[98dvh]'}
+        surfaceElementRef={sessionSheetSnap.surfaceRef}
+        onExitComplete={sessionSheetSnap.reset}
       >
         <div className="flex min-h-0 flex-1 flex-col">
           {renderHeader()}
