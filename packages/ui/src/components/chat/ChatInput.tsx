@@ -129,6 +129,7 @@ import { admitChatInputQueueMessageAndConsumeResources } from './queueAdmission'
 import { shouldShowPermissionAutoAcceptControl, togglePermissionAutoAccept } from './permissionAutoAccept';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
+const COMPOSER_TEXT_LAYOUT_CLASS = 'box-border w-full whitespace-pre-wrap break-words px-3 typography-markdown [font-family:inherit] [font-style:inherit] [font-weight:inherit] leading-[inherit] tracking-[inherit] md:typography-ui-label';
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 const EMPTY_QUEUE: QueuedMessage[] = [];
 const FILE_MENTION_TOKEN = /^@[^\s]+$/;
@@ -5458,15 +5459,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             <ActiveEditorFileSuggestion />
                         </div>
                         <div className={cn("relative overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
-                            {/* No highlight mirror on mobile: over wrapped text its
-                                layout drifts from the real textarea, which visually
-                                misplaces the caret. Plain textarea text keeps caret
-                                and text in the same layout. */}
-                            {highlightedComposerContent && !isMobile && (
+                            {/* Shared text metrics keep wrapped mirror content aligned
+                                with the textarea across desktop and mobile. */}
+                            {highlightedComposerContent && (
                                 <div
                                     aria-hidden
                                     className={cn(
-                                        'pointer-events-none absolute inset-0 z-0 whitespace-pre-wrap break-words px-3 rounded-b-none',
+                                        'pointer-events-none absolute inset-0 z-0 rounded-b-none',
+                                        COMPOSER_TEXT_LAYOUT_CLASS,
                                         isComposerExpanded
                                             ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-4')
                                             : isMobile
@@ -5616,14 +5616,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 fillContainer={isComposerExpanded}
                                 outerClassName={cn('ring-0 bg-transparent shadow-none hover:bg-transparent focus-within:ring-0', isComposerExpanded && 'flex-1 min-h-0')}
                                 className={cn(
-                                    'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent relative z-10',
+                                    'min-h-[52px] resize-none border-0 rounded-b-none appearance-none hover:border-transparent bg-transparent relative z-10',
+                                    COMPOSER_TEXT_LAYOUT_CLASS,
                                     isComposerExpanded
                                         ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-4')
                                         : isMobile
                                             ? 'py-2.5'
                                             : 'pt-4 pb-2',
                                     inputMode === 'shell' && 'font-mono',
-                                    highlightedComposerContent && !isMobile && 'text-transparent caret-[var(--surface-foreground)]',
+                                    highlightedComposerContent && 'text-transparent caret-[var(--surface-foreground)]',
                                 )}
                                 style={{
                                     flex: isComposerExpanded ? '1 1 auto' : 'none',
