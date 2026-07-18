@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { evaluateSwipeDirection } from './useEdgeSwipeSessionSwitch';
+import { evaluateSwipeDirection, evaluateSwipeProgress } from './useEdgeSwipeSessionSwitch';
 
 import type { SwipeDirectionInput } from './useEdgeSwipeSessionSwitch';
 
@@ -135,5 +135,30 @@ describe('evaluateSwipeDirection', () => {
 
   test('vertical swipe within the old tolerance is ignored', () => {
     expect(evaluateSwipeDirection(baseSwipe({ endX: 259, endY: 200 }))).toBe(null);
+  });
+});
+
+describe('evaluateSwipeProgress', () => {
+  test('reports progressive next-session feedback before commit', () => {
+    expect(evaluateSwipeProgress(baseSwipe({ endX: 168, endY: 304 }), { prev: true, next: true })).toEqual({
+      direction: 'next',
+      progress: 0.5,
+      offsetX: -32,
+      canSwitch: true,
+    });
+  });
+
+  test('clamps committed visual progress and reports unavailable direction', () => {
+    expect(evaluateSwipeProgress(baseSwipe({ endX: 100, endY: 303 }), { prev: true, next: false })).toEqual({
+      direction: 'next',
+      progress: 1,
+      offsetX: -48,
+      canSwitch: false,
+    });
+  });
+
+  test('ignores tiny and vertical-dominant movement', () => {
+    expect(evaluateSwipeProgress(baseSwipe({ endX: 194 }), { prev: true, next: true })).toBe(null);
+    expect(evaluateSwipeProgress(baseSwipe({ endX: 180, endY: 330 }), { prev: true, next: true })).toBe(null);
   });
 });

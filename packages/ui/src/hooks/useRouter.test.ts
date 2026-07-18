@@ -94,11 +94,16 @@ const harness = createHookHarness();
 const sessionSubscribers = new Set<(state: typeof sessionState) => void>();
 const uiSubscribers = new Set<(state: typeof uiState) => void>();
 const settingsDialogOpenCalls: boolean[] = [];
+const setCurrentSessionCalls: Array<{ sessionId: string; directory: string }> = [];
 
 const sessionState = {
   currentSessionId: 'session-1' as string | null,
   currentSessionDirectory: '/repo' as string | null,
-  setCurrentSession: () => undefined,
+  setCurrentSession: (sessionId: string, directory: string) => {
+    setCurrentSessionCalls.push({ sessionId, directory });
+    sessionState.currentSessionId = sessionId;
+    sessionState.currentSessionDirectory = directory;
+  },
 };
 const uiState = {
   activeMainTab: 'chat' as const,
@@ -120,6 +125,7 @@ let globalSessionsState = {
   activeSessions: [{ id: 'session-1' }],
   archivedSessions: [] as Array<{ id: string }>,
 };
+let resolvedSessionDirectory = '/repo';
 let urlRoute = {
   sessionId: 'session-1' as string | null,
   tab: null as 'chat' | null,
@@ -153,7 +159,7 @@ mock.module('@/stores/useUIStore', () => ({
   ),
 }));
 mock.module('@/stores/useGlobalSessionsStore', () => ({
-  resolveGlobalSessionDirectory: () => '/repo',
+  resolveGlobalSessionDirectory: () => resolvedSessionDirectory,
   useGlobalSessionsStore: Object.assign(
     <T,>(selector: (state: typeof globalSessionsState) => T) => selector(globalSessionsState),
     { getState: () => globalSessionsState },
@@ -186,6 +192,7 @@ describe('useRouter', () => {
     sessionSubscribers.clear();
     uiSubscribers.clear();
     settingsDialogOpenCalls.length = 0;
+    setCurrentSessionCalls.length = 0;
     sessionState.currentSessionId = 'session-1';
     sessionState.currentSessionDirectory = '/repo';
     uiState.activeMainTab = 'chat';
@@ -197,6 +204,7 @@ describe('useRouter', () => {
       activeSessions: [{ id: 'session-1' }],
       archivedSessions: [],
     };
+    resolvedSessionDirectory = '/repo';
     urlRoute = {
       sessionId: 'session-1',
       tab: null,
@@ -235,5 +243,39 @@ describe('useRouter', () => {
 
     expect(uiState.isSettingsDialogOpen).toBe(true);
     expect(settingsDialogOpenCalls).toEqual([true]);
+  });
+
+  test('skips the deep-link timeout after the session resolves', async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    let timeoutCalls = 0;
+    globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+      timeoutCalls += 1;
+      return originalSetTimeout(...args);
+    }) as typeof setTimeout;
+
+    try {
+      harness.render(useRouter);
+      await Promise.resolve();
+
+      expect(timeoutCalls).toBe(0);
+      expect(urlRoute.sessionId).toBe('session-1');
+    } finally {
+      harness.reset();
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
+  test('reconciles a selected session to its authoritative directory', async () => {
+    sessionState.currentSessionDirectory = '/stale-repo';
+    resolvedSessionDirectory = '/repo/worktree';
+
+    harness.render(useRouter);
+    await Promise.resolve();
+
+    expect(setCurrentSessionCalls[0]).toEqual({
+      sessionId: 'session-1',
+      directory: '/repo/worktree',
+    });
+    expect(sessionState.currentSessionDirectory).toBe('/repo/worktree');
   });
 });

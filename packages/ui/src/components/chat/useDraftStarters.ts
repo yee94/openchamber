@@ -57,14 +57,14 @@ export type UseDraftStartersResult = {
     reorder: (group: StarterGroup, fromId: string, toId: string) => void;
 };
 
-export function useDraftStarters(): UseDraftStartersResult {
+export function useDraftStarters(directory?: string | null): UseDraftStartersResult {
     const { t } = useI18n();
     const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
     const globalRaw = useUIStore((s) => s.globalDraftStarters);
-    const commandsQuery = useCommandsQuery();
+    const commandsQuery = useCommandsQuery({ directory });
     const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
     const { refetch: refetchCommands } = commandsQuery;
-    const skillsQuery = useInstalledSkillsQuery();
+    const skillsQuery = useInstalledSkillsQuery({ directory });
     const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
     const { refetch: refetchSkills } = skillsQuery;
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);

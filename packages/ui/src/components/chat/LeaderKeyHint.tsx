@@ -42,7 +42,10 @@ export const LeaderKeyHint: React.FC<{ className?: string }> = ({ className }) =
         className,
       )}
     >
-      <ShortcutKbd shortcut={leaderLabel} />
+      <ShortcutKbd
+        shortcut={leaderLabel}
+        className="opacity-[0.35] [&_[data-slot=kbd]]:rounded-md [&_[data-slot=kbd]]:border-0 [&_[data-slot=kbd]]:bg-[color-mix(in_srgb,var(--surface-foreground)_6%,transparent)] [&_[data-slot=kbd]]:text-muted-foreground/65 [&_[data-slot=kbd]]:shadow-none"
+      />
       <span className="typography-micro text-[var(--surface-muted-foreground)]">·</span>
       {LEADER_ACTIONS.map((action, index) => (
         <React.Fragment key={action.key}>
@@ -50,7 +53,7 @@ export const LeaderKeyHint: React.FC<{ className?: string }> = ({ className }) =
             <span className="typography-micro text-[var(--surface-muted-foreground)]">·</span>
           ) : null}
           <span className="inline-flex items-center gap-1 typography-micro">
-            <Kbd className="border-[var(--interactive-selection)] bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]">
+            <Kbd className="rounded-md border-0 bg-[color-mix(in_srgb,var(--surface-foreground)_6%,transparent)] text-muted-foreground/65 shadow-none">
               {action.key}
             </Kbd>
             <span className="text-[var(--surface-muted-foreground)]">{t(action.labelKey)}</span>

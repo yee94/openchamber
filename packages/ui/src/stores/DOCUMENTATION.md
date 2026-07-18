@@ -49,6 +49,9 @@ startup. `useAgentsStore` and `useCommandsStore` own selection, drafts, and muta
 actions.
 
 Agent, command, and installed-skills queries use transport identity plus configuration directory.
+Composer consumers pass the effective session, worktree, or draft directory explicitly so discovery,
+highlighting, and send-time slash classification share the same query scope. Settings consumers retain
+the active project configuration directory.
 Metadata failures retain the prior complete query snapshot for that key; the
 failed refresh leaves that snapshot available. `useAgentsStore` owns agent
 selection, drafts, and mutation actions while `agentQueries.ts` owns agent server

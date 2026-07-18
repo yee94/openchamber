@@ -65,6 +65,7 @@ interface CommandAutocompleteProps {
   searchQuery: string;
   onCommandSelect: (command: CommandInfo, submit?: boolean) => void;
   onClose: () => void;
+  directory?: string | null;
   style?: React.CSSProperties;
 }
 
@@ -72,6 +73,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   searchQuery,
   onCommandSelect,
   onClose,
+  directory,
   style,
 }, ref) => {
   const { t } = useI18n();
@@ -86,10 +88,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const commandsQuery = useCommandsQuery();
+  const commandsQuery = useCommandsQuery({ directory });
   const commandsWithMetadata = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
   const isCommandsFetching = commandsQuery.isFetching;
-  const skillsQuery = useInstalledSkillsQuery();
+  const skillsQuery = useInstalledSkillsQuery({ directory });
   const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
   const { refetch: refetchSkills } = skillsQuery;
   const [selectedIndex, setSelectedIndex] = React.useState(0);

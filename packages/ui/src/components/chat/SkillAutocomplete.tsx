@@ -20,6 +20,7 @@ interface SkillAutocompleteProps {
   searchQuery: string;
   onSkillSelect: (skillName: string) => void;
   onClose: () => void;
+  directory?: string | null;
   style?: React.CSSProperties;
 }
 
@@ -27,6 +28,7 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   searchQuery,
   onSkillSelect,
   onClose,
+  directory,
   style,
 }, ref) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -37,7 +39,7 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   const keyboardNavigationRef = React.useRef(false);
   const [filteredSkills, setFilteredSkills] = React.useState<SkillInfo[]>([]);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
-  const skillsQuery = useInstalledSkillsQuery();
+  const skillsQuery = useInstalledSkillsQuery({ directory });
   const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
   const { refetch: refetchSkills } = skillsQuery;
 

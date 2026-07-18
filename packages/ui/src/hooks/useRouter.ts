@@ -53,6 +53,8 @@ export function useRouter(): void {
 
   // Get store actions (stable references)
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
@@ -222,44 +224,47 @@ export function useRouter(): void {
       return;
     }
 
-    const currentSession = useSessionUIStore.getState();
-    if (
-      currentSession.currentSessionId === route.sessionId
-      && currentSession.currentSessionDirectory
-    ) {
-      return;
-    }
-
     const session = [...activeSessions, ...archivedSessions]
       .find((candidate) => candidate.id === route.sessionId);
     const directory = session ? resolveGlobalSessionDirectory(session) : null;
-    if (!directory) {
-      redirectToHome();
+    if (directory) {
+      if (
+        currentSessionId !== route.sessionId
+        || currentSessionDirectory !== directory
+      ) {
+        setCurrentSession(route.sessionId, directory);
+      }
       return;
     }
 
     if (
-      currentSession.currentSessionId !== route.sessionId
-      || currentSession.currentSessionDirectory !== directory
+      currentSessionId === route.sessionId
+      && currentSessionDirectory
     ) {
-      setCurrentSession(route.sessionId, directory);
+      return;
     }
-  }, [activeSessions, archivedSessions, hasLoadedGlobalSessions, redirectToHome, route, setCurrentSession]);
+
+    redirectToHome();
+  }, [activeSessions, archivedSessions, currentSessionDirectory, currentSessionId, hasLoadedGlobalSessions, redirectToHome, route, setCurrentSession]);
 
   React.useEffect(() => {
-    if (!route.sessionId || isVSCode) {
+    const isResolved = currentSessionId === route.sessionId && Boolean(currentSessionDirectory);
+    if (!route.sessionId || isVSCode || isResolved) {
       return;
     }
 
     const sessionId = route.sessionId;
     const timeout = setTimeout(() => {
-      if (parseRoute().sessionId === sessionId) {
+      const currentSession = useSessionUIStore.getState();
+      const resolvedWhileWaiting = currentSession.currentSessionId === sessionId
+        && Boolean(currentSession.currentSessionDirectory);
+      if (parseRoute().sessionId === sessionId && !resolvedWhileWaiting) {
         redirectToHome();
       }
     }, SESSION_ROUTE_TIMEOUT_MS);
 
     return () => clearTimeout(timeout);
-  }, [isVSCode, redirectToHome, route.sessionId]);
+  }, [currentSessionDirectory, currentSessionId, isVSCode, redirectToHome, route.sessionId]);
 
   // Subscribe to session changes
   React.useEffect(() => {

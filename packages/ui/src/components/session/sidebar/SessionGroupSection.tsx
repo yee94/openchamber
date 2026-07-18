@@ -827,7 +827,6 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     : null;
   const showInlinePrTitle = Boolean(prIndicator && group.branch);
   const showBranchSubtitle = !prIndicator && !group.isMain && Boolean(group.branch);
-  const prVisualState = prIndicator?.visualState ?? null;
   const checksSummary = prIndicator && prIndicator.state === 'open' && prIndicator.checks
     ? t('sessions.sidebar.group.pr.checksPassed', {
       success: prIndicator.checks.success,
@@ -882,7 +881,6 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
         return null;
     }
   })();
-  const branchIconColor = statusLine?.color ?? (prVisualState ? `var(--pr-${prVisualState})` : undefined);
   const handlePrLinkClick = (event: React.MouseEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -1194,8 +1192,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                       <span className="inline-flex shrink-0 items-center gap-1 leading-none align-middle">
                         <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                           <Icon name="git-branch"
-                            className={cn('h-3.5 w-3.5 shrink-0', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
-                            style={branchIconColor ? { color: branchIconColor } : undefined}
+                            className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
                           />
                           <span className={cn(
                             'text-muted-foreground h-3.5 w-3.5 items-center justify-center',
@@ -1265,7 +1262,6 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                   <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                     <Icon name="git-branch"
                       className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
-                      style={branchIconColor ? { color: branchIconColor } : undefined}
                     />
                     <span className={cn(
                       'text-muted-foreground h-3.5 w-3.5 items-center justify-center',
@@ -1289,8 +1285,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
-                          <Icon name="git-branch" className="h-3.5 w-3.5 text-muted-foreground"
-                            style={branchIconColor ? { color: branchIconColor } : undefined}/>
+                          <Icon name="git-branch" className="h-3.5 w-3.5 text-muted-foreground" />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" sideOffset={6} align="start" className="max-w-sm">
@@ -1321,8 +1316,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                       </TooltipContent>
                     </Tooltip>
                   ) : (
-                    <Icon name="git-branch" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
-                      style={branchIconColor ? { color: branchIconColor } : undefined}/>
+                    <Icon name="git-branch" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                   )
                 ) : null}
                 <span

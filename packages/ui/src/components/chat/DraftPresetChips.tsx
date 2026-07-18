@@ -31,6 +31,7 @@ import {
 import { useI18n } from '@/lib/i18n';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import {
     useDraftStarters,
     type ResolvedStarter,
@@ -244,7 +245,8 @@ const AddStarterPicker: React.FC<{
  */
 export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, className }) => {
     const { t } = useI18n();
-    const { global, project, pinnable, ensureLoaded, addStarter, removeStarter, reorder } = useDraftStarters();
+    const directory = useEffectiveDirectory();
+    const { global, project, pinnable, ensureLoaded, addStarter, removeStarter, reorder } = useDraftStarters(directory);
     const { isMobile } = useDeviceInfo();
     const [isDragging, setIsDragging] = React.useState(false);
     const [expanded, setExpanded] = React.useState(false);

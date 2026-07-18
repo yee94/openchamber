@@ -1,5 +1,5 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { useInputStore } from '@/sync/input-store';
@@ -16,6 +16,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { ShortcutKbd } from '@/components/ui/kbd';
+import { subscribeSessionSwitchIntent } from '@/lib/sessionSwitchIntent';
 
 interface TextSelectionMenuProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -45,6 +46,17 @@ const appendDistilledInsightToNotes = (existingNotes: string, insight: string): 
 
 const DESKTOP_MENU_SIDE_MARGIN_PX = 8;
 const DESKTOP_MENU_FALLBACK_WIDTH_PX = 280;
+let dismissVisibleTextSelectionMenu: (() => void) | null = null;
+
+subscribeSessionSwitchIntent(() => {
+  if (typeof window !== 'undefined') {
+    window.getSelection()?.removeAllRanges();
+  }
+  if (dismissVisibleTextSelectionMenu) {
+    flushSync(dismissVisibleTextSelectionMenu);
+  }
+});
+
 const BLOCK_TAGS = new Set([
   'address', 'article', 'aside', 'blockquote', 'dd', 'div', 'dl', 'dt',
   'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3',
@@ -291,6 +303,9 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
   const hideMenu = React.useCallback(() => {
     pendingSelectionRef.current = null;
+    if (dismissVisibleTextSelectionMenu === hideMenu) {
+      dismissVisibleTextSelectionMenu = null;
+    }
 
     if (!isMenuVisibleRef.current) {
       return;
@@ -308,25 +323,11 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     isMenuVisibleRef.current = false;
   }, []);
 
-  // Cached session views stay mounted via React.Activity; the menu portals to
-  // document.body, so it must be dismissed when the active session changes.
-  const previousSessionIdRef = React.useRef(currentSessionId);
-  React.useEffect(() => {
-    if (previousSessionIdRef.current === currentSessionId) {
-      return;
+  React.useEffect(() => () => {
+    if (dismissVisibleTextSelectionMenu === hideMenu) {
+      dismissVisibleTextSelectionMenu = null;
     }
-    previousSessionIdRef.current = currentSessionId;
-
-    const selection = window.getSelection();
-    const container = containerRef.current;
-    if (selection && container) {
-      const range = getSelectionRangeWithinContainer(selection, container);
-      if (range) {
-        selection.removeAllRanges();
-      }
-    }
-    hideMenu();
-  }, [containerRef, currentSessionId, hideMenu]);
+  }, [hideMenu]);
 
   const getDesktopClampedX = React.useCallback((anchorX: number) => {
     if (typeof window === 'undefined') {
@@ -348,6 +349,11 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
   const showMenu = React.useCallback(() => {
     if (!pendingSelectionRef.current) return;
+
+    if (dismissVisibleTextSelectionMenu !== hideMenu) {
+      dismissVisibleTextSelectionMenu?.();
+      dismissVisibleTextSelectionMenu = hideMenu;
+    }
 
     const { plainText, markdownText, rect } = pendingSelectionRef.current;
     const shouldAnimateIn = !position.show;
@@ -377,7 +383,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         openRafRef.current = null;
       });
     }
-  }, [getDesktopClampedX, isMobile, position.show]);
+  }, [getDesktopClampedX, hideMenu, isMobile, position.show]);
 
   React.useLayoutEffect(() => {
     if (!position.show || isMobile || !menuRef.current) {

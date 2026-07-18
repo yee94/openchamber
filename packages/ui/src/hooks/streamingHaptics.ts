@@ -1,5 +1,5 @@
 /**
- * Streaming haptic feedback for Capacitor native mobile apps.
+ * Haptic feedback for Capacitor native mobile apps.
  *
  * Pure logic (platform checks, should-trigger evaluation, dedup state machine)
  * lives here and is tested standalone. The hook wraps it with store subscriptions
@@ -152,6 +152,26 @@ export function triggerMobileHaptic(): boolean {
     return mod.Haptics.impact({ style: mod.ImpactStyle.Light }).catch(() => undefined);
   });
   return true;
+}
+
+const MOBILE_PRESS_TARGET_SELECTOR = 'button, [role="button"]';
+
+/** Adds light feedback after enabled mobile controls complete a real user click. */
+export function useMobilePressHaptics(): void {
+  React.useEffect(() => {
+    if (!isCapacitorMobileNative()) return;
+
+    const handleClick = (event: MouseEvent) => {
+      if (!event.isTrusted || !(event.target instanceof Element)) return;
+      const control = event.target.closest<HTMLElement>(MOBILE_PRESS_TARGET_SELECTOR);
+      if (!control) return;
+      if (control.matches(':disabled, [aria-disabled="true"], [data-mobile-press-feedback="none"]')) return;
+      triggerMobileHaptic();
+    };
+
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 }
 
 // ---------------------------------------------------------------------------

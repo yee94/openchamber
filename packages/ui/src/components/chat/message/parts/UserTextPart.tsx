@@ -37,10 +37,10 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     const [isTruncated, setIsTruncated] = React.useState(false);
     const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
     const collapsibleUserMessages = useUIStore((state) => state.collapsibleUserMessages);
-    const skillsQuery = useInstalledSkillsQuery();
+    const effectiveDirectory = useEffectiveDirectory();
+    const skillsQuery = useInstalledSkillsQuery({ directory: effectiveDirectory });
     const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
     const openContextFile = useUIStore((state) => state.openContextFile);
-    const effectiveDirectory = useEffectiveDirectory();
     const { t } = useI18n();
     const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
     const isCollapsed = collapsibleUserMessages && !isExpanded;

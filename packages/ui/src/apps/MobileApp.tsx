@@ -68,9 +68,9 @@ import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from
 import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
-import { useEdgeSwipeSessionSwitch } from './useEdgeSwipeSessionSwitch';
+import { useEdgeSwipeSessionSwitch, type SwipeProgress } from './useEdgeSwipeSessionSwitch';
 import { useHeaderSwipeToSessions } from './useHeaderSwipeToSessions';
-import { useStreamingHaptics } from '@/hooks/streamingHaptics';
+import { useMobilePressHaptics, useStreamingHaptics } from '@/hooks/streamingHaptics';
 import { useNativePushRegistration } from './useNativePushRegistration';
 
 const MOBILE_SETTINGS_PAGES = [
@@ -2066,6 +2066,7 @@ const MobileHeader: React.FC<{
 const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
   const { t } = useI18n();
   useStreamingHaptics();
+  useMobilePressHaptics();
   const mobileSessionPanelOpen = useUIStore((state) => state.mobileSessionPanelOpen);
   const setMobileSessionPanelOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
   const [filesOpen, setFilesOpen] = React.useState(false);
@@ -2211,6 +2212,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // slide+fade on the chat content so it's obvious the session changed.
   const chatMainRef = React.useRef<HTMLElement>(null);
   const chatAnimRef = React.useRef<HTMLDivElement>(null);
+  const previousSessionPlaceholderRef = React.useRef<HTMLDivElement>(null);
+  const nextSessionPlaceholderRef = React.useRef<HTMLDivElement>(null);
   const swipeDirectionRef = React.useRef<'prev' | 'next' | null>(null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
@@ -2221,7 +2224,37 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const recordSwipeDirection = React.useCallback((direction: 'prev' | 'next') => {
     swipeDirectionRef.current = direction;
   }, []);
-  useEdgeSwipeSessionSwitch(chatMainRef, { onSwitch: recordSwipeDirection });
+  const renderSwipeProgress = React.useCallback((progress: SwipeProgress | null) => {
+    const chat = chatAnimRef.current;
+    const previous = previousSessionPlaceholderRef.current;
+    const next = nextSessionPlaceholderRef.current;
+    if (!chat || !previous || !next) return;
+
+    if (!progress) {
+      chat.style.transform = '';
+      chat.style.opacity = '';
+      chat.style.willChange = '';
+      previous.style.opacity = '0';
+      previous.style.transform = 'translate3d(-12px, -50%, 0)';
+      next.style.opacity = '0';
+      next.style.transform = 'translate3d(12px, -50%, 0)';
+      return;
+    }
+
+    chat.getAnimations().forEach((animation) => animation.cancel());
+    chat.style.willChange = 'transform, opacity';
+    chat.style.transform = `translate3d(${progress.offsetX * 0.22}px, 0, 0)`;
+    chat.style.opacity = String(1 - progress.progress * 0.08);
+    const placeholder = progress.direction === 'prev' ? previous : next;
+    const hiddenPlaceholder = progress.direction === 'prev' ? next : previous;
+    hiddenPlaceholder.style.opacity = '0';
+    placeholder.style.opacity = String((progress.canSwitch ? 0.35 : 0.18) + progress.progress * 0.65);
+    placeholder.style.transform = `translate3d(${progress.offsetX * 0.12}px, -50%, 0) scale(${0.96 + progress.progress * 0.04})`;
+  }, []);
+  useEdgeSwipeSessionSwitch(chatMainRef, {
+    onSwitch: recordSwipeDirection,
+    onProgress: renderSwipeProgress,
+  });
 
   // A right swipe across more than half the chat opens the session panel.
   // Disabled when any overlay is already open so the gesture doesn't stack
@@ -2493,7 +2526,23 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             />
           </div>
           <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
-            <div ref={chatAnimRef} className="h-full w-full">
+            <div
+              ref={previousSessionPlaceholderRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 z-20 rounded-full border border-border/70 bg-background/90 px-3 py-1.5 typography-meta font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm"
+              style={{ transform: 'translate3d(-12px, -50%, 0)' }}
+            >
+              {t('helpDialog.item.previousSession')}
+            </div>
+            <div
+              ref={nextSessionPlaceholderRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute right-3 top-1/2 z-20 rounded-full border border-border/70 bg-background/90 px-3 py-1.5 typography-meta font-medium text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm"
+              style={{ transform: 'translate3d(12px, -50%, 0)' }}
+            >
+              {t('helpDialog.item.nextSession')}
+            </div>
+            <div ref={chatAnimRef} data-session-swipe-surface="true" className="h-full w-full">
               <ErrorBoundary>
                 <ChatView />
               </ErrorBoundary>

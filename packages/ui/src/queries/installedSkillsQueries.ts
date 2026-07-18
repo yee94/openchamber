@@ -59,10 +59,11 @@ export const installedSkillsQueryOptions = (
   };
 };
 
-export const useInstalledSkillsQuery = (options: { enabled?: boolean } = {}) => {
+export const useInstalledSkillsQuery = (options: { enabled?: boolean; directory?: string | null } = {}) => {
   const activeProjectPath = useProjectsStore((state) => state.getActiveProject?.()?.path ?? null);
+  const directory = normalizeDirectory(options.directory) ?? normalizeDirectory(activeProjectPath) ?? normalizeDirectory(opencodeClient.getDirectory());
   return useQuery({
-    ...installedSkillsQueryOptions(normalizeDirectory(activeProjectPath) ?? normalizeDirectory(opencodeClient.getDirectory())),
+    ...installedSkillsQueryOptions(directory),
     enabled: options.enabled,
   });
 };

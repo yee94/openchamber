@@ -1192,9 +1192,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     // Known slash-invocations (commands + skills + built-ins) used to highlight
     // matching /tokens in the composer, the same way confirmed @files are.
-    const commandsQuery = useCommandsQuery();
+    const commandsQuery = useCommandsQuery({ directory: currentDirectory });
     const availableCommands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
-    const installedSkillsQuery = useInstalledSkillsQuery();
+    const installedSkillsQuery = useInstalledSkillsQuery({ directory: currentDirectory });
     const availableSkills = React.useMemo(() => installedSkillsQuery.data ?? [], [installedSkillsQuery.data]);
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
@@ -5358,6 +5358,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         <CommandAutocomplete
                             ref={commandRef}
                             searchQuery={commandQuery}
+                            directory={currentDirectory}
                             onCommandSelect={handleCommandSelect}
                             onClose={() => setShowCommandAutocomplete(false)}
                             style={isDesktopExpanded && autocompleteOverlayPosition
@@ -5377,6 +5378,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         <SkillAutocomplete
                             ref={skillRef}
                             searchQuery={skillQuery}
+                            directory={currentDirectory}
                             onSkillSelect={handleSkillSelect}
                             onClose={() => setShowSkillAutocomplete(false)}
                             style={isDesktopExpanded && autocompleteOverlayPosition

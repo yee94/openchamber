@@ -1,14 +1,15 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 
+import { triggerMobileHaptic } from '@/hooks/streamingHaptics';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 /**
- * Horizontal touch-swipe gesture to switch sessions on the mobile composer.
+ * Horizontal touch-swipe gesture to switch sessions in the mobile chat.
  *
  * The listeners live on the chat container, while gesture starts are accepted
- * only from a composer surface marked with `data-session-swipe-surface`:
+ * only from a chat surface marked with `data-session-swipe-surface`:
  *
  * - Left  swipe → step +1 (next / older session)
  * - Right swipe → step -1 (prev / newer session)
@@ -24,8 +25,8 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
  * `time.updated`. The order is computed at gesture time from the store
  * (not subscribed) so it's always fresh and never re-attaches.
  *
- * Only `touchstart` / `touchend` are observed (both passive), so this
- * never blocks scrolling — it just reads where the gesture began and ended.
+ * Touch listeners stay passive, so scrolling remains browser-owned. Progress
+ * updates let the caller render compositor-only feedback while the finger moves.
  */
 
 const MIN_DISTANCE = 64; // px of dominant-axis travel required to commit a switch
@@ -106,6 +107,16 @@ export interface SwipeDirectionInput {
 
 export type SwipeDirection = 'prev' | 'next' | null;
 
+export interface SwipeProgress {
+  direction: Exclude<SwipeDirection, null>;
+  /** Commit progress, clamped from 0 to 1. */
+  progress: number;
+  /** Finger travel clamped to the visual feedback range. */
+  offsetX: number;
+  /** Whether a session exists in this direction. */
+  canSwitch: boolean;
+}
+
 /**
  * Pure function: determine swipe direction (prev / next) from raw touch
  * coordinates. Callers inject the gate flags; this function only evaluates
@@ -121,6 +132,25 @@ export const evaluateSwipeDirection = (input: SwipeDirectionInput): SwipeDirecti
   if (absDx < MIN_DISTANCE) return null;
   if (absDy > absDx * MAX_OFF_AXIS_RATIO) return null;
   return dx < 0 ? 'next' : 'prev';
+};
+
+export const evaluateSwipeProgress = (
+  input: Pick<SwipeDirectionInput, 'startX' | 'startY' | 'endX' | 'endY'>,
+  available: { prev: boolean; next: boolean },
+): SwipeProgress | null => {
+  const dx = input.endX - input.startX;
+  const dy = input.endY - input.startY;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  if (absDx < 8 || absDy > absDx * MAX_OFF_AXIS_RATIO) return null;
+  const direction = dx < 0 ? 'next' : 'prev';
+  return {
+    direction,
+    progress: Math.min(absDx / MIN_DISTANCE, 1),
+    offsetX: Math.sign(dx) * Math.min(absDx, 48),
+    canSwitch: available[direction],
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -160,6 +190,16 @@ const switchByStep = (step: number): boolean => {
   return true;
 };
 
+const availableDirections = (): { prev: boolean; next: boolean } => {
+  const ordered = orderedTopLevelSessions();
+  const currentId = useSessionUIStore.getState().currentSessionId;
+  const index = ordered.findIndex((session) => session.id === currentId);
+  return {
+    prev: index > 0,
+    next: index >= 0 && index < ordered.length - 1,
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -167,6 +207,8 @@ const switchByStep = (step: number): boolean => {
 export interface EdgeSwipeSessionSwitchOptions {
   /** Called after a successful switch, with the travel direction, so the caller can animate. */
   onSwitch?: (direction: 'prev' | 'next') => void;
+  /** Called during a qualifying swipe and with null when tracking ends. */
+  onProgress?: (progress: SwipeProgress | null) => void;
 }
 
 export const useEdgeSwipeSessionSwitch = (
@@ -176,6 +218,8 @@ export const useEdgeSwipeSessionSwitch = (
   // Keep onSwitch in a ref so a changing callback identity doesn't re-attach the listeners.
   const onSwitchRef = React.useRef(options?.onSwitch);
   onSwitchRef.current = options?.onSwitch;
+  const onProgressRef = React.useRef(options?.onProgress);
+  onProgressRef.current = options?.onProgress;
 
   React.useEffect(() => {
     const element = ref.current;
@@ -185,6 +229,9 @@ export const useEdgeSwipeSessionSwitch = (
     let startX = 0;
     let startY = 0;
     let startedOnSwallowTarget = false;
+    let available = { prev: false, next: false };
+    let hapticTriggered = false;
+    let progressActive = false;
     let suppressNextClick = false;
     let clickResetTimer: number | null = null;
 
@@ -208,11 +255,39 @@ export const useEdgeSwipeSessionSwitch = (
       startX = touch.clientX;
       startY = touch.clientY;
       startedOnSwallowTarget = isSwallowTarget(touch);
+      available = availableDirections();
+      hapticTriggered = false;
+      progressActive = false;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!tracking || startedOnSwallowTarget || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const progress = evaluateSwipeProgress({
+        startX,
+        startY,
+        endX: touch.clientX,
+        endY: touch.clientY,
+      }, available);
+
+      if (!progress) {
+        if (progressActive) onProgressRef.current?.(null);
+        progressActive = false;
+        return;
+      }
+
+      progressActive = true;
+      onProgressRef.current?.(progress);
+      if (progress.progress === 1 && progress.canSwitch && !hapticTriggered) {
+        hapticTriggered = triggerMobileHaptic();
+      }
     };
 
     const onTouchEnd = (event: TouchEvent) => {
       if (!tracking) return;
       tracking = false;
+      if (progressActive) onProgressRef.current?.(null);
+      progressActive = false;
       if (startedOnSwallowTarget) return;
 
       const touch = event.changedTouches[0];
@@ -232,6 +307,7 @@ export const useEdgeSwipeSessionSwitch = (
 
       const step = direction === 'prev' ? -1 : 1;
       if (switchByStep(step)) {
+        if (!hapticTriggered) triggerMobileHaptic();
         suppressNextClick = true;
         if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);
         clickResetTimer = window.setTimeout(() => {
@@ -244,6 +320,8 @@ export const useEdgeSwipeSessionSwitch = (
 
     const onTouchCancel = () => {
       tracking = false;
+      if (progressActive) onProgressRef.current?.(null);
+      progressActive = false;
     };
 
     const onClickCapture = (event: MouseEvent) => {
@@ -258,12 +336,14 @@ export const useEdgeSwipeSessionSwitch = (
     };
 
     element.addEventListener('touchstart', onTouchStart, { passive: true });
+    element.addEventListener('touchmove', onTouchMove, { passive: true });
     element.addEventListener('touchend', onTouchEnd, { passive: true });
     element.addEventListener('touchcancel', onTouchCancel, { passive: true });
     element.addEventListener('click', onClickCapture, true);
     return () => {
       if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);
       element.removeEventListener('touchstart', onTouchStart);
+      element.removeEventListener('touchmove', onTouchMove);
       element.removeEventListener('touchend', onTouchEnd);
       element.removeEventListener('touchcancel', onTouchCancel);
       element.removeEventListener('click', onClickCapture, true);
