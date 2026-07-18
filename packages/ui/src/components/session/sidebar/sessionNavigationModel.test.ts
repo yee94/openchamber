@@ -7,6 +7,7 @@ import {
   filterVisibleProjectNavigationTargets,
   getDefaultProjectGroupVisibleCount,
   resolveProjectVirtualSessionIndex,
+  selectVisibleSessionNodes,
 } from './sessionNavigationModel';
 import type { SessionNavigationTarget } from '@/sync/session-navigation';
 
@@ -33,6 +34,19 @@ const group = (id: string, sessions: SessionNode[], options?: { main?: boolean; 
 });
 
 describe('buildProjectNavigationTargets', () => {
+  test('keeps running sessions visible beyond the compact boundary', () => {
+    const nodes = [
+      node('first', 500),
+      node('second', 400),
+      node('third', 300),
+      node('running', 200),
+      node('hidden', 100),
+    ];
+
+    expect(selectVisibleSessionNodes(nodes, 3, new Set(['running'])).map((item) => item.session.id))
+      .toEqual(['first', 'second', 'third', 'running']);
+  });
+
   test('follows visual project, root-group, folder, and row order', () => {
     const rootA = node('root-a', 100);
     const rootB = node('root-b', 200);
@@ -168,6 +182,40 @@ describe('buildProjectNavigationTargets', () => {
     });
 
     expect(visible.map((item) => item.sessionId)).toEqual(['visible-a', 'visible-b']);
+  });
+
+  test('keeps running shortcut targets beyond the Show more boundary', () => {
+    const targets: SessionNavigationTarget[] = [
+      {
+        scope: 'project',
+        sessionId: 'visible',
+        projectId: 'project-a',
+        directory: '/project-a',
+        groupKey: 'project-a:root',
+        visibleIndex: 0,
+      },
+      {
+        scope: 'project',
+        sessionId: 'running',
+        projectId: 'project-a',
+        directory: '/project-a',
+        groupKey: 'project-a:root',
+        visibleIndex: 5,
+      },
+    ];
+
+    const visible = filterVisibleProjectNavigationTargets({
+      targets,
+      collapsedProjectIds: new Set(),
+      collapsedGroupKeys: new Set(),
+      collapsedFolderIds: new Set(),
+      visibleSessionCountByGroup: new Map(),
+      defaultVisibleSessionCount: 3,
+      hasSessionSearchQuery: false,
+      alwaysVisibleSessionIds: new Set(['running']),
+    });
+
+    expect(visible.map((item) => item.sessionId)).toEqual(['visible', 'running']);
   });
 
   test('uses the revealed batch size and search expansion rules', () => {

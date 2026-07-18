@@ -1,21 +1,32 @@
 /**
  * Haptic feedback for Capacitor native mobile apps.
  *
- * Pure logic (platform checks, should-trigger evaluation, dedup state machine)
+ * Pure logic (platform checks, visible-session evaluation, dedup state machine)
  * lives here and is tested standalone. The hook wraps it with store subscriptions
- * and a fire-and-forget dynamic import to `@capacitor/haptics`.
+ * and the native OpenChamber haptics plugin.
  */
 
 import React from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import {
   createStreamingHapticEventDeduper,
-  createStreamingHapticEventQueue,
   subscribeToStreamingHapticEvents,
 } from '@/sync/streaming-haptic-events';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
-export const HAPTIC_MIN_INTERVAL_MS = 20;
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+type OpenChamberHapticsPlugin = {
+  impactLight: () => Promise<void>;
+};
+
+const OpenChamberHaptics = registerPlugin<OpenChamberHapticsPlugin>('OpenChamberHaptics');
+let nativeHapticsAvailable: boolean | null = null;
+
+const isNativeHapticsAvailable = (): boolean => {
+  nativeHapticsAvailable ??= Capacitor.isPluginAvailable('OpenChamberHaptics');
+  return nativeHapticsAvailable;
+};
 
 // ---------------------------------------------------------------------------
 // Pure logic – tested without Capacitor or React
@@ -64,15 +75,8 @@ type HapticsDecisionReason =
   | 'hidden';
 
 /**
- * Pure function: given the current dedup state and the latest snapshot,
- * decides whether a haptic should fire AND returns the next dedup state.
- *
- * Rules (in priority order):
- * 1. No streaming message → skip.
- * 2. App not foreground / document hidden → skip.
- * 3. Not in "streaming" phase → skip.
- * 4. Same message ID within the haptic cadence window → skip.
- * 5. Otherwise → fire and update dedup state.
+ * Pure function that determines whether an event belongs to the visible,
+ * foreground session.
  */
 export function evaluateHaptics(input: HapticsInput): HapticsDecision {
   const { eventSessionId, currentSessionId, isForeground, isVisible } = input;
@@ -105,6 +109,8 @@ export function evaluateHaptics(input: HapticsInput): HapticsDecision {
   };
 }
 
+const HAPTIC_MIN_INTERVAL_MS = 20;
+
 export function shouldTriggerHaptic(lastTriggeredAt: number, now: number): boolean {
   return now - lastTriggeredAt >= HAPTIC_MIN_INTERVAL_MS;
 }
@@ -127,34 +133,7 @@ export function evaluateSwipeThresholdHaptic(input: {
   return { thresholdReached: input.thresholdReached, event: null };
 }
 
-// ---------------------------------------------------------------------------
-// Dynamic import cache – prevents repeated imports of the Capacitor plugin
-// ---------------------------------------------------------------------------
-
-let hapticsImportPromise: Promise<typeof import('@capacitor/haptics')> | null = null;
-
-function getHapticsModule(): Promise<typeof import('@capacitor/haptics')> {
-  if (!hapticsImportPromise) {
-    hapticsImportPromise = import('@capacitor/haptics');
-  }
-  return hapticsImportPromise;
-}
-
-let hapticsModuleCache: typeof import('@capacitor/haptics') | null = null;
-let hapticsModuleCacheValid = false;
 let lastHapticAt = Number.NEGATIVE_INFINITY;
-
-async function getHapticsModuleCached(): Promise<typeof import('@capacitor/haptics') | null> {
-  if (hapticsModuleCacheValid) return hapticsModuleCache;
-  try {
-    hapticsModuleCache = await getHapticsModule();
-    hapticsModuleCacheValid = true;
-    return hapticsModuleCache;
-  } catch {
-    hapticsModuleCacheValid = true; // don't retry after failure
-    return null;
-  }
-}
 
 type MobileHapticStrength = 'light' | 'medium';
 
@@ -164,17 +143,15 @@ export function triggerMobileHaptic(
   options?: { bypassCadence?: boolean },
 ): boolean {
   if (!isCapacitorMobileNative()) return false;
+  if (!isNativeHapticsAvailable()) return false;
   if (document.visibilityState !== 'visible' || !document.documentElement.classList.contains('oc-native-app-active')) return false;
 
   const now = Date.now();
   if (!options?.bypassCadence && !shouldTriggerHaptic(lastHapticAt, now)) return false;
   lastHapticAt = now;
 
-  void getHapticsModuleCached().then((mod) => {
-    if (!mod) return;
-    const style = strength === 'medium' ? mod.ImpactStyle.Medium : mod.ImpactStyle.Light;
-    return mod.Haptics.impact({ style }).catch(() => undefined);
-  });
+  void strength;
+  void OpenChamberHaptics.impactLight().catch(() => undefined);
   return true;
 }
 
@@ -184,7 +161,6 @@ const MOBILE_PRESS_TARGET_SELECTOR = 'button, [role="button"]';
 export function useMobilePressHaptics(): void {
   React.useEffect(() => {
     if (!isCapacitorMobileNative()) return;
-    void getHapticsModuleCached();
 
     const handleClick = (event: MouseEvent) => {
       if (!event.isTrusted || !(event.target instanceof Element)) return;
@@ -204,7 +180,7 @@ export function useMobilePressHaptics(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Fires a light haptic (`ImpactStyle.Light`) when a visible streaming part updates.
+ * Fires a light haptic when a visible streaming part updates.
  *
  * - Only active on Capacitor iOS / Android native builds.
  * - Visible assistant text changes repeat; reasoning and tool appearances fire once per part.
@@ -213,49 +189,9 @@ export function useStreamingHaptics(): void {
   useIsomorphicLayoutEffect(() => {
     if (!isCapacitorMobileNative()) return;
 
-    let disposed = false;
-    let timer: number | null = null;
     const shouldProcessEvent = createStreamingHapticEventDeduper();
-    const queue = createStreamingHapticEventQueue();
-
-    const canProcessEvent = (event: Parameters<typeof evaluateHaptics>[0]) => evaluateHaptics(event).shouldTrigger;
-    const clearTimer = () => {
-      if (timer === null) return;
-      window.clearTimeout(timer);
-      timer = null;
-    };
-    const schedule = (delay = 0) => {
-      if (disposed || timer !== null || queue.size() === 0) return;
-      timer = window.setTimeout(() => {
-        timer = null;
-        const event = queue.peek();
-        if (!event || disposed) return;
-
-        const currentSessionId = useSessionUIStore.getState().currentSessionId;
-        const isForeground = document.documentElement.classList.contains('oc-native-app-active');
-        if (!canProcessEvent({
-          eventSessionId: event.sessionID,
-          currentSessionId,
-          isForeground,
-          isVisible: document.visibilityState === 'visible',
-        })) {
-          queue.dequeue();
-          schedule();
-          return;
-        }
-
-        if (!triggerMobileHaptic()) {
-          schedule(HAPTIC_MIN_INTERVAL_MS);
-          return;
-        }
-
-        queue.dequeue();
-        schedule(HAPTIC_MIN_INTERVAL_MS);
-      }, delay);
-    };
 
     const unsubscribe = subscribeToStreamingHapticEvents((event) => {
-      if (disposed) return;
       if (!shouldProcessEvent(event)) return;
 
       const currentSessionId = useSessionUIStore.getState().currentSessionId;
@@ -269,15 +205,9 @@ export function useStreamingHaptics(): void {
       });
 
       if (!decision.shouldTrigger) return;
-      queue.enqueue(event);
-      schedule();
+      triggerMobileHaptic();
     });
 
-    return () => {
-      disposed = true;
-      clearTimer();
-      queue.clear();
-      unsubscribe();
-    };
+    return unsubscribe;
   }, []);
 }

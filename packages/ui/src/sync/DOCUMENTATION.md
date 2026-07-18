@@ -92,10 +92,11 @@ Current consumers:
 
 - `SessionSidebar.tsx`
 - `SessionNodeItem.tsx`
-- `Header.tsx`
 - agent/session activity surfaces using `useGlobalSessionStatus()` / `useAllSessionStatuses()`
 
 Cross-directory selectors subscribe to the narrow child-store field they aggregate. Session aggregation listens to `state.session`; per-session status listens only to that session's `state.session_status` entry. Unrelated streaming events such as `message.part.delta` must not trigger global session/status scans.
+
+`useCurrentSessionEntity(sessionID)` owns current-session entity resolution for the desktop Header and mobile Header. It prioritizes the matching cross-directory live session, then the matching global active session. A resolved entity remains available for two seconds during a brief source gap; clearing or changing the session ID immediately clears that fallback.
 
 `scoped-session-status.ts` owns exact `(directory, sessionID)` status reads and subscriptions. A missing child-store snapshot reads as `unknown`; a successful directory status snapshot with no matching entry reads as `idle`. Its registry subscription rebinds when a requested directory store appears, and status listeners ignore parts plus other session IDs.
 
@@ -166,6 +167,17 @@ been applied. This prevents a pre-authenticated `401` settings request from
 becoming the cached startup result consumed by the session coordinator.
 
 ## Session message loading
+
+### Context panel session transcripts
+
+- Web and Electron ContextPanel chat tabs render an in-realm strict-read-only transcript through the root `SyncProvider`. They read the same directory-scoped live stores as the primary chat and do not create an independent sync lifecycle.
+- Browser and preview iframe surfaces retain their existing ownership and bridge behavior.
+- The direct `?ocPanel=session-chat` embedded entry remains available for compatibility, while ContextPanel chat rendering always selects the in-realm transcript.
+- A panel transcript's domain identity is the normalized `(directory, sessionId)` target. Its geometry/view identity is `JSON.stringify([runtimeKey, surfaceId, normalizedDirectory, sessionId])`; `surfaceId` is scoped to normalized `(directoryKey, tabId)`. Keep these identities separate when changing viewport restoration or retained-view behavior.
+- Nested panel navigation is local to the `(directoryKey, tabId)` surface. It accepts same-directory targets, maintains anchor/current/stack metadata, and never writes the primary `setCurrentSession()` selection.
+- ContextPanel retains a bounded panel-local `React.Activity` cache of four transcript views and 48 MiB. The active view is touched, hidden views pause effects, estimate callbacks update their matching view, and closing a tab removes every retained nested view for that tab.
+- Context panel transcript capabilities are strict read-only: nested-session navigation is available within the panel directory; composer, session mutation, and primary-selection ownership remain outside the surface.
+- Cover planner, navigation, geometry key, cache touch/estimate/close, render-mode, and viewed-session behavior in `components/layout/contextPanelSessionSurface.test.ts`.
 
 - The imperative session-selection path and the reactive `useSync()` path share
   one app-wide single-flight request keyed by runtime, directory, session,

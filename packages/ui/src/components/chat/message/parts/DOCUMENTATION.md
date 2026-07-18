@@ -37,6 +37,9 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - A successful session-status snapshot stops stale task loading when the child session is idle
     or when the task started before the snapshot request. Tasks created after that boundary wait
     for live status. The original tool part remains unchanged for history and diagnostics.
+  - Nested task-session navigation delegates to `SessionSurfaceContext`. In an
+    ContextPanel transcript, the strict read-only panel surface accepts
+    same-directory local navigation and preserves the primary session selection.
   - If you want to change expandable tool layout, edit here.
 
 - `taskToolModel.ts`
@@ -89,7 +92,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 - After a row is released, the first layout pass sync-paints Markdown and reveals before the browser paints (so a streaming-tail → history remount does not flash the skeleton over already-rendered content). Async morphdom still upgrades to the rich DOM afterward. The target subtree remains exclusively imperative-owned.
 - Hydration state is keyed by stable turn/message entry keys rather than virtual indexes, so prepending older pages does not shift the wrong rows into the hydrated set. The newest entry stays hydrated immediately; streaming-tail Markdown remains immediate.
 - Thinking/Justification duration is hidden in `sorted` mode (handled in `ReasoningPart.tsx` + `JustificationBlock.tsx`).
-- Native mobile haptics follow visible AI output during an active message lifecycle: each Reasoning or Tool part fires once when it appears, while assistant and Justification text fire for each throttled visible content change. Native cadence scheduling retains one-shot appearances and coalesces pending text pulses.
+- Native mobile haptics follow visible AI output during an active message lifecycle: each Reasoning or Tool part fires once when it appears, while assistant and Justification text fire for every visible content change. The native `OpenChamberHaptics` hot path invokes each accepted event directly without timers, queues, or cadence scheduling.
 
 ## "I want to change description for Perplexity" (example recipe)
 
@@ -119,6 +122,13 @@ Why: only navigation tools use the compact static path; all other tools need obs
   - `bun run type-check`
   - `bun run lint`
   - `bun run build`
+
+## Context panel transcript verification
+
+- `components/layout/contextPanelSessionSurface.test.ts` covers strict panel
+  navigation planning, runtime-scoped geometry keys, retained-view cache limits,
+  close cleanup, and viewed-session resolution.
+- Keep browser and preview iframe behavior outside this transcript contract.
 
 ## Quick map of files in this folder
 

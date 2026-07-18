@@ -44,6 +44,8 @@ export interface HighlightRange {
     priority?: number;
     /** Filename rendered as an inline attachment tag with its file-type icon. */
     attachmentName?: string;
+    /** Skill name rendered as an inline skill tag with its book icon. */
+    skillName?: string;
 }
 
 export interface MentionRange {
@@ -56,6 +58,26 @@ export interface HighlightPart {
     text: string;
     className: string;
     attachmentName?: string;
+    skillName?: string;
+}
+
+export interface SkillMentionDeletionIntent {
+    key: 'Backspace' | 'Delete';
+    selectionStart: number;
+    selectionEnd: number;
+    altKey?: boolean;
+}
+
+export interface SkillMentionDeletionResult {
+    text: string;
+    caret: number;
+    removedSkillNames: string[];
+}
+
+export interface SkillMentionRange {
+    start: number;
+    end: number;
+    name: string;
 }
 
 type AnyStyle = HighlightRange['style'];
@@ -313,15 +335,98 @@ export function buildHighlightParts(
             : DEFAULT_CLASS;
         const segText = text.slice(segStart, segEnd);
         const attachmentName = bestRange?.attachmentName;
+        const skillName = bestRange?.skillName;
         const last = parts[parts.length - 1];
-        if (last && last.className === className && last.attachmentName === attachmentName) {
+        if (last && last.className === className && last.attachmentName === attachmentName && last.skillName === skillName) {
             last.text += segText;
         } else {
-            parts.push({ text: segText, className, attachmentName });
+            parts.push({ text: segText, className, attachmentName, skillName });
         }
     }
 
     return parts.length > 0 ? parts : null;
+}
+
+export function findSkillMentionRanges(
+    text: string,
+    skillNames: Iterable<string>,
+): SkillMentionRange[] {
+    const knownNames = new Set(Array.from(skillNames, (name) => name.toLowerCase()));
+    const ranges: SkillMentionRange[] = [];
+    const pattern = /(^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+        const name = match[2] || '';
+        if (!knownNames.has(name.toLowerCase())) continue;
+        const start = match.index + (match[1]?.length ?? 0);
+        ranges.push({ start, end: start + name.length + 1, name });
+    }
+    return ranges;
+}
+
+export function resolveAtomicReferenceSelection(
+    selectionStart: number,
+    selectionEnd: number,
+    ranges: Array<{ start: number; end: number }>,
+): { start: number; end: number } | null {
+    if (selectionStart === selectionEnd) {
+        const containing = ranges.find((range) => selectionStart > range.start && selectionStart < range.end);
+        return containing ? { start: containing.start, end: containing.end } : null;
+    }
+
+    const intersected = ranges.filter((range) => range.start < selectionEnd && range.end > selectionStart);
+    if (intersected.length === 0) return null;
+    return {
+        start: Math.min(selectionStart, ...intersected.map((range) => range.start)),
+        end: Math.max(selectionEnd, ...intersected.map((range) => range.end)),
+    };
+}
+
+export function resolveSkillMentionDeletion(
+    text: string,
+    skillNames: Iterable<string>,
+    intent: SkillMentionDeletionIntent,
+): SkillMentionDeletionResult | null {
+    const ranges = findSkillMentionRanges(text, skillNames);
+
+    const selectionStart = Math.max(0, Math.min(intent.selectionStart, text.length));
+    const selectionEnd = Math.max(selectionStart, Math.min(intent.selectionEnd, text.length));
+    let deletionStart = selectionStart;
+    let deletionEnd = selectionEnd;
+
+    if (selectionStart === selectionEnd) {
+        if (intent.altKey) {
+            if (intent.key === 'Backspace') {
+                while (deletionStart > 0 && /\s/.test(text[deletionStart - 1])) deletionStart -= 1;
+                while (deletionStart > 0 && !/\s/.test(text[deletionStart - 1])) deletionStart -= 1;
+            } else {
+                while (deletionEnd < text.length && /\s/.test(text[deletionEnd])) deletionEnd += 1;
+                while (deletionEnd < text.length && !/\s/.test(text[deletionEnd])) deletionEnd += 1;
+            }
+        } else if (intent.key === 'Backspace') {
+            deletionStart = Math.max(0, selectionStart - 1);
+        } else {
+            deletionEnd = Math.min(text.length, selectionStart + 1);
+        }
+    }
+
+    if (deletionStart === deletionEnd) return null;
+    const intersected = ranges.filter((range) => range.start < deletionEnd && range.end > deletionStart);
+    if (intersected.length === 0) return null;
+
+    let start = Math.min(deletionStart, ...intersected.map((range) => range.start));
+    let end = Math.max(deletionEnd, ...intersected.map((range) => range.end));
+    if (end < text.length && /\s/.test(text[end]) && (start === 0 || /\s/.test(text[start - 1]))) {
+        end += 1;
+    } else if (end === text.length && start > 0 && /\s/.test(text[start - 1])) {
+        start -= 1;
+    }
+
+    return {
+        text: `${text.slice(0, start)}${text.slice(end)}`,
+        caret: start,
+        removedSkillNames: intersected.map((range) => range.name),
+    };
 }
 
 export function mentionRangesToHighlightRanges(mentions: MentionRange[]): HighlightRange[] {

@@ -15,6 +15,8 @@ import { evaluateSwipeThresholdHaptic, triggerMobileHaptic } from '@/hooks/strea
  * - Tappable content remains a click candidate until horizontal intent wins.
  * - The listener runs in capture phase so nested tools cannot interrupt an
  *   already-recognized swipe.
+ * - Composer surfaces and horizontally-scrollable ancestors are excluded so
+ *   the gesture stays separate from session switching and horizontal scrolling.
  */
 
 const MAX_OFF_AXIS_RATIO = 0.55; // |dy| must stay below |dx| × this
@@ -48,6 +50,52 @@ interface HeaderSwipeResult {
   open: boolean;
 }
 
+interface HeaderSwipePoint {
+  clientX: number;
+  clientY: number;
+}
+
+interface HeaderSwipeGestureState {
+  segmentStart: HeaderSwipePoint;
+  lastTouch: HeaderSwipePoint;
+  open: boolean;
+}
+
+export const createHeaderSwipeGestureState = (
+  touch: HeaderSwipePoint,
+): HeaderSwipeGestureState => ({
+  segmentStart: touch,
+  lastTouch: touch,
+  open: false,
+});
+
+/**
+ * Updates the opening candidate from one continuous horizontal direction
+ * segment. A direction reversal anchors its new segment at the prior touch.
+ */
+export const updateHeaderSwipeGestureState = (
+  state: HeaderSwipeGestureState,
+  touch: HeaderSwipePoint,
+  viewportWidth: number,
+): HeaderSwipeGestureState => {
+  const previousSegmentDx = state.lastTouch.clientX - state.segmentStart.clientX;
+  const movementDx = touch.clientX - state.lastTouch.clientX;
+  const reversed = previousSegmentDx !== 0
+    && movementDx !== 0
+    && Math.sign(previousSegmentDx) !== Math.sign(movementDx);
+  const segmentStart = reversed ? state.lastTouch : state.segmentStart;
+  const dx = touch.clientX - segmentStart.clientX;
+  const dy = touch.clientY - segmentStart.clientY;
+  const exceedsThreshold = Math.abs(dx) >= viewportWidth * OPEN_DISTANCE_RATIO;
+  const staysOnAxis = Math.abs(dy) <= Math.abs(dx) * MAX_OFF_AXIS_RATIO;
+
+  return {
+    segmentStart,
+    lastTouch: touch,
+    open: exceedsThreshold && staysOnAxis && dx > 0,
+  };
+};
+
 /**
  * Pure function: determine whether a completed touch gesture on the header
  * should open the sessions sheet. Callers inject the gate flags; this function
@@ -57,17 +105,13 @@ export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult 
   if (input.disabled) return { open: false };
   if (input.startedOnExcludedTarget) return { open: false };
 
-  const dx = input.endX - input.startX;
-  const dy = input.endY - input.startY;
-
-  // Must be a horizontal rightward swipe (left-to-right)
-  if (dx <= 0) return { open: false };
-  if (Math.abs(dx) < input.viewportWidth * OPEN_DISTANCE_RATIO) return { open: false };
-
-  // Suppress off-axis (vertical) gestures so diagonal scrolls don't open the sheet
-  if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return { open: false };
-
-  return { open: true };
+  return {
+    open: updateHeaderSwipeGestureState(
+      createHeaderSwipeGestureState({ clientX: input.startX, clientY: input.startY }),
+      { clientX: input.endX, clientY: input.endY },
+      input.viewportWidth,
+    ).open,
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -130,8 +174,6 @@ export const useHeaderSwipeToSessions = (
     if (!element) return;
 
     let tracking = false;
-    let startX = 0;
-    let startY = 0;
     let startedOnExcludedTarget = false;
     let horizontalIntent = false;
     let previewStarted = false;
@@ -139,6 +181,7 @@ export const useHeaderSwipeToSessions = (
     let thresholdHapticDelivered = false;
     let latestDistance = 0;
     let viewportWidth = 0;
+    let gestureState: HeaderSwipeGestureState | null = null;
 
     const updateThreshold = (distance: number) => {
       const enterThreshold = viewportWidth * OPEN_DISTANCE_RATIO;
@@ -173,17 +216,17 @@ export const useHeaderSwipeToSessions = (
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) {
         tracking = false;
+        gestureState = null;
         return;
       }
       if (disabledRef.current) {
         tracking = false;
+        gestureState = null;
         return;
       }
 
       const touch = event.touches[0];
       tracking = true;
-      startX = touch.clientX;
-      startY = touch.clientY;
       viewportWidth = window.innerWidth;
       startedOnExcludedTarget = isExcludedTarget(touch);
       horizontalIntent = false;
@@ -191,24 +234,26 @@ export const useHeaderSwipeToSessions = (
       thresholdReached = false;
       thresholdHapticDelivered = false;
       latestDistance = 0;
+      gestureState = createHeaderSwipeGestureState(touch);
     };
 
     const onTouchMove = (event: TouchEvent) => {
-      if (!tracking || startedOnExcludedTarget) return;
+      if (!tracking || startedOnExcludedTarget || !gestureState) return;
       if (event.touches.length !== 1) {
         if (horizontalIntent) finishPreview(false);
         tracking = false;
+        gestureState = null;
         return;
       }
       const touch = event.touches[0];
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
+      gestureState = updateHeaderSwipeGestureState(gestureState, touch, viewportWidth);
+      const dx = touch.clientX - gestureState.segmentStart.clientX;
+      const dy = touch.clientY - gestureState.segmentStart.clientY;
 
       if (!horizontalIntent) {
         const absDx = Math.abs(dx);
         if (absDx < INTENT_DISTANCE) return;
         if (dx <= 0 || Math.abs(dy) > absDx * MAX_OFF_AXIS_RATIO) {
-          tracking = false;
           return;
         }
         horizontalIntent = true;
@@ -219,7 +264,6 @@ export const useHeaderSwipeToSessions = (
       if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) {
         finishPreview(false);
         horizontalIntent = false;
-        tracking = false;
         return;
       }
 
@@ -230,21 +274,14 @@ export const useHeaderSwipeToSessions = (
     };
 
     const onTouchEnd = (event: TouchEvent) => {
-      if (!tracking) return;
+      if (!tracking || !gestureState) return;
       tracking = false;
+      const touch = event.changedTouches[0];
+      if (touch) gestureState = updateHeaderSwipeGestureState(gestureState, touch, viewportWidth);
+      const commit = horizontalIntent && gestureState.open;
+      gestureState = null;
       if (!horizontalIntent) return;
       event.preventDefault();
-      const touch = event.changedTouches[0];
-      if (touch) latestDistance = Math.max(0, touch.clientX - startX);
-      const commit = touch ? evaluateHeaderSwipe({
-        startX,
-        startY,
-        endX: touch.clientX,
-        endY: touch.clientY,
-        viewportWidth,
-        disabled: false,
-        startedOnExcludedTarget: false,
-      }).open : false;
       if (commit && !thresholdHapticDelivered) triggerMobileHaptic('medium', { bypassCadence: true });
       finishPreview(commit);
     };
@@ -252,6 +289,7 @@ export const useHeaderSwipeToSessions = (
     const onTouchCancel = () => {
       if (horizontalIntent) finishPreview(false);
       tracking = false;
+      gestureState = null;
     };
 
     element.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });

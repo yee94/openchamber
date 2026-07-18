@@ -51,6 +51,7 @@ import {
     sendReviewFeedbackToOriginal,
 } from '@/lib/reviewFlow';
 import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
+import { getSessionSurfaceActionAvailability, navigateNestedSession, useSessionSurface } from '../SessionSurfaceContext';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -210,6 +211,7 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     const { isMobile } = useDeviceInfo();
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
+    const sessionSurface = useSessionSurface();
     const { t } = useI18n();
 
     const description = typeof part.description === 'string' ? part.description.trim() : '';
@@ -263,27 +265,29 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
                 </div>
             ) : null}
 
-            {taskSessionID ? (
+            {taskSessionID && sessionSurface.capabilities.navigateNestedSession ? (
                 <div className="mt-1.5">
                     <button
                         type="button"
                         className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                         onClick={() => {
                             if (!effectiveDirectory) return;
-                            // In contexts with no ContextPanel (embedded
-                            // session-chat iframe) or single-surface layouts
-                            // (mobile, VS Code), navigate in place. Otherwise
-                            // open a new side-panel tab.
-                            if (isEmbeddedSessionChat() || isMobile || isVSCodeRuntime()) {
-                                setCurrentSession(taskSessionID, effectiveDirectory);
-                                return;
-                            }
+                            navigateNestedSession(sessionSurface, taskSessionID, effectiveDirectory, () => {
+                                // In contexts with no ContextPanel (embedded
+                                // session-chat iframe) or single-surface layouts
+                                // (mobile, VS Code), navigate in place. Otherwise
+                                // open a new side-panel tab.
+                                if (isEmbeddedSessionChat() || isMobile || isVSCodeRuntime()) {
+                                    setCurrentSession(taskSessionID, effectiveDirectory);
+                                    return;
+                                }
 
-                            openContextPanelTab(effectiveDirectory, {
-                                mode: 'chat',
-                                dedupeKey: `session:${taskSessionID}`,
-                                label: description || agent || t('contextPanel.mode.chat'),
-                                readOnly: true,
+                                openContextPanelTab(effectiveDirectory, {
+                                    mode: 'chat',
+                                    dedupeKey: `session:${taskSessionID}`,
+                                    label: description || agent || t('contextPanel.mode.chat'),
+                                    readOnly: true,
+                                });
                             });
                         }}
                     >
@@ -493,6 +497,8 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
 }) => {
     const { locale, t } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
+    const sessionSurface = useSessionSurface();
+    const sessionSurfaceActions = getSessionSurfaceActionAvailability(sessionSurface);
     const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
@@ -567,7 +573,7 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
         [hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
     );
 
-    const effectiveOnFork = chatSurfaceMode === 'mini-chat' ? undefined : onFork;
+    const effectiveOnFork = chatSurfaceMode === 'mini-chat' || !sessionSurfaceActions.fork ? undefined : onFork;
     // 移动端：尺寸/间距与桌面一致；左对齐由底栏 -ml 处理
     const timestamp = React.useMemo(() => {
         void locale;
@@ -806,6 +812,8 @@ const AssistantMessageActionButtons = React.memo(({
 }: AssistantMessageActionButtonsProps) => {
     const { t } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
+    const sessionSurface = useSessionSurface();
+    const sessionSurfaceActions = getSessionSurfaceActionAvailability(sessionSurface);
     const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
     const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
     const voiceProvider = useConfigStore((state) => state.voiceProvider);
@@ -977,7 +985,7 @@ const AssistantMessageActionButtons = React.memo(({
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.copyAnswer')}</TooltipContent>
                 </Tooltip>
             )}
-            {reviewTransferAction && chatSurfaceMode !== 'mini-chat' ? (
+            {reviewTransferAction && chatSurfaceMode !== 'mini-chat' && sessionSurfaceActions.reviewTransfer ? (
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
@@ -1063,6 +1071,8 @@ const AssistantMessageBody = React.memo(({
 }: Omit<MessageBodyProps, 'isUser'>) => {
     const { t, locale } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
+    const sessionSurface = useSessionSurface();
+    const sessionSurfaceActions = getSessionSurfaceActionAvailability(sessionSurface);
     const streamPhase = _streamPhase;
     void _allowAnimation;
     const messageContentRef = React.useRef<HTMLDivElement>(null);
@@ -1848,7 +1858,7 @@ const AssistantMessageBody = React.memo(({
                     <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.openPreview')}</TooltipContent>
                 </Tooltip>
             ) : null}
-            {!isMiniChatSurface && !isReviewSessionView ? <Tooltip>
+            {!isMiniChatSurface && !isReviewSessionView && sessionSurfaceActions.fork ? <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
                         type="button"

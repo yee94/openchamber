@@ -17,6 +17,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { ShortcutKbd } from '@/components/ui/kbd';
 import { subscribeSessionSwitchIntent } from '@/lib/sessionSwitchIntent';
+import { getSessionSurfaceActionAvailability, useSessionSurface } from '../SessionSurfaceContext';
 
 interface TextSelectionMenuProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -283,6 +284,8 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const effectiveDirectory = useEffectiveDirectory();
   const sessions = useSessions();
+  const sessionSurface = useSessionSurface();
+  const canUseTextSelectionActions = getSessionSurfaceActionAvailability(sessionSurface).textSelectionMutation;
 
   React.useEffect(() => {
     isMenuVisibleRef.current = position.show;
@@ -553,6 +556,9 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!canUseTextSelectionActions) {
+        return;
+      }
       if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'i') {
         return;
       }
@@ -574,7 +580,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [addSelectionToChat, containerRef]);
+  }, [addSelectionToChat, canUseTextSelectionActions, containerRef]);
 
   const handleCreateNewSession = React.useCallback(async () => {
     if (!selectedText) return;
@@ -671,7 +677,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          <button
+          {canUseTextSelectionActions ? <button
             onClick={handleAddToChat}
             className={cn(
               'flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left',
@@ -685,9 +691,9 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           >
             <Icon name="add" className="h-5 w-5 flex-shrink-0" />
             <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.addToChat')}</span>
-          </button>
+          </button> : null}
 
-          <button
+          {canUseTextSelectionActions ? <button
             onClick={handleCreateNewSession}
             className={cn(
               'flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left',
@@ -701,7 +707,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           >
             <Icon name="chat-new" className="h-5 w-5 flex-shrink-0" />
             <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.newSession')}</span>
-          </button>
+          </button> : null}
 
           <button
             onClick={handleCopy}
@@ -719,7 +725,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
             <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.copy')}</span>
           </button>
 
-          {!isVSCodeRuntime() ? (
+          {canUseTextSelectionActions && !isVSCodeRuntime() ? (
             <button
               onClick={handleAddToNotes}
               disabled={isAddingToNotes}
@@ -764,7 +770,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           isOpening ? 'opacity-0 translate-y-[4px]' : 'opacity-100 translate-y-0'
         )}
       >
-        <button
+        {canUseTextSelectionActions ? <button
           onClick={handleAddToChat}
           className={cn(
             'flex items-center gap-1.5 px-2 py-1 rounded-md',
@@ -779,11 +785,11 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           <Icon name="add" className="h-4 w-4" />
           <span className="whitespace-nowrap">{t('chat.textSelection.actions.addToChat')}</span>
           <ShortcutKbd shortcut="⌘+I" />
-        </button>
+        </button> : null}
       
-        <div className="w-px h-4 bg-[var(--interactive-border)]" />
+        {canUseTextSelectionActions ? <div className="w-px h-4 bg-[var(--interactive-border)]" /> : null}
       
-        <button
+        {canUseTextSelectionActions ? <button
           onClick={handleCreateNewSession}
           className={cn(
             'flex items-center gap-1.5 px-2 py-1 rounded-md',
@@ -797,9 +803,27 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         >
           <Icon name="chat-new" className="h-4 w-4" />
           <span className="whitespace-nowrap">{t('chat.textSelection.actions.newSession')}</span>
+        </button> : null}
+
+        {canUseTextSelectionActions ? <div className="w-px h-4 bg-[var(--interactive-border)]" /> : null}
+
+        <button
+          onClick={handleCopy}
+          className={cn(
+            'flex items-center gap-1.5 px-2 py-1 rounded-md',
+            'text-sm font-medium',
+            'text-[var(--surface-foreground)]',
+            'hover:bg-[var(--interactive-hover)]',
+            'transition-colors duration-150'
+          )}
+          title={t('chat.textSelection.actions.copy')}
+          type="button"
+        >
+          <Icon name="file-copy" className="h-4 w-4" />
+          <span className="whitespace-nowrap">{t('chat.textSelection.actions.copy')}</span>
         </button>
 
-        {!isVSCodeRuntime() ? (
+        {canUseTextSelectionActions && !isVSCodeRuntime() ? (
           <>
             <div className="w-px h-4 bg-[var(--interactive-border)]" />
 

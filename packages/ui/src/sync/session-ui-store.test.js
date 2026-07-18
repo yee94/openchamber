@@ -417,9 +417,8 @@ describe('new-session draft identity', () => {
 });
 
 describe('routeMessage skill invocation', () => {
-  // OpenCode registers every skill as a command (source: "skill"), so a skill
-  // selected from the slash menu must be dispatched via session.command so its
-  // content is injected — not sent as a plain "/name" text message (issue #1605).
+  // Skills remain regular prompts so the model loads them through the skill tool.
+  // Configured commands continue to use session.command.
   const sendCommandCalls = [];
   const sendMessageCalls = [];
   let originalSendCommand;
@@ -485,7 +484,7 @@ describe('routeMessage skill invocation', () => {
     queryClient.removeQueries({ queryKey: commandQueryOptions('/skills/project').queryKey });
   });
 
-  test('invokes a user-installed skill as a command', async () => {
+  test('sends a user-installed skill as a regular prompt', async () => {
     queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }]);
 
     await routeMessage({
@@ -494,11 +493,13 @@ describe('routeMessage skill invocation', () => {
       content: '/grill-with-docs',
       providerID: 'provider-a',
       modelID: 'model-a',
+      additionalParts: [{ text: 'Use the corresponding skill tool.', synthetic: true }],
     });
 
-    expect(sendCommandCalls).toHaveLength(1);
-    expect(sendCommandCalls[0].command).toBe('grill-with-docs');
-    expect(sendMessageCalls).toHaveLength(0);
+    expect(sendCommandCalls).toHaveLength(0);
+    expect(sendMessageCalls).toHaveLength(1);
+    expect(sendMessageCalls[0].text).toBe('/grill-with-docs');
+    expect(sendMessageCalls[0].additionalParts).toEqual([{ text: 'Use the corresponding skill tool.', synthetic: true }]);
   });
 
   test('loads a cold skill cache before classifying a slash token', async () => {
@@ -513,9 +514,9 @@ describe('routeMessage skill invocation', () => {
     });
 
     expect(queryFetches).toHaveLength(2);
-    expect(sendCommandCalls).toHaveLength(1);
-    expect(sendCommandCalls[0].command).toBe('cold-skill');
-    expect(sendMessageCalls).toHaveLength(0);
+    expect(sendCommandCalls).toHaveLength(0);
+    expect(sendMessageCalls).toHaveLength(1);
+    expect(sendMessageCalls[0].text).toBe('/cold-skill');
   });
 
   test('loads a cold command cache before classifying a slash token', async () => {
@@ -535,7 +536,7 @@ describe('routeMessage skill invocation', () => {
     expect(sendMessageCalls).toHaveLength(0);
   });
 
-  test('forwards trailing arguments to the skill command', async () => {
+  test('preserves trailing skill instructions in the regular prompt', async () => {
     queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }]);
 
     await routeMessage({
@@ -546,9 +547,26 @@ describe('routeMessage skill invocation', () => {
       modelID: 'model-a',
     });
 
-    expect(sendCommandCalls).toHaveLength(1);
-    expect(sendCommandCalls[0].command).toBe('grill-with-docs');
-    expect(sendCommandCalls[0].arguments).toBe('focus on auth');
+    expect(sendCommandCalls).toHaveLength(0);
+    expect(sendMessageCalls).toHaveLength(1);
+    expect(sendMessageCalls[0].text).toBe('/grill-with-docs focus on auth');
+  });
+
+  test('prefers an installed skill when a command shares its name', async () => {
+    queryClient.setQueryData(commandQueryOptions('/skills/project').queryKey, [{ name: 'shared-name' }]);
+    queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'shared-name', path: '/skills/shared-name/SKILL.md', scope: 'user', source: 'opencode' }]);
+
+    await routeMessage({
+      sessionId: 'session-skill',
+      directory: '/skills/project',
+      content: '/shared-name use this workflow',
+      providerID: 'provider-a',
+      modelID: 'model-a',
+    });
+
+    expect(sendCommandCalls).toHaveLength(0);
+    expect(sendMessageCalls).toHaveLength(1);
+    expect(sendMessageCalls[0].text).toBe('/shared-name use this workflow');
   });
 
   test('sends an unknown slash token as a plain message', async () => {

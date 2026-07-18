@@ -131,39 +131,35 @@ export async function routeMessage(params: {
     const dirState = getDirectoryState(requestDirectory)
     const syncCommands = dirState?.command ?? []
 
-    // OpenCode registers every skill as a command (source: "skill"), but the
-    // commands store filters skills out and the synced command list is only
-    // hydrated at bootstrap. Consult the installed-skills Query snapshot so a
-    // skill selected from the slash menu is invoked via session.command
-    // (injecting its content) instead of being sent as a literal "/name"
-    // message (#1605).
+    // OpenCode also exposes skills through its command catalog. Resolve the
+    // installed skill catalog first so slash-invoked skills stay on the prompt
+    // path and reach the model through the skill tool.
     const syncCommand = syncCommands.find((c) => c.name === cmdName)
-    let isCommand = Boolean(syncCommand)
-    if (!isCommand) {
-      const queryDirectory = requestDirectory ?? useDirectoryStore.getState().currentDirectory ?? null
-      const transport = getRuntimeTransportIdentity()
-      const commandsQuery = commandQueryOptions(queryDirectory, transport)
-      const skillsQuery = installedSkillsQueryOptions(queryDirectory, transport)
-      const commandsQueryState = queryClient.getQueryState(commandsQuery.queryKey)
-      const skillsQueryState = queryClient.getQueryState(skillsQuery.queryKey)
-      const hasCommandsSnapshot = commandsQueryState?.data !== undefined
-      const hasSkillsSnapshot = skillsQueryState?.data !== undefined
-      const [storeCommands, installedSkills] = await Promise.all([
-        hasCommandsSnapshot
+    const queryDirectory = requestDirectory ?? useDirectoryStore.getState().currentDirectory ?? null
+    const transport = getRuntimeTransportIdentity()
+    const commandsQuery = commandQueryOptions(queryDirectory, transport)
+    const skillsQuery = installedSkillsQueryOptions(queryDirectory, transport)
+    const commandsQueryState = queryClient.getQueryState(commandsQuery.queryKey)
+    const skillsQueryState = queryClient.getQueryState(skillsQuery.queryKey)
+    const hasCommandsSnapshot = commandsQueryState?.data !== undefined
+    const hasSkillsSnapshot = skillsQueryState?.data !== undefined
+    const [storeCommands, installedSkills] = await Promise.all([
+      syncCommand
+        ? Promise.resolve([])
+        : hasCommandsSnapshot
           ? Promise.resolve(readCommandsSnapshot(queryDirectory, transport))
           : queryClient.fetchQuery({ ...commandsQuery, staleTime: Infinity }),
-        hasSkillsSnapshot
-          ? Promise.resolve(readInstalledSkillsSnapshot(queryClient, queryDirectory, transport))
-          : queryClient.fetchQuery({ ...skillsQuery, staleTime: Infinity }),
-      ])
+      hasSkillsSnapshot
+        ? Promise.resolve(readInstalledSkillsSnapshot(queryClient, queryDirectory, transport))
+        : queryClient.fetchQuery({ ...skillsQuery, staleTime: Infinity }),
+    ])
 
-      if (getRuntimeTransportIdentity() !== transport) {
-        throw new Error("Runtime changed while resolving slash command")
-      }
-
-      isCommand = Boolean(storeCommands.find((c) => c.name === cmdName))
-        || installedSkills.some((skill) => skill.name === cmdName)
+    if (getRuntimeTransportIdentity() !== transport) {
+      throw new Error("Runtime changed while resolving slash command")
     }
+
+    const isSkill = installedSkills.some((skill) => skill.name === cmdName)
+    const isCommand = !isSkill && Boolean(syncCommand || storeCommands.find((c) => c.name === cmdName))
 
     if (isCommand) {
       return optimisticSend({

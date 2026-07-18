@@ -2,11 +2,38 @@ import React from 'react';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { createScrollSpy } from '@/components/chat/lib/scroll/scrollSpy';
-import { useViewportStore } from '@/sync/viewport-store';
+import { getViewportSessionMemory, useViewportStore, type SessionMemoryState } from '@/sync/viewport-store';
 
 type AutoFollowState = 'following' | 'released';
 
 export type ContentChangeReason = 'text' | 'structural' | 'permission' | 'animation';
+
+export type ViewportIdentity = {
+    sessionId: string | null;
+    viewportKey?: string;
+};
+
+export const createViewportIdentity = (sessionId: string | null, viewportKey?: string): ViewportIdentity => ({ sessionId, viewportKey });
+
+export const isSameViewportIdentity = (left: ViewportIdentity | null, right: ViewportIdentity | null): boolean => (
+    left?.sessionId === right?.sessionId && left?.viewportKey === right?.viewportKey
+);
+
+export const shouldReplayViewportRestore = (pending: ViewportIdentity | null, current: ViewportIdentity): boolean => (
+    isSameViewportIdentity(pending, current)
+);
+
+export type ViewportSnapshotSave = {
+    identity: ViewportIdentity;
+    anchor: number;
+    scrollPosition: NonNullable<SessionMemoryState['scrollPosition']>;
+};
+
+export const createViewportSnapshotSave = (
+    identity: ViewportIdentity,
+    anchor: number,
+    scrollPosition: NonNullable<SessionMemoryState['scrollPosition']>,
+): ViewportSnapshotSave => ({ identity, anchor, scrollPosition });
 
 export interface AnimationHandlers {
     onChunk: () => void;
@@ -20,6 +47,7 @@ export interface AnimationHandlers {
 
 interface UseChatAutoFollowOptions {
     currentSessionId: string | null;
+    viewportKey?: string;
     sessionMessageCount: number;
     sessionIsWorking: boolean;
     isMobile: boolean;
@@ -153,6 +181,7 @@ const nestedScrollableCanConsumeUp = (root: HTMLElement, target: EventTarget | n
 
 export const useChatAutoFollow = ({
     currentSessionId,
+    viewportKey,
     sessionMessageCount,
     sessionIsWorking,
     isMobile,
@@ -175,10 +204,9 @@ export const useChatAutoFollow = ({
     isMobileRef.current = isMobile;
     const sessionMessageCountRef = React.useRef(sessionMessageCount);
     sessionMessageCountRef.current = sessionMessageCount;
-    const currentSessionIdRef = React.useRef(currentSessionId);
-    currentSessionIdRef.current = currentSessionId;
-
-    const lastSessionIdRef = React.useRef<string | null>(null);
+    const currentViewportIdentityRef = React.useRef(createViewportIdentity(currentSessionId, viewportKey));
+    currentViewportIdentityRef.current = createViewportIdentity(currentSessionId, viewportKey);
+    const lastViewportIdentityRef = React.useRef<ViewportIdentity | null>(null);
 
     // Programmatic-scroll marker: the bottom position we last
     // wrote and when. A scroll event whose scrollTop matches `top` within a few
@@ -211,11 +239,11 @@ export const useChatAutoFollow = ({
     const entryStickLastHeightRef = React.useRef(0);
 
     const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const pendingSaveRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
+    const pendingSaveRef = React.useRef<ViewportSnapshotSave | null>(null);
     // When restoreSnapshot is invoked while ChatViewport is still hydrating
     // (skeleton rendered, no scroll container yet), we record the session here
     // so a follow-up effect can replay the restore once the container mounts.
-    const pendingInitialRestoreRef = React.useRef<string | null>(null);
+    const pendingInitialRestoreRef = React.useRef<ViewportIdentity | null>(null);
 
     const updateViewportAnchor = useViewportStore((s) => s.updateViewportAnchor);
 
@@ -473,22 +501,22 @@ export const useChatAutoFollow = ({
         }
         const pending = pendingSaveRef.current;
         if (!pending) return;
-        const container = scrollRef.current;
-        if (!container) {
+        if (!pending.identity.sessionId) {
             pendingSaveRef.current = null;
             return;
         }
-        updateViewportAnchor(pending.sessionId, pending.anchor, {
-            scrollTop: container.scrollTop,
-            scrollHeight: container.scrollHeight,
-            clientHeight: container.clientHeight,
-        });
+        updateViewportAnchor(
+            pending.identity.sessionId,
+            pending.anchor,
+            pending.scrollPosition,
+            pending.identity.viewportKey,
+        );
         pendingSaveRef.current = null;
     }, [updateViewportAnchor]);
 
     const queueSave = React.useCallback(() => {
-        const sessionId = currentSessionIdRef.current;
-        if (!sessionId) return;
+        const identity = currentViewportIdentityRef.current;
+        if (!identity.sessionId) return;
         const container = scrollRef.current;
         if (!container) return;
 
@@ -498,7 +526,11 @@ export const useChatAutoFollow = ({
             : 0;
         const anchor = Math.floor(anchorRatio * sessionMessageCountRef.current);
 
-        pendingSaveRef.current = { sessionId, anchor };
+        pendingSaveRef.current = createViewportSnapshotSave(
+            identity,
+            anchor,
+            { scrollTop, scrollHeight, clientHeight },
+        );
         if (saveTimerRef.current !== null) return;
         saveTimerRef.current = setTimeout(() => {
             saveTimerRef.current = null;
@@ -510,19 +542,20 @@ export const useChatAutoFollow = ({
         flushSave();
     }, [flushSave]);
 
-    const restoreSnapshot = React.useCallback(async (): Promise<boolean> => {
-        const sessionId = currentSessionIdRef.current;
-        if (!sessionId) return false;
+    const restoreSnapshot = React.useCallback(async (identity = currentViewportIdentityRef.current): Promise<boolean> => {
+        if (!identity.sessionId) return false;
+        const snapshot = getViewportSessionMemory(identity.sessionId, identity.viewportKey);
 
         const container = scrollRef.current;
         if (!container) {
             // ChatViewport not mounted yet (e.g., session still hydrating).
             // Record the request so the container-attach effect can replay it.
-            pendingInitialRestoreRef.current = sessionId;
+            pendingInitialRestoreRef.current = identity;
             setStateValue('following');
             return false;
         }
         pendingInitialRestoreRef.current = null;
+        lastScrollTopRef.current = snapshot?.scrollPosition?.scrollTop ?? 0;
 
         // Always return to the bottom on session switch. The content
         // ResizeObserver re-pins instantly as late
@@ -539,19 +572,23 @@ export const useChatAutoFollow = ({
 
     // ── session change ───────────────────────────────────────────────────────
     React.useEffect(() => {
-        if (!currentSessionId || currentSessionId === lastSessionIdRef.current) {
+        const identity = currentViewportIdentityRef.current;
+        const previousIdentity = lastViewportIdentityRef.current;
+        if (isSameViewportIdentity(identity, previousIdentity)) {
             return;
         }
-        lastSessionIdRef.current = currentSessionId;
-        MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
         flushSave();
         cancelForcedBottom();
+        lastViewportIdentityRef.current = identity;
         autoRef.current = null;
-        // Drop any pending restore request inherited from a different session.
-        if (pendingInitialRestoreRef.current && pendingInitialRestoreRef.current !== currentSessionId) {
-            pendingInitialRestoreRef.current = null;
+        lastScrollTopRef.current = 0;
+        endEntryStick();
+        setStateValue('following');
+        pendingInitialRestoreRef.current = null;
+        if (currentSessionId && currentSessionId !== previousIdentity?.sessionId) {
+            MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
         }
-    }, [cancelForcedBottom, currentSessionId, flushSave]);
+    }, [cancelForcedBottom, currentSessionId, endEntryStick, flushSave, setStateValue, viewportKey]);
 
     // When work begins and we are still following, pin to the bottom so the
     // first streaming frame does not paint mid-history.
@@ -574,10 +611,11 @@ export const useChatAutoFollow = ({
     // preventing a visible flash of content at the wrong scroll position.
     React.useLayoutEffect(() => {
         if (!containerEl) return;
-        if (pendingInitialRestoreRef.current && pendingInitialRestoreRef.current === currentSessionId) {
-            void restoreSnapshot();
+        const pendingIdentity = pendingInitialRestoreRef.current;
+        if (pendingIdentity && shouldReplayViewportRestore(pendingIdentity, currentViewportIdentityRef.current)) {
+            void restoreSnapshot(pendingIdentity);
         }
-    }, [containerEl, currentSessionId, restoreSnapshot]);
+    }, [containerEl, currentSessionId, viewportKey, restoreSnapshot]);
 
     // ── scroll event handling ────────────────────────────────────────────────
     const handleScrollEvent = React.useCallback(() => {

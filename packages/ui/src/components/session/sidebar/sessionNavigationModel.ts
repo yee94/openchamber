@@ -28,6 +28,7 @@ type FilterVisibleProjectNavigationTargetsArgs = {
   visibleSessionCountByGroup: ReadonlyMap<string, number>;
   defaultVisibleSessionCount: number;
   hasSessionSearchQuery: boolean;
+  alwaysVisibleSessionIds?: ReadonlySet<string>;
 };
 
 const isSubtaskSession = (session: Session): boolean => {
@@ -44,6 +45,22 @@ const resolveNodeDirectory = (node: SessionNode, group: SessionGroup): string | 
 // further remote pages remain user-driven through "Show more sessions".
 export const getDefaultProjectGroupVisibleCount = (): number => 3;
 
+export const selectVisibleSessionNodes = (
+  nodes: readonly SessionNode[],
+  visibleCount: number,
+  alwaysVisibleSessionIds: ReadonlySet<string>,
+): SessionNode[] => {
+  const boundary = Math.min(nodes.length, Math.max(0, visibleCount));
+  const visible = nodes.slice(0, boundary);
+  for (let index = boundary; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    if (node && alwaysVisibleSessionIds.has(node.session.id)) {
+      visible.push(node);
+    }
+  }
+  return visible;
+};
+
 /**
  * Keep only project rows that are logically rendered by the sidebar. This is
  * intentionally based on React state rather than DOM measurement: rows hidden
@@ -58,6 +75,7 @@ export const filterVisibleProjectNavigationTargets = ({
   visibleSessionCountByGroup,
   defaultVisibleSessionCount,
   hasSessionSearchQuery,
+  alwaysVisibleSessionIds,
 }: FilterVisibleProjectNavigationTargetsArgs): SessionNavigationTarget[] => (
   targets.filter((target) => {
     if (!target.projectId || collapsedProjectIds.has(target.projectId)) {
@@ -81,7 +99,10 @@ export const filterVisibleProjectNavigationTargets = ({
         defaultVisibleSessionCount,
         visibleSessionCountByGroup.get(target.groupKey) ?? defaultVisibleSessionCount,
       );
-      if (target.visibleIndex >= visibleCount) {
+      if (
+        target.visibleIndex >= visibleCount
+        && !alwaysVisibleSessionIds?.has(target.sessionId)
+      ) {
         return false;
       }
     }

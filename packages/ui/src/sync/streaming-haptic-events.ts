@@ -66,46 +66,6 @@ export const createStreamingHapticEventDeduper = (maxEntries = 1000) => {
   };
 };
 
-export type StreamingHapticEventQueue = {
-  enqueue: (event: StreamingHapticEvent) => void;
-  peek: () => StreamingHapticEvent | undefined;
-  dequeue: () => StreamingHapticEvent | undefined;
-  size: () => number;
-  clear: () => void;
-};
-
-/**
- * Keeps one current text pulse while preserving one-shot part appearances in
- * arrival order. The cap bounds memory during a sustained native cadence.
- */
-export const createStreamingHapticEventQueue = (maxEntries = 100): StreamingHapticEventQueue => {
-  const events: StreamingHapticEvent[] = [];
-  const entryLimit = Math.max(1, Math.floor(maxEntries));
-
-  return {
-    enqueue: (event) => {
-      if (event.kind === 'text') {
-        for (let index = events.length - 1; index >= 0; index -= 1) {
-          if (events[index].kind === 'text') {
-            events.splice(index, 1);
-          }
-        }
-      }
-
-      events.push(event);
-      while (events.length > entryLimit) {
-        events.shift();
-      }
-    },
-    peek: () => events[0],
-    dequeue: () => events.shift(),
-    size: () => events.length,
-    clear: () => {
-      events.length = 0;
-    },
-  };
-};
-
 type Listener = (event: StreamingHapticEvent) => void;
 
 const listeners = new Set<Listener>();

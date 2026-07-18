@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
+import { shouldSubmitCommandOnSelection } from './commandSelection';
 
 type CommandSource = 'openchamber' | 'opencode' | 'skill';
 
@@ -346,7 +347,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           // Enter immediately runs system/opencode commands (e.g. /new, /fork,
           // /model). Skills only get inserted — they usually need arguments or
           // surrounding context before the user actually sends.
-          const shouldSubmit = key === 'Enter' && !command.isSkill;
+          const shouldSubmit = shouldSubmitCommandOnSelection(command, key === 'Enter');
           onCommandSelect(command, shouldSubmit);
         }
       }
@@ -444,7 +445,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                     event.preventDefault();
                     event.stopPropagation();
                     ignoreClickRef.current = true;
-                    onCommandSelect(command);
+                    onCommandSelect(command, shouldSubmitCommandOnSelection(command, isMobile));
                   }}
                   onPointerCancel={() => {
                     pointerStartRef.current = null;
@@ -455,7 +456,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                       ignoreClickRef.current = false;
                       return;
                     }
-                    onCommandSelect(command);
+                    onCommandSelect(command, shouldSubmitCommandOnSelection(command, isMobile));
                   }}
                   onMouseMove={() => {
                     keyboardNavigationRef.current = false;

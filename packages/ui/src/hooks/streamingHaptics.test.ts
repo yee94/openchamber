@@ -9,7 +9,6 @@ import {
 } from './streamingHaptics';
 import {
   createStreamingHapticEventDeduper,
-  createStreamingHapticEventQueue,
   evaluateVisiblePartHaptic,
   shouldEmitToolAppearanceHaptic,
   type StreamingHapticEvent,
@@ -209,50 +208,5 @@ describe('tool appearance haptic baseline', () => {
     expect(shouldEmitToolAppearanceHaptic(true, false)).toBe(false);
     expect(shouldEmitToolAppearanceHaptic(true, true)).toBe(true);
     expect(shouldEmitToolAppearanceHaptic(false, false)).toBe(true);
-  });
-});
-
-describe('streaming haptic event queue', () => {
-  const event = (kind: StreamingHapticEvent['kind'], partID: string): StreamingHapticEvent => ({
-    sessionID: 'session-1',
-    messageID: 'message-1',
-    partID,
-    kind,
-  });
-
-  test('keeps same-batch tool appearances for cadence consumption', () => {
-    const queue = createStreamingHapticEventQueue();
-    const firstTool = event('tool', 'tool-1');
-    const secondTool = event('tool', 'tool-2');
-
-    queue.enqueue(firstTool);
-    queue.enqueue(secondTool);
-
-    expect(queue.dequeue()).toEqual(firstTool);
-    expect(queue.dequeue()).toEqual(secondTool);
-  });
-
-  test('coalesces pending text into its latest pulse', () => {
-    const queue = createStreamingHapticEventQueue();
-    queue.enqueue(event('text', 'text-1'));
-    queue.enqueue(event('tool', 'tool-1'));
-    const latestText = event('text', 'text-2');
-    queue.enqueue(latestText);
-
-    expect(queue.dequeue()).toEqual(event('tool', 'tool-1'));
-    expect(queue.dequeue()).toEqual(latestText);
-    expect(queue.size()).toBe(0);
-  });
-
-  test('bounds queued events', () => {
-    const queue = createStreamingHapticEventQueue(2);
-    queue.enqueue(event('tool', 'tool-1'));
-    queue.enqueue(event('thinking', 'reasoning-1'));
-    const newestTool = event('tool', 'tool-2');
-    queue.enqueue(newestTool);
-
-    expect(queue.size()).toBe(2);
-    expect(queue.dequeue()).toEqual(event('thinking', 'reasoning-1'));
-    expect(queue.dequeue()).toEqual(newestTool);
   });
 });

@@ -63,6 +63,7 @@ import {
   type ScopedSessionStatus,
   type ScopedSessionStatusScope,
 } from "./scoped-session-status"
+import { CURRENT_SESSION_ENTITY_CACHE_TTL_MS, resolveCurrentSessionEntity } from "./current-session-entity"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -2378,10 +2379,67 @@ export function useSession(sessionID?: string | null, directory?: string) {
     if (directory) {
       return childStores.ensureChild(directory).subscribe(notify)
     }
-    return childStores.subscribeAll(notify)
+    return childStores.subscribeAllSelected((state) => state.session, notify)
   }, [childStores, directory])
 
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export function useCurrentSessionEntity(sessionID?: string | null): Session | null {
+  const liveSession = useSession(sessionID)
+  const globalActiveSession = useGlobalSessionsStore(useCallback((state) => {
+    if (!sessionID) return null
+    return state.activeSessions.find((session) => session.id === sessionID) ?? null
+  }, [sessionID]))
+  const resolvedSession = resolveCurrentSessionEntity(sessionID, liveSession, globalActiveSession)
+  const lastResolvedSessionRef = useRef<{
+    sessionID: string
+    session: Session
+    expiresAt: number | null
+  } | null>(null)
+  const [, setFallbackVersion] = React.useState(0)
+
+  useEffect(() => {
+    if (!sessionID) {
+      lastResolvedSessionRef.current = null
+      return
+    }
+
+    if (resolvedSession) {
+      lastResolvedSessionRef.current = {
+        sessionID,
+        session: resolvedSession,
+        expiresAt: null,
+      }
+      return
+    }
+
+    const cached = lastResolvedSessionRef.current
+    if (!cached || cached.sessionID !== sessionID) {
+      lastResolvedSessionRef.current = null
+      return
+    }
+
+    const expiresAt = cached.expiresAt ?? Date.now() + CURRENT_SESSION_ENTITY_CACHE_TTL_MS
+    cached.expiresAt = expiresAt
+    const remainingMs = expiresAt - Date.now()
+
+    const timeoutID = window.setTimeout(() => {
+      if (lastResolvedSessionRef.current?.sessionID === sessionID) {
+        lastResolvedSessionRef.current = null
+      }
+      setFallbackVersion((value) => value + 1)
+    }, remainingMs)
+
+    return () => window.clearTimeout(timeoutID)
+  }, [resolvedSession, sessionID])
+
+  if (resolvedSession) return resolvedSession
+  const cached = lastResolvedSessionRef.current
+  if (cached && cached.sessionID === sessionID && (cached.expiresAt === null || cached.expiresAt > Date.now())) {
+    return cached.session
+  }
+  return null
 }
 
 /** Get one session directory by id for a directory */

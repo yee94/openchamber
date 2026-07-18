@@ -54,7 +54,7 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SessionStartupCoordinator } from '@/components/session/SessionStartupCoordinator';
-import { SyncProvider, useParentSession, useSession, useSessionMessages } from '@/sync/sync-context';
+import { SyncProvider, useCurrentSessionEntity, useParentSession, useSessionMessages } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
 import { MobileChangesSurface } from './MobileChangesSurface';
@@ -1958,7 +1958,7 @@ const MobileHeader: React.FC<{
   const currentWorktreeMetadata = useSessionUIStore(
     React.useCallback((state) => (currentSessionId ? state.worktreeMetadata.get(currentSessionId) ?? null : null), [currentSessionId]),
   );
-  const currentSession = useSession(currentSessionId, effectiveDirectory || undefined);
+  const currentSession = useCurrentSessionEntity(currentSessionId);
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
 
   const projectLabel = React.useMemo(() => {

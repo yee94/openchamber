@@ -1,9 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 
+import { getMobileSessionPageSize } from './mobileSessionPagination';
+
 // ---------------------------------------------------------------------------
 // Test the core stop logic that MobileSessionsSheet uses without requiring
 // full React rendering. These test the critical data transformations.
 // ---------------------------------------------------------------------------
+
+describe('MobileSessionsSheet pagination', () => {
+  test('shows 20 sessions by default for projects without worktrees', () => {
+    expect(getMobileSessionPageSize(false)).toBe(20);
+  });
+
+  test('shows 5 sessions by default for projects with worktrees', () => {
+    expect(getMobileSessionPageSize(true)).toBe(5);
+  });
+});
 
 describe('MobileSessionsSheet stop logic', () => {
   test('runningSessionMap: identifies busy and retry as running', () => {

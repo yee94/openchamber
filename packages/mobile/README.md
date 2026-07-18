@@ -12,6 +12,13 @@ The mobile package reuses the web build, then rewrites `mobile.html` to `index.h
 - The connection screen and `Instances` menu item are Capacitor-only. Hosted `mobile.html` in a normal browser keeps the regular web behavior.
 - Password-protected OpenChamber servers can be unlocked from the mobile app. The app stores the issued client token with the saved connection.
 
+## Native Haptics Hot Path
+
+- The `OpenChamberHaptics.impactLight` Capacitor 8 plugin provides a fire-and-forget light impact for mobile interaction feedback.
+- iOS registers the plugin from `OpenChamberBridgeViewController`, reuses one main-thread `UIImpactFeedbackGenerator(.light)`, prepares it on creation, and prepares it after every impact.
+- Android registers the plugin before `BridgeActivity.onCreate`, then runs `WebView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)` on the UI thread.
+- Both native methods declare a `none` return type and leave the callback unresolved to keep this input-feedback path free of promise completion work.
+
 ## Commands
 
 Run these from `packages/mobile`, or use the root `mobile:*` aliases.

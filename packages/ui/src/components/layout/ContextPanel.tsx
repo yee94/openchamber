@@ -24,7 +24,7 @@ import { toast } from '@/components/ui';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
-import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
+import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
 import { Icon } from "@/components/icon/Icon";
 import { OpenChamberLogo } from "@/components/ui/OpenChamberLogo";
 import { invokeDesktopCommand } from '@/lib/desktopNative';
@@ -35,6 +35,21 @@ import {
   getOrCreateEmbeddedSessionChatURL,
   type EmbeddedSessionChatURLCacheEntry,
 } from './contextPanelEmbeddedChat';
+import { ContextPanelSessionTranscript } from './ContextPanelSessionTranscript';
+import {
+  createContextPanelNavigationState,
+  createContextPanelSessionSurfaceId,
+  createContextPanelSessionViewKey,
+  cleanupContextPanelNavigationSurfaces,
+  navigateContextPanelBack,
+  reduceContextPanelSessionCache,
+  resolveContextPanelActiveNavigation,
+  resolveContextPanelViewedSessionId,
+  resolveContextPanelChatRenderMode,
+  updateContextPanelNavigation,
+  type ContextPanelNavigationState,
+  type ContextPanelSessionCacheState,
+} from './contextPanelSessionSurface';
 import {
   type PreviewElementMetadata,
   isPreviewElementMetadata,
@@ -2113,6 +2128,34 @@ export const ContextPanel: React.FC = () => {
   const wasOpenRef = React.useRef(false);
   const previousIsOpenRef = React.useRef(isOpen);
   const suppressWidthTransitionFrameRef = React.useRef<number | null>(null);
+  const [sessionNavigationByTabId, setSessionNavigationByTabId] = React.useState<Record<string, ContextPanelNavigationState>>({});
+  const sessionNavigationRef = React.useRef(sessionNavigationByTabId);
+  sessionNavigationRef.current = sessionNavigationByTabId;
+  const [sessionCache, dispatchSessionCache] = React.useReducer(reduceContextPanelSessionCache, { activeViewKey: null, tabs: {}, mountedViews: {} } satisfies ContextPanelSessionCacheState);
+  const chatRenderMode = resolveContextPanelChatRenderMode();
+  const runtimeKey = getRuntimeKey();
+
+  const commitSessionNavigation = React.useCallback((update: (current: Record<string, ContextPanelNavigationState>) => Record<string, ContextPanelNavigationState>) => {
+    const current = sessionNavigationRef.current;
+    const next = update(current);
+    if (next === current) return false;
+    sessionNavigationRef.current = next;
+    setSessionNavigationByTabId(next);
+    return true;
+  }, []);
+
+  const closePanelTab = React.useCallback((tabId: string) => {
+    if (!directoryKey) return;
+    dispatchSessionCache({ type: 'close-tab', tabId });
+    const surfaceId = createContextPanelSessionSurfaceId(directoryKey, tabId);
+    commitSessionNavigation((current) => {
+      if (!current[surfaceId]) return current;
+      const next = { ...current };
+      delete next[surfaceId];
+      return next;
+    });
+    closeContextPanelTab(directoryKey, tabId);
+  }, [closeContextPanelTab, commitSessionNavigation, directoryKey]);
 
   const suppressWidthTransitionForFrame = React.useCallback(() => {
     setSuppressWidthTransition(true);
@@ -2246,6 +2289,12 @@ export const ContextPanel: React.FC = () => {
   }, [directoryKey, toggleContextPanelExpanded]);
 
   const handlePanelKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'w' && activeTab && directoryKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      closePanelTab(activeTab.id);
+      return;
+    }
     if (event.key !== 'Escape') {
       return;
     }
@@ -2253,7 +2302,7 @@ export const ContextPanel: React.FC = () => {
     event.preventDefault();
     event.stopPropagation();
     handleClose();
-  }, [handleClose]);
+  }, [activeTab, closePanelTab, directoryKey, handleClose]);
 
   React.useEffect(() => {
     if (!directoryKey || !activeTab) {
@@ -2268,7 +2317,10 @@ export const ContextPanel: React.FC = () => {
   }, [activeTab, directoryKey, setSelectedFilePath]);
 
   const activeChatTabID = activeTab?.mode === 'chat' ? activeTab.id : null;
-  const activeChatSessionID = activeTab?.mode === 'chat' ? getSessionIDFromDedupeKey(activeTab.dedupeKey) : null;
+  const activeChatSessionID = resolveContextPanelViewedSessionId(
+    activeChatTabID ? sessionNavigationByTabId[createContextPanelSessionSurfaceId(directoryKey, activeChatTabID)] : undefined,
+    activeChatTabID ? getSessionIDFromDedupeKey(activeTab?.dedupeKey) : null,
+  );
 
   React.useEffect(() => {
     if (!isOpen || !directoryKey || !activeChatSessionID || typeof window === 'undefined') {
@@ -2452,7 +2504,7 @@ export const ContextPanel: React.FC = () => {
         const frameEntry = Array.from(chatFrameRefs.current.entries())
           .find(([, frame]) => frame.contentWindow === event.source);
         if (frameEntry && directoryKey) {
-          closeContextPanelTab(directoryKey, frameEntry[0]);
+          closePanelTab(frameEntry[0]);
         }
         return;
       }
@@ -2479,7 +2531,7 @@ export const ContextPanel: React.FC = () => {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [closeContextPanelTab, directoryKey, postChatSettingsSyncToEmbeddedChat, postEmbeddedVisibilityToChats, setThemeMode, themeMode]);
+  }, [closePanelTab, directoryKey, postChatSettingsSyncToEmbeddedChat, postEmbeddedVisibilityToChats, setThemeMode, themeMode]);
 
   React.useLayoutEffect(() => {
     const hasAnyChatTab = tabs.some((tab) => tab.mode === 'chat');
@@ -2539,6 +2591,74 @@ export const ContextPanel: React.FC = () => {
 
   const isFileTabActive = activeTab?.mode === 'file';
 
+  React.useEffect(() => {
+    const liveChatSurfaceIDs = new Set(chatTabs.map((tab) => createContextPanelSessionSurfaceId(directoryKey, tab.id)));
+    commitSessionNavigation((current) => {
+      let changed = false;
+      const next: Record<string, ContextPanelNavigationState> = {};
+      for (const tab of chatTabs) {
+        const sessionId = getSessionIDFromDedupeKey(tab.dedupeKey);
+        if (!sessionId) continue;
+        const surfaceId = createContextPanelSessionSurfaceId(directoryKey, tab.id);
+        const existing = current[surfaceId];
+        next[surfaceId] = existing ?? createContextPanelNavigationState({ sessionId, directory: directoryKey });
+        changed ||= !existing;
+      }
+      const retained = cleanupContextPanelNavigationSurfaces(current, liveChatSurfaceIDs);
+      changed ||= retained !== current;
+      return changed ? { ...retained, ...next } : current;
+    });
+    for (const tabId of Object.keys(sessionCache.tabs)) {
+      if (!liveChatSurfaceIDs.has(createContextPanelSessionSurfaceId(directoryKey, tabId)) || sessionCache.tabs[tabId]?.directory !== directoryKey) dispatchSessionCache({ type: 'close-tab', tabId });
+    }
+  }, [chatTabs, commitSessionNavigation, directoryKey, sessionCache.tabs]);
+
+  const activeChatSurfaceId = activeChatTabID ? createContextPanelSessionSurfaceId(directoryKey, activeChatTabID) : null;
+  const activeChatAnchor = activeChatTabID ? getSessionIDFromDedupeKey(activeTab?.dedupeKey) : null;
+  const activeChatNavigation = activeChatSurfaceId && activeChatAnchor
+    ? resolveContextPanelActiveNavigation(sessionNavigationByTabId[activeChatSurfaceId], { sessionId: activeChatAnchor, directory: directoryKey })
+    : undefined;
+  const activeChatViewKey = activeChatNavigation && activeChatSurfaceId
+    ? createContextPanelSessionViewKey(runtimeKey, activeChatSurfaceId, activeChatNavigation.current.directory, activeChatNavigation.current.sessionId)
+    : null;
+
+  React.useLayoutEffect(() => {
+    if (chatRenderMode !== 'react-surface' || !isOpen || !activeChatTabID || !activeChatNavigation || !activeChatSurfaceId || !activeChatViewKey) {
+      if (chatRenderMode === 'react-surface') dispatchSessionCache({ type: 'activate', viewKey: null, now: Date.now() });
+      return;
+    }
+    commitSessionNavigation((current) => current[activeChatSurfaceId]
+      ? current
+      : { ...current, [activeChatSurfaceId]: activeChatNavigation });
+    dispatchSessionCache({
+      type: 'touch',
+      tab: { tabId: activeChatTabID, sessionId: activeChatNavigation.anchor.sessionId, directory: activeChatNavigation.anchor.directory },
+      view: { tabId: activeChatTabID, surfaceId: activeChatSurfaceId, sessionId: activeChatNavigation.current.sessionId, directory: activeChatNavigation.current.directory, viewKey: activeChatViewKey },
+      now: Date.now(),
+    });
+  }, [activeChatNavigation, activeChatSurfaceId, activeChatTabID, activeChatViewKey, chatRenderMode, commitSessionNavigation, isOpen]);
+
+  const handleSessionNavigate = React.useCallback((tabId: string, sessionId: string, directory: string): boolean => {
+    const surfaceId = createContextPanelSessionSurfaceId(directoryKey, tabId);
+    let accepted = false;
+    commitSessionNavigation((current) => {
+      const result = updateContextPanelNavigation(current, surfaceId, { sessionId, directory });
+      accepted = result.accepted;
+      return result.navigationBySurfaceId;
+    });
+    return accepted;
+  }, [commitSessionNavigation, directoryKey]);
+
+  const handleSessionNavigateBack = React.useCallback((tabId: string) => {
+    const surfaceId = createContextPanelSessionSurfaceId(directoryKey, tabId);
+    commitSessionNavigation((current) => {
+      const state = current[surfaceId];
+      if (!state) return current;
+      const next = navigateContextPanelBack(state);
+      return next === state ? current : { ...current, [surfaceId]: next };
+    });
+  }, [commitSessionNavigation, directoryKey]);
+
   const header = (
     <header className="flex h-10 items-stretch border-b border-transparent">
       <SortableTabsStrip
@@ -2551,10 +2671,7 @@ export const ContextPanel: React.FC = () => {
           setActiveContextPanelTab(directoryKey, tabID);
         }}
         onClose={(tabID) => {
-          if (!directoryKey) {
-            return;
-          }
-          closeContextPanelTab(directoryKey, tabID);
+          closePanelTab(tabID);
         }}
         onReorder={(activeTabID, overTabID) => {
           if (!directoryKey) {
@@ -2656,7 +2773,7 @@ export const ContextPanel: React.FC = () => {
             <FilesView mode="editor-only" isActive={isOpen && isFileTabActive} />
           </div>
         ) : null}
-        {chatTabs.map((tab) => {
+        {chatRenderMode === 'legacy-iframe' && chatTabs.map((tab) => {
           const sessionID = getSessionIDFromDedupeKey(tab.dedupeKey);
           if (!sessionID) {
             return null;
@@ -2691,6 +2808,24 @@ export const ContextPanel: React.FC = () => {
             />
           );
         })}
+        {chatRenderMode === 'react-surface' ? Object.values(sessionCache.mountedViews).map((view) => {
+          const navigation = sessionNavigationByTabId[createContextPanelSessionSurfaceId(directoryKey, view.tabId)];
+          const visible = isOpen && activeChatTabID === view.tabId && activeChatViewKey === view.viewKey;
+          return (
+            <React.Activity key={view.viewKey} name={`context-panel-session-${view.sessionId}`} mode={visible ? 'visible' : 'hidden'}>
+              <ContextPanelSessionTranscript
+                surfaceId={view.surfaceId}
+                sessionId={view.sessionId}
+                directory={view.directory}
+                active={visible}
+                canNavigateBack={visible && Boolean(navigation?.stack.length)}
+                onNavigateSession={(sessionId, directory) => handleSessionNavigate(view.tabId, sessionId, directory)}
+                onNavigateBack={() => handleSessionNavigateBack(view.tabId)}
+                onEstimateBytes={(viewKey, estimatedBytes) => dispatchSessionCache({ type: 'estimate', viewKey, estimatedBytes })}
+              />
+            </React.Activity>
+          );
+        }) : null}
         {browserTabs.map((tab) => (
           <div
             key={tab.id}

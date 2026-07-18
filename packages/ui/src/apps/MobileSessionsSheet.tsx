@@ -32,6 +32,7 @@ import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { abortCurrentOperation } from '@/sync/session-actions';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
+import { getMobileSessionPageSize } from './mobileSessionPagination';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
 
 type MobileSessionsSheetProps = {
@@ -73,9 +74,6 @@ type ProjectNode = {
   totalSessions: number;
   isActive: boolean;
 };
-
-const SESSIONS_PER_BUCKET = 3;
-const SESSIONS_PAGE_SIZE = 7;
 
 // Left padding for session rows so the title's first letter aligns with its
 // parent label. Root/project-level sessions align with the project label;
@@ -451,8 +449,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const [gitProjectPaths, setGitProjectPaths] = React.useState<Set<string>>(new Set());
   const [rootBranchesByProject, setRootBranchesByProject] = React.useState<Map<string, string>>(new Map());
   // Per-bucket count of sessions revealed past the default page. Ephemeral —
-  // resets when the sheet closes or when a group/project is toggled. Expand
-  // state itself lives in useMobileSessionTreeStore (persisted).
+  // resets when the sheet closes, while group/project collapse preserves it.
+  // Expand state itself lives in useMobileSessionTreeStore (persisted).
   // Key: `${projectId}::${bucketKey}`.
   const [visibleCountByBucket, setVisibleCountByBucket] = React.useState<Map<string, number>>(new Map());
 
@@ -657,39 +655,20 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     });
   };
 
-  const resetProjectVisibleCounts = (projectId: string) => {
-    setVisibleCountByBucket((previous) => {
-      let changed = false;
-      const next = new Map(previous);
-      const prefix = `${projectId}::`;
-      for (const key of next.keys()) {
-        if (key.startsWith(prefix)) {
-          next.delete(key);
-          changed = true;
-        }
-      }
-      return changed ? next : previous;
-    });
-  };
-
   const showMoreBucketSessions = (
     bucketKey: string,
     directory: string,
     currentVisibleCount: number,
     totalSessions: number,
+    pageSize: number,
   ) => {
-    const currentLimit = Math.max(SESSIONS_PER_BUCKET, currentVisibleCount);
-    const nextVisibleCount = currentLimit + SESSIONS_PAGE_SIZE;
     setVisibleCountByBucket((previous) => {
       const next = new Map(previous);
-      const current = Math.max(
-        SESSIONS_PER_BUCKET,
-        previous.get(bucketKey) ?? SESSIONS_PER_BUCKET,
-        currentVisibleCount,
-      );
-      next.set(bucketKey, current + SESSIONS_PAGE_SIZE);
+      const current = Math.max(pageSize, previous.get(bucketKey) ?? pageSize, currentVisibleCount);
+      next.set(bucketKey, current + pageSize);
       return next;
     });
+    const nextVisibleCount = Math.max(pageSize, currentVisibleCount) + pageSize;
     if (nextVisibleCount < totalSessions) return;
     const normalizedBucketDirectory = normalizePath(directory);
     if (!normalizedBucketDirectory) return;
@@ -706,6 +685,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // recursively). Pagination counts only top-level sessions.
   const renderBucketSessions = (node: ProjectNode, bucket: WorktreeBucket, indent: number) => {
     const bucketKey = `${node.project.id}::${bucket.key}`;
+    const pageSize = getMobileSessionPageSize(node.project.worktrees.length > 0);
 
     // Group children by parent within this bucket, and treat sessions whose parent
     // is not in this bucket as top-level so nothing is hidden.
@@ -724,7 +704,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       return !parentId || !idsInBucket.has(parentId);
     });
 
-    const visibleCount = visibleCountByBucket.get(bucketKey) ?? SESSIONS_PER_BUCKET;
+    const visibleCount = visibleCountByBucket.get(bucketKey) ?? pageSize;
     const visibleRoots = roots.slice(0, visibleCount);
     const remaining = roots.length - visibleRoots.length;
     const pagination = activePaginationByDirectory.get(normalizePath(bucket.path));
@@ -732,8 +712,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     const isLoadingRemoteSessions = pagination?.loadingMore === true;
     // Show fewer whenever the rendered list is past the default page, even if
     // more remain — so "more" and "fewer" can appear together for fold / load-more.
-    const canShowFewer = roots.length > SESSIONS_PER_BUCKET
-      && (visibleRoots.length > SESSIONS_PER_BUCKET || visibleCount > SESSIONS_PER_BUCKET);
+    const canShowFewer = roots.length > pageSize
+      && (visibleRoots.length > pageSize || visibleCount > pageSize);
 
     const renderNode = (session: Session, rowIndent: number): React.ReactNode => {
       const children = childrenByParent.get(session.id) ?? [];
@@ -781,23 +761,19 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           showMore={remaining > 0 || hasRemoteSessions}
           showFewer={canShowFewer}
           loadingMore={isLoadingRemoteSessions}
-          onShowMore={() => showMoreBucketSessions(bucketKey, bucket.path, visibleRoots.length, roots.length)}
+          onShowMore={() => showMoreBucketSessions(bucketKey, bucket.path, visibleRoots.length, roots.length, pageSize)}
           onShowFewer={() => resetBucketVisibleCount(bucketKey)}
         />
       </div>
     );
   };
 
-  // Toggling resets the visible-session count for the affected buckets so a
-  // re-expanded group starts from the default page again.
   const toggleProject = (projectId: string, currentlyExpanded: boolean) => {
     setProjectExpanded(projectId, !currentlyExpanded);
-    resetProjectVisibleCounts(projectId);
   };
 
   const toggleWorktree = (projectId: string, bucketKey: string, currentlyExpanded: boolean) => {
     setWorktreeExpanded(`${projectId}::${bucketKey}`, !currentlyExpanded);
-    resetBucketVisibleCount(`${projectId}::${bucketKey}`);
   };
 
   const handleSelectSession = (session: Session) => {

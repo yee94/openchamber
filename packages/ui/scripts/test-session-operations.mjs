@@ -28,6 +28,7 @@ const testFiles = [
     'src/sync/__tests__/issue-2039.test.ts',
     'src/sync/session-combined-send.test.ts',
     'src/hooks/useQueuedMessageAutoSend.test.ts',
+    'src/components/chat/commandSelection.test.ts',
     'src/components/chat/localCommandClassifier.test.ts',
     'src/components/chat/immediateSessionCommandAction.test.ts',
     'src/components/chat/immediateCommandTextConsumption.test.ts',

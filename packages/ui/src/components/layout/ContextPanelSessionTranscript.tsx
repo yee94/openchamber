@@ -1,0 +1,236 @@
+import React from 'react';
+
+import MessageList, { type MessageListHandle } from '@/components/chat/MessageList';
+import { ReadOnlyPromptBanner } from '@/components/chat/ReadOnlyPromptBanner';
+import ScrollToBottomButton from '@/components/chat/components/ScrollToBottomButton';
+import { SessionSurfaceContext, STRICT_READ_ONLY_SESSION_SURFACE_CAPABILITIES } from '@/components/chat/SessionSurfaceContext';
+import { Icon } from '@/components/icon/Icon';
+import { Button } from '@/components/ui/button';
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
+import { useChatAutoFollow } from '@/hooks/useChatAutoFollow';
+import { useI18n } from '@/lib/i18n';
+import { getProviderModelDisplayName } from '@/lib/modelDisplay';
+import { getRuntimeKey } from '@/lib/runtime-switch';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { getSessionMaterializationStatus } from '@/sync/materialization';
+import { getSessionPrefetch, subscribeSessionPrefetch } from '@/sync/session-prefetch-cache';
+import { useStreamingStore } from '@/sync/streaming';
+import { useDirectorySync, useSessionMessageCount, useSessionMessageRecords, useSessionStatus, useSyncDirectory } from '@/sync/sync-context';
+import { useSync } from '@/sync/use-sync';
+import {
+    createContextPanelViewportRestoreIdentity,
+    createContextPanelSessionViewKey,
+    estimateContextPanelSessionBytes,
+    normalizeContextPanelDirectory,
+    resolveContextPanelEnsureForce,
+    resolveContextPanelPartialErrorRetry,
+    resolveContextPanelPrependAnchor,
+    resolveContextPanelPrependScrollTop,
+    resolveContextPanelTranscriptState,
+    shouldApplyContextPanelManualPrependCompensation,
+    shouldConsumeContextPanelPrepend,
+    shouldRequestContextPanelLoadOlder,
+    shouldShowContextPanelLoadOlder,
+    shouldRestoreContextPanelViewport,
+    type ContextPanelTranscriptState,
+    type ContextPanelPendingPrepend,
+} from './contextPanelSessionSurface';
+import { resolveContextPanelSessionExecution } from './contextPanelSessionExecution';
+
+export type ContextPanelSessionTranscriptProps = {
+    surfaceId: string;
+    sessionId: string;
+    directory: string;
+    active: boolean;
+    canNavigateBack: boolean;
+    onNavigateSession: (sessionId: string, directory: string) => boolean | void;
+    onNavigateBack: () => void;
+    onEstimateBytes?: (viewportKey: string, estimatedBytes: number) => void;
+};
+
+const TranscriptState: React.FC<{ state: ContextPanelTranscriptState; error?: string; onRetry: () => void }> = ({ state, error, onRetry }) => {
+    const { t } = useI18n();
+    if (state === 'cold-loading' || state === 'working-empty') {
+        return <div className="flex h-full items-center justify-center text-sm text-muted-foreground"><Icon name="loader-4" className="size-4 animate-spin" /></div>;
+    }
+    if (state === 'fatal-error' || state === 'directory-mismatch') {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-sm text-muted-foreground">
+                <div className="text-center">{error || t('chat.emptyState.opencodeUnreachable')}</div>
+                {state === 'fatal-error' ? <Button type="button" variant="secondary" size="sm" onClick={onRetry}>{t('chat.history.retry')}</Button> : null}
+            </div>
+        );
+    }
+    return <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">{t('chat.timeline.empty.session')}</div>;
+};
+
+const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscriptProps & { syncDirectory: string }> = (props) => {
+    const { surfaceId, sessionId, directory, active, canNavigateBack, onNavigateSession, onNavigateBack, onEstimateBytes, syncDirectory } = props;
+    const { t } = useI18n();
+    const sync = useSync();
+    const runtimeKey = getRuntimeKey();
+    const normalizedDirectory = normalizeContextPanelDirectory(directory);
+    const viewportKey = createContextPanelSessionViewKey(runtimeKey, surfaceId, normalizedDirectory, sessionId);
+    const messageListRef = React.useRef<MessageListHandle | null>(null);
+    const prependAnchorRef = React.useRef<ContextPanelPendingPrepend | null>(null);
+    const prependRequestRef = React.useRef(0);
+    const [completedPrependToken, setCompletedPrependToken] = React.useState<number | null>(null);
+    const restoredViewportsRef = React.useRef(new Set<string>());
+    const sessionMessageCount = useSessionMessageCount(sessionId, syncDirectory);
+    const sessionMessages = useSessionMessageRecords(sessionId, syncDirectory);
+    const providers = useConfigStore((state) => state.providers);
+    const execution = React.useMemo(
+        () => resolveContextPanelSessionExecution(sessionMessages),
+        [sessionMessages],
+    );
+    const executionModelName = React.useMemo(() => {
+        if (!execution.modelId) return t('common.unavailable');
+        const provider = providers.find((entry) => entry.id === execution.providerId);
+        const modelExists = provider?.models.some((model) => model.id === execution.modelId);
+        return modelExists
+            ? getProviderModelDisplayName(provider, execution.modelId) || execution.modelId
+            : execution.modelId;
+    }, [execution.modelId, execution.providerId, providers, t]);
+    const sessionStatus = useSessionStatus(sessionId, syncDirectory);
+    const isRenderable = useDirectorySync(React.useCallback(
+        (state) => getSessionMaterializationStatus(state, sessionId).renderable,
+        [sessionId],
+    ), syncDirectory);
+    const prefetch = React.useSyncExternalStore(
+        React.useCallback((notify) => subscribeSessionPrefetch(syncDirectory, sessionId, notify, runtimeKey), [runtimeKey, sessionId, syncDirectory]),
+        React.useCallback(() => getSessionPrefetch(syncDirectory, sessionId, runtimeKey), [runtimeKey, sessionId, syncDirectory]),
+        React.useCallback(() => undefined, []),
+    );
+    const streamingMessageId = useStreamingStore(React.useCallback((state) => state.streamingMessageIds.get(sessionId) ?? null, [sessionId]));
+    const activeStreamingPhase = useStreamingStore(React.useCallback(
+        (state) => streamingMessageId ? state.messageStreamStates.get(streamingMessageId)?.phase ?? null : null,
+        [streamingMessageId],
+    ));
+    const sessionIsWorking = sessionStatus?.type === 'busy' || sessionStatus?.type === 'retry';
+    const { scrollRef, notifyContentChange, getAnimationHandlers, goToBottom, restoreSnapshot, showScrollButton } = useChatAutoFollow({
+        currentSessionId: sessionId,
+        viewportKey,
+        sessionMessageCount,
+        sessionIsWorking,
+        isMobile: false,
+    });
+    const ensureSession = React.useCallback((reason: 'active' | 'retry') => {
+        void sync.ensureSessionRenderable(sessionId, resolveContextPanelEnsureForce(reason));
+    }, [sessionId, sync]);
+
+    React.useEffect(() => {
+        if (active) ensureSession('active');
+    }, [active, ensureSession]);
+    React.useEffect(() => {
+        onEstimateBytes?.(viewportKey, estimateContextPanelSessionBytes(sessionMessageCount));
+    }, [onEstimateBytes, sessionMessageCount, viewportKey]);
+    React.useEffect(() => {
+        if (!shouldRestoreContextPanelViewport(restoredViewportsRef.current, sessionId, viewportKey, isRenderable)) return;
+        const identity = createContextPanelViewportRestoreIdentity(sessionId, viewportKey);
+        restoredViewportsRef.current.add(identity);
+        void restoreSnapshot();
+    }, [isRenderable, restoreSnapshot, sessionId, viewportKey]);
+    React.useLayoutEffect(() => {
+        prependAnchorRef.current = null;
+        setCompletedPrependToken(null);
+    }, [viewportKey]);
+    React.useLayoutEffect(() => {
+        const pending = prependAnchorRef.current;
+        const element = scrollRef.current;
+        if (!shouldConsumeContextPanelPrepend(pending, completedPrependToken, viewportKey)) return;
+        if (!element || !shouldApplyContextPanelManualPrependCompensation(Boolean(messageListRef.current?.isHistoryVirtualized()))) {
+            prependAnchorRef.current = null;
+            return;
+        }
+        element.scrollTop = resolveContextPanelPrependScrollTop(pending.anchor, element.scrollHeight);
+        prependAnchorRef.current = null;
+    }, [completedPrependToken, scrollRef, sessionMessages, viewportKey]);
+
+    const hasMore = sync.hasMore(sessionId);
+    const isLoading = prefetch?.status === 'loading' || sync.isLoading(sessionId);
+    const loadOlder = React.useCallback(() => {
+        if (!shouldRequestContextPanelLoadOlder(hasMore, isLoading)) return;
+        const token = prependRequestRef.current + 1;
+        prependRequestRef.current = token;
+        const element = scrollRef.current;
+        const anchor = element ? resolveContextPanelPrependAnchor({
+            hasMore,
+            isLoading,
+            historyVirtualized: Boolean(messageListRef.current?.isHistoryVirtualized()),
+            scrollHeight: element.scrollHeight,
+            scrollTop: element.scrollTop,
+        }) : null;
+        prependAnchorRef.current = anchor ? { token, viewportKey, anchor } : null;
+        void sync.loadMore(sessionId).finally(() => {
+            setCompletedPrependToken(token);
+        });
+    }, [hasMore, isLoading, scrollRef, sessionId, sync, viewportKey]);
+    const transcriptState = resolveContextPanelTranscriptState({
+        directoryMatches: true,
+        requested: active,
+        renderable: isRenderable,
+        messageCount: sessionMessages.length,
+        working: sessionIsWorking,
+        error: prefetch?.status === 'error' ? prefetch.error : undefined,
+    });
+    const surface = React.useMemo(() => ({
+        kind: 'panel' as const,
+        surfaceId,
+        sessionId,
+        directory: normalizedDirectory,
+        active,
+        capabilities: STRICT_READ_ONLY_SESSION_SURFACE_CAPABILITIES,
+        navigateSession: onNavigateSession,
+    }), [active, normalizedDirectory, onNavigateSession, sessionId, surfaceId]);
+    const retryPartialError = React.useCallback(() => {
+        if (resolveContextPanelPartialErrorRetry(hasMore) === 'load-more') {
+            loadOlder();
+            return;
+        }
+        ensureSession('retry');
+    }, [ensureSession, hasMore, loadOlder]);
+
+    return (
+        <SessionSurfaceContext.Provider value={surface}>
+            <div className="relative flex h-full min-h-0 flex-col bg-background" data-context-session-surface="true" data-session-id={sessionId} data-surface-id={surfaceId}>
+                {canNavigateBack ? <Button type="button" variant="outline" size="xs" onClick={onNavigateBack} className="absolute left-3 top-3 z-20 !font-normal bg-[var(--surface-background)]/95" aria-label={t('chat.container.returnToParent.aria')} title={t('chat.container.returnToParent.title')}><Icon name="arrow-left" className="h-4 w-4" />{t('chat.container.returnToParent.label')}</Button> : null}
+                <div className="relative min-h-0 flex-1">
+                    {transcriptState === 'cold-loading' || transcriptState === 'working-empty' || transcriptState === 'authoritative-empty' || transcriptState === 'fatal-error' ? <TranscriptState state={transcriptState} error={prefetch?.error} onRetry={() => ensureSession('retry')} /> : (
+                        <>
+                            <ScrollShadow ref={scrollRef} className="absolute inset-0 overflow-y-auto overflow-x-hidden chat-scroll overlay-scrollbar-target" observeMutations={false} data-scroll-shadow="true" data-scrollbar="chat">
+                                <div className="relative min-h-full">
+                                    {transcriptState === 'partial-error' ? <div className="flex items-center justify-center gap-2 px-3 py-2 text-sm text-[var(--status-error-foreground)]"><span className="truncate">{prefetch?.error}</span><Button type="button" variant="secondary" size="xs" onClick={retryPartialError}>{t('chat.history.retry')}</Button></div> : null}
+                                    {shouldShowContextPanelLoadOlder(hasMore) ? <div className="flex justify-center pt-3 pb-1"><Button type="button" variant="secondary" size="sm" onClick={loadOlder} disabled={isLoading}>{isLoading ? <Icon name="loader-4" className="size-4 animate-spin" /> : null}{t('chat.history.loadOlder')}</Button></div> : null}
+                                    <MessageList ref={messageListRef} sessionKey={sessionId} virtualizerKey={viewportKey} messages={sessionMessages} sessionIsWorking={sessionIsWorking} activeStreamingMessageId={streamingMessageId} activeStreamingPhase={activeStreamingPhase} onMessageContentChange={notifyContentChange} getAnimationHandlers={getAnimationHandlers} isLoadingOlder={isLoading} scrollToBottom={() => goToBottom('instant')} scrollRef={scrollRef} directory={syncDirectory} />
+                                    <div className="h-12" aria-hidden="true" />
+                                </div>
+                            </ScrollShadow>
+                            <ScrollToBottomButton visible={showScrollButton} onClick={() => goToBottom('smooth')} />
+                        </>
+                    )}
+                </div>
+                <ReadOnlyPromptBanner agentName={execution.agentName} providerId={execution.providerId} modelId={execution.modelId} modelName={executionModelName} />
+            </div>
+        </SessionSurfaceContext.Provider>
+    );
+};
+
+export const ContextPanelSessionTranscript: React.FC<ContextPanelSessionTranscriptProps> = (props) => {
+    const syncDirectory = useSyncDirectory();
+    const { t } = useI18n();
+    const normalizedDirectory = normalizeContextPanelDirectory(props.directory);
+    const directoryMatches = normalizedDirectory === normalizeContextPanelDirectory(syncDirectory);
+    const surface = React.useMemo(() => ({
+        kind: 'panel' as const,
+        surfaceId: props.surfaceId,
+        sessionId: props.sessionId,
+        directory: normalizedDirectory,
+        active: props.active,
+        capabilities: STRICT_READ_ONLY_SESSION_SURFACE_CAPABILITIES,
+        navigateSession: props.onNavigateSession,
+    }), [normalizedDirectory, props.active, props.onNavigateSession, props.sessionId, props.surfaceId]);
+    if (!directoryMatches) {
+        return <SessionSurfaceContext.Provider value={surface}><div className="h-full" data-context-session-surface="true" data-session-id={props.sessionId} data-surface-id={props.surfaceId}><TranscriptState state="directory-mismatch" onRetry={() => undefined} error={t('chat.emptyState.opencodeUnreachable')} /></div></SessionSurfaceContext.Provider>;
+    }
+    return <ContextPanelSessionTranscriptContent {...props} syncDirectory={syncDirectory} />;
+};

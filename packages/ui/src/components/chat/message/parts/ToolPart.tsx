@@ -70,6 +70,7 @@ import {
     MOBILE_SHELL_CODE_LINE_HEIGHT,
     TOOL_EXPANDED_TIMELINE_CLASS_NAME,
 } from './toolExpandedLayout';
+import { navigateNestedSession, useSessionSurface } from '../../SessionSurfaceContext';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -1247,6 +1248,7 @@ const TaskToolSummary: React.FC<{
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     const runtime = React.useContext(RuntimeAPIContext);
+    const sessionSurface = useSessionSurface();
 
     const trimmedOutput = typeof output === 'string'
         ? stripTaskMetadataFromOutput(output)
@@ -1259,19 +1261,21 @@ const TaskToolSummary: React.FC<{
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
         if (sessionId && currentDirectory) {
-            // In contexts with no ContextPanel (embedded session-chat iframe)
-            // or single-surface layouts (mobile, VS Code), navigate in place.
-            // Otherwise open a new side-panel tab.
-            if (isEmbeddedSessionChat() || isMobile || runtime?.runtime.isVSCode) {
-                setCurrentSession(sessionId, currentDirectory);
-                return;
-            }
+            navigateNestedSession(sessionSurface, sessionId, currentDirectory, () => {
+                // In contexts with no ContextPanel (embedded session-chat iframe)
+                // or single-surface layouts (mobile, VS Code), navigate in place.
+                // Otherwise open a new side-panel tab.
+                if (isEmbeddedSessionChat() || isMobile || runtime?.runtime.isVSCode) {
+                    setCurrentSession(sessionId, currentDirectory);
+                    return;
+                }
 
-            openContextPanelTab(currentDirectory, {
-                mode: 'chat',
-                dedupeKey: `session:${sessionId}`,
-                label: agentDisplayName,
-                readOnly: true,
+                openContextPanelTab(currentDirectory, {
+                    mode: 'chat',
+                    dedupeKey: `session:${sessionId}`,
+                    label: agentDisplayName,
+                    readOnly: true,
+                });
             });
         }
     };
@@ -1304,7 +1308,7 @@ const TaskToolSummary: React.FC<{
                 />
             ) : null}
 
-            {sessionId && (
+            {sessionId && sessionSurface.capabilities.navigateNestedSession && (
                 <button
                     type="button"
                     className={cn('flex items-center gap-1.5 text-primary hover:text-primary/80 w-full', TASK_SUMMARY_TEXT_CLASS)}
@@ -1954,6 +1958,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     const currentDirectory = useEffectiveDirectory() ?? '';
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const mobileActions = useMobileAppActions();
+    const sessionSurface = useSessionSurface();
 
     const normalizedPartTool = normalizeToolName(part.tool);
     const isTaskTool = normalizedPartTool === 'task';
@@ -2284,23 +2289,25 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             return false;
         }
         pendingOpenTaskSessionRef.current = false;
-        if (isMobile || runtime?.runtime.isVSCode) {
-            setCurrentSession(sessionId, currentDirectory);
-            return true;
-        }
-        openContextPanelTab(currentDirectory, {
-            mode: 'chat',
-            dedupeKey: `session:${sessionId}`,
-            label: taskTitle,
-            readOnly: true,
+        return navigateNestedSession(sessionSurface, sessionId, currentDirectory, () => {
+            if (isMobile || runtime?.runtime.isVSCode) {
+                setCurrentSession(sessionId, currentDirectory);
+                return;
+            }
+            openContextPanelTab(currentDirectory, {
+                mode: 'chat',
+                dedupeKey: `session:${sessionId}`,
+                label: taskTitle,
+                readOnly: true,
+            });
         });
-        return true;
     }, [
         currentDirectory,
         isMobile,
         openContextPanelTab,
         runtime?.runtime.isVSCode,
         setCurrentSession,
+        sessionSurface,
         taskSessionId,
         taskTitle,
     ]);
@@ -2317,7 +2324,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         // Task：整行始终打开子会话（含 loading）；详情展开只走图标位箭头
         if (isTaskTool) {
             e.stopPropagation();
-            if (!openTaskSession()) {
+            if (sessionSurface.capabilities.navigateNestedSession && !openTaskSession()) {
                 // 子会话 id 还在路上：记下意图，id 到达后自动打开
                 pendingOpenTaskSessionRef.current = true;
             }
@@ -2513,7 +2520,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                     onToggle(part.id);
                                     return;
                                 }
-                                if (!openTaskSession()) {
+                                if (sessionSurface.capabilities.navigateNestedSession && !openTaskSession()) {
                                     pendingOpenTaskSessionRef.current = true;
                                 }
                                 return;

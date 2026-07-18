@@ -30,6 +30,7 @@ import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual } from './message/renderCompare';
 import type { ReviewTransferDirection } from '@/lib/reviewFlow';
+import { getSessionSurfaceActionAvailability, useSessionSurface } from './SessionSurfaceContext';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 
@@ -140,6 +141,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     reviewTransferDirection = null,
 }) => {
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
+    const sessionSurface = useSessionSurface();
+    const sessionSurfaceActions = getSessionSurfaceActionAvailability(sessionSurface);
     const alwaysShowMessageActions = isMobile || isTablet;
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -1046,9 +1049,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 showReasoningTraces={showReasoningTraces}
                                                 onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                                                 agentMention={agentMention}
-                                                onEdit={handleEdit}
-                                                onRevert={handleRevert}
-                                                onFork={isUser ? handleFork : undefined}
+                                                onEdit={sessionSurfaceActions.edit ? handleEdit : undefined}
+                                                onRevert={sessionSurfaceActions.revert ? handleRevert : undefined}
+                                                onFork={isUser && sessionSurfaceActions.fork ? handleFork : undefined}
                                                 pendingMessageAction={pendingMessageAction}
                                                 errorMessage={assistantErrorText}
                                                 errorVariant={assistantErrorVariant}
@@ -1082,9 +1085,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 showReasoningTraces={showReasoningTraces}
                                                 onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                                                 agentMention={agentMention}
-                                                onEdit={handleEdit}
-                                                onRevert={handleRevert}
-                                                onFork={isUser ? handleFork : undefined}
+                                                onEdit={sessionSurfaceActions.edit ? handleEdit : undefined}
+                                                onRevert={sessionSurfaceActions.revert ? handleRevert : undefined}
+                                                onFork={isUser && sessionSurfaceActions.fork ? handleFork : undefined}
                                                 pendingMessageAction={pendingMessageAction}
                                                 errorMessage={assistantErrorText}
                                                 errorVariant={assistantErrorVariant}

@@ -4,6 +4,7 @@ import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 
 import { ChatInput } from './ChatInput';
+import { ReadOnlyPromptBanner } from './ReadOnlyPromptBanner';
 import { DraftPresetChips } from './DraftPresetChips';
 import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
@@ -491,18 +492,6 @@ const HYDRATING_SKELETON_ITEMS: Array<{
         textWidths: ['w-24', 'w-[84%]', 'w-[64%]'],
     },
 ];
-
-const ReadOnlyPromptBanner: React.FC = () => {
-    const { t } = useI18n();
-
-    return (
-        <div className="p-3">
-            <div className="rounded-2xl border border-border/70 bg-[var(--surface-background)] px-4 py-3 typography-ui-label text-muted-foreground">
-                {t('chat.container.readOnlySubagentPromptBanner')}
-            </div>
-        </div>
-    );
-};
 
 const getProjectDisplayLabel = (project: { label?: string; path: string }): string => {
     return formatDirectoryName(project.path);

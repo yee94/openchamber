@@ -6,7 +6,8 @@ import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell } from '@/lib/desktop';
 import { formatDirectoryName, cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useAllLiveSessions } from '@/sync/sync-context';
+import { useAllLiveSessions, useAllSessionStatuses } from '@/sync/sync-context';
+import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -417,6 +418,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const gitBranches = React.useMemo(() => new Map<string, string | null>(), []);
 
   const liveSessions = useAllLiveSessions();
+  const liveSessionStatuses = useAllSessionStatuses();
+  const fallbackSessionStatuses = useGlobalSessionStatusStore((state) => state.statusById);
+  const runningSessionIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const [sessionId, status] of Object.entries(liveSessionStatuses)) {
+      if (status.type === 'busy' || status.type === 'retry') ids.add(sessionId);
+    }
+    for (const sessionId of fallbackSessionStatuses.keys()) {
+      if (liveSessionStatuses[sessionId] === undefined) ids.add(sessionId);
+    }
+    return ids;
+  }, [fallbackSessionStatuses, liveSessionStatuses]);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const fullCatalogSessionIds = useGlobalSessionsStore((state) => state.fullCatalogSessionIds);
   const fullCatalogGeneration = useGlobalSessionsStore((state) => state.fullCatalogGeneration);
@@ -1727,6 +1740,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       visibleSessionCountByGroup,
       defaultVisibleSessionCount: getDefaultProjectGroupVisibleCount(),
       hasSessionSearchQuery,
+      alwaysVisibleSessionIds: runningSessionIds,
     })
   ), [
     collapsedFolderIds,
@@ -1734,6 +1748,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     collapsedProjects,
     hasSessionSearchQuery,
     projectNavigationTargets,
+    runningSessionIds,
     visibleSessionCountByGroup,
   ]);
 
@@ -2325,6 +2340,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         editTitle={editTitle}
         openSidebarMenuKey={openSidebarMenuKey}
         liveSessionById={liveSessionById}
+        runningSessionIds={runningSessionIds}
         prVisualStateByDirectoryBranch={prVisualStateByDirectoryBranch}
         onToggleCollapsedGroup={(key) => {
           if (group.isArchivedBucket && collapsedGroups.has(key) && projectId) {
@@ -2374,6 +2390,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       editTitle,
       openSidebarMenuKey,
       liveSessionById,
+      runningSessionIds,
       prVisualStateByDirectoryBranch,
       toggleCollapsedGroup,
       ensureArchivedSessionsLoaded,

@@ -34,13 +34,16 @@ export type ViewportState = {
   sessionMemoryState: Map<string, SessionMemoryState>
   isSyncing: boolean
 
-  updateViewportAnchor: (sessionId: string, anchor: number, scrollPosition?: SessionMemoryState['scrollPosition']) => void
+  updateViewportAnchor: (sessionId: string, anchor: number, scrollPosition?: SessionMemoryState['scrollPosition'], geometryKey?: string) => void
 }
 
 export const viewportSessionKey = (sessionId: string, runtimeKey = getRuntimeKey()): string => `${runtimeKey}\n${sessionId}`
 
-export const getViewportSessionMemory = (sessionId: string): SessionMemoryState | undefined => {
+export const getViewportSessionMemory = (sessionId: string, geometryKey?: string): SessionMemoryState | undefined => {
   const state = useViewportStore.getState()
+  if (geometryKey) {
+    return state.sessionMemoryState.get(geometryKey)
+  }
   return state.sessionMemoryState.get(viewportSessionKey(sessionId)) ?? state.sessionMemoryState.get(sessionId)
 }
 
@@ -48,11 +51,11 @@ export const useViewportStore = create<ViewportState>()((set) => ({
   sessionMemoryState: new Map(),
   isSyncing: false,
 
-  updateViewportAnchor: (sessionId, anchor, scrollPosition) =>
+  updateViewportAnchor: (sessionId, anchor, scrollPosition, geometryKey) =>
     set((s) => {
       const map = new Map(s.sessionMemoryState)
-      const key = viewportSessionKey(sessionId)
-      const existing = map.get(key) ?? map.get(sessionId) ?? {
+      const key = geometryKey ?? viewportSessionKey(sessionId)
+      const existing = map.get(key) ?? (geometryKey ? undefined : map.get(sessionId)) ?? {
         viewportAnchor: 0,
         isStreaming: false,
         lastAccessedAt: Date.now(),

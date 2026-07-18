@@ -95,6 +95,14 @@ These stores coordinate visible app state, navigation, selected tabs, dialogs, a
 
 `useUIStore` keeps context-panel tab *content* directory-scoped (`contextPanelByDirectory`), but the *open* state of the right workspace (context panel for subagent/file preview/diff, plus right sidebar git/files) is session-correlated. `syncWorkspacePanelsForSessionSwitch()` captures the previous session snapshot into in-memory `sessionWorkspacePanelById` and restores the next session (or closes panels when there is no snapshot). Callers that leave a real session must invoke it: `setCurrentSession()` on session id change, and `openNewSessionDraft()` when clearing the current session for Welcome/draft (it does not go through `setCurrentSession`).
 
+ContextPanel chat navigation stays component-local and is keyed by normalized
+directory plus tab ID. It owns its anchor/current/stack and retained transcript
+view metadata; `useUIStore` owns tab content, active tab, close, and reorder.
+Panel navigation preserves the primary session selection in `session-ui-store`.
+Web and Electron store up to four panel transcript views within a 48 MiB local cache;
+the cache is runtime-scoped through each view's geometry key and is cleared for
+all nested views when its tab closes.
+
 `useConfigStore.ts` keeps provider and agent snapshots project-scoped. Its transient
 provider/agent loading maps are keyed by the active config directory so a deeplink
 into an uncached project can show explicit composer loading controls while cached

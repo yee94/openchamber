@@ -44,6 +44,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { PendingChangesBar } from './PendingChangesBar';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
+import { getSessionSurfaceActionAvailability, useSessionSurface } from './SessionSurfaceContext';
 import type { ToolPopupContent } from './message/types';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
@@ -95,7 +96,10 @@ import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from 
 import { isSyntheticPart } from '@/lib/messages/synthetic';
 import {
     buildHighlightParts,
+    findSkillMentionRanges,
     mentionRangesToHighlightRanges,
+    resolveAtomicReferenceSelection,
+    resolveSkillMentionDeletion,
     tokenizeMarkdown,
     type HighlightRange,
     type MentionRange,
@@ -197,11 +201,21 @@ const withInlineInsertionBoundaries = (content: string, before: string, after: s
     return `${needsLeadingSpace ? ' ' : ''}${content}${needsTrailingSpace ? ' ' : ''}`;
 };
 
-const withAttachmentCitationBoundaries = (content: string, before: string, after: string): string => {
+const withReferenceInsertionBoundaries = (content: string, before: string, after: string): string => {
     const insertion = withInlineInsertionBoundaries(content, before, after);
-    const leadingSpace = before.length === 0 && !/^\s/.test(insertion) ? ' ' : '';
-    const trailingSpace = after.length === 0 && !/\s$/.test(insertion) ? ' ' : '';
-    return `${leadingSpace}${insertion}${trailingSpace}`;
+    return `   ${insertion.trim()} `;
+};
+
+const normalizeReferenceDeletionWhitespace = (text: string, caret: number): { text: string; caret: number } => {
+    let start = caret;
+    let end = caret;
+    while (start > 0 && /\s/.test(text[start - 1])) start -= 1;
+    while (end < text.length && /\s/.test(text[end])) end += 1;
+    const separator = start > 0 && end < text.length ? ' ' : '';
+    return {
+        text: `${text.slice(0, start)}${separator}${text.slice(end)}`,
+        caret: start + separator.length,
+    };
 };
 
 const collectInlineSkillMentions = (text: string, skillNames: Set<string>): string[] => {
@@ -1080,6 +1094,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
     const setExpandedInput = useUIStore((state) => state.setExpandedInput);
     const setTimelineDialogOpen = useUIStore((state) => state.setTimelineDialogOpen);
+    const sessionSurface = useSessionSurface();
+    const sessionSurfaceActions = getSessionSurfaceActionAvailability(sessionSurface);
     const { git: runtimeGit, vscode: vscodeApi } = useRuntimeAPIs();
     const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
     const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
@@ -1195,6 +1211,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const availableCommands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
     const installedSkillsQuery = useInstalledSkillsQuery({ directory: currentDirectory });
     const availableSkills = React.useMemo(() => installedSkillsQuery.data ?? [], [installedSkillsQuery.data]);
+    const availableSkillNames = React.useMemo(
+        () => new Map(availableSkills.map((skill) => [skill.name.toLowerCase(), skill.name])),
+        [availableSkills],
+    );
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
             'init', 'review', 'undo', 'redo', 'fork', 'timeline', 'model', 'compact', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'goal', 'catch-up', 'debug', 'weigh', 'explore',
@@ -1205,8 +1225,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return names;
     }, [availableCommands, availableSkills, isMobile]);
 
-    // /command and /skill spans (primary color). Only tokens that match a known
-    // command/skill name are highlighted — partial/unknown tokens stay plain.
+    // Known commands use primary text; installed skills render as inline tags.
     const composerCommandRanges = React.useMemo<HighlightRange[]>(() => {
         if (!message || !message.includes('/') || inputMode === 'shell' || knownSlashNames.size === 0) {
             return [];
@@ -1220,10 +1239,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 continue;
             }
             const slashStart = match.index + match[1].length;
-            ranges.push({ start: slashStart, end: slashStart + 1 + name.length, style: 'mentionCommand' });
+            const skillName = availableSkillNames.get(name.toLowerCase());
+            ranges.push(skillName
+                ? {
+                    start: slashStart,
+                    end: slashStart + 1 + name.length,
+                    style: 'mentionCommand',
+                    className: 'text-[var(--status-warning)]',
+                    priority: 102,
+                    skillName,
+                }
+                : { start: slashStart, end: slashStart + 1 + name.length, style: 'mentionCommand' });
         }
         return ranges;
-    }, [inputMode, knownSlashNames, message]);
+    }, [availableSkillNames, inputMode, knownSlashNames, message]);
 
     // Snippet triggers (#name / #alias). Highlighted like commands once the
     // trigger matches a known snippet name or alias.
@@ -1299,9 +1328,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 {
                     ...range,
                     style: 'mentionFile' as const,
-                    // The invisible citation keeps the textarea's exact width and
-                    // baseline; the visual tag is overlaid without changing layout.
-                    className: 'relative inline-block max-w-full whitespace-nowrap align-baseline text-transparent',
                     priority: 101,
                     attachmentName,
                 },
@@ -2207,7 +2233,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 });
                 return;
             }
-            else if (commandName === 'timeline' && currentSessionId) {
+            else if (commandName === 'timeline' && currentSessionId && sessionSurfaceActions.timeline) {
                 setTimelineDialogOpen(true);
                 return;
             }
@@ -2674,21 +2700,42 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
             if (citationDeletion) {
                 const removedFilenames = new Set(citationDeletion.removedFilenames.map((filename) => filename.toLowerCase()));
+                const normalizedDeletion = normalizeReferenceDeletionWhitespace(citationDeletion.text, citationDeletion.caret);
                 e.preventDefault();
                 for (const attachment of attachedFiles) {
                     if (removedFilenames.has(attachment.filename.toLowerCase())) {
                         removeAttachedFile(attachment.id);
                     }
                 }
-                setMessage(citationDeletion.text);
+                setMessage(normalizedDeletion.text);
                 requestAnimationFrame(() => {
                     if (textareaRef.current) {
-                        textareaRef.current.selectionStart = citationDeletion.caret;
-                        textareaRef.current.selectionEnd = citationDeletion.caret;
+                        textareaRef.current.selectionStart = normalizedDeletion.caret;
+                        textareaRef.current.selectionEnd = normalizedDeletion.caret;
                     }
                     adjustTextareaHeight();
                 });
-                updateAutocompleteState(citationDeletion.text, citationDeletion.caret);
+                updateAutocompleteState(normalizedDeletion.text, normalizedDeletion.caret);
+                return;
+            }
+
+            const skillDeletion = resolveSkillMentionDeletion(
+                message,
+                availableSkillNames.keys(),
+                { key: e.key, selectionStart, selectionEnd, altKey: e.altKey },
+            );
+            if (skillDeletion) {
+                const normalizedDeletion = normalizeReferenceDeletionWhitespace(skillDeletion.text, skillDeletion.caret);
+                e.preventDefault();
+                setMessage(normalizedDeletion.text);
+                requestAnimationFrame(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.selectionStart = normalizedDeletion.caret;
+                        textareaRef.current.selectionEnd = normalizedDeletion.caret;
+                    }
+                    adjustTextareaHeight();
+                });
+                updateAutocompleteState(normalizedDeletion.text, normalizedDeletion.caret);
                 return;
             }
 
@@ -3543,7 +3590,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const insertionContent = pastedText
             ? `${pastedText}${/\s$/.test(pastedText) ? '' : ' '}${citationText}`
             : citationText;
-        const insertionText = withAttachmentCitationBoundaries(
+        const insertionText = withReferenceInsertionBoundaries(
             insertionContent,
             message.slice(0, selectionStart),
             message.slice(selectionEnd),
@@ -3668,13 +3715,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const lastSlashSymbol = textBeforeCursor.lastIndexOf('/');
 
         if (lastSlashSymbol !== -1) {
-            const newMessage =
-                message.substring(0, lastSlashSymbol) +
-                `/${skillName} ` +
-                message.substring(cursorPosition);
+            const before = message.substring(0, lastSlashSymbol);
+            const after = message.substring(cursorPosition);
+            const insertion = withReferenceInsertionBoundaries(`/${skillName}`, before, after);
+            const newMessage = `${before}${insertion}${after}`;
             setMessage(newMessage);
 
-            const nextCursor = lastSlashSymbol + skillName.length + 2;
+            const nextCursor = before.length + insertion.length;
             requestAnimationFrame(() => {
                 if (textareaRef.current) {
                     textareaRef.current.selectionStart = nextCursor;
@@ -3716,7 +3763,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const handleCommandSelect = (command: CommandInfo, submit = false) => {
 
         const commandText = `/${command.name}`;
-        setMessage(`${commandText} `);
+        setMessage(command.isSkill ? `   ${commandText} ` : `${commandText} `);
 
         const textareaElement = textareaRef.current as HTMLTextAreaElement & { _commandMetadata?: typeof command };
         if (textareaElement) {
@@ -3931,7 +3978,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         if (files.length > 0) {
             const citationText = buildAttachmentCitationText(files.map((file) => file.name));
-            const insertionText = withAttachmentCitationBoundaries(
+            const insertionText = withReferenceInsertionBoundaries(
                 citationText,
                 messageRef.current.slice(0, textareaRef.current?.selectionStart ?? messageRef.current.length),
                 messageRef.current.slice(textareaRef.current?.selectionEnd ?? messageRef.current.length),
@@ -3969,7 +4016,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         if (list.length > 0) {
             const citationText = buildAttachmentCitationText(list.map((file) => file.name));
-            const insertionText = withAttachmentCitationBoundaries(
+            const insertionText = withReferenceInsertionBoundaries(
                 citationText,
                 messageRef.current.slice(0, textareaRef.current?.selectionStart ?? messageRef.current.length),
                 messageRef.current.slice(textareaRef.current?.selectionEnd ?? messageRef.current.length),
@@ -5483,11 +5530,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         >
                                             {part.attachmentName ? (
                                                 <>
-                                                    <span className="invisible">{part.text}</span>
-                                                    <span className="before:content-[''] before:absolute before:-inset-x-0.5 before:inset-y-0 before:-z-10 before:rounded-md before:bg-[var(--status-info-background)] isolate absolute left-0 top-1/2 inline-flex h-5 w-max max-w-[min(120px,100%)] -translate-y-1/2 items-center gap-0.5 overflow-visible px-0.5 text-[0.875em] leading-none text-[var(--status-info)]">
-                                                        <FileTypeIcon filePath={getAttachmentCitationIconPath(part.attachmentName)} className="size-3 shrink-0" />
-                                                        <span className="min-w-0 truncate overflow-hidden">{part.attachmentName}</span>
+                                                    <span className="relative inline-block align-baseline text-transparent">
+                                                        [
+                                                        <FileTypeIcon filePath={getAttachmentCitationIconPath(part.attachmentName)} className="pointer-events-none absolute right-[0.25em] top-1/2 size-[1em] -translate-y-1/2" />
                                                     </span>
+                                                    <span>{part.attachmentName}</span>
+                                                    <span className="text-transparent">]</span>
+                                                </>
+                                            ) : part.skillName ? (
+                                                <>
+                                                    <span className="relative inline-block align-baseline text-transparent">
+                                                        /
+                                                        <Icon name="book-open" className="pointer-events-none absolute right-[0.25em] top-1/2 size-[1em] -translate-y-1/2 text-[var(--status-warning)]" aria-hidden="true" />
+                                                    </span>
+                                                    <span>{part.text.slice(1)}</span>
                                                 </>
                                             ) : part.text}
                                         </span>
@@ -5524,7 +5580,30 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 }}
                                 onSelect={(e) => {
                                     const ta = e.currentTarget;
-                                    cursorPosRef.current = ta.selectionStart ?? 0;
+                                    const selectionStart = ta.selectionStart ?? 0;
+                                    const selectionEnd = ta.selectionEnd ?? selectionStart;
+                                    const atomicSelection = resolveAtomicReferenceSelection(
+                                        selectionStart,
+                                        selectionEnd,
+                                        [
+                                            ...findAttachmentCitationRanges(
+                                                message,
+                                                attachedFiles
+                                                    .filter(isInlineAttachmentCitation)
+                                                    .map((file) => file.filename),
+                                            ),
+                                            ...findSkillMentionRanges(message, availableSkillNames.keys()),
+                                        ],
+                                    );
+                                    if (
+                                        atomicSelection
+                                        && (atomicSelection.start !== selectionStart || atomicSelection.end !== selectionEnd)
+                                    ) {
+                                        ta.setSelectionRange(atomicSelection.start, atomicSelection.end);
+                                        cursorPosRef.current = atomicSelection.end;
+                                    } else {
+                                        cursorPosRef.current = selectionStart;
+                                    }
                                     updateAutocompleteOverlayPosition();
                                 }}
                                 onFocus={() => {

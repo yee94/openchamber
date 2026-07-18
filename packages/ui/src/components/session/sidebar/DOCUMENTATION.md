@@ -16,8 +16,10 @@
    groups reveal 3 sessions by default from the already-fetched 20-session page;
    Show more reveals cached rows before loading the next 20-session page on demand.
    Once expanded past the default page, Show fewer is available alongside Show more
-   so the list can fold back without loading every remaining row first.
+   so the list can fold back without loading every remaining row first. Busy and
+   retrying sessions from the loaded snapshot remain visible beyond the folded boundary.
 - Project/worktree Show more first reveals already-fetched rows, then fetches the next 20-session page for its own directory at the local boundary.
+- The mobile session tree shows 20 root sessions by default for projects without worktrees. Projects with worktrees show 5 sessions per root/worktree bucket by default; Show more and Show fewer use that bucket's default page size. Collapsing and reopening a project or worktree preserves its revealed session count until Show fewer is selected or the sessions surface closes.
 - Project rows retain the persisted project-registry order while session and worktree data hydrates. A successfully sent message promotes its owning project to the top; ordinary activity and selection do not reorder the structural project tree.
 - The Projects section header no longer shows a global syncing accessory. While a
   project's session directories are fetching, that project's folder icon swaps to a
@@ -100,7 +102,7 @@
 - Archived groups are collapsed by default and support bulk deletion at group/folder level.
 - Session rows support compact inline dates in minimal mode and simplified metadata in default mode.
 - Session-row visual selection is published through a narrow row-only Focus store before authoritative navigation. Focus includes the render scope (`recent` or `project`) plus session/project identity, so duplicate representations never both receive the Active background or satisfy the wrong paint barrier.
-- Previous/next-session navigation consumes ordered snapshots published from the rendered sidebar model. A Recent-origin focus cycles Recent items; a project-origin focus cycles only the logically visible rows inside its current expanded project. Rows hidden by project/group/folder collapse or the group's Show more boundary are excluded, and shortcuts never cross into another project as a fallback.
+- Previous/next-session navigation consumes ordered snapshots published from the rendered sidebar model. A Recent-origin focus cycles Recent items; a project-origin focus cycles only the logically visible rows inside its current expanded project. Rows hidden by project/group/folder collapse or the group's Show more boundary are excluded, while busy and retrying rows retained beyond that boundary remain keyboard targets. Shortcuts never cross into another project as a fallback.
 - Advancing through Recent with the next-session shortcut reveals all remaining rows in the bounded 8-session Recent set, exactly like Show more. Navigation wraps after the eighth row and never loads another remote Recent page.
 - Global Mod+1…9 navigation numbers the first nine logically visible session rows from top to bottom across Recent and the expanded project tree. Container headers never consume a number; duplicate Recent/Project representations remain distinct Focus rows. Holding the platform primary modifier for 500ms reveals compact shortcut chips only on those rows; each chip occupies only its intrinsic width and replaces row quick actions until release. Releasing the modifier, window blur, or page hide clears the hints immediately.
 - Every session navigation announces a monotonic intent revision. A later sidebar, keyboard, deep-link, or switcher intent invalidates an older pending sidebar commit, including ABA sequences such as A -> B -> A.

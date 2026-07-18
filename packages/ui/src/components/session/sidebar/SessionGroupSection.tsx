@@ -41,6 +41,7 @@ import { useI18n } from '@/lib/i18n';
 import {
   getDefaultProjectGroupVisibleCount,
   resolveProjectVirtualSessionIndex,
+  selectVisibleSessionNodes,
 } from './sessionNavigationModel';
 
 type DeleteFolderConfirm = {
@@ -106,6 +107,7 @@ type Props = {
   editTitle: string;
   openSidebarMenuKey: string | null;
   liveSessionById: Map<string, Session>;
+  runningSessionIds: ReadonlySet<string>;
   prVisualStateByDirectoryBranch: Map<string, {
     visualState: 'draft' | 'open' | 'blocked' | 'merged' | 'closed';
     number: number;
@@ -154,6 +156,19 @@ const groupHasPinnedMembershipChange = (
   const visit = (node: SessionNode): boolean => {
     const sessionId = node.session.id;
     if (prevPinnedSessionIds.has(sessionId) !== nextPinnedSessionIds.has(sessionId)) return true;
+    return node.children.some(visit);
+  };
+  return group.sessions.some(visit);
+};
+
+const groupHasRunningMembershipChange = (
+  group: SessionGroup,
+  prevRunningSessionIds: ReadonlySet<string>,
+  nextRunningSessionIds: ReadonlySet<string>,
+): boolean => {
+  const visit = (node: SessionNode): boolean => {
+    const sessionId = node.session.id;
+    if (prevRunningSessionIds.has(sessionId) !== nextRunningSessionIds.has(sessionId)) return true;
     return node.children.some(visit);
   };
   return group.sessions.some(visit);
@@ -275,6 +290,11 @@ const areGroupPropsEqual = (prev: Props, next: Props): boolean => {
     return false;
   }
 
+  if (prev.runningSessionIds !== next.runningSessionIds
+    && groupHasRunningMembershipChange(next.group, prev.runningSessionIds, next.runningSessionIds)) {
+    return false;
+  }
+
   // Per-row / per-state props. The PR-visual-state map flips frequently
   // during bootstrap but a single group's value is usually stable, so we
   // compare only the value this group actually consumes instead of the
@@ -377,6 +397,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     dragHandleProps,
     compactBodyPadding = false,
     scrollContainerRef,
+    runningSessionIds,
   } = props;
 
   const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
@@ -571,11 +592,16 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   }), [subtreeContainsActive, subtreeContainsEditing, menuOpenSessionId, resolveNodeStructureKey]);
 
   const totalSessions = ungroupedSessions.length;
-  const visibleSessions = group.isArchivedBucket
+  const baseVisibleSessions = group.isArchivedBucket
     ? ungroupedSessions
     : hasSessionSearchQuery
       ? ungroupedSessions
       : ungroupedSessions.slice(0, nonArchivedVisibleCount);
+  const visibleSessions = group.isArchivedBucket
+    ? ungroupedSessions
+    : hasSessionSearchQuery
+      ? ungroupedSessions
+      : selectVisibleSessionNodes(ungroupedSessions, nonArchivedVisibleCount, runningSessionIds);
   const remainingCount = totalSessions - visibleSessions.length;
   const visibleSortableSessionOrder = React.useMemo(() => buildVisibleSortableSessionOrder({
     folders: allFoldersForGroup,
@@ -588,8 +614,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   // At the default page only More is offered. After the user (or navigation
   // auto-reveal) expands past that page, Fewer stays available even when
   // remote hasMore is still true — so More and Fewer can appear together.
-  const isAtDefaultPage = visibleSessions.length <= maxVisible
-    && (visibleSessionCount === undefined || visibleSessionCount <= maxVisible);
+  const isAtDefaultPage = visibleSessionCount === undefined || visibleSessionCount <= maxVisible;
   const canShowLess = !group.isArchivedBucket
     && !hasSessionSearchQuery
     && totalSessions > maxVisible
@@ -1110,7 +1135,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
           {remainingCount > 0 || hasRemoteSessions ? (
             <button
               type="button"
-              onClick={() => showMoreGroupSessions(groupKey, visibleSessions.length, totalSessions)}
+              onClick={() => showMoreGroupSessions(groupKey, baseVisibleSessions.length, totalSessions)}
               disabled={isLoadingRemoteSessions}
               className={cn(
                 'text-left hover:text-foreground hover:underline disabled:pointer-events-none',

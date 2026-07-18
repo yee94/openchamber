@@ -111,14 +111,41 @@ const isPrependAboveCommit = (previous: RenderEntry[], next: RenderEntry[]): boo
     return insertedIndex > 0;
 };
 
-const tanstackTimelineCache = new Map<string, { keys: readonly string[]; items: VirtualItem[] }>();
+// eslint-disable-next-line react-refresh/only-export-components
+export const createTanstackTimelineSnapshotCache = <T,>(limit: number) => {
+    const cache = new Map<string, { keys: readonly string[]; items: T[] }>();
+
+    return {
+        read: (virtualizerKey: string, keys: readonly string[]): T[] | undefined => {
+            const entry = cache.get(virtualizerKey);
+            if (!entry) return undefined;
+            if (sameKeys(entry.keys, keys)) return entry.items;
+            cache.delete(virtualizerKey);
+            return undefined;
+        },
+        write: (virtualizerKey: string, keys: readonly string[], items: T[]): void => {
+            if (keys.length === 0) return;
+            cache.delete(virtualizerKey);
+            cache.set(virtualizerKey, { keys: keys.slice(), items });
+            while (cache.size > limit) {
+                const oldest = cache.keys().next().value;
+                if (typeof oldest !== 'string') break;
+                cache.delete(oldest);
+            }
+        },
+    };
+};
+
+const tanstackTimelineCache = createTanstackTimelineSnapshotCache<VirtualItem>(TIMELINE_CACHE_LIMIT);
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const resolveMessageListKeys = (sessionKey: string, virtualizerKey?: string) => ({
+    sessionKey,
+    virtualizerKey: virtualizerKey ?? sessionKey,
+});
 
 const readTanstackTimelineCache = (sessionKey: string, keys: readonly string[]): VirtualItem[] | undefined => {
-    const entry = tanstackTimelineCache.get(sessionKey);
-    if (!entry) return undefined;
-    if (sameKeys(entry.keys, keys)) return entry.items;
-    tanstackTimelineCache.delete(sessionKey);
-    return undefined;
+    return tanstackTimelineCache.read(sessionKey, keys);
 };
 
 const writeTanstackTimelineCache = (
@@ -127,13 +154,7 @@ const writeTanstackTimelineCache = (
     virtualizer: TanstackVirtualizerInstance | null | undefined,
 ): void => {
     if (!virtualizer || keys.length === 0) return;
-    tanstackTimelineCache.delete(sessionKey);
-    tanstackTimelineCache.set(sessionKey, { keys: keys.slice(), items: virtualizer.takeSnapshot() });
-    while (tanstackTimelineCache.size > TIMELINE_CACHE_LIMIT) {
-        const oldest = tanstackTimelineCache.keys().next().value;
-        if (typeof oldest !== 'string') break;
-        tanstackTimelineCache.delete(oldest);
-    }
+    tanstackTimelineCache.write(sessionKey, keys, virtualizer.takeSnapshot());
 };
 
 const useStableEvent = <TArgs extends unknown[], TResult>(handler: (...args: TArgs) => TResult) => {
@@ -345,6 +366,7 @@ const withShellBridgeDetails = (message: ChatMessageEntry, details: ShellBridgeD
 
 interface MessageListProps {
     sessionKey: string;
+    virtualizerKey?: string;
     disableStaging?: boolean;
     messages: ChatMessageEntry[];
     sessionIsWorking?: boolean;
@@ -1312,6 +1334,7 @@ StreamingTailContent.displayName = 'StreamingTailContent';
 
 const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     sessionKey,
+    virtualizerKey,
     messages,
     sessionIsWorking = false,
     activeStreamingMessageId = null,
@@ -1324,13 +1347,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     directory,
 }, ref) => {
     streamPerfCount('ui.message_list.render');
+    const { sessionKey: domainSessionKey, virtualizerKey: resolvedVirtualizerKey } = resolveMessageListKeys(sessionKey, virtualizerKey);
     const stickyUserHeader = useUIStore(state => state.stickyUserHeader);
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const activityRenderMode = useUIStore((state) => state.activityRenderMode);
     const showTurnChangedFiles = useUIStore((state) => state.showTurnChangedFiles);
     const defaultActivityExpanded = activityRenderMode === 'summary';
     const reviewTransferDirection = useGlobalSessionsStore((state) => {
-        return state.reviewTransferBySessionId.get(sessionKey) ?? null;
+        return state.reviewTransferBySessionId.get(domainSessionKey) ?? null;
     });
     const [turnUiStates, setTurnUiStates] = React.useState<Map<string, TurnUiState>>(() => new Map());
     const userAnimationRef = React.useRef<{
@@ -1435,7 +1459,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     }), [baseDisplayMessages, retryOverlay]);
 
     const { projection, staticTurns, streamingTurn } = useTurnRecords(displayMessages, {
-        sessionKey,
+        sessionKey: domainSessionKey,
         showTextJustificationActivity: chatRenderMode === 'sorted',
         showTurnChangedFiles,
         hasLiveTail: sessionIsWorking || Boolean(activeStreamingMessageId),
@@ -1853,13 +1877,13 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                         <FadeInDisabledProvider disabled={shouldVirtualizeHistory}>
                             <DeferredToolHydrationProvider enabled={true}>
                                 <StaticHistoryList
-                                    key={sessionKey}
+                                    key={resolvedVirtualizerKey}
                                     entries={historyEntries}
                                     engine={historyEngine}
                                     contentRef={historyContentRef}
                                     scrollRef={scrollRef}
                                     registerTanstackVirtualizer={registerTanstackVirtualizer}
-                                    virtualizerKey={sessionKey}
+                                    virtualizerKey={resolvedVirtualizerKey}
                                     onMessageContentChange={stableHistoryContentChange}
                                     getAnimationHandlers={stableGetAnimationHandlers}
                                     scrollToBottom={stableScrollToBottom}
