@@ -127,7 +127,7 @@ export const ICON_NAME_MAP = {
   "command": { lucide: "command", fill: false },
   "compass-3": { lucide: "compass", fill: false },
   "computer": { lucide: "monitor", fill: false },
-  "contract-up-down": { lucide: "chevrons-up-down", fill: false },
+  "contract-up-down": { lucide: "chevrons-down-up", fill: false },
   "corner-down-left": { lucide: "corner-down-left", fill: false },
   "cursor": { lucide: "mouse-pointer", fill: false },
   "database-2": { lucide: "database", fill: false },

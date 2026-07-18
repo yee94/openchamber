@@ -2230,6 +2230,27 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
     }
   }, [loadDirectory, root, toggleExpandedPath]);
 
+  const directoryPaths = React.useMemo(() => Array.from(new Set(
+    Object.values(childrenByDir).flatMap((nodes) => nodes
+      .filter((node) => node.type === 'directory')
+      .map((node) => node.path))
+  )), [childrenByDir]);
+  const expandedPathSet = React.useMemo(
+    () => new Set(expandedPaths.map((path) => normalizePath(path))),
+    [expandedPaths],
+  );
+  const allDirectoriesExpanded = directoryPaths.length > 0
+    && directoryPaths.every((path) => expandedPathSet.has(normalizePath(path)));
+
+  const toggleAllDirectories = React.useCallback(() => {
+    if (!root) return;
+    if (allDirectoriesExpanded) {
+      removeExpandedPathsByPrefix(root, root);
+      return;
+    }
+    expandPaths(root, directoryPaths.map((path) => normalizePath(path)));
+  }, [allDirectoriesExpanded, directoryPaths, expandPaths, removeExpandedPathsByPrefix, root]);
+
   const fileRowPermissions = React.useMemo(
     () => ({ canRename, canCreateFile, canCreateFolder, canDelete, canReveal }),
     [canRename, canCreateFile, canCreateFolder, canDelete, canReveal]
@@ -2240,7 +2261,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
 
     return nodes.map((node, index) => {
       const isDir = node.type === 'directory';
-      const isExpanded = isDir && expandedPaths.includes(node.path);
+      const isExpanded = isDir && expandedPathSet.has(normalizePath(node.path));
       const isActive = selectedFile?.path === node.path;
       const isLast = index === nodes.length - 1;
 
@@ -4189,6 +4210,24 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>{t('filesView.tree.actions.refreshTitle')}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleAllDirectories}
+                disabled={directoryPaths.length === 0 && expandedPaths.length === 0}
+                className="size-8 flex-shrink-0 p-0"
+                title={allDirectoriesExpanded ? t('sidebarFilesTree.actions.collapseAllTitle') : t('sidebarFilesTree.actions.expandAllTitle')}
+                aria-label={allDirectoriesExpanded ? t('sidebarFilesTree.actions.collapseAllTitle') : t('sidebarFilesTree.actions.expandAllTitle')}
+              >
+                <Icon name={allDirectoriesExpanded ? 'contract-up-down' : 'expand-up-down'} className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {allDirectoriesExpanded ? t('sidebarFilesTree.actions.collapseAllTitle') : t('sidebarFilesTree.actions.expandAllTitle')}
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>

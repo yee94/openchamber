@@ -115,6 +115,9 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
   const [expandedDirectories, setExpandedDirectories] = React.useState<Set<string>>(new Set());
   const [revertAllOpen, setRevertAllOpen] = React.useState(false);
   const [pendingDirectoryRevert, setPendingDirectoryRevert] = React.useState<PendingDirectoryRevert | null>(null);
+  // Tracks directory keys seen in the previous tree pass so git status refreshes
+  // can auto-expand newly discovered folders without undoing user-collapsed ones.
+  const seenDirectoryKeysRef = React.useRef<Set<string>>(new Set());
 
   const trees = React.useMemo(
     () => visibleGroups.map((group) => buildChangesTree(group.entries)),
@@ -143,19 +146,37 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
 
   React.useEffect(() => {
     if (!isTreeView) {
+      seenDirectoryKeysRef.current = new Set();
       return;
     }
+
+    const allDirectoryKeys = new Set(Array.from(directoryKeysByGroup.values()).flat());
+    const seenDirectoryKeys = seenDirectoryKeysRef.current;
+    const isInitialSeed = seenDirectoryKeys.size === 0 && allDirectoryKeys.size > 0;
+
     setExpandedDirectories((previous) => {
-      const allDirectoryKeys = new Set(Array.from(directoryKeysByGroup.values()).flat());
-      const next = new Set<string>();
-      previous.forEach((key) => {
-        if (allDirectoryKeys.has(key)) {
-          next.add(key);
+      const next = new Set(previous);
+      let changed = false;
+
+      for (const key of next) {
+        if (!allDirectoryKeys.has(key)) {
+          next.delete(key);
+          changed = true;
         }
-      });
-      allDirectoryKeys.forEach((key) => next.add(key));
-      return next;
+      }
+
+      for (const key of allDirectoryKeys) {
+        const isNewDirectory = !seenDirectoryKeys.has(key);
+        if ((isInitialSeed || isNewDirectory) && !next.has(key)) {
+          next.add(key);
+          changed = true;
+        }
+      }
+
+      return changed ? next : previous;
     });
+
+    seenDirectoryKeysRef.current = allDirectoryKeys;
   }, [directoryKeysByGroup, isTreeView]);
 
   const rows = React.useMemo<PanelRow[]>(() => {
@@ -412,7 +433,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({
                 aria-label={toggleAllLabel}
                 title={toggleAllLabel}
               >
-                <Icon name="expand-up-down" className="size-3.5" />
+                <Icon name={allDirectoriesExpanded ? 'contract-up-down' : 'expand-up-down'} className="size-3.5" />
               </button>
             ) : null}
             <button

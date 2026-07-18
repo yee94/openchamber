@@ -335,6 +335,8 @@ export const useChatAutoFollow = ({
         forceBottomTouchCleanupRef.current = null;
     }, []);
 
+    React.useEffect(() => () => cancelForcedBottom(), [cancelForcedBottom, containerEl]);
+
     const forceBottomDefeatingMomentum = React.useCallback(() => {
         const el = scrollRef.current;
         if (!el) return;

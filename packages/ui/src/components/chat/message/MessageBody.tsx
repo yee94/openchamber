@@ -56,8 +56,8 @@ import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedC
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
 const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-1.5 mb-0.5 flex items-center justify-start gap-1.5';
-/** 移动端：保持正文与操作栏的紧凑节奏. */
-const INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME = 'mt-1.5 mb-0.5 flex items-center justify-start gap-1.5';
+/** 移动端：正文与底栏再拉开一点，避免贴死. */
+const INLINE_MESSAGE_ACTIONS_MOBILE_CLASS_NAME = 'mt-3 mb-0.5 flex items-center justify-start gap-1.5';
 /** Icon-only message-footer actions — ~14px glyphs in 24px hit; medium stroke. */
 const MESSAGE_ACTION_ICON_BUTTON_CLASS =
   'size-6! p-0 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50';
@@ -67,7 +67,7 @@ const MESSAGE_ACTION_ICON_CLASS = 'size-3.5!';
  * 移动端 -ml 抵消 size-6 按钮图标居中内缩，与正文左对齐.
  */
 const MESSAGE_FOOTER_ROW_CLASS = 'mt-1.5 mb-0.5 flex flex-wrap items-center gap-3';
-const MESSAGE_FOOTER_ROW_MOBILE_CLASS = 'mt-1.5 mb-0.5 flex flex-wrap items-center gap-3 -ml-[5px]';
+const MESSAGE_FOOTER_ROW_MOBILE_CLASS = 'mt-3 mb-0.5 flex flex-wrap items-center gap-3 -ml-[5px]';
 const MESSAGE_ACTION_GROUP_CLASS = 'flex items-center gap-2';
 /** Duration / timestamp — 与操作图标同色；字略小，行高贴齐图标高度保持垂直对齐. */
 const MESSAGE_FOOTER_META_GROUP_CLASS = 'flex items-center gap-2 text-muted-foreground';
@@ -1898,13 +1898,12 @@ const AssistantMessageBody = React.memo(({
                                 'group/assistant-text relative flow-root my-1.5 break-words max-w-full',
                                 // Info: quiet chip — 圆角/padding 与 tool row 几何一致
                                 // Error: keep a clearer callout.
-                                // 移动端：-ml-2.5 抵消 px-2.5，info 图标与正文 / copy 同左缘
-                                // （优先字形对齐；边框略探入 gutter，同 tool row -mx 逻辑）.
+                                // 移动端保留完整卡片边界，与消息内容列左缘对齐.
                                 errorVariant === 'info'
                                     ? cn(
                                         'inline-flex w-fit max-w-full border border-[var(--status-info-border)]/45 bg-[var(--status-info-background)]/40',
                                         isMobile
-                                            ? 'items-start gap-1.5 -ml-2.5 rounded-lg px-2.5 py-1.5'
+                                            ? 'items-start gap-1.5 rounded-lg px-2.5 py-1.5'
                                             : cn('items-center gap-1.5', TOOL_ROW_CHIP_GEOMETRY_CLASS),
                                     )
                                     : 'mt-3 flex items-center gap-2 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] p-3',

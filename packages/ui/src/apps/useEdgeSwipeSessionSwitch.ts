@@ -171,34 +171,31 @@ const orderedTopLevelSessions = (): Session[] =>
     .slice()
     .sort((a, b) => updatedAt(b) - updatedAt(a));
 
-/**
- * Switch to the session `step` positions away from the current one (clamped — no wrap).
- * Returns true if a switch actually happened.
- */
-const switchByStep = (step: number): boolean => {
-  const ordered = orderedTopLevelSessions();
-  if (ordered.length < 2) return false;
-
-  const currentId = useSessionUIStore.getState().currentSessionId;
-  const index = ordered.findIndex((session) => session.id === currentId);
-  if (index < 0) return false;
-
-  const targetIndex = index + step;
-  if (targetIndex < 0 || targetIndex >= ordered.length) return false;
-
-  const target = ordered[targetIndex];
-  useSessionUIStore.getState().setCurrentSession(target.id, resolveGlobalSessionDirectory(target));
-  return true;
+type SessionSwipeTargets = {
+  currentId: string | null;
+  prevId: string | null;
+  nextId: string | null;
 };
 
-const availableDirections = (): { prev: boolean; next: boolean } => {
+const resolveSessionSwipeTargets = (): SessionSwipeTargets => {
   const ordered = orderedTopLevelSessions();
   const currentId = useSessionUIStore.getState().currentSessionId;
   const index = ordered.findIndex((session) => session.id === currentId);
   return {
-    prev: index > 0,
-    next: index >= 0 && index < ordered.length - 1,
+    currentId,
+    prevId: index > 0 ? ordered[index - 1].id : null,
+    nextId: index >= 0 && index < ordered.length - 1 ? ordered[index + 1].id : null,
   };
+};
+
+const switchToSwipeTarget = (direction: 'prev' | 'next', targets: SessionSwipeTargets): boolean => {
+  if (useSessionUIStore.getState().currentSessionId !== targets.currentId) return false;
+  const targetId = direction === 'prev' ? targets.prevId : targets.nextId;
+  if (!targetId) return false;
+  const target = useGlobalSessionsStore.getState().activeSessions.find((session) => session.id === targetId);
+  if (!target) return false;
+  useSessionUIStore.getState().setCurrentSession(target.id, resolveGlobalSessionDirectory(target));
+  return true;
 };
 
 // ---------------------------------------------------------------------------
@@ -230,6 +227,7 @@ export const useEdgeSwipeSessionSwitch = (
     let startX = 0;
     let startY = 0;
     let startedOnSwallowTarget = false;
+    let targets: SessionSwipeTargets = { currentId: null, prevId: null, nextId: null };
     let available = { prev: false, next: false };
     let thresholdReached = false;
     let thresholdHapticDelivered = false;
@@ -257,7 +255,8 @@ export const useEdgeSwipeSessionSwitch = (
       startX = touch.clientX;
       startY = touch.clientY;
       startedOnSwallowTarget = isSwallowTarget(touch);
-      available = availableDirections();
+      targets = resolveSessionSwipeTargets();
+      available = { prev: targets.prevId !== null, next: targets.nextId !== null };
       thresholdReached = false;
       thresholdHapticDelivered = false;
       progressActive = false;
@@ -352,8 +351,7 @@ export const useEdgeSwipeSessionSwitch = (
         return;
       }
 
-      const step = direction === 'prev' ? -1 : 1;
-      if (switchByStep(step)) {
+      if (switchToSwipeTarget(direction, targets)) {
         if (!thresholdHapticDelivered) triggerMobileHaptic('medium', { bypassCadence: true });
         suppressNextClick = true;
         if (clickResetTimer !== null) window.clearTimeout(clickResetTimer);

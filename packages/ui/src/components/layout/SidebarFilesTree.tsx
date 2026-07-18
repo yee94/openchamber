@@ -889,9 +889,12 @@ export const SidebarFilesTree: React.FC = () => {
       .filter((node) => node.type === 'directory')
       .map((node) => node.path))
   )), [childrenByDir]);
-  const expandedPathSet = React.useMemo(() => new Set(expandedPaths), [expandedPaths]);
+  const expandedPathSet = React.useMemo(
+    () => new Set(expandedPaths.map((path) => normalizePath(path))),
+    [expandedPaths],
+  );
   const allDirectoriesExpanded = directoryPaths.length > 0
-    && directoryPaths.every((path) => expandedPathSet.has(path));
+    && directoryPaths.every((path) => expandedPathSet.has(normalizePath(path)));
 
   const toggleAllDirectories = React.useCallback(() => {
     if (!root) return;
@@ -1039,7 +1042,7 @@ export const SidebarFilesTree: React.FC = () => {
 
     return nodes.map((node) => {
       const isDir = node.type === 'directory';
-      const isExpanded = isDir && expandedPaths.includes(node.path);
+      const isExpanded = isDir && expandedPathSet.has(normalizePath(node.path));
       const isActive = selectedPath === node.path;
       return (
         <li key={node.path} className="relative">
@@ -1162,19 +1165,17 @@ export const SidebarFilesTree: React.FC = () => {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={toggleAllDirectories}
-                  disabled={directoryPaths.length === 0 && expandedPaths.length === 0}
-                  className="w-6 flex-shrink-0 p-0"
-                  title={toggleAllDirectoriesLabel}
-                  aria-label={toggleAllDirectoriesLabel}
-                >
-                  <Icon name={allDirectoriesExpanded ? 'contract-up-down' : 'expand-up-down'} className="size-3.5" />
-                </Button>
-              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={toggleAllDirectories}
+                disabled={directoryPaths.length === 0 && expandedPaths.length === 0}
+                className="w-6 flex-shrink-0 p-0"
+                title={toggleAllDirectoriesLabel}
+                aria-label={toggleAllDirectoriesLabel}
+              >
+                <Icon name={allDirectoriesExpanded ? 'contract-up-down' : 'expand-up-down'} className="size-3.5" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>{toggleAllDirectoriesLabel}</TooltipContent>
           </Tooltip>
