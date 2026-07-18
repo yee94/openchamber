@@ -2,9 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.16.26] - 2026-07-18
+## [1.16.27] - 2026-07-18
 
 - **Mobile sessions:** keep session-sheet presentation progress anchored to the initial touch so rightward opening, leftward cancellation, and renewed rightward opening follow the same distance while threshold haptics remain stable.
+
+## [1.16.26] - 2026-07-18
+
+- **Mobile sessions:** require clear reversal intent before cancelling a session-sheet presentation to reduce release-direction jitter.
 - **Release integrity:** validate the complete artifact inventory through the draft Release ID so the final publication gate can inspect every asset before publishing the tag.
 
 ## [1.16.25] - 2026-07-18
