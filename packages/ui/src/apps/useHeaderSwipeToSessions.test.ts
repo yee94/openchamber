@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { evaluateHeaderSwipe } from './useHeaderSwipeToSessions';
+import {
+  createHeaderSwipeGestureState,
+  evaluateHeaderSwipe,
+  updateHeaderSwipeGestureState,
+} from './useHeaderSwipeToSessions';
 
 import type { HeaderSwipeInput } from './useHeaderSwipeToSessions';
 
@@ -91,5 +95,72 @@ describe('evaluateHeaderSwipe', () => {
   // -----------------------------------------------------------------------
   test('rejects when started on an excluded target', () => {
     expect(evaluateHeaderSwipe(base({ startedOnExcludedTarget: true })).open).toBe(false);
+  });
+});
+
+describe('updateHeaderSwipeGestureState', () => {
+  const viewportWidth = 200;
+
+  const update = (
+    state: ReturnType<typeof createHeaderSwipeGestureState>,
+    clientX: number,
+    clientY = 0,
+  ) => updateHeaderSwipeGestureState(state, { clientX, clientY }, viewportWidth);
+
+  test('reopens after a rightward candidate is cancelled by leftward travel', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    expect(state.open).toBe(true);
+    state = update(state, 0);
+    expect(state.open).toBe(false);
+    state = update(state, 101);
+    expect(state.open).toBe(true);
+  });
+
+  test('keeps the candidate cancelled after a final leftward segment', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    state = update(state, 0);
+
+    expect(state.open).toBe(false);
+  });
+
+  test('keeps the candidate open through a small release-direction jitter', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    state = update(state, 100);
+
+    expect(state.open).toBe(true);
+    expect(state.segmentStart.clientX).toBe(0);
+  });
+
+  test('cancels after a deliberate reversal reaches the intent distance', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    state = update(state, 94);
+    expect(state.open).toBe(true);
+    state = update(state, 93);
+
+    expect(state.open).toBe(false);
+    expect(state.segmentStart.clientX).toBe(101);
+  });
+
+  test('anchors a reversed segment at the local turning point', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 100, clientY: 0 });
+    state = update(state, 220);
+    state = update(state, 180);
+    state = update(state, 281);
+
+    expect(state.segmentStart.clientX).toBe(180);
+    expect(state.open).toBe(true);
+  });
+
+  test('keeps the candidate unchanged for an off-axis segment', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    state = update(state, 0);
+    state = update(state, 101, 60);
+
+    expect(state.open).toBe(false);
   });
 });

@@ -48,6 +48,53 @@ interface HeaderSwipeResult {
   open: boolean;
 }
 
+interface HeaderSwipePoint {
+  clientX: number;
+  clientY: number;
+}
+
+interface HeaderSwipeGestureState {
+  segmentStart: HeaderSwipePoint;
+  lastTouch: HeaderSwipePoint;
+  open: boolean;
+}
+
+export const createHeaderSwipeGestureState = (
+  touch: HeaderSwipePoint,
+): HeaderSwipeGestureState => ({
+  segmentStart: touch,
+  lastTouch: touch,
+  open: false,
+});
+
+/**
+ * Updates the opening candidate from one continuous horizontal direction
+ * segment. A direction reversal anchors its new segment at the prior touch.
+ */
+export const updateHeaderSwipeGestureState = (
+  state: HeaderSwipeGestureState,
+  touch: HeaderSwipePoint,
+  viewportWidth: number,
+): HeaderSwipeGestureState => {
+  const previousSegmentDx = state.lastTouch.clientX - state.segmentStart.clientX;
+  const movementDx = touch.clientX - state.lastTouch.clientX;
+  const reversed = previousSegmentDx !== 0
+    && movementDx !== 0
+    && Math.sign(previousSegmentDx) !== Math.sign(movementDx);
+  if (reversed && Math.abs(movementDx) < INTENT_DISTANCE) return state;
+  const segmentStart = reversed ? state.lastTouch : state.segmentStart;
+  const dx = touch.clientX - segmentStart.clientX;
+  const dy = touch.clientY - segmentStart.clientY;
+  const exceedsThreshold = Math.abs(dx) >= viewportWidth * OPEN_DISTANCE_RATIO;
+  const staysOnAxis = Math.abs(dy) <= Math.abs(dx) * MAX_OFF_AXIS_RATIO;
+
+  return {
+    segmentStart,
+    lastTouch: touch,
+    open: exceedsThreshold && staysOnAxis && dx > 0,
+  };
+};
+
 /**
  * Pure function: determine whether a completed touch gesture on the header
  * should open the sessions sheet. Callers inject the gate flags; this function
