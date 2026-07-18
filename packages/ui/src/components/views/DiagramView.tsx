@@ -1,55 +1,49 @@
 import React from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useUIStore } from '@/stores/useUIStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
+import { fileContentQueryKey, setFileContentSnapshot, useFileContentQuery } from '@/queries/fileQueries';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
 import { DiagramEditor, type DiagramEditorHandle } from '@/components/diagram';
 import { Icon } from '@/components/icon/Icon';
 
 export function DiagramView() {
   const { t } = useI18n();
   const { files } = useRuntimeAPIs();
+  const queryClient = useQueryClient();
+  const effectiveDirectory = useEffectiveDirectory() ?? null;
+  const transport = getRuntimeTransportIdentity();
 
   const [filePath, setFilePath] = React.useState<string | null>(null);
   const [xml, setXml] = React.useState('');
-  const [loading, setLoading] = React.useState(true);
   const editorRef = React.useRef<DiagramEditorHandle>(null);
   const mountedRef = React.useRef(false);
-  const latestRequestRef = React.useRef<{ path: string; generation: number } | null>(null);
+  const latestRequestRef = React.useRef<{
+    path: string;
+    generation: number;
+    transport: string;
+    scopeDirectory: string | null;
+  } | null>(null);
   const requestGenerationRef = React.useRef(0);
   const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const pendingDiagramFile = useUIStore((state) => state.pendingDiagramFile);
+  const fileQuery = useFileContentQuery(
+    { scopeDirectory: effectiveDirectory, path: filePath },
+    { enabled: Boolean(filePath) },
+  );
 
-  const loadFile = React.useCallback(async (path: string) => {
+  if (filePath && (
+    latestRequestRef.current?.path !== filePath
+    || latestRequestRef.current.transport !== transport
+    || latestRequestRef.current.scopeDirectory !== effectiveDirectory
+  )) {
     const generation = requestGenerationRef.current + 1;
     requestGenerationRef.current = generation;
-    latestRequestRef.current = { path, generation };
-    setLoading(true);
-    setFilePath(path);
-
-    try {
-      const result = await files?.readFile?.(path);
-      const latestRequest = latestRequestRef.current;
-      if (!mountedRef.current || latestRequest?.path !== path || latestRequest.generation !== generation) {
-        return;
-      }
-
-      if (result) {
-        setXml(result.content);
-      }
-    } catch {
-      const latestRequest = latestRequestRef.current;
-      if (!mountedRef.current || latestRequest?.path !== path || latestRequest.generation !== generation) {
-        return;
-      }
-
-      setXml('');
-    } finally {
-      const latestRequest = latestRequestRef.current;
-      if (mountedRef.current && latestRequest?.path === path && latestRequest.generation === generation) {
-        setLoading(false);
-      }
-    }
-  }, [files]);
+    latestRequestRef.current = { path: filePath, generation, transport, scopeDirectory: effectiveDirectory };
+  }
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -65,9 +59,31 @@ export function DiagramView() {
     }
     const pending = useUIStore.getState().consumePendingDiagramFile();
     if (pending) {
-      void loadFile(pending);
+      const generation = requestGenerationRef.current + 1;
+      requestGenerationRef.current = generation;
+      latestRequestRef.current = {
+        path: pending,
+        generation,
+        transport,
+        scopeDirectory: effectiveDirectory,
+      };
+      setFilePath(pending);
     }
-  }, [loadFile, pendingDiagramFile]);
+  }, [effectiveDirectory, pendingDiagramFile, transport]);
+
+  React.useEffect(() => {
+    const request = latestRequestRef.current;
+    if (!request || request.path !== filePath || request.transport !== transport || request.scopeDirectory !== effectiveDirectory) {
+      return;
+    }
+    if (fileQuery.data !== undefined) {
+      setXml(fileQuery.data);
+      return;
+    }
+    if (fileQuery.isError) {
+      setXml('');
+    }
+  }, [effectiveDirectory, filePath, fileQuery.data, fileQuery.isError, transport]);
 
   const saveDiagram = React.useCallback(async () => {
     const newXml = editorRef.current?.getXml();
@@ -75,17 +91,33 @@ export function DiagramView() {
     const writeFile = files?.writeFile;
     if (!filePath || !writeFile || !newXml || newXml === xml || request?.path !== filePath) return;
 
-    const { path, generation } = request;
+    const { path, generation, scopeDirectory, transport: requestTransport } = request;
     const save = saveQueueRef.current.then(async () => {
-      await writeFile(path, newXml);
-      const latestRequest = latestRequestRef.current;
-      if (mountedRef.current && latestRequest?.path === path && latestRequest.generation === generation) {
-        setXml(newXml);
+      try {
+        const result = await writeFile(path, newXml);
+        if (!result?.success) {
+          throw new Error(t('filesView.toast.writeFileFailed'));
+        }
+        const fileInput = { scopeDirectory, path };
+        await queryClient.cancelQueries({ queryKey: fileContentQueryKey(fileInput, requestTransport), exact: true });
+        setFileContentSnapshot(queryClient, fileInput, requestTransport, newXml);
+        const latestRequest = latestRequestRef.current;
+        if (
+          mountedRef.current
+          && latestRequest?.path === path
+          && latestRequest.generation === generation
+          && latestRequest.transport === requestTransport
+          && latestRequest.scopeDirectory === scopeDirectory
+        ) {
+          setXml(newXml);
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t('filesView.toast.saveFailed'));
       }
     });
     saveQueueRef.current = save.catch(() => undefined);
     await save;
-  }, [filePath, files, xml]);
+  }, [filePath, files, queryClient, t, xml]);
 
   const fileName = filePath ? filePath.split('/').pop() || filePath : '';
 
@@ -99,7 +131,7 @@ export function DiagramView() {
     );
   }
 
-  if (loading) {
+  if (fileQuery.isPending) {
     return (
       <div className="flex h-full items-center justify-center p-3">
         <Icon name="loader-4" className="size-4 animate-spin" />

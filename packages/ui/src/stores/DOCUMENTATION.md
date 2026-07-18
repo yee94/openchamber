@@ -26,7 +26,6 @@ These are the most performance-sensitive.
 - `useGitStore.ts`
 - `useGitHubPrStatusStore.ts`
 - `useFilesViewTabsStore.ts`
-- `useCommandsStore.ts`
 
 These stores act like centralized keyed caches. UI should consume narrow slices from them instead of re-fetching the same data in multiple places.
 
@@ -36,14 +35,44 @@ such as directory, and `queryKeys.quota()` appends the provider. A runtime
 transport identity change clears the Query client, so cached data never crosses
 runtime transports.
 
-`useCommandsStore` loads the official command catalog through the OpenCode SDK,
-then resolves OpenChamber-owned scope metadata with one batched runtime request.
-Never restore the per-command metadata `Promise.all` path: large command catalogs
-otherwise create an N+1 preflight/request storm during cold startup.
+`fileQueries.ts` owns runtime-scoped directory, search, content, and stat pull
+state. Its keys include transport, normalized path scope, resource, and behavior
+options. `MobileFilesSurface` uses this baseline while retaining navigation,
+route, drafts, raw asset auth, and mutations locally.
+`DiagramView` keeps initial diagram reads in the content Query while retaining XML editing and its serial save queue locally.
+`planQueries.ts` owns resolved plan reads. Its aggregate Query resolves target paths or the ordered session repo/home candidates using the authoritative optional-read `exists` contract. `PlanView` owns the editable draft and serial save queue; successful saves update the matching file-content and plan aggregate snapshots.
 
-Agents and commands cache entries use transport identity plus configuration
-directory. A metadata failure retains the prior complete snapshot for that key;
-the incomplete refresh never replaces it.
+`agentQueries.ts` and `commandQueries.ts` own their official SDK catalogs, then
+resolve OpenChamber-owned scope metadata with one bounded batched runtime request.
+Keep this batch boundary to prevent catalog-sized metadata request fanout during cold
+startup. `useAgentsStore` and `useCommandsStore` own selection, drafts, and mutation
+actions.
+
+Agent, command, and installed-skills queries use transport identity plus configuration directory.
+Metadata failures retain the prior complete query snapshot for that key; the
+failed refresh leaves that snapshot available. `useAgentsStore` owns agent
+selection, drafts, and mutation actions while `agentQueries.ts` owns agent server
+state and metadata enrichment. `useConfigStore` retains SDK agent ownership.
+
+`mcpQueries.ts` owns MCP configuration lists and official runtime status by
+transport identity and normalized directory. `useMcpConfigStore` retains
+selection, drafts, and configuration mutations; `useMcpStore` retains runtime
+diagnostics and connection/OAuth mutations. Every mutation captures transport
+and directory before dispatch, then refreshes the matching Query keys.
+
+`githubAuthQueries.ts` owns GitHub authentication status by transport identity.
+Auth refreshes retain the prior complete snapshot on failure, while
+`useGitHubAuthStore` provides only imperative refresh and cache-write actions.
+PR status watchers keep their specialized visible-consumer lifecycle in
+`useGitHubPrStatusStore`.
+
+Skills Catalog sources and source pages belong to TanStack Query. Their keys use
+transport identity, configuration directory, and source ID for source pages.
+`useSkillsCatalogStore` owns source selection and scan/install mutation state.
+Skills mutations capture their directory and transport before dispatch. Successful
+mutations refresh the matching installed-skills query and invalidate matching
+Catalog queries after OpenCode is ready; legacy store refresh remains for current
+consumers.
 
 `useQuotaStore` keeps UI settings and rendered provider results. Runtime reset
 clears quota results, fetch state, errors, and active refresh generations.

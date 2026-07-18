@@ -18,7 +18,7 @@ import { isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUt
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { ensureOutsideFileGrantForDesktop } from '@/lib/outsideFileGrants';
 import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
@@ -582,7 +582,8 @@ const StaticToolRowInner: React.FC<{
     const isReadGroup = toolName.toLowerCase() === 'read';
     const runtime = React.useContext(RuntimeAPIContext);
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-    const skills = useSkillsStore((state) => state.skills);
+    const skillsQuery = useInstalledSkillsQuery();
+    const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
     const hasRunningActivity = React.useMemo(() => activities.some((activity) => isActivityRunning(activity)), [activities]);
     const skillByName = React.useMemo(() => new Map(skills.map((skill) => [skill.name, skill])), [skills]);
 

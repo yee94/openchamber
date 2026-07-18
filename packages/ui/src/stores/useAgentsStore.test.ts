@@ -2,40 +2,29 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 let activeProjectPath = '/workspace/project';
 let runtimeKey = 'runtime-a';
-let listAgentsCalls = 0;
-let listAgentsImpl: (directory?: string | null) => Promise<unknown[]> = async () => [];
-let metadataFails = false;
+let refreshCalls: Array<[string | null, string]> = [];
+let configChangeCalls = 0;
+let agentsSnapshot: Array<{ name: string; hidden?: boolean }> = [];
+let refreshedAgents: Array<{ name: string; hidden?: boolean }> = [];
+let responseImpl: () => Promise<Response> = async () => new Response(JSON.stringify({ requiresReload: false }));
 
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
-    getDirectory: () => '/fallback/project',
-    listAgents: async (directory?: string | null) => {
-      listAgentsCalls += 1;
-      return listAgentsImpl(directory);
-    },
+mock.module('@/lib/opencode/client', () => ({ opencodeClient: { getDirectory: () => '/fallback/project', checkHealth: async () => true } }));
+mock.module('@/stores/useProjectsStore', () => ({ useProjectsStore: { getState: () => ({ getActiveProject: () => ({ path: activeProjectPath }), projects: [] }) } }));
+mock.module('@/lib/runtime-switch', () => ({ getRuntimeTransportIdentity: () => runtimeKey, isRuntimeEndpointIdentityChange: () => false, subscribeRuntimeEndpointChanged: () => () => undefined }));
+mock.module('@/lib/runtime-fetch', () => ({ runtimeFetch: async () => responseImpl() }));
+mock.module('@/queries/agentQueries', () => ({
+  resolveConfigQueryDirectory: () => activeProjectPath,
+  readAgentsSnapshot: () => agentsSnapshot,
+  refreshAgentsQuery: async (_client: unknown, directory: string | null, transport: string) => {
+    refreshCalls.push([directory, transport]);
+    agentsSnapshot = refreshedAgents;
+    return refreshedAgents;
   },
 }));
-
-mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: { getState: () => ({ getActiveProject: () => ({ path: activeProjectPath }) }) },
-}));
-
-mock.module('@/lib/runtime-switch', () => ({ getRuntimeTransportIdentity: () => runtimeKey }));
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: async () => metadataFails
-    ? Promise.reject(new Error('metadata unavailable'))
-    : new Response(JSON.stringify({ scope: 'project' }), { headers: { 'Content-Type': 'application/json' } }),
-}));
-mock.module('@/lib/configUpdate', () => ({
-  startConfigUpdate: mock(() => undefined), finishConfigUpdate: mock(() => undefined), updateConfigUpdateMessage: mock(() => undefined),
-}));
-mock.module('@/lib/configSync', () => ({
-  emitConfigChange: mock(() => undefined), scopeMatches: mock(() => false), subscribeToConfigChanges: mock(() => () => undefined),
-}));
-mock.module('@/stores/useConfigStore', () => ({ useConfigStore: { getState: () => ({}) } }));
-mock.module('@/stores/useSkillsStore', () => ({
-  invalidateSkillsLoadCache: mock(() => undefined), useSkillsStore: { getState: () => ({}) },
-}));
+mock.module('@/lib/configUpdate', () => ({ startConfigUpdate: mock(() => undefined), finishConfigUpdate: mock(() => undefined), updateConfigUpdateMessage: mock(() => undefined) }));
+mock.module('@/lib/configSync', () => ({ emitConfigChange: () => { configChangeCalls += 1; }, scopeMatches: mock(() => false), subscribeToConfigChanges: mock(() => () => undefined) }));
+mock.module('@/stores/useConfigStore', () => ({ useConfigStore: { getState: () => ({ loadAgents: async () => undefined, loadProviders: async () => undefined, invalidateModelMetadataCache: () => undefined, invalidateProviderCache: () => undefined }) } }));
+mock.module('@/stores/useSkillsStore', () => ({ invalidateSkillsLoadCache: mock(() => undefined), useSkillsStore: { getState: () => ({}) } }));
 mock.module('@/stores/useSkillsCatalogStore', () => ({ useSkillsCatalogStore: { getState: () => ({}) } }));
 
 const { useAgentsStore } = await import('./useAgentsStore');
@@ -44,78 +33,71 @@ describe('useAgentsStore', () => {
   beforeEach(() => {
     activeProjectPath = '/workspace/project';
     runtimeKey = 'runtime-a';
-    listAgentsCalls = 0;
-    metadataFails = false;
-    listAgentsImpl = async () => [];
-    useAgentsStore.setState({
-      selectedAgentName: null,
-      agents: [],
-      agentsByCacheKey: {},
-      activeAgentsCacheKey: null,
-      isLoading: false,
-      agentDraft: null,
-    });
+    refreshCalls = [];
+    configChangeCalls = 0;
+    agentsSnapshot = [{ name: 'visible' }, { name: 'hidden', hidden: true }];
+    refreshedAgents = agentsSnapshot;
+    responseImpl = async () => new Response(JSON.stringify({ requiresReload: false }));
+    useAgentsStore.setState({ selectedAgentName: null, agentDraft: null });
   });
 
-  test('keeps TTL snapshots isolated by directory and runtime identity', async () => {
-    listAgentsImpl = async (directory) => [{ name: directory?.endsWith('one') ? 'one' : 'two' }];
+  test('keeps only UI state in Zustand', () => {
+    const state = useAgentsStore.getState();
+    expect(state.selectedAgentName).toBe(null);
+    expect(state.agentDraft).toBe(null);
+    expect('agents' in state).toBe(false);
+    expect('isLoading' in state).toBe(false);
+  });
 
-    activeProjectPath = '/workspace/race-one';
-    await useAgentsStore.getState().loadAgents();
-    expect(useAgentsStore.getState().agents.map((agent) => agent.name)).toEqual(['one']);
+  test('loads the captured directory and transport through the query', async () => {
+    expect(await useAgentsStore.getState().loadAgents()).toBe(true);
+    expect(refreshCalls).toEqual([['/workspace/project', 'runtime-a']]);
+    expect(useAgentsStore.getState().getAgentByName('visible')?.name).toBe('visible');
+    expect(useAgentsStore.getState().getVisibleAgents().map((agent) => agent.name)).toEqual(['visible']);
+  });
 
-    activeProjectPath = '/workspace/race-two';
-    await useAgentsStore.getState().loadAgents();
-    expect(useAgentsStore.getState().agents.map((agent) => agent.name)).toEqual(['two']);
+  test('creates on the active runtime, refreshes its captured project directory, and retains the query result', async () => {
+    activeProjectPath = '/workspace/create-project';
+    refreshedAgents = [{ name: 'created-agent' }];
+    const result = await useAgentsStore.getState().createAgent({ name: 'new-agent' });
+    expect(result).toEqual({ ok: true });
+    expect(refreshCalls).toEqual([['/workspace/create-project', 'runtime-a']]);
+    expect(useAgentsStore.getState().getAgentByName('created-agent')?.name).toBe('created-agent');
+  });
 
-    activeProjectPath = '/workspace/race-one';
-    await useAgentsStore.getState().loadAgents();
-    expect(useAgentsStore.getState().agents.map((agent) => agent.name)).toEqual(['one']);
-    expect(listAgentsCalls).toBe(2);
+  test('carries the captured query target through a reload refresh', async () => {
+    responseImpl = async () => new Response(JSON.stringify({ requiresReload: true }));
+    const result = await useAgentsStore.getState().updateAgent('visible', { description: 'updated' });
+    expect(result).toEqual({ ok: true });
+    expect(refreshCalls).toEqual([['/workspace/project', 'runtime-a']]);
+  });
 
+  test('keeps the new runtime selection and query untouched when an earlier delete resolves', async () => {
+    useAgentsStore.setState({ selectedAgentName: 'visible' });
+    let resolveResponse!: (response: Response) => void;
+    responseImpl = () => new Promise((resolve) => { resolveResponse = resolve; });
+
+    const deleteRequest = useAgentsStore.getState().deleteAgent('visible');
+    await Promise.resolve();
     runtimeKey = 'runtime-b';
-    await useAgentsStore.getState().loadAgents();
-    expect(listAgentsCalls).toBe(3);
-    expect(Object.keys(useAgentsStore.getState().agentsByCacheKey)).toHaveLength(3);
+    useAgentsStore.setState({ selectedAgentName: 'visible' });
+    resolveResponse(new Response(JSON.stringify({ requiresReload: false })));
+
+    const result = await deleteRequest;
+    expect(result).toEqual({ ok: true });
+    expect(useAgentsStore.getState().selectedAgentName).toBe('visible');
+    expect(refreshCalls).toEqual([]);
+    expect(configChangeCalls).toBe(0);
   });
 
-  test('keeps the active directory snapshot when an earlier request finishes later', async () => {
-    let resolveOne: ((agents: unknown[]) => void) | undefined;
-    let resolveTwo: ((agents: unknown[]) => void) | undefined;
-    listAgentsImpl = async (directory) => new Promise((resolve) => {
-      if (directory?.endsWith('one')) resolveOne = resolve;
-      else resolveTwo = resolve;
-    });
+  test('updates on the active runtime and refreshes the exact captured directory', async () => {
+    activeProjectPath = '/workspace/update-project';
+    refreshedAgents = [{ name: 'visible', hidden: true }];
 
-    activeProjectPath = '/workspace/concurrent-one';
-    const first = useAgentsStore.getState().loadAgents();
-    activeProjectPath = '/workspace/concurrent-two';
-    const second = useAgentsStore.getState().loadAgents();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(resolveTwo).toBeDefined();
-    resolveTwo!([{ name: 'two' }]);
-    await second;
-    expect(resolveOne).toBeDefined();
-    resolveOne!([{ name: 'one' }]);
-    await first;
+    const result = await useAgentsStore.getState().updateAgent('visible', { description: 'updated' });
 
-    expect(useAgentsStore.getState().agents.map((agent) => agent.name)).toEqual(['two']);
-  });
-
-  test('keeps the complete scope snapshot stale when metadata refresh fails', async () => {
-    const originalDateNow = Date.now;
-    listAgentsImpl = async () => [{ name: 'agent' }];
-    await useAgentsStore.getState().loadAgents();
-    metadataFails = true;
-    Date.now = () => originalDateNow() + 6000;
-    try {
-      await useAgentsStore.getState().loadAgents();
-      expect(useAgentsStore.getState().agents[0]?.name).toBe('agent');
-      expect((useAgentsStore.getState().agents[0] as { scope?: string } | undefined)?.scope).toBe('project');
-      await useAgentsStore.getState().loadAgents();
-      expect(listAgentsCalls).toBe(3);
-    } finally {
-      Date.now = originalDateNow;
-    }
+    expect(result).toEqual({ ok: true });
+    expect(refreshCalls).toEqual([['/workspace/update-project', 'runtime-a']]);
+    expect(useAgentsStore.getState().getAgentByName('visible')).toEqual({ name: 'visible', hidden: true });
   });
 });

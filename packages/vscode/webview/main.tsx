@@ -608,6 +608,18 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
+  if (normalizedPathname === '/api/config/agents/metadata' && method === 'POST') {
+    const body = await extractJsonBody(input, init, method);
+    const directory = getRequestDirectoryHint(url, input, init);
+    try {
+      const data = await sendBridgeMessage('api:config/agents', { method, body, directory });
+      return jsonResponse(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return jsonResponse({ error: message }, 500);
+    }
+  }
+
   if (pathname.startsWith('/api/config/agents/')) {
     const encodedName = pathname.slice('/api/config/agents/'.length);
     const name = decodeURIComponent(encodedName);
@@ -620,6 +632,18 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
+  if (normalizedPathname === '/api/config/commands/metadata' && method === 'POST') {
+    const body = await extractJsonBody(input, init, method);
+    const directory = getRequestDirectoryHint(url, input, init);
+    try {
+      const data = await sendBridgeMessage('api:config/commands', { method, body, directory });
+      return jsonResponse(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return jsonResponse({ error: message }, 500);
     }
   }
 
@@ -713,12 +737,14 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     const filePath = decodeURIComponent(skillsFilesMatch[2]);
     const verb = method;
     const body = await extractJsonBody(input, init, method);
+    const directory = getRequestDirectoryHint(url, input, init);
     try {
       const data = await sendBridgeMessage('api:config/skills/files', { 
         method: verb, 
         name, 
         filePath, 
-        content: body.content 
+        content: body.content,
+        directory,
       });
       return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
@@ -742,8 +768,9 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
   // Skills catalog: /api/config/skills/catalog
   if (pathname === '/api/config/skills/catalog') {
     const refresh = url.searchParams.get('refresh') === 'true';
+    const directory = getRequestDirectoryHint(url, input, init);
     try {
-      const data = await sendBridgeMessage('api:config/skills:catalog', { refresh });
+      const data = await sendBridgeMessage('api:config/skills:catalog', { refresh, directory });
       return new Response(JSON.stringify(data), { status: skillsCatalogStatusFromPayload(data), headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -754,8 +781,9 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
   // Skills scan: /api/config/skills/scan
   if (pathname === '/api/config/skills/scan') {
     const body = await extractJsonBody(input, init, method);
+    const directory = getRequestDirectoryHint(url, input, init);
     try {
-      const data = await sendBridgeMessage('api:config/skills:scan', body);
+      const data = await sendBridgeMessage('api:config/skills:scan', { ...body, directory });
       return new Response(JSON.stringify(data), { status: skillsCatalogStatusFromPayload(data), headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -766,8 +794,9 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
   // Skills install: /api/config/skills/install
   if (pathname === '/api/config/skills/install') {
     const body = await extractJsonBody(input, init, method);
+    const directory = getRequestDirectoryHint(url, input, init);
     try {
-      const data = await sendBridgeMessage('api:config/skills:install', body);
+      const data = await sendBridgeMessage('api:config/skills:install', { ...body, directory });
       return new Response(JSON.stringify(data), { status: skillsCatalogStatusFromPayload(data), headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -777,8 +806,9 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
 
   // Skills CRUD: /api/config/skills/:name or /api/config/skills
   if (pathname === '/api/config/skills') {
+    const directory = getRequestDirectoryHint(url, input, init);
     try {
-      const data = await sendBridgeMessage('api:config/skills', { method: 'GET' });
+      const data = await sendBridgeMessage('api:config/skills', { method: 'GET', directory });
       return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -791,8 +821,9 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     const name = decodeURIComponent(encodedName);
     const verb = method;
     const body = await extractJsonBody(input, init, method);
+    const directory = getRequestDirectoryHint(url, input, init);
     try {
-      const data = await sendBridgeMessage('api:config/skills', { method: verb, name, body });
+      const data = await sendBridgeMessage('api:config/skills', { method: verb, name, body, directory });
       return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

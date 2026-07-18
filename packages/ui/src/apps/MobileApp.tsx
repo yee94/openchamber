@@ -42,7 +42,7 @@ import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useGitStatus, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useMcpConfigStore, type McpDraft } from '@/stores/useMcpConfigStore';
-import { useMcpStore } from '@/stores/useMcpStore';
+import { useMcpConfigsQuery, useMcpStatusQuery } from '@/queries/mcpQueries';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { listProjectWorktrees, worktreeMapsEqual } from '@/lib/worktrees/worktreeManager';
@@ -2084,11 +2084,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const updateAvailable = useUpdateStore((state) => state.available);
   const updateRuntimeType = useUpdateStore((state) => state.runtimeType);
   const showCapacitorOnlyFeatures = React.useMemo(() => isCapacitorMobileApp(), []);
-  const mcpServers = useMcpConfigStore((state) => state.mcpServers);
+  const { data: mcpServers = [], refetch: refetchMcpConfigs } = useMcpConfigsQuery(currentDirectory ?? null, { enabled: mcpOpen });
+  const { refetch: refetchMcpStatus } = useMcpStatusQuery(currentDirectory ?? null, { enabled: mcpOpen });
   const setMcpDraft = useMcpConfigStore((state) => state.setMcpDraft);
   const setSelectedMcp = useMcpConfigStore((state) => state.setSelectedMcp);
-  const refreshMcpStatus = useMcpStore((state) => state.refresh);
-  const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
   const gitStatus = useGitStatus(normalizePath(currentDirectory) || null);
   const dirtyChangeCount = gitStatus?.files?.length ?? 0;
 
@@ -2343,14 +2342,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const refreshMcpOverlay = React.useCallback(() => {
     if (isMcpRefreshing) return;
     setIsMcpRefreshing(true);
-    const directory = currentDirectory || null;
     const minSpinPromise = new Promise((resolve) => window.setTimeout(resolve, 500));
     void Promise.all([
-      refreshMcpStatus({ directory, silent: true }),
-      loadMcpConfigs({ force: true }),
+      refetchMcpStatus(),
+      refetchMcpConfigs(),
       minSpinPromise,
     ]).finally(() => setIsMcpRefreshing(false));
-  }, [currentDirectory, isMcpRefreshing, loadMcpConfigs, refreshMcpStatus]);
+  }, [isMcpRefreshing, refetchMcpConfigs, refetchMcpStatus]);
 
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
 

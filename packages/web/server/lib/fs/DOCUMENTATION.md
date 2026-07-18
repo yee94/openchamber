@@ -34,4 +34,5 @@ Own filesystem API behavior for the web server runtime, including workspace-boun
 
 ## Notes for contributors
 - Keep filesystem policy (workspace root checks, error mapping, exec timeout behavior) inside this module, not in the composition root.
+- Optional `GET /api/fs/read` responses retain their `text/plain` body and set `x-openchamber-file-exists` to `true` or `false` so empty files remain distinguishable from missing files.
 - If adding new `/api/fs/*` endpoints, add them in `routes.js` and extend this document.

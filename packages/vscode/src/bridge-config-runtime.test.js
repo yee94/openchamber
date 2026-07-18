@@ -52,6 +52,67 @@ afterEach(() => {
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
 describe('VS Code config bridge plugin parity', () => {
+  test('uses an explicit directory for project skill creation and listing', async () => {
+    const managerRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-vscode-skills-manager-'));
+    const targetRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-vscode-skills-target-'));
+    tempRoots.push(managerRoot, targetRoot);
+    const ctx = createCtx(managerRoot);
+    const skillsDeps = {
+      ...deps,
+      fetchOpenCodeSkillsFromApi: async (_ctx, workingDirectory) => [{
+        name: 'directory-skill',
+        path: workingDirectory,
+        scope: workingDirectory === targetRoot ? 'project' : 'user',
+        source: 'opencode',
+      }],
+    };
+
+    const created = await handleConfigBridgeMessage({
+      id: 'create-project-skill',
+      type: 'api:config/skills',
+      payload: {
+        method: 'POST',
+        name: 'target-skill',
+        directory: targetRoot,
+        body: { scope: 'project', source: 'opencode', description: 'Target project skill' },
+      },
+    }, ctx, deps);
+    const listed = await handleConfigBridgeMessage({
+      id: 'list-project-skills',
+      type: 'api:config/skills',
+      payload: { method: 'GET', directory: targetRoot },
+    }, ctx, skillsDeps);
+
+    expect(created?.success).toBe(true);
+    expect(fs.existsSync(path.join(targetRoot, '.opencode', 'skills', 'target-skill', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(managerRoot, '.opencode', 'skills', 'target-skill', 'SKILL.md'))).toBe(false);
+    expect(listed?.data?.skills).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'directory-skill', path: targetRoot, scope: 'project' }),
+    ]));
+  });
+
+  test('returns deduplicated agent and command metadata batches', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-vscode-metadata-'));
+    tempRoots.push(root);
+    const ctx = createCtx(root);
+
+    const agents = await handleConfigBridgeMessage({
+      id: 'agent-metadata',
+      type: 'api:config/agents',
+      payload: { method: 'POST', directory: root, body: { names: [' built-in ', 'built-in', '', 1] } },
+    }, ctx, deps);
+    const commands = await handleConfigBridgeMessage({
+      id: 'command-metadata',
+      type: 'api:config/commands',
+      payload: { method: 'POST', directory: root, body: { names: [' built-in ', 'built-in', '', 1] } },
+    }, ctx, deps);
+
+    expect(agents?.data).toMatchObject({ agents: { 'built-in': { scope: null, isBuiltIn: true } } });
+    expect(Object.keys(agents?.data?.agents || {})).toEqual(['built-in']);
+    expect(commands?.data).toMatchObject({ commands: { 'built-in': { scope: null, isBuiltIn: true } } });
+    expect(Object.keys(commands?.data?.commands || {})).toEqual(['built-in']);
+  });
+
   test('removes agent fields when update payload sends null', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-vscode-agent-null-'));
     tempRoots.push(root);

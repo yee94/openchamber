@@ -1,101 +1,28 @@
-import { create } from "zustand";
-import type { StoreApi, UseBoundStore } from "zustand";
-import { devtools, persist } from "zustand/middleware";
-import { opencodeClient } from "@/lib/opencode/client";
+import { create } from 'zustand';
+import type { StoreApi, UseBoundStore } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from '@/lib/configUpdate';
+import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from '@/lib/configSync';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import { runtimeFetch } from '@/lib/runtime-fetch';
+import { queryClient } from '@/lib/queryRuntime';
+import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import {
-  startConfigUpdate,
-  finishConfigUpdate,
-  updateConfigUpdateMessage,
-} from "@/lib/configUpdate";
-import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
-import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
-import { useProjectsStore } from "@/stores/useProjectsStore";
-import { runtimeFetch } from "@/lib/runtime-fetch";
-import { getRuntimeTransportIdentity } from "@/lib/runtime-switch";
+  readCommandsSnapshot,
+  refreshCommandsQuery,
+  resolveConfigQueryDirectory,
+  type Command,
+  type CommandConfig,
+  type CommandScope,
+} from '@/queries/commandQueries';
 
+export type { Command, CommandConfig, CommandScope } from '@/queries/commandQueries';
 
-export type CommandScope = 'user' | 'project';
-
-export interface CommandConfig {
-  name: string;
-  description?: string;
-  agent?: string | null;
-  model?: string | null;
-  source?: string;
-  template?: string;
-  scope?: CommandScope;
-}
-
-export interface Command extends CommandConfig {
-  isBuiltIn?: boolean;
-}
-
-// Built-in commands provided by OpenCode (not defined in user config directories)
+const CONFIG_EVENT_SOURCE = 'useCommandsStore';
 const BUILTIN_COMMAND_NAMES = new Set(['init', 'review']);
-
-export const isCommandBuiltIn = (command: Command): boolean => {
-  return BUILTIN_COMMAND_NAMES.has(command.name);
-};
-
-const CONFIG_EVENT_SOURCE = "useCommandsStore";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const COMMANDS_LOAD_CACHE_TTL_MS = 5000;
-const DEFAULT_COMMANDS_CACHE_KEY = '__default__';
-const commandsLastLoadedAt = new Map<string, number>();
-const commandsCompleteCacheKeys = new Set<string>();
-const commandsLoadInFlight = new Map<string, Promise<boolean>>();
 
-const getCommandsCacheKey = (directory: string | null): string => {
-  return JSON.stringify([getRuntimeTransportIdentity(), directory?.trim() || DEFAULT_COMMANDS_CACHE_KEY]);
-};
-
-export const invalidateCommandsLoadCache = (directory: string | null = getRequestDirectory()) => {
-  commandsLastLoadedAt.delete(getCommandsCacheKey(directory));
-};
-
-const buildCommandsSignature = (commands: Command[]): string => {
-  return commands
-    .map((command) => [
-      command.name,
-      command.scope ?? '',
-      command.description ?? '',
-      command.agent ?? '',
-      command.model ?? '',
-      command.source ?? '',
-      command.template ?? '',
-      String(command.isBuiltIn === true),
-    ].join('|'))
-    .join('||');
-};
-
-const getRequestDirectory = (): string | null => {
-  try {
-    const projectsStore = useProjectsStore.getState();
-    const activeProject = projectsStore.getActiveProject?.();
-    
-    // 1. Primary: Active project path from store
-    if (activeProject?.path?.trim()) {
-      return activeProject.path.trim();
-    }
-
-    // 2. Fallback: current OpenCode directory (session / runtime)
-    const clientDir = opencodeClient.getDirectory();
-    if (clientDir?.trim()) {
-      return clientDir.trim();
-    }
-  } catch (err) {
-    console.warn('[CommandsStore] Error resolving config directory:', err);
-  }
-
-  return null;
-};
-
-const MAX_HEALTH_WAIT_MS = 20000;
-const FAST_HEALTH_POLL_INTERVAL_MS = 300;
-const FAST_HEALTH_POLL_ATTEMPTS = 4;
-const SLOW_HEALTH_POLL_BASE_MS = 800;
-const SLOW_HEALTH_POLL_INCREMENT_MS = 200;
-const SLOW_HEALTH_POLL_MAX_MS = 2000;
+export const isCommandBuiltIn = (command: Command): boolean => BUILTIN_COMMAND_NAMES.has(command.name);
 
 export interface CommandDraft {
   name: string;
@@ -107,14 +34,8 @@ export interface CommandDraft {
 }
 
 interface CommandsStore {
-
   selectedCommandName: string | null;
-  commands: Command[];
-  commandsByCacheKey: Record<string, Command[]>;
-  activeCommandsCacheKey: string | null;
-  isLoading: boolean;
   commandDraft: CommandDraft | null;
-
   setSelectedCommand: (name: string | null) => void;
   setCommandDraft: (draft: CommandDraft | null) => void;
   loadCommands: () => Promise<boolean>;
@@ -130,425 +51,99 @@ declare global {
   }
 }
 
-export const useCommandsStore = create<CommandsStore>()(
-  devtools(
-    persist(
-      (set, get) => ({
-
-        selectedCommandName: null,
-        commands: [],
-        commandsByCacheKey: {},
-        activeCommandsCacheKey: null,
-        isLoading: false,
-        commandDraft: null,
-
-        setSelectedCommand: (name: string | null) => {
-          set({ selectedCommandName: name });
-        },
-
-        setCommandDraft: (draft: CommandDraft | null) => {
-          set({ commandDraft: draft });
-        },
-
-        loadCommands: async () => {
-          const directory = getRequestDirectory();
-          const cacheKey = getCommandsCacheKey(directory);
-          const now = Date.now();
-          const loadedAt = commandsLastLoadedAt.get(cacheKey) ?? 0;
-          const state = get();
-          const cachedCommands = state.commandsByCacheKey[cacheKey]
-            ?? (state.activeCommandsCacheKey === null ? state.commands : []);
-          const hasCachedCommands = commandsLastLoadedAt.has(cacheKey);
-
-          set({
-            commands: cachedCommands,
-            activeCommandsCacheKey: cacheKey,
-            isLoading: !hasCachedCommands || now - loadedAt >= COMMANDS_LOAD_CACHE_TTL_MS,
-          });
-
-          if (hasCachedCommands && now - loadedAt < COMMANDS_LOAD_CACHE_TTL_MS) {
-            return true;
-          }
-
-          const inFlight = commandsLoadInFlight.get(cacheKey);
-          if (inFlight) {
-            return inFlight;
-          }
-
-          const request = (async () => {
-            const previousCommands = get().commandsByCacheKey[cacheKey] ?? [];
-            const previousSignature = buildCommandsSignature(previousCommands);
-            let lastError: unknown = null;
-
-            for (let attempt = 0; attempt < 3; attempt++) {
-              try {
-                // Ensure the list is scoped to the same directory we use for config source detection.
-                const commands = await opencodeClient.withDirectory(
-                  directory,
-                  () => opencodeClient.listCommandsWithDetails()
-                );
-
-                const configurableCommands = commands.filter((cmd) => cmd.source !== 'skill');
-                let commandsWithScope = configurableCommands;
-                let metadataComplete = true;
-                if (configurableCommands.length > 0) {
-                  try {
-                    const response = await runtimeFetch('/api/config/commands/metadata', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Cache-Control': 'no-cache',
-                        ...(directory ? { 'x-opencode-directory': directory } : {}),
-                      },
-                      body: JSON.stringify({ names: configurableCommands.map((command) => command.name) }),
-                      query: directory ? { directory } : undefined,
-                    });
-                    if (response.ok) {
-                      const data = await response.json() as {
-                        commands?: Record<string, { scope?: unknown }>;
-                      };
-                      commandsWithScope = configurableCommands.map((command) => {
-                        const scope = data.commands?.[command.name]?.scope;
-                        return scope === 'project' || scope === 'user'
-                          ? { ...command, scope }
-                          : command;
-                      });
-                    } else {
-                      metadataComplete = false;
-                    }
-                  } catch (error) {
-                    console.warn('[CommandsStore] Failed to fetch command metadata batch:', error);
-                    metadataComplete = false;
-                  }
-                }
-
-                const nextSignature = buildCommandsSignature(commandsWithScope);
-                const nextCommands = !metadataComplete && commandsCompleteCacheKeys.has(cacheKey)
-                  ? previousCommands
-                  : previousSignature !== nextSignature ? commandsWithScope : previousCommands;
-                const state = get();
-                const nextState: Partial<CommandsStore> = {
-                  commandsByCacheKey: {
-                    ...state.commandsByCacheKey,
-                    [cacheKey]: nextCommands,
-                  },
-                };
-                if (state.activeCommandsCacheKey === cacheKey) {
-                  nextState.commands = nextCommands;
-                  nextState.isLoading = false;
-                }
-                set(nextState);
-                if (metadataComplete) {
-                  commandsLastLoadedAt.set(cacheKey, Date.now());
-                  commandsCompleteCacheKeys.add(cacheKey);
-                }
-                return true;
-              } catch (error) {
-                lastError = error;
-                const waitMs = 200 * (attempt + 1);
-                await new Promise((resolve) => setTimeout(resolve, waitMs));
-              }
-            }
-
-            console.error("Failed to load commands:", lastError);
-            if (get().activeCommandsCacheKey === cacheKey) {
-              set({ isLoading: false });
-            }
-            return false;
-          })();
-
-          commandsLoadInFlight.set(cacheKey, request);
-          try {
-            return await request;
-          } finally {
-            commandsLoadInFlight.delete(cacheKey);
-          }
-        },
-
-        createCommand: async (config: CommandConfig) => {
-          startConfigUpdate("Creating command configuration…");
-          let requiresReload = false;
-          try {
-            console.log('[CommandsStore] Creating command:', config.name);
-
-            const commandConfig: Record<string, unknown> = {
-              template: config.template || '',
-            };
-
-            if (config.description) commandConfig.description = config.description;
-            if (config.agent) commandConfig.agent = config.agent;
-            if (config.model) commandConfig.model = config.model;
-            if (config.scope) commandConfig.scope = config.scope;
-
-            console.log('[CommandsStore] Command config to save:', commandConfig);
-
-            const directory = getRequestDirectory();
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/commands/${encodeURIComponent(config.name)}${queryParams}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(directory ? { 'x-opencode-directory': directory } : {}),
-              },
-              body: JSON.stringify(commandConfig)
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to create command';
-              throw new Error(message);
-            }
-
-            console.log('[CommandsStore] Command created successfully');
-
-            const needsReload = payload?.requiresReload ?? true;
-            invalidateCommandsLoadCache(directory);
-            if (needsReload) {
-              requiresReload = true;
-              await performFullConfigRefresh({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
-
-            const loaded = await get().loadCommands();
-            if (loaded) {
-              emitConfigChange("commands", { source: CONFIG_EVENT_SOURCE });
-            }
-            return loaded;
-          } catch (error) {
-            console.error("[CommandsStore] Failed to create command:", error);
-            return false;
-          } finally {
-            if (!requiresReload) {
-              finishConfigUpdate();
-            }
-          }
-        },
-
-        updateCommand: async (name: string, config: Partial<CommandConfig>) => {
-          startConfigUpdate("Updating command configuration…");
-          let requiresReload = false;
-          try {
-            console.log('[CommandsStore] Updating command:', name);
-            console.log('[CommandsStore] Config received:', config);
-
-            const commandConfig: Record<string, unknown> = {};
-
-            if (config.description !== undefined) commandConfig.description = config.description;
-            if (config.agent !== undefined) commandConfig.agent = config.agent;
-            if (config.model !== undefined) commandConfig.model = config.model;
-            if (config.template !== undefined) commandConfig.template = config.template;
-
-            console.log('[CommandsStore] Command config to update:', commandConfig);
-
-            const directory = getRequestDirectory();
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/commands/${encodeURIComponent(name)}${queryParams}`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(directory ? { 'x-opencode-directory': directory } : {}),
-              },
-              body: JSON.stringify(commandConfig)
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to update command';
-              throw new Error(message);
-            }
-
-            console.log('[CommandsStore] Command updated successfully');
-
-            const needsReload = payload?.requiresReload ?? true;
-            invalidateCommandsLoadCache(directory);
-            if (needsReload) {
-              requiresReload = true;
-              await performFullConfigRefresh({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
-
-            const loaded = await get().loadCommands();
-            if (loaded) {
-              emitConfigChange("commands", { source: CONFIG_EVENT_SOURCE });
-            }
-            return loaded;
-          } catch (error) {
-            console.error("[CommandsStore] Failed to update command:", error);
-            return false;
-          } finally {
-            if (!requiresReload) {
-              finishConfigUpdate();
-            }
-          }
-        },
-
-        deleteCommand: async (name: string) => {
-          startConfigUpdate("Deleting command configuration…");
-          let requiresReload = false;
-          try {
-            // Use active project root for project-level command support
-            const directory = getRequestDirectory();
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/commands/${encodeURIComponent(name)}${queryParams}`, {
-              method: 'DELETE',
-              headers: directory ? { 'x-opencode-directory': directory } : undefined,
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to delete command';
-              throw new Error(message);
-            }
-
-            console.log('[CommandsStore] Command deleted successfully');
-
-            const needsReload = payload?.requiresReload ?? true;
-            invalidateCommandsLoadCache(directory);
-            if (needsReload) {
-              requiresReload = true;
-              await performFullConfigRefresh({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
-
-            const loaded = await get().loadCommands();
-            if (loaded) {
-              emitConfigChange("commands", { source: CONFIG_EVENT_SOURCE });
-            }
-
-            if (get().selectedCommandName === name) {
-              set({ selectedCommandName: null });
-            }
-
-            return loaded;
-          } catch (error) {
-            console.error("Failed to delete command:", error);
-            return false;
-          } finally {
-            if (!requiresReload) {
-              finishConfigUpdate();
-            }
-          }
-        },
-
-        getCommandByName: (name: string) => {
-          const { commands } = get();
-          return commands.find((c) => c.name === name);
-        },
-      }),
-      {
-        name: "commands-store",
-        storage: createDeferredSafeJSONStorage(),
-        partialize: (state) => ({
-          selectedCommandName: state.selectedCommandName,
-        }),
-      },
-    ),
-    {
-      name: "commands-store",
-    },
-  ),
-);
-
-if (typeof window !== "undefined") {
-  window.__zustand_commands_store__ = useCommandsStore;
-}
-
-async function waitForOpenCodeConnection(delayMs?: number) {
-  const initialPause = typeof delayMs === "number" && delayMs > 0
-    ? Math.min(delayMs, FAST_HEALTH_POLL_INTERVAL_MS)
-    : 0;
-
-  if (initialPause > 0) {
-    await sleep(initialPause);
+const refreshMutationCommands = async (directory: string | null, transport: string) => {
+  await refreshCommandsQuery(queryClient, directory, transport);
+  if (getRuntimeTransportIdentity() === transport) {
+    emitConfigChange('commands', { source: CONFIG_EVENT_SOURCE });
   }
+};
 
-  const start = Date.now();
-  let attempt = 0;
-  let lastError: unknown = null;
-
-  while (Date.now() - start < MAX_HEALTH_WAIT_MS) {
-    attempt += 1;
-    updateConfigUpdateMessage(`Waiting for OpenCode… (attempt ${attempt})`);
-
+export const useCommandsStore = create<CommandsStore>()(devtools(persist((set) => ({
+  selectedCommandName: null,
+  commandDraft: null,
+  setSelectedCommand: (selectedCommandName) => set({ selectedCommandName }),
+  setCommandDraft: (commandDraft) => set({ commandDraft }),
+  loadCommands: async () => {
+    const directory = resolveConfigQueryDirectory();
+    const transport = getRuntimeTransportIdentity();
     try {
-      const isHealthy = await opencodeClient.checkHealth();
-      if (isHealthy) {
-        return;
-      }
-      lastError = new Error("OpenCode health check reported not ready");
-    } catch (error) {
-      lastError = error;
+      await refreshCommandsQuery(queryClient, directory, transport);
+      return true;
+    } catch {
+      return false;
     }
+  },
+  createCommand: async (config) => mutateCommand('POST', config.name, config, set),
+  updateCommand: async (name, config) => mutateCommand('PATCH', name, config, set),
+  deleteCommand: async (name) => mutateCommand('DELETE', name, undefined, set),
+  getCommandByName: (name) => readCommandsSnapshot().find((command) => command.name === name),
+}), {
+  name: 'commands-store',
+  storage: createDeferredSafeJSONStorage(),
+  partialize: (state) => ({ selectedCommandName: state.selectedCommandName }),
+}), { name: 'commands-store' }));
 
-    const elapsed = Date.now() - start;
-
-    const waitMs =
-      attempt <= FAST_HEALTH_POLL_ATTEMPTS && elapsed < 1200
-        ? FAST_HEALTH_POLL_INTERVAL_MS
-        : Math.min(
-            SLOW_HEALTH_POLL_BASE_MS +
-              Math.max(0, attempt - FAST_HEALTH_POLL_ATTEMPTS) * SLOW_HEALTH_POLL_INCREMENT_MS,
-            SLOW_HEALTH_POLL_MAX_MS,
-          );
-
-    await sleep(waitMs);
-  }
-
-  throw lastError || new Error("OpenCode did not become ready in time");
-}
-
-async function performFullConfigRefresh(options: { message?: string; delayMs?: number } = {}) {
-  const { message, delayMs } = options;
-
+async function mutateCommand(
+  method: 'POST' | 'PATCH' | 'DELETE',
+  name: string,
+  config: CommandConfig | Partial<CommandConfig> | undefined,
+  set: (partial: Partial<CommandsStore>) => void,
+): Promise<boolean> {
+  const labels = { POST: 'Creating', PATCH: 'Updating', DELETE: 'Deleting' };
+  startConfigUpdate(`${labels[method]} command configuration…`);
+  const directory = resolveConfigQueryDirectory();
+  const transport = getRuntimeTransportIdentity();
+  let requiresReload = false;
   try {
-    updateConfigUpdateMessage(message || "Refreshing commands…");
-  } catch {
-    // ignore
-  }
-
-  try {
-    await waitForOpenCodeConnection(delayMs);
-    updateConfigUpdateMessage("Refreshing commands…");
-
-    const commandsStore = useCommandsStore.getState();
-
-    invalidateCommandsLoadCache();
-    await commandsStore.loadCommands();
-
-    emitConfigChange("commands", { source: CONFIG_EVENT_SOURCE });
+    const commandConfig: Record<string, unknown> = {};
+    if (method === 'POST') {
+      commandConfig.template = config?.template || '';
+      if (config?.description) commandConfig.description = config.description;
+      if (config?.agent) commandConfig.agent = config.agent;
+      if (config?.model) commandConfig.model = config.model;
+      if (config?.scope) commandConfig.scope = config.scope;
+    }
+    if (method === 'PATCH') {
+      for (const key of ['description', 'agent', 'model', 'template'] as const) {
+        if (config?.[key] !== undefined) commandConfig[key] = config[key];
+      }
+    }
+    const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
+    const response = await runtimeFetch(`/api/config/commands/${encodeURIComponent(name)}${query}`, {
+      method,
+      headers: method === 'DELETE'
+        ? (directory ? { 'x-opencode-directory': directory } : undefined)
+        : { 'Content-Type': 'application/json', ...(directory ? { 'x-opencode-directory': directory } : {}) },
+      ...(method === 'DELETE' ? {} : { body: JSON.stringify(commandConfig) }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || `Failed to ${method.toLowerCase()} command`);
+    requiresReload = payload?.requiresReload ?? true;
+    if (requiresReload) {
+      await performFullConfigRefresh(directory, transport, { message: payload?.message, delayMs: payload?.reloadDelayMs });
+    } else {
+      await refreshMutationCommands(directory, transport);
+    }
+    if (method === 'DELETE') set({ selectedCommandName: null });
+    return true;
   } catch (error) {
-    console.error("[CommandsStore] Failed to refresh configuration after OpenCode restart:", error);
-    updateConfigUpdateMessage("OpenCode refresh failed. Please retry refreshing configuration manually.");
-    await sleep(1500);
-    throw error;
+    console.error('[CommandsStore] Command mutation failed:', error);
+    return false;
   } finally {
     finishConfigUpdate();
   }
 }
 
-let unsubscribeCommandsConfigChanges: (() => void) | null = null;
-
-if (!unsubscribeCommandsConfigChanges) {
-  unsubscribeCommandsConfigChanges = subscribeToConfigChanges((event) => {
-    if (event.source === CONFIG_EVENT_SOURCE) {
-      return;
-    }
-
-    if (scopeMatches(event, "commands")) {
-      const { loadCommands } = useCommandsStore.getState();
-      void loadCommands();
-    }
-  });
+async function performFullConfigRefresh(directory: string | null, transport: string, options: { message?: string; delayMs?: number }) {
+  if (options.delayMs) await sleep(options.delayMs);
+  updateConfigUpdateMessage(options.message || 'Refreshing commands…');
+  await refreshMutationCommands(directory, transport);
 }
+
+if (typeof window !== 'undefined') window.__zustand_commands_store__ = useCommandsStore;
+
+subscribeToConfigChanges((event) => {
+  if (event.source !== CONFIG_EVENT_SOURCE && scopeMatches(event, 'commands')) {
+    void useCommandsStore.getState().loadCommands();
+  }
+});

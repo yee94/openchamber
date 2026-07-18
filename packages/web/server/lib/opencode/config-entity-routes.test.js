@@ -7,12 +7,12 @@ import path from 'node:path';
 
 import { registerConfigEntityRoutes } from './config-entity-routes.js';
 
-const createDependencies = (getCommandSources, configDirectory) => ({
+const createDependencies = (getCommandSources, configDirectory, getAgentSources = vi.fn()) => ({
   resolveProjectDirectory: async () => ({ directory: '/repo' }),
   resolveOptionalProjectDirectory: async () => ({ directory: '/repo' }),
   refreshOpenCodeAfterConfigChange: vi.fn(async () => ({})),
   clientReloadDelayMs: 0,
-  getAgentSources: vi.fn(),
+  getAgentSources,
   getAgentConfig: vi.fn(),
   createAgent: vi.fn(),
   updateAgent: vi.fn(),
@@ -58,6 +58,62 @@ describe('config entity command metadata route', () => {
         'built-in': { scope: null, isBuiltIn: true },
       },
     });
+  });
+});
+
+describe('config entity agent metadata route', () => {
+  it('normalizes, deduplicates, bounds, and returns agent metadata in one batch', async () => {
+    const app = express();
+    app.use(express.json());
+    const getAgentSources = vi.fn((name) => ({
+      md: { exists: name === 'project-agent', scope: name === 'project-agent' ? 'project' : null, path: name === 'project-agent' ? '/repo/.opencode/agents/group/project-agent.md' : null },
+      json: { exists: name === 'user-agent', scope: name === 'user-agent' ? 'user' : null },
+    }));
+    registerConfigEntityRoutes(app, createDependencies(vi.fn(), undefined, getAgentSources));
+
+    const response = await request(app)
+      .post('/api/config/agents/metadata?directory=%2Frepo')
+      .send({ names: [' project-agent ', 'user-agent', 'project-agent', '', 42] })
+      .expect(200);
+
+    expect(getAgentSources).toHaveBeenCalledTimes(2);
+    expect(response.body).toEqual({
+      agents: {
+        'project-agent': {
+          scope: 'project',
+          isBuiltIn: false,
+          sources: {
+            md: { exists: true, scope: 'project', path: '/repo/.opencode/agents/group/project-agent.md' },
+            json: { exists: false, scope: null },
+          },
+        },
+        'user-agent': {
+          scope: 'user',
+          isBuiltIn: false,
+          sources: {
+            md: { exists: false, scope: null, path: null },
+            json: { exists: true, scope: 'user' },
+          },
+        },
+      },
+    });
+  });
+
+  it('bounds agent metadata batches at 500 names', async () => {
+    const app = express();
+    app.use(express.json());
+    const getAgentSources = vi.fn(() => ({
+      md: { exists: false, scope: null, path: null },
+      json: { exists: false, scope: null },
+    }));
+    registerConfigEntityRoutes(app, createDependencies(vi.fn(), undefined, getAgentSources));
+
+    await request(app)
+      .post('/api/config/agents/metadata?directory=%2Frepo')
+      .send({ names: Array.from({ length: 501 }, (_, index) => `agent-${index}`) })
+      .expect(200);
+
+    expect(getAgentSources).toHaveBeenCalledTimes(500);
   });
 });
 

@@ -36,6 +36,7 @@ Keep `bridge.ts` as a thin orchestration layer that delegates message handling t
 
 - `bridge-localfs-proxy-runtime.ts`
   - Local `/api/fs/read` and `/api/fs/raw` proxy helpers and shared proxy utility helpers.
+  - Optional file reads signal existence through `x-openchamber-file-exists` while preserving plain-text bodies.
 
 - `bridge-proxy-runtime.ts`
   - Proxy route handlers (`api:proxy`, `api:session:message`) with injected helper dependencies.
@@ -43,6 +44,9 @@ Keep `bridge.ts` as a thin orchestration layer that delegates message handling t
 - `bridge-config-runtime.ts`
   - Config and skills message handlers (`api:config/*`).
   - Includes OpenCode resolution diagnostics parity handler used by shared UI (`/api/config/opencode-resolution`).
+  - Skills list, detail/CRUD, files, catalog, scan, and install requests carry the
+    webview directory hint. Directory-sensitive handlers resolve that payload at
+    call time, so project-scoped skills match the shared UI query directory.
 
 - `bridge-settings-runtime.ts`
   - Settings read/write and OpenCode skills discovery via API for bridge consumers.

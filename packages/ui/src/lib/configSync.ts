@@ -1,4 +1,4 @@
-export type ConfigChangeScope = "agents" | "providers" | "commands" | "skills" | "all";
+export type ConfigChangeScope = "agents" | "providers" | "commands" | "skills" | "mcp" | "all";
 
 export interface ConfigChangeEvent {
   scopes: ConfigChangeScope[];

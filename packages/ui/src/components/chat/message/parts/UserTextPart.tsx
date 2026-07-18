@@ -4,7 +4,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import type { AgentMentionInfo } from '../types';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { Icon } from "@/components/icon/Icon";
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { getDirectoryForFilePath } from '@/lib/path-utils';
@@ -37,7 +37,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     const [isTruncated, setIsTruncated] = React.useState(false);
     const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
     const collapsibleUserMessages = useUIStore((state) => state.collapsibleUserMessages);
-    const skills = useSkillsStore((state) => state.skills);
+    const skillsQuery = useInstalledSkillsQuery();
+    const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
     const openContextFile = useUIStore((state) => state.openContextFile);
     const effectiveDirectory = useEffectiveDirectory();
     const { t } = useI18n();

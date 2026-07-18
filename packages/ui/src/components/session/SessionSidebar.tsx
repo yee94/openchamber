@@ -86,7 +86,7 @@ import {
   syncSidebarVisualSelection,
 } from "./sidebar/sidebarVisualSelection";
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs";
-import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore";
+import { useGitHubAuthQuery } from "@/queries/githubAuthQueries";
 import { subscribeOpenchamberEvents } from "@/lib/openchamberEvents";
 import {
   announceSessionSwitchIntent,
@@ -1315,8 +1315,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   ]);
 
   const { github } = useRuntimeAPIs();
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
-  const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
+  const githubAuthQuery = useGitHubAuthQuery();
+  const githubAuthStatus = githubAuthQuery.data ?? null;
+  const githubAuthChecked = githubAuthQuery.isFetched;
   const gitRepoStatus = useGitRepoStatusMap(normalizedProjectPaths);
   const ensurePrStatusEntry = useGitHubPrStatusStore(
     (state) => state.ensureEntry,

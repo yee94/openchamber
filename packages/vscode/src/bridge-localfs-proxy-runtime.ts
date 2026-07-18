@@ -68,6 +68,17 @@ export const tryHandleLocalFsProxy = async (method: string, requestPath: string)
   const optional = parsed.searchParams.get('optional') === 'true';
   const resolution: FsReadPathResolution = await resolveFileReadPath(targetPath);
   if (!resolution.ok) {
+    if (fsProxyPath === '/api/fs/read' && optional && resolution.status === 404) {
+      return {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-openchamber-file-exists': 'false',
+        },
+        bodyBase64: base64EncodeUtf8(''),
+      };
+    }
     if (fsProxyPath === '/api/fs/stat' && optional && resolution.status === 404) {
       return {
         status: 200,
@@ -110,6 +121,7 @@ export const tryHandleLocalFsProxy = async (method: string, requestPath: string)
         headers: {
           'content-type': 'text/plain; charset=utf-8',
           'cache-control': 'no-store',
+          ...(optional ? { 'x-openchamber-file-exists': 'true' } : {}),
         },
         bodyBase64: base64EncodeUtf8(content),
       };
@@ -127,6 +139,17 @@ export const tryHandleLocalFsProxy = async (method: string, requestPath: string)
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err?.code === 'ENOENT') {
+      if (fsProxyPath === '/api/fs/read' && optional) {
+        return {
+          status: 200,
+          headers: {
+            'content-type': 'text/plain; charset=utf-8',
+            'cache-control': 'no-store',
+            'x-openchamber-file-exists': 'false',
+          },
+          bodyBase64: base64EncodeUtf8(''),
+        };
+      }
       if (fsProxyPath === '/api/fs/stat' && optional) {
         return {
           status: 200,

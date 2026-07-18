@@ -7,8 +7,9 @@ import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore, materializeOpenDraftSession } from './session-ui-store';
 import { setActionRefs, setOptimisticRefs } from './session-actions';
 import { setSyncRefs } from './sync-refs';
-import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useCommandsStore } from '@/stores/useCommandsStore';
+import { queryClient } from '@/lib/queryRuntime';
+import { commandQueryOptions } from '@/queries/commandQueries';
+import { installedSkillsQueryOptions } from '@/queries/installedSkillsQueries';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from './input-store';
 import { newSessionDraftKey, sessionDraftKey } from './input-draft-types';
@@ -423,6 +424,9 @@ describe('routeMessage skill invocation', () => {
   const sendMessageCalls = [];
   let originalSendCommand;
   let originalSendMessage;
+  let originalFetchQuery;
+  let queryResults;
+  let queryFetches;
 
   beforeEach(() => {
     sendCommandCalls.length = 0;
@@ -442,10 +446,24 @@ describe('routeMessage skill invocation', () => {
     setOptimisticRefs(() => {}, () => {});
     useConfigStore.setState({ isConnected: true });
 
-    // The sync command list and the commands store both exclude user skills,
-    // so they start empty here — the skill is only known to the skills store.
-    useCommandsStore.setState({ commands: [] });
-    useSkillsStore.setState({ skills: [] });
+    queryClient.removeQueries({ queryKey: installedSkillsQueryOptions('/skills/project').queryKey });
+    queryClient.removeQueries({ queryKey: commandQueryOptions('/skills/project').queryKey });
+
+    queryResults = { commands: [], skills: [] };
+    queryFetches = [];
+    originalFetchQuery = queryClient.fetchQuery;
+    queryClient.fetchQuery = async (options) => {
+      queryFetches.push(options.queryKey);
+      if (JSON.stringify(options.queryKey) === JSON.stringify(commandQueryOptions('/skills/project').queryKey)) {
+        if (queryResults.commands instanceof Error) throw queryResults.commands;
+        return queryResults.commands;
+      }
+      if (JSON.stringify(options.queryKey) === JSON.stringify(installedSkillsQueryOptions('/skills/project').queryKey)) {
+        if (queryResults.skills instanceof Error) throw queryResults.skills;
+        return queryResults.skills;
+      }
+      throw new Error('Unexpected slash query');
+    };
 
     originalSendCommand = opencodeClient.sendCommand;
     originalSendMessage = opencodeClient.sendMessage;
@@ -462,13 +480,13 @@ describe('routeMessage skill invocation', () => {
   afterEach(() => {
     opencodeClient.sendCommand = originalSendCommand;
     opencodeClient.sendMessage = originalSendMessage;
-    useSkillsStore.setState({ skills: [] });
+    queryClient.fetchQuery = originalFetchQuery;
+    queryClient.removeQueries({ queryKey: installedSkillsQueryOptions('/skills/project').queryKey });
+    queryClient.removeQueries({ queryKey: commandQueryOptions('/skills/project').queryKey });
   });
 
   test('invokes a user-installed skill as a command', async () => {
-    useSkillsStore.setState({
-      skills: [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }],
-    });
+    queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }]);
 
     await routeMessage({
       sessionId: 'session-skill',
@@ -483,10 +501,42 @@ describe('routeMessage skill invocation', () => {
     expect(sendMessageCalls).toHaveLength(0);
   });
 
-  test('forwards trailing arguments to the skill command', async () => {
-    useSkillsStore.setState({
-      skills: [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }],
+  test('loads a cold skill cache before classifying a slash token', async () => {
+    queryResults.skills = [{ name: 'cold-skill', path: '/skills/cold-skill/SKILL.md', scope: 'user', source: 'opencode' }];
+
+    await routeMessage({
+      sessionId: 'session-skill',
+      directory: '/skills/project',
+      content: '/cold-skill',
+      providerID: 'provider-a',
+      modelID: 'model-a',
     });
+
+    expect(queryFetches).toHaveLength(2);
+    expect(sendCommandCalls).toHaveLength(1);
+    expect(sendCommandCalls[0].command).toBe('cold-skill');
+    expect(sendMessageCalls).toHaveLength(0);
+  });
+
+  test('loads a cold command cache before classifying a slash token', async () => {
+    queryResults.commands = [{ name: 'cold-command' }];
+
+    await routeMessage({
+      sessionId: 'session-command',
+      directory: '/skills/project',
+      content: '/cold-command argument',
+      providerID: 'provider-a',
+      modelID: 'model-a',
+    });
+
+    expect(queryFetches).toHaveLength(2);
+    expect(sendCommandCalls).toHaveLength(1);
+    expect(sendCommandCalls[0]).toMatchObject({ command: 'cold-command', arguments: 'argument' });
+    expect(sendMessageCalls).toHaveLength(0);
+  });
+
+  test('forwards trailing arguments to the skill command', async () => {
+    queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, [{ name: 'grill-with-docs', path: '/skills/grill-with-docs/SKILL.md', scope: 'user', source: 'opencode' }]);
 
     await routeMessage({
       sessionId: 'session-skill',
@@ -502,6 +552,9 @@ describe('routeMessage skill invocation', () => {
   });
 
   test('sends an unknown slash token as a plain message', async () => {
+    queryClient.setQueryData(commandQueryOptions('/skills/project').queryKey, []);
+    queryClient.setQueryData(installedSkillsQueryOptions('/skills/project').queryKey, []);
+
     await routeMessage({
       sessionId: 'session-skill',
       directory: '/skills/project',
@@ -512,6 +565,49 @@ describe('routeMessage skill invocation', () => {
 
     expect(sendMessageCalls).toHaveLength(1);
     expect(sendCommandCalls).toHaveLength(0);
+    expect(queryFetches).toHaveLength(0);
+  });
+
+  test('rejects a slash send when command discovery fails', async () => {
+    queryResults.commands = new Error('command discovery failed');
+
+    await expect(routeMessage({
+      sessionId: 'session-command',
+      directory: '/skills/project',
+      content: '/cold-command',
+      providerID: 'provider-a',
+      modelID: 'model-a',
+    })).rejects.toThrow('command discovery failed');
+
+    expect(sendCommandCalls).toHaveLength(0);
+    expect(sendMessageCalls).toHaveLength(0);
+  });
+
+  test('retries command discovery after a failed slash send', async () => {
+    queryResults.commands = new Error('command discovery failed');
+
+    await expect(routeMessage({
+      sessionId: 'session-command',
+      directory: '/skills/project',
+      content: '/retry-command',
+      providerID: 'provider-a',
+      modelID: 'model-a',
+    })).rejects.toThrow('command discovery failed');
+
+    queryResults.commands = [{ name: 'retry-command' }];
+
+    await routeMessage({
+      sessionId: 'session-command',
+      directory: '/skills/project',
+      content: '/retry-command',
+      providerID: 'provider-a',
+      modelID: 'model-a',
+    });
+
+    expect(queryFetches).toHaveLength(4);
+    expect(sendCommandCalls).toHaveLength(1);
+    expect(sendCommandCalls[0].command).toBe('retry-command');
+    expect(sendMessageCalls).toHaveLength(0);
   });
 });
 

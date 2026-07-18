@@ -96,12 +96,19 @@ export const createVSCodeFilesAPI = (): FilesAPI => ({
     };
   },
 
-  async readFile(path: string): Promise<{ content: string; path: string }> {
+  async readFile(path: string, options): Promise<{ content: string; path: string; exists?: boolean }> {
     const target = normalizePath(path);
-    const data = await sendBridgeMessage<{ content: string; path: string }>('api:fs:read', { path: target });
+    const data = await sendBridgeMessage<{ content: string; path: string; exists?: boolean }>('api:fs:read', {
+      path: target,
+      optional: options?.optional,
+    });
+    if (options?.optional && typeof data?.exists !== 'boolean') {
+      throw new Error('Optional file read requires an existence result');
+    }
     return {
       content: typeof data?.content === 'string' ? data.content : '',
       path: typeof data?.path === 'string' ? normalizePath(data.path) : target,
+      exists: options?.optional ? data?.exists : true,
     };
   },
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn, fuzzyMatch } from '@/lib/utils';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useUIStore } from '@/stores/useUIStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
@@ -37,13 +37,13 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   const keyboardNavigationRef = React.useRef(false);
   const [filteredSkills, setFilteredSkills] = React.useState<SkillInfo[]>([]);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
-  const skills = useSkillsStore((s) => s.skills);
-  const loadSkills = useSkillsStore((s) => s.loadSkills);
+  const skillsQuery = useInstalledSkillsQuery();
+  const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
+  const { refetch: refetchSkills } = skillsQuery;
 
   React.useEffect(() => {
-    // Always trigger loadSkills when autocomplete opens to ensure project context is fresh
-    void loadSkills();
-  }, [loadSkills]);
+    void refetchSkills();
+  }, [refetchSkills]);
 
   React.useEffect(() => {
     const normalizedQuery = searchQuery.trim();

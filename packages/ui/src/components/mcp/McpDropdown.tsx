@@ -16,11 +16,14 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { cn } from '@/lib/utils';
 import { useDeviceInfo } from '@/lib/device';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { computeMcpHealth, useMcpStore } from '@/stores/useMcpStore';
+import { useMcpConfigsQuery, useMcpStatusQuery, type McpServerWithScope, type McpStatusMap } from '@/queries/mcpQueries';
 import { McpIcon } from '@/components/icons/McpIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
+
+const EMPTY_MCP_STATUS: McpStatusMap = {};
+const EMPTY_MCP_SERVERS: McpServerWithScope[] = [];
 
 const statusTooltip = (
   status: McpStatus | undefined,
@@ -72,30 +75,14 @@ export const McpDropdownContent: React.FC<McpDropdownContentProps> = ({ active, 
   const { t } = useI18n();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const directory = currentDirectory ?? null;
-  const status = useMcpStore((state) => state.getStatusForDirectory(directory));
-  const refresh = useMcpStore((state) => state.refresh);
   const connect = useMcpStore((state) => state.connect);
   const disconnect = useMcpStore((state) => state.disconnect);
-  const mcpServers = useMcpConfigStore((state) => state.mcpServers);
-  const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
+  const { data: statusData, refetch: refetchStatus, isError: isStatusError, error: statusError } = useMcpStatusQuery(directory, { enabled: active });
+  const { data: configsData } = useMcpConfigsQuery(directory, { enabled: active });
+  const status = statusData ?? EMPTY_MCP_STATUS;
+  const mcpServers = configsData ?? EMPTY_MCP_SERVERS;
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [busyName, setBusyName] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    void refresh({ directory, silent: true });
-  }, [refresh, directory]);
-
-  React.useEffect(() => {
-    void loadMcpConfigs({ force: true });
-  }, [loadMcpConfigs]);
-
-  React.useEffect(() => {
-    if (!active) return;
-    void Promise.all([
-      refresh({ directory, silent: true }),
-      loadMcpConfigs({ force: true }),
-    ]);
-  }, [active, refresh, directory, loadMcpConfigs]);
 
   const sortedNames = React.useMemo(() => {
     const names = new Set<string>(Object.keys(status));
@@ -112,10 +99,10 @@ export const McpDropdownContent: React.FC<McpDropdownContentProps> = ({ active, 
     if (isSpinning) return;
     setIsSpinning(true);
     const minSpinPromise = new Promise(resolve => setTimeout(resolve, 500));
-    Promise.all([refresh({ directory }), minSpinPromise]).finally(() => {
+    Promise.all([refetchStatus(), minSpinPromise]).finally(() => {
       setIsSpinning(false);
     });
-  }, [isSpinning, refresh, directory]);
+  }, [isSpinning, refetchStatus]);
 
   return (
     <div className={cn('w-full', className)}>
@@ -149,7 +136,11 @@ export const McpDropdownContent: React.FC<McpDropdownContentProps> = ({ active, 
       <div className={cn('max-h-64 overflow-y-auto', mobileListDensity ? 'space-y-1 py-3' : 'px-3 py-2.5', listClassName)}>
         <div className={cn(!mobileListDensity && sortedNames.length > 0 && 'rounded-xl bg-[var(--surface-muted)] p-1.5')}>
         {sortedNames.map((serverName) => {
-          const serverStatus = status[serverName];
+          const serverStatus = status[serverName] ?? (
+            isStatusError && !statusData && mcpServers.some((server) => server.name === serverName)
+              ? { status: 'failed' as const, error: statusError.message }
+              : undefined
+          );
           const tone = statusTone(serverStatus);
           const isConnected = serverStatus?.status === 'connected';
           const isBusy = busyName === serverName;
@@ -230,12 +221,12 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const directory = currentDirectory ?? null;
 
-  const status = useMcpStore((state) => state.getStatusForDirectory(directory));
-  const refresh = useMcpStore((state) => state.refresh);
   const connect = useMcpStore((state) => state.connect);
   const disconnect = useMcpStore((state) => state.disconnect);
-  const mcpServers = useMcpConfigStore((state) => state.mcpServers);
-  const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
+  const { data: statusData, refetch: refetchStatus, isError: isStatusError, error: statusError } = useMcpStatusQuery(directory, { enabled: open });
+  const { data: configsData } = useMcpConfigsQuery(directory, { enabled: open });
+  const status = statusData ?? EMPTY_MCP_STATUS;
+  const mcpServers = configsData ?? EMPTY_MCP_SERVERS;
 
   const handleDropdownOpenChange = React.useCallback((isOpen: boolean) => {
     if (!isOpen) {
@@ -257,21 +248,6 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
 
   const [busyName, setBusyName] = React.useState<string | null>(null);
 
-  // Fetch on mount and when directory changes
-  React.useEffect(() => {
-    void refresh({ directory, silent: true });
-    void loadMcpConfigs({ force: true });
-  }, [refresh, directory, loadMcpConfigs]);
-
-  // Refresh when dropdown opens
-  React.useEffect(() => {
-    if (!open) return;
-    void Promise.all([
-      refresh({ directory, silent: true }),
-      loadMcpConfigs({ force: true }),
-    ]);
-  }, [open, refresh, directory, loadMcpConfigs]);
-
   const health = React.useMemo(() => computeMcpHealth(status), [status]);
 
   const sortedNames = React.useMemo(() => {
@@ -289,15 +265,19 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
     if (isSpinning) return;
     setIsSpinning(true);
     const minSpinPromise = new Promise(resolve => setTimeout(resolve, 500));
-    Promise.all([refresh({ directory }), minSpinPromise]).finally(() => {
+    Promise.all([refetchStatus(), minSpinPromise]).finally(() => {
       setIsSpinning(false);
     });
-  }, [isSpinning, refresh, directory]);
+  }, [isSpinning, refetchStatus]);
 
   const renderServerList = () => (
     <>
       {sortedNames.map((serverName) => {
-        const serverStatus = status[serverName];
+        const serverStatus = status[serverName] ?? (
+          isStatusError && !statusData && mcpServers.some((server) => server.name === serverName)
+            ? { status: 'failed' as const, error: statusError.message }
+            : undefined
+        );
         const tone = statusTone(serverStatus);
         const isConnected = serverStatus?.status === 'connected';
         const isBusy = busyName === serverName;

@@ -23,8 +23,9 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
-import { useCommandsStore } from "@/stores/useCommandsStore"
-import { useSkillsStore } from "@/stores/useSkillsStore"
+import { commandQueryOptions, readCommandsSnapshot } from "@/queries/commandQueries"
+import { queryClient } from "@/lib/queryRuntime"
+import { installedSkillsQueryOptions, readInstalledSkillsSnapshot } from "@/queries/installedSkillsQueries"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -77,7 +78,7 @@ import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
 import { setSessionOpener } from "./session-opener"
-import { getRuntimeKey } from "@/lib/runtime-switch"
+import { getRuntimeKey, getRuntimeTransportIdentity } from "@/lib/runtime-switch"
 import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
 import { beginSessionSwitchMeasure } from "@/lib/sessionSwitchPerf"
 import { sessionLoadDebug } from "./session-load-debug"
@@ -89,7 +90,7 @@ export type { AttachedFile }
 // Send routing — shell mode, slash commands, or normal prompt
 // ---------------------------------------------------------------------------
 
-export function routeMessage(params: {
+export async function routeMessage(params: {
   sessionId: string
   directory?: string | null
   content: string
@@ -128,16 +129,40 @@ export function routeMessage(params: {
 
     const dirState = getDirectoryState(requestDirectory)
     const syncCommands = dirState?.command ?? []
-    const storeCommands = useCommandsStore.getState().commands
 
     // OpenCode registers every skill as a command (source: "skill"), but the
     // commands store filters skills out and the synced command list is only
-    // hydrated at bootstrap. Consult the live skills store so a skill selected
-    // from the slash menu is invoked via session.command (injecting its
-    // content) instead of being sent as a literal "/name" message (#1605).
-    const isCommand = syncCommands.find((c) => c.name === cmdName)
-      || storeCommands.find((c) => c.name === cmdName)
-      || useSkillsStore.getState().skills.some((s) => s.name === cmdName)
+    // hydrated at bootstrap. Consult the installed-skills Query snapshot so a
+    // skill selected from the slash menu is invoked via session.command
+    // (injecting its content) instead of being sent as a literal "/name"
+    // message (#1605).
+    const syncCommand = syncCommands.find((c) => c.name === cmdName)
+    let isCommand = Boolean(syncCommand)
+    if (!isCommand) {
+      const queryDirectory = requestDirectory ?? useDirectoryStore.getState().currentDirectory ?? null
+      const transport = getRuntimeTransportIdentity()
+      const commandsQuery = commandQueryOptions(queryDirectory, transport)
+      const skillsQuery = installedSkillsQueryOptions(queryDirectory, transport)
+      const commandsQueryState = queryClient.getQueryState(commandsQuery.queryKey)
+      const skillsQueryState = queryClient.getQueryState(skillsQuery.queryKey)
+      const hasCommandsSnapshot = commandsQueryState?.data !== undefined
+      const hasSkillsSnapshot = skillsQueryState?.data !== undefined
+      const [storeCommands, installedSkills] = await Promise.all([
+        hasCommandsSnapshot
+          ? Promise.resolve(readCommandsSnapshot(queryDirectory, transport))
+          : queryClient.fetchQuery({ ...commandsQuery, staleTime: Infinity }),
+        hasSkillsSnapshot
+          ? Promise.resolve(readInstalledSkillsSnapshot(queryClient, queryDirectory, transport))
+          : queryClient.fetchQuery({ ...skillsQuery, staleTime: Infinity }),
+      ])
+
+      if (getRuntimeTransportIdentity() !== transport) {
+        throw new Error("Runtime changed while resolving slash command")
+      }
+
+      isCommand = Boolean(storeCommands.find((c) => c.name === cmdName))
+        || installedSkills.some((skill) => skill.name === cmdName)
+    }
 
     if (isCommand) {
       return optimisticSend({

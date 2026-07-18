@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useGitHubAuthQuery } from '@/queries/githubAuthQueries';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -211,8 +211,9 @@ export function NewWorktreeDialog({
   const { t } = useI18n();
   const { github, git } = useRuntimeAPIs();
   const isMobile = useUIStore((state) => state.isMobile);
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
-  const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
+  const githubAuthQuery = useGitHubAuthQuery();
+  const githubAuthStatus = githubAuthQuery.data ?? null;
+  const githubAuthChecked = githubAuthQuery.isFetched;
   const activeProject = useProjectsStore((state) => state.getActiveProject());
   
   const projectDirectory = activeProject?.path ?? null;

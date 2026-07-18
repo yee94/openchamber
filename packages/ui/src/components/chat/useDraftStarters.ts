@@ -2,8 +2,8 @@ import React from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
-import { useCommandsStore } from '@/stores/useCommandsStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useCommandsQuery } from '@/queries/commandQueries';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getProjectDraftStarters, saveProjectDraftStarters } from '@/lib/openchamberConfig';
@@ -61,8 +61,12 @@ export function useDraftStarters(): UseDraftStartersResult {
     const { t } = useI18n();
     const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
     const globalRaw = useUIStore((s) => s.globalDraftStarters);
-    const commands = useCommandsStore((s) => s.commands);
-    const skills = useSkillsStore((s) => s.skills);
+    const commandsQuery = useCommandsQuery();
+    const commands = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
+    const { refetch: refetchCommands } = commandsQuery;
+    const skillsQuery = useInstalledSkillsQuery();
+    const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
+    const { refetch: refetchSkills } = skillsQuery;
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
     const projects = useProjectsStore((s) => s.projects);
 
@@ -91,14 +95,13 @@ export function useDraftStarters(): UseDraftStartersResult {
     }, [projectRef?.id]);
 
     const ensureLoaded = React.useCallback(() => {
-        void useCommandsStore.getState().loadCommands?.();
-        void useSkillsStore.getState().loadSkills?.();
-    }, []);
+        void refetchCommands();
+        void refetchSkills();
+    }, [refetchCommands, refetchSkills]);
 
     // Preload commands and skills on mount so that pinned command/skill starters
     // resolve immediately without requiring the user to open the add dialog first.
-    // Both loaders are TTL-cached and in-flight-deduped, so this is a cheap no-op
-    // if they were already loaded.
+    // Both loaders coalesce matching in-flight requests, so this shares an active refresh.
     React.useEffect(() => {
         ensureLoaded();
     }, [ensureLoaded]);

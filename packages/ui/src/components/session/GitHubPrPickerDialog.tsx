@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useGitHubAuthQuery } from '@/queries/githubAuthQueries';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { useDeviceInfo } from '@/lib/device';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -69,8 +69,9 @@ export function GitHubPrPickerDialog({
 }) {
   const { t } = useI18n();
   const { github } = useRuntimeAPIs();
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
-  const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
+  const githubAuthQuery = useGitHubAuthQuery();
+  const githubAuthStatus = githubAuthQuery.data ?? null;
+  const githubAuthChecked = githubAuthQuery.isFetched;
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const isMobile = useUIStore((state) => state.isMobile);

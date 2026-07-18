@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 type EffectSlot = {
   cleanup?: () => void;
@@ -70,6 +70,15 @@ const createHookHarness = () => {
 
   return {
     react,
+    reset() {
+      effectSlots.forEach((slot) => slot.cleanup?.());
+      stateSlots.length = 0;
+      memoSlots.length = 0;
+      effectSlots.length = 0;
+      hookIndex = 0;
+      mounted = false;
+      renderHook = null;
+    },
     render(callback: () => void) {
       renderHook = () => {
         hookIndex = 0;
@@ -84,6 +93,7 @@ const createHookHarness = () => {
 const harness = createHookHarness();
 const sessionSubscribers = new Set<(state: typeof sessionState) => void>();
 const uiSubscribers = new Set<(state: typeof uiState) => void>();
+const settingsDialogOpenCalls: boolean[] = [];
 
 const sessionState = {
   currentSessionId: 'session-1' as string | null,
@@ -97,6 +107,7 @@ const uiState = {
   pendingDiffFile: null as string | null,
   setActiveMainTab: () => undefined,
   setSettingsDialogOpen: (isOpen: boolean) => {
+    settingsDialogOpenCalls.push(isOpen);
     uiState.isSettingsDialogOpen = isOpen;
   },
   setSettingsPage: (path: string) => {
@@ -170,13 +181,36 @@ mock.module('@/components/layout/contextPanelEmbeddedChat', () => ({ isEmbeddedS
 const { useRouter } = await import('./useRouter');
 
 describe('useRouter', () => {
-  test('keeps Settings open when session summaries update after Settings opens', async () => {
+  beforeEach(() => {
+    harness.reset();
+    sessionSubscribers.clear();
+    uiSubscribers.clear();
+    settingsDialogOpenCalls.length = 0;
+    sessionState.currentSessionId = 'session-1';
+    sessionState.currentSessionDirectory = '/repo';
+    uiState.activeMainTab = 'chat';
+    uiState.isSettingsDialogOpen = false;
+    uiState.settingsPage = 'home';
+    uiState.pendingDiffFile = null;
+    globalSessionsState = {
+      hasLoaded: true,
+      activeSessions: [{ id: 'session-1' }],
+      archivedSessions: [],
+    };
+    urlRoute = {
+      sessionId: 'session-1',
+      tab: null,
+      settingsPath: null,
+      diffFile: null,
+    };
+  });
+
+  test('does not close Settings when the current session summary updates', async () => {
     harness.render(useRouter);
     await Promise.resolve();
 
-    uiState.settingsPage = 'appearance';
-    uiState.isSettingsDialogOpen = true;
-    uiSubscribers.forEach((subscriber) => subscriber(uiState));
+    settingsDialogOpenCalls.length = 0;
+    uiState.setSettingsDialogOpen(true);
 
     globalSessionsState = {
       ...globalSessionsState,
@@ -185,5 +219,21 @@ describe('useRouter', () => {
     harness.render(useRouter);
 
     expect(uiState.isSettingsDialogOpen).toBe(true);
+    expect(settingsDialogOpenCalls).toEqual([true]);
+  });
+
+  test('keeps Settings open while the resolved session is absent from a summary refresh', async () => {
+    harness.render(useRouter);
+    await Promise.resolve();
+
+    uiState.setSettingsDialogOpen(true);
+    globalSessionsState = {
+      ...globalSessionsState,
+      activeSessions: [],
+    };
+    harness.render(useRouter);
+
+    expect(uiState.isSettingsDialogOpen).toBe(true);
+    expect(settingsDialogOpenCalls).toEqual([true]);
   });
 });

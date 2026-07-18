@@ -2,8 +2,8 @@ import React from 'react';
 import { cn, fuzzyMatch } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionMessages } from '@/sync/sync-context';
-import { useCommandsStore } from '@/stores/useCommandsStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useCommandsQuery } from '@/queries/commandQueries';
+import { useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
@@ -86,10 +86,12 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const commandsWithMetadata = useCommandsStore((s) => s.commands);
-  const refreshCommands = useCommandsStore((s) => s.loadCommands);
-  const skills = useSkillsStore((s) => s.skills);
-  const refreshSkills = useSkillsStore((s) => s.loadSkills);
+  const commandsQuery = useCommandsQuery();
+  const commandsWithMetadata = React.useMemo(() => commandsQuery.data ?? [], [commandsQuery.data]);
+  const isCommandsFetching = commandsQuery.isFetching;
+  const skillsQuery = useInstalledSkillsQuery();
+  const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
+  const { refetch: refetchSkills } = skillsQuery;
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const keyboardNavigationRef = React.useRef(false);
@@ -99,6 +101,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const ignoreClickRef = React.useRef(false);
   const pointerStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const pointerMovedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    void refetchSkills();
+  }, [refetchSkills]);
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -119,14 +125,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   }, [onClose]);
 
   React.useEffect(() => {
-    // Force refresh to get latest project context when mounting
-    void refreshCommands();
-    void refreshSkills();
-  }, [refreshCommands, refreshSkills]);
-
-  React.useEffect(() => {
     const loadCommands = async () => {
-      setLoading(true);
+      setLoading(isCommandsFetching);
       try {
         const skillNames = new Set(skills.map((skill) => skill.name));
         const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
@@ -297,7 +297,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     };
 
     loadCommands();
-  }, [searchQuery, hasMessagesInCurrentSession, hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, skills, t]);
+  }, [searchQuery, hasMessagesInCurrentSession, hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, isCommandsFetching, skills, t]);
 
   React.useEffect(() => {
     setSelectedIndex(0);

@@ -1,5 +1,6 @@
 import React from 'react';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { useQueryClient } from '@tanstack/react-query';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
@@ -33,7 +34,6 @@ import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { EditorView } from '@codemirror/view';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -45,6 +45,11 @@ import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { useI18n } from '@/lib/i18n';
+import { resolvePlanSource, usePlanResolvedQuery, type ResolvedPlan } from '@/queries/planQueries';
+import { fileContentQueryKey, setFileContentSnapshot } from '@/queries/fileQueries';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
+import { queryKeys } from '@/lib/queryRuntime';
+import { applyPlanSnapshot, canSavePlanDocument, createPlanSaveState, failPlanSaveForDocument, finishPlanSaveForDocument, isPlanSaveStateClean, prunePlanSaveStates, restorePlanDocumentSaveState, retryPlanSave, setPlanSaveDesired, shouldFlushPlanSaveOnBoundary, shouldShowMissingPlan, startPlanSaveForTransport } from './planDocumentState';
 
 type PlanViewProps = {
   targetPath?: string | null;
@@ -56,6 +61,17 @@ type PlanSendTarget = 'session' | 'worktree';
 type PendingPlanSend = {
   action: PlanSendAction;
   target: PlanSendTarget;
+};
+
+type PlanSaveContext = {
+  identity: string;
+  transport: ReturnType<typeof getRuntimeTransportIdentity>;
+  path: string;
+  scopeDirectory: string | null;
+  planKey: unknown;
+  planInput: unknown;
+  write: (content: string) => Promise<void>;
+  commit: (content: string) => Promise<void>;
 };
 
 const normalize = (value: string): string => {
@@ -164,6 +180,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const runtimeApis = useRuntimeAPIs();
+  const queryClient = useQueryClient();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
 
@@ -199,9 +216,11 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
     return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory });
   }, [resolvedPath, sessionDirectory, homeDirectory]);
   const [content, setContent] = React.useState<string>('');
+  const [baseContent, setBaseContent] = React.useState<string>('');
   const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
   const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [saveRetry, setSaveRetry] = React.useState(0);
   const planFileLabel = React.useMemo(() => {
     return displayPath ? displayPath.split('/').pop() || t('planView.file.defaultName') : t('planView.file.defaultName');
   }, [displayPath, t]);
@@ -212,14 +231,16 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
     return parseProjectPlanMarkdown(content).title || t('planView.title.default');
   }, [content, t]);
   const sendPromptTitle = React.useMemo(() => parsedTitle.trim() || t('planView.title.default'), [parsedTitle, t]);
-  const [loading, setLoading] = React.useState(false);
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const isMountedRef = React.useRef(true);
-  const readGenerationRef = React.useRef(0);
-  const saveGenerationRef = React.useRef(0);
-  const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
+  const planSaveStatesRef = React.useRef(new Map<string, ReturnType<typeof createPlanSaveState>>());
+  const saveTimersRef = React.useRef(new Map<string, number>());
+  const saveWorkersRef = React.useRef(new Map<string, Promise<void>>());
+  const saveContextsRef = React.useRef(new Map<string, PlanSaveContext>());
+  const drainPlanSaveRef = React.useRef<(context: PlanSaveContext) => void>(() => {});
+  const documentIdentityRef = React.useRef<string | null>(null);
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
@@ -227,10 +248,19 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
 
   React.useEffect(() => {
     isMountedRef.current = true;
+    const saveTimers = saveTimersRef.current;
+    const saveContexts = saveContextsRef.current;
+    const planSaveStates = planSaveStatesRef.current;
     return () => {
       isMountedRef.current = false;
-      readGenerationRef.current += 1;
-      saveGenerationRef.current += 1;
+      for (const timer of saveTimers.values()) {
+        window.clearTimeout(timer);
+      }
+      saveTimers.clear();
+      for (const [identity, context] of saveContexts) {
+        const state = planSaveStates.get(identity);
+        if (state && shouldFlushPlanSaveOnBoundary(state)) drainPlanSaveRef.current(context);
+      }
     };
   }, []);
 
@@ -382,167 +412,185 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
     return extensions;
   }, [currentTheme, resolvedPath, editorFontSize]);
 
+  const planInput = React.useMemo(() => ({
+    mode: targetPath ? 'target' as const : 'session' as const,
+    sessionId: currentSessionId,
+    scopeDirectory: sessionDirectory || null,
+    targetPath: targetPath || null,
+    repoPath: !targetPath && session?.slug && session?.time?.created && sessionDirectory
+      ? buildRepoPlanPath(sessionDirectory, session.time.created, session.slug) : null,
+    homePath: !targetPath && session?.slug && session?.time?.created
+      ? resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null) : null,
+  }), [currentSessionId, homeDirectory, session?.slug, session?.time?.created, sessionDirectory, targetPath]);
+  const planEnabled = Boolean(targetPath || (planModeEnabled && planInput.repoPath && planInput.homePath));
+  const planQuery = usePlanResolvedQuery(planInput, { enabled: planEnabled });
+  const transport = getRuntimeTransportIdentity();
+  const currentTransportRef = React.useRef(transport);
+  currentTransportRef.current = transport;
+  const planKey = React.useMemo(
+    () => queryKeys.plans.resolved(planInput.mode, planInput.sessionId, planInput.scopeDirectory, planInput.targetPath, planInput.repoPath, planInput.homePath, transport),
+    [planInput.homePath, planInput.mode, planInput.repoPath, planInput.scopeDirectory, planInput.sessionId, planInput.targetPath, transport],
+  );
+  const documentIdentity = React.useMemo(() => JSON.stringify(planKey), [planKey]);
+  const loading = planEnabled && planQuery.isPending;
+  const initialReadError = planEnabled && planQuery.isError && planQuery.data === undefined;
+  const missingPlan = shouldShowMissingPlan(planEnabled && planQuery.data?.kind === 'missing', { path: resolvedPath, content, baseContent });
+  const missingCandidates = planQuery.data?.kind === 'missing' ? planQuery.data.candidates : null;
+
   React.useEffect(() => {
-    // Saved project plans opened via context panel should work even when session plan mode is off.
-    if (!planModeEnabled && !targetPath) {
+    if (!planEnabled) {
+      documentIdentityRef.current = null;
       setResolvedPath(null);
       setContent('');
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const generation = ++readGenerationRef.current;
-    const isCurrent = () => !cancelled && isMountedRef.current && generation === readGenerationRef.current;
-
-    const readText = async (path: string): Promise<string> => {
-      if (runtimeApis.files?.readFile) {
-        const result = await runtimeApis.files.readFile(path);
-        return result?.content ?? '';
-      }
-
-      const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
-      if (runtimeFiles?.readFile) {
-        const result = await runtimeFiles.readFile(path, { optional: true });
-        return result?.content ?? '';
-      }
-
-      const response = await runtimeFetch(`/api/fs/read?path=${encodeURIComponent(path)}&optional=true`, {
-        // Avoid conditional requests (304 + empty body).
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to read plan file (${response.status})`);
-      }
-      return response.text();
-    };
-
-    const run = async () => {
-      setResolvedPath(null);
-      setContent('');
+      setBaseContent('');
       setSaveError(null);
-
-      if (targetPath) {
-        setLoading(true);
-        try {
-          const text = await readText(targetPath);
-          if (!isCurrent()) return;
-          setResolvedPath(targetPath);
-          setContent(text);
-        } catch {
-          if (!isCurrent()) return;
-          setResolvedPath(null);
-          setContent('');
-        } finally {
-          if (isCurrent()) setLoading(false);
-        }
-        return;
-      }
-
-      if (!session?.slug || !session?.time?.created || !sessionDirectory) {
-        setResolvedPath(null);
-        setContent('');
-        return;
-      }
-
-      setLoading(true);
-
-      try {
-        const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug);
-        const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null);
-
-        let resolved: string | null = null;
-        let text: string | null = null;
-
-        try {
-          text = await readText(repoPath);
-          resolved = repoPath;
-        } catch {
-          // ignore
-        }
-
-        if (!resolved) {
-          try {
-            text = await readText(homePath);
-            resolved = homePath;
-          } catch {
-            // ignore
-          }
-        }
-
-        if (!isCurrent()) return;
-
-        if (!resolved || text === null) {
-          setResolvedPath(null);
-          setContent('');
-          return;
-        }
-
-        setResolvedPath(resolved);
-        setContent(text);
-      } catch {
-        if (!isCurrent()) return;
-        setResolvedPath(null);
-        setContent('');
-      } finally {
-        if (isCurrent()) setLoading(false);
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [homeDirectory, planModeEnabled, runtimeApis.files, sessionDirectory, session?.slug, session?.time?.created, targetPath]);
-
-  React.useEffect(() => {
-    const generation = ++saveGenerationRef.current;
-    const isCurrent = () => isMountedRef.current && generation === saveGenerationRef.current;
-
-    if (!resolvedPath) {
-      if (isCurrent()) setSaveError(null);
       return;
     }
+    const snapshot = planEnabled && planQuery.data?.kind === 'resolved'
+      ? { path: planQuery.data.path, content: planQuery.data.content }
+      : null;
+    const previousIdentity = documentIdentityRef.current;
+    const saveState = planSaveStatesRef.current.get(documentIdentity);
+    let next = applyPlanSnapshot(
+      { identity: documentIdentityRef.current, path: resolvedPath, content, baseContent },
+      documentIdentity,
+      snapshot,
+      (saveState?.inFlight ?? null) !== null,
+    );
+    const identityChanged = documentIdentityRef.current !== documentIdentity;
+    if (identityChanged && saveState && !isPlanSaveStateClean(saveState)) {
+      const savedPath = saveContextsRef.current.get(documentIdentity)?.path ?? null;
+      next = restorePlanDocumentSaveState(documentIdentity, snapshot?.path ?? savedPath, saveState);
+    }
+    if (identityChanged && previousIdentity) {
+      const previousTimer = saveTimersRef.current.get(previousIdentity);
+      if (previousTimer !== undefined) {
+        window.clearTimeout(previousTimer);
+        saveTimersRef.current.delete(previousIdentity);
+      }
+      const previousState = planSaveStatesRef.current.get(previousIdentity);
+      const previousContext = saveContextsRef.current.get(previousIdentity);
+      if (previousState && previousContext && shouldFlushPlanSaveOnBoundary(previousState)) {
+        drainPlanSaveRef.current(previousContext);
+      }
+    }
+    documentIdentityRef.current = documentIdentity;
+    if (identityChanged || next.path !== resolvedPath || next.content !== content || next.baseContent !== baseContent) {
+      setResolvedPath(next.path);
+      setContent(next.content);
+      setBaseContent(next.baseContent);
+      if (identityChanged) setSaveError(planSaveStatesRef.current.get(documentIdentity)?.failed?.error ?? null);
+    }
+    if (!saveState || isPlanSaveStateClean(saveState)) {
+      planSaveStatesRef.current.set(documentIdentity, createPlanSaveState(next.baseContent));
+    }
+    for (const identity of prunePlanSaveStates(planSaveStatesRef.current, documentIdentity)) {
+      saveContextsRef.current.delete(identity);
+    }
+  }, [baseContent, content, documentIdentity, planEnabled, planQuery.data, resolvedPath]);
 
-    const controller = window.setTimeout(() => {
-      const save = async () => {
-        if (!isCurrent()) return;
+  const drainPlanSave = React.useCallback((context: PlanSaveContext) => {
+    if (saveWorkersRef.current.has(context.identity)) return;
+    const worker = (async () => {
+      while (true) {
+        const state = planSaveStatesRef.current.get(context.identity);
+        if (!state) return;
+        const [nextState, attempt] = startPlanSaveForTransport(state, context.transport, currentTransportRef.current);
+        planSaveStatesRef.current.set(context.identity, nextState);
+        if (!attempt) return;
 
-        setSaveError(null);
         try {
-          if (runtimeApis.files?.writeFile) {
-            const result = await runtimeApis.files.writeFile(resolvedPath, content);
-            if (!result?.success) {
-              throw new Error(t('planView.error.writeFailed'));
-            }
-          } else {
-            const response = await runtimeFetch('/api/fs/write', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: resolvedPath, content }),
-            });
-            if (!response.ok) {
-              throw new Error(t('planView.error.writePlanFileFailed', { status: response.status }));
-            }
+          await context.write(attempt.content);
+          await context.commit(attempt.content);
+          finishPlanSaveForDocument(planSaveStatesRef.current, context.identity, attempt);
+          for (const identity of prunePlanSaveStates(planSaveStatesRef.current, documentIdentityRef.current)) {
+            saveContextsRef.current.delete(identity);
+          }
+          if (isMountedRef.current && documentIdentityRef.current === context.identity) {
+            setBaseContent(attempt.content);
+            setSaveError(null);
           }
         } catch (error) {
-          if (isCurrent()) {
-            setSaveError(error instanceof Error ? error.message : t('planView.error.saveFailed'));
+          const message = error instanceof Error ? error.message : t('planView.error.saveFailed');
+          failPlanSaveForDocument(planSaveStatesRef.current, context.identity, attempt, message);
+          const failedState = planSaveStatesRef.current.get(context.identity);
+          const failedRevision = failedState?.failed?.revision;
+          if (isMountedRef.current && documentIdentityRef.current === context.identity && failedState && failedRevision !== undefined && failedRevision === failedState.desiredRevision) {
+            setSaveError(message);
           }
         }
-      };
+      }
+    })().finally(() => {
+      saveWorkersRef.current.delete(context.identity);
+    });
+    saveWorkersRef.current.set(context.identity, worker);
+  }, [t]);
+  drainPlanSaveRef.current = drainPlanSave;
 
-      saveQueueRef.current = saveQueueRef.current.then(save, save);
+  React.useEffect(() => {
+    const saveTimers = saveTimersRef.current;
+    const saveState = planSaveStatesRef.current.get(documentIdentity) ?? createPlanSaveState(content);
+    planSaveStatesRef.current.set(documentIdentity, setPlanSaveDesired(saveState, content));
+    for (const identity of prunePlanSaveStates(planSaveStatesRef.current, documentIdentity)) {
+      saveContextsRef.current.delete(identity);
+    }
+    if (!canSavePlanDocument(planEnabled, resolvedPath) || !resolvedPath) {
+      if (isMountedRef.current && documentIdentityRef.current === documentIdentity) setSaveError(null);
+      return;
+    }
+
+    const existingTimer = saveTimers.get(documentIdentity);
+    if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+    const writeFile = runtimeApis.files?.writeFile;
+    const context: PlanSaveContext = {
+      identity: documentIdentity,
+      transport,
+      path: resolvedPath,
+      scopeDirectory: planInput.scopeDirectory,
+      planKey,
+      planInput,
+      write: async (contentToSave) => {
+        if (writeFile) {
+          const result = await writeFile(resolvedPath, contentToSave);
+          if (!result?.success) throw new Error(t('planView.error.writeFailed'));
+          return;
+        }
+        const response = await runtimeFetch('/api/fs/write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(planInput.scopeDirectory ? { 'x-opencode-directory': planInput.scopeDirectory } : {}) },
+          body: JSON.stringify({ path: resolvedPath, content: contentToSave }),
+        });
+        if (!response.ok) throw new Error(t('planView.error.writePlanFileFailed', { status: response.status }));
+      },
+      commit: async (contentToSave) => {
+        const fileInput = {
+          scopeDirectory: planInput.scopeDirectory,
+          path: resolvedPath,
+          options: { optional: true, ...(planInput.scopeDirectory ? { directory: planInput.scopeDirectory } : {}) },
+        };
+        await queryClient.cancelQueries({ queryKey: fileContentQueryKey(fileInput, transport), exact: true });
+        await queryClient.cancelQueries({ queryKey: planKey, exact: true });
+        setFileContentSnapshot(queryClient, fileInput, transport, contentToSave);
+        queryClient.setQueryData<ResolvedPlan>(planKey, () => ({
+          kind: 'resolved',
+          source: resolvePlanSource(planInput, resolvedPath),
+          path: resolvedPath,
+          content: contentToSave,
+        }));
+      },
+    };
+    saveContextsRef.current.set(documentIdentity, context);
+    const controller = window.setTimeout(() => {
+      saveTimers.delete(documentIdentity);
+      drainPlanSave(context);
     }, 350);
+    saveTimers.set(documentIdentity, controller);
 
     return () => {
       window.clearTimeout(controller);
-      if (saveGenerationRef.current === generation) {
-        saveGenerationRef.current += 1;
-      }
+      if (saveTimers.get(documentIdentity) === controller) saveTimers.delete(documentIdentity);
     };
-  }, [content, homeDirectory, planModeEnabled, resolvedPath, runtimeApis.files, sessionDirectory, session?.slug, session?.time?.created, t, targetPath]);
+  }, [content, documentIdentity, drainPlanSave, planEnabled, planInput, planKey, planQuery.data?.kind, queryClient, resolvedPath, runtimeApis.files, saveRetry, t, transport]);
 
   React.useEffect(() => {
     return () => {
@@ -692,9 +740,21 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         <div className="min-w-0 flex-1">
           <div className="typography-ui-label font-medium truncate">{parsedTitle}</div>
           {saveError ? (
-            <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
+            <Button
+              variant="link"
+              size="xs"
+              className="h-auto p-0 typography-micro text-[color:var(--status-error)]"
+              title={saveError}
+              onClick={() => {
+                const saveState = planSaveStatesRef.current.get(documentIdentity);
+                if (!saveState) return;
+                planSaveStatesRef.current.set(documentIdentity, retryPlanSave(saveState));
+                setSaveError(null);
+                setSaveRetry((value) => value + 1);
+              }}
+            >
               {t('planView.error.saveFailed')}
-            </div>
+            </Button>
           ) : null}
         </div>
         {resolvedPath ? (
@@ -838,6 +898,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {loading ? (
             <div className="p-3 typography-ui text-muted-foreground">{t('planView.state.loading')}</div>
+          ) : initialReadError ? (
+            <div className="p-3 typography-ui text-destructive">{planQuery.error instanceof Error ? planQuery.error.message : t('planView.error.saveFailed')}</div>
+          ) : missingPlan && missingCandidates ? (
+            <div className="p-3 typography-ui text-muted-foreground">{missingCandidates.join(', ')}</div>
           ) : (
             <div className="relative h-full">
               <div className="h-full">

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { toast } from '@/components/ui';
 import { useSkillsStore, type SkillConfig, type SkillScope, type SupportingFile, type PendingFile } from '@/stores/useSkillsStore';
+import { resolveInstalledSkillsQueryDirectory, useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
@@ -105,27 +106,26 @@ const SkillsInstalledPage: React.FC = () => {
   const { currentTheme } = useThemeSystem();
   const {
     selectedSkillName,
-    getSkillByName,
     getSkillDetail,
     createSkill,
     updateSkill,
-    skills,
     skillDraft,
     setSkillDraft,
     setSelectedSkill,
   } = useSkillsStore(useShallow((s) => ({
     selectedSkillName: s.selectedSkillName,
-    getSkillByName: s.getSkillByName,
     getSkillDetail: s.getSkillDetail,
     createSkill: s.createSkill,
     updateSkill: s.updateSkill,
-    skills: s.skills,
     skillDraft: s.skillDraft,
     setSkillDraft: s.setSkillDraft,
     setSelectedSkill: s.setSelectedSkill,
   })));
+  const skillsQuery = useInstalledSkillsQuery();
+  const queryDirectory = resolveInstalledSkillsQueryDirectory();
+  const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
 
-  const selectedSkill = selectedSkillName ? getSkillByName(selectedSkillName) : null;
+  const selectedSkill = selectedSkillName ? skills.find((skill) => skill.name === selectedSkillName) ?? null : null;
   const isNewSkill = Boolean(skillDraft && skillDraft.name === selectedSkillName && !selectedSkill);
   const hasStaleSelection = Boolean(selectedSkillName && !selectedSkill && !skillDraft);
   const isReadOnlySkill = selectedSkill?.path === '<built-in>';
@@ -328,14 +328,14 @@ const SkillsInstalledPage: React.FC = () => {
 
       let success: boolean;
       if (isNewSkill) {
-        success = await createSkill(config);
+        success = await createSkill(config, { directory: queryDirectory });
         if (success) {
           setSkillDraft(null);
           setPendingFiles([]);
           setSelectedSkill(skillName);
         }
       } else {
-        success = await updateSkill(skillName, config);
+        success = await updateSkill(skillName, config, { directory: queryDirectory });
         if (success) {
           setOriginalDescription(description.trim());
           setOriginalInstructions(instructions.trim());

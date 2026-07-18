@@ -198,6 +198,40 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
     }
   };
 
+  app.post('/api/config/agents/metadata', async (req, res) => {
+    try {
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+      if (!Array.isArray(req.body?.names)) {
+        return res.status(400).json({ error: 'names must be an array' });
+      }
+
+      const names = [...new Set(req.body.names
+        .filter((name) => typeof name === 'string')
+        .map((name) => name.trim())
+        .filter(Boolean))]
+        .slice(0, 500);
+      const agents = {};
+      for (const agentName of names) {
+        const sources = getAgentSources(agentName, directory);
+        const scope = sources.md.exists
+          ? sources.md.scope
+          : (sources.json.exists ? sources.json.scope : null);
+        agents[agentName] = {
+          scope,
+          isBuiltIn: !sources.md.exists && !sources.json.exists,
+          sources,
+        };
+      }
+      return res.json({ agents });
+    } catch (error) {
+      console.error('Failed to get agent metadata batch:', error);
+      return res.status(500).json({ error: 'Failed to get agent configuration metadata' });
+    }
+  });
+
   app.get('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;

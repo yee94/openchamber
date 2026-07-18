@@ -5,6 +5,7 @@ import { NumberInput } from '@/components/ui/number-input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { useAgentsStore, type AgentConfig, type AgentMutationResult, type AgentScope } from '@/stores/useAgentsStore';
+import { useAgentsQuery } from '@/queries/agentQueries';
 import { useShallow } from 'zustand/react/shallow';
 import { useDirectorySync } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -223,7 +224,6 @@ export const AgentsPage: React.FC = () => {
     getAgentByName,
     createAgent,
     updateAgent,
-    agents,
     agentDraft,
     setAgentDraft,
   } = useAgentsStore(useShallow((s) => ({
@@ -231,10 +231,10 @@ export const AgentsPage: React.FC = () => {
     getAgentByName: s.getAgentByName,
     createAgent: s.createAgent,
     updateAgent: s.updateAgent,
-    agents: s.agents,
     agentDraft: s.agentDraft,
     setAgentDraft: s.setAgentDraft,
   })));
+  const { data: agents = [] } = useAgentsQuery();
 
   const selectedAgent = selectedAgentName ? getAgentByName(selectedAgentName) : null;
   const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent);

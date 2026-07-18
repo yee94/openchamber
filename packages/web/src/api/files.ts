@@ -158,7 +158,7 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     };
   },
 
-  async readFile(path: string, options): Promise<{ content: string; path: string }> {
+  async readFile(path: string, options): Promise<{ content: string; path: string; exists?: boolean }> {
     const target = normalizePath(path);
     const params = new URLSearchParams({ path: target });
     if (options?.allowOutsideWorkspace) {
@@ -182,7 +182,14 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     }
 
     const content = await response.text();
-    return { content, path: target };
+    if (options?.optional) {
+      const exists = response.headers.get('x-openchamber-file-exists');
+      if (exists !== 'true' && exists !== 'false') {
+        throw new Error('Optional file read requires an existence response header');
+      }
+      return { content, path: target, exists: exists === 'true' };
+    }
+    return { content, path: target, exists: true };
   },
 
   async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {

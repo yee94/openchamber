@@ -23,6 +23,8 @@ import { useI18n } from '@/lib/i18n';
 import type { SkillsCatalogItem } from '@/lib/api/types';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { resolveSkillsCatalogQueryDirectory } from '@/queries/skillsCatalogQueries';
+import { getRuntimeTransportIdentity } from '@/lib/runtime-switch';
 import { InstallConflictsDialog, type ConflictDecision, type SkillConflict } from './InstallConflictsDialog';
 import {
   SKILL_LOCATION_OPTIONS,
@@ -55,6 +57,8 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     targetSource: 'opencode' | 'agents';
     skillDir: string;
     directoryOverride?: string | null;
+    effectiveDirectory: string | null;
+    transportIdentity: string;
   } | null>(null);
 
   React.useEffect(() => {
@@ -125,6 +129,8 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     targetSource: 'opencode' | 'agents';
     skillDir: string;
     directoryOverride?: string | null;
+    effectiveDirectory: string | null;
+    transportIdentity: string;
     conflictDecisions?: Record<string, ConflictDecision>;
   }) => {
     // Build selection with clawdhub metadata if present
@@ -147,7 +153,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
       selections: [selection],
       conflictPolicy: 'prompt',
       conflictDecisions: request.conflictDecisions,
-    }, { directory: request.directoryOverride ?? null });
+    }, { directory: request.effectiveDirectory, transportIdentity: request.transportIdentity });
 
     if (result.ok) {
       toast.success(t('settings.skills.catalog.installSkill.toast.installed'));
@@ -163,6 +169,8 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
         targetSource: request.targetSource,
         skillDir: request.skillDir,
         directoryOverride: request.directoryOverride ?? null,
+        effectiveDirectory: request.effectiveDirectory,
+        transportIdentity: request.transportIdentity,
       });
       setConflicts(result.error.conflicts);
       setConflictsOpen(true);
@@ -281,6 +289,8 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
                   targetSource,
                   skillDir: item.skillDir,
                   directoryOverride,
+                  effectiveDirectory: directoryOverride ?? resolveSkillsCatalogQueryDirectory(),
+                  transportIdentity: getRuntimeTransportIdentity(),
                 })
               }
             >
@@ -304,6 +314,8 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
             skillDir: baseRequest.skillDir,
             conflictDecisions: decisions,
             directoryOverride: baseRequest.directoryOverride ?? null,
+            effectiveDirectory: baseRequest.effectiveDirectory,
+            transportIdentity: baseRequest.transportIdentity,
           });
           setConflictsOpen(false);
         }}

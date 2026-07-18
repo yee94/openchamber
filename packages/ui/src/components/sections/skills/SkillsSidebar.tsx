@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useSkillsStore, type DiscoveredSkill } from '@/stores/useSkillsStore';
+import { resolveInstalledSkillsQueryDirectory, useInstalledSkillsQuery } from '@/queries/installedSkillsQueries';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -45,7 +46,6 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
 
   const {
     selectedSkillName,
-    skills,
     setSelectedSkill,
     setSkillDraft,
     createSkill,
@@ -53,13 +53,15 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     getSkillDetail,
   } = useSkillsStore(useShallow((s) => ({
     selectedSkillName: s.selectedSkillName,
-    skills: s.skills,
     setSelectedSkill: s.setSelectedSkill,
     setSkillDraft: s.setSkillDraft,
     createSkill: s.createSkill,
     deleteSkill: s.deleteSkill,
     getSkillDetail: s.getSkillDetail,
   })));
+  const skillsQuery = useInstalledSkillsQuery();
+  const queryDirectory = resolveInstalledSkillsQueryDirectory();
+  const skills = React.useMemo(() => skillsQuery.data ?? [], [skillsQuery.data]);
 
   // Skills are loaded by the Settings shell when this page is active.
 
@@ -97,7 +99,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     }
 
     setIsDeletePending(true);
-    const success = await deleteSkill(deleteDialogSkill.name);
+    const success = await deleteSkill(deleteDialogSkill.name, { directory: queryDirectory });
     if (success) {
       toast.success(t('settings.skills.sidebar.toast.skillDeleted', { name: deleteDialogSkill.name }));
       setDeleteDialogSkill(null);
@@ -182,11 +184,11 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       description: 'Renamed skill', // Will need proper description
       scope: renameDialogSkill.scope,
       source: renameDialogSkill.source,
-    });
+    }, { directory: queryDirectory });
 
     if (success) {
       // Delete old skill
-      const deleteSuccess = await deleteSkill(renameDialogSkill.name);
+      const deleteSuccess = await deleteSkill(renameDialogSkill.name, { directory: queryDirectory });
       if (deleteSuccess) {
         toast.success(`Skill renamed to "${sanitizedName}"`);
         setSelectedSkill(sanitizedName);

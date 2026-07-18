@@ -77,10 +77,11 @@ export function useRouter(): void {
         settingsPath: 'home',
         diffFile: null,
       }, { replace: true, force: true });
+      setRoute(parseRoute());
     } finally {
       isApplyingRouteRef.current = false;
     }
-  }, [isVSCode, setActiveMainTab, setSettingsDialogOpen]);
+  }, [isVSCode, setActiveMainTab, setRoute, setSettingsDialogOpen]);
 
   /**
    * Apply a parsed route state to the application stores.
@@ -221,15 +222,29 @@ export function useRouter(): void {
       return;
     }
 
+    const currentSession = useSessionUIStore.getState();
+    if (
+      currentSession.currentSessionId === route.sessionId
+      && currentSession.currentSessionDirectory
+    ) {
+      return;
+    }
+
     const session = [...activeSessions, ...archivedSessions]
       .find((candidate) => candidate.id === route.sessionId);
-    if (!session || !resolveGlobalSessionDirectory(session)) {
+    const directory = session ? resolveGlobalSessionDirectory(session) : null;
+    if (!directory) {
       redirectToHome();
       return;
     }
 
-    void applyRoute(route);
-  }, [activeSessions, applyRoute, archivedSessions, hasLoadedGlobalSessions, redirectToHome, route]);
+    if (
+      currentSession.currentSessionId !== route.sessionId
+      || currentSession.currentSessionDirectory !== directory
+    ) {
+      setCurrentSession(route.sessionId, directory);
+    }
+  }, [activeSessions, archivedSessions, hasLoadedGlobalSessions, redirectToHome, route, setCurrentSession]);
 
   React.useEffect(() => {
     if (!route.sessionId || isVSCode) {

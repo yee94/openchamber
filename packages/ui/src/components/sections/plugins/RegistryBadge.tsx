@@ -6,14 +6,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
-import { usePluginsStore } from '@/stores/usePluginsStore';
+import type { RegistryResult } from '@/stores/usePluginsStore';
 
 interface RegistryBadgeProps {
-  spec: string;
+  info: RegistryResult | undefined;
 }
 
-export const RegistryBadge: React.FC<RegistryBadgeProps> = ({ spec }) => {
-  const info = usePluginsStore((s) => s.registryInfo[spec]);
+export const RegistryBadge: React.FC<RegistryBadgeProps> = ({ info }) => {
   const { t } = useI18n();
 
   if (!info) return null;

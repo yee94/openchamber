@@ -3,11 +3,15 @@ import { cn, getModifierLabel } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
+import { readAgentsSnapshot } from '@/queries/agentQueries';
+import { readCommandsSnapshot, useCommandsQuery } from '@/queries/commandQueries';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { readMcpConfigsSnapshot } from '@/queries/mcpQueries';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { queryClient } from '@/lib/queryRuntime';
+import { readInstalledSkillsSnapshot, refreshInstalledSkillsQuery, resolveInstalledSkillsQueryDirectory } from '@/queries/installedSkillsQueries';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -288,6 +292,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const settingsSlug = resolveSettingsSlug(settingsPageRaw);
+  const commandsQuery = useCommandsQuery({ enabled: settingsSlug === 'commands' });
+  const { refetch: refetchCommands } = commandsQuery;
+
+  React.useEffect(() => {
+    if (settingsSlug === 'commands') {
+      void refetchCommands();
+    }
+  }, [refetchCommands, settingsSlug]);
 
   const [mobileStage, setMobileStage] = React.useState<MobileStage>(initialMobileStage);
   const autoNavSlugRef = React.useRef<string | null>(null);
@@ -413,11 +425,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'commands') {
-      void useCommandsStore.getState().loadCommands();
       return;
     }
     if (settingsSlug === 'mcp') {
-      void useMcpConfigStore.getState().loadMcpConfigs();
       return;
     }
     if (settingsSlug === 'plugins') {
@@ -425,8 +435,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
-      void useSkillsStore.getState().loadSkills();
-      void useSkillsCatalogStore.getState().loadCatalog();
+      void refreshInstalledSkillsQuery(queryClient, resolveInstalledSkillsQueryDirectory());
     }
     if (settingsSlug === 'snippets') {
       void useSnippetsStore.getState().loadSnippets();
@@ -533,7 +542,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const prepareSettingsSearchTarget = React.useCallback((result: SettingsSearchResult): string => {
     if (result.id.startsWith('agents.')) {
       const store = useAgentsStore.getState();
-      const name = nextUniqueName('new-agent', store.agents.map((agent) => agent.name));
+      const name = nextUniqueName('new-agent', readAgentsSnapshot().map((agent) => agent.name));
       store.setAgentDraft({ name, scope: 'user' });
       store.setSelectedAgent(name);
       return result.id === 'agents.create' ? 'agents.name' : result.id;
@@ -541,7 +550,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
     if (result.id.startsWith('commands.')) {
       const store = useCommandsStore.getState();
-      const name = nextUniqueName('new-command', store.commands.map((command) => command.name));
+      const name = nextUniqueName('new-command', readCommandsSnapshot().map((command) => command.name));
       store.setCommandDraft({ name, scope: 'user' });
       store.setSelectedCommand(name);
       return result.id === 'commands.create' ? 'commands.name' : result.id;
@@ -549,7 +558,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
     if (result.id.startsWith('mcp.')) {
       const store = useMcpConfigStore.getState();
-      const name = nextUniqueName('new-mcp-server', store.mcpServers.map((server) => server.name));
+      const name = nextUniqueName('new-mcp-server', readMcpConfigsSnapshot().map((server) => server.name));
       store.setMcpDraft({
         name,
         scope: 'user',
@@ -579,10 +588,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
 
     if (result.id.startsWith('skills.')) {
-      const store = useSkillsStore.getState();
-      const name = nextUniqueName('new-skill', store.skills.map((skill) => skill.name));
-      store.setSkillDraft({ name, scope: 'user', source: 'opencode', description: '', instructions: '' });
-      store.setSelectedSkill(name);
+      const installedSkillsSnapshot = readInstalledSkillsSnapshot(queryClient);
+      const skillsStore = useSkillsStore.getState();
+      const name = nextUniqueName('new-skill', installedSkillsSnapshot.map((skill) => skill.name));
+      skillsStore.setSkillDraft({ name, scope: 'user', source: 'opencode', description: '', instructions: '' });
+      skillsStore.setSelectedSkill(name);
       return result.id === 'skills.create' ? 'skills.basic-information' : result.id;
     }
 

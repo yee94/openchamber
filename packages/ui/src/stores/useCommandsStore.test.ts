@@ -1,228 +1,113 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-
 let activeProjectPath = '/workspace/project';
 let runtimeKey = 'runtime-a';
 let commandRequestDirectory: string | null = null;
-
-let listCommandsWithDetailsCalls = 0;
-let listCommandsWithDetailsImpl: () => Promise<unknown[]> = async () => [];
-let withDirectoryImpl: (_directory: string | null, callback: () => Promise<unknown>) => Promise<unknown> = async (directory, callback) => {
-  commandRequestDirectory = directory;
-  return callback();
-};
-let getDirectoryImpl: () => string = () => '/fallback/project';
-let runtimeFetchCalls: Array<{ input: string; init?: RequestInit }> = [];
-let runtimeFetchImpl: (input: string, init?: RequestInit) => Promise<Response> = async () => new Response(JSON.stringify({ commands: {} }), {
-  headers: { 'Content-Type': 'application/json' },
-});
-
-const listCommandsWithDetailsMock = async () => {
-  listCommandsWithDetailsCalls += 1;
-  return listCommandsWithDetailsImpl();
-};
-
-const withDirectoryMock = async (directory: string | null, callback: () => Promise<unknown>) => withDirectoryImpl(directory, callback);
-const getDirectoryMock = () => getDirectoryImpl();
-const runtimeFetchMock = async (input: string, init?: RequestInit) => {
-  runtimeFetchCalls.push({ input, init });
-  return runtimeFetchImpl(input, init);
-};
+let listCalls = 0;
+type RawCommand = { name: string; source?: string; template?: string };
+let listImpl: () => Promise<RawCommand[]> = async () => [];
+let metadataCalls: Array<RequestInit | undefined> = [];
+let metadataImpl: (init?: RequestInit) => Promise<Response> = async () => new Response(JSON.stringify({ commands: {} }));
 
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: {
-    getDirectory: getDirectoryMock,
-    listCommandsWithDetails: listCommandsWithDetailsMock,
-    withDirectory: withDirectoryMock,
+    getDirectory: () => '/fallback/project',
+    withDirectory: async (directory: string | null, callback: () => Promise<unknown>) => {
+      commandRequestDirectory = directory;
+      return callback();
+    },
+    listCommandsWithDetails: async () => {
+      listCalls += 1;
+      return listImpl();
+    },
   },
 }));
-
 mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: {
-    getState: () => ({
-      getActiveProject: () => ({ path: activeProjectPath }),
-    }),
+  useProjectsStore: Object.assign(() => null, { getState: () => ({ getActiveProject: () => ({ path: activeProjectPath }) }) }),
+}));
+mock.module('@/lib/runtime-fetch', () => ({
+  runtimeFetch: async (_input: string, init?: RequestInit) => {
+    metadataCalls.push(init);
+    return metadataImpl(init);
   },
 }));
-
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: runtimeFetchMock,
-}));
-
 mock.module('@/lib/runtime-switch', () => ({
   getRuntimeTransportIdentity: () => runtimeKey,
+  isRuntimeEndpointIdentityChange: () => false,
+  subscribeRuntimeEndpointChanged: () => () => undefined,
 }));
+mock.module('@/lib/configUpdate', () => ({ startConfigUpdate: mock(() => undefined), finishConfigUpdate: mock(() => undefined), updateConfigUpdateMessage: mock(() => undefined) }));
+mock.module('@/lib/configSync', () => ({ emitConfigChange: mock(() => undefined), scopeMatches: mock(() => false), subscribeToConfigChanges: mock(() => () => undefined) }));
 
-mock.module('@/lib/configUpdate', () => ({
-  startConfigUpdate: mock(() => undefined),
-  finishConfigUpdate: mock(() => undefined),
-  updateConfigUpdateMessage: mock(() => undefined),
-}));
-
-mock.module('@/lib/configSync', () => ({
-  emitConfigChange: mock(() => undefined),
-  scopeMatches: mock(() => false),
-  subscribeToConfigChanges: mock(() => () => undefined),
-}));
-
-const { invalidateCommandsLoadCache, useCommandsStore } = await import('./useCommandsStore');
+const { commandQueryOptions, readCommandsSnapshot, refreshCommandsQuery } = await import('@/queries/commandQueries');
+const { useCommandsStore } = await import('./useCommandsStore');
+const { queryClient } = await import('@/lib/queryRuntime');
 
 describe('useCommandsStore', () => {
   beforeEach(() => {
-    listCommandsWithDetailsCalls = 0;
-    listCommandsWithDetailsImpl = async () => [];
+    queryClient.clear();
     activeProjectPath = '/workspace/project';
     runtimeKey = 'runtime-a';
     commandRequestDirectory = null;
-    withDirectoryImpl = async (directory, callback) => {
-      commandRequestDirectory = directory;
-      return callback();
-    };
-    getDirectoryImpl = () => '/fallback/project';
-    runtimeFetchCalls = [];
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ commands: {} }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    useCommandsStore.setState({
-      selectedCommandName: null,
-      commands: [],
-      commandsByCacheKey: {},
-      activeCommandsCacheKey: null,
-      isLoading: false,
-      commandDraft: null,
-    });
+    listCalls = 0;
+    listImpl = async () => [];
+    metadataCalls = [];
+    metadataImpl = async () => new Response(JSON.stringify({ commands: {} }));
+    useCommandsStore.setState({ selectedCommandName: null, commandDraft: null });
   });
 
-  test('loadCommands preserves previous commands when the command list fails', async () => {
-    const previousCommands = [{
-      name: 'existing',
-      description: 'Existing command',
-      template: 'do the previous thing',
-      scope: 'project' as const,
-    }];
-    useCommandsStore.setState({ commands: previousCommands });
-    listCommandsWithDetailsImpl = async () => {
-      throw new Error('network down');
-    };
+  test('keeps only command UI state and loads through the query cache', async () => {
+    listImpl = async () => [...Array.from({ length: 80 }, (_, index) => ({ name: `command-${index}`, source: 'command' })), { name: 'skill', source: 'skill' }];
+    metadataImpl = async () => new Response(JSON.stringify({ commands: { 'command-0': { scope: 'project' } } }));
 
-    const result = await useCommandsStore.getState().loadCommands();
+    const loaded = await useCommandsStore.getState().loadCommands();
 
-    expect(result).toBe(false);
-    expect(listCommandsWithDetailsCalls).toBe(3);
-    expect(useCommandsStore.getState().commands).toEqual(previousCommands);
-    expect(useCommandsStore.getState().isLoading).toBe(false);
+    expect(loaded).toBe(true);
+    expect(readCommandsSnapshot()).toHaveLength(80);
+    expect(readCommandsSnapshot()[0]?.scope).toBe('project');
+    expect(commandRequestDirectory).toBe('/workspace/project');
+    expect(metadataCalls).toHaveLength(1);
+    expect(metadataCalls[0]?.signal).toBeInstanceOf(AbortSignal);
+    expect(Object.hasOwn(useCommandsStore.getState(), 'commands')).toBe(false);
+    expect(Object.hasOwn(useCommandsStore.getState(), 'isLoading')).toBe(false);
   });
 
-  test('loads scope metadata for many commands with one batched runtime request', async () => {
-    listCommandsWithDetailsImpl = async () => Array.from({ length: 80 }, (_, index) => ({
-      name: `command-${index}`,
-      description: `Command ${index}`,
-      source: 'command',
-    }));
-    runtimeFetchImpl = async (_input, init) => {
-      const body = JSON.parse(String(init?.body)) as { names: string[] };
-      return new Response(JSON.stringify({
-        commands: Object.fromEntries(body.names.map((name) => [name, { scope: 'project', isBuiltIn: false }])),
-      }), { headers: { 'Content-Type': 'application/json' } });
-    };
-
-    const result = await useCommandsStore.getState().loadCommands();
-
-    expect(result).toBe(true);
-    expect(runtimeFetchCalls).toHaveLength(1);
-    expect(runtimeFetchCalls[0]?.input).toBe('/api/config/commands/metadata');
-    expect(runtimeFetchCalls[0]?.init?.method).toBe('POST');
-    expect(useCommandsStore.getState().commands).toHaveLength(80);
-    expect(useCommandsStore.getState().commands.every((command) => command.scope === 'project')).toBe(true);
-  });
-
-  test('keeps TTL snapshots isolated by directory and runtime identity', async () => {
-    listCommandsWithDetailsImpl = async () => [{
-      name: activeProjectPath.endsWith('one') ? 'one' : 'two',
-      source: 'command',
-    }];
-
-    activeProjectPath = '/workspace/race-one';
-    await useCommandsStore.getState().loadCommands();
-    expect(useCommandsStore.getState().commands.map((command) => command.name)).toEqual(['one']);
-
-    activeProjectPath = '/workspace/race-two';
-    await useCommandsStore.getState().loadCommands();
-    expect(useCommandsStore.getState().commands.map((command) => command.name)).toEqual(['two']);
-
-    activeProjectPath = '/workspace/race-one';
-    await useCommandsStore.getState().loadCommands();
-    expect(useCommandsStore.getState().commands.map((command) => command.name)).toEqual(['one']);
-    expect(listCommandsWithDetailsCalls).toBe(2);
-
-    runtimeKey = 'runtime-b';
-    await useCommandsStore.getState().loadCommands();
-    expect(listCommandsWithDetailsCalls).toBe(3);
-    expect(Object.keys(useCommandsStore.getState().commandsByCacheKey)).toHaveLength(3);
-  });
-
-  test('keeps the active directory snapshot when an earlier request finishes later', async () => {
-    let resolveOne: ((commands: unknown[]) => void) | undefined;
-    let resolveTwo: ((commands: unknown[]) => void) | undefined;
-    listCommandsWithDetailsImpl = async () => new Promise((resolve) => {
-      if (commandRequestDirectory?.endsWith('one')) resolveOne = resolve;
-      else resolveTwo = resolve;
-    });
-
-    activeProjectPath = '/workspace/concurrent-one';
-    const first = useCommandsStore.getState().loadCommands();
-    activeProjectPath = '/workspace/concurrent-two';
-    const second = useCommandsStore.getState().loadCommands();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(resolveTwo).toBeDefined();
-    resolveTwo!([{ name: 'two', source: 'command' }]);
-    await second;
-    expect(resolveOne).toBeDefined();
-    resolveOne!([{ name: 'one', source: 'command' }]);
-    await first;
-
-    expect(useCommandsStore.getState().commands.map((command) => command.name)).toEqual(['two']);
-  });
-
-  test('refreshes the displayed snapshot when a command template changes', async () => {
+  test('refreshes the captured query after a mutation', async () => {
     let template = 'first';
-    listCommandsWithDetailsImpl = async () => [{ name: 'deploy', source: 'command', template }];
-
-    await useCommandsStore.getState().loadCommands();
+    listImpl = async () => [{ name: 'deploy', source: 'command', template }];
+    await refreshCommandsQuery(queryClient, activeProjectPath, runtimeKey);
     template = 'second';
-    invalidateCommandsLoadCache('/workspace/project');
-    await useCommandsStore.getState().loadCommands();
+    await refreshCommandsQuery(queryClient, activeProjectPath, runtimeKey);
+    expect(readCommandsSnapshot()[0]?.template).toBe('second');
 
-    expect(useCommandsStore.getState().commands[0]?.template).toBe('second');
+    metadataImpl = async (init) => init?.method === 'PATCH'
+      ? new Response(JSON.stringify({ requiresReload: false }))
+      : new Response(JSON.stringify({ commands: {} }));
+    await useCommandsStore.getState().updateCommand('deploy', { template: 'third' });
+    expect(listCalls).toBe(3);
   });
 
-  test('keeps scope out of PATCH payloads', async () => {
-    listCommandsWithDetailsImpl = async () => [];
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ requiresReload: false }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+  test('keeps a switched runtime query untouched after a mutation completes', async () => {
+    listImpl = async () => [{ name: 'deploy', source: 'command' }];
+    await refreshCommandsQuery(queryClient, activeProjectPath, runtimeKey);
+    const requestRuntime = runtimeKey;
+    metadataImpl = async (init) => {
+      if (init?.method === 'PATCH') {
+        runtimeKey = 'runtime-b';
+        return new Response(JSON.stringify({ requiresReload: false }));
+      }
+      return new Response(JSON.stringify({ commands: {} }));
+    };
 
-    await useCommandsStore.getState().updateCommand('deploy', { scope: 'project', template: 'run' });
+    await useCommandsStore.getState().updateCommand('deploy', { template: 'updated' });
 
-    const patch = runtimeFetchCalls.find((call) => call.init?.method === 'PATCH');
-    expect(JSON.parse(String(patch?.init?.body))).toEqual({ template: 'run' });
+    expect(runtimeKey).toBe('runtime-b');
+    expect(listCalls).toBe(1);
+    expect((queryClient.getQueryData(['runtime-a', 'commands', '/workspace/project']) as RawCommand[])[0]?.name).toBe('deploy');
+    expect(commandQueryOptions('/workspace/project').queryKey).toEqual(['runtime-b', 'commands', '/workspace/project']);
+    expect(requestRuntime).toBe('runtime-a');
   });
 
-  test('keeps the complete scope snapshot stale when metadata refresh fails', async () => {
-    invalidateCommandsLoadCache('/workspace/project');
-    listCommandsWithDetailsImpl = async () => [{ name: 'deploy', source: 'command' }];
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ commands: { deploy: { scope: 'project' } } }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await useCommandsStore.getState().loadCommands();
-    runtimeFetchImpl = async () => { throw new Error('metadata unavailable'); };
-    invalidateCommandsLoadCache('/workspace/project');
-
-    await useCommandsStore.getState().loadCommands();
-
-    expect(useCommandsStore.getState().commands[0]?.name).toBe('deploy');
-    expect(useCommandsStore.getState().commands[0]?.scope).toBe('project');
-    await useCommandsStore.getState().loadCommands();
-    expect(listCommandsWithDetailsCalls).toBe(3);
+  test('uses the captured runtime query key', () => {
+    expect(commandQueryOptions('/workspace/project').queryKey).toEqual(['runtime-a', 'commands', '/workspace/project']);
   });
 });

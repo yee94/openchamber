@@ -27,6 +27,7 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useGitHubAuthQuery } from '@/queries/githubAuthQueries';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
@@ -790,7 +791,7 @@ export const Header: React.FC<HeaderProps> = ({
   const setQuotaDisplayMode = useQuotaStore((state) => state.setDisplayMode);
 
   const { isMobile } = useDeviceInfo();
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
+  const githubAuthStatus = useGitHubAuthQuery().data ?? null;
   const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
 
   const headerRef = React.useRef<HTMLElement | null>(null);

@@ -355,13 +355,28 @@ export async function handleConfigBridgeMessage(
         body?: Record<string, unknown>;
         directory?: string;
       };
+      const workingDirectory = resolveWorkingDirectory(ctx, directory);
+      const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
+      if (normalizedMethod === 'POST' && !name && Array.isArray(body?.names)) {
+        const names = [...new Set(body.names
+          .filter((candidate): candidate is string => typeof candidate === 'string')
+          .map((candidate) => candidate.trim())
+          .filter(Boolean))]
+          .slice(0, 500);
+        const agents: Record<string, unknown> = {};
+        for (const agentName of names) {
+          const sources = getAgentSources(agentName, workingDirectory);
+          const scope = sources.md.exists
+            ? sources.md.scope
+            : (sources.json.exists ? sources.json.scope : null);
+          agents[agentName] = { scope, isBuiltIn: !sources.md.exists && !sources.json.exists, sources };
+        }
+        return { id, type, success: true, data: { agents } };
+      }
       const agentName = typeof name === 'string' ? name.trim() : '';
       if (!agentName) {
         return { id, type, success: false, error: 'Agent name is required' };
       }
-
-      const workingDirectory = resolveWorkingDirectory(ctx, directory);
-      const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
 
       if (normalizedMethod === 'GET') {
         const sources = getAgentSources(agentName, workingDirectory);
@@ -438,13 +453,28 @@ export async function handleConfigBridgeMessage(
         body?: Record<string, unknown>;
         directory?: string;
       };
+      const workingDirectory = resolveWorkingDirectory(ctx, directory);
+      const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
+      if (normalizedMethod === 'POST' && !name && Array.isArray(body?.names)) {
+        const names = [...new Set(body.names
+          .filter((candidate): candidate is string => typeof candidate === 'string')
+          .map((candidate) => candidate.trim())
+          .filter(Boolean))]
+          .slice(0, 500);
+        const commands: Record<string, unknown> = {};
+        for (const commandName of names) {
+          const sources = getCommandSources(commandName, workingDirectory);
+          const scope = sources.md.exists
+            ? sources.md.scope
+            : (sources.json.exists ? sources.json.scope : null);
+          commands[commandName] = { scope, isBuiltIn: !sources.md.exists && !sources.json.exists, sources };
+        }
+        return { id, type, success: true, data: { commands } };
+      }
       const commandName = typeof name === 'string' ? name.trim() : '';
       if (!commandName) {
         return { id, type, success: false, error: 'Command name is required' };
       }
-
-      const workingDirectory = resolveWorkingDirectory(ctx, directory);
-      const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
 
       if (normalizedMethod === 'GET') {
         const sources = getCommandSources(commandName, workingDirectory);
@@ -731,8 +761,13 @@ export async function handleConfigBridgeMessage(
     }
 
     case 'api:config/skills': {
-      const { method, name, body } = (payload || {}) as { method?: string; name?: string; body?: Record<string, unknown> };
-      const workingDirectory = ctx?.manager?.getWorkingDirectory() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const { method, name, body, directory } = (payload || {}) as {
+        method?: string;
+        name?: string;
+        body?: Record<string, unknown>;
+        directory?: string;
+      };
+      const workingDirectory = resolveWorkingDirectory(ctx, directory);
       const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
 
       if (!name && normalizedMethod === 'GET') {
@@ -813,8 +848,9 @@ export async function handleConfigBridgeMessage(
     }
 
     case 'api:config/skills:catalog': {
-      const refresh = Boolean((payload as { refresh?: boolean } | undefined)?.refresh);
-      const workingDirectory = ctx?.manager?.getWorkingDirectory() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const request = (payload || {}) as { refresh?: boolean; directory?: string };
+      const refresh = Boolean(request.refresh);
+      const workingDirectory = resolveWorkingDirectory(ctx, request.directory);
       const settings = deps.readSettings(ctx);
       const additionalSources = parseSkillsCatalogSources(settings);
       const installedSkills = await resolveDiscoveredSkills(deps, ctx, workingDirectory);
@@ -823,7 +859,7 @@ export async function handleConfigBridgeMessage(
     }
 
     case 'api:config/skills:scan': {
-      const body = (payload || {}) as { source?: string; subpath?: string; gitIdentityId?: string };
+      const body = (payload || {}) as { source?: string; subpath?: string; gitIdentityId?: string; directory?: string };
       const data = await scanSkillsRepositoryFromGit({
         source: String(body.source || ''),
         subpath: body.subpath,
@@ -840,9 +876,10 @@ export async function handleConfigBridgeMessage(
         selections?: Array<{ skillDir: string }>;
         conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
         conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
+        directory?: string;
       };
 
-      const workingDirectory = ctx?.manager?.getWorkingDirectory() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workingDirectory = resolveWorkingDirectory(ctx, body.directory);
 
       const data = await installSkillsFromGit({
         source: String(body.source || ''),
@@ -883,13 +920,14 @@ export async function handleConfigBridgeMessage(
     }
 
     case 'api:config/skills/files': {
-      const { method, name, filePath, content } = (payload || {}) as {
+      const { method, name, filePath, content, directory } = (payload || {}) as {
         method?: string;
         name?: string;
         filePath?: string;
         content?: string;
+        directory?: string;
       };
-      const workingDirectory = ctx?.manager?.getWorkingDirectory() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workingDirectory = resolveWorkingDirectory(ctx, directory);
 
       const skillName = typeof name === 'string' ? name.trim() : '';
       if (!skillName) {
