@@ -581,6 +581,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           VERSION: ${{ needs.create-release.outputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
@@ -588,6 +589,7 @@ jobs:
           (async () => {
           const {
             REPOSITORY: repo,
+            RELEASE_ID: releaseId,
             VERSION: version,
             BUILD_NUMBER: buildNumber,
             GITHUB_TOKEN: token,
@@ -615,7 +617,7 @@ jobs:
             `OpenChamber-${version}-${buildNumber}-android.apk`,
             `openchamber-${version}.vsix`,
           ];
-          const response = await fetch(`https://api.github.com/repos/${repo}/releases/tags/v${version}`, {
+          const response = await fetch(`https://api.github.com/repos/${repo}/releases/${releaseId}`, {
             headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
           });
           if (!response.ok) throw new Error(`Failed to inspect release assets: ${response.status} ${await response.text()}`);

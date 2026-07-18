@@ -83,6 +83,7 @@ export const updateHeaderSwipeGestureState = (
   const reversed = previousSegmentDx !== 0
     && movementDx !== 0
     && Math.sign(previousSegmentDx) !== Math.sign(movementDx);
+  if (reversed && Math.abs(movementDx) < INTENT_DISTANCE) return state;
   const segmentStart = reversed ? state.lastTouch : state.segmentStart;
   const dx = touch.clientX - segmentStart.clientX;
   const dy = touch.clientY - segmentStart.clientY;

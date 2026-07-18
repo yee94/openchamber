@@ -125,6 +125,26 @@ describe('updateHeaderSwipeGestureState', () => {
     expect(state.open).toBe(false);
   });
 
+  test('keeps the candidate open through a small release-direction jitter', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    state = update(state, 100);
+
+    expect(state.open).toBe(true);
+    expect(state.segmentStart.clientX).toBe(0);
+  });
+
+  test('cancels after a deliberate reversal reaches the intent distance', () => {
+    let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
+    state = update(state, 101);
+    state = update(state, 94);
+    expect(state.open).toBe(true);
+    state = update(state, 93);
+
+    expect(state.open).toBe(false);
+    expect(state.segmentStart.clientX).toBe(101);
+  });
+
   test('anchors a reversed segment at the local turning point', () => {
     let state = createHeaderSwipeGestureState({ clientX: 100, clientY: 0 });
     state = update(state, 220);
