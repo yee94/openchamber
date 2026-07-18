@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   createHeaderSwipeGestureState,
   evaluateHeaderSwipe,
+  getHeaderSwipePresentationProgress,
   updateHeaderSwipeGestureState,
 } from './useHeaderSwipeToSessions';
 
@@ -125,34 +126,24 @@ describe('updateHeaderSwipeGestureState', () => {
     expect(state.open).toBe(false);
   });
 
-  test('keeps the candidate open through a small release-direction jitter', () => {
+  test('keeps the original origin while tracking leftward travel', () => {
     let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
     state = update(state, 101);
-    state = update(state, 100);
+    state = update(state, 69);
 
-    expect(state.open).toBe(true);
+    expect(state.open).toBe(false);
     expect(state.segmentStart.clientX).toBe(0);
   });
 
-  test('cancels after a deliberate reversal reaches the intent distance', () => {
+  test('uses the same threshold distance when reopening after leftward travel', () => {
     let state = createHeaderSwipeGestureState({ clientX: 0, clientY: 0 });
     state = update(state, 101);
-    state = update(state, 94);
-    expect(state.open).toBe(true);
-    state = update(state, 93);
-
+    state = update(state, 69);
     expect(state.open).toBe(false);
-    expect(state.segmentStart.clientX).toBe(101);
-  });
+    state = update(state, 70);
 
-  test('anchors a reversed segment at the local turning point', () => {
-    let state = createHeaderSwipeGestureState({ clientX: 100, clientY: 0 });
-    state = update(state, 220);
-    state = update(state, 180);
-    state = update(state, 281);
-
-    expect(state.segmentStart.clientX).toBe(180);
     expect(state.open).toBe(true);
+    expect(state.segmentStart.clientX).toBe(0);
   });
 
   test('keeps the candidate unchanged for an off-axis segment', () => {
@@ -162,5 +153,17 @@ describe('updateHeaderSwipeGestureState', () => {
     state = update(state, 101, 60);
 
     expect(state.open).toBe(false);
+  });
+});
+
+describe('getHeaderSwipePresentationProgress', () => {
+  test('tracks zero to open to zero to open during one continuous touch', () => {
+    const startX = 20;
+    const viewportWidth = 200;
+
+    expect(getHeaderSwipePresentationProgress(startX, 20, viewportWidth)).toBe(0);
+    expect(getHeaderSwipePresentationProgress(startX, 90, viewportWidth)).toBe(1);
+    expect(getHeaderSwipePresentationProgress(startX, 20, viewportWidth)).toBe(0);
+    expect(getHeaderSwipePresentationProgress(startX, 90, viewportWidth)).toBe(1);
   });
 });

@@ -69,29 +69,19 @@ export const createHeaderSwipeGestureState = (
   open: false,
 });
 
-/**
- * Updates the opening candidate from one continuous horizontal direction
- * segment. A direction reversal anchors its new segment at the prior touch.
- */
+/** Updates the opening candidate against the gesture's original touch point. */
 export const updateHeaderSwipeGestureState = (
   state: HeaderSwipeGestureState,
   touch: HeaderSwipePoint,
   viewportWidth: number,
 ): HeaderSwipeGestureState => {
-  const previousSegmentDx = state.lastTouch.clientX - state.segmentStart.clientX;
-  const movementDx = touch.clientX - state.lastTouch.clientX;
-  const reversed = previousSegmentDx !== 0
-    && movementDx !== 0
-    && Math.sign(previousSegmentDx) !== Math.sign(movementDx);
-  if (reversed && Math.abs(movementDx) < INTENT_DISTANCE) return state;
-  const segmentStart = reversed ? state.lastTouch : state.segmentStart;
-  const dx = touch.clientX - segmentStart.clientX;
-  const dy = touch.clientY - segmentStart.clientY;
+  const dx = touch.clientX - state.segmentStart.clientX;
+  const dy = touch.clientY - state.segmentStart.clientY;
   const exceedsThreshold = Math.abs(dx) >= viewportWidth * OPEN_DISTANCE_RATIO;
   const staysOnAxis = Math.abs(dy) <= Math.abs(dx) * MAX_OFF_AXIS_RATIO;
 
   return {
-    segmentStart,
+    segmentStart: state.segmentStart,
     lastTouch: touch,
     open: exceedsThreshold && staysOnAxis && dx > 0,
   };
@@ -114,6 +104,15 @@ export const evaluateHeaderSwipe = (input: HeaderSwipeInput): HeaderSwipeResult 
     ).open,
   };
 };
+
+export const getHeaderSwipePresentationProgress = (
+  startX: number,
+  currentX: number,
+  viewportWidth: number,
+): number => Math.min(
+  Math.max(0, currentX - startX) / Math.max(1, viewportWidth * OPEN_DISTANCE_RATIO),
+  1,
+);
 
 // ---------------------------------------------------------------------------
 // Interactive / scrollable exclusion helpers
@@ -262,16 +261,14 @@ export const useHeaderSwipeToSessions = (
         onPreviewStartRef.current?.();
       }
 
-      if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) {
-        finishPreview(false);
-        horizontalIntent = false;
-        return;
-      }
-
       event.preventDefault();
       latestDistance = Math.max(0, dx);
       updateThreshold(latestDistance);
-      onProgressRef.current?.(Math.min(latestDistance / (viewportWidth * OPEN_DISTANCE_RATIO), 1));
+      onProgressRef.current?.(getHeaderSwipePresentationProgress(
+        gestureState.segmentStart.clientX,
+        touch.clientX,
+        viewportWidth,
+      ));
     };
 
     const onTouchEnd = (event: TouchEvent) => {

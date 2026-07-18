@@ -91,6 +91,31 @@ describe('swipe threshold haptics', () => {
       available: false,
     })).toEqual({ thresholdReached: false, event: 'cancel' });
   });
+
+  test('emits enter again when one continuous swipe returns across the threshold', () => {
+    const entered = evaluateSwipeThresholdHaptic({
+      thresholdReached: false,
+      distance: 64,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: true,
+    });
+    const cancelled = evaluateSwipeThresholdHaptic({
+      thresholdReached: entered.thresholdReached,
+      distance: 56,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: true,
+    });
+
+    expect(evaluateSwipeThresholdHaptic({
+      thresholdReached: cancelled.thresholdReached,
+      distance: 64,
+      enterDistance: 64,
+      cancelDistance: 56,
+      available: true,
+    })).toEqual({ thresholdReached: true, event: 'enter' });
+  });
 });
 
 describe('visible part haptic semantics', () => {
