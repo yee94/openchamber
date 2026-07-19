@@ -686,6 +686,7 @@ type ComposerActionButtonsProps = {
     currentSessionId: string | null;
     newSessionDraftOpen: boolean;
     draftSubmitting?: boolean;
+    submissionBlocked: boolean;
     onPrimaryAction: () => void;
     onQueueMessage: () => void;
     onAbort: () => void;
@@ -703,6 +704,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
         currentSessionId,
         newSessionDraftOpen,
         draftSubmitting,
+        submissionBlocked,
         onPrimaryAction,
         onQueueMessage,
         onAbort,
@@ -712,7 +714,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
     const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
-            disabled={!canSend || (!currentSessionId && !newSessionDraftOpen) || draftSubmitting}
+            disabled={!canSend || (!currentSessionId && !newSessionDraftOpen) || draftSubmitting || submissionBlocked}
             onClick={(event) => {
                 if (!isMobile) {
                     return;
@@ -742,7 +744,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
             {hasContent ? (
                 <button
                     type="button"
-                    disabled={!currentSessionId}
+                    disabled={!currentSessionId || submissionBlocked}
                     onClick={(event) => {
                         if (isMobile) {
                             event.preventDefault();
@@ -783,6 +785,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
     && prev.currentSessionId === next.currentSessionId
     && prev.newSessionDraftOpen === next.newSessionDraftOpen
     && prev.draftSubmitting === next.draftSubmitting
+    && prev.submissionBlocked === next.submissionBlocked
     && prev.onPrimaryAction === next.onPrimaryAction
     && prev.onQueueMessage === next.onQueueMessage
     && prev.onAbort === next.onAbort
@@ -821,6 +824,7 @@ const appendInlineText = (base: string, next: string): string => {
 interface ChatInputProps {
     onOpenSettings?: () => void;
     scrollToBottom?: () => void;
+    submissionBlocked?: boolean;
 }
 
 type AutocompleteOverlayPosition = {
@@ -836,7 +840,7 @@ const createComposerDraftKey = (transportIdentity: string, currentSessionId: str
     return draftID ? newSessionDraftKey({ transportIdentity }, draftID) : null;
 };
 
-const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
+const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom, submissionBlocked = false }) => {
     const { t } = useI18n();
     const [attachmentPopup, setAttachmentPopup] = React.useState<ToolPopupContent>({
         open: false,
@@ -1266,11 +1270,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             return [];
         }
 
+        const inlineAttachments = sendableAttachedFiles.filter(isInlineAttachmentCitation);
+        const attachmentIcons = new Map(inlineAttachments.map((file) => [
+            file.filename.trim().toLowerCase(),
+            file.mimeType.startsWith('image/') ? 'image' as const : 'attachment' as const,
+        ]));
         return findAttachmentCitationRanges(
             message,
-            sendableAttachedFiles
-                .filter(isInlineAttachmentCitation)
-                .map((file) => file.filename),
+            inlineAttachments.map((file) => file.filename),
         ).flatMap((range) => {
             const attachmentName = message.slice(range.start + 1, range.end - 1);
             return [
@@ -1279,6 +1286,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     style: 'mentionFile' as const,
                     priority: 101,
                     attachmentName,
+                    attachmentIcon: attachmentIcons.get(attachmentName.trim().toLowerCase()),
                 },
             ];
         });
@@ -1543,6 +1551,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
+        if (submissionBlocked) return;
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId) return;
 
@@ -1602,7 +1611,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t, replacePlainDocument, composerMentions]);
+    }, [submissionBlocked, getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t, replacePlainDocument, composerMentions]);
 
     const handleQueuedMessageEdit = React.useCallback((content: string, _attachments?: QueuedMessage['attachments'], composerDocument?: QueuedMessage['composerDocument'], composerMentions?: QueuedMessage['composerMentions']) => {
         replaceMaterializedDocument(composerDocument ?? materializeComposerDocument({ text: content, references: [] }, new Map(Array.from(getAllSyncSessionMap(), ([id, session]) => [id, session.title || id]))), composerMentions);
@@ -1612,12 +1621,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [replaceMaterializedDocument]);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
+        if (submissionBlocked) return;
         if (currentSessionId && currentQueueScope) {
             void dispatchQueuedMessage(currentSessionId, { delivery: 'steer', queueItemID: messageId, scope: currentQueueScope, manual: true });
             return;
         }
         toast.error(t('chat.chatInput.toast.messageSendFailed'));
-    }, [currentQueueScope, currentSessionId, t]);
+    }, [submissionBlocked, currentQueueScope, currentSessionId, t]);
 
     const handleOpenAgentPanel = React.useCallback(() => {
         setMobileControlsPanel('agent');
@@ -1632,6 +1642,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, []);
 
     const handleSubmit = async (options?: SubmitOptions) => {
+        if (submissionBlocked) return;
         const queuedOnly = options?.queuedOnly ?? false;
         const queuedMessageId = options?.queuedMessageId;
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
@@ -5184,6 +5195,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 currentSessionId={currentSessionId}
                                 newSessionDraftOpen={newSessionDraftOpen}
                                 draftSubmitting={draftSubmitting}
+                                submissionBlocked={submissionBlocked}
                                 onPrimaryAction={handlePrimaryAction}
                                 onQueueMessage={handleQueueMessage}
                                 onAbort={handleAbort}
@@ -5395,7 +5407,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                 <>
                                                     <span className="relative inline-block align-baseline text-transparent">
                                                         [
-                                                        <Icon name="attachment-2" className="pointer-events-none absolute right-[0.25em] top-1/2 size-[1em] -translate-y-1/2 text-[var(--primary)]" aria-hidden="true" />
+                                                        <Icon name={part.attachmentIcon === 'image' ? 'file-image' : 'attachment-2'} className="pointer-events-none absolute right-[0.25em] top-1/2 size-[1em] -translate-y-1/2 text-[var(--primary)]" aria-hidden="true" />
                                                     </span>
                                                     <span>{part.attachmentName}</span>
                                                     <span className="text-transparent">]</span>
@@ -5642,6 +5654,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                 currentSessionId={currentSessionId}
                                                 newSessionDraftOpen={newSessionDraftOpen}
                                                 draftSubmitting={draftSubmitting}
+                                                submissionBlocked={submissionBlocked}
                                                 onPrimaryAction={handlePrimaryAction}
                                                 onQueueMessage={handleQueueMessage}
                                                 onAbort={handleAbort}
@@ -5722,6 +5735,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         currentSessionId={currentSessionId}
                                         newSessionDraftOpen={newSessionDraftOpen}
                                         draftSubmitting={draftSubmitting}
+                                        submissionBlocked={submissionBlocked}
                                         onPrimaryAction={handlePrimaryAction}
                                         onQueueMessage={handleQueueMessage}
                                         onAbort={handleAbort}

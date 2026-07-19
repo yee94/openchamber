@@ -66,11 +66,13 @@ Release artifacts and repository links use `yee94/openchamber`. Electron is the 
 ## UI State and Runtime Ownership
 
 - TanStack Query owns runtime-scoped pull server state.
-- `@reactuses/core` owns standard browser, DOM, event, timer, observer, and storage interaction Hooks.
+- `@reactuses/core` is installed and owns standard browser, DOM, event, timer, observer, and storage interaction Hooks.
 - Zustand and component state own UI selections, drafts, and mutation orchestration.
 - `RuntimeAPIs`, `runtimeFetch`, and relay transports own cross-runtime and realtime boundaries.
 - Use `useEffect` to synchronize external systems. Calculate derived values during render and trigger mutations from event handlers.
-- `@reactuses/core` requires explicit authorization before installation; the repository currently has no installed dependency.
+- Shared UI never uses `React.useCallback` or `useCallback`. Event handlers and callbacks passed to child components or external subscriptions with stable identity requirements use `@reactuses/core` `useEvent`.
+- Render-phase selectors, synchronous derived calculations, and callback factories use `useMemo`, module-level pure functions, or ordinary functions. `useEvent` is reserved for event-time callbacks because its latest implementation changes during the layout phase.
+- Effect rerun conditions express their real semantic dependencies. `useEvent` identity never controls an effect's rerun condition.
 
 ## Session Index and Performance Invariants
 

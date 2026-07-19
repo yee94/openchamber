@@ -1,5 +1,6 @@
 import React from 'react';
 import { Menu as BaseMenu } from '@base-ui/react/menu';
+import { useEvent } from '@reactuses/core';
 import type { Session } from '@opencode-ai/sdk/v2';
 
 import {
@@ -74,14 +75,14 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const { t } = useI18n();
 
-  const handleNewSession = React.useCallback(() => {
+  const handleNewSession = useEvent(() => {
     setActiveMainTab('chat');
     onSelect();
     openNewSessionDraft();
-  }, [onSelect, openNewSessionDraft, setActiveMainTab]);
+  });
 
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
-  const toggleParent = React.useCallback((sessionId: string) => {
+  const toggleParent = useEvent((sessionId: string) => {
     setExpandedParents((prev) => {
       const next = new Set(prev);
       if (next.has(sessionId)) {
@@ -91,7 +92,7 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
       }
       return next;
     });
-  }, []);
+  });
 
   return (
     <div className="max-h-[60vh] overflow-y-auto">
@@ -208,7 +209,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
   const rawBranchLabel = secondaryMeta?.branchLabel?.trim() || null;
   const branchLabel = rawBranchLabel && rawBranchLabel !== 'HEAD' ? rawBranchLabel : null;
 
-  const handleSelect = React.useCallback(() => {
+  const handleSelect = useEvent(() => {
     if (isActive) {
       closeDropdown();
       return;
@@ -216,7 +217,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
     const directory = resolveGlobalSessionDirectory(session);
     setCurrentSession(session.id, directory ?? null);
     closeDropdown();
-  }, [closeDropdown, isActive, session, setCurrentSession]);
+  });
 
   return (
     <BaseMenu.Item

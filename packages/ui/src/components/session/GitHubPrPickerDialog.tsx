@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import {
   Dialog,
   DialogContent,
@@ -110,14 +111,14 @@ export function GitHubPrPickerDialog({
   const error = searchReady && prsQuery.error
     ? prsQuery.error instanceof Error ? prsQuery.error.message : String(prsQuery.error)
     : null;
-  const loadMore = React.useCallback(async () => {
+  const loadMore = useEvent(async () => {
     try {
       await prsQuery.fetchNextPage();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(t('session.githubPrPicker.toast.loadMoreFailed'), { description: message });
     }
-  }, [prsQuery, t]);
+  });
 
   React.useEffect(() => {
     if (!open) {
@@ -134,12 +135,12 @@ export function GitHubPrPickerDialog({
 
   const connected = !githubAuthChecked || (githubAuthStatus?.connected !== false && result?.connected !== false);
 
-  const openGitHubSettings = React.useCallback(() => {
+  const openGitHubSettings = useEvent(() => {
     setSettingsPage('github');
     setSettingsDialogOpen(true);
-  }, [setSettingsDialogOpen, setSettingsPage]);
+  });
 
-  const attachPr = React.useCallback(async (prNumber: number, sourceRepo?: GitHubRepoSelector | null) => {
+  const attachPr = useEvent(async (prNumber: number, sourceRepo?: GitHubRepoSelector | null) => {
     if (!projectDirectory) {
       toast.error(t('session.githubPrPicker.error.noActiveProject'));
       return;
@@ -206,7 +207,7 @@ export function GitHubPrPickerDialog({
     } finally {
       if (isCurrentRequest()) setLoadingPrNumber(null);
     }
-  }, [github, includeDiff, loadingPrNumber, onOpenChange, onSelect, projectDirectory, t]);
+  });
 
   const title = t('session.githubPrPicker.title');
   const description = t('session.githubPrPicker.description');

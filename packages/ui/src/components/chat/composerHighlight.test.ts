@@ -54,6 +54,16 @@ describe('buildHighlightParts', () => {
         ]);
     });
 
+    test('preserves image citation icon semantics through highlight segmentation', () => {
+        const parts = buildHighlightParts('[image-1.png] [selection.ts:1-2]', [
+            { start: 0, end: 13, style: 'mentionFile', attachmentName: 'image-1.png', attachmentIcon: 'image' },
+            { start: 14, end: 32, style: 'mentionFile', attachmentName: 'selection.ts:1-2', attachmentIcon: 'attachment' },
+        ]);
+
+        expect([parts?.[0]?.attachmentName, parts?.[0]?.attachmentIcon]).toEqual(['image-1.png', 'image']);
+        expect([parts?.[2]?.attachmentName, parts?.[2]?.attachmentIcon]).toEqual(['selection.ts:1-2', 'attachment']);
+    });
+
     test('uses one primary color for every composer reference kind', () => {
         const styles: HighlightRange['style'][] = [
             'mentionFile',

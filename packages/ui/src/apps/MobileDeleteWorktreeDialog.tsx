@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2/client';
+import { useEvent } from '@reactuses/core';
 
 import { Button } from '@/components/ui/button';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -91,67 +92,92 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
     };
   }, [open, worktree?.path, worktree?.status?.isDirty]);
 
-  const removeWorktreeInBackground = React.useCallback((target: WorktreeMetadata) => {
+  const removeWorktreeInBackground = useEvent((operation: {
+    worktree: WorktreeMetadata;
+    project: ProjectRef;
+    hasBranch: boolean;
+    deleteLocalBranch: boolean;
+    deleteRemoteBranch: boolean;
+    currentDirectory: typeof currentDirectory;
+    worktreePath: string;
+    onDeleted: typeof onDeleted;
+    t: typeof t;
+  }) => {
     void (async () => {
       try {
-        await removeProjectWorktree(project, target, {
-          deleteRemoteBranch: hasBranch && deleteRemoteBranch,
-          deleteLocalBranch: hasBranch && deleteLocalBranch,
+        await removeProjectWorktree(operation.project, operation.worktree, {
+          deleteRemoteBranch: operation.hasBranch && operation.deleteRemoteBranch,
+          deleteLocalBranch: operation.hasBranch && operation.deleteLocalBranch,
         });
 
         // If the removed worktree was the active directory, fall back to the project root.
-        if (normalizePath(currentDirectory) === worktreePath && normalizePath(project.path)) {
-          useDirectoryStore.getState().setDirectory(normalizePath(project.path), { showOverlay: false });
+        if (normalizePath(operation.currentDirectory) === operation.worktreePath && normalizePath(operation.project.path)) {
+          useDirectoryStore.getState().setDirectory(normalizePath(operation.project.path), { showOverlay: false });
         }
 
-        toast.success(t('sessions.sidebar.sessionDialogs.worktree.removedTitle'), {
+        toast.success(operation.t('sessions.sidebar.sessionDialogs.worktree.removedTitle'), {
           description:
-            hasBranch && deleteRemoteBranch
-              ? t('sessions.sidebar.sessionDialogs.worktree.removedWithRemote')
-              : t('sessions.sidebar.sessionDialogs.worktree.removed'),
+            operation.hasBranch && operation.deleteRemoteBranch
+              ? operation.t('sessions.sidebar.sessionDialogs.worktree.removedWithRemote')
+              : operation.t('sessions.sidebar.sessionDialogs.worktree.removed'),
         });
-        onDeleted?.();
+        operation.onDeleted?.();
       } catch (error) {
-        toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), {
-          description: error instanceof Error ? error.message : t('sessions.sidebar.dialogs.deleteResult.tryAgain'),
+        toast.error(operation.t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), {
+          description: error instanceof Error ? error.message : operation.t('sessions.sidebar.dialogs.deleteResult.tryAgain'),
         });
       }
     })();
-  }, [currentDirectory, deleteLocalBranch, deleteRemoteBranch, hasBranch, onDeleted, project, t, worktreePath]);
+  });
 
   const handleConfirm = async () => {
     if (!worktree || isProcessing) return;
+    const operation = {
+      worktree,
+      project,
+      hasBranch,
+      deleteLocalBranch,
+      deleteRemoteBranch,
+      currentDirectory,
+      worktreePath,
+      onDeleted,
+      archiveSessions,
+      linkedSessionIds: linkedSessions.map((session) => session.id),
+      onClose,
+      open,
+      t,
+    };
     setIsProcessing(true);
     try {
-      if (linkedSessions.length > 0) {
-        const { archivedIds, failedIds } = await archiveSessions(linkedSessions.map((session) => session.id));
+      if (operation.linkedSessionIds.length > 0) {
+        const { archivedIds, failedIds } = await operation.archiveSessions(operation.linkedSessionIds);
         if (failedIds.length > 0) {
           if (archivedIds.length > 0) {
             toast.success(
               archivedIds.length === 1
-                ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
-                : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
+                ? operation.t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
+                : operation.t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
             );
           }
           toast.error(
             failedIds.length === 1
-              ? t('sessions.sidebar.bulkActions.failedArchiveSingle', { count: failedIds.length })
-              : t('sessions.sidebar.bulkActions.failedArchivePlural', { count: failedIds.length }),
-            { description: t('sessions.sidebar.dialogs.deleteResult.tryAgain') },
+              ? operation.t('sessions.sidebar.bulkActions.failedArchiveSingle', { count: failedIds.length })
+              : operation.t('sessions.sidebar.bulkActions.failedArchivePlural', { count: failedIds.length }),
+            { description: operation.t('sessions.sidebar.dialogs.deleteResult.tryAgain') },
           );
           setIsProcessing(false);
           return;
         }
       }
-      removeWorktreeInBackground(worktree);
-      onClose();
+      removeWorktreeInBackground(operation);
+      operation.onClose();
     } catch (error) {
-      toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), {
-        description: error instanceof Error ? error.message : t('sessions.sidebar.dialogs.deleteResult.tryAgain'),
+      toast.error(operation.t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), {
+        description: error instanceof Error ? error.message : operation.t('sessions.sidebar.dialogs.deleteResult.tryAgain'),
       });
       setIsProcessing(false);
     } finally {
-      if (!open) {
+      if (!operation.open) {
         setIsProcessing(false);
       }
     }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
@@ -106,6 +107,19 @@ const IPAD_SIDEBAR_MIN_WIDTH = 280;
 const IPAD_SIDEBAR_MAX_WIDTH = 560;
 const IPAD_METADATA_POPOVER_WIDTH = 380;
 
+const clampIpadSidebarWidth = (value: number): number => (
+  Math.min(IPAD_SIDEBAR_MAX_WIDTH, Math.max(IPAD_SIDEBAR_MIN_WIDTH, Math.round(value)))
+);
+
+const applyIpadSidebarLiveWidth = (asideRef: React.RefObject<HTMLElement | null>, nextWidth: number): void => {
+  const aside = asideRef.current;
+  if (!aside) return;
+  aside.style.width = `${nextWidth}px`;
+  aside.style.minWidth = `${nextWidth}px`;
+  aside.style.maxWidth = `${nextWidth}px`;
+  aside.style.setProperty('--oc-ipad-sidebar-width', `${nextWidth}px`);
+};
+
 /** Drag-resize for the iPad sidebars: same live-width mechanics as the desktop
     Sidebar (imperative styles during the drag, committed to state at the end),
     but with a finger-sized grab strip instead of a 3px hover handle. */
@@ -123,20 +137,7 @@ function useIpadSidebarResize(side: 'left' | 'right', storageKey: string, defaul
   const liveWidthRef = React.useRef<number | null>(null);
   const pointerIdRef = React.useRef<number | null>(null);
 
-  const clampWidth = React.useCallback((value: number) => (
-    Math.min(IPAD_SIDEBAR_MAX_WIDTH, Math.max(IPAD_SIDEBAR_MIN_WIDTH, Math.round(value)))
-  ), []);
-
-  const applyLiveWidth = React.useCallback((nextWidth: number) => {
-    const aside = asideRef.current;
-    if (!aside) return;
-    aside.style.width = `${nextWidth}px`;
-    aside.style.minWidth = `${nextWidth}px`;
-    aside.style.maxWidth = `${nextWidth}px`;
-    aside.style.setProperty('--oc-ipad-sidebar-width', `${nextWidth}px`);
-  }, []);
-
-  const handlePointerDown = React.useCallback((event: React.PointerEvent) => {
+  const handlePointerDown = useEvent((event: React.PointerEvent) => {
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
@@ -148,25 +149,25 @@ function useIpadSidebarResize(side: 'left' | 'right', storageKey: string, defaul
     liveWidthRef.current = width;
     setIsResizing(true);
     event.preventDefault();
-  }, [width]);
+  });
 
-  const handlePointerMove = React.useCallback((event: React.PointerEvent) => {
+  const handlePointerMove = useEvent((event: React.PointerEvent) => {
     if (pointerIdRef.current !== event.pointerId) return;
     const delta = event.clientX - startXRef.current;
-    const next = clampWidth(startWidthRef.current + (side === 'left' ? delta : -delta));
+    const next = clampIpadSidebarWidth(startWidthRef.current + (side === 'left' ? delta : -delta));
     if (liveWidthRef.current === next) return;
     liveWidthRef.current = next;
-    applyLiveWidth(next);
-  }, [applyLiveWidth, clampWidth, side]);
+    applyIpadSidebarLiveWidth(asideRef, next);
+  });
 
-  const handlePointerEnd = React.useCallback((event: React.PointerEvent) => {
+  const handlePointerEnd = useEvent((event: React.PointerEvent) => {
     if (pointerIdRef.current !== event.pointerId) return;
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
       // ignore
     }
-    const finalWidth = clampWidth(liveWidthRef.current ?? startWidthRef.current);
+    const finalWidth = clampIpadSidebarWidth(liveWidthRef.current ?? startWidthRef.current);
     pointerIdRef.current = null;
     liveWidthRef.current = null;
     setIsResizing(false);
@@ -176,7 +177,7 @@ function useIpadSidebarResize(side: 'left' | 'right', storageKey: string, defaul
     } catch {
       // ignore
     }
-  }, [clampWidth, storageKey]);
+  });
 
   const handleProps = React.useMemo(() => ({
     onPointerDown: handlePointerDown,
@@ -710,14 +711,14 @@ const MobileConnectionWelcome: React.FC<{ onConnected: () => void }> = ({ onConn
   const [connectingId, setConnectingId] = React.useState<string | null>(null);
   const [password, setPassword] = React.useState('');
 
-  const handleSubmit = React.useCallback((event: React.FormEvent) => {
+  const handleSubmit = useEvent((event: React.FormEvent) => {
     event.preventDefault();
     void conn.connect({ url: serverUrl, clientToken, label: connectionName });
-  }, [clientToken, conn, connectionName, serverUrl]);
+  });
 
   // Accept a pasted pairing link (openchamber://connect?...) in the URL field and
   // split it back into the server URL + token.
-  const handleUrlChange = React.useCallback((value: string) => {
+  const handleUrlChange = useEvent((value: string) => {
     if (/^openchamber:\/\//i.test(value.trim())) {
       const payload = parseConnectionPayload(value);
       if (payload) {
@@ -732,9 +733,9 @@ const MobileConnectionWelcome: React.FC<{ onConnected: () => void }> = ({ onConn
       }
     }
     setServerUrl(value);
-  }, [conn]);
+  });
 
-  const handleScanQr = React.useCallback(async () => {
+  const handleScanQr = useEvent(async () => {
     if (isScanning || isBusy) return;
     conn.setError(null);
     setIsScanning(true);
@@ -769,17 +770,17 @@ const MobileConnectionWelcome: React.FC<{ onConnected: () => void }> = ({ onConn
     } finally {
       setIsScanning(false);
     }
-  }, [conn, isBusy, isScanning, t]);
+  });
 
-  const handlePasswordSubmit = React.useCallback((event: React.FormEvent) => {
+  const handlePasswordSubmit = useEvent((event: React.FormEvent) => {
     event.preventDefault();
     void conn.submitPassword(password);
-  }, [conn, password]);
+  });
 
-  const cancelPassword = React.useCallback(() => {
+  const cancelPassword = useEvent(() => {
     setPassword('');
     conn.cancelPassword();
-  }, [conn]);
+  });
 
   return (
     <main className="oc-keyboard-fill-screen flex min-h-dvh flex-col overflow-y-auto bg-background px-6 pb-[calc(var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))+28px)] pt-[calc(var(--safe-area-inset-top,env(safe-area-inset-top,0px))+28px)] text-foreground">
@@ -988,16 +989,16 @@ const MobileInstancesSurface: React.FC<{
   // an effect keyed on the derived connection object. With an effect, any churn of the
   // connections list re-fires it and overwrites what the user is typing — the keyboard
   // "resets" mid-edit. Imperative population is immune to that.
-  const resetForm = React.useCallback(() => {
+  const resetForm = useEvent(() => {
     setEditingId(null);
     setUrl('');
     setLabel('');
     setClientToken('');
     setError(null);
     setFormOpen(false);
-  }, [setError]);
+  });
 
-  const saveInstance = React.useCallback((event: React.FormEvent) => {
+  const saveInstance = useEvent((event: React.FormEvent) => {
     event.preventDefault();
     // The id is what makes this an EDIT: saveConnection uses it to preserve the
     // existing relay/https candidates (and the Keychain token they key) instead
@@ -1005,11 +1006,11 @@ const MobileInstancesSurface: React.FC<{
     void saveConnection({ id: editingId ?? undefined, url, label, clientToken }).then((saved) => {
       if (saved) resetForm();
     });
-  }, [clientToken, editingId, label, resetForm, saveConnection, url]);
+  });
 
   // Scan a pairing QR into the add/edit form fields (does not change edit mode, so
   // the form-reset effect doesn't wipe the scanned values). The user reviews + saves.
-  const handleScanInstance = React.useCallback(async () => {
+  const handleScanInstance = useEvent(async () => {
     if (isScanning) return;
     setError(null);
     setIsScanning(true);
@@ -1045,25 +1046,25 @@ const MobileInstancesSurface: React.FC<{
     } finally {
       setIsScanning(false);
     }
-  }, [conn, isScanning, setError, t]);
+  });
 
-  const handlePasswordSubmit = React.useCallback((event: React.FormEvent) => {
+  const handlePasswordSubmit = useEvent((event: React.FormEvent) => {
     event.preventDefault();
     void submitPassword(password);
-  }, [password, submitPassword]);
+  });
 
-  const cancelPasswordPrompt = React.useCallback(() => {
+  const cancelPasswordPrompt = useEvent(() => {
     setPassword('');
     cancelPassword();
-  }, [cancelPassword]);
+  });
 
   // Two-step delete (mirrors the session sheet): the trash icon arms the row, a
   // second tap on the destructive button confirms, the X disarms. No hover relied on.
-  const toggleConfirmDelete = React.useCallback((id: string) => {
+  const toggleConfirmDelete = useEvent((id: string) => {
     setConfirmingDeleteId((current) => (current === id ? null : id));
-  }, []);
+  });
 
-  const confirmDelete = React.useCallback((id: string) => {
+  const confirmDelete = useEvent((id: string) => {
     setConfirmingDeleteId(null);
     if (editingId === id) resetForm();
     // Removing the ACTIVE instance — or the LAST one — must drop the user back
@@ -1075,7 +1076,7 @@ const MobileInstancesSurface: React.FC<{
         onActiveConnectionDeleted();
       }
     });
-  }, [connections.length, editingId, onActiveConnectionDeleted, removeConnection, resetForm]);
+  });
 
   const inputClass = 'h-12 w-full rounded-[16px] border border-border/70 bg-surface-elevated px-4 text-[16px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20';
 
@@ -1730,12 +1731,13 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
   const currentModelId = useConfigStore((state) => state.currentModelId);
   const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
   useConfigStore((state) => state.modelsMetadata.size);
-  const savedSessionModel = useSelectionStore(
-    React.useCallback(
-      (state) => (currentSessionId ? state.sessionModelSelections.get(currentSessionId) ?? null : null),
-      [currentSessionId],
+  const savedSessionModelSelector = React.useMemo(
+    () => (state: ReturnType<typeof useSelectionStore.getState>) => (
+      currentSessionId ? state.sessionModelSelections.get(currentSessionId) ?? null : null
     ),
+    [currentSessionId],
   );
+  const savedSessionModel = useSelectionStore(savedSessionModelSelector);
   const quotaResults = useQuotaStore((state) => state.results);
   const loadQuotaSettings = useQuotaStore((state) => state.loadSettings);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
@@ -1954,16 +1956,24 @@ const MobileHeader: React.FC<{
   const [metadataOpen, setMetadataOpen] = React.useState(false);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const currentSessionDirectory = useSessionUIStore(
-    React.useCallback((state) => (currentSessionId ? state.getDirectoryForSession(currentSessionId) : null), [currentSessionId]),
+  const currentSessionDirectorySelector = React.useMemo(
+    () => (state: ReturnType<typeof useSessionUIStore.getState>) => (
+      currentSessionId ? state.getDirectoryForSession(currentSessionId) : null
+    ),
+    [currentSessionId],
   );
+  const currentSessionDirectory = useSessionUIStore(currentSessionDirectorySelector);
   const effectiveDirectory = currentSessionDirectory || currentDirectory;
   const gitDirectory = normalizePath(effectiveDirectory) || null;
   const projects = useProjectsStore((state) => state.projects);
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const currentWorktreeMetadata = useSessionUIStore(
-    React.useCallback((state) => (currentSessionId ? state.worktreeMetadata.get(currentSessionId) ?? null : null), [currentSessionId]),
+  const currentWorktreeMetadataSelector = React.useMemo(
+    () => (state: ReturnType<typeof useSessionUIStore.getState>) => (
+      currentSessionId ? state.worktreeMetadata.get(currentSessionId) ?? null : null
+    ),
+    [currentSessionId],
   );
+  const currentWorktreeMetadata = useSessionUIStore(currentWorktreeMetadataSelector);
   const currentSession = useCurrentSessionEntity(currentSessionId);
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
 
@@ -1985,15 +1995,15 @@ const MobileHeader: React.FC<{
     setMetadataOpen(false);
   }, [currentSessionId, effectiveDirectory]);
 
-  const handleOpenSessions = React.useCallback(() => {
+  const handleOpenSessions = useEvent(() => {
     setMetadataOpen(false);
     onOpenSessions();
-  }, [onOpenSessions]);
+  });
 
-  const handleOpenMenu = React.useCallback(() => {
+  const handleOpenMenu = useEvent(() => {
     setMetadataOpen(false);
     onOpenMenu();
-  }, [onOpenMenu]);
+  });
 
   return (
     <>
@@ -2120,15 +2130,15 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const [ipadSidebarOpen, setIpadSidebarOpen] = React.useState(isIPad && !isPortrait);
   const [ipadRightPanel, setIpadRightPanel] = React.useState<'files' | 'changes' | 'turn-diff' | null>(null);
 
-  const toggleIpadSidebar = React.useCallback(() => {
+  const toggleIpadSidebar = useEvent(() => {
     const willOpen = !ipadSidebarOpen;
     // Portrait doesn't fit both side panels next to a usable chat column:
     // opening one closes the other (iPadOS behaves the same way).
     if (willOpen && isPortrait) setIpadRightPanel(null);
     setIpadSidebarOpen(willOpen);
-  }, [ipadSidebarOpen, isPortrait]);
+  });
 
-  const openFilesSurface = React.useCallback(() => {
+  const openFilesSurface = useEvent(() => {
     setTurnDiffOpen(false);
     setTurnDiffMessageId(null);
     if (isIPad) {
@@ -2138,9 +2148,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return;
     }
     setFilesOpen(true);
-  }, [isIPad, isPortrait]);
+  });
 
-  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean; targetLine?: number } | null = null) => {
+  const openChangesSurface = useEvent((diff: { path: string; staged: boolean; targetLine?: number } | null = null) => {
     setTurnDiffOpen(false);
     setTurnDiffMessageId(null);
     setPendingChangesDiff(diff);
@@ -2150,9 +2160,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return;
     }
     setChangesOpen(true);
-  }, [isIPad, isPortrait]);
+  });
 
-  const openTurnDiffSurface = React.useCallback((messageId?: string) => {
+  const openTurnDiffSurface = useEvent((messageId?: string) => {
     setPendingChangesDiff(null);
     setChangesOpen(false);
     setTurnDiffMessageId(messageId ?? null);
@@ -2162,21 +2172,21 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return;
     }
     setTurnDiffOpen(true);
-  }, [isIPad, isPortrait]);
+  });
 
-  const closeIpadRightPanel = React.useCallback(() => {
+  const closeIpadRightPanel = useEvent(() => {
     setIpadRightPanel(null);
     setPendingChangesDiff(null);
-  }, []);
+  });
 
-  const toggleIpadRightPanel = React.useCallback((panel: 'files' | 'changes') => {
+  const toggleIpadRightPanel = useEvent((panel: 'files' | 'changes') => {
     if (ipadRightPanel === panel) {
       closeIpadRightPanel();
       return;
     }
     if (panel === 'files') openFilesSurface();
     else openChangesSurface();
-  }, [closeIpadRightPanel, ipadRightPanel, openChangesSurface, openFilesSurface]);
+  });
 
   // Keep the right panel's content mounted through the width-collapse
   // animation; drop it once the panel is fully closed.
@@ -2212,14 +2222,14 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     [openChangesSurface, openFilesSurface, openTurnDiffSurface],
   );
 
-  const closeChanges = React.useCallback(() => {
+  const closeChanges = useEvent(() => {
     setChangesOpen(false);
     setPendingChangesDiff(null);
-  }, []);
+  });
 
-  const closeTurnDiff = React.useCallback(() => {
+  const closeTurnDiff = useEvent(() => {
     setTurnDiffOpen(false);
-  }, []);
+  });
 
   // Expose the shell's panel-opening actions to the deep-link layer so openchamber:// URLs
   // (and notification taps / widgets) can navigate to these surfaces. Session and
@@ -2257,17 +2267,21 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const swipeDirectionRef = React.useRef<'prev' | 'next' | null>(null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-  const currentSessionDirectory = useSessionUIStore(
-    React.useCallback((state) => (currentSessionId ? state.getDirectoryForSession(currentSessionId) : null), [currentSessionId]),
+  const currentSessionDirectorySelector = React.useMemo(
+    () => (state: ReturnType<typeof useSessionUIStore.getState>) => (
+      currentSessionId ? state.getDirectoryForSession(currentSessionId) : null
+    ),
+    [currentSessionId],
   );
+  const currentSessionDirectory = useSessionUIStore(currentSessionDirectorySelector);
   const parentSessionTarget = useParentSessionTarget(currentSessionId, currentSessionDirectory || currentDirectory || undefined);
   // Record the swipe direction; the animation itself runs in the layout effect below, once the
   // new session's content has committed — running it inline in the swipe callback raced the
   // re-render and dropped the animation on roughly every other switch.
-  const recordSwipeDirection = React.useCallback((direction: 'prev' | 'next') => {
+  const recordSwipeDirection = useEvent((direction: 'prev' | 'next') => {
     swipeDirectionRef.current = direction;
-  }, []);
-  const renderSwipeProgress = React.useCallback((progress: SwipeProgress | null) => {
+  });
+  const renderSwipeProgress = useEvent((progress: SwipeProgress | null) => {
     const chat = chatAnimRef.current;
     const previous = previousSessionHolderRef.current;
     const next = nextSessionHolderRef.current;
@@ -2298,7 +2312,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     Array.from(visibleHolder.children).forEach((child) => {
       if (child instanceof HTMLElement) child.style.opacity = progress.canSwitch ? '1' : '0.35';
     });
-  }, []);
+  });
   useEdgeSwipeSessionSwitch(chatMainRef, {
     onSwitch: recordSwipeDirection,
     onProgress: renderSwipeProgress,
@@ -2319,18 +2333,18 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     || updateOpen
     || directoryDialogOpen
     || overflowOpen;
-  const handleHeaderSwipeOpen = React.useCallback(() => {
+  const handleHeaderSwipeOpen = useEvent(() => {
     getMobileWindowMotionController(MOBILE_SESSIONS_WINDOW_ID)?.finish('commit');
-  }, []);
-  const handleHeaderSwipePreviewStart = React.useCallback(() => {
+  });
+  const handleHeaderSwipePreviewStart = useEvent(() => {
     getMobileWindowMotionController(MOBILE_SESSIONS_WINDOW_ID)?.begin('present');
-  }, []);
-  const handleHeaderSwipePreviewCancel = React.useCallback(() => {
+  });
+  const handleHeaderSwipePreviewCancel = useEvent(() => {
     getMobileWindowMotionController(MOBILE_SESSIONS_WINDOW_ID)?.finish('cancel');
-  }, []);
-  const renderHeaderSwipeProgress = React.useCallback((progress: number | null) => {
+  });
+  const renderHeaderSwipeProgress = useEvent((progress: number | null) => {
     if (progress !== null) getMobileWindowMotionController(MOBILE_SESSIONS_WINDOW_ID)?.update(progress);
-  }, []);
+  });
   useHeaderSwipeToSessions(chatMainRef, {
     onOpen: handleHeaderSwipeOpen,
     onPreviewStart: handleHeaderSwipePreviewStart,
@@ -2356,7 +2370,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     );
   }, [currentSessionId]);
 
-  const handleNativeBack = React.useCallback(() => {
+  const handleNativeBack = useEvent(() => {
     if (overflowOpen) {
       setOverflowOpen(false);
       return true;
@@ -2406,13 +2420,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return true;
     }
     return false;
-  }, [changesOpen, closeChanges, closeTurnDiff, directoryDialogOpen, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSessionTarget, scheduledTasksDialogOpen, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, turnDiffOpen, updateOpen]);
+  });
 
   useNativeAndroidBackButton(handleNativeBack);
 
   const showUpdateItem = updateAvailable && (updateRuntimeType === 'desktop' || updateRuntimeType === 'web');
 
-  const openMcpCreateSettings = React.useCallback(() => {
+  const openMcpCreateSettings = useEvent(() => {
     const baseName = 'new-mcp-server';
     let newName = baseName;
     let counter = 1;
@@ -2444,9 +2458,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     setMcpOpen(false);
     setSettingsInitialMobileStage('page-content');
     setSettingsOpen(true);
-  }, [mcpServers, setMcpDraft, setSelectedMcp, setSettingsPage]);
+  });
 
-  const refreshMcpOverlay = React.useCallback(() => {
+  const refreshMcpOverlay = useEvent(() => {
     if (isMcpRefreshing) return;
     setIsMcpRefreshing(true);
     const minSpinPromise = new Promise((resolve) => window.setTimeout(resolve, 500));
@@ -2455,7 +2469,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       refetchMcpConfigs(),
       minSpinPromise,
     ]).finally(() => setIsMcpRefreshing(false));
-  }, [isMcpRefreshing, refetchMcpConfigs, refetchMcpStatus]);
+  });
 
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
 
@@ -2961,7 +2975,7 @@ export function MobileApp({ apis }: MobileAppProps) {
   const lastNativeResumeSyncEventAtRef = React.useRef(0);
   const nativeResumeValidationSeqRef = React.useRef(0);
 
-  const handleNativeResume = React.useCallback(() => {
+  const handleNativeResume = useEvent(() => {
     const apiBaseUrl = getRuntimeApiBaseUrl();
     const validationSeq = nativeResumeValidationSeqRef.current + 1;
     nativeResumeValidationSeqRef.current = validationSeq;
@@ -3028,7 +3042,7 @@ export function MobileApp({ apis }: MobileAppProps) {
       lastNativeResumeSyncEventAtRef.current = now;
       window.dispatchEvent(new Event('openchamber:system-resume'));
     }
-  }, [agentsCount, apis.github, initializeApp, loadAgents, loadProviders, providersCount, refreshGitHubAuthStatus]);
+  });
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent, useLatest } from '@reactuses/core';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -141,24 +142,26 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
     sessionBootstrappedRef.current = true;
   }, [config, currentSessionId, sessions, setCurrentSession, sync]);
 
+  const sessionsRef = useLatest(sessions);
+  const handleOpenSession = useEvent((event: Event) => {
+    const detail = (event as CustomEvent<{ sessionId?: string; directory?: string }>).detail;
+    const sessionId = typeof detail?.sessionId === 'string' ? detail.sessionId.trim() : '';
+    if (!sessionId) return;
+    if (useSessionUIStore.getState().currentSessionId === sessionId) return;
+    const directory = typeof detail?.directory === 'string' && detail.directory.trim().length > 0
+      ? detail.directory.trim()
+      : (sessionsRef.current.find((entry) => entry.id === sessionId) as { directory?: string | null } | undefined)?.directory ?? null;
+    void sync.ensureSessionRenderable(sessionId);
+    setCurrentSession(sessionId, directory);
+    sessionBootstrappedRef.current = true;
+  });
+
   // Switch this mini-chat to another session in place (e.g. picked from the
   // tray while this window was focused) instead of spawning a new window.
   React.useEffect(() => {
-    const onOpenSession = (event: Event) => {
-      const detail = (event as CustomEvent<{ sessionId?: string; directory?: string }>).detail;
-      const sessionId = typeof detail?.sessionId === 'string' ? detail.sessionId.trim() : '';
-      if (!sessionId) return;
-      if (useSessionUIStore.getState().currentSessionId === sessionId) return;
-      const directory = typeof detail?.directory === 'string' && detail.directory.trim().length > 0
-        ? detail.directory.trim()
-        : (sessions.find((entry) => entry.id === sessionId) as { directory?: string | null } | undefined)?.directory ?? null;
-      void sync.ensureSessionRenderable(sessionId);
-      setCurrentSession(sessionId, directory);
-      sessionBootstrappedRef.current = true;
-    };
-    window.addEventListener('openchamber:open-session', onOpenSession);
-    return () => window.removeEventListener('openchamber:open-session', onOpenSession);
-  }, [sessions, setCurrentSession, sync]);
+    window.addEventListener('openchamber:open-session', handleOpenSession);
+    return () => window.removeEventListener('openchamber:open-session', handleOpenSession);
+  }, [handleOpenSession]);
 
   React.useEffect(() => {
     if (config.mode !== 'draft' || draftOpen || currentSessionId) return;

@@ -1,10 +1,10 @@
 import React, {
   useEffect,
   useMemo,
-  useCallback,
   useState,
 } from 'react';
 import { flushSync } from 'react-dom';
+import { useEvent } from '@reactuses/core';
 import type { Theme, ThemeMode } from '@/types/theme';
 import type { DesktopSettings } from '@/lib/desktop';
 import { isDesktopLocalOriginActive, isDesktopShell as detectDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
@@ -211,13 +211,13 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return merged;
   }, [customThemes, embeddedBootstrapTheme, embeddedSyncedTheme, isVSCode, vscodeTheme]);
 
-  const getThemeByIdFromAvailable = useCallback(
-    (themeId: string): Theme | undefined => availableThemes.find((theme) => theme.metadata.id === themeId),
+  const getThemeByIdFromAvailable = useMemo(
+    () => (themeId: string): Theme | undefined => availableThemes.find((theme) => theme.metadata.id === themeId),
     [availableThemes],
   );
 
-  const ensureThemeById = useCallback(
-    (themeId: string, variant: 'light' | 'dark'): Theme => {
+  const ensureThemeById = useMemo(
+    () => (themeId: string, variant: 'light' | 'dark'): Theme => {
       const theme = getThemeByIdFromAvailable(themeId);
       if (theme && theme.metadata.variant === variant) {
         return theme;
@@ -244,7 +244,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       : ensureThemeById(preferences.lightThemeId, 'light');
   }, [ensureThemeById, isVSCode, preferences, systemPrefersDark, vscodeTheme]);
 
-  const reloadCustomThemes = useCallback(async () => {
+  const reloadCustomThemes = useEvent(async () => {
     if (typeof window === 'undefined' || isVSCode) {
       return;
     }
@@ -277,7 +277,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     } finally {
       setCustomThemesLoading(false);
     }
-  }, [isLocalDesktopOrigin, isVSCode]);
+  });
 
   useEffect(() => {
     void reloadCustomThemes();
@@ -308,7 +308,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return () => window.removeEventListener('openchamber:vscode-theme', handleThemeEvent as EventListener);
   }, [isVSCode]);
 
-  const updateBrowserChrome = useCallback((theme: Theme) => {
+  const updateBrowserChrome = useEvent((theme: Theme) => {
     if (typeof document === 'undefined') {
       return;
     }
@@ -340,14 +340,14 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       document.head.appendChild(metaThemeColorMedia);
     }
     metaThemeColorMedia.setAttribute('content', chromeColor);
-  }, []);
+  });
 
-  const applyVSCodeRuntimeClass = useCallback((enabled: boolean) => {
+  const applyVSCodeRuntimeClass = useEvent((enabled: boolean) => {
     if (typeof document === 'undefined') {
       return;
     }
     document.documentElement.classList.toggle('vscode-runtime', enabled);
-  }, []);
+  });
 
   useIsomorphicLayoutEffect(() => {
     if (typeof window === 'undefined') {
@@ -461,7 +461,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return () => window.removeEventListener('storage', handleStorage);
   }, [receivesParentThemeSync]);
 
-  const applyIncomingThemeSync = useCallback((payload: ThemeSyncPayload) => {
+  const applyIncomingThemeSync = useEvent((payload: ThemeSyncPayload) => {
     const mode = payload.themeMode;
     const light = payload.lightThemeId;
     const dark = payload.darkThemeId;
@@ -500,7 +500,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
         };
       });
     });
-  }, [receivesParentThemeSync]);
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -628,8 +628,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return () => window.removeEventListener('openchamber:settings-synced', handleSettingsSynced);
   }, []);
 
-  const setTheme = useCallback(
-    (themeId: string) => {
+  const setTheme = useEvent((themeId: string) => {
       const theme = availableThemes.find((candidate) => candidate.metadata.id === themeId);
       if (!theme) {
         return;
@@ -657,11 +656,9 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
           themeMode: 'light',
         };
       });
-    },
-    [availableThemes],
-  );
+  });
 
-  const setThemeModeHandler = useCallback((mode: ThemeMode) => {
+  const setThemeModeHandler = useEvent((mode: ThemeMode) => {
     setPreferences((prev) => {
       if (prev.themeMode === mode) {
         return prev;
@@ -671,10 +668,9 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
         themeMode: mode,
       };
     });
-  }, []);
+  });
 
-  const setSystemPreferenceHandler = useCallback(
-    (use: boolean) => {
+  const setSystemPreferenceHandler = useEvent((use: boolean) => {
       if (use) {
         setPreferences((prev) => {
           if (prev.themeMode === 'system') {
@@ -699,12 +695,9 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
           themeMode: fallbackMode,
         };
       });
-    },
-    [currentTheme.metadata.variant],
-  );
+  });
 
-  const setLightThemePreference = useCallback(
-    (themeId: string) => {
+  const setLightThemePreference = useEvent((themeId: string) => {
       const theme = availableThemes.find(
         (candidate) =>
           candidate.metadata.id === themeId && candidate.metadata.variant === 'light',
@@ -722,12 +715,9 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
           lightThemeId: theme.metadata.id,
         };
       });
-    },
-    [availableThemes],
-  );
+  });
 
-  const setDarkThemePreference = useCallback(
-    (themeId: string) => {
+  const setDarkThemePreference = useEvent((themeId: string) => {
       const theme = availableThemes.find(
         (candidate) =>
           candidate.metadata.id === themeId && candidate.metadata.variant === 'dark',
@@ -745,11 +735,9 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
           darkThemeId: theme.metadata.id,
         };
       });
-    },
-    [availableThemes],
-  );
+  });
 
-  const value: ThemeContextValue = {
+  const value = useMemo<ThemeContextValue>(() => ({
     currentTheme,
     availableThemes,
     setTheme,
@@ -763,7 +751,20 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     darkThemeId: preferences.darkThemeId,
     setLightThemePreference,
     setDarkThemePreference,
-  };
+  }), [
+    availableThemes,
+    currentTheme,
+    customThemesLoading,
+    preferences.darkThemeId,
+    preferences.lightThemeId,
+    preferences.themeMode,
+    reloadCustomThemes,
+    setDarkThemePreference,
+    setLightThemePreference,
+    setSystemPreferenceHandler,
+    setTheme,
+    setThemeModeHandler,
+  ]);
 
   return (
     <ThemeSystemContext.Provider value={value}>

@@ -31,6 +31,7 @@ import {
 } from '@/lib/scheduledTasksApi';
 import { ScheduledTaskEditorDialog } from './ScheduledTaskEditorDialog';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useEvent } from '@reactuses/core';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { queryClient, queryKeys } from '@/lib/queryRuntime';
 
@@ -342,9 +343,9 @@ export function ScheduledTasksWorkspace({
     },
   });
 
-  const confirmDraftChange = React.useCallback(() => (
+  const confirmDraftChange = useEvent(() => (
     !draftDirty || window.confirm(t('sessions.scheduledTasks.workspace.confirm.discardChanges'))
-  ), [draftDirty, t]);
+ ));
 
   React.useEffect(() => {
     if (!draftDirty) {
@@ -362,7 +363,7 @@ export function ScheduledTasksWorkspace({
     };
   }, [draftDirty, setMainTabGuard, t]);
 
-  const handleSelectTask = React.useCallback((entry: GlobalScheduledTask) => {
+  const handleSelectTask = useEvent((entry: GlobalScheduledTask) => {
     const identity = { projectId: entry.projectId, taskId: entry.task.id };
     if (taskIdentityKey(identity) === (selectedTaskIdentity ? taskIdentityKey(selectedTaskIdentity) : '') && editorMode === 'edit') {
       return;
@@ -373,34 +374,34 @@ export function ScheduledTasksWorkspace({
     setSelectedTaskIdentity(identity);
     setEditorMode('edit');
     setDraftDirty(false);
-  }, [confirmDraftChange, editorMode, selectedTaskIdentity]);
+  });
 
-  const handleCreate = React.useCallback(() => {
+  const handleCreate = useEvent(() => {
     if (!createProjectID || !confirmDraftChange()) {
       return;
     }
     setSelectedTaskIdentity(null);
     setEditorMode('create');
     setDraftDirty(false);
-  }, [confirmDraftChange, createProjectID]);
+  });
 
-  const handleCancelEditor = React.useCallback((nextOpen: boolean) => {
+  const handleCancelEditor = useEvent((nextOpen: boolean) => {
     if (nextOpen || !confirmDraftChange()) {
       return;
     }
     setSelectedTaskIdentity(null);
     setEditorMode('closed');
     setDraftDirty(false);
-  }, [confirmDraftChange]);
+  });
 
-  const requestClose = React.useCallback(() => {
+  const requestClose = useEvent(() => {
     if (editorMode !== 'closed') {
       handleCancelEditor(false);
       return true;
     }
     onOpenChange?.(false);
     return true;
-  }, [editorMode, handleCancelEditor, onOpenChange]);
+  });
 
   React.useEffect(() => {
     if (!isMobilePanel || !open) return;
@@ -411,9 +412,11 @@ export function ScheduledTasksWorkspace({
       if (mobileCloseRequest === requestClose) mobileCloseRequest = null;
       window.removeEventListener('oc:scheduled-tasks-close-request', handleCloseRequest);
     };
-  }, [isMobilePanel, open, requestClose]);
+    // useEvent keeps requestClose stable while open controls subscription lifecycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobilePanel, open]);
 
-  const handleSaveTask = React.useCallback(async (taskDraft: Partial<ScheduledTask>) => {
+  const handleSaveTask = useEvent(async (taskDraft: Partial<ScheduledTask>) => {
     const projectID = selectedTaskIdentity?.projectId || createProjectID;
     if (!projectID) {
       throw new Error(t('sessions.scheduledTasks.dialog.error.chooseProjectFirst'));
@@ -434,9 +437,9 @@ export function ScheduledTasksWorkspace({
     setDraftDirty(false);
     toast.success(t('sessions.scheduledTasks.dialog.toast.saved'));
     return nextSelectedTask;
-  }, [createProjectID, saveTaskMutation, selectedTaskIdentity, t, tasks]);
+  });
 
-  const handleDeleteTask = React.useCallback(async (entry: GlobalScheduledTask) => {
+  const handleDeleteTask = useEvent(async (entry: GlobalScheduledTask) => {
     const { projectId, task } = entry;
     if (!window.confirm(t('sessions.scheduledTasks.dialog.confirm.deleteTask', { taskName: task.name }))) {
       return;
@@ -456,9 +459,9 @@ export function ScheduledTasksWorkspace({
     } finally {
       setMutatingTaskIdentity(null);
     }
-  }, [deleteTaskMutation, selectedTaskIdentity, t]);
+  });
 
-  const handleRunTask = React.useCallback(async ({ projectId, task }: GlobalScheduledTask) => {
+  const handleRunTask = useEvent(async ({ projectId, task }: GlobalScheduledTask) => {
     setMutatingTaskIdentity(taskIdentityKey({ projectId, taskId: task.id }));
     try {
       await runTaskMutation.mutateAsync({ projectID: projectId, taskID: task.id });
@@ -468,9 +471,9 @@ export function ScheduledTasksWorkspace({
     } finally {
       setMutatingTaskIdentity(null);
     }
-  }, [runTaskMutation, t]);
+  });
 
-  const handleToggleTask = React.useCallback(async ({ projectId, task }: GlobalScheduledTask, enabled: boolean) => {
+  const handleToggleTask = useEvent(async ({ projectId, task }: GlobalScheduledTask, enabled: boolean) => {
     setMutatingTaskIdentity(taskIdentityKey({ projectId, taskId: task.id }));
     try {
       await toggleTaskMutation.mutateAsync({ projectID: projectId, task: { ...task, enabled } });
@@ -479,7 +482,7 @@ export function ScheduledTasksWorkspace({
     } finally {
       setMutatingTaskIdentity(null);
     }
-  }, [t, toggleTaskMutation]);
+  });
 
   const filteredTasks = React.useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -496,7 +499,7 @@ export function ScheduledTasksWorkspace({
     });
   }, [filter, search, t, tasks]);
 
-  const renderWorkspaceProjectLabel = React.useCallback((project: ProjectEntry) => {
+  const renderWorkspaceProjectLabel = (project: ProjectEntry) => {
     const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
     const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
     const fallback = <Icon name={iconName ?? 'folder'} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />;
@@ -508,7 +511,7 @@ export function ScheduledTasksWorkspace({
         <span className="truncate">{formatDirectoryName(project.path)}</span>
       </span>
     );
-  }, []);
+  };
   const editorProjectOptions = projects.map((project) => ({
     id: project.id,
     label: renderWorkspaceProjectLabel(project),

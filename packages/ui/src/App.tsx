@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatView } from '@/components/views/ChatView';
 import { FireworksProvider } from '@/contexts/FireworksContext';
@@ -787,9 +788,9 @@ function App({ apis }: AppProps) {
 
   useRouter();
 
-  const handleToggleMemoryDebug = React.useCallback(() => {
+  const handleToggleMemoryDebug = useEvent(() => {
     setShowMemoryDebug(prev => !prev);
-  }, []);
+  });
 
   useMenuActions(handleToggleMemoryDebug);
 
@@ -896,7 +897,7 @@ function App({ apis }: AppProps) {
     };
   }, [isDesktopRuntime, bootInjectionStatus]);
 
-  const handleDesktopBootDismiss = React.useCallback(async () => {
+  const handleDesktopBootDismiss = useEvent(async () => {
     if (shouldRestartDesktopBootFlow({
       isDesktopShell: isDesktopShell(),
       isDesktopLocalOriginActive: isDesktopLocalOriginActive(),
@@ -906,9 +907,9 @@ function App({ apis }: AppProps) {
     }
 
     window.location.reload();
-  }, []);
+  });
 
-  const handleManualInitRetry = React.useCallback(async () => {
+  const handleManualInitRetry = useEvent(async () => {
     if (manualInitRetrying) return;
 
     setInitRetryExhausted(false);
@@ -923,7 +924,7 @@ function App({ apis }: AppProps) {
     if (!useConfigStore.getState().isInitialized) {
       setInitRetryEpoch((value) => value + 1);
     }
-  }, [manualInitRetrying]);
+  });
 
   // Map boot outcome kind to recovery variant
   const mapBootViewToRecoveryVariant = (view: DesktopBootView): RecoveryVariant | undefined => {

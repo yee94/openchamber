@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -82,6 +83,23 @@ const FieldLabel: React.FC<{
   </div>
 );
 
+const renderProjectLabel = (project: ProjectEntry) => {
+  const displayLabel = formatDirectoryName(project.path);
+  const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+  const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+  const fallback = <Icon name={iconName ?? 'folder'} className="h-3.5 w-3.5" style={iconColor ? { color: iconColor } : undefined} />;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span
+        className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-muted-foreground"
+      >
+        {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
+      </span>
+      <span className="truncate">{displayLabel}</span>
+    </span>
+  );
+};
+
 export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   initialPrompt,
   onCreated,
@@ -132,29 +150,12 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
   const selectedProjectDirectory = selectedProject?.path ?? currentDirectory;
 
-  const handleProjectChange = React.useCallback((projectId: string) => {
+  const handleProjectChange = useEvent((projectId: string) => {
     setSelectedProjectId(projectId);
     if (projectId !== activeProjectId) {
       setActiveProjectIdOnly(projectId);
     }
-  }, [activeProjectId, setActiveProjectIdOnly]);
-
-  const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
-    const displayLabel = formatDirectoryName(project.path);
-    const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
-    const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
-    const fallback = <Icon name={iconName ?? 'folder'} className="h-3.5 w-3.5" style={iconColor ? { color: iconColor } : undefined} />;
-    return (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        <span
-          className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden text-muted-foreground"
-        >
-          {project.iconImage ? <ProjectIconImage project={project} className="size-full object-contain" fallback={fallback} /> : fallback}
-        </span>
-        <span className="truncate">{displayLabel}</span>
-      </span>
-    );
-  }, []);
+  });
 
   const projectRef = React.useMemo<ProjectRef | null>(() => {
     if (selectedProject?.path) {
@@ -201,24 +202,29 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     return '';
   }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
 
-  const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
+  const handleDragStart = useEvent(async (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
     if (e.button !== 0) return;
     if (isDesktopApp) await startDesktopWindowDrag();
-  }, [isDesktopApp]);
+  });
 
-  React.useEffect(() => {
-    if (!onCancel) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
+  const handleCancelKeyDown = useEvent((e: KeyboardEvent) => {
+    if (onCancel) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         onCancel();
       }
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onCancel]);
+    }
+  });
+
+  const canCancel = Boolean(onCancel);
+  React.useEffect(() => {
+    if (!canCancel) return;
+    window.addEventListener('keydown', handleCancelKeyDown, true);
+    return () => window.removeEventListener('keydown', handleCancelKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- canCancel controls the subscription lifecycle; useEvent supplies the latest callback.
+  }, [canCancel]);
 
   const [worktreeBaseBranch, setWorktreeBaseBranch] = React.useState<string>('');
   const { isLoading: isLoadingWorktreeBaseBranches, isGitRepository } = useBranchOptions(selectedProjectDirectory);
@@ -272,17 +278,17 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     return () => { cancelled = true; };
   }, [projectRef]);
 
-  const updateGroup = React.useCallback((groupId: string, updates: Partial<RunGroupState>) => {
+  const updateGroup = useEvent((groupId: string, updates: Partial<RunGroupState>) => {
     setRunGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, ...updates } : g));
-  }, []);
+  });
 
-  const removeGroup = React.useCallback((groupId: string) => {
+  const removeGroup = useEvent((groupId: string) => {
     setRunGroups((prev) => prev.filter((g) => g.id !== groupId));
-  }, []);
+  });
 
-  const addGroup = React.useCallback(() => {
+  const addGroup = useEvent(() => {
     setRunGroups((prev) => [...prev, { id: generateInstanceId(), prompt: '', models: [] }]);
-  }, []);
+  });
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -702,20 +708,20 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
   const commandRef = React.useRef<CommandAutocompleteHandle>(null);
   const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
 
-  const handleAddModel = React.useCallback((model: ModelSelectionWithId) => {
+  const handleAddModel = useEvent((model: ModelSelectionWithId) => {
     if (group.models.length >= MAX_MODELS_PER_GROUP) return;
     onUpdate(group.id, { models: [...group.models, model] });
-  }, [group.id, group.models, onUpdate]);
+  });
 
-  const handleRemoveModel = React.useCallback((index: number) => {
+  const handleRemoveModel = useEvent((index: number) => {
     onUpdate(group.id, { models: group.models.filter((_, i) => i !== index) });
-  }, [group.id, group.models, onUpdate]);
+  });
 
-  const handleUpdateModel = React.useCallback((index: number, model: ModelSelectionWithId) => {
+  const handleUpdateModel = useEvent((index: number, model: ModelSelectionWithId) => {
     onUpdate(group.id, { models: group.models.map((item, i) => (i === index ? model : item)) });
-  }, [group.id, group.models, onUpdate]);
+  });
 
-  const updateAutocompleteState = React.useCallback((value: string, cursorPosition: number) => {
+  const updateAutocompleteState = useEvent((value: string, cursorPosition: number) => {
     if (value.startsWith('/')) {
       const firstSpace = value.indexOf(' ');
       const firstNewline = value.indexOf('\n');
@@ -766,13 +772,13 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
     }
 
     setShowFileMention(false);
-  }, []);
+  });
 
-  const setPrompt = React.useCallback((value: string) => {
+  const setPrompt = useEvent((value: string) => {
     onUpdate(group.id, { prompt: value });
-  }, [group.id, onUpdate]);
+  });
 
-  const handleFileSelect = React.useCallback((file: { name: string; path: string; relativePath?: string }) => {
+  const handleFileSelect = useEvent((file: { name: string; path: string; relativePath?: string }) => {
     const prompt = group.prompt;
     const textarea = promptTextareaRef.current;
     const cursorPosition = textarea?.selectionStart ?? prompt.length;
@@ -799,9 +805,9 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
       }
       updateAutocompleteState(nextPrompt, nextCursor);
     });
-  }, [group.prompt, setPrompt, updateAutocompleteState]);
+  });
 
-  const handleAgentSelect = React.useCallback((agentName: string) => {
+  const handleAgentSelect = useEvent((agentName: string) => {
     const prompt = group.prompt;
     const textarea = promptTextareaRef.current;
     const cursorPosition = textarea?.selectionStart ?? prompt.length;
@@ -824,9 +830,9 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
       }
       updateAutocompleteState(nextPrompt, nextCursor);
     });
-  }, [group.prompt, setPrompt, updateAutocompleteState]);
+  });
 
-  const handleCommandSelect = React.useCallback((command: CommandInfo) => {
+  const handleCommandSelect = useEvent((command: CommandInfo) => {
     const nextPrompt = `/${command.name} `;
     setPrompt(nextPrompt);
     setShowCommandAutocomplete(false);
@@ -842,9 +848,9 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
       }
       updateAutocompleteState(nextPrompt, nextPrompt.length);
     });
-  }, [setPrompt, updateAutocompleteState]);
+  });
 
-  const handleSnippetSelect = React.useCallback((_snippet: unknown, trigger: string) => {
+  const handleSnippetSelect = useEvent((_snippet: unknown, trigger: string) => {
     const prompt = group.prompt;
     const textarea = promptTextareaRef.current;
     const cursorPosition = textarea?.selectionStart ?? prompt.length;
@@ -865,9 +871,9 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
       }
       updateAutocompleteState(nextPrompt, nextCursor);
     });
-  }, [group.prompt, setPrompt, updateAutocompleteState]);
+  });
 
-  const handlePromptKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handlePromptKeyDown = useEvent((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showCommandAutocomplete && commandRef.current) {
       if (event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Escape' || event.key === 'Tab') {
         event.preventDefault();
@@ -889,7 +895,7 @@ const RunGroupCard: React.FC<RunGroupCardProps> = ({
         snippetRef.current.handleKeyDown(event.key);
       }
     }
-  }, [showCommandAutocomplete, showFileMention, showSnippetAutocomplete]);
+  });
 
   return (
     <div className="rounded-lg border border-border p-3 space-y-3">

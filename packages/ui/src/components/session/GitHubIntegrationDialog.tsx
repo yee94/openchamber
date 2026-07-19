@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useEvent } from '@reactuses/core';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,10 @@ interface ValidationResult {
   error: string | null;
 }
 
+function getValidationKey(projectDirectory: string, branchName: string) {
+  return `${projectDirectory}\0${branchName}`;
+}
+
 export function GitHubIntegrationDialog({
   open,
   onOpenChange,
@@ -58,14 +63,14 @@ export function GitHubIntegrationDialog({
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
-  
+  const projectId = activeProject?.id ?? null;
   const projectDirectory = activeProject?.path ?? null;
   const projectRef: ProjectRef | null = React.useMemo(() => {
-    if (projectDirectory && activeProject) {
-      return { id: activeProject.id, path: projectDirectory };
+    if (projectDirectory && projectId) {
+      return { id: projectId, path: projectDirectory };
     }
     return null;
-  }, [activeProject, projectDirectory]);
+  }, [projectId, projectDirectory]);
 
   // State
   const [activeTab, setActiveTab] = React.useState<GitHubTab>('issues');
@@ -81,10 +86,11 @@ export function GitHubIntegrationDialog({
   const [validations, setValidations] = React.useState<Map<string, ValidationResult>>(new Map());
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(false);
+  const validationGenerationRef = React.useRef(0);
 
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 350);
 
-  const loadData = React.useCallback(async (query?: string) => {
+  const loadData = useEvent(async (query?: string) => {
     if (!projectDirectory || !github) return;
     if (githubAuthChecked && githubAuthStatus?.connected === false) return;
     
@@ -120,7 +126,7 @@ export function GitHubIntegrationDialog({
     } finally {
       setLoading(false);
     }
-  }, [projectDirectory, github, githubAuthChecked, githubAuthStatus, activeTab, t]);
+  });
 
   React.useEffect(() => {
     if (!open || !projectDirectory) return;
@@ -182,7 +188,7 @@ export function GitHubIntegrationDialog({
     return () => controller.abort();
   }, [open, projectDirectory, github, githubAuthChecked, githubAuthStatus, activeTab, debouncedSearchQuery, loadData, t]);
 
-  const loadMore = React.useCallback(async () => {
+  const loadMore = useEvent(async () => {
     if (!projectDirectory || !github) return;
     if (loading || loadingMore) return;
     if (!hasMore) return;
@@ -216,7 +222,7 @@ export function GitHubIntegrationDialog({
     } finally {
       setLoadingMore(false);
     }
-  }, [projectDirectory, github, activeTab, page, hasMore, loading, loadingMore, debouncedSearchQuery]);
+  });
 
   // Reset state when dialog opens/closes
   React.useEffect(() => {
@@ -238,23 +244,33 @@ export function GitHubIntegrationDialog({
     void loadData();
   }, [open, loadData]);
 
+  React.useEffect(() => {
+    validationGenerationRef.current += 1;
+    setValidations(new Map());
+  }, [projectDirectory, projectRef]);
+
   // Validate branches for worktree creation
-  const validateBranch = React.useCallback(async (branchName: string) => {
+  const validateBranch = useEvent(async (branchName: string) => {
     if (!projectRef || !branchName) return;
-    
+    const validationKey = getValidationKey(projectRef.path, branchName);
+
     // Check cache first
-    if (validations.has(branchName)) return;
-    
+    if (validations.has(validationKey)) return;
+
+    const requestGeneration = validationGenerationRef.current;
+
     try {
       const result = await validateWorktreeCreate(projectRef, {
         mode: 'new',
         branchName,
         worktreeName: branchName,
       });
-      
+
+      if (requestGeneration !== validationGenerationRef.current) return;
+
       const blockingError = result.errors.find((entry) => entry.code === 'branch_in_use');
-      
-      setValidations(prev => new Map(prev).set(branchName, {
+
+      setValidations(prev => new Map(prev).set(validationKey, {
         isValid: !blockingError,
         error: blockingError
           ? t(blockingError.code === 'branch_exists'
@@ -263,12 +279,14 @@ export function GitHubIntegrationDialog({
           : null,
       }));
     } catch {
-      setValidations(prev => new Map(prev).set(branchName, {
+      if (requestGeneration !== validationGenerationRef.current) return;
+
+      setValidations(prev => new Map(prev).set(validationKey, {
         isValid: false,
         error: t('session.githubIntegration.validation.failed'),
       }));
     }
-  }, [projectRef, validations, t]);
+  });
 
   // Validate PR branches when loaded
   React.useEffect(() => {
@@ -279,7 +297,7 @@ export function GitHubIntegrationDialog({
         void validateBranch(pr.head);
       }
     });
-  }, [open, activeTab, prs, validateBranch]);
+  }, [open, activeTab, prs, projectDirectory, projectRef, validateBranch]);
 
   // GitHub connection check
   const isGitHubConnected = githubAuthChecked && githubAuthStatus?.connected === true;
@@ -323,12 +341,14 @@ export function GitHubIntegrationDialog({
   };
 
   // Check if selection is valid
-  const canConfirm = selectedIssue || (selectedPr && validations.get(selectedPr.head ?? '')?.isValid !== false);
+  const canConfirm = selectedIssue || (selectedPr?.head && projectDirectory
+    ? validations.get(getValidationKey(projectDirectory, selectedPr.head))?.isValid !== false
+    : false);
 
   // Check if PR is blocked
   const isPrBlocked = (pr: GitHubPullRequestSummary): boolean => {
     if (!pr.head) return true;
-    const validation = validations.get(pr.head);
+    const validation = projectDirectory ? validations.get(getValidationKey(projectDirectory, pr.head)) : undefined;
     return validation?.isValid === false;
   };
 
@@ -441,7 +461,9 @@ export function GitHubIntegrationDialog({
                   {prs.length > 0 ? (
                     prs.map(pr => {
                       const blocked = isPrBlocked(pr);
-                      const validation = pr.head ? validations.get(pr.head) : undefined;
+                      const validation = pr.head && projectDirectory
+                        ? validations.get(getValidationKey(projectDirectory, pr.head))
+                        : undefined;
                       
                       return (
                         <button

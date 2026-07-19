@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import {
   Dialog,
   DialogContent,
@@ -368,20 +369,20 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     rowRefs.current.get(row.value)?.scrollIntoView({ block: 'nearest' });
   }, [highlightedIndex, rows]);
 
-  const handleClose = React.useCallback(() => {
+  const handleClose = useEvent(() => {
     onOpenChange(false);
-  }, [onOpenChange]);
+  });
 
-  const selectAddedProjectForDraft = React.useCallback((project: { id: string; path: string }) => {
+  const selectAddedProjectForDraft = useEvent((project: { id: string; path: string }) => {
     const sessionUiState = useSessionUIStore.getState();
     if (!sessionUiState.newSessionDraft?.open) return;
     sessionUiState.setNewSessionDraftTarget({
       projectId: project.id,
       directoryOverride: project.path,
     }, { force: true });
-  }, []);
+  });
 
-  const handleQuickAdd = React.useCallback((event: React.MouseEvent, path: string) => {
+  const handleQuickAdd = useEvent((event: React.MouseEvent, path: string) => {
     event.stopPropagation();
     const normalized = normalizeDirectoryPath(path);
     if (normalized && addedProjectPaths.has(normalized)) return;
@@ -393,9 +394,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       return;
     }
     selectAddedProjectForDraft(project);
-  }, [addProject, addedProjectPaths, selectAddedProjectForDraft, t]);
+  });
 
-  const finalizeSelection = React.useCallback(async (target: string) => {
+  const finalizeSelection = useEvent(async (target: string) => {
     if (!target || isConfirming) return;
     const normalized = normalizeDirectoryPath(target);
     if (normalized && addedProjectPaths.has(normalized)) return;
@@ -435,26 +436,26 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     } finally {
       setIsConfirming(false);
     }
-  }, [addProject, addedProjectPaths, cloneRemoteUrl, handleClose, isCloneMode, isConfirming, selectAddedProjectForDraft, selectedGitIdentity?.id, shouldCreateTarget, targetPath, t]);
+  });
 
-  const browseToDisplayPath = React.useCallback((displayPath: string) => {
+  const browseToDisplayPath = useEvent((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
-  }, []);
+  });
 
-  const browseToEntry = React.useCallback((entry: BrowseEntry) => {
+  const browseToEntry = useEvent((entry: BrowseEntry) => {
     setQuery(appendBrowsePathSegment(query, entry.name));
-  }, [query]);
+  });
 
-  const executeRow = React.useCallback((row: BrowseRow | null) => {
+  const executeRow = useEvent((row: BrowseRow | null) => {
     if (!row) return;
     if (row.type === 'up') {
       if (row.path) browseToDisplayPath(row.path);
       return;
     }
     browseToEntry(row);
-  }, [browseToDisplayPath, browseToEntry]);
+  });
 
-  const handleOpenInFinder = React.useCallback(async () => {
+  const handleOpenInFinder = useEvent(async () => {
     if (!isDesktop || isOpeningFinder) return;
     setIsOpeningFinder(true);
     try {
@@ -484,9 +485,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     } finally {
       setIsOpeningFinder(false);
     }
-  }, [finalizeSelection, isDesktop, isOpeningFinder, requestAccess, startAccessing, t, targetPath]);
+  });
 
-  const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useEvent((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setHighlightedIndex((index) => Math.min(rows.length - 1, index + 1));
@@ -512,7 +513,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       event.preventDefault();
       handleClose();
     }
-  }, [executeRow, finalizeSelection, handleClose, hasHighlightedBrowseItem, highlightedRow, query, rows.length, targetPath]);
+  });
 
   const showHiddenToggle = (
     <button

@@ -44,6 +44,8 @@ export interface HighlightRange {
     priority?: number;
     /** Filename rendered as an inline attachment tag with its file-type icon. */
     attachmentName?: string;
+    /** Visual kind for inline image and code-selection citations. */
+    attachmentIcon?: 'image' | 'attachment';
     /** Session title rendered over the stable session mention token. */
     sessionLabel?: string;
     /** Skill name rendered as an inline skill reference with its book icon. */
@@ -61,6 +63,7 @@ export interface HighlightPart {
     text: string;
     className: string;
     attachmentName?: string;
+    attachmentIcon?: 'image' | 'attachment';
     sessionLabel?: string;
     skillName?: string;
 }
@@ -343,13 +346,14 @@ export function buildHighlightParts(
             : DEFAULT_CLASS;
         const segText = text.slice(segStart, segEnd);
         const attachmentName = bestRange?.attachmentName;
+        const attachmentIcon = bestRange?.attachmentIcon;
         const sessionLabel = bestRange?.sessionLabel;
         const skillName = bestRange?.skillName;
         const last = parts[parts.length - 1];
-        if (last && last.className === className && last.attachmentName === attachmentName && last.sessionLabel === sessionLabel && last.skillName === skillName) {
+        if (last && last.className === className && last.attachmentName === attachmentName && last.attachmentIcon === attachmentIcon && last.sessionLabel === sessionLabel && last.skillName === skillName) {
             last.text += segText;
         } else {
-            parts.push({ text: segText, className, attachmentName, sessionLabel, skillName });
+            parts.push({ text: segText, className, attachmentName, attachmentIcon, sessionLabel, skillName });
         }
     }
 

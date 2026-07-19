@@ -45,9 +45,12 @@ Use `useEffect` for external-system synchronization. Calculate derived values du
 
 ## `@reactuses/core`
 
-- Add and use `@reactuses/core` after explicit dependency authorization. Import Hooks as named exports from the package root.
+- `@reactuses/core` is installed. Import Hooks as named exports from the package root.
 - Reuse its standard Hooks for browser, DOM, events, timers, observers, storage, debouncing, and stable callbacks after verifying the installed version's exports, SSR fallback, cleanup behavior, and return shape.
 - Project-appropriate candidates include `useEventListener`, `useClickOutside`, `useResizeObserver`, `useScrollLock`, `useMediaQuery`, `useNetwork`, `useDebounce`, `useDebounceFn`, `useTimeoutFn`, `useInterval`, and `useEvent`.
+- Shared UI never uses `React.useCallback` or `useCallback`. Event handlers and callbacks passed to child components or external subscriptions with stable identity requirements use `useEvent`.
+- Render-phase selectors, synchronous derived calculations, and callback factories use `useMemo`, module-level pure functions, or ordinary functions. `useEvent` serves event-time callbacks because its latest implementation changes during the layout phase.
+- Effect rerun conditions express their real semantic dependencies. `useEvent` identity never controls an effect's rerun condition.
 - Keep server state in TanStack Query, global UI/app state in Zustand, and IPC/SSE behavior in runtime and sync modules.
 
 ## Refactor Patterns

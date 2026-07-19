@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2/client';
+import { useEvent } from '@reactuses/core';
 
 import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
 import { Icon } from '@/components/icon/Icon';
@@ -468,14 +469,14 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     return map;
   }, [allStatuses]);
 
-  // Abort helpers — debounced identity via useCallback for stable prop passing.
-  const handleStopSession = React.useCallback((sessionId: string) => {
+  // Abort helpers retain stable event identities for prop passing.
+  const handleStopSession = useEvent((sessionId: string) => {
     void abortCurrentOperation(sessionId);
-  }, []);
+  });
 
-  const handleStopSessions = React.useCallback((sessionIds: string[]) => {
+  const handleStopSessions = useEvent((sessionIds: string[]) => {
     void Promise.all(sessionIds.map((id) => abortCurrentOperation(id)));
-  }, []);
+  });
 
   React.useEffect(() => {
     if (!open) {
@@ -876,17 +877,14 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   };
 
   /** Short "Project · branch" string shown under the session title in search results. */
-  const buildSessionContextLabel = React.useCallback(
-    (session: Session): string => {
-      const directory = getSessionDirectory(session);
-      const project = findExactProjectMatch(projectsMeta, directory);
-      if (!project) return getProjectLabel(directory) || directory;
-      const matchedWorktree = findExactWorktreeMatch(project, normalizePath(directory));
-      if (matchedWorktree?.branch) return `${project.label} · ${matchedWorktree.branch}`;
-      return project.label;
-    },
-    [projectsMeta],
-  );
+  const buildSessionContextLabel = (session: Session): string => {
+    const directory = getSessionDirectory(session);
+    const project = findExactProjectMatch(projectsMeta, directory);
+    if (!project) return getProjectLabel(directory) || directory;
+    const matchedWorktree = findExactWorktreeMatch(project, normalizePath(directory));
+    if (matchedWorktree?.branch) return `${project.label} · ${matchedWorktree.branch}`;
+    return project.label;
+  };
 
   const handleSelectProject = (project: ProjectMeta) => {
     setActiveProject(project.id);

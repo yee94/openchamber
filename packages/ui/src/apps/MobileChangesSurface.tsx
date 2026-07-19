@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import { Icon } from '@/components/icon/Icon';
 
 import { toast } from '@/components/ui';
@@ -108,6 +109,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     resolved: false,
   });
   const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
+  const remoteRequest = React.useRef({ key: null as string | null, generation: 0 });
 
   const changeEntries = React.useMemo(() => {
     const files = status?.files ?? [];
@@ -137,10 +139,11 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     return [];
   }, [remoteUrl, remotes, status?.tracking]);
 
-  const selectedDiff = useGitStore(React.useCallback((state) => {
+  const selectedDiffSelector = React.useMemo(() => (state: ReturnType<typeof useGitStore.getState>) => {
     if (!currentDirectory || route.type !== 'diff') return null;
     return state.directories.get(currentDirectory)?.diffCache.get(diffCacheKey(route.path, route.staged)) ?? null;
-  }, [currentDirectory, route]));
+  }, [currentDirectory, route]);
+  const selectedDiff = useGitStore(selectedDiffSelector);
 
   const selectedFileEntry = React.useMemo(() => {
     if (route.type !== 'diff') return null;
@@ -162,38 +165,48 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     || (hasActiveDiffLoadState && diffLoadState.resolved),
   );
 
-  const refreshStatusAndBranches = React.useCallback(async (showErrors = true) => {
-    if (!currentDirectory) return;
+  const refreshStatusAndBranches = useEvent(async (directory: string, showErrors = true) => {
     try {
       await Promise.all([
-        fetchStatus(currentDirectory, git),
-        fetchBranches(currentDirectory, git),
+        fetchStatus(directory, git),
+        fetchBranches(directory, git),
       ]);
     } catch (error) {
       if (showErrors) {
         toast.error(error instanceof Error ? error.message : t('gitView.toast.refreshRepositoryFailed'));
       }
     }
-  }, [currentDirectory, fetchBranches, fetchStatus, git, t]);
+  });
 
-  const refreshRemotes = React.useCallback(async () => {
-    if (!currentDirectory) {
-      setRemotes([]);
-      setRemoteUrl(null);
-      return;
-    }
+  const refreshRemotes = useEvent(async (directory: string, requestKey: string, requestGeneration: number) => {
+    const isCurrentRequest = () => remoteRequest.current.key === requestKey
+      && remoteRequest.current.generation === requestGeneration;
     try {
       const [remoteList, url] = await Promise.all([
-        git.getRemotes(currentDirectory).catch(() => []),
-        git.getRemoteUrl ? git.getRemoteUrl(currentDirectory).catch(() => null) : Promise.resolve(null),
+        git.getRemotes(directory).catch(() => []),
+        git.getRemoteUrl ? git.getRemoteUrl(directory).catch(() => null) : Promise.resolve(null),
       ]);
+      if (!isCurrentRequest()) return;
       setRemotes(remoteList);
       setRemoteUrl(url);
     } catch {
+      if (!isCurrentRequest()) return;
       setRemotes([]);
       setRemoteUrl(null);
     }
-  }, [currentDirectory, git]);
+  });
+
+  const startRemoteRefresh = useEvent((directory: string) => {
+    if (directory !== currentDirectory) {
+      return { requestGeneration: null, promise: Promise.resolve() };
+    }
+    const requestGeneration = remoteRequest.current.generation + 1;
+    remoteRequest.current = { key: directory, generation: requestGeneration };
+    return {
+      requestGeneration,
+      promise: refreshRemotes(directory, directory, requestGeneration),
+    };
+  });
 
   React.useEffect(() => {
     if (!currentDirectory) return;
@@ -202,8 +215,22 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   }, [currentDirectory, ensureAll, git, setActiveDirectory]);
 
   React.useEffect(() => {
-    void refreshRemotes();
-  }, [refreshRemotes]);
+    if (!currentDirectory) {
+      remoteRequest.current = { key: null, generation: remoteRequest.current.generation + 1 };
+      setRemotes([]);
+      setRemoteUrl(null);
+      return;
+    }
+    const { requestGeneration, promise } = startRemoteRefresh(currentDirectory);
+    void promise;
+    return () => {
+      if (requestGeneration !== null
+        && remoteRequest.current.key === currentDirectory
+        && remoteRequest.current.generation === requestGeneration) {
+        remoteRequest.current = { key: currentDirectory, generation: requestGeneration + 1 };
+      }
+    };
+  }, [currentDirectory, git, startRemoteRefresh]);
 
   React.useEffect(() => {
     if (!currentDirectory || changeEntries.length === 0) return;
@@ -267,6 +294,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
 
   const handleSyncAction = async (action: Exclude<SyncAction, null>, remote?: GitRemote) => {
     if (!currentDirectory) return;
+    const operationDirectory = currentDirectory;
     setSyncAction(action);
     try {
       const getPullOptions = (pullRemote: GitRemote) => {
@@ -279,27 +307,27 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
 
       if (action === 'fetch') {
         if (!remote) throw new Error(t('mobile.changes.noRemote'));
-        await git.gitFetch(currentDirectory, { remote: remote.name });
+        await git.gitFetch(operationDirectory, { remote: remote.name });
         toast.success(t('gitView.toast.fetchedFromRemote', { name: remote.name }));
       } else if (action === 'sync') {
         if (!remote) throw new Error(t('mobile.changes.noRemote'));
-        await git.gitFetch(currentDirectory, { remote: remote.name });
-        const afterFetch = await git.getGitStatus(currentDirectory);
+        await git.gitFetch(operationDirectory, { remote: remote.name });
+        const afterFetch = await git.getGitStatus(operationDirectory);
         if ((afterFetch.behind ?? 0) > 0) {
           if ((afterFetch.files?.length ?? 0) > 0) {
             toast.error(t('gitView.toast.commitOrStashBeforeSync'));
             return;
           }
-          await git.gitPull(currentDirectory, getPullOptions(remote));
+          await git.gitPull(operationDirectory, getPullOptions(remote));
         }
-        const afterPull = await git.getGitStatus(currentDirectory);
+        const afterPull = await git.getGitStatus(operationDirectory);
         if ((afterPull.ahead ?? 0) > 0) {
-          await git.gitPush(currentDirectory);
+          await git.gitPush(operationDirectory);
         }
         toast.success(t('gitView.toast.alreadyUpToDate'));
       }
-      await refreshStatusAndBranches(false);
-      await refreshRemotes();
+      await refreshStatusAndBranches(operationDirectory, false);
+      await startRemoteRefresh(operationDirectory).promise;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('gitView.toast.syncActionFailed', { action: t('gitView.sync.syncChanges') }));
     } finally {
@@ -307,35 +335,37 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     }
   };
 
-  const moveChangePaths = React.useCallback(async (paths: string[], direction: 'stage' | 'unstage') => {
+  const moveChangePaths = useEvent(async (paths: string[], direction: 'stage' | 'unstage') => {
     if (!currentDirectory || paths.length === 0) return;
+    const operationDirectory = currentDirectory;
     try {
       if (direction === 'stage') {
-        if (paths.length > 1) await stageGitFiles(currentDirectory, paths);
-        else await stageGitFile(currentDirectory, paths[0]);
+        if (paths.length > 1) await stageGitFiles(operationDirectory, paths);
+        else await stageGitFile(operationDirectory, paths[0]);
       } else {
-        if (paths.length > 1) await unstageGitFiles(currentDirectory, paths);
-        else await unstageGitFile(currentDirectory, paths[0]);
+        if (paths.length > 1) await unstageGitFiles(operationDirectory, paths);
+        else await unstageGitFile(operationDirectory, paths[0]);
       }
-      await refreshStatusAndBranches(false);
+      await refreshStatusAndBranches(operationDirectory, false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : direction === 'stage'
         ? t('gitView.toast.stageFileFailed')
         : t('gitView.toast.unstageFileFailed'));
     }
-  }, [currentDirectory, refreshStatusAndBranches, t]);
+  });
 
-  const handleViewChangeDiff = React.useCallback((path: string, staged = false) => {
+  const handleViewChangeDiff = useEvent((path: string, staged = false) => {
     setRoute({ type: 'diff', path, staged, targetLine: null });
-  }, []);
+  });
 
-  const handleRevertFile = React.useCallback(async (filePath: string) => {
+  const handleRevertFile = useEvent(async (filePath: string) => {
     if (!currentDirectory) return;
+    const operationDirectory = currentDirectory;
     setRevertingPaths((previous) => new Set(previous).add(filePath));
     try {
-      await git.revertGitFile(currentDirectory, filePath);
+      await git.revertGitFile(operationDirectory, filePath);
       toast.success(t('gitView.toast.revertedFile', { path: filePath }));
-      await refreshStatusAndBranches(false);
+      await refreshStatusAndBranches(operationDirectory, false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('gitView.toast.revertFailed'));
     } finally {
@@ -345,16 +375,17 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         return next;
       });
     }
-  }, [currentDirectory, git, refreshStatusAndBranches, t]);
+  });
 
-  const handleRevertAll = React.useCallback(async (paths: string[]) => {
+  const handleRevertAll = useEvent(async (paths: string[]) => {
     if (!currentDirectory || paths.length === 0 || isRevertingAll) return;
+    const operationDirectory = currentDirectory;
     const uniquePaths = Array.from(new Set(paths));
     setIsRevertingAll(true);
     setRevertingPaths(new Set(uniquePaths));
     try {
-      await Promise.all(uniquePaths.map((filePath) => git.revertGitFile(currentDirectory, filePath)));
-      await refreshStatusAndBranches(false);
+      await Promise.all(uniquePaths.map((filePath) => git.revertGitFile(operationDirectory, filePath)));
+      await refreshStatusAndBranches(operationDirectory, false);
       toast.success(uniquePaths.length === 1
         ? t('gitView.toast.revertedFilesSingle', { count: uniquePaths.length })
         : t('gitView.toast.revertedFilesPlural', { count: uniquePaths.length }));
@@ -364,9 +395,9 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
       setRevertingPaths(new Set());
       setIsRevertingAll(false);
     }
-  }, [currentDirectory, git, isRevertingAll, refreshStatusAndBranches, t]);
+  });
 
-  const handleInsertHighlights = React.useCallback((highlights: string[]) => {
+  const handleInsertHighlights = useEvent((highlights: string[]) => {
     const normalized = highlights.map((text) => text.trim()).filter(Boolean);
     if (normalized.length === 0) {
       setGeneratedHighlights([]);
@@ -374,10 +405,11 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     }
     setCommitMessage((current) => `${current.trim()}${current.trim() ? '\n\n' : ''}${normalized.join('\n')}`.trim());
     setGeneratedHighlights([]);
-  }, []);
+  });
 
-  const handleGenerateCommitMessage = React.useCallback(async () => {
+  const handleGenerateCommitMessage = useEvent(async () => {
     if (!currentDirectory) return;
+    const operationDirectory = currentDirectory;
     const selectedFilePaths = stagedChangeEntries.map((file) => file.path).sort();
     if (selectedFilePaths.length === 0) {
       toast.error(t('gitView.toast.selectFileToDescribe'));
@@ -385,7 +417,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     }
     setIsGeneratingMessage(true);
     try {
-      const { message } = await generateCommitMessage(currentDirectory, selectedFilePaths);
+      const { message } = await generateCommitMessage(operationDirectory, selectedFilePaths);
       setCommitMessage(message.subject?.trim() ?? '');
       setGeneratedHighlights(Array.isArray(message.highlights) ? message.highlights : []);
     } catch (error) {
@@ -393,10 +425,11 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     } finally {
       setIsGeneratingMessage(false);
     }
-  }, [currentDirectory, stagedChangeEntries, t]);
+  });
 
   const handleCommit = async (options: { pushAfter?: boolean } = {}) => {
     if (!currentDirectory) return;
+    const operationDirectory = currentDirectory;
     if (!commitMessage.trim()) {
       toast.error(t('gitView.toast.enterCommitMessage'));
       return;
@@ -409,7 +442,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
 
     setCommitAction(options.pushAfter ? 'commitAndPush' : 'commit');
     try {
-      await git.createGitCommit(currentDirectory, commitMessage.trim(), { files: filesToCommit });
+      await git.createGitCommit(operationDirectory, commitMessage.trim(), { files: filesToCommit });
       toast.success(t('gitView.toast.commitCreated'));
       setCommitMessage('');
       setGeneratedHighlights([]);
@@ -424,21 +457,21 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
           ? status.tracking.slice(trackingPrefix.length)
           : undefined;
 
-        await git.gitFetch(currentDirectory, { remote: remote.name });
-        const afterFetch = await git.getGitStatus(currentDirectory);
+        await git.gitFetch(operationDirectory, { remote: remote.name });
+        const afterFetch = await git.getGitStatus(operationDirectory);
         if ((afterFetch.behind ?? 0) > 0) {
-          await git.gitPull(currentDirectory, { remote: remote.name, branch: trackedBranch, rebase: true });
+          await git.gitPull(operationDirectory, { remote: remote.name, branch: trackedBranch, rebase: true });
         }
 
-        const afterPull = await git.getGitStatus(currentDirectory);
+        const afterPull = await git.getGitStatus(operationDirectory);
         if ((afterPull.ahead ?? 0) > 0) {
-          await git.gitPush(currentDirectory);
+          await git.gitPush(operationDirectory);
         }
 
-        await refreshStatusAndBranches(false);
-        await refreshRemotes();
+        await refreshStatusAndBranches(operationDirectory, false);
+        await startRemoteRefresh(operationDirectory).promise;
       } else {
-        await refreshStatusAndBranches(false);
+        await refreshStatusAndBranches(operationDirectory, false);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('gitView.toast.createCommitFailed'));

@@ -16,6 +16,7 @@
 
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { Capacitor } from '@capacitor/core';
+import { useEvent } from '@reactuses/core';
 import React from 'react';
 
 import { useI18n } from '@/lib/i18n';
@@ -1282,21 +1283,21 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
   const connectionsRef = React.useRef(connections);
   const busyRef = React.useRef<'connect' | 'password' | 'pairing' | null>(null);
 
-  const applyConnections = React.useCallback((next: MobileSavedConnection[]) => {
+  const applyConnections = useEvent((next: MobileSavedConnection[]) => {
     connectionsRef.current = next;
     setConnections(next);
-  }, []);
+  });
 
-  const beginBusy = React.useCallback((operation: 'connect' | 'password' | 'pairing') => {
+  const beginBusy = useEvent((operation: 'connect' | 'password' | 'pairing') => {
     busyRef.current = operation;
     setBusyOperation(operation);
-  }, []);
+  });
 
-  const endBusy = React.useCallback((operation: 'connect' | 'password' | 'pairing') => {
+  const endBusy = useEvent((operation: 'connect' | 'password' | 'pairing') => {
     if (busyRef.current !== operation) return;
     busyRef.current = null;
     setBusyOperation(null);
-  }, []);
+  });
 
   // Refresh from storage on mount (runs the legacy-token migration too).
   React.useEffect(() => {
@@ -1308,14 +1309,14 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
   }, [applyConnections]);
 
   // Persist metadata for a connection and reflect it in state immediately.
-  const persistMetadata = React.useCallback((draft: { id?: string; label: string; candidates: MobileTransportCandidate[]; clientToken?: string }) => {
+  const persistMetadata = useEvent((draft: { id?: string; label: string; candidates: MobileTransportCandidate[]; clientToken?: string }) => {
     const next = upsertConnectionInList(connectionsRef.current, draft);
     applyConnections(next);
     writeConnections(next);
     return next;
-  }, [applyConnections]);
+  });
 
-  const connect = React.useCallback(async (input: MobileConnectInput) => {
+  const connect = useEvent(async (input: MobileConnectInput) => {
     setError(null);
     beginBusy('connect');
     try {
@@ -1375,9 +1376,9 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
     } finally {
       endBusy('connect');
     }
-  }, [beginBusy, endBusy, onConnected, persistMetadata, t]);
+  });
 
-  const redeemPairingConnection = React.useCallback(async (payload: PairingConnectionPayload) => {
+  const redeemPairingConnection = useEvent(async (payload: PairingConnectionPayload) => {
     if (busyRef.current === 'pairing') return;
     setError(null);
     beginBusy('pairing');
@@ -1458,9 +1459,9 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
       if (!adopted && chosen?.kind === 'relay') chosen.tunnel.close();
       endBusy('pairing');
     }
-  }, [beginBusy, endBusy, onConnected, persistMetadata, t]);
+  });
 
-  const submitPassword = React.useCallback(async (password: string) => {
+  const submitPassword = useEvent(async (password: string) => {
     if (!pendingConnection || !password.trim() || busyRef.current === 'password') return;
     setError(null);
     beginBusy('password');
@@ -1536,14 +1537,14 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
       if (!adopted && chosen?.kind === 'relay') chosen.tunnel.close();
       endBusy('password');
     }
-  }, [beginBusy, endBusy, onConnected, pendingConnection, persistMetadata, t]);
+  });
 
-  const cancelPassword = React.useCallback(() => {
+  const cancelPassword = useEvent(() => {
     setPendingConnection(null);
     setError(null);
-  }, []);
+  });
 
-  const saveConnection = React.useCallback(async (input: MobileConnectInput): Promise<MobileSavedConnection | null> => {
+  const saveConnection = useEvent(async (input: MobileConnectInput): Promise<MobileSavedConnection | null> => {
     setError(null);
     let candidates = buildCandidatesFromInput(input);
     const existing = input.id ? connectionsRef.current.find((connection) => connection.id === input.id) ?? null : null;
@@ -1586,14 +1587,14 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
     }
     const next = persistMetadata({ id: input.id, label, candidates, clientToken });
     return next.find((connection) => candidateSetsMatch(connection.candidates, candidates)) ?? null;
-  }, [persistMetadata, t]);
+  });
 
-  const removeConnection = React.useCallback(async (id: string): Promise<MobileSavedConnection | null> => {
+  const removeConnection = useEvent(async (id: string): Promise<MobileSavedConnection | null> => {
     const removed = connectionsRef.current.find((connection) => connection.id === id) ?? null;
     const next = await deleteMobileConnection(id);
     applyConnections(next);
     return removed;
-  }, [applyConnections]);
+  });
 
   return {
     connections,
