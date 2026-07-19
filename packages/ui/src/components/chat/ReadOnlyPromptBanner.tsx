@@ -13,7 +13,7 @@ type ReadOnlyPromptBannerProps = {
 };
 
 /** Mobile needs an explicit size: `.typography-*` is unset on mobile-pointer. */
-const BANNER_TEXT_CLASS = 'text-[11px] leading-4 sm:text-[length:var(--text-micro)] sm:leading-5';
+const BANNER_TEXT_CLASS = 'text-xs leading-4 sm:text-[length:var(--text-micro)] sm:leading-5';
 
 const ExecutionModelIcon: React.FC<{
     providerId?: string;
@@ -25,10 +25,10 @@ const ExecutionModelIcon: React.FC<{
             modelId={modelId}
             providerId={providerId}
             alt={label}
-            className="size-3 shrink-0"
+            className="size-3.5 shrink-0"
             fallback={(
-                <span role="img" aria-label={label} className="inline-flex size-3 shrink-0 items-center justify-center">
-                    <Icon name="brain-ai-3" className="size-3" />
+                <span role="img" aria-label={label} className="inline-flex size-3.5 shrink-0 items-center justify-center">
+                    <Icon name="brain-ai-3" className="size-3.5" />
                 </span>
             )}
         />
@@ -68,7 +68,7 @@ export const ReadOnlyPromptBanner: React.FC<ReadOnlyPromptBannerProps> = (props)
                         className={`mt-1.5 grid min-w-0 grid-cols-2 items-center gap-x-3 border-t border-border/70 pt-1.5 ${BANNER_TEXT_CLASS}`}
                     >
                         <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                            <AgentAvatar name={props.agentName} size={12} label={agentLabel} />
+                            <AgentAvatar name={props.agentName} size={14} label={agentLabel} />
                             <span className="min-w-0 flex-1 truncate text-foreground" title={agentName}>{agentName}</span>
                         </div>
                         <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
