@@ -30,3 +30,4 @@ Constraints:
 - Never expose, print, or modify repository secrets or signing credentials.
 - Execute the release flow without asking for confirmation during the command.
 - Report the version, commit, tag, push result, and workflow dispatch result.
+- If a previous attempt for the same version left a Draft Release, read @docs/RELEASING.md section `finalize-release` / asset inventory before re-dispatching. Prefer `gh run rerun <run-id> --failed` over starting a second same-version Release; stale `OpenChamber-$VERSION-$RUN_NUMBER-android.*` assets will block publish.

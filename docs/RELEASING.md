@@ -125,3 +125,59 @@ tag push 会包含 mobile-release。手动触发时使用 `release_scope=all`。
 ### Android APK 未出现在 Release assets 中
 
 检查 `mobile-release` 的 `Build signed Android release`、`Upload Android artifacts` 和 `Upload Android artifacts to GitHub Release` 三个步骤。前两个步骤产出 APK/AAB，第三个步骤通过 `gh release upload` 附加到 Release。
+
+### `finalize-release` / `Verify complete release asset inventory` 失败
+
+`finalize-release` 要求 Draft Release **恰好 21 个**资产，且 Android 版本化文件名必须匹配**当前这次** workflow 的 `github.run_number`：
+
+- `OpenChamber-$VERSION-$RUN_NUMBER-android.aab`
+- `OpenChamber-$VERSION-$RUN_NUMBER-android.apk`
+
+同名资产（如 `app-release.apk`、桌面安装包、`latest*.yml`、`.vsix`）上传时会被覆盖；但 Android 版本化文件名包含 `run_number`，**不会**被后续运行覆盖。
+
+因此，只要同一版本经历过多次 Release 运行（先 `workflow_dispatch` 再 tag push、或多次手动重跑），旧的 `-NN-android.*` 会留在 Draft 上。典型报错：
+
+```text
+Expected exactly 21 release assets, found 23: ... OpenChamber-1.16.32-72-android.aab, ... OpenChamber-1.16.32-73-android.aab ...
+```
+
+**v1.16.32 实况：** 第一次 `workflow_dispatch` 已上传 build `72` Android 资产；后续 tag push 运行号变成 `73` 又上传一套；`finalize` 因多出旧资产失败，Draft 无法转正式。
+
+**恢复步骤：**
+
+1. 确认 Draft 仍在，并找出应保留的最新 Android build number（通常等于失败那次 run 的 `run_number` / 日志里的 `BUILD_NUMBER`）：
+
+   ```bash
+   gh release view "v$VERSION" --repo yee94/openchamber
+   gh run view <run-id> --repo yee94/openchamber --log-failed | tail -80
+   ```
+
+2. 删除同版本下**过期**的 Android 版本化资产（保留最新 `run_number` 那一套，以及 `app-release.aab` / `app-release.apk`）：
+
+   ```bash
+   # 列出资产与 id
+   gh api "repos/yee94/openchamber/releases/tags/v$VERSION" --jq '.assets[] | {id,name}'
+
+   # 删除过期的版本化 Android 资产（示例：去掉 72，保留 73）
+   gh api -X DELETE "repos/yee94/openchamber/releases/assets/<asset-id>"
+   ```
+
+3. 清理后资产数应为 21，再只重跑失败的 `finalize-release`（不必整条 Release 全量重跑）：
+
+   ```bash
+   gh run rerun <run-id> --repo yee94/openchamber --failed
+   ```
+
+4. 若再次全量重跑同版本 Release，会再次产生新的 `run_number` 并追加新的 `-NN-android.*`。**重跑前先删掉旧的版本化 Android 资产**，或接受还要再做一次步骤 2–3。
+
+**预防：**
+
+- 同一 `$VERSION` 优先只走一次入口：tag push **或** 一次 `workflow_dispatch`，不要先手动 dispatch 再建同版本 tag。
+- 若某次运行已成功上传 Android、但桌面端失败：优先 `gh run rerun <run-id> --failed`（同一 `run_number`，不会追加新的 `-NN-android.*`），不要另开一次同版本 Release。
+- 发布后若 `isDraft=true`，先看 `finalize-release` 是否卡在资产数量/旧 build number，而不是立刻切下一个 patch 版本。
+
+### Windows / Linux `Install dependencies` 失败（镜像解包）
+
+桌面构建偶发在 `bun install` 阶段失败，日志常见从 `mirrors.tencent.com/npm/...` 拉取 `app-builder-bin` 后解包失败。这会导致该平台产物缺失，`finalize-release` 被跳过，Draft 保留。
+
+处理：对**同一次** run 执行 `gh run rerun <run-id> --failed`。若 Android 已上传成功，这种同 run 重跑不会改 `run_number`，一般不会触发上一节的资产膨胀问题。
