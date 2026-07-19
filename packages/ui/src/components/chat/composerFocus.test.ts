@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { RefObject } from 'react';
 
-import { focusComposerTextarea, resolveComposerTextarea } from './composerFocus';
+import { focusComposerTextarea, resolveComposerTextarea, shouldApplyComposerDomCorrection } from './composerFocus';
 
 type FakeTextarea = {
     isConnected: boolean;
@@ -55,5 +55,11 @@ describe('composerFocus', () => {
 
         expect(resolveComposerTextarea(ref)).toBeNull();
         expect(focusComposerTextarea(ref)).toBe(false);
+    });
+
+    test('keeps native IME composition ownership over value and selection correction', () => {
+        expect(shouldApplyComposerDomCorrection(true, true)).toBe(false);
+        expect(shouldApplyComposerDomCorrection(true, false)).toBe(true);
+        expect(shouldApplyComposerDomCorrection(false, false)).toBe(false);
     });
 });

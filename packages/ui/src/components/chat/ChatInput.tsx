@@ -105,6 +105,7 @@ import {
     type HighlightRange,
     type MentionRange,
 } from './composerHighlight';
+import { shouldApplyComposerDomCorrection } from './composerFocus';
 import { highlightFencedCode } from './composerCodeHighlight';
 import {
     assignImageAttachmentFilenames,
@@ -1010,6 +1011,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const applyProgrammaticEdit = React.useCallback((nextText: string, mentionsUpdater?: (mentions: readonly DraftMention[], document: ComposerDocument) => DraftMention[]) => replaceProgrammaticText(nextText, mentionsUpdater), [replaceProgrammaticText]);
     const isConfirmedFilePath = React.useCallback((text: string): boolean => !text.startsWith('session:') && (text.includes('/') || text.includes('\\') || text.includes('.') || confirmedFileMentions.some((mention) => mention.value === text)), [confirmedFileMentions]);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const nativeCompositionActiveRef = React.useRef(false);
     const cursorPosRef = React.useRef(0);
     const previousMessageLengthRef = React.useRef(message.length);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
@@ -3098,7 +3100,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const textarea = textareaRef.current;
             // Native dictation and IMEs own an active replacement range. Preserve
             // it when Composer accepted the browser value and caret unchanged.
-            if (textarea && shouldCorrectTextarea) {
+            if (textarea && shouldApplyComposerDomCorrection(shouldCorrectTextarea, nativeCompositionActiveRef.current)) {
                 textarea.value = document.text;
                 textarea.setSelectionRange(selection.start, selection.end);
             }
@@ -5436,6 +5438,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 // Chinese/Japanese letters leaking into the box.
                                 readOnly={isLeaderKeyPending}
                                 onChange={handleTextChange}
+                                onCompositionStart={() => {
+                                    nativeCompositionActiveRef.current = true;
+                                }}
+                                onCompositionEnd={(event) => {
+                                    nativeCompositionActiveRef.current = false;
+                                    const textarea = event.currentTarget;
+                                    commitBrowserTextChange(
+                                        textarea.value,
+                                        textarea.selectionStart ?? textarea.value.length,
+                                        textarea.selectionEnd ?? textarea.selectionStart ?? textarea.value.length,
+                                    );
+                                }}
                                 onBeforeInput={handleBeforeInput}
                                 onKeyDown={handleKeyDown}
                                 onPaste={handlePaste}
@@ -5457,6 +5471,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     const ta = e.currentTarget;
                                     const selectionStart = ta.selectionStart ?? 0;
                                     const selectionEnd = ta.selectionEnd ?? selectionStart;
+                                    if (nativeCompositionActiveRef.current) {
+                                        cursorPosRef.current = selectionEnd;
+                                        return;
+                                    }
                                     const atomicSelection = resolveAtomicReferenceSelection(
                                         selectionStart,
                                         selectionEnd,
@@ -5495,6 +5513,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     setMobileTextareaFocused(true);
                                 }}
                                 onBlur={() => {
+                                    nativeCompositionActiveRef.current = false;
                                     if (!isMobile) {
                                         // Keep left-icon emphasis while focus moves into the footer
                                         // (agent menu / attachment) so the bar doesn't flash muted.

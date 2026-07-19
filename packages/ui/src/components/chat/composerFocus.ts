@@ -20,3 +20,8 @@ export const focusComposerTextarea = (
     textarea.focus({ preventScroll: true });
     return true;
 };
+
+export const shouldApplyComposerDomCorrection = (
+    correctionRequested: boolean,
+    nativeCompositionActive: boolean,
+): boolean => correctionRequested && !nativeCompositionActive;

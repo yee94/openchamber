@@ -92,8 +92,26 @@ describe('MobileSessionsSheet long press', () => {
       onTrigger: () => { triggered += 1; },
     });
     const fire = () => scheduled?.();
-    return { controller, fire, pressedKeys, start, triggered: () => triggered };
+    return {
+      controller,
+      fire,
+      pending: () => scheduled !== null,
+      pressedKeys,
+      start,
+      triggered: () => triggered,
+    };
   };
+
+  test('a quick tap clears the hold without suppressing its click', () => {
+    const subject = setup();
+    subject.start();
+    subject.controller.end(7);
+    subject.fire();
+
+    expect(subject.triggered()).toBe(0);
+    expect(subject.controller.consumeClick('session:a')).toBe(false);
+    expect(subject.pressedKeys.at(-1)).toBeNull();
+  });
 
   test('triggers after the hold delay and suppresses the following click', () => {
     const subject = setup();
@@ -123,6 +141,30 @@ describe('MobileSessionsSheet long press', () => {
     subject.fire();
 
     expect(subject.triggered()).toBe(0);
+    expect(subject.pressedKeys.at(-1)).toBeNull();
+  });
+
+  test('reset clears the pending timer, pressed state, and click suppression', () => {
+    const subject = setup();
+    subject.start();
+    expect(subject.pending()).toBe(true);
+
+    subject.controller.reset();
+    subject.fire();
+
+    expect(subject.pending()).toBe(false);
+    expect(subject.triggered()).toBe(0);
+    expect(subject.controller.consumeClick('session:a')).toBe(false);
+    expect(subject.pressedKeys.at(-1)).toBeNull();
+  });
+
+  test('closing a context-menu action resets suppression before the next click', () => {
+    const subject = setup();
+    subject.controller.openFromContextMenu('session:a', () => {});
+
+    subject.controller.reset();
+
+    expect(subject.controller.consumeClick('session:a')).toBe(false);
     expect(subject.pressedKeys.at(-1)).toBeNull();
   });
 });

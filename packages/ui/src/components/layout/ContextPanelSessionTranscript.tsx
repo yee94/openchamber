@@ -96,6 +96,10 @@ const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscri
         (state) => getSessionMaterializationStatus(state, sessionId).renderable,
         [sessionId],
     ), syncDirectory);
+    const hasConfirmedParent = useDirectorySync(React.useCallback(
+        (state) => Boolean(state.session.find((session) => session.id === sessionId)?.parentID),
+        [sessionId],
+    ), syncDirectory);
     const prefetch = React.useSyncExternalStore(
         React.useCallback((notify) => subscribeSessionPrefetch(syncDirectory, sessionId, notify, runtimeKey), [runtimeKey, sessionId, syncDirectory]),
         React.useCallback(() => getSessionPrefetch(syncDirectory, sessionId, runtimeKey), [runtimeKey, sessionId, syncDirectory]),
@@ -209,7 +213,7 @@ const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscri
                         </>
                     )}
                 </div>
-                <ReadOnlyPromptBanner agentName={execution.agentName} providerId={execution.providerId} modelId={execution.modelId} modelName={executionModelName} />
+                {hasConfirmedParent ? <ReadOnlyPromptBanner agentName={execution.agentName} providerId={execution.providerId} modelId={execution.modelId} modelName={executionModelName} /> : null}
             </div>
         </SessionSurfaceContext.Provider>
     );

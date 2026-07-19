@@ -15,7 +15,7 @@ describe('resolveChatPromptAvailability', () => {
         });
     });
 
-    test('shows the read-only banner for subagent and explicitly read-only surfaces', () => {
+    test('shows the read-only banner only for confirmed subagent sessions', () => {
         expect(resolveChatPromptAvailability({
             readOnly: false,
             sessionIdentityPending: false,
@@ -27,7 +27,13 @@ describe('resolveChatPromptAvailability', () => {
             sessionIdentityPending: false,
             isSubagentSession: false,
             allowPromptingSubagentSessions: true,
-        }).showReadOnlyBanner).toBe(true);
+        }).showReadOnlyBanner).toBe(false);
+        expect(resolveChatPromptAvailability({
+            readOnly: true,
+            sessionIdentityPending: true,
+            isSubagentSession: false,
+            allowPromptingSubagentSessions: false,
+        }).showReadOnlyBanner).toBe(false);
     });
 
     test('keeps prompting available for known primary sessions and enabled subagent sessions', () => {

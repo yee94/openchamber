@@ -829,7 +829,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const promptAvailability = resolveChatPromptAvailability({
         readOnly,
         sessionIdentityPending,
-        isSubagentSession: Boolean(parentSessionTarget),
+        isSubagentSession: Boolean(currentSessionEntity?.parentID),
         allowPromptingSubagentSessions,
     });
     const readOnlyPromptBanner = parentSessionTarget ? (
@@ -840,7 +840,6 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
             modelName={sessionExecutionModelName}
         />
     ) : <ReadOnlyPromptBanner />;
-
     React.useEffect(() => {
         if (typeof window === 'undefined' || window.parent === window) {
             return;
@@ -903,6 +902,11 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         isMobile,
         onActiveTurnChange: handleActiveTurnChange,
     });
+    const promptSurface = promptAvailability.showReadOnlyBanner
+        ? readOnlyPromptBanner
+        : readOnly
+            ? null
+            : <ChatInput scrollToBottom={scrollToBottomOnSend} submissionBlocked={promptAvailability.blockSubmission} />;
 
     const viewportMessages = sessionMessages;
 
@@ -1245,7 +1249,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 								: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
 				>
-                        {promptAvailability.showReadOnlyBanner ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} submissionBlocked={promptAvailability.blockSubmission} />}
+                        {promptSurface}
 				</div>
 			</div>
         );
@@ -1304,7 +1308,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background',
 					)}
 				>
-					{promptAvailability.showReadOnlyBanner ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} submissionBlocked={promptAvailability.blockSubmission} />}
+					{promptSurface}
 				</div>
 			</div>
 		);
@@ -1360,7 +1364,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
-                    {promptAvailability.showReadOnlyBanner ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} submissionBlocked={promptAvailability.blockSubmission} />}
+                    {promptSurface}
 				</div>
             </div>
         );
@@ -1395,7 +1399,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
-                    {promptAvailability.showReadOnlyBanner ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} submissionBlocked={promptAvailability.blockSubmission} />}
+                    {promptSurface}
 				</div>
             </div>
         );
@@ -1453,7 +1457,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
                         onClick={navigation.resumeToLatest}
                     />
                 )}
-                {promptAvailability.showReadOnlyBanner ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} submissionBlocked={promptAvailability.blockSubmission} />}
+                {promptSurface}
             </div>
 
             <TimelineDialog

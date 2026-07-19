@@ -11,7 +11,7 @@ export const resolveChatPromptAvailability = (input: {
 }): ChatPromptAvailability => {
     const subagentReadOnly = input.isSubagentSession && !input.allowPromptingSubagentSessions;
     return {
-        showReadOnlyBanner: input.readOnly || subagentReadOnly,
+        showReadOnlyBanner: input.isSubagentSession && (input.readOnly || subagentReadOnly),
         blockSubmission: input.sessionIdentityPending,
     };
 };

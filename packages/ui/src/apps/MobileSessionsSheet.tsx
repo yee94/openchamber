@@ -563,6 +563,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     }
   }, [open]);
 
+  React.useEffect(() => () => {
+    longPressControllerRef.current?.reset();
+  }, []);
+
   React.useEffect(() => {
     if (!open) return;
     if (projects.length === 0) {
