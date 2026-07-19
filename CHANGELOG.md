@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.31] - 2026-07-19
+
+- **Composer:** fix IME and native dictation input being overwritten by composer textarea correction when reconciliation preserved the browser value and selection unchanged; `requiresTextCorrection` now signals only when Session or Paste reference ranges expand beyond the browser edit boundary.
+
 ## [1.16.30] - 2026-07-19
 
 - **Mobile chat:** preserve mobile worktree, project filter, and expanded group state across session-sheet refreshes; improve parent-session navigation and read-only prompt behavior.
