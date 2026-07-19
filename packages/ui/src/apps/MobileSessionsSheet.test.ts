@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { getMobileSessionPageSize, mergeMobileWorktreeRefreshResults } from './mobileSessionPagination';
+import { createMobileLongPressController } from './mobileLongPress';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 const worktree = (path: string): WorktreeMetadata => ({
@@ -65,6 +66,64 @@ describe('MobileSessionsSheet pagination', () => {
 
   test('shows 5 sessions by default for projects with worktrees', () => {
     expect(getMobileSessionPageSize(true)).toBe(5);
+  });
+});
+
+describe('MobileSessionsSheet long press', () => {
+  const setup = () => {
+    let scheduled: (() => void) | null = null;
+    let triggered = 0;
+    const pressedKeys: Array<string | null> = [];
+    const controller = createMobileLongPressController({
+      schedule: (callback) => {
+        scheduled = callback;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      },
+      clear: () => {
+        scheduled = null;
+      },
+      onPressedKeyChange: (key) => pressedKeys.push(key),
+    });
+    const start = () => controller.start({
+      pointerId: 7,
+      key: 'session:a',
+      clientX: 10,
+      clientY: 20,
+      onTrigger: () => { triggered += 1; },
+    });
+    const fire = () => scheduled?.();
+    return { controller, fire, pressedKeys, start, triggered: () => triggered };
+  };
+
+  test('triggers after the hold delay and suppresses the following click', () => {
+    const subject = setup();
+    subject.start();
+    subject.fire();
+    subject.controller.end(7);
+
+    expect(subject.triggered()).toBe(1);
+    expect(subject.controller.consumeClick('session:a')).toBe(true);
+    expect(subject.controller.consumeClick('session:a')).toBe(false);
+  });
+
+  test('movement beyond the threshold cancels the hold', () => {
+    const subject = setup();
+    subject.start();
+    subject.controller.move(7, 30, 20);
+    subject.fire();
+
+    expect(subject.triggered()).toBe(0);
+    expect(subject.pressedKeys.at(-1)).toBeNull();
+  });
+
+  test('pointercancel clears the pending hold', () => {
+    const subject = setup();
+    subject.start();
+    subject.controller.cancel(7);
+    subject.fire();
+
+    expect(subject.triggered()).toBe(0);
+    expect(subject.pressedKeys.at(-1)).toBeNull();
   });
 });
 

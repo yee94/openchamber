@@ -2,16 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.16.31] - 2026-07-19
-
-- **Composer:** fix IME and native dictation input being overwritten by composer textarea correction when reconciliation preserved the browser value and selection unchanged; `requiresTextCorrection` now signals only when Session or Paste reference ranges expand beyond the browser edit boundary.
-
 ## [1.16.30] - 2026-07-19
 
 - **Mobile chat:** preserve mobile worktree, project filter, and expanded group state across session-sheet refreshes; improve parent-session navigation and read-only prompt behavior.
 - **Composer document:** add strict durable-document parser with serialization, equality validation, resource descriptions, and queue-canonical representation for v3/v4 message queues.
 - **Composer mentions:** confirm authored file/agent mentions through the entire queue pipeline — admission, payload dispatch, ledger serialization, v3 migration, draft edit bridge, and attachment coordinator — with UTF-16 boundary validation and strict range enforcement.
 - **Chat composer:** integrate confirmed file/agent mention passing from input to queued message creation; add send-plan and delivery modules for steerable queue dispatch.
+- **Composer input:** preserve IME and native dictation edits when textarea reconciliation keeps the browser value and selection unchanged; apply text correction only when Session or Paste reference ranges cross the browser edit boundary.
+- **Prompt availability:** separate read-only prompt guidance from submission blocking with shared availability rules and focused coverage.
+- **UI event handling:** migrate cross-surface callbacks to stable `useEvent` handlers across mobile, multirun, session dialogs, integrations, and theme synchronization.
+- **Composer highlighting:** render image-aware inline attachment icons and keep highlighted reference ranges aligned with composer edits.
+- **Mobile session actions:** add long-press project, worktree, and session action surfaces with movement cancellation, click suppression, rename, pin, share, archive, delete, and clipboard flows.
 - **PermissionCard:** refactor with structured metadata views via JsonSummaryView, i18n labels for Replace All, response format, Allow Once, and Always Agree; normalize metadata keys for consistent field display.
 - **i18n:** add permission-card locale entries across all 11 supported languages.
 - **Session reliability:** preserve session view state, reconcile stale directories from the authoritative index, and replay turn-diff navigation when context tabs reopen.

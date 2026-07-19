@@ -20,6 +20,7 @@
    retrying sessions from the loaded snapshot remain visible beyond the folded boundary.
 - Project/worktree Show more first reveals already-fetched rows, then fetches the next 20-session page for its own directory at the local boundary.
 - The mobile session tree shows 20 root sessions by default for projects without worktrees. Projects with worktrees show 5 sessions per root/worktree bucket by default; Show more and Show fewer use that bucket's default page size. Collapsing and reopening a project or worktree preserves its revealed session count until Show fewer is selected or the sessions surface closes.
+- Mobile project, worktree, and session rows expose their matching sidebar actions through a touch-sized bottom action panel after a 500ms long press. Scrolling movement and pointer cancellation abort the gesture, the triggering click is consumed, and native context menus open the same panel. Search-result project and session rows share this behavior.
 - Project rows retain the persisted project-registry order while session and worktree data hydrates. A successfully sent message promotes its owning project to the top; ordinary activity and selection do not reorder the structural project tree.
 - The Projects section header no longer shows a global syncing accessory. While a
   project's session directories are fetching, that project's folder icon swaps to a

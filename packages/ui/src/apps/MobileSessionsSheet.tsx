@@ -7,8 +7,10 @@ import { Icon } from '@/components/icon/Icon';
 import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toast } from '@/components/ui';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
@@ -19,20 +21,27 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import {
   loadMoreGlobalSessionsForDirectory,
   mergeLiveSessionWithGlobalSession,
+  syncGlobalSessionsForDirectories,
   useGlobalSessionsStore,
 } from '@/stores/useGlobalSessionsStore';
 import { useMobileSessionExpansionStore } from '@/stores/useMobileSessionExpansionStore';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { orderWorktrees, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions, useAllSessionStatuses } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
-import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
+import { deleteSessionsWithUndo, showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { abortCurrentOperation } from '@/sync/session-actions';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
+import { MobileDeleteWorktreeDialog } from './MobileDeleteWorktreeDialog';
+import {
+  createMobileLongPressController,
+  type MobileLongPressController,
+} from './mobileLongPress';
 import { getMobileSessionPageSize, mergeMobileWorktreeRefreshResults } from './mobileSessionPagination';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
 
@@ -74,6 +83,20 @@ type ProjectNode = {
   buckets: WorktreeBucket[];
   totalSessions: number;
   isActive: boolean;
+};
+
+type MobileActionTarget =
+  | { key: string; kind: 'project'; project: ProjectMeta }
+  | { key: string; kind: 'worktree'; project: ProjectMeta; worktree: WorktreeMetadata }
+  | { key: string; kind: 'session'; session: Session };
+
+type LongPressHandlers = {
+  pressed: boolean;
+  onPointerDown: React.PointerEventHandler<HTMLButtonElement>;
+  onPointerMove: React.PointerEventHandler<HTMLButtonElement>;
+  onPointerUp: React.PointerEventHandler<HTMLButtonElement>;
+  onPointerCancel: React.PointerEventHandler<HTMLButtonElement>;
+  onContextMenu: React.MouseEventHandler<HTMLButtonElement>;
 };
 
 // Left padding for session rows so the title's first letter aligns with its
@@ -231,6 +254,25 @@ const NewWorktreeIconButton: React.FC<{
   );
 };
 
+const MobileActionButton: React.FC<{
+  icon: React.ComponentProps<typeof Icon>['name'];
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}> = ({ icon, label, onClick, destructive = false }) => (
+  <Button
+    type="button"
+    variant={destructive ? 'destructive' : 'ghost'}
+    size="default"
+    className="min-h-12 w-full justify-start gap-3 rounded-xl px-3 typography-ui-label"
+    onClick={onClick}
+    style={{ touchAction: 'manipulation' }}
+  >
+    <Icon name={icon} className="size-5 shrink-0" />
+    <span className="truncate">{label}</span>
+  </Button>
+);
+
 const SessionRow: React.FC<{
   session: Session;
   active: boolean;
@@ -251,6 +293,7 @@ const SessionRow: React.FC<{
   onStop?: () => void;
   /** Aria label for the stop button. */
   stopAriaLabel?: string;
+  longPressHandlers: LongPressHandlers;
 }> = ({
   session,
   active,
@@ -265,6 +308,7 @@ const SessionRow: React.FC<{
   onConfirmArchive,
   onStop,
   stopAriaLabel,
+  longPressHandlers,
 }) => {
   const { t } = useI18n();
   const time = formatRelativeShort(getSessionTimestamp(session));
@@ -298,9 +342,15 @@ const SessionRow: React.FC<{
         className={cn(
           'flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
           confirmingArchive && 'opacity-50',
+          longPressHandlers.pressed && 'bg-interactive-active scale-[0.99]',
         )}
         style={{ paddingLeft: indent, touchAction: 'manipulation' }}
         onClick={onSelect}
+        onPointerDown={longPressHandlers.onPointerDown}
+        onPointerMove={longPressHandlers.onPointerMove}
+        onPointerUp={longPressHandlers.onPointerUp}
+        onPointerCancel={longPressHandlers.onPointerCancel}
+        onContextMenu={longPressHandlers.onContextMenu}
         disabled={confirmingArchive}
       >
         <span className="flex min-w-0 flex-1 flex-col">
@@ -432,9 +482,16 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const archiveSession = useSessionUIStore((state) => state.archiveSession);
+  const archiveSessions = useSessionUIStore((state) => state.archiveSessions);
+  const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
+  const shareSession = useSessionUIStore((state) => state.shareSession);
+  const unshareSession = useSessionUIStore((state) => state.unshareSession);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
+  const removeProject = useProjectsStore((state) => state.removeProject);
+  const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
+  const togglePinnedSession = useSessionPinnedStore((state) => state.toggle);
   const projectExpandedMap = useMobileSessionTreeStore((state) => state.projectExpanded);
   const worktreeExpandedMap = useMobileSessionTreeStore((state) => state.worktreeExpanded);
   const setProjectExpanded = useMobileSessionTreeStore((state) => state.setProjectExpanded);
@@ -450,6 +507,20 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
+  const [actionTarget, setActionTarget] = React.useState<MobileActionTarget | null>(null);
+  const [pressedActionKey, setPressedActionKey] = React.useState<string | null>(null);
+  const [renamingSession, setRenamingSession] = React.useState<Session | null>(null);
+  const [renameDraft, setRenameDraft] = React.useState('');
+  const [worktreeToDelete, setWorktreeToDelete] = React.useState<{
+    project: ProjectMeta;
+    worktree: WorktreeMetadata;
+  } | null>(null);
+  const longPressControllerRef = React.useRef<MobileLongPressController | null>(null);
+  if (!longPressControllerRef.current) {
+    longPressControllerRef.current = createMobileLongPressController({
+      onPressedKeyChange: setPressedActionKey,
+    });
+  }
   const [gitProjectPaths, setGitProjectPaths] = React.useState<Set<string>>(new Set());
   const [rootBranchesByProject, setRootBranchesByProject] = React.useState<Map<string, string>>(new Map());
   // Per-bucket count of sessions revealed past the default page. Ephemeral —
@@ -484,6 +555,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       setVisibleCountByBucket(new Map());
       setEditingProjectId(null);
       setConfirmingArchiveSessionId(null);
+      setActionTarget(null);
+      setRenamingSession(null);
+      setWorktreeToDelete(null);
+      longPressControllerRef.current?.reset();
       return;
     }
   }, [open]);
@@ -711,6 +786,44 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     });
   };
 
+  const closeActionMenu = () => {
+    setActionTarget(null);
+    longPressControllerRef.current?.reset();
+  };
+
+  const getLongPressHandlers = (target: MobileActionTarget): LongPressHandlers => ({
+    pressed: pressedActionKey === target.key || actionTarget?.key === target.key,
+    onPointerDown: (event) => {
+      if ((event.pointerType !== 'touch' && event.pointerType !== 'pen') || event.button !== 0) return;
+      longPressControllerRef.current?.start({
+        pointerId: event.pointerId,
+        key: target.key,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        onTrigger: () => setActionTarget(target),
+      });
+    },
+    onPointerMove: (event) => {
+      longPressControllerRef.current?.move(event.pointerId, event.clientX, event.clientY);
+    },
+    onPointerUp: (event) => {
+      longPressControllerRef.current?.end(event.pointerId);
+    },
+    onPointerCancel: (event) => {
+      longPressControllerRef.current?.cancel(event.pointerId);
+    },
+    onContextMenu: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      longPressControllerRef.current?.openFromContextMenu(target.key, () => setActionTarget(target));
+    },
+  });
+
+  const runRowClick = (key: string, action: () => void) => {
+    if (longPressControllerRef.current?.consumeClick(key)) return;
+    action();
+  };
+
   const showMoreBucketSessions = (
     bucketKey: string,
     directory: string,
@@ -782,6 +895,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         ? [session.id, ...runningChildIds]
         : runningChildIds;
       const title = session.title?.trim() || t('mobile.sessions.untitled');
+      const actionKey = `session:${session.id}`;
       return (
         <React.Fragment key={session.id}>
           <SessionRow
@@ -792,7 +906,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             expanded={expanded}
             onToggleChildren={hasChildren ? () => toggleParent(session.id) : undefined}
             confirmingArchive={confirmingArchiveSessionId === session.id}
-            onSelect={() => handleSelectSession(session)}
+            onSelect={() => runRowClick(actionKey, () => handleSelectSession(session))}
             onRequestArchive={() => handleRequestArchive(session.id)}
             onConfirmArchive={() => void handleConfirmArchive(session)}
             onStop={(isRunning || hasRunningHiddenChildren) ? () => handleStopSessions(stopIds) : undefined}
@@ -801,6 +915,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                 ? t('mobile.sessions.stopSubsessionsAria', { title })
                 : t('mobile.sessions.stopSessionAria', { title })
             }
+            longPressHandlers={getLongPressHandlers({ key: actionKey, kind: 'session', session })}
           />
           {hasChildren && expanded
             ? children.map((child) => renderNode(child, rowIndent + CHILD_INDENT_STEP))
@@ -874,6 +989,129 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     setWorktreeDialogProjectId(projectId);
     setActiveProjectIdOnly(projectId);
     setNewWorktreeDialogOpen(true);
+  };
+
+  const collectSessionTreeIds = (sessionId: string): string[] => {
+    const childrenByParent = new Map<string, string[]>();
+    for (const candidate of sessions) {
+      const parentId = getParentId(candidate);
+      if (!parentId) continue;
+      const childIds = childrenByParent.get(parentId) ?? [];
+      childIds.push(candidate.id);
+      childrenByParent.set(parentId, childIds);
+    }
+    const collected: string[] = [];
+    const visited = new Set<string>();
+    const visit = (id: string) => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      collected.push(id);
+      for (const childId of childrenByParent.get(id) ?? []) visit(childId);
+    };
+    visit(sessionId);
+    return collected;
+  };
+
+  const handleArchiveFromMenu = async (session: Session) => {
+    const ids = collectSessionTreeIds(session.id);
+    const { archivedIds, failedIds } = await archiveSessions(ids);
+    if (archivedIds.length > 0) {
+      showArchivedSessionsUndoToast({
+        sessionIds: archivedIds,
+        message: archivedIds.length === 1
+          ? t('sessions.sidebar.session.archive.success')
+          : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
+        undoLabel: t('sessions.sidebar.undo'),
+        settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+        undoFailedMessage: archivedIds.length === 1
+          ? t('sessions.sidebar.session.archive.undoFailed')
+          : t('sessions.sidebar.bulkActions.archiveUndoFailed', { count: archivedIds.length }),
+      });
+    }
+    if (failedIds.length > 0) {
+      toast.error(failedIds.length === 1
+        ? t('sessions.sidebar.bulkActions.failedArchiveSingle', { count: failedIds.length })
+        : t('sessions.sidebar.bulkActions.failedArchivePlural', { count: failedIds.length }));
+    }
+  };
+
+  const handleHardDeleteSession = (session: Session) => {
+    const ids = collectSessionTreeIds(session.id);
+    deleteSessionsWithUndo({
+      sessionIds: ids,
+      message: ids.length === 1
+        ? t('sessions.sidebar.session.delete.success')
+        : t('sessions.sidebar.bulkActions.deletedPlural', { count: ids.length }),
+      undoLabel: t('sessions.sidebar.undo'),
+      commitFailedMessage: t('sessions.sidebar.session.delete.error'),
+    });
+  };
+
+  const handleShareFromMenu = async (session: Session) => {
+    try {
+      const result = await shareSession(session.id);
+      if (!result?.share?.url) {
+        toast.error(t('sessions.sidebar.session.share.error'));
+        return;
+      }
+      toast.success(t('sessions.sidebar.session.share.successTitle'), {
+        description: t('sessions.sidebar.session.share.successDescription'),
+      });
+    } catch {
+      toast.error(t('sessions.sidebar.session.share.error'));
+    }
+  };
+
+  const handleCopyShareUrl = async (url: string) => {
+    const result = await copyTextToClipboard(url);
+    if (result.ok) {
+      toast.success(t('sessions.sidebar.session.menu.copied'));
+      return;
+    }
+    toast.error(t('sessions.sidebar.session.share.copyUrlError'));
+  };
+
+  const handleUnshareFromMenu = async (sessionId: string) => {
+    try {
+      const result = await unshareSession(sessionId);
+      if (result) {
+        toast.success(t('sessions.sidebar.session.unshare.success'));
+        return;
+      }
+      toast.error(t('sessions.sidebar.session.unshare.error'));
+    } catch {
+      toast.error(t('sessions.sidebar.session.unshare.error'));
+    }
+  };
+
+  const handleSaveSessionRename = async () => {
+    if (!renamingSession) return;
+    const title = renameDraft.trim();
+    if (!title) return;
+    try {
+      await updateSessionTitle(renamingSession.id, title);
+      setRenamingSession(null);
+      setRenameDraft('');
+    } catch {
+      toast.error(t('sessions.sidebar.session.menu.rename'), {
+        description: t('sessions.sidebar.dialogs.deleteResult.tryAgain'),
+      });
+    }
+  };
+
+  const startSessionDraftForDirectory = (project: ProjectMeta, directory: string) => {
+    setActiveProjectIdOnly(project.id);
+    openNewSessionDraft({
+      selectedProjectId: project.id,
+      directoryOverride: directory,
+      preserveDirectoryOverride: true,
+    });
+    onOpenChange(false);
+  };
+
+  const syncProjectSessions = (project: ProjectMeta) => {
+    const directories = [project.path, ...project.worktrees.map((worktree) => worktree.path)];
+    void syncGlobalSessionsForDirectories(directories, sessions);
   };
 
   /** Short "Project · branch" string shown under the session title in search results. */
@@ -986,6 +1224,164 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       </>
     ) : null;
 
+  const actionTargetTitle = actionTarget?.kind === 'project'
+    ? actionTarget.project.label
+    : actionTarget?.kind === 'worktree'
+      ? actionTarget.worktree.branch || actionTarget.worktree.label || actionTarget.worktree.path
+      : actionTarget?.kind === 'session'
+        ? actionTarget.session.title?.trim() || t('mobile.sessions.untitled')
+        : '';
+
+  const actionMenuContent = actionTarget?.kind === 'project' ? (
+    <div className="flex flex-col gap-1">
+      <MobileActionButton
+        icon="add"
+        label={t('sessions.sidebar.project.actions.newSession')}
+        onClick={() => {
+          const project = actionTarget.project;
+          closeActionMenu();
+          startSessionDraftForDirectory(project, project.path);
+        }}
+      />
+      {actionTarget.project.isGitRepo ? (
+        <MobileActionButton
+          icon="node-tree"
+          label={t('sessions.sidebar.project.actions.newWorktree')}
+          onClick={() => {
+            const projectId = actionTarget.project.id;
+            closeActionMenu();
+            handleNewWorktree(projectId);
+          }}
+        />
+      ) : null}
+      <MobileActionButton
+        icon="refresh"
+        label={t('sessions.sidebar.project.actions.syncSessions')}
+        onClick={() => {
+          const project = actionTarget.project;
+          closeActionMenu();
+          syncProjectSessions(project);
+        }}
+      />
+      <MobileActionButton
+        icon="pencil-ai"
+        label={t('sessions.sidebar.project.actions.edit')}
+        onClick={() => {
+          const projectId = actionTarget.project.id;
+          closeActionMenu();
+          setEditingProjectId(projectId);
+        }}
+      />
+      <MobileActionButton
+        icon="close"
+        label={t('sessions.sidebar.project.actions.closeProject')}
+        destructive
+        onClick={() => {
+          const projectId = actionTarget.project.id;
+          closeActionMenu();
+          removeProject(projectId);
+        }}
+      />
+    </div>
+  ) : actionTarget?.kind === 'worktree' ? (
+    <div className="flex flex-col gap-1">
+      <MobileActionButton
+        icon="add"
+        label={t('sessions.sidebar.project.actions.newSession')}
+        onClick={() => {
+          const { project, worktree } = actionTarget;
+          closeActionMenu();
+          startSessionDraftForDirectory(project, worktree.path);
+        }}
+      />
+      <MobileActionButton
+        icon="delete-bin"
+        label={t('mobile.projectEdit.deleteWorktreeConfirmButton')}
+        destructive
+        onClick={() => {
+          const target = { project: actionTarget.project, worktree: actionTarget.worktree };
+          closeActionMenu();
+          setWorktreeToDelete(target);
+        }}
+      />
+    </div>
+  ) : actionTarget?.kind === 'session' ? (
+    <div className="flex flex-col gap-1">
+      <MobileActionButton
+        icon="pencil-ai"
+        label={t('sessions.sidebar.session.menu.rename')}
+        onClick={() => {
+          const session = actionTarget.session;
+          closeActionMenu();
+          setRenameDraft(session.title?.trim() || t('mobile.sessions.untitled'));
+          setRenamingSession(session);
+        }}
+      />
+      <MobileActionButton
+        icon={pinnedSessionIds.has(actionTarget.session.id) ? 'unpin' : 'pushpin'}
+        label={pinnedSessionIds.has(actionTarget.session.id)
+          ? t('sessions.sidebar.session.menu.unpin')
+          : t('sessions.sidebar.session.menu.pin')}
+        onClick={() => {
+          const sessionId = actionTarget.session.id;
+          closeActionMenu();
+          togglePinnedSession(sessionId);
+        }}
+      />
+      {actionTarget.session.share?.url ? (
+        <>
+          <MobileActionButton
+            icon="file-copy"
+            label={t('sessions.sidebar.session.menu.copyLink')}
+            onClick={() => {
+              const url = actionTarget.session.share?.url;
+              closeActionMenu();
+              if (url) void handleCopyShareUrl(url);
+            }}
+          />
+          <MobileActionButton
+            icon="link-unlink-m"
+            label={t('sessions.sidebar.session.menu.unshare')}
+            onClick={() => {
+              const sessionId = actionTarget.session.id;
+              closeActionMenu();
+              void handleUnshareFromMenu(sessionId);
+            }}
+          />
+        </>
+      ) : (
+        <MobileActionButton
+          icon="share-2"
+          label={t('sessions.sidebar.session.menu.share')}
+          onClick={() => {
+            const session = actionTarget.session;
+            closeActionMenu();
+            void handleShareFromMenu(session);
+          }}
+        />
+      )}
+      <MobileActionButton
+        icon="archive"
+        label={t('sessions.sidebar.bulkActions.archive')}
+        onClick={() => {
+          const session = actionTarget.session;
+          closeActionMenu();
+          void handleArchiveFromMenu(session);
+        }}
+      />
+      <MobileActionButton
+        icon="delete-bin"
+        label={t('sessions.sidebar.bulkActions.delete')}
+        destructive
+        onClick={() => {
+          const session = actionTarget.session;
+          closeActionMenu();
+          handleHardDeleteSession(session);
+        }}
+      />
+    </div>
+  ) : null;
+
   const surfaceContent = (
       <div className="flex h-full flex-col">
         <div className="shrink-0 px-4 pb-2 pt-1">
@@ -1055,7 +1451,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                            active={currentSessionId === session.id}
                            indent={12}
                            contextLabel={buildSessionContextLabel(session)}
-                           onSelect={() => handleSelectSession(session)}
+                           onSelect={() => runRowClick(`session:${session.id}`, () => handleSelectSession(session))}
+                           longPressHandlers={getLongPressHandlers({ key: `session:${session.id}`, kind: 'session', session })}
                            onStop={isRunning ? () => handleStopSession(session.id) : undefined}
                            stopAriaLabel={t('mobile.sessions.stopSessionAria', { title })}
                          />
@@ -1076,17 +1473,28 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                     </span>
                   </div>
                   <div className="overflow-hidden rounded-2xl border border-border/40 bg-[var(--surface-elevated)]">
-                    {searchProjectMatches.map((project, index) => (
-                      <div
-                        key={project.id}
-                        className={cn('flex items-center', index > 0 && 'border-t border-border/30')}
-                      >
-                        <button
-                          type="button"
-                          className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                          onClick={() => handleSelectProject(project)}
-                          style={{ touchAction: 'manipulation' }}
+                    {searchProjectMatches.map((project, index) => {
+                      const actionKey = `project:${project.id}`;
+                      const handlers = getLongPressHandlers({ key: actionKey, kind: 'project', project });
+                      return (
+                        <div
+                          key={project.id}
+                          className={cn('flex items-center', index > 0 && 'border-t border-border/30')}
                         >
+                          <button
+                            type="button"
+                            className={cn(
+                              'flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left transition-all hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
+                              handlers.pressed && 'bg-interactive-active scale-[0.99]',
+                            )}
+                            onClick={() => runRowClick(actionKey, () => handleSelectProject(project))}
+                            onPointerDown={handlers.onPointerDown}
+                            onPointerMove={handlers.onPointerMove}
+                            onPointerUp={handlers.onPointerUp}
+                            onPointerCancel={handlers.onPointerCancel}
+                            onContextMenu={handlers.onContextMenu}
+                            style={{ touchAction: 'manipulation' }}
+                          >
                           <MobileProjectIcon project={project} />
                           <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">
                             {project.label}
@@ -1094,15 +1502,16 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                           <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">
                             {project.sessionCount}
                           </span>
-                        </button>
-                        {project.isGitRepo ? (
-                          <NewWorktreeIconButton
-                            className="mr-2"
-                            onClick={() => handleNewWorktree(project.id)}
-                          />
-                        ) : null}
-                      </div>
-                    ))}
+                          </button>
+                          {project.isGitRepo ? (
+                            <NewWorktreeIconButton
+                              className="mr-2"
+                              onClick={() => handleNewWorktree(project.id)}
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}
@@ -1111,6 +1520,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             <div className="flex flex-col">
               {orderedNodes.map((node, nodeIndex) => {
                 const projectExpanded = isProjectExpanded(node);
+                const projectActionKey = `project:${node.project.id}`;
+                const projectLongPress = getLongPressHandlers({ key: projectActionKey, kind: 'project', project: node.project });
                 const buckets = normalizedQuery
                   ? node.buckets.filter((bucket) =>
                       bucket.sessions.some((session) =>
@@ -1127,8 +1538,16 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                     <div className="flex min-h-14 w-full items-center">
                       <button
                         type="button"
-                        className="flex min-h-14 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                        onClick={() => toggleProject(node.project.id, projectExpanded)}
+                        className={cn(
+                          'flex min-h-14 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left transition-all hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
+                          projectLongPress.pressed && 'bg-interactive-active scale-[0.99]',
+                        )}
+                        onClick={() => runRowClick(projectActionKey, () => toggleProject(node.project.id, projectExpanded))}
+                        onPointerDown={projectLongPress.onPointerDown}
+                        onPointerMove={projectLongPress.onPointerMove}
+                        onPointerUp={projectLongPress.onPointerUp}
+                        onPointerCancel={projectLongPress.onPointerCancel}
+                        onContextMenu={projectLongPress.onContextMenu}
                         aria-expanded={projectExpanded}
                         aria-label={
                           projectExpanded
@@ -1197,12 +1616,27 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                               {worktreeBuckets.map((bucket) => {
                                 const worktreeExpanded = isWorktreeExpanded(node, bucket);
                                 const isActiveWt = activeWorktreePath === bucket.path;
+                                const worktreeActionKey = `worktree:${node.project.id}:${bucket.key}`;
+                                const worktreeLongPress = getLongPressHandlers({
+                                  key: worktreeActionKey,
+                                  kind: 'worktree',
+                                  project: node.project,
+                                  worktree: bucket.worktree!,
+                                });
                                 return (
                                   <div key={bucket.key}>
                                     <button
                                       type="button"
-                                      className="flex min-h-11 w-full items-center gap-2 py-1.5 pl-4 pr-3 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                      onClick={() => toggleWorktree(node.project.id, bucket.key, worktreeExpanded)}
+                                      className={cn(
+                                        'flex min-h-11 w-full items-center gap-2 py-1.5 pl-4 pr-3 text-left transition-all hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
+                                        worktreeLongPress.pressed && 'bg-interactive-active scale-[0.99]',
+                                      )}
+                                      onClick={() => runRowClick(worktreeActionKey, () => toggleWorktree(node.project.id, bucket.key, worktreeExpanded))}
+                                      onPointerDown={worktreeLongPress.onPointerDown}
+                                      onPointerMove={worktreeLongPress.onPointerMove}
+                                      onPointerUp={worktreeLongPress.onPointerUp}
+                                      onPointerCancel={worktreeLongPress.onPointerCancel}
+                                      onContextMenu={worktreeLongPress.onContextMenu}
                                       aria-expanded={worktreeExpanded}
                                       aria-label={
                                         worktreeExpanded
@@ -1289,6 +1723,70 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             onOpenChange(false);
           }}
         />
+        <MobileOverlayPanel
+          open={Boolean(actionTarget)}
+          title={actionTargetTitle}
+          onClose={closeActionMenu}
+          contentMaxHeightClassName="max-h-[min(68dvh,560px)]"
+        >
+          {actionMenuContent}
+        </MobileOverlayPanel>
+        <MobileOverlayPanel
+          open={Boolean(renamingSession)}
+          title={t('sessions.sidebar.session.menu.rename')}
+          onClose={() => {
+            setRenamingSession(null);
+            setRenameDraft('');
+          }}
+          footer={
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1"
+                onClick={() => {
+                  setRenamingSession(null);
+                  setRenameDraft('');
+                }}
+              >
+                {t('sessions.sidebar.dialogs.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                className="flex-1"
+                disabled={!renameDraft.trim()}
+                onClick={() => void handleSaveSessionRename()}
+              >
+                {t('sessions.sidebar.session.rename.save')}
+              </Button>
+            </div>
+          }
+        >
+          <form
+            className="px-1 py-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveSessionRename();
+            }}
+          >
+            <Input
+              value={renameDraft}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              autoFocus
+              className="h-12"
+            />
+          </form>
+        </MobileOverlayPanel>
+        {worktreeToDelete ? (
+          <MobileDeleteWorktreeDialog
+            open
+            project={{ id: worktreeToDelete.project.id, path: worktreeToDelete.project.path }}
+            worktree={worktreeToDelete.worktree}
+            onClose={() => setWorktreeToDelete(null)}
+            onDeleted={() => setWorktreeRefreshKey((value) => value + 1)}
+          />
+        ) : null}
         <MobileProjectEditSurface
           open={editingProjectId !== null}
           project={projectsMeta.find((entry) => entry.id === editingProjectId) ?? null}
