@@ -34,6 +34,7 @@ describe('ReadOnlyPromptBanner', () => {
 
         expect(markup).toContain('data-testid="read-only-prompt-banner-meta"');
         expect(markup).toContain('grid-cols-2');
+        expect(markup).toContain('text-[11px]');
         expect(markup).toContain('>Oracle</span>');
         expect(markup).toContain('>GPT-5.6 Sol Fast</span>');
     });
