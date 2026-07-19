@@ -1,6 +1,6 @@
 ## [1.16.32] - 2026-07-19
 
-- No notable VS Code-specific changes.
+- Chat: the read-only subagent prompt banner keeps agent and model on one row and uses a smaller shared type size.
 
 ## [1.16.1] - 2026-07-14
 
