@@ -39,6 +39,8 @@ const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 const FORM_CONTROL_CLASS = '!h-9 !min-h-9 w-full min-w-0 rounded-full border-0 bg-[var(--surface-elevated)] px-3 py-1 ring-1 ring-inset ring-border/60 transition-[background-color,box-shadow,transform] duration-150 ease-out hover:[&:not(:focus)]:bg-[var(--surface-subtle)] hover:[&:not(:focus)]:ring-transparent active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] data-[popup-open]:bg-[var(--surface-subtle)] data-[popup-open]:shadow-sm motion-reduce:transition-none';
 const PANEL_CONTROL_CLASS = 'ml-auto -mr-1.5 w-fit max-w-[72%] justify-self-end justify-end bg-transparent text-right ring-0 hover:[&:not(:focus)]:bg-interactive-hover/70 data-[popup-open]:bg-interactive-hover/70 [&>span]:!flex-none [&>span]:text-right [&_[data-slot=select-value]]:justify-end';
 const PANEL_ROW_CLASS = `grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-4 ${groupedCardRowClassName}`;
+const MOBILE_PANEL_CONTROL_CLASS = 'ml-auto w-fit max-w-[68%] justify-end bg-transparent text-right ring-0 hover:[&:not(:focus)]:bg-interactive-hover/70 data-[popup-open]:bg-interactive-hover/70 [&>span]:!flex-none [&>span]:text-right [&_[data-slot=select-value]]:justify-end';
+const MOBILE_PANEL_ROW_CLASS = `flex min-w-0 flex-row items-center justify-between gap-3 ${groupedCardRowClassName}`;
 
 const getLocalDateISO = () => {
   const now = new Date();
@@ -621,7 +623,10 @@ const CronScheduleSection: React.FC<{
   locale: string;
   t: ReturnType<typeof useI18n>['t'];
   panel?: boolean;
-}> = ({ draft, setDraft, locale, t, panel = false }) => {
+  mobilePanel?: boolean;
+}> = ({ draft, setDraft, locale, t, panel = false, mobilePanel = false }) => {
+  const groupedPanel = panel || mobilePanel;
+  const rowClassName = mobilePanel ? MOBILE_PANEL_ROW_CLASS : PANEL_ROW_CLASS;
   const cronExpression = draft.schedule.cronExpression;
   const cronValidation = React.useMemo(
     () => (cronExpression.trim() ? isValidCronExpression(cronExpression) : null),
@@ -646,10 +651,10 @@ const CronScheduleSection: React.FC<{
   );
 
   return (
-    <div className={cn('flex flex-col gap-3', panel && 'gap-0')}>
-      <div className={cn('flex flex-col gap-1', panel && PANEL_ROW_CLASS)}>
+    <div className={cn('flex flex-col gap-3', groupedPanel && 'gap-0')}>
+      <div className={cn('flex flex-col gap-1', groupedPanel && rowClassName)}>
         <FieldLabel htmlFor="sched-cron" required>{t('sessions.scheduledTasks.editor.cronExpression.label')}</FieldLabel>
-        <div className={cn(panel && 'ml-auto -mr-1.5 flex max-w-[72%] flex-col items-end gap-1')}>
+        <div className={cn(groupedPanel && (mobilePanel ? 'ml-auto flex max-w-[68%] flex-col items-end gap-1' : 'ml-auto -mr-1.5 flex max-w-[72%] flex-col items-end gap-1'))}>
           <Input
             id="sched-cron"
             value={cronExpression}
@@ -658,7 +663,7 @@ const CronScheduleSection: React.FC<{
               schedule: { ...prev.schedule, cronExpression: event.target.value },
             }))}
             placeholder={t('sessions.scheduledTasks.editor.cronExpression.placeholder')}
-            className={cn('w-full font-mono', panel && 'w-fit min-w-[160px] [field-sizing:content] rounded-full bg-transparent text-right ring-0 hover:bg-interactive-hover/70')}
+            className={cn('w-full font-mono', groupedPanel && 'w-fit min-w-[140px] [field-sizing:content] rounded-full bg-transparent text-right ring-0 hover:bg-interactive-hover/70')}
           />
           {cronValidation && !cronValidation.valid && cronExpression.trim() ? (
             <span className="typography-micro text-destructive">
@@ -669,17 +674,17 @@ const CronScheduleSection: React.FC<{
       </div>
 
       {nextRuns.length > 0 ? (
-        <div className={cn('flex flex-col gap-1', panel && PANEL_ROW_CLASS)}>
+        <div className={cn('flex flex-col gap-1', groupedPanel && rowClassName)}>
           <span className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.cronExpression.nextRuns')}</span>
-          <span className={cn('typography-micro text-foreground', panel && 'ml-auto -mr-1.5 max-w-[72%] text-right')}>
+          <span className={cn('typography-micro text-foreground', groupedPanel && (mobilePanel ? 'ml-auto max-w-[68%] text-right' : 'ml-auto -mr-1.5 max-w-[72%] text-right'))}>
             {nextRuns.map(formatNextRun).join(', ')}
           </span>
         </div>
       ) : null}
 
-      <div className={cn('flex flex-col gap-1', panel && [PANEL_ROW_CLASS, 'items-start'])}>
+      <div className={cn('flex flex-col gap-1', groupedPanel && [rowClassName, 'items-start'])}>
         <span className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.cronExpression.examples')}</span>
-        <div className={cn('flex flex-wrap gap-1.5', panel && 'ml-auto -mr-1.5 max-w-[72%] justify-end')}>
+        <div className={cn('flex flex-wrap gap-1.5', groupedPanel && (mobilePanel ? 'ml-auto max-w-[68%] justify-end' : 'ml-auto -mr-1.5 max-w-[72%] justify-end'))}>
           {CRON_EXAMPLES.map((example) => (
             <button
               key={example.expression}
@@ -731,6 +736,11 @@ export function ScheduledTaskEditorDialog(props: {
     projectOptions = [],
     onProjectChange,
   } = props;
+  const desktopPanel = presentation === 'panel';
+  const mobilePanel = presentation === 'mobile-panel';
+  const groupedPanel = desktopPanel || mobilePanel;
+  const panelControlClassName = mobilePanel ? MOBILE_PANEL_CONTROL_CLASS : PANEL_CONTROL_CLASS;
+  const panelRowClassName = mobilePanel ? MOBILE_PANEL_ROW_CLASS : PANEL_ROW_CLASS;
   const { t, locale } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
   const loadAgents = useConfigStore((state) => state.loadAgents);
@@ -872,19 +882,22 @@ export function ScheduledTaskEditorDialog(props: {
     };
   }, [isDatePickerOpen]);
 
-  const availableVariants = React.useMemo(() => {
+  const selectedModelForVariant = React.useMemo(() => {
     const provider = providers.find((item) => item.id === draft.execution.providerID);
-    const model = provider?.models?.find((item) => item.id === draft.execution.modelID) as { variants?: Record<string, unknown> } | undefined;
-    return model?.variants ? Object.keys(model.variants) : [];
+    return provider?.models?.find((item) => item.id === draft.execution.modelID) as { variants?: Record<string, unknown> } | undefined;
   }, [draft.execution.modelID, draft.execution.providerID, providers]);
+  const availableVariants = React.useMemo(
+    () => selectedModelForVariant?.variants ? Object.keys(selectedModelForVariant.variants) : [],
+    [selectedModelForVariant],
+  );
 
   React.useEffect(() => {
-    if (!draft.execution.variant || availableVariants.includes(draft.execution.variant)) return;
+    if (!selectedModelForVariant || !draft.execution.variant || availableVariants.includes(draft.execution.variant)) return;
     setDraft((prev) => ({
       ...prev,
       execution: { ...prev.execution, variant: '' },
     }));
-  }, [availableVariants, draft.execution.variant]);
+  }, [availableVariants, draft.execution.variant, selectedModelForVariant]);
 
   const toggleWeekday = React.useCallback((weekday: number, nextChecked: boolean) => {
     setDraft((prev) => {
@@ -1233,8 +1246,8 @@ export function ScheduledTaskEditorDialog(props: {
   const description = t('sessions.scheduledTasks.editor.description');
 
   const formBody = (
-    <div className={cn('flex flex-col gap-5', presentation === 'panel' && 'gap-6')}>
-      <div className={cn('flex flex-col gap-1', presentation === 'panel' && 'hidden')}>
+    <div className={cn('flex flex-col gap-5', groupedPanel && 'gap-6')}>
+      <div className={cn('flex flex-col gap-1', desktopPanel && 'hidden')}>
         <FieldLabel htmlFor="sched-name" required>{t('sessions.scheduledTasks.editor.taskName.label')}</FieldLabel>
         <Input
           id="sched-name"
@@ -1246,15 +1259,15 @@ export function ScheduledTaskEditorDialog(props: {
         />
       </div>
 
-      <div className={cn('flex flex-col gap-3 border-t border-border/40 pt-5', presentation === 'panel' && 'order-4 animate-in fade-in slide-in-from-right-1 border-0 pt-0 duration-200 [animation-delay:80ms] [animation-fill-mode:both] motion-reduce:animate-none')}>
-        {presentation === 'panel' ? (
+      <div className={cn('flex flex-col gap-3 border-t border-border/40 pt-5', groupedPanel && 'order-4 animate-in fade-in slide-in-from-right-1 border-0 pt-0 duration-200 [animation-delay:80ms] [animation-fill-mode:both] motion-reduce:animate-none')}>
+        {groupedPanel ? (
           <h3 className={groupedSectionTitleClassName}>
             {t('sessions.scheduledTasks.editor.panel.frequency')}
           </h3>
         ) : null}
-        <div className={cn(presentation === 'panel' && groupedCardClassName)}>
-        <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', presentation === 'panel' && 'flex flex-col gap-0', !isMobile && presentation !== 'panel' && 'sm:grid-cols-2')}>
-          <div className={cn('flex min-w-0 flex-col gap-1', presentation === 'panel' && [PANEL_ROW_CLASS, 'last:border-b'])}>
+        <div className={cn(groupedPanel && groupedCardClassName, groupedPanel && draft.schedule.kind === 'once' && isDatePickerOpen && 'overflow-visible')}>
+        <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', groupedPanel && 'flex flex-col gap-0', !isMobile && !groupedPanel && 'sm:grid-cols-2')}>
+          <div className={cn('flex min-w-0 flex-col gap-1', groupedPanel && [panelRowClassName, 'last:border-b'])}>
             <FieldLabel>{t('sessions.scheduledTasks.editor.scheduleType.label')}</FieldLabel>
             <Select
               value={draft.schedule.kind}
@@ -1271,7 +1284,7 @@ export function ScheduledTaskEditorDialog(props: {
                 }));
               }}
             >
-              <SelectTrigger className={cn(FORM_CONTROL_CLASS, presentation === 'panel' && PANEL_CONTROL_CLASS)}>
+              <SelectTrigger className={cn(FORM_CONTROL_CLASS, groupedPanel && panelControlClassName)}>
                 <SelectValue>
                   {(value) => value === 'daily'
                     ? t('sessions.scheduledTasks.editor.scheduleType.daily')
@@ -1294,15 +1307,15 @@ export function ScheduledTaskEditorDialog(props: {
         </div>
 
           {draft.schedule.kind === 'cron' ? (
-            <CronScheduleSection draft={draft} setDraft={setDraft} locale={locale} t={t} panel={presentation === 'panel'} />
+            <CronScheduleSection draft={draft} setDraft={setDraft} locale={locale} t={t} panel={desktopPanel} mobilePanel={mobilePanel} />
           ) : draft.schedule.kind === 'once' ? (
-            <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', presentation === 'panel' && 'flex flex-col gap-0', !isMobile && presentation !== 'panel' && 'sm:grid-cols-2')}>
-              <div className={cn('flex min-w-0 flex-col gap-1', presentation === 'panel' && PANEL_ROW_CLASS)} ref={datePickerRef}>
+            <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', groupedPanel && 'flex flex-col gap-0', !isMobile && !groupedPanel && 'sm:grid-cols-2')}>
+              <div className={cn('flex min-w-0 flex-col gap-1', groupedPanel && panelRowClassName)} ref={datePickerRef}>
                 <FieldLabel>{t('sessions.scheduledTasks.editor.date.label')}</FieldLabel>
                 <div className="relative">
                   <button
                     type="button"
-                    className={cn(FORM_CONTROL_CLASS, 'flex items-center justify-between gap-2 text-left', presentation === 'panel' && PANEL_CONTROL_CLASS)}
+                    className={cn(FORM_CONTROL_CLASS, 'flex items-center justify-between gap-2 text-left', groupedPanel && panelControlClassName)}
                     onClick={() => setIsDatePickerOpen((prev) => !prev)}
                   >
                     <span className="inline-flex min-w-0 items-center gap-2">
@@ -1313,7 +1326,10 @@ export function ScheduledTaskEditorDialog(props: {
                   </button>
 
                   {isDatePickerOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+6px)] z-50 w-[288px] animate-in fade-in zoom-in-95 slide-in-from-top-1 rounded-xl border border-border bg-background p-3 shadow-sm duration-150 motion-reduce:animate-none">
+                    <div className={cn(
+                      'absolute top-[calc(100%+6px)] z-50 w-[min(288px,calc(100vw-2rem))] animate-in fade-in zoom-in-95 slide-in-from-top-1 rounded-xl border border-border bg-background p-3 shadow-sm duration-150 motion-reduce:animate-none',
+                      mobilePanel ? 'right-0' : 'left-0',
+                    )}>
                       <div className="mb-2 flex items-center justify-between">
                         <button
                           type="button"
@@ -1404,11 +1420,13 @@ export function ScheduledTaskEditorDialog(props: {
                 </div>
               </div>
 
-              <div className={cn('flex min-w-0 flex-col gap-1', presentation === 'panel' && PANEL_ROW_CLASS)}>
+              <div className={cn('flex min-w-0 flex-col gap-1', groupedPanel && panelRowClassName)}>
                 <FieldLabel>{t('sessions.scheduledTasks.editor.time.label')}</FieldLabel>
                 <TimePill
                   value={draft.schedule.onceTime}
-                  className={cn(presentation === 'panel' && 'ml-auto -mr-1.5 w-fit min-w-0 justify-self-end bg-transparent ring-0 hover:[&:not(:focus-within)]:bg-interactive-hover/70')}
+                  className={cn(groupedPanel && (mobilePanel
+                    ? 'ml-auto w-fit min-w-0 justify-end bg-transparent ring-0 hover:[&:not(:focus-within)]:bg-interactive-hover/70'
+                    : 'ml-auto -mr-1.5 w-fit min-w-0 justify-self-end bg-transparent ring-0 hover:[&:not(:focus-within)]:bg-interactive-hover/70'))}
                   use24Hour={use24Hour}
                   hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
                   minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
@@ -1423,9 +1441,9 @@ export function ScheduledTaskEditorDialog(props: {
               </div>
             </div>
           ) : (
-            <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', presentation === 'panel' && 'flex flex-col gap-0', !isMobile && presentation !== 'panel' && 'sm:grid-cols-2')}>
+            <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', groupedPanel && 'flex flex-col gap-0', !isMobile && !groupedPanel && 'sm:grid-cols-2')}>
               {draft.schedule.kind === 'weekly' ? (
-                <div className={cn('flex flex-col gap-1', presentation === 'panel' && groupedCardRowClassName, !isMobile && presentation !== 'panel' && 'sm:col-span-2')}>
+                <div className={cn('flex flex-col gap-1', groupedPanel && groupedCardRowClassName, !isMobile && !groupedPanel && 'sm:col-span-2')}>
                   <FieldLabel>{t('sessions.scheduledTasks.editor.weekdays.label')}</FieldLabel>
                   <div className="flex flex-wrap gap-x-3 gap-y-2">
                     {orderedWeekdays.map((weekday) => {
@@ -1453,15 +1471,17 @@ export function ScheduledTaskEditorDialog(props: {
                 </div>
               ) : null}
 
-              <div className={cn('flex min-w-0 flex-col gap-2', presentation === 'panel' && [PANEL_ROW_CLASS, 'justify-start'])}>
+              <div className={cn('flex min-w-0 flex-col gap-2', groupedPanel && [panelRowClassName, 'justify-start'], mobilePanel && 'flex-col items-stretch')}>
                 <FieldLabel>{t('sessions.scheduledTasks.editor.times.label')}</FieldLabel>
-                <div className={cn(presentation === 'panel' ? 'relative ml-auto -mr-1.5 flex w-fit max-w-[72%] items-center justify-end justify-self-end' : 'contents')}>
-                <div className={cn('flex flex-col gap-2', presentation === 'panel' && 'flex-row flex-wrap justify-end transition-[padding] group-hover:pr-8 motion-reduce:transition-none')}>
+                <div className={cn(groupedPanel ? (mobilePanel
+                  ? 'relative flex w-full flex-wrap items-center justify-end'
+                  : 'relative ml-auto -mr-1.5 flex w-fit max-w-[72%] items-center justify-end justify-self-end') : 'contents')}>
+                <div className={cn('flex flex-col gap-2', groupedPanel && 'flex-row flex-wrap justify-end transition-[padding] motion-reduce:transition-none', desktopPanel && 'group-hover:pr-8')}>
                   {draft.schedule.times.map((time, index) => (
                     <div key={index} className="flex min-w-0 items-center gap-2">
                       <TimePill
                         value={time}
-                        className={cn(presentation === 'panel' && 'w-fit min-w-0 bg-transparent ring-0 hover:[&:not(:focus-within)]:bg-interactive-hover/70')}
+                        className={cn(groupedPanel && 'w-fit min-w-0 bg-transparent ring-0 hover:[&:not(:focus-within)]:bg-interactive-hover/70')}
                         use24Hour={use24Hour}
                         hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
                         minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
@@ -1484,17 +1504,17 @@ export function ScheduledTaskEditorDialog(props: {
                     </div>
                   ))}
                 </div>
-                <div className={cn(presentation === 'panel' && 'absolute right-0 shrink-0')}>
+                <div className={cn(groupedPanel && 'shrink-0', desktopPanel && 'absolute right-0')}>
                   <Button
                     type="button"
-                    size={presentation === 'panel' ? 'icon' : 'sm'}
-                    variant={presentation === 'panel' ? 'ghost' : 'outline'}
-                    className={cn('h-9', presentation === 'panel' && 'size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none')}
+                    size={groupedPanel ? 'icon' : 'sm'}
+                    variant={groupedPanel ? 'ghost' : 'outline'}
+                    className={cn('h-9', desktopPanel && 'size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none', mobilePanel && 'size-9')}
                     onClick={addTime}
                     aria-label={t('sessions.scheduledTasks.editor.times.add')}
                   >
-                    <Icon name="add" className={cn('h-4 w-4', presentation !== 'panel' && 'mr-1')} />
-                    {presentation !== 'panel' ? t('sessions.scheduledTasks.editor.times.add') : null}
+                    <Icon name="add" className={cn('h-4 w-4', !groupedPanel && 'mr-1')} />
+                    {!groupedPanel ? t('sessions.scheduledTasks.editor.times.add') : null}
                   </Button>
                 </div>
                 </div>
@@ -1505,18 +1525,18 @@ export function ScheduledTaskEditorDialog(props: {
         </div>
       </div>
 
-      <div className={cn('flex flex-col gap-3 border-t border-border/40 pt-5', presentation === 'panel' && 'contents')}>
-          {presentation === 'panel' ? (
+      <div className={cn('flex flex-col gap-3 border-t border-border/40 pt-5', groupedPanel && 'contents')}>
+          {groupedPanel ? (
             <h3 className={cn('order-2', groupedSectionTitleClassName)}>
               {t('sessions.scheduledTasks.editor.panel.details')}
             </h3>
           ) : null}
-          <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', presentation === 'panel' && ['order-3 flex flex-col gap-0 animate-in fade-in slide-in-from-right-1 duration-200 [animation-delay:40ms] [animation-fill-mode:both] motion-reduce:animate-none', groupedCardClassName], !isMobile && presentation !== 'panel' && 'sm:grid-cols-2')}>
+          <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', groupedPanel && ['order-3 flex flex-col gap-0 animate-in fade-in slide-in-from-right-1 duration-200 [animation-delay:40ms] [animation-fill-mode:both] motion-reduce:animate-none', groupedCardClassName], !isMobile && !groupedPanel && 'sm:grid-cols-2')}>
             {projectOptions.length > 0 ? (
-              <div className={cn('flex min-w-0 flex-col gap-1', presentation === 'panel' && PANEL_ROW_CLASS)}>
+              <div className={cn('flex min-w-0 flex-col gap-1', groupedPanel && panelRowClassName)}>
                 <FieldLabel>{t('sessions.scheduledTasks.dialog.project.label')}</FieldLabel>
                 <Select value={projectID} disabled={!onProjectChange} onValueChange={onProjectChange}>
-                  <SelectTrigger className={cn(FORM_CONTROL_CLASS, presentation === 'panel' && PANEL_CONTROL_CLASS)}>
+                  <SelectTrigger className={cn(FORM_CONTROL_CLASS, groupedPanel && panelControlClassName)}>
                     <SelectValue>
                       {(value) => projectOptions.find((project) => project.id === value)?.label}
                     </SelectValue>
@@ -1529,14 +1549,14 @@ export function ScheduledTaskEditorDialog(props: {
                 </Select>
               </div>
             ) : null}
-            <div className={cn('flex min-w-0 flex-col gap-1', presentation === 'panel' && PANEL_ROW_CLASS)}>
+            <div className={cn('flex min-w-0 flex-col gap-1', groupedPanel && panelRowClassName)}>
               <FieldLabel required>{t('sessions.scheduledTasks.editor.model.label')}</FieldLabel>
               <ModelSelector
                 providerId={draft.execution.providerID}
                 modelId={draft.execution.modelID}
                 variant={draft.execution.variant}
-                className={cn(FORM_CONTROL_CLASS, presentation === 'panel' && PANEL_CONTROL_CLASS, '[&>div]:min-w-0 [&>div]:flex-1 [&_span]:truncate')}
-                showIcon={presentation !== 'panel'}
+                className={cn(FORM_CONTROL_CLASS, groupedPanel && panelControlClassName, '[&>div]:min-w-0 [&>div]:flex-1 [&_span]:truncate')}
+                showIcon={!desktopPanel}
                 onChange={(providerID, modelID, variant = '') => {
                   setDraft((prev) => ({
                     ...prev,
@@ -1550,12 +1570,12 @@ export function ScheduledTaskEditorDialog(props: {
                 }}
               />
             </div>
-            {presentation === 'panel' ? (
-              <div className={PANEL_ROW_CLASS}>
+            {groupedPanel ? (
+              <div className={panelRowClassName}>
                 <FieldLabel>{t('sessions.scheduledTasks.editor.agent.label')}</FieldLabel>
                 <AgentSelector
                   agentName={draft.execution.agent}
-                  className={cn(FORM_CONTROL_CLASS, PANEL_CONTROL_CLASS, '[&>div]:min-w-0 [&>div]:flex-1 [&_span]:truncate')}
+                  className={cn(FORM_CONTROL_CLASS, panelControlClassName, '[&>div]:min-w-0 [&>div]:flex-1 [&_span]:truncate')}
                   showIcon
                   filter={(agent) => isPrimaryMode(agent.mode)}
                   onChange={(agent) => setDraft((prev) => ({
@@ -1565,10 +1585,10 @@ export function ScheduledTaskEditorDialog(props: {
                 />
               </div>
             ) : null}
-            {presentation === 'panel' ? (
-              <label className={cn(PANEL_ROW_CLASS, 'cursor-pointer')}>
+            {groupedPanel ? (
+              <label className={cn(panelRowClassName, 'cursor-pointer')}>
                 <span className="typography-ui-label text-foreground">{t('sessions.scheduledTasks.editor.goal.label')}</span>
-                <span className="-mr-1.5 justify-self-end pr-3">
+                <span className={cn('pr-3', desktopPanel && '-mr-1.5 justify-self-end', mobilePanel && 'ml-auto')}>
                   <Checkbox
                     checked={draft.execution.goalEnabled}
                     onChange={(goalEnabled) => setDraft((prev) => ({
@@ -1582,7 +1602,7 @@ export function ScheduledTaskEditorDialog(props: {
             ) : null}
           </div>
 
-          {presentation !== 'panel' ? <div className="flex min-w-0 flex-col gap-1">
+          {!groupedPanel ? <div className="flex min-w-0 flex-col gap-1">
             <FieldLabel>{t('sessions.scheduledTasks.editor.agent.label')}</FieldLabel>
             <AgentSelector
               agentName={draft.execution.agent}
@@ -1598,8 +1618,8 @@ export function ScheduledTaskEditorDialog(props: {
             />
           </div> : null}
 
-          <div className={cn('flex flex-col gap-1', presentation === 'panel' && 'order-1')}>
-            <div className={cn(presentation === 'panel' && 'sr-only')}>
+          <div className={cn('flex flex-col gap-1', groupedPanel && 'order-1')}>
+            <div className={cn(groupedPanel && 'sr-only')}>
               <FieldLabel htmlFor="sched-prompt" required>{t('sessions.scheduledTasks.editor.prompt.label')}</FieldLabel>
             </div>
             <div className="relative">
@@ -1614,12 +1634,12 @@ export function ScheduledTaskEditorDialog(props: {
                   updateAutocompleteState(nextPrompt, cursorPosition);
                 }}
                 onKeyDown={handlePromptKeyDown}
-                rows={presentation === 'panel' ? 4 : 8}
-                simple={presentation === 'panel'}
+                rows={groupedPanel ? 4 : 8}
+                simple={groupedPanel}
                 placeholder={t('sessions.scheduledTasks.editor.prompt.placeholder')}
                 className={cn(
                   'typography-meta min-h-[120px] max-h-[300px] resize-none overflow-y-auto',
-                  presentation === 'panel' && '!h-32 !min-h-32 !max-h-32 rounded-2xl border border-border/60 bg-[var(--surface-elevated)] px-4 py-4 text-base shadow-none ring-0 placeholder:text-muted-foreground/65 focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]',
+                  groupedPanel && '!h-32 !min-h-32 !max-h-32 rounded-2xl border border-border/60 bg-[var(--surface-elevated)] px-4 py-4 text-base shadow-none ring-0 placeholder:text-muted-foreground/65 focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]',
                 )}
               />
 
@@ -1674,7 +1694,7 @@ export function ScheduledTaskEditorDialog(props: {
             </div>
           </div>
 
-          {presentation !== 'panel' ? <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+          {!groupedPanel ? <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
             <label className="inline-flex cursor-pointer items-center gap-2">
               <Checkbox
                 checked={draft.execution.goalEnabled}

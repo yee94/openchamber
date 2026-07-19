@@ -6,7 +6,7 @@ import { registerScheduledTaskToolRoute } from './managed-tool-route.js';
 
 const session = { id: 'ses_1', directory: '/repo/packages/app' };
 const messages = [
-  { info: { id: 'usr_1', role: 'user', model: { providerID: 'anthropic', modelID: 'claude-test' }, agent: 'build', variant: 'fast' } },
+  { info: { id: 'usr_1', role: 'user', model: { providerID: 'anthropic', modelID: 'claude-test', variant: 'fast' }, agent: 'build' } },
   { info: { id: 'ast_1', role: 'assistant', parentID: 'usr_1' } },
 ];
 
@@ -41,6 +41,13 @@ const createApp = (overrides = {}) => {
       tasks.splice(index, 1);
       return { deleted: true, tasks };
     }),
+    patchScheduledTask: vi.fn(async (_projectID, taskID, patch) => {
+      const existing = tasks.find((item) => item.id === taskID);
+      if (!existing) return { task: null, tasks };
+      const saved = { ...existing, ...patch, schedule: { ...existing.schedule, ...patch.schedule }, execution: { ...existing.execution, ...patch.execution } };
+      tasks[tasks.indexOf(existing)] = saved;
+      return { task: saved, tasks };
+    }),
     ...overrides.projectConfigRuntime,
   };
   const scheduledTasksRuntime = {
@@ -56,6 +63,8 @@ const createApp = (overrides = {}) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = overrides.fetch || fetchMock;
   const validateDirectoryPath = overrides.validateDirectoryPath || vi.fn(async (directory) => ({ ok: true, directory }));
+  const logger = overrides.logger || { error: vi.fn(), warn: vi.fn() };
+  const scheduleSyncRetry = overrides.scheduleSyncRetry || vi.fn();
   registerScheduledTaskToolRoute(app, {
     express,
     path: awaitablePath,
@@ -66,10 +75,11 @@ const createApp = (overrides = {}) => {
     sanitizeProjects: (projects) => projects,
     projectConfigRuntime,
     scheduledTasksRuntime,
-    logger: { error: vi.fn() },
+    logger,
+    scheduleSyncRetry,
     ...overrides.dependencies,
   });
-  return { app, projectConfigRuntime, scheduledTasksRuntime, fetchMock, validateDirectoryPath, restore: () => { globalThis.fetch = originalFetch; } };
+  return { app, projectConfigRuntime, scheduledTasksRuntime, fetchMock, validateDirectoryPath, logger, scheduleSyncRetry, restore: () => { globalThis.fetch = originalFetch; } };
 };
 
 // The route receives Node's path module through dependency injection in production.
@@ -96,17 +106,17 @@ describe('managed scheduled task tool route', () => {
     } finally { fixture.restore(); }
   });
 
-  it('uses explicit execution models and preserves state during partial update', async () => {
+  it('passes only the requested partial fields to patchScheduledTask', async () => {
     const fixture = createApp();
     try {
       const response = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('update', {
         taskId: 'task_1', name: 'Renamed', execution: { modelID: 'explicit-model' }, schedule: { timezone: 'Europe/Paris' },
       }));
       expect(response.status).toBe(200);
-      const saved = fixture.projectConfigRuntime.upsertScheduledTask.mock.calls[0][1];
-      expect(saved).toMatchObject({ id: 'task_1', name: 'Renamed', state: task.state });
-      expect(saved.execution).toMatchObject({ providerID: 'openai', modelID: 'explicit-model', prompt: 'existing prompt' });
-      expect(saved.schedule).toMatchObject({ kind: 'daily', time: '09:00', timezone: 'Europe/Paris' });
+      expect(fixture.projectConfigRuntime.patchScheduledTask).toHaveBeenCalledWith('app', 'task_1', {
+        name: 'Renamed', execution: { modelID: 'explicit-model' }, schedule: { timezone: 'Europe/Paris' },
+      });
+      expect(fixture.projectConfigRuntime.listScheduledTasks).not.toHaveBeenCalled();
     } finally { fixture.restore(); }
   });
 
@@ -150,21 +160,19 @@ describe('managed scheduled task tool route', () => {
     } finally { fixture.restore(); }
   });
 
-  it('uses the latest modeled user when the current assistant message is pending', async () => {
-    const pendingMessages = [
-      { info: { id: 'usr_latest', role: 'user', model: { providerID: 'provider', modelID: 'model', variant: 'model-variant' } } },
-    ];
-    const fixture = createApp({ fetch: vi.fn(async (url) => (
-      String(url).includes('/message') ? Response.json(pendingMessages) : Response.json(session)
-    )) });
+  it('rejects missing or forged message IDs', async () => {
+    const fixture = createApp();
     try {
-      const response = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('create', {
-        name: 'Pending assistant', schedule: { kind: 'daily', time: '10:00', timezone: 'UTC' }, execution: { prompt: 'run' },
-      }, { messageID: 'ast_pending' }));
-      expect(response.status).toBe(201);
-      expect(fixture.projectConfigRuntime.upsertScheduledTask.mock.calls[0][1].execution).toMatchObject({
-        providerID: 'provider', modelID: 'model', variant: 'model-variant',
-      });
+      expect((await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('list', {}, { messageID: 'missing' }))).status).toBe(400);
+      expect((await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('list', {}, { messageID: 'usr_1' }))).status).toBe(400);
+    } finally { fixture.restore(); }
+  });
+
+  it('rejects a context agent that differs from the authoritative user agent', async () => {
+    const fixture = createApp();
+    try {
+      const response = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('list', {}, { agent: 'forged-agent' }));
+      expect(response.status).toBe(400);
     } finally { fixture.restore(); }
   });
 
@@ -192,6 +200,44 @@ describe('managed scheduled task tool route', () => {
       const response = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('list'));
       expect(response.status).toBe(200);
       expect(response.body.projectId).toBe('root');
+    } finally { fixture.restore(); }
+  });
+
+  it('fails closed when an invalid configured project lexically contains the session', async () => {
+    const fixture = createApp({
+      validateDirectoryPath: vi.fn(async (directory) => directory === '/repo/packages'
+        ? { ok: false, error: 'missing' }
+        : { ok: true, directory }),
+      dependencies: {
+        readSettingsFromDiskMigrated: async () => ({ projects: [{ id: 'root', path: '/repo' }, { id: 'broken', path: '/repo/packages' }] }),
+      },
+    });
+    try {
+      const response = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('list'));
+      expect(response.status).toBe(409);
+    } finally { fixture.restore(); }
+  });
+
+  it('returns successful mutations when scheduler sync fails and schedules a retry', async () => {
+    const retry = vi.fn();
+    const fixture = createApp({
+      scheduledTasksRuntime: { syncProject: vi.fn().mockRejectedValue(new Error('scheduler down')) },
+      scheduleSyncRetry: retry,
+    });
+    try {
+      const created = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('create', {
+        name: 'Retry task', schedule: { kind: 'daily', time: '10:00', timezone: 'UTC' }, execution: { prompt: 'run' },
+      }));
+      expect(created.status).toBe(201);
+      expect(created.body.schedulerSynced).toBe(false);
+      expect(retry).toHaveBeenCalledTimes(1);
+      retry.mock.calls[0][0]();
+      await Promise.resolve();
+      expect(fixture.scheduledTasksRuntime.syncProject).toHaveBeenCalledTimes(2);
+
+      const deleted = await request(fixture.app).post(MANAGED_SCHEDULED_TASK_TOOL_PATH).send(body('delete', { taskId: 'task_1' }));
+      expect(deleted.status).toBe(200);
+      expect(deleted.body.schedulerSynced).toBe(false);
     } finally { fixture.restore(); }
   });
 

@@ -78,6 +78,7 @@ import { useSelectionStore } from "./selection-store"
 import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
+import { queueScopeKey, type QueueScope } from "@/stores/messageQueueStore"
 import { setSessionOpener } from "./session-opener"
 import { getRuntimeKey, getRuntimeTransportIdentity } from "@/lib/runtime-switch"
 import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
@@ -323,6 +324,7 @@ export type SessionUIState = {
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>
   webUICreatedSessions: Set<string>
   sessionAbortFlags: Map<string, { timestamp: number; acknowledged: boolean }>
+  queueAbortBlocks: Map<string, { token: string; expiresAt: number }>
   abortControllers: Map<string, AbortController>
   isLoading: boolean
   lastLoadedDirectory: string | null
@@ -346,6 +348,9 @@ export type SessionUIState = {
   setDraftPreserveDirectoryOverride: (value: boolean) => void
   setDraftPermissionAutoAcceptEnabled: (enabled: boolean) => void
   acknowledgeSessionAbort: (sessionId: string) => void
+  beginQueueAbortBlock: (scope: Extract<QueueScope, { state: "bound" }>, durationMs?: number) => string
+  clearQueueAbortBlock: (scope: Extract<QueueScope, { state: "bound" }>, token: string) => void
+  pruneQueueAbortBlocks: (now?: number) => void
   clearAbortPrompt: () => void
   armAbortPrompt: (durationMs?: number) => number | null
   clearError: () => void
@@ -942,6 +947,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   availableWorktreesByProject: PERSISTED_WORKTREE_MAP,
   webUICreatedSessions: new Set(),
   sessionAbortFlags: new Map(),
+  queueAbortBlocks: new Map(),
   abortControllers: new Map(),
   isLoading: false,
   lastLoadedDirectory: null,
@@ -1069,6 +1075,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       directory,
       draft: cloneDraft(get().newSessionDraft),
     })
+    set({ queueAbortBlocks: new Map() })
   },
 
   restoreForRuntimeSwitch: (apiBaseUrl?: string | null) => {
@@ -1090,6 +1097,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       abortPromptExpiresAt: null,
       error: null,
       sessionAbortFlags: new Map(),
+      queueAbortBlocks: new Map(),
       pendingChangesBarDismissed: new Map(),
       stagedMessageEdit: null,
     })
@@ -1324,6 +1332,37 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       const existing = flags.get(sessionId)
       if (existing) flags.set(sessionId, { ...existing, acknowledged: true })
       return { sessionAbortFlags: flags }
+    }),
+
+  beginQueueAbortBlock: (scope, durationMs = 2000) => {
+    const token = createUuid()
+    const key = queueScopeKey(scope)
+    set((state) => {
+      const queueAbortBlocks = new Map(state.queueAbortBlocks)
+      queueAbortBlocks.set(key, { token, expiresAt: Date.now() + durationMs })
+      return { queueAbortBlocks }
+    })
+    return token
+  },
+
+  clearQueueAbortBlock: (scope, token) =>
+    set((state) => {
+      const key = queueScopeKey(scope)
+      if (state.queueAbortBlocks.get(key)?.token !== token) return state
+      const queueAbortBlocks = new Map(state.queueAbortBlocks)
+      queueAbortBlocks.delete(key)
+      return { queueAbortBlocks }
+    }),
+
+  pruneQueueAbortBlocks: (now = Date.now()) =>
+    set((state) => {
+      let queueAbortBlocks: Map<string, { token: string; expiresAt: number }> | undefined
+      for (const [key, block] of state.queueAbortBlocks) {
+        if (block.expiresAt > now) continue
+        if (!queueAbortBlocks) queueAbortBlocks = new Map(state.queueAbortBlocks)
+        queueAbortBlocks.delete(key)
+      }
+      return queueAbortBlocks ? { queueAbortBlocks } : state
     }),
 
   clearAbortPrompt: () => set({ abortPromptSessionId: null, abortPromptExpiresAt: null }),

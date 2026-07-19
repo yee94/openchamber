@@ -8,6 +8,7 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 import { restartDesktopApp } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { checkOpenCodeAvailability, retryOpenCodeAvailability } from './openCodeAvailability';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const DOCS_URL = 'https://opencode.ai/docs';
@@ -126,17 +127,6 @@ export function LocalSetupScreen({
     }
   }, [isDesktopApp]);
 
-  const checkCliAvailability = React.useCallback(async (): Promise<boolean> => {
-    try {
-      const response = await runtimeFetch('/health');
-      if (!response.ok) return false;
-      const data = await response.json();
-      return data.openCodeRunning === true || data.isOpenCodeReady === true;
-    } catch {
-      return false;
-    }
-  }, []);
-
   const handleBrowse = React.useCallback(async () => {
     if (typeof window === 'undefined') {
       return;
@@ -187,7 +177,10 @@ export function LocalSetupScreen({
     setIsChecking(true);
     setCheckError(null);
     try {
-      const available = await checkCliAvailability();
+      let available = await checkOpenCodeAvailability();
+      if (!available) {
+        available = await retryOpenCodeAvailability();
+      }
       if (available) {
         // CLI is available, proceed to main screen
         onCliAvailable?.();
@@ -199,7 +192,7 @@ export function LocalSetupScreen({
     } finally {
       setIsChecking(false);
     }
-  }, [checkCliAvailability, onCliAvailable, t]);
+  }, [onCliAvailable, t]);
 
   const docsUrl = DOCS_URL;
   const binaryPlaceholder =

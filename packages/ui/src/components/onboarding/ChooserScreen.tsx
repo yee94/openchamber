@@ -11,10 +11,12 @@ import { RemoteConnectionForm } from './RemoteConnectionForm';
 import { desktopHostsGet, desktopHostsSet } from '@/lib/desktopHosts';
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { checkOpenCodeAvailability, retryOpenCodeAvailability } from './openCodeAvailability';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const DOCS_URL = 'https://opencode.ai/docs';
 const POLL_INTERVAL_MS = 2500;
+const AUTO_RETRY_INTERVAL_MS = 10000;
 
 type OnboardingPlatform = 'macos' | 'linux' | 'windows' | 'unknown';
 
@@ -56,6 +58,8 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
   const [activeTab, setActiveTab] = React.useState<'local' | 'remote'>('local');
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [troubleOpen, setTroubleOpen] = React.useState(false);
+  const [checkError, setCheckError] = React.useState<string | null>(null);
+  const availabilityAnnouncedRef = React.useRef(false);
 
   React.useEffect(() => {
     setIsDesktopApp(isDesktopShell());
@@ -103,17 +107,6 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
     }
   }, [isDesktopApp]);
 
-  const checkCliAvailability = React.useCallback(async (): Promise<boolean> => {
-    try {
-      const response = await runtimeFetch('/health');
-      if (!response.ok) return false;
-      const data = await response.json();
-      return data.openCodeRunning === true || data.isOpenCodeReady === true;
-    } catch {
-      return false;
-    }
-  }, []);
-
   const persistFirstChoice = React.useCallback(async (choice: 'local' | 'remote') => {
     if (!isDesktopApp) return;
 
@@ -126,10 +119,17 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
   }, [isDesktopApp]);
 
   const announceAvailable = React.useCallback(async () => {
-    if (isDesktopApp) {
-      await persistFirstChoice('local');
+    if (availabilityAnnouncedRef.current) return;
+    availabilityAnnouncedRef.current = true;
+    try {
+      if (isDesktopApp) {
+        await persistFirstChoice('local');
+      }
+      await onCliAvailable?.();
+    } catch (error) {
+      availabilityAnnouncedRef.current = false;
+      throw error;
     }
-    onCliAvailable?.();
   }, [isDesktopApp, onCliAvailable, persistFirstChoice]);
 
   // Background polling: while the local tab is visible, periodically check
@@ -140,11 +140,17 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastRetryAt = 0;
 
     const tick = async () => {
       if (cancelled) return;
       try {
-        const available = await checkCliAvailability();
+        let available = await checkOpenCodeAvailability();
+        const now = Date.now();
+        if (!available && now - lastRetryAt >= AUTO_RETRY_INTERVAL_MS) {
+          lastRetryAt = now;
+          available = await retryOpenCodeAvailability();
+        }
         if (cancelled) return;
         if (available) {
           await announceAvailable();
@@ -164,17 +170,27 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [activeTab, checkCliAvailability, announceAvailable]);
+  }, [activeTab, announceAvailable]);
 
   const handleManualCheck = React.useCallback(async () => {
     setIsManualChecking(true);
+    setCheckError(null);
     try {
-      const available = await checkCliAvailability();
-      if (available) await announceAvailable();
+      let available = await checkOpenCodeAvailability();
+      if (!available) {
+        available = await retryOpenCodeAvailability();
+      }
+      if (available) {
+        await announceAvailable();
+      } else {
+        setCheckError(t('onboarding.localSetup.errors.cliNotReady'));
+      }
+    } catch {
+      setCheckError(t('onboarding.localSetup.errors.detectionFailed'));
     } finally {
       setIsManualChecking(false);
     }
-  }, [checkCliAvailability, announceAvailable]);
+  }, [announceAvailable, t]);
 
   const handleBrowse = React.useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -325,6 +341,12 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
                 {isManualChecking ? t('onboarding.localSetup.actions.checking') : t('onboarding.localSetup.actions.checkNow')}
               </button>
             </div>
+
+            {checkError && (
+              <p role="alert" className="text-center text-xs text-[var(--status-error-foreground)]">
+                {checkError}
+              </p>
+            )}
 
             <div
               className="rounded-lg border px-4 py-3 flex items-center gap-3"

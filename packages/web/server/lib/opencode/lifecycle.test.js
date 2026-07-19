@@ -15,6 +15,7 @@ const originalPath = process.env.PATH;
 
 afterEach(() => {
   spawnMock.mockReset();
+  vi.unstubAllGlobals();
   if (typeof originalOpencodeBinary === 'string') {
     process.env.OPENCODE_BINARY = originalOpencodeBinary;
   } else {
@@ -43,7 +44,7 @@ const createMockChild = () => {
   return child;
 };
 
-const createRuntime = (overrides = {}) => {
+const createRuntime = (overrides = {}, stateRef = null) => {
   const state = {
     openCodeWorkingDirectory: '/tmp/project',
     openCodeProcess: null,
@@ -66,6 +67,10 @@ const createRuntime = (overrides = {}) => {
     resolvedWslOpencodePath: null,
     resolvedWslDistro: null,
   };
+
+  if (stateRef) {
+    stateRef.current = state;
+  }
 
   return createOpenCodeLifecycleRuntime({
     state,
@@ -214,6 +219,29 @@ describe('OpenCode lifecycle', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 
+  it('terminates each managed child when its startup output cannot be parsed', async () => {
+    delete process.env.OPENCODE_BINARY;
+    const firstChild = createMockChild();
+    const secondChild = createMockChild();
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        firstChild.stdout.emit('data', 'opencode server listening without a url\n');
+      });
+      return firstChild;
+    });
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        secondChild.stdout.emit('data', 'opencode server listening without a url\n');
+      });
+      return secondChild;
+    });
+
+    await expect(createRuntime().startOpenCode()).rejects.toThrow('Failed to parse server url from output');
+
+    expect(firstChild.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(secondChild.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
   it('does not retry managed startup when the configured OpenCode binary is invalid', async () => {
     delete process.env.OPENCODE_BINARY;
     const error = new Error('Configured OpenCode binary not found: /missing/opencode');
@@ -252,5 +280,117 @@ describe('OpenCode lifecycle', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(2);
     await server.close();
+  });
+
+  it('prefers configured external OpenCode over an HMR managed child', async () => {
+    const stateRef = {};
+    const managedChild = { close: vi.fn(async () => {}) };
+    const runtime = createRuntime({
+      env: {
+        ENV_CONFIGURED_OPENCODE_PORT: null,
+        ENV_CONFIGURED_OPENCODE_HOST: { origin: 'http://127.0.0.1:3001' },
+        ENV_EFFECTIVE_PORT: 3001,
+        ENV_CONFIGURED_OPENCODE_HOSTNAME: '127.0.0.1',
+        ENV_SKIP_OPENCODE_START: true,
+      },
+      syncFromHmrState: vi.fn(),
+    }, stateRef);
+    stateRef.current.openCodeProcess = managedChild;
+    stateRef.current.openCodePort = 45678;
+    stateRef.current.isExternalOpenCode = false;
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ healthy: true }), { status: 200 })));
+    await runtime.bootstrapOpenCodeAtStartup();
+    expect(managedChild.close).toHaveBeenCalledTimes(1);
+    expect(stateRef.current.openCodeProcess).toBeNull();
+    expect(stateRef.current.isExternalOpenCode).toBe(true);
+    expect(stateRef.current.openCodePort).toBe(3001);
+  });
+
+  it('clears restored external ownership before starting a managed child', async () => {
+    const child = createMockChild();
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => child.stdout.emit('data', 'opencode server listening on http://127.0.0.1:45678\n'));
+      return child;
+    });
+    const stateRef = {};
+    const runtime = createRuntime({
+      env: {
+        ENV_CONFIGURED_OPENCODE_PORT: 45678,
+        ENV_CONFIGURED_OPENCODE_HOST: null,
+        ENV_EFFECTIVE_PORT: null,
+        ENV_CONFIGURED_OPENCODE_HOSTNAME: '127.0.0.1',
+        ENV_SKIP_OPENCODE_START: false,
+      },
+    }, stateRef);
+    stateRef.current.isExternalOpenCode = true;
+    stateRef.current.openCodeBaseUrl = 'http://127.0.0.1:3001';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ healthy: true }), { status: 200 })));
+
+    await runtime.bootstrapOpenCodeAtStartup();
+
+    expect(stateRef.current.isExternalOpenCode).toBe(false);
+    expect(stateRef.current.openCodeBaseUrl).toBeNull();
+    expect(stateRef.current.openCodeProcess?.pid).toBe(12345);
+    await stateRef.current.openCodeProcess.close();
+  });
+
+  it('re-resolves and starts OpenCode after the initial bootstrap failed', async () => {
+    delete process.env.OPENCODE_BINARY;
+    let installed = false;
+    const missingBinaryError = Object.assign(new Error('OpenCode CLI is missing'), {
+      code: 'OPENCODE_BINARY_INVALID',
+    });
+    const applyOpencodeBinaryFromSettings = vi.fn(async (options = {}) => {
+      if (options.strict === true && !installed) {
+        throw missingBinaryError;
+      }
+      return null;
+    });
+    const ensureOpencodeCliEnv = vi.fn(() => {
+      if (!installed) return null;
+      process.env.OPENCODE_BINARY = '/mock/opencode';
+      return process.env.OPENCODE_BINARY;
+    });
+    const clearResolvedOpenCodeBinary = vi.fn();
+    const child = createMockChild();
+    const stateRef = {};
+    const runtime = createRuntime({
+      env: {
+        ENV_CONFIGURED_OPENCODE_PORT: 45678,
+        ENV_CONFIGURED_OPENCODE_HOST: null,
+        ENV_EFFECTIVE_PORT: null,
+        ENV_CONFIGURED_OPENCODE_HOSTNAME: '127.0.0.1',
+        ENV_SKIP_OPENCODE_START: false,
+      },
+      applyOpencodeBinaryFromSettings,
+      ensureOpencodeCliEnv,
+      clearResolvedOpenCodeBinary,
+    }, stateRef);
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await runtime.bootstrapOpenCodeAtStartup();
+    expect(spawnMock).not.toHaveBeenCalled();
+
+    installed = true;
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        child.stdout.emit('data', 'opencode server listening on http://127.0.0.1:45678\n');
+      });
+      return child;
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ healthy: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+
+    try {
+      await runtime.retryOpenCodeStartup();
+      expect(clearResolvedOpenCodeBinary).toHaveBeenCalledTimes(1);
+      expect(spawnMock).toHaveBeenCalledTimes(1);
+      expect(spawnMock.mock.calls[0][0]).toBe('/mock/opencode');
+    } finally {
+      errorLog.mockRestore();
+      await stateRef.current.openCodeProcess?.close();
+    }
   });
 });

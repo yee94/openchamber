@@ -14,12 +14,17 @@ interface MobileOverlayPanelProps {
   contentMaxHeightClassName?: string;
   renderHeader?: (closeButton: React.ReactNode) => React.ReactNode;
   containedBody?: boolean;
+  closeAriaLabel?: string;
 }
 
 const OVERLAY_ROOT_ID = 'mobile-overlay-root';
 // Entrance animation: classic slide up from the bottom + scrim fade.
 const ENTER_DELAY_MS = 16;
 const ENTER_DURATION_MS = 200;
+const openOverlayStack: symbol[] = [];
+let bodyLockDepth = 0;
+let bodyOverflowBeforeLock = '';
+let overlaySignalDepth = 0;
 
 const ensureOverlayRoot = () => {
   if (typeof document === 'undefined') return null;
@@ -42,8 +47,12 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   contentMaxHeightClassName,
   renderHeader,
   containedBody = false,
+  closeAriaLabel,
 }) => {
   const overlayRootRef = React.useRef<HTMLElement | null>(null);
+  const overlayIDRef = React.useRef(Symbol('mobile-overlay'));
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   const [entered, setEntered] = React.useState(false);
   // True once the enter transition has finished. While entering, the panel's
   // keyboard-inset bottom anchor must NOT animate: opening an overlay usually
@@ -81,9 +90,15 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   // keyboard in an installed PWA.
   React.useLayoutEffect(() => {
     if (!open) return;
-    window.dispatchEvent(new Event('oc:mobile-overlay-opened'));
+    if (overlaySignalDepth === 0) {
+      window.dispatchEvent(new Event('oc:mobile-overlay-opened'));
+    }
+    overlaySignalDepth += 1;
     return () => {
-      window.dispatchEvent(new Event('oc:mobile-overlay-closed'));
+      overlaySignalDepth = Math.max(0, overlaySignalDepth - 1);
+      if (overlaySignalDepth === 0) {
+        window.dispatchEvent(new Event('oc:mobile-overlay-closed'));
+      }
     };
   }, [open]);
 
@@ -91,19 +106,31 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
     if (!open) {
       return;
     }
-    const previousOverflow = document.body.style.overflow;
+    const overlayID = overlayIDRef.current;
+    openOverlayStack.push(overlayID);
+    if (bodyLockDepth === 0) {
+      bodyOverflowBeforeLock = document.body.style.overflow;
+    }
+    bodyLockDepth += 1;
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
+      if (event.key === 'Escape' && openOverlayStack[openOverlayStack.length - 1] === overlayID) {
+        onCloseRef.current();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      const stackIndex = openOverlayStack.lastIndexOf(overlayID);
+      if (stackIndex >= 0) {
+        openOverlayStack.splice(stackIndex, 1);
+      }
+      bodyLockDepth = Math.max(0, bodyLockDepth - 1);
+      if (bodyLockDepth === 0) {
+        document.body.style.overflow = bodyOverflowBeforeLock;
+      }
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || !overlayRootRef.current) {
     return null;
@@ -120,6 +147,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
       )}
       role="dialog"
       aria-modal="true"
+      aria-label={title}
       onClick={onClose}
     >
         <div
@@ -140,7 +168,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
               type="button"
               onClick={onClose}
               className={cn('flex items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover', containedBody ? 'size-11' : 'h-8 w-8')}
-              aria-label={title}
+              aria-label={closeAriaLabel ?? title}
             >
               <Icon name="close" className="h-4 w-4" />
             </button>
@@ -158,7 +186,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
           );
         })()}
         {containedBody ? (
-          <div className={cn('min-h-0 flex-1 overflow-hidden', contentMaxHeight)}>
+          <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', contentMaxHeight)}>
             {children}
           </div>
         ) : (

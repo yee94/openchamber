@@ -84,11 +84,14 @@ describe('ScheduledTasksDialog queries', () => {
     expect(workspaceContent).toContain('key="empty"');
     expect(workspaceContent).toContain('key="tasks"');
     expect(workspaceContent).toContain('exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}');
-    expect(workspaceContent).toContain('h-11 min-h-11 rounded-full bg-[var(--surface-elevated)] pl-10 pr-4');
+    expect(workspaceContent).toContain("isMobilePanel ? 'h-11 min-h-11' : '!h-9 !min-h-9'");
     expect(workspaceContent).toContain("initial={reduceMotion ? { opacity: 1, width: 0 } : { opacity: 0, width: 0, x: 24 }}");
     expect(workspaceContent).toContain('motion-reduce:transition-none');
     expect(editorContent).toContain('motion-reduce:animate-none');
     expect(editorContent).toContain('groupedCardClassName');
+    expect(editorContent).toContain('const groupedPanel = desktopPanel || mobilePanel;');
+    expect(editorContent).toContain('MOBILE_PANEL_ROW_CLASS');
+    expect(editorContent).toContain('MOBILE_PANEL_CONTROL_CLASS');
   });
 
   test('exposes the scheduled tasks overlay from the dedicated mobile menu', async () => {
@@ -111,12 +114,31 @@ describe('ScheduledTasksDialog queries', () => {
       readFile(join(directory, '../../apps/MobileApp.tsx'), 'utf8'),
     ]);
     expect(workspaceContent).toContain("presentation?: 'workspace' | 'mobile-panel'");
-    expect(workspaceContent).toContain("presentation={isMobilePanel ? 'panel' : undefined}");
+    expect(workspaceContent).toContain("presentation={isMobilePanel ? 'mobile-panel' : undefined}");
     expect(workspaceContent).toContain('if (editorMode !== \'closed\')');
     expect(workspaceContent).toContain('handleCancelEditor(false)');
     expect(workspaceContent).toContain("window.addEventListener('oc:scheduled-tasks-close-request', handleCloseRequest)");
     expect(overlayContent).toContain('containedBody?: boolean');
-    expect(overlayContent).toContain("'min-h-0 flex-1 overflow-hidden'");
+    expect(overlayContent).toContain("'flex min-h-0 flex-1 flex-col overflow-hidden'");
+    expect(overlayContent).toContain('openOverlayStack[openOverlayStack.length - 1] === overlayID');
     expect(mobileAppContent).toContain("window.dispatchEvent(new Event('oc:scheduled-tasks-close-request'));");
+  });
+
+  test('uses the shared model picker for model and thinking mode selection', async () => {
+    const directory = dirname(fileURLToPath(import.meta.url));
+    const [editorContent, modelSelectorContent, mobileModelPickerContent] = await Promise.all([
+      readFile(join(directory, 'ScheduledTaskEditorDialog.tsx'), 'utf8'),
+      readFile(join(directory, '../sections/agents/ModelSelector.tsx'), 'utf8'),
+      readFile(join(directory, '../model-picker/MobileModelPickerPanel.tsx'), 'utf8'),
+    ]);
+    expect(editorContent).toContain('variant={draft.execution.variant}');
+    expect(editorContent).not.toContain("t('sessions.scheduledTasks.editor.thinkingLevel.label')");
+    expect(modelSelectorContent).toContain('variant?: string;');
+    expect(modelSelectorContent).toContain('<MobileModelPickerPanel');
+    expect(modelSelectorContent).toContain('variantSelectionEnabled={variantSelectionEnabled}');
+    expect(modelSelectorContent).toContain('onSelect={handleMobileSelect}');
+    expect(mobileModelPickerContent).toContain('allowedModelIdsByProvider');
+    expect(mobileModelPickerContent).toContain("setView('variant')");
+    expect(editorContent).toContain('if (!selectedModelForVariant || !draft.execution.variant');
   });
 });

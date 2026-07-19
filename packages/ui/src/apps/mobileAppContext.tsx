@@ -4,7 +4,7 @@ import React from 'react';
 export type MobileAppActions = {
   /** Open the Changes surface as a modal and (optionally) navigate it to a specific diff. */
   openChanges: (options?: { diffPath?: string | null; staged?: boolean; targetLine?: number }) => void;
-  /** Open every diff from the current turn in a mobile review sheet. */
+  /** Open every diff from the owning turn in a mobile review sheet. */
   openTurnDiff: (messageId?: string) => void;
   /** Open the Files surface as a modal. */
   openFiles: () => void;

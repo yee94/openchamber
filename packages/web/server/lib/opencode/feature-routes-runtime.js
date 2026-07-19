@@ -11,6 +11,7 @@ import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
+import { registerScheduledTaskToolRoute } from '../scheduled-tasks/managed-tool-route.js';
 import { registerConversationRoutes } from '../conversations/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerPluginRoutes } from './plugin-routes.js';
@@ -68,6 +69,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
   const registerRoutes = async (app, routeDependencies) => {
     const {
+      express,
       crypto,
       fs,
       os,
@@ -84,6 +86,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       validateDirectoryPath,
       readCustomThemesFromDisk,
       refreshOpenCodeAfterConfigChange,
+      retryOpenCodeStartup,
       getOpenCodeResolutionSnapshot,
       formatSettingsResponse,
       readSettingsFromDisk,
@@ -108,6 +111,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSettingsUtilityRoutes(app, {
       readCustomThemesFromDisk,
       refreshOpenCodeAfterConfigChange,
+      retryOpenCodeStartup,
       clientReloadDelayMs,
     });
 
@@ -151,6 +155,18 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTasksRuntime,
       getOpenChamberEventClients,
       writeSseEvent,
+    });
+
+    registerScheduledTaskToolRoute(app, {
+      express,
+      path,
+      validateDirectoryPath,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+      readSettingsFromDiskMigrated,
+      sanitizeProjects,
+      projectConfigRuntime,
+      scheduledTasksRuntime,
     });
 
     registerConversationRoutes(app, {

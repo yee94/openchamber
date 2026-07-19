@@ -13,6 +13,7 @@ import { installedSkillsQueryOptions } from '@/queries/installedSkillsQueries';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from './input-store';
 import { newSessionDraftKey, sessionDraftKey } from './input-draft-types';
+import { queueScopeKey } from '@/stores/messageQueueStore';
 
 /**
  * Unit tests for session worktree routing through the authoritative store.
@@ -246,6 +247,23 @@ describe('session-worktree-store worktree routing', () => {
     const attachment = store.getAttachment('session-not-repo');
     expect(attachment).toBeDefined();
     expect(attachment.worktreeStatus).toBe('not-a-repo');
+  });
+});
+
+describe('queue abort blocks', () => {
+  test('keeps a newer exact-scope block when an older abort failure clears its token', () => {
+    const store = useSessionUIStore.getState();
+    const firstScope = { state: 'bound', transportIdentity: 'runtime-a', directory: '/project-a', sessionID: 'shared-session' };
+    const otherScope = { ...firstScope, directory: '/project-b' };
+    const firstToken = store.beginQueueAbortBlock(firstScope, 2000);
+    const secondToken = store.beginQueueAbortBlock(firstScope, 2000);
+    store.beginQueueAbortBlock(otherScope, 2000);
+    store.clearQueueAbortBlock(firstScope, firstToken);
+
+    expect(useSessionUIStore.getState().queueAbortBlocks.get(queueScopeKey(firstScope))?.token).toBe(secondToken);
+    expect(useSessionUIStore.getState().queueAbortBlocks.has(queueScopeKey(otherScope))).toBe(true);
+    useSessionUIStore.getState().pruneQueueAbortBlocks(Date.now() + 2001);
+    expect(useSessionUIStore.getState().queueAbortBlocks.size).toBe(0);
   });
 });
 

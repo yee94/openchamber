@@ -13,7 +13,7 @@ import { fetchRecentSendConfirmationRecords, getSendFailureKind, releaseUnconfir
 import { ascendingIdAfter } from '@/sync/message-id';
 import { getSyncMessages } from '@/sync/sync-refs';
 type SessionStatusType = ScopedSessionStatus;
-const RETRY_BASE = 2000; const RETRY_MAX = 60000; const RECENT_ABORT_DELAY_MS = 2000; const RECONCILIATION_QUERY_DEADLINE_MS = 5000; const MAX_RECONCILIATION_CHECKS = 3;
+const RETRY_BASE = 2000; const RETRY_MAX = 60000; const RECONCILIATION_QUERY_DEADLINE_MS = 5000; const MAX_RECONCILIATION_CHECKS = 3;
 export const getQueuedAutoSendRetryDelayMs = (failures: number) => Math.min(RETRY_BASE * 2 ** Math.max(failures - 1, 0), RETRY_MAX);
 const dispatchFlights = new Map<string, Promise<void>>();
 const dispatchScopeFlights = new Map<string, Promise<void>>();
@@ -87,7 +87,12 @@ const latestMessageID = (sessionID: string, directory: string): string | undefin
 };
 type QueryOperation = { scope: BoundScope; item: QueueItem; key: string };
 type QueueSchedulerPlan = { dispatchScopes: BoundScope[]; queryOperations: QueryOperation[]; resolveOperations: QueryOperation[]; recoverOperations: QueryOperation[]; nextWakeAt?: number; inspectedScopeCount: number };
-export const planQueueScheduler = ({ queuedMessages, activeTransportIdentity, getStatus, getTurnState = () => 'settled', previous, inFlight, dispatchInFlight = getDispatchFlightKeys(), blockedSessions, now }: { queuedMessages: Record<string, QueuedMessage[]>; activeTransportIdentity: string; getStatus: (scope: BoundScope) => SessionStatusType; getTurnState?: (scope: BoundScope) => QueueTurnState; previous: Map<string, SessionStatusType>; inFlight: Set<string>; dispatchInFlight?: Set<string>; blockedSessions: Set<string>; now: number }): QueueSchedulerPlan => {
+export const getQueueAbortBlockWakeAt = (blocks: Map<string, { expiresAt: number }>, now: number): number | undefined => {
+  let nextWakeAt: number | undefined;
+  for (const block of blocks.values()) if (block.expiresAt > now && (!nextWakeAt || block.expiresAt < nextWakeAt)) nextWakeAt = block.expiresAt;
+  return nextWakeAt;
+};
+export const planQueueScheduler = ({ queuedMessages, activeTransportIdentity, getStatus, getTurnState = () => 'settled', previous, inFlight, dispatchInFlight = getDispatchFlightKeys(), blockedSessions, blockedScopeKeys = new Set<string>(), now }: { queuedMessages: Record<string, QueuedMessage[]>; activeTransportIdentity: string; getStatus: (scope: BoundScope) => SessionStatusType; getTurnState?: (scope: BoundScope) => QueueTurnState; previous: Map<string, SessionStatusType>; inFlight: Set<string>; dispatchInFlight?: Set<string>; blockedSessions: Set<string>; blockedScopeKeys?: Set<string>; now: number }): QueueSchedulerPlan => {
   const plan: QueueSchedulerPlan = { dispatchScopes: [], queryOperations: [], resolveOperations: [], recoverOperations: [], inspectedScopeCount: 0 };
   const liveKeys = new Set<string>();
   for (const [scopeKey, queue] of Object.entries(queuedMessages)) {
@@ -98,7 +103,7 @@ export const planQueueScheduler = ({ queuedMessages, activeTransportIdentity, ge
     const status = getStatus(scope); const headPlan = planQueueHead(item, status, previous.get(scopeKey), now, dispatchInFlight.has(dispatchKey), getTurnState(scope));
     previous.set(scopeKey, status);
     if (headPlan.nextWakeAt && (!plan.nextWakeAt || headPlan.nextWakeAt < plan.nextWakeAt)) plan.nextWakeAt = headPlan.nextWakeAt;
-    if (headPlan.dispatch && !blockedSessions.has(scope.sessionID) && !dispatchInFlight.has(dispatchKey) && !dispatchInFlight.has(scopeDispatchKey)) plan.dispatchScopes.push(scope);
+    if (headPlan.dispatch && !blockedSessions.has(scope.sessionID) && !blockedScopeKeys.has(queueScopeKey(scope)) && !dispatchInFlight.has(dispatchKey) && !dispatchInFlight.has(scopeDispatchKey)) plan.dispatchScopes.push(scope);
     if (headPlan.query && !inFlight.has(key)) plan.queryOperations.push({ scope, item, key });
     if (headPlan.resolve) plan.resolveOperations.push({ scope, item, key });
     if (headPlan.recover && !inFlight.has(key)) plan.recoverOperations.push({ scope, item, key });
@@ -249,6 +254,7 @@ const releaseUnresolvedQueueHead = (scope: BoundScope, item: QueueItem) => {
 export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?: boolean }) {
   const enabled = typeof enabledOrOptions === 'boolean' ? enabledOrOptions : enabledOrOptions?.enabled ?? true;
   const queuedMessages = useMessageQueueStore((state) => state.queuedMessages); const runsByOriginalSessionID = useAutoReviewStore((state) => state.runsByOriginalSessionID);
+  const queueAbortBlocks = useSessionUIStore((state) => state.queueAbortBlocks);
   const activeTransportIdentity = React.useSyncExternalStore(
     subscribeRuntimeEndpointChanged,
     getRuntimeTransportIdentity,
@@ -311,12 +317,12 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
   }, [childStores]);
   const [wake, setWake] = React.useState(0); const previous = React.useRef(new Map<string, SessionStatusType>()); const reconciliationInFlight = React.useRef(new Set<string>());
   React.useEffect(() => {
-    if (!enabled) return; const now = Date.now(); const abortFlags = useSessionUIStore.getState().sessionAbortFlags; const blockedSessions = new Set<string>();
-    for (const [sessionID, record] of abortFlags) if (now - record.timestamp < RECENT_ABORT_DELAY_MS) blockedSessions.add(sessionID);
+    if (!enabled) return; const now = Date.now(); useSessionUIStore.getState().pruneQueueAbortBlocks(now); const blockedSessions = new Set<string>(); const blockedScopeKeys = new Set<string>();
+    for (const [scopeKey, block] of queueAbortBlocks) if (block.expiresAt > now) blockedScopeKeys.add(scopeKey);
     // A running auto-review pauses only its matching stable runtime. Legacy
     // unkeyed records allow drain so persisted history cannot strand a queue.
     for (const sessionID of getAutoReviewBlockedSessions(runsByOriginalSessionID, activeRuntimeKey)) blockedSessions.add(sessionID);
-    const schedule = planQueueScheduler({ queuedMessages, activeTransportIdentity, getStatus, getTurnState, previous: previous.current, inFlight: reconciliationInFlight.current, blockedSessions, now });
+    const schedule = planQueueScheduler({ queuedMessages, activeTransportIdentity, getStatus, getTurnState, previous: previous.current, inFlight: reconciliationInFlight.current, blockedSessions, blockedScopeKeys, now });
     for (const operation of schedule.recoverOperations) {
       useMessageQueueStore.getState().markQueueItemReconciling(operation.scope, {
         queueItemID: operation.item.queueItemID,
@@ -340,6 +346,7 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
         setWake((value) => value + 1);
       });
     }
-    let timer: ReturnType<typeof setTimeout> | undefined; if (schedule.nextWakeAt) timer = setTimeout(() => setWake((value) => value + 1), Math.max(0, schedule.nextWakeAt - Date.now())); return () => { if (timer) clearTimeout(timer); };
-  }, [activeRuntimeKey, activeTransportIdentity, childStores, dispatchFlightState, enabled, queuedMessages, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, getTurnState, wake]);
+    const abortBlockWakeAt = getQueueAbortBlockWakeAt(queueAbortBlocks, now); const nextWakeAt = !schedule.nextWakeAt ? abortBlockWakeAt : !abortBlockWakeAt ? schedule.nextWakeAt : Math.min(schedule.nextWakeAt, abortBlockWakeAt);
+    let timer: ReturnType<typeof setTimeout> | undefined; if (nextWakeAt) timer = setTimeout(() => { useSessionUIStore.getState().pruneQueueAbortBlocks(); setWake((value) => value + 1); }, Math.max(0, nextWakeAt - Date.now())); return () => { if (timer) clearTimeout(timer); };
+  }, [activeRuntimeKey, activeTransportIdentity, childStores, dispatchFlightState, enabled, queuedMessages, queueAbortBlocks, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, getTurnState, wake]);
 }

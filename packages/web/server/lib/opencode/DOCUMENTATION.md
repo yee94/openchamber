@@ -108,6 +108,7 @@ This module provides OpenCode server integration utilities for the web server ru
   - `waitForAgentPresence(agentName, timeoutMs?, intervalMs?)`
   - `refreshOpenCodeAfterConfigChange(reason, options?)`
   - `bootstrapOpenCodeAtStartup()`
+  - `retryOpenCodeStartup()`
   - `startHealthMonitoring(healthCheckIntervalMs)`
   - `waitForPortRelease(port, timeoutMs, hostname?)`
   - `killProcessOnPort(port)`
@@ -131,7 +132,9 @@ This module provides OpenCode server integration utilities for the web server ru
 ## Public exports (managed-capabilities-runtime.js)
 - `createManagedCapabilitiesRuntime(dependencies?)`: returns resource publishing, bridge-origin, child-environment, identity, and bridge-authorization APIs for managed OpenCode only.
 - `mergeManagedOpenCodeConfig({ configContent, pluginUrl, instructionsUrl })`: merges injected plugin/instructions URLs with stable deduplication.
-- `SCHEDULED_TASK_BRIDGE_PATH`: scheduled-task bridge route path.
+- Managed child config injects the plugin as a file URL and instructions as an absolute filesystem path. Capability identity validates the current managed PID and its liveness before HMR reuse or bridge authorization.
+- `bootstrap-runtime.js` forwards managed bridge authorization to the API auth gate. The reserved bridge path accepts only the current managed-child capability and returns HTTP 403 before UI, tunnel, or client authentication for every other request. `feature-routes-runtime.js` registers the managed scheduled-task bridge before generic OpenCode proxy composition.
+- Capability resources use an application-version and source-content SHA-256 fingerprint directory. The bridge token is a managed OpenCode process capability: every plugin loaded into that process belongs to the trusted-code boundary. External OpenCode receives no managed capability injection or bridge authorization.
 
 ## Public exports (env-config.js)
 - `resolveOpenCodeEnvConfig(options?)`: resolves and validates OpenCode host/port/hostname environment configuration.
@@ -252,6 +255,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `registerSettingsUtilityRoutes(app, dependencies)`: registers small settings utility endpoints:
   - `GET /api/config/themes`
   - `POST /api/config/reload`
+  - `POST /api/opencode/retry`
 - `registerCommonRequestMiddleware(app, dependencies)`: registers shared request middleware stack:
   - conditional JSON body parser behavior for `/api/*` vs non-API requests
   - URL-encoded parser setup

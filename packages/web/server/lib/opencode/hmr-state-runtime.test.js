@@ -29,4 +29,11 @@ describe('hmr state runtime', () => {
     runtime.syncStateFromRuntime(state, { managedCapabilityIdentity: identity });
     expect(runtime.restoreRuntimeFromState({ hmrState: state, userProvidedOpenCodePassword: null }).managedCapabilityIdentity).toEqual(identity);
   });
+
+  it('synchronizes external OpenCode ownership across HMR state', () => {
+    const runtime = createRuntime();
+    const state = runtime.getOrCreateHmrState();
+    runtime.syncStateFromRuntime(state, { isExternalOpenCode: true });
+    expect(runtime.restoreRuntimeFromState({ hmrState: state, userProvidedOpenCodePassword: null }).isExternalOpenCode).toBe(true);
+  });
 });

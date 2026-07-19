@@ -16,19 +16,29 @@ Server-owned scheduled task runtime and routes for OpenChamber-only automation.
   - Concurrency controls
   - Session create + prompt_async execution
   - Emits OpenChamber task-run events
+  - Isolates project sync failures, retries each failed project up to three times,
+    and clears pending retries during shutdown
 
 - `packages/web/server/lib/scheduled-tasks/routes.js`
   - Global scheduled task list endpoint with per-project partial-result handling
   - Project scheduled task CRUD endpoints
   - Manual run endpoint
   - OpenChamber events SSE stream endpoint
+  - Returns persisted mutation results with `schedulerSynced`; a failed scheduler
+    sync schedules one bounded retry while preserving the committed response
 
 - `packages/web/server/lib/scheduled-tasks/managed-tool-route.js`
   - Managed OpenCode `scheduled_task` bridge endpoint
+  - Receives requests only after the API auth gate validates the current
+    managed-child capability for the reserved bridge path
   - Resolves the authoritative OpenCode session and message model before selecting
     the deepest configured project containing the session directory
   - Requires `validateDirectoryPath` for realpath-backed directory validation
     across request context, OpenCode session context, worktrees, and projects
+  - Requires an exact assistant/tool message and its in-session user parent
+  - Uses `projectConfigRuntime.patchScheduledTask()` for partial updates
+  - Returns persisted mutations with `schedulerSynced`; failed scheduler syncs
+    schedule one bounded retry without including task prompts in logs
   - Exports `registerScheduledTaskToolRoute(app, dependencies)`
 
 - `packages/web/server/lib/scheduled-tasks/managed-tool-contract.js`

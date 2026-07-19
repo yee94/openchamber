@@ -16,6 +16,10 @@ let sessionDeleteMessageFailureID: string | null = null
 let sessionForkResult: import("@opencode-ai/sdk/v2/client").Session | null = null
 let clearAttachedFilesCalls = 0
 const globalUpsertedSessions: unknown[] = []
+let abortReject = false
+let abortResult: { data?: boolean; error?: unknown; response?: { status?: number } } = { data: true }
+const abortBlockEvents: Array<{ event: "begin" | "clear"; scope: Record<string, unknown>; token: string }> = []
+let abortBlockToken = 0
 
 const mockScopedClient = {
   permission: {
@@ -54,7 +58,8 @@ const mockSdk = {
     }),
     abort: mock((params: Record<string, unknown>) => {
       replyCalls.push({ method: "session.abort", params })
-      return Promise.resolve({ data: true })
+      if (abortReject) return Promise.reject(new Error("abort failed"))
+      return Promise.resolve(abortResult)
     }),
     updateSession: mock((sessionId: string, changes: Record<string, unknown>, directory?: string | null) => {
       replyCalls.push({ method: "session.update", params: { sessionID: sessionId, ...changes, directory } })
@@ -172,6 +177,14 @@ mock.module("./session-ui-store", () => ({
         return null
       },
       setCurrentSession: () => undefined,
+      beginQueueAbortBlock: (scope: Record<string, unknown>) => {
+        const token = `abort-${++abortBlockToken}`
+        abortBlockEvents.push({ event: "begin", scope, token })
+        return token
+      },
+      clearQueueAbortBlock: (scope: Record<string, unknown>, token: string) => {
+        abortBlockEvents.push({ event: "clear", scope, token })
+      },
     }),
     setState: () => undefined,
   },
@@ -301,6 +314,60 @@ describe("fetchMessagesForSession startup race", () => {
     const messageCalls = replyCalls.filter((call) => call.method === "session.messages")
     expect(messageCalls).toHaveLength(1)
     expect(messageCalls[0]?.params.limit).toBe(30)
+  })
+})
+
+describe("abort queue dispatch block", () => {
+  beforeEach(() => {
+    replyCalls.length = 0
+    abortBlockEvents.length = 0
+    abortBlockToken = 0
+    abortReject = false
+    abortResult = { data: true }
+  })
+
+  test("creates the exact-scope block before the SDK abort and rolls back its token on failure", async () => {
+    const store = createStore({}, { session: [{ id: "session-a", time: { created: 1 } } as Session] })
+    const childStores = createChildStores([["/test/project", store]])
+    const { abortCurrentOperation, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    await abortCurrentOperation("session-a")
+    expect(abortBlockEvents).toHaveLength(1)
+    expect(abortBlockEvents[0]?.event).toBe("begin")
+    expect(abortBlockEvents[0]?.scope.directory).toBe("/test/project")
+    expect(abortBlockEvents[0]?.scope.sessionID).toBe("session-a")
+    expect(abortBlockEvents[0]?.token).toBe("abort-1")
+    expect(replyCalls.findIndex((call) => call.method === "session.abort")).toBeGreaterThanOrEqual(0)
+
+    abortReject = true
+    await abortCurrentOperation("session-a")
+    abortReject = false
+    const [begin, clear] = abortBlockEvents.slice(-2)
+    expect(begin?.event).toBe("begin")
+    expect(clear?.event).toBe("clear")
+    expect(begin?.scope).toEqual(clear?.scope)
+    expect(begin?.token).toBe("abort-2")
+    expect(clear?.token).toBe("abort-2")
+  })
+
+  test("rolls back the matching block for SDK error and false data responses", async () => {
+    const store = createStore({}, { session: [{ id: "session-a", time: { created: 1 } } as Session] })
+    const childStores = createChildStores([["/test/project", store]])
+    const { abortCurrentOperation, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    for (const result of [
+      { error: { message: "abort rejected" }, response: { status: 500 } },
+      { data: false },
+    ]) {
+      abortResult = result
+      await abortCurrentOperation("session-a")
+      const [begin, clear] = abortBlockEvents.slice(-2)
+      expect(begin?.event).toBe("begin")
+      expect(clear?.event).toBe("clear")
+      expect(clear?.token).toBe(begin?.token)
+    }
   })
 })
 

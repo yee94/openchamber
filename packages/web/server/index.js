@@ -48,6 +48,7 @@ import {
 } from './lib/event-stream/index.js';
 import { createFsSearchRuntime as createFsSearchRuntimeFactory } from './lib/fs/search.js';
 import { createOpenCodeLifecycleRuntime } from './lib/opencode/lifecycle.js';
+import { createManagedCapabilitiesRuntime } from './lib/opencode/managed-capabilities-runtime.js';
 import { createOpenCodeEnvRuntime } from './lib/opencode/env-runtime.js';
 import { resolveOpenCodeEnvConfig } from './lib/opencode/env-config.js';
 import { createHmrStateRuntime } from './lib/opencode/hmr-state-runtime.js';
@@ -520,6 +521,7 @@ const initialOpenCodeAuthState = hmrStateRuntime.resolveOpenCodeAuthFromState({
 });
 let openCodeAuthPassword = initialOpenCodeAuthState.openCodeAuthPassword;
 let openCodeAuthSource = initialOpenCodeAuthState.openCodeAuthSource;
+let managedCapabilityIdentity = hmrState.managedCapabilityIdentity ?? null;
 
 // Sync helper - call after modifying any HMR state variable
 const syncToHmrState = () => {
@@ -532,6 +534,8 @@ const syncToHmrState = () => {
     openCodeWorkingDirectory,
     openCodeAuthPassword,
     openCodeAuthSource,
+    managedCapabilityIdentity,
+    isExternalOpenCode,
   });
 };
 
@@ -549,6 +553,8 @@ const syncFromHmrState = () => {
   openCodeWorkingDirectory = restored.openCodeWorkingDirectory;
   openCodeAuthPassword = restored.openCodeAuthPassword;
   openCodeAuthSource = restored.openCodeAuthSource;
+  managedCapabilityIdentity = restored.managedCapabilityIdentity;
+  isExternalOpenCode = restored.isExternalOpenCode;
 };
 
 // Module-level variables that shadow HMR state
@@ -1033,6 +1039,22 @@ Object.defineProperties(openCodeLifecycleState, {
   resolvedWslBinary: { get: () => resolvedWslBinary, set: (value) => { resolvedWslBinary = value; } },
   resolvedWslOpencodePath: { get: () => resolvedWslOpencodePath, set: (value) => { resolvedWslOpencodePath = value; } },
   resolvedWslDistro: { get: () => resolvedWslDistro, set: (value) => { resolvedWslDistro = value; } },
+  managedCapabilityIdentity: { get: () => managedCapabilityIdentity, set: (value) => { managedCapabilityIdentity = value; } },
+});
+
+const managedCapabilitiesRuntime = createManagedCapabilitiesRuntime({
+  dataDir: OPENCHAMBER_DATA_DIR,
+  version: OPENCHAMBER_VERSION,
+  getManagedChildPid: () => openCodeProcess?.pid ?? null,
+  isManagedChildAlive: (pid) => {
+    if (isExternalOpenCode || openCodeProcess?.pid !== pid || !Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  },
 });
 
 const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
@@ -1062,6 +1084,7 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
   buildAugmentedPath,
   buildManagedOpenCodePath,
   getManagedOpenCodeShellEnvSnapshot: getLoginShellEnvSnapshot,
+  managedCapabilitiesRuntime,
   getActiveSessionCount,
 });
 
@@ -1113,8 +1136,8 @@ const ensureGlobalWatcherStarted = async () => {
 
   return globalWatcherStartPromise;
 };
-const bootstrapOpenCodeAtStartup = async (...args) => {
-  await openCodeLifecycleRuntime.bootstrapOpenCodeAtStartup(...args);
+
+const completeOpenCodeStartup = () => {
   scheduleOpenCodeApiDetection();
   if (openCodeLifecycleState.openCodeProcess && !openCodeLifecycleState.isExternalOpenCode) {
     startHealthMonitoring();
@@ -1125,6 +1148,16 @@ const bootstrapOpenCodeAtStartup = async (...args) => {
   void ensureGlobalWatcherStarted().catch((error) => {
     console.warn(`Global event watcher startup failed: ${error?.message || error}`);
   });
+};
+
+const bootstrapOpenCodeAtStartup = async (...args) => {
+  await openCodeLifecycleRuntime.bootstrapOpenCodeAtStartup(...args);
+  completeOpenCodeStartup();
+};
+
+const retryOpenCodeStartup = async (...args) => {
+  await openCodeLifecycleRuntime.retryOpenCodeStartup(...args);
+  completeOpenCodeStartup();
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
 const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRelease(...args);
@@ -1460,6 +1493,7 @@ async function main(options = {}) {
     },
     readSettingsFromDiskMigrated,
     normalizeTunnelSessionTtlMs,
+    authorizeManagedOpenCodeBridgeRequest: managedCapabilitiesRuntime.authorizeManagedOpenCodeBridgeRequest,
     sayTTSCapability,
     ensurePushInitialized,
     ensureGlobalWatcherStarted,
@@ -1536,6 +1570,7 @@ async function main(options = {}) {
   relayService.registerRoutes(app);
 
   await featureRoutesRuntime.registerRoutes(app, {
+    express,
     crypto,
     fs,
     os,
@@ -1552,6 +1587,7 @@ async function main(options = {}) {
     validateDirectoryPath,
     readCustomThemesFromDisk,
     refreshOpenCodeAfterConfigChange,
+    retryOpenCodeStartup,
     getOpenCodeResolutionSnapshot,
     formatSettingsResponse,
     readSettingsFromDisk,
@@ -1613,6 +1649,7 @@ async function main(options = {}) {
     }),
     scheduleOpenCodeApiDetection,
     bootstrapOpenCodeAtStartup,
+    setManagedOpenCodeBridgeOrigin: managedCapabilitiesRuntime.setBridgeOrigin,
     triggerHealthCheck,
     staticRoutesRuntime,
     process,

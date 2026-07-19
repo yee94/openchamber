@@ -2,12 +2,56 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { createTunnelAuth } from './tunnel-auth.js';
-import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerServerStatusRoutes } from './core-routes.js';
+import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerServerStatusRoutes, registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerSessionIndexRoutes } from '../session-index/routes.js';
 
 describe('core-routes', () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('retries OpenCode startup through the onboarding recovery route', async () => {
+    const app = express();
+    const retryOpenCodeStartup = vi.fn(async () => {});
+
+    registerSettingsUtilityRoutes(app, {
+      readCustomThemesFromDisk: vi.fn(async () => []),
+      refreshOpenCodeAfterConfigChange: vi.fn(async () => {}),
+      retryOpenCodeStartup,
+      clientReloadDelayMs: 100,
+    });
+
+    await request(app)
+      .post('/api/opencode/retry')
+      .expect(200, { success: true });
+
+    expect(retryOpenCodeStartup).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an unavailable OpenCode retry as a service failure', async () => {
+    const app = express();
+    const error = new Error('OpenCode CLI could not be resolved');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    registerSettingsUtilityRoutes(app, {
+      readCustomThemesFromDisk: vi.fn(async () => []),
+      refreshOpenCodeAfterConfigChange: vi.fn(async () => {}),
+      retryOpenCodeStartup: vi.fn(async () => {
+        throw error;
+      }),
+      clientReloadDelayMs: 100,
+    });
+
+    try {
+      await request(app)
+        .post('/api/opencode/retry')
+        .expect(503, {
+          error: 'OpenCode CLI could not be resolved',
+          success: false,
+        });
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('should call gracefulShutdown with exitProcess: true on /api/system/shutdown', async () => {
@@ -566,19 +610,33 @@ describe('core-routes', () => {
     expect(requireAuth).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the injected managed bridge authorization callback before UI auth', async () => {
+  it('requires the managed bridge capability independently from UI auth', async () => {
     const app = express();
-    const requireAuth = vi.fn((_req, res) => res.status(401).send('Unauthorized'));
+    const requireAuth = vi.fn((_req, _res, next) => next());
     registerAuthAndAccessRoutes(app, {
       express,
       tunnelAuthController: { classifyRequestScope: () => 'local', requireTunnelSession: vi.fn(), getTunnelSessionFromRequest: vi.fn(), clearTunnelSessionCookie: vi.fn(), exchangeBootstrapToken: vi.fn() },
       uiAuthController: { requireAuth, handleSessionStatus: vi.fn(), handleSessionCreate: vi.fn(), handlePasskeyStatus: vi.fn(), handlePasskeyAuthenticationOptions: vi.fn(), handlePasskeyAuthenticationVerify: vi.fn(), handlePasskeyRegistrationOptions: vi.fn(), handlePasskeyRegistrationVerify: vi.fn(), handlePasskeyList: vi.fn(), handlePasskeyRevoke: vi.fn(), handleResetAuth: vi.fn() },
       readSettingsFromDiskMigrated: vi.fn(async () => ({})), normalizeTunnelSessionTtlMs: vi.fn(),
-      authorizeManagedOpenCodeBridgeRequest: (req) => req.originalUrl === '/api/openchamber/scheduled-tasks/bridge' && req.method === 'POST',
+      authorizeManagedOpenCodeBridgeRequest: (req) => req.originalUrl === '/api/internal/managed-opencode/scheduled-task' && req.method === 'POST' && req.get('x-test-capability') === 'valid',
     });
-    app.post('/api/openchamber/scheduled-tasks/bridge', (_req, res) => res.json({ reached: true }));
-    await request(app).post('/api/openchamber/scheduled-tasks/bridge').expect(200, { reached: true });
-    await request(app).post('/api/other').expect(401);
+    app.post('/api/internal/managed-opencode/scheduled-task', (_req, res) => res.json({ reached: true }));
+    app.post('/api/other', (_req, res) => res.json({ reached: true }));
+
+    await request(app)
+      .post('/api/internal/managed-opencode/scheduled-task')
+      .set('x-test-capability', 'valid')
+      .expect(200, { reached: true });
+    await request(app)
+      .post('/api/internal/managed-opencode/scheduled-task')
+      .expect(403, { error: 'Forbidden' });
+    await request(app)
+      .post('/api/internal/managed-opencode/scheduled-task/')
+      .expect(403, { error: 'Forbidden' });
+    await request(app)
+      .post('/API/INTERNAL/MANAGED-OPENCODE/SCHEDULED-TASK')
+      .expect(403, { error: 'Forbidden' });
+    await request(app).post('/api/other').expect(200, { reached: true });
     expect(requireAuth).toHaveBeenCalledTimes(1);
   });
 });

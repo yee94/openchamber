@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,8 +9,6 @@ import {
   MANAGED_SCHEDULED_TASK_TOOL_PATH,
 } from '../scheduled-tasks/managed-tool-contract.js';
 
-export const SCHEDULED_TASK_BRIDGE_PATH = MANAGED_SCHEDULED_TASK_TOOL_PATH;
-export { MANAGED_SCHEDULED_TASK_TOKEN_HEADER };
 const RESOURCE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'managed-capabilities');
 
 const stableEntryKey = (value) => typeof value === 'string' ? `string:${value}` : `json:${JSON.stringify(value)}`;
@@ -56,13 +55,24 @@ export const createManagedCapabilitiesRuntime = ({
 } = {}) => {
   let bridgeOrigin = null;
   let identity = null;
+  const safeVersion = String(version).replace(/[^A-Za-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'capability';
+  const sourcePluginPath = pathLike.join(resourceDir, 'scheduled-task.js');
+  const sourceInstructionsPath = pathLike.join(resourceDir, 'scheduled-task-instructions.md');
+  const materialFingerprint = cryptoLike.createHash('sha256')
+    .update('scheduled-task.js\0')
+    .update(readFileSync(sourcePluginPath))
+    .update('\0scheduled-task-instructions.md\0')
+    .update(readFileSync(sourceInstructionsPath))
+    .digest('hex')
+    .slice(0, 16);
+  const materialVersion = `${safeVersion}-${materialFingerprint}`;
 
-  const resourceDirectory = () => pathLike.join(dataDir, 'managed-opencode-capabilities', version);
+  const resourceDirectory = () => pathLike.join(dataDir, 'managed-opencode-capabilities', materialVersion);
   const resourcePaths = () => {
     const directory = resourceDirectory();
     return {
       directory,
-      pluginPath: pathLike.join(directory, 'scheduled-task.js'),
+      pluginPath: pathLike.join(directory, 'scheduled-task.mjs'),
       instructionsPath: pathLike.join(directory, 'scheduled-task-instructions.md'),
     };
   };
@@ -70,25 +80,32 @@ export const createManagedCapabilitiesRuntime = ({
   const publishResources = async () => {
     const target = resourceDirectory();
     try {
-      await fsLike.access(pathLike.join(target, 'scheduled-task.js'));
+      await fsLike.access(pathLike.join(target, 'scheduled-task.mjs'));
       await fsLike.access(pathLike.join(target, 'scheduled-task-instructions.md'));
       return resourcePaths();
     } catch {
     }
     const parent = pathLike.dirname(target);
     await fsLike.mkdir(parent, { recursive: true });
-    const temporary = pathLike.join(parent, `.${version}.${cryptoLike.randomBytes(8).toString('hex')}.tmp`);
+    const temporary = pathLike.join(parent, `.${materialVersion}.${cryptoLike.randomBytes(8).toString('hex')}.tmp`);
     try {
       await fsLike.mkdir(temporary);
       await Promise.all([
-        fsLike.copyFile(pathLike.join(resourceDir, 'scheduled-task.js'), pathLike.join(temporary, 'scheduled-task.js')),
-        fsLike.copyFile(pathLike.join(resourceDir, 'scheduled-task-instructions.md'), pathLike.join(temporary, 'scheduled-task-instructions.md')),
+        fsLike.copyFile(sourcePluginPath, pathLike.join(temporary, 'scheduled-task.mjs')),
+        fsLike.copyFile(sourceInstructionsPath, pathLike.join(temporary, 'scheduled-task-instructions.md')),
       ]);
       try {
         await fsLike.rename(temporary, target);
       } catch (error) {
         if (error?.code !== 'EEXIST' && error?.code !== 'ENOTEMPTY') throw error;
-        await fsLike.rm(temporary, { recursive: true, force: true });
+        try {
+          await fsLike.access(pathLike.join(target, 'scheduled-task.mjs'));
+          await fsLike.access(pathLike.join(target, 'scheduled-task-instructions.md'));
+          await fsLike.rm(temporary, { recursive: true, force: true });
+        } catch {
+          await fsLike.rm(target, { recursive: true, force: true });
+          await fsLike.rename(temporary, target);
+        }
       }
       return resourcePaths();
     } catch (error) {
@@ -110,12 +127,13 @@ export const createManagedCapabilitiesRuntime = ({
     const { pluginPath, instructionsPath } = await publishResources();
     const token = cryptoLike.randomBytes(32).toString('hex');
     const pluginUrl = pathToFileURL(pluginPath).href;
-    identity = { version, origin: bridgeOrigin, token, childPid: null };
+    identity = { version: materialVersion, origin: bridgeOrigin, token, childPid: null };
     return {
       ...baseEnv,
       OPENCODE_CONFIG_CONTENT: mergeManagedOpenCodeConfig({ configContent: baseEnv.OPENCODE_CONFIG_CONTENT, pluginUrl, instructionsUrl: instructionsPath }),
       OPENCHAMBER_SCHEDULED_TASK_BRIDGE_ORIGIN: bridgeOrigin,
       OPENCHAMBER_SCHEDULED_TASK_BRIDGE_PATH: MANAGED_SCHEDULED_TASK_TOOL_PATH,
+      OPENCHAMBER_SCHEDULED_TASK_TOKEN_HEADER: MANAGED_SCHEDULED_TASK_TOKEN_HEADER,
       OPENCHAMBER_SCHEDULED_TASK_BRIDGE_TOKEN: token,
     };
   };
@@ -126,7 +144,7 @@ export const createManagedCapabilitiesRuntime = ({
   const setCapabilityIdentity = (value) => { identity = value || null; };
   const getCapabilityIdentity = () => identity;
   const hasValidIdentity = () => Boolean(
-    identity?.version === version
+    identity?.version === materialVersion
     && identity.origin === bridgeOrigin
     && typeof identity.token === 'string'
     && identity.token.length === 64

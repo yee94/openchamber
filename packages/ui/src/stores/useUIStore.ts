@@ -39,6 +39,7 @@ type ContextPanelTab = {
   stagedDiff: boolean;
   diffScope: PendingDiffScope | null;
   diffTargetLine?: number | null;
+  diffTurnMessageId: string | null;
   touchedAt: number;
 };
 
@@ -52,6 +53,7 @@ type ContextPanelTabDescriptor = {
   stagedDiff?: boolean;
   diffScope?: PendingDiffScope | null;
   diffTargetLine?: number | null;
+  diffTurnMessageId?: string | null;
 };
 
 type ContextPanelDirectoryState = {
@@ -207,6 +209,15 @@ const normalizePendingDiffScope = (value: unknown): PendingDiffScope | null => {
   return value === 'working' || value === 'staged' || value === 'turn' ? value : null;
 };
 
+const normalizeContextDiffTurnMessageId = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
 const buildDefaultContextPanelTabDedupeKey = (mode: ContextPanelMode, targetPath: string | null): string => {
   if (mode === 'file') {
     return targetPath || mode;
@@ -262,6 +273,7 @@ const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPa
     diffTargetLine: typeof descriptor.diffTargetLine === 'number' && Number.isFinite(descriptor.diffTargetLine)
       ? Math.max(1, Math.trunc(descriptor.diffTargetLine))
       : null,
+    diffTurnMessageId: normalizeContextDiffTurnMessageId(descriptor.diffTurnMessageId),
     touchedAt: Date.now(),
   };
 };
@@ -305,6 +317,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       stagedDiff?: unknown;
       diffScope?: unknown;
       diffTargetLine?: unknown;
+      diffTurnMessageId?: unknown;
       touchedAt?: unknown;
     };
 
@@ -337,6 +350,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       diffTargetLine: typeof candidate.diffTargetLine === 'number' && Number.isFinite(candidate.diffTargetLine)
         ? Math.max(1, Math.trunc(candidate.diffTargetLine))
         : null,
+      diffTurnMessageId: normalizeContextDiffTurnMessageId(candidate.diffTurnMessageId),
       touchedAt: typeof candidate.touchedAt === 'number' && Number.isFinite(candidate.touchedAt)
         ? candidate.touchedAt
         : Date.now(),
@@ -392,6 +406,7 @@ const upsertContextPanelTab = (
       ? {
           ...tab,
           diffTargetLine: nextTab.diffTargetLine,
+          diffTurnMessageId: nextTab.diffTurnMessageId,
           mode: nextTab.mode,
           targetPath: nextTab.targetPath || tab.targetPath,
           dedupeKey: nextTab.dedupeKey,
@@ -807,7 +822,7 @@ interface UIStore {
    */
   syncWorkspacePanelsForSessionSwitch: (args: SessionWorkspacePanelSwitchArgs) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
-  openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number) => void;
+  openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number, turnMessageId?: string | null) => void;
   openContextFileDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
@@ -1325,7 +1340,7 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
-        openContextDiff: (directory, filePath, staged = false, scope = null, targetLine) => {
+        openContextDiff: (directory, filePath, staged = false, scope = null, targetLine, turnMessageId) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           const normalizedFilePath = (filePath || '').trim();
           if (!normalizedDirectory || !normalizedFilePath) {
@@ -1340,6 +1355,7 @@ export const useUIStore = create<UIStore>()(
             stagedDiff: diffScope === 'staged',
             diffScope,
             diffTargetLine: targetLine,
+            diffTurnMessageId: turnMessageId,
           });
         },
 

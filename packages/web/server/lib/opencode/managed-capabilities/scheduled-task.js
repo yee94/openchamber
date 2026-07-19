@@ -1,12 +1,12 @@
 export default async function scheduledTaskPlugin() {
   const bridgeOrigin = process.env.OPENCHAMBER_SCHEDULED_TASK_BRIDGE_ORIGIN;
   const bridgePath = process.env.OPENCHAMBER_SCHEDULED_TASK_BRIDGE_PATH;
+  const tokenHeader = process.env.OPENCHAMBER_SCHEDULED_TASK_TOKEN_HEADER;
   const bridgeToken = process.env.OPENCHAMBER_SCHEDULED_TASK_BRIDGE_TOKEN;
   const operations = ['list', 'create', 'update', 'delete', 'run'];
 
   const requestSchema = {
     type: 'object',
-    required: ['operation'],
     additionalProperties: false,
     properties: {
       operation: { type: 'string', enum: operations, description: 'list, create, update, delete, or run' },
@@ -19,20 +19,30 @@ export default async function scheduledTaskPlugin() {
         additionalProperties: false,
         properties: {
           kind: { type: 'string', enum: ['daily', 'weekly', 'once', 'cron'] },
-          time: { type: 'string', description: 'Local HH:MM time for daily or weekly schedules' },
+          time: { type: 'string', description: 'Local HH:mm time for daily, weekly, or once schedules' },
+          times: { type: 'array', items: { type: 'string' }, description: 'Local HH:mm times for daily or weekly schedules' },
           weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 } },
-          at: { type: 'string', description: 'ISO timestamp for once schedules' },
-          expression: { type: 'string', description: 'Cron expression for cron schedules' },
+          date: { type: 'string', description: 'YYYY-MM-DD date for once schedules' },
+          cron: { type: 'string', description: 'Cron expression for cron schedules' },
           timezone: { type: 'string' },
         },
       },
       execution: {
         type: 'object',
-        description: 'Scheduled prompt and optional model. The current session model is the default.',
-        additionalProperties: true,
-        properties: { prompt: { type: 'string' }, model: { type: 'string' } },
+        description: 'Scheduled prompt and execution settings. providerID and modelID default to the current session model.',
+        additionalProperties: false,
+        properties: {
+          prompt: { type: 'string' }, providerID: { type: 'string' }, modelID: { type: 'string' }, agent: { type: 'string' }, variant: { type: 'string' }, goalEnabled: { type: 'boolean' }, goalTokenBudget: { type: 'number', minimum: 1 },
+        },
       },
     },
+    oneOf: [
+      { required: ['operation'], properties: { operation: { enum: ['list'] } }, allOf: [{ not: { required: ['taskId'] } }, { not: { required: ['name'] } }, { not: { required: ['enabled'] } }, { not: { required: ['schedule'] } }, { not: { required: ['execution'] } }] },
+      { required: ['operation', 'name', 'schedule', 'execution'], properties: { operation: { enum: ['create'] }, execution: { type: 'object', required: ['prompt'] } }, not: { required: ['taskId'] } },
+      { required: ['operation', 'taskId'], properties: { operation: { enum: ['update'] } } },
+      { required: ['operation', 'taskId'], properties: { operation: { enum: ['delete'] } }, allOf: [{ not: { required: ['name'] } }, { not: { required: ['enabled'] } }, { not: { required: ['schedule'] } }, { not: { required: ['execution'] } }] },
+      { required: ['operation', 'taskId'], properties: { operation: { enum: ['run'] } }, allOf: [{ not: { required: ['name'] } }, { not: { required: ['enabled'] } }, { not: { required: ['schedule'] } }, { not: { required: ['execution'] } }] },
+    ],
   };
 
   const addDefaultAsk = (permission) => {
@@ -51,13 +61,13 @@ export default async function scheduledTaskPlugin() {
     },
     tool: {
       scheduled_task: {
-        description: 'Manage OpenChamber scheduled tasks. Schedules support daily, weekly, once, and cron; weekdays uses 0=Sunday. The current session model is the execution default. Update with enabled:false pauses and enabled:true resumes.',
+        description: 'Manage OpenChamber scheduled tasks. Daily uses time or times; weekly uses weekdays (0=Sunday) with time or times; once uses date and time; cron uses cron. The current session model is the execution default. Update with enabled:false pauses and enabled:true resumes.',
         args: { request: requestSchema },
         execute: async (args, context) => {
           const request = args?.request;
           const operation = request?.operation;
           if (!operations.includes(operation)) throw new Error('scheduled_task requires a supported request.operation');
-          if (!bridgeOrigin || !bridgePath || !bridgeToken) throw new Error('scheduled_task bridge is unavailable');
+          if (!bridgeOrigin || !bridgePath || !tokenHeader || !bridgeToken) throw new Error('scheduled_task bridge is unavailable');
           if (['create', 'update', 'delete', 'run'].includes(operation)) {
             await context.ask({
               permission: 'scheduled_task',
@@ -82,7 +92,7 @@ export default async function scheduledTaskPlugin() {
           try {
             response = await fetch(new URL(bridgePath, bridgeOrigin), {
               method: 'POST',
-              headers: { 'content-type': 'application/json', 'x-openchamber-scheduled-task-token': bridgeToken },
+              headers: { 'content-type': 'application/json', [tokenHeader]: bridgeToken },
               body: JSON.stringify(payload),
             });
           } catch (error) {

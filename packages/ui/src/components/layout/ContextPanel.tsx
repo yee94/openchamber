@@ -2851,9 +2851,11 @@ export const ContextPanel: React.FC = () => {
               pinSelectedFileHeaderToTopOnNavigate
               showOpenInEditorAction
               diffScope={tab.diffScope ?? (tab.stagedDiff ? 'staged' : 'working')}
+              turnMessageId={tab.diffTurnMessageId}
               onDiffScopeChange={handleDiffScopeChange}
               targetFilePath={tab.targetPath}
               targetLine={tab.diffTargetLine ?? null}
+              navigationRequestKey={tab.touchedAt}
               flushContent
               singleFileView={tab.mode === 'file-diff'}
               preloadFullFiles={tab.mode === 'file-diff'}

@@ -1,3 +1,5 @@
+import { MANAGED_SCHEDULED_TASK_TOOL_PATH } from '../scheduled-tasks/managed-tool-contract.js';
+
 const parseLoopbackUrl = (rawUrl) => {
   if (typeof rawUrl !== 'string') {
     return null;
@@ -594,8 +596,15 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   };
 
   const requireApiAuth = async (req, res, next) => {
-    if (authorizeManagedOpenCodeBridgeRequest(req) === true) {
-      return next();
+    const requestPathname = getRequestPathname(req);
+    const normalizedRequestPathname = requestPathname.length > 1
+      ? requestPathname.replace(/\/+$/, '').toLowerCase()
+      : requestPathname;
+    if (normalizedRequestPathname === MANAGED_SCHEDULED_TASK_TOOL_PATH.toLowerCase()) {
+      if (authorizeManagedOpenCodeBridgeRequest(req) === true) {
+        return next();
+      }
+      return res.status(403).json({ error: 'Forbidden' });
     }
     // Preview proxy requests carry a target-scoped capability token that the
     // preview proxy validates against the registered target id/TTL. Let those
@@ -1011,6 +1020,7 @@ export const registerSettingsUtilityRoutes = (app, dependencies) => {
   const {
     readCustomThemesFromDisk,
     refreshOpenCodeAfterConfigChange,
+    retryOpenCodeStartup,
     clientReloadDelayMs,
   } = dependencies;
 
@@ -1040,6 +1050,19 @@ export const registerSettingsUtilityRoutes = (app, dependencies) => {
       console.error('[Server] Failed to reload configuration:', error);
       res.status(500).json({
         error: error.message || 'Failed to reload configuration',
+        success: false,
+      });
+    }
+  });
+
+  app.post('/api/opencode/retry', async (_req, res) => {
+    try {
+      await retryOpenCodeStartup();
+      res.json({ success: true });
+    } catch (error) {
+      console.error('[Server] Failed to retry OpenCode startup:', error);
+      res.status(503).json({
+        error: error instanceof Error ? error.message : 'Failed to retry OpenCode startup',
         success: false,
       });
     }

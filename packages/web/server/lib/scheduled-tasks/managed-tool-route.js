@@ -1,12 +1,11 @@
 import { MANAGED_SCHEDULED_TASK_TOOL_PATH } from './managed-tool-contract.js';
 
-export { MANAGED_SCHEDULED_TASK_TOOL_PATH } from './managed-tool-contract.js';
-
 const MAX_ID_LENGTH = 512;
 const MAX_NAME_LENGTH = 80;
 const MAX_PROMPT_LENGTH = 20_000;
 const MAX_OBJECT_KEYS = 24;
 const OPEN_CODE_CONTEXT_TIMEOUT_MS = 10_000;
+const OPEN_CODE_MESSAGE_LIMIT = 100;
 
 const isValidationError = (message) => /^(body|context|input|operation|execution|schedule|messageID|Session directory|A user message|task\.name|task\.id)/.test(message)
   || message.includes(' is required')
@@ -82,32 +81,38 @@ const fetchOpenCodeJson = async ({ buildOpenCodeUrl, getOpenCodeAuthHeaders, rou
 
 const userDefaultsForMessage = (messages, messageID) => {
   const current = messages.find((message) => message?.info?.id === messageID);
-  if (current && !['assistant', 'tool'].includes(current.info?.role)) {
+  if (!current || !['assistant', 'tool'].includes(current.info?.role)) {
     throw new Error('messageID must identify an assistant or tool message');
   }
-  if (current) {
-    const byID = new Map(messages.map((message) => [message?.info?.id, message]));
-    let candidate = current;
-    const visited = new Set();
-    while (candidate?.info?.parentID && !visited.has(candidate.info.id)) {
-      visited.add(candidate.info.id);
-      candidate = byID.get(candidate.info.parentID);
-      if (candidate?.info?.role === 'user') return candidate.info;
-    }
+  const byID = new Map(messages.map((message) => [message?.info?.id, message]));
+  let candidate = current;
+  const visited = new Set();
+  while (candidate?.info?.parentID && !visited.has(candidate.info.id)) {
+    visited.add(candidate.info.id);
+    candidate = byID.get(candidate.info.parentID);
+    if (candidate?.info?.role === 'user') return candidate.info;
   }
-  const users = messages.filter((message) => message?.info?.role === 'user' && message?.info?.model);
-  const latest = users.at(-1)?.info;
-  if (!latest) throw new Error('A user message with model information is required');
-  return latest;
+  throw new Error('messageID must have a user message parent in this session');
 };
 
-const selectProject = async (path, validateDirectoryPath, projects, sessionDirectory) => {
+const lexicalPath = (path, value) => typeof value === 'string' && value.trim() ? path.resolve(value.trim()) : null;
+
+const selectProject = async (path, validateDirectoryPath, projects, sessionDirectory, rawDirectories) => {
   const candidates = await Promise.all(projects
     .filter((project) => typeof project?.id === 'string' && typeof project?.path === 'string')
     .map(async (project) => {
       try {
         return { ...project, canonicalPath: await validatedDirectory(validateDirectoryPath, project.path, 'configured project path') };
       } catch {
+        const lexicalProjectPath = lexicalPath(path, project.path);
+        if (lexicalProjectPath && rawDirectories.some((directory) => {
+          const lexicalDirectory = lexicalPath(path, directory);
+          return lexicalDirectory && isWithin(path, lexicalProjectPath, lexicalDirectory);
+        })) {
+          const error = new Error('A configured project path containing this session requires attention');
+          error.statusCode = 409;
+          throw error;
+        }
         return null;
       }
     }));
@@ -168,7 +173,30 @@ export const registerScheduledTaskToolRoute = (app, dependencies) => {
     projectConfigRuntime,
     scheduledTasksRuntime,
     logger = console,
+    scheduleSyncRetry = (retry) => {
+      const timer = setTimeout(retry, 1_000);
+      timer.unref?.();
+      return timer;
+    },
   } = dependencies;
+
+  const syncAfterMutation = async (projectID, operation) => {
+    try {
+      await scheduledTasksRuntime.syncProject(projectID);
+      return true;
+    } catch {
+      logger.warn?.('[ScheduledTaskTool] scheduler sync failed', { projectID, operation });
+      try {
+        scheduleSyncRetry(() => {
+          Promise.resolve(scheduledTasksRuntime.syncProject(projectID)).catch(() => {
+            logger.warn?.('[ScheduledTaskTool] scheduler sync retry failed', { projectID, operation });
+          });
+        });
+      } catch {
+      }
+      return false;
+    }
+  };
 
   app.post(MANAGED_SCHEDULED_TASK_TOOL_PATH, express.json({ limit: '64kb', strict: true }), async (req, res) => {
     try {
@@ -177,7 +205,7 @@ export const registerScheduledTaskToolRoute = (app, dependencies) => {
       const messageID = asString(context.messageID, 'context.messageID');
       const contextDirectory = await validatedDirectory(validateDirectoryPath, context.directory, 'context.directory');
       const worktree = context.worktree === undefined ? null : await validatedDirectory(validateDirectoryPath, context.worktree, 'context.worktree');
-      if (context.agent !== undefined) asString(context.agent, 'context.agent', 256);
+      const contextAgent = context.agent === undefined ? null : asString(context.agent, 'context.agent', 256);
 
       const session = await fetchOpenCodeJson({
         buildOpenCodeUrl, getOpenCodeAuthHeaders, route: `/session/${encodeURIComponent(sessionID)}`, directory: contextDirectory,
@@ -194,11 +222,11 @@ export const registerScheduledTaskToolRoute = (app, dependencies) => {
 
       const settings = await readSettingsFromDiskMigrated();
       const projects = sanitizeProjects(settings?.projects || []);
-      const project = await selectProject(path, validateDirectoryPath, Array.isArray(projects) ? projects : [], sessionDirectory);
+      const project = await selectProject(path, validateDirectoryPath, Array.isArray(projects) ? projects : [], sessionDirectory, [context.directory, session.directory, context.worktree]);
       if (!project) return res.status(404).json({ error: 'Configure a project containing this session directory before managing scheduled tasks' });
 
       const messages = await fetchOpenCodeJson({
-        buildOpenCodeUrl, getOpenCodeAuthHeaders, route: `/session/${encodeURIComponent(sessionID)}/message`, directory: contextDirectory,
+        buildOpenCodeUrl, getOpenCodeAuthHeaders, route: `/session/${encodeURIComponent(sessionID)}/message?limit=${OPEN_CODE_MESSAGE_LIMIT}`, directory: contextDirectory,
       });
       if (!Array.isArray(messages)) {
         const error = new Error('OpenCode returned invalid message context');
@@ -206,7 +234,7 @@ export const registerScheduledTaskToolRoute = (app, dependencies) => {
         throw error;
       }
       const userInfo = userDefaultsForMessage(messages, messageID);
-      const model = userInfo?.model && typeof userInfo.model === 'object' ? userInfo.model : {};
+      if (contextAgent && contextAgent !== userInfo.agent) throw new Error('context.agent does not match the user message agent');
 
       if (operation === 'list') {
         hasOnlyKeys(input, new Set(), 'input');
@@ -218,8 +246,8 @@ export const registerScheduledTaskToolRoute = (app, dependencies) => {
         hasOnlyKeys(input, new Set(['taskId']), 'input');
         const deleted = await projectConfigRuntime.deleteScheduledTask(project.id, taskID);
         if (!deleted.deleted) return res.status(404).json({ error: 'Task not found' });
-        await scheduledTasksRuntime.syncProject(project.id);
-        return res.json({ projectId: project.id, tasks: await projectConfigRuntime.listScheduledTasks(project.id) });
+        const schedulerSynced = await syncAfterMutation(project.id, operation);
+        return res.json({ projectId: project.id, tasks: deleted.tasks, schedulerSynced });
       }
       if (operation === 'run') {
         hasOnlyKeys(input, new Set(['taskId']), 'input');
@@ -235,34 +263,37 @@ export const registerScheduledTaskToolRoute = (app, dependencies) => {
         : new Set(['taskId', 'name', 'enabled', 'schedule', 'execution']), 'input');
       validateTaskInputFields(input);
 
-      let existing = null;
       if (operation === 'update') {
-        existing = (await projectConfigRuntime.listScheduledTasks(project.id)).find((task) => task.id === taskID);
-        if (!existing) return res.status(404).json({ error: 'Task not found' });
+        const patch = {
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+          ...(input.schedule === undefined ? {} : { schedule: input.schedule }),
+          ...(input.execution === undefined ? {} : { execution: input.execution }),
+        };
+        const patched = await projectConfigRuntime.patchScheduledTask(project.id, taskID, patch);
+        if (!patched?.task) return res.status(404).json({ error: 'Task not found' });
+        const schedulerSynced = await syncAfterMutation(project.id, operation);
+        return res.json({ projectId: project.id, task: patched.task, tasks: patched.tasks, schedulerSynced });
       }
+      const model = userInfo?.model && typeof userInfo.model === 'object' ? userInfo.model : {};
       const executionInput = input.execution === undefined ? {} : asObject(input.execution, 'input.execution');
-      const execution = { ...(existing?.execution || {}), ...executionInput };
+      const execution = { ...executionInput };
       if (!execution.providerID) execution.providerID = model.providerID;
       if (!execution.modelID) execution.modelID = model.modelID;
-      if (!execution.agent) execution.agent = context.agent || userInfo.agent;
-      if (!execution.variant) execution.variant = model.variant || userInfo.variant;
+      if (!execution.agent) execution.agent = userInfo.agent;
+      if (!execution.variant) execution.variant = model.variant;
       if (operation === 'create' && (!execution.providerID || !execution.modelID)) {
         throw new Error('execution.providerID and execution.modelID are required from the user message or input');
       }
       const taskInput = {
-        ...(existing || {}),
-        ...(operation === 'update' ? { id: taskID } : {}),
         ...(input.name === undefined ? {} : { name: input.name }),
         ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
-        schedule: { ...(existing?.schedule || {}), ...(input.schedule === undefined ? {} : asObject(input.schedule, 'input.schedule')) },
+        schedule: input.schedule === undefined ? {} : asObject(input.schedule, 'input.schedule'),
         execution,
-        ...(existing ? { state: existing.state } : {}),
       };
       const upserted = await projectConfigRuntime.upsertScheduledTask(project.id, taskInput);
-      await scheduledTasksRuntime.syncProject(project.id);
-      const tasks = await projectConfigRuntime.listScheduledTasks(project.id);
-      const task = tasks.find((item) => item.id === upserted.task.id) || upserted.task;
-      return res.status(operation === 'create' ? 201 : 200).json({ projectId: project.id, created: upserted.created, task, tasks });
+      const schedulerSynced = await syncAfterMutation(project.id, operation);
+      return res.status(201).json({ projectId: project.id, created: upserted.created, task: upserted.task, tasks: upserted.tasks, schedulerSynced });
     } catch (error) {
       const statusCode = error?.statusCode || (isValidationError(error?.message || '') ? 400 : 500);
       if (statusCode >= 500) logger.error?.('[ScheduledTaskTool] request failed', { operation: req.body?.operation, statusCode });

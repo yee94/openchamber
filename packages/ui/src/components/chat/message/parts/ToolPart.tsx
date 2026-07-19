@@ -432,24 +432,18 @@ const buildWritePreviewPatch = (filePath: string | undefined, content: string): 
     ].join('\n');
 };
 
-const getFirstChangedLineFromMetadata = (tool: string, metadata?: Record<string, unknown>): number | undefined => {
+const getFirstChangedLineFromMetadata = (
+    tool: string,
+    metadata?: Record<string, unknown>,
+    preferredPath?: string,
+): number | undefined => {
     if (!metadata || (tool !== 'edit' && tool !== 'multiedit' && tool !== 'apply_patch')) {
         return undefined;
     }
 
-    const topLevelPatch = getPatchText((metadata as { patch?: unknown }).patch) ?? getPatchText(metadata.diff);
-    if (topLevelPatch) {
-        const line = extractFirstChangedLineFromDiff(topLevelPatch);
-        if (Number.isFinite(line)) {
-            return line;
-        }
-    }
-
-    const files = Array.isArray(metadata.files) ? metadata.files : [];
-    const firstFile = files[0] as { patch?: unknown; diff?: unknown } | undefined;
-    const filePatch = getPatchText(firstFile?.patch) ?? getPatchText(firstFile?.diff);
-    if (filePatch) {
-        const line = extractFirstChangedLineFromDiff(filePatch);
+    const primaryDiff = getPrimaryDiffFromMetadata(tool, metadata, preferredPath);
+    if (primaryDiff) {
+        const line = extractFirstChangedLineFromDiff(primaryDiff);
         if (Number.isFinite(line)) {
             return line;
         }
@@ -477,8 +471,8 @@ const getPrimaryDiffFromMetadata = (
                 if (!file || typeof file !== 'object') {
                     return false;
                 }
-                const candidate = file as { relativePath?: unknown; filePath?: unknown };
-                return candidate.relativePath === preferred || candidate.filePath === preferred;
+                const candidate = file as { relativePath?: unknown; filePath?: unknown; movePath?: unknown };
+                return candidate.relativePath === preferred || candidate.filePath === preferred || candidate.movePath === preferred;
             })
             : files[0];
 
@@ -488,6 +482,15 @@ const getPrimaryDiffFromMetadata = (
             if (patch) {
                 return patch;
             }
+        }
+    }
+
+    const fileDiff = metadata.filediff;
+    if (fileDiff && typeof fileDiff === 'object') {
+        const patch = getPatchText((fileDiff as { patch?: unknown }).patch)
+            ?? getPatchText((fileDiff as { diff?: unknown }).diff);
+        if (patch) {
+            return patch;
         }
     }
 
@@ -583,6 +586,9 @@ const getPrimaryToolPath = (
     input: Record<string, unknown> | undefined,
     metadata: Record<string, unknown> | undefined,
 ): string | null => {
+    const fileDiff = isRecord(metadata?.filediff) ? metadata.filediff : undefined;
+    const fileDiffPath = isRecord(fileDiff) && typeof fileDiff.file === 'string' ? fileDiff.file : null;
+
     if (toolName === 'apply_patch') {
         const files = Array.isArray(metadata?.files) ? metadata.files : [];
         const first = files.find((entry) => {
@@ -591,22 +597,21 @@ const getPrimaryToolPath = (
             }
             return entry.type !== 'delete';
         });
-        if (!isRecord(first)) {
-            return null;
+        if (isRecord(first)) {
+            return typeof first.movePath === 'string'
+                ? first.movePath
+                : typeof first.filePath === 'string'
+                    ? first.filePath
+                    : typeof first.relativePath === 'string'
+                        ? first.relativePath
+                        : fileDiffPath;
         }
-        return typeof first.movePath === 'string'
-            ? first.movePath
-            : typeof first.filePath === 'string'
-                ? first.filePath
-                : typeof first.relativePath === 'string'
-                    ? first.relativePath
-                    : null;
+        return fileDiffPath;
     }
 
     if (toolName === 'edit' || toolName === 'multiedit') {
-        const fileDiff = isRecord(metadata?.filediff) ? metadata.filediff : undefined;
-        if (isRecord(fileDiff) && typeof fileDiff.file === 'string') {
-            return fileDiff.file;
+        if (fileDiffPath) {
+            return fileDiffPath;
         }
         return typeof input?.filePath === 'string'
             ? input.filePath
@@ -2333,42 +2338,32 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             return;
         }
 
-        if (part.tool === 'apply_patch' && mobileActions) {
+        if (normalizedPartTool === 'apply_patch' && mobileActions) {
             e.stopPropagation();
             mobileActions.openTurnDiff(messageId);
-            return;
-        }
-
-        if (part.tool === 'apply_patch' && currentDirectory && !mobileActions && !isMobile && !runtime?.runtime.isVSCode) {
-            e.stopPropagation();
-            openContextPanelTab(currentDirectory, { mode: 'diff', diffScope: 'turn' });
             return;
         }
 
         let filePath: unknown;
         let targetLine: number | undefined;
         let toolDiff: string | undefined;
-        if (part.tool === 'edit' || part.tool === 'multiedit') {
-            filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
-            targetLine = getFirstChangedLineFromMetadata(part.tool, metadata);
+        if (normalizedPartTool === 'edit' || normalizedPartTool === 'multiedit' || normalizedPartTool === 'apply_patch') {
+            filePath = getPrimaryToolPath(normalizedPartTool, input, metadata);
+            targetLine = getFirstChangedLineFromMetadata(
+                normalizedPartTool,
+                metadata,
+                typeof filePath === 'string' ? filePath : undefined,
+            );
             if (typeof filePath === 'string') {
-                toolDiff = getPrimaryDiffFromMetadata(part.tool, metadata, filePath);
+                toolDiff = getPrimaryDiffFromMetadata(normalizedPartTool, metadata, filePath);
             }
-        } else if (part.tool === 'apply_patch') {
-            const files = Array.isArray(metadata?.files) ? metadata?.files : [];
-            const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined;
-            filePath = firstFile?.relativePath || firstFile?.filePath;
-            targetLine = getFirstChangedLineFromMetadata(part.tool, metadata);
-            if (typeof filePath === 'string') {
-                toolDiff = getPrimaryDiffFromMetadata(part.tool, metadata, filePath);
-            }
-        } else if (['write', 'create', 'file_write'].includes(part.tool)) {
+        } else if (['write', 'create', 'file_write'].includes(normalizedPartTool)) {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
             targetLine = 1;
             if (typeof filePath === 'string' && typeof input?.content === 'string') {
                 toolDiff = buildWritePreviewPatch(filePath, input.content);
             }
-        } else if (part.tool === 'lsp') {
+        } else if (normalizedPartTool === 'lsp') {
             filePath = input?.filePath || input?.file_path || input?.path;
             const line = input?.line;
             targetLine = typeof line === 'number' && Number.isFinite(line) ? Math.trunc(line) : undefined;
@@ -2396,7 +2391,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     } else if (isMobile) {
                         navigateToDiff(relativePath, false, 'turn', targetLine);
                     } else {
-                        openContextDiff(currentDirectory, relativePath, false, 'turn', targetLine);
+                        openContextDiff(currentDirectory, relativePath, false, 'turn', targetLine, messageId);
                     }
                     return;
                 }
@@ -2420,7 +2415,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 return;
             }
 
-            if (part.tool === 'lsp') {
+            if (normalizedPartTool === 'lsp') {
                 if (runtime?.editor) {
                     void runtime.editor.openFile(absolutePath, targetLine);
                     return;
@@ -2453,6 +2448,12 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 runtime.editor.openFile(absolutePath, targetLine);
                 return;
             }
+        }
+
+        if (normalizedPartTool === 'apply_patch' && currentDirectory && !mobileActions && !isMobile && !runtime?.runtime.isVSCode) {
+            e.stopPropagation();
+            openContextPanelTab(currentDirectory, { mode: 'diff', diffScope: 'turn', diffTurnMessageId: messageId });
+            return;
         }
 
         if (!isFileNavTool) {

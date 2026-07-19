@@ -4,7 +4,6 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ModelLogo } from '@/components/ui/ModelLogo';
 import { Icon } from '@/components/icon/Icon';
 import { useModelLists } from '@/hooks/useModelLists';
@@ -15,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
+import { MobileModelPickerPanel } from '@/components/model-picker/MobileModelPickerPanel';
 
 interface ModelSelectorProps {
     providerId: string;
@@ -121,6 +121,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const selectedModel = providerId && modelId ? { providerID: providerId, modelID: modelId } : null;
     const triggerLabel = providerId && modelId ? `${providerId}/${modelId}` : (placeholder || t('settings.agents.modelSelector.notSelected'));
     const variantLabel = variantSelectionEnabled ? (variant || t('chat.modelControls.default')) : null;
+    const resolveMobileVariant = React.useCallback((entryProviderId: string, entryModelId: string) => {
+        if (!variantSelectionEnabled || entryProviderId !== providerId || entryModelId !== modelId) return undefined;
+        return variant || undefined;
+    }, [modelId, providerId, variant, variantSelectionEnabled]);
+    const handleMobileSelect = React.useCallback((nextProviderId: string, nextModelId: string, nextVariant: string | undefined) => {
+        onChange(nextProviderId, nextModelId, variantSelectionEnabled ? (nextVariant ?? '') : undefined);
+        addRecentModel(nextProviderId, nextModelId);
+        closePicker();
+    }, [addRecentModel, closePicker, onChange, variantSelectionEnabled]);
 
     const renderVariantControl = React.useCallback((entry: ModelPickerEntry, state: { isSelected: boolean }) => {
         if (!variantSelectionEnabled || getVariantOptions(entry).length === 0) return null;
@@ -160,6 +169,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             includeNotSelected
             onSelectNone={handleSelectNone}
             onEscape={closePicker}
+            maxHeightClassName={isActuallyMobile ? 'max-h-none flex-1' : undefined}
             tooltipsEnabled={tooltipsEnabled && (isActuallyMobile ? isMobilePanelOpen : isDropdownOpen)}
             isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
             onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
@@ -173,7 +183,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 type="button"
                 className="flex min-h-11 items-center gap-2 border-b border-border/40 px-3 text-left typography-ui-label font-medium text-foreground hover:bg-interactive-hover"
                 onClick={() => setVariantTarget(null)}
-                aria-label={t('sessions.scheduledTasks.editor.actions.cancel')}
+                aria-label={t('header.actions.backAria')}
             >
                 <Icon name="arrow-left" className="size-4" />
                 <span className="min-w-0 flex-1 truncate">{variantTarget.modelID}</span>
@@ -234,13 +244,25 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     </div>
                     <Icon name="arrow-down-s" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                 </button>
-                <MobileOverlayPanel
+                <MobileModelPickerPanel
                     open={isMobilePanelOpen}
                     onClose={closePicker}
-                    title={t('settings.agents.modelSelector.title')}
-                >
-                    {picker}
-                </MobileOverlayPanel>
+                    selectedProviderID={providerId}
+                    selectedModelID={modelId}
+                    resolveSelectedVariant={resolveMobileVariant}
+                    onSelect={handleMobileSelect}
+                    providers={providers}
+                    favoriteModels={favoriteModelsList}
+                    recentModels={recentModelsList}
+                    modelsMetadata={modelsMetadata}
+                    hiddenModels={hiddenModels}
+                    allowedProviderIds={allowedProviderIds}
+                    allowedModelIdsByProvider={allowedModelIdsByProvider}
+                    providerOrder={providerOrder}
+                    variantSelectionEnabled={variantSelectionEnabled}
+                    isFavorite={isFavoriteModel}
+                    onToggleFavorite={toggleFavoriteModel}
+                />
             </>
         );
     }

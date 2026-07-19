@@ -963,6 +963,8 @@ interface DiffViewProps {
     targetLine?: number | null;
     /** Load complete file context when this view opens. */
     preloadFullFiles?: boolean;
+    /** Changes whenever the surrounding tab is reopened for the same target. */
+    navigationRequestKey?: number;
 }
 
 export const DiffView: React.FC<DiffViewProps> = ({
@@ -978,6 +980,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     flushContent = false,
     singleFileView = false,
     preloadFullFiles = false,
+    navigationRequestKey,
 }) => {
     const { t } = useI18n();
     const { git, files } = useRuntimeAPIs();
@@ -1336,7 +1339,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         pendingScrollTargetRef.current = normalizedTarget;
         expandStackedFile(normalizedTarget);
         setScrollRequestNonce((value) => value + 1);
-    }, [activeDiffScope, expandStackedFile, targetFilePath, targetLine]);
+    }, [activeDiffScope, expandStackedFile, navigationRequestKey, targetFilePath, targetLine]);
 
     React.useEffect(() => {
         if (!displayFile) {

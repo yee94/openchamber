@@ -1364,9 +1364,20 @@ export async function abortCurrentOperation(sessionId: string): Promise<void> {
   // (the "stop button does nothing" report — sessions in another project/
   // worktree than the UI's current directory could never be aborted).
   const { directory } = dirStoreForSession(sessionId)
+  const scope = directory ? {
+    state: "bound" as const,
+    transportIdentity: getRuntimeTransportIdentity(),
+    directory,
+    sessionID: sessionId,
+  } : null
+  const blockToken = scope ? useSessionUIStore.getState().beginQueueAbortBlock(scope) : null
   try {
-    await sdk().session.abort({ sessionID: sessionId, directory })
+    const result = await sdk().session.abort({ sessionID: sessionId, directory })
+    if (assertSdkData(result, "session.abort") !== true) {
+      throw new Error("Session abort failed")
+    }
   } catch (error) {
+    if (scope && blockToken) useSessionUIStore.getState().clearQueueAbortBlock(scope, blockToken)
     console.error("[session-actions] abort failed", error)
   }
 }

@@ -14,12 +14,12 @@ import { Input } from '@/components/ui/input';
 import { Kbd } from '@/components/ui/kbd';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ModelLogo } from '@/components/ui/ModelLogo';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import type { IconName } from "@/components/icon/icons";
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
+import { MobileModelPickerPanel } from '@/components/model-picker/MobileModelPickerPanel';
 import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import { isDesktopShell } from '@/lib/desktop';
 import { getAgentColor } from '@/lib/agentColors';
@@ -27,7 +27,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { mergeModelMetadataWithLiveModel } from '@/lib/modelMetadata';
 import { getModelDisplayName as getSharedModelDisplayName } from '@/lib/modelDisplay';
 import { getEditModeColors } from '@/lib/permissions/editModeColors';
-import { matchesModelSearch } from '@/lib/search/modelSearch';
 import { cn, fuzzyMatch } from '@/lib/utils';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { AgentCycleLabel } from '@/components/chat/AgentCycleLabel';
@@ -43,7 +42,7 @@ import { getSessionMaterializationStatus } from '@/sync/materialization';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useIsTextTruncated } from '@/hooks/useIsTextTruncated';
-import { formatEffortLabel, getCycledPrimaryAgentName, isPrimaryMode, type MobileControlsPanel } from './mobileControlsUtils';
+import { getCycledPrimaryAgentName, isPrimaryMode, type MobileControlsPanel } from './mobileControlsUtils';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
@@ -56,10 +55,7 @@ type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
 
 type PermissionAction = 'allow' | 'ask' | 'deny';
 type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
-type MobileVariantTarget = { providerId: string; modelId: string };
-
 const buildModelRefKey = (providerID: string, modelID: string) => `${providerID}:${modelID}`;
-const MAX_INLINE_MOBILE_VARIANT_OPTIONS = 6;
 const INSTANT_DROPDOWN_CLASS = 'transition-none animate-none data-[starting-style]:!opacity-100 data-[starting-style]:!scale-100 data-[ending-style]:!opacity-100 data-[ending-style]:!scale-100';
 
 const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
@@ -337,6 +333,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const setAgent = useConfigStore((state) => state.setAgent);
     const getCurrentProvider = useConfigStore((state) => state.getCurrentProvider);
     const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
+    const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
     const getCurrentAgent = useConfigStore((state) => state.getCurrentAgent);
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
 
@@ -437,20 +434,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const activeMobilePanel = usingExternalMobilePanel ? mobilePanel : localMobilePanel;
     const setActiveMobilePanel = usingExternalMobilePanel ? onMobilePanelChange : setLocalMobilePanel;
     const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState<'model' | 'agent' | null>(null);
-    const [mobileModelQuery, setMobileModelQuery] = React.useState('');
-    const [expandedMobileModelKey, setExpandedMobileModelKey] = React.useState<string | null>(null);
-    const [mobileVariantTarget, setMobileVariantTarget] = React.useState<MobileVariantTarget | null>(null);
     const manualVariantSelectionRef = React.useRef(false);
     const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), [setActiveMobilePanel]);
     const closeMobileTooltip = React.useCallback(() => setMobileTooltipOpen(null), []);
     const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
-    const [expandedMobileProviders, setExpandedMobileProviders] = React.useState<Set<string>>(() => {
-        const initial = new Set<string>();
-        if (currentProviderId) {
-            initial.add(currentProviderId);
-        }
-        return initial;
-    });
     // Use global state for model selector (allows Ctrl+M shortcut)
     const agentMenuOpen = isModelSelectorOpen;
     const setAgentMenuOpen = setModelSelectorOpen;
@@ -520,34 +507,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
         return resolveComposerTextarea(composerTextareaRef);
     }, [composerTextareaRef]);
-
-    React.useEffect(() => {
-        if (activeMobilePanel === 'model') {
-            setExpandedMobileProviders(() => {
-                const initial = new Set<string>();
-                if (currentProviderId) {
-                    initial.add(currentProviderId);
-                }
-                return initial;
-            });
-        }
-    }, [activeMobilePanel, currentProviderId]);
-
-    React.useEffect(() => {
-        if (activeMobilePanel === null) {
-            setExpandedMobileModelKey(null);
-        }
-        if (activeMobilePanel !== 'variant') {
-            setMobileVariantTarget(null);
-        }
-    }, [activeMobilePanel]);
-
-    React.useEffect(() => {
-        if (activeMobilePanel !== 'model') {
-            setMobileModelQuery('');
-            setExpandedMobileModelKey(null);
-        }
-    }, [activeMobilePanel]);
 
     // Handle model selector close behavior (separate from agent selector)
     const prevModelSelectorOpenRef = React.useRef(isModelSelectorOpen);
@@ -621,23 +580,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const currentProvider = getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
-
-    const visibleProviders = React.useMemo(() => {
-        const result: typeof providers = [];
-        for (const provider of providers) {
-            const providerModels = Array.isArray(provider.models) ? provider.models : [];
-            const visibleModels = providerModels.filter((model: ProviderModel) => {
-                const modelId = typeof model?.id === 'string' ? model.id : '';
-                return !hiddenModels.some(
-                    (item) => item.providerID === String(provider.id) && item.modelID === modelId
-                );
-            });
-            if (visibleModels.length > 0) {
-                result.push({ ...provider, models: visibleModels });
-            }
-        }
-        return result;
-    }, [providers, hiddenModels]);
 
     const currentModelForMetadata = currentModelId
         ? models.find((model: ProviderModel) => model.id === currentModelId)
@@ -1429,18 +1371,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return name.charAt(0).toUpperCase() + name.slice(1);
     };
 
-    const toggleMobileProviderExpansion = React.useCallback((providerId: string) => {
-        setExpandedMobileProviders((prev) => {
-            const next = new Set(prev);
-            if (next.has(providerId)) {
-                next.delete(providerId);
-            } else {
-                next.add(providerId);
-            }
-            return next;
-        });
-    }, []);
-
     const handleLongPressStart = React.useCallback((type: 'model' | 'agent') => {
         if (longPressTimerRef.current) {
             clearTimeout(longPressTimerRef.current);
@@ -1683,58 +1613,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    const renderMobileModelPanel = () => {
+    const renderSharedMobileModelPanel = () => {
         if (!isCompact) return null;
 
-        const normalizedQuery = mobileModelQuery.trim();
-        const filteredFavorites = favoriteModelsList.filter(({ model, providerID }) => {
-            const provider = providers.find((entry) => entry.id === providerID);
-            const providerName = provider?.name || providerID;
-            const modelName = getModelDisplayName(model);
-            return normalizedQuery.length === 0
-                || matchesModelSearch(modelName, normalizedQuery)
-                || matchesModelSearch(providerName, normalizedQuery);
-        });
-
-        const filteredRecents = recentModelsList.filter(({ model, providerID }) => {
-            const provider = providers.find((entry) => entry.id === providerID);
-            const providerName = provider?.name || providerID;
-            const modelName = getModelDisplayName(model);
-            return normalizedQuery.length === 0
-                || matchesModelSearch(modelName, normalizedQuery)
-                || matchesModelSearch(providerName, normalizedQuery);
-        });
-
-        const filteredProviders: {
-            provider: (typeof visibleProviders)[number];
-            providerModels: ProviderModel[];
-            matchesProvider: boolean;
-        }[] = [];
-        for (const provider of visibleProviders) {
-            const providerModels = Array.isArray(provider.models) ? provider.models : [];
-            const matchesProvider = normalizedQuery.length === 0
-                ? true
-                : matchesModelSearch(provider.name, normalizedQuery) || matchesModelSearch(provider.id, normalizedQuery);
-            const matchingModels = normalizedQuery.length === 0
-                ? providerModels
-                : providerModels.filter((model: ProviderModel) => {
-                    const name = getModelDisplayName(model);
-                    const id = typeof model.id === 'string' ? model.id : '';
-                    return matchesModelSearch(name, normalizedQuery) || matchesModelSearch(id, normalizedQuery);
-                });
-            const resolvedModels = matchesProvider && normalizedQuery.length > 0 ? providerModels : matchingModels;
-            if (matchesProvider || resolvedModels.length > 0) {
-                filteredProviders.push({ provider, providerModels: resolvedModels, matchesProvider });
-            }
-        }
-
-        const focusMobileComposer = () => {
-            requestAnimationFrame(() => {
-                focusComposerTextarea(composerTextareaRef);
-            });
-        };
-
-        const handleMobileModelApply = (providerId: string, modelId: string, variant: string | undefined) => {
+        const handleSelect = (providerId: string, modelId: string, variant: string | undefined) => {
             const result = applyModelSelectionWithVariant(providerId, modelId, variant);
             if (result !== 'applied') {
                 if (result === 'provider-missing') {
@@ -1746,406 +1628,30 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             }
 
             persistAgentModelPreference(resolveLiveAgentName(), providerId, modelId, variant);
-            setExpandedMobileModelKey(null);
             closeMobilePanel();
-            focusMobileComposer();
-        };
-
-        const openMobileVariantOverflow = (providerId: string, modelId: string) => {
-            setMobileVariantTarget({ providerId, modelId });
-            setActiveMobilePanel('variant');
-        };
-
-        const renderMobileModelRow = ({
-            model,
-            providerId,
-            modelId,
-            showProviderLogo,
-        }: {
-            model: ProviderModel;
-            providerId: string;
-            modelId: string;
-            showProviderLogo: boolean;
-        }) => {
-            const rowKey = buildModelRefKey(providerId, modelId);
-            const isSelected = providerId === currentProviderId && modelId === currentModelId;
-            const metadata = mergeModelMetadataWithLiveModel(providerId, model, getModelMetadata(providerId, modelId));
-            const variantOptions = getModelVariantOptions(providerId, modelId);
-            const hasVariants = variantOptions.length > 0;
-            const resolvedVariant = resolveModelVariantSelection(providerId, modelId);
-            const variantLabel = hasVariants ? formatEffortLabel(resolvedVariant) : null;
-            const isExpanded = expandedMobileModelKey === rowKey;
-            const inlineVariantOptions = [undefined, ...variantOptions].slice(0, MAX_INLINE_MOBILE_VARIANT_OPTIONS);
-            const hasVariantOverflow = inlineVariantOptions.length < variantOptions.length + 1;
-            const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
-                ...icon,
-                label: localizeMetaLabel(icon.label),
-            }));
-            const modalityIcons = [
-                ...getModalityIcons(metadata, 'input').map((icon) => ({ ...icon, label: localizeMetaLabel(icon.label) })),
-                ...getModalityIcons(metadata, 'output').map((icon) => ({ ...icon, label: localizeMetaLabel(icon.label) })),
-            ];
-            const indicatorIcons = Array.from(
-                new Map([...capabilityIcons, ...modalityIcons].map((icon) => [icon.key, icon])).values()
-            );
-            const contextText = metadata?.limit?.context ? `${formatTokens(metadata.limit.context)} ctx` : null;
-
-            return (
-                <div
-                    key={`mobile-model-${providerId}-${modelId}`}
-                    className={cn(
-                        'border-b border-border/30 last:border-b-0',
-                        isSelected && 'bg-interactive-selection/15 text-interactive-selection-foreground'
-                    )}
-                >
-                    <div className="flex items-center gap-2 px-2 py-1.5">
-                        <button
-                            type="button"
-                            onClick={() => handleMobileModelApply(providerId, modelId, resolvedVariant)}
-                            className={cn(
-                                'flex flex-1 min-w-0 items-start gap-2 text-left',
-                                'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-lg'
-                            )}
-                        >
-                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                <div className="flex min-w-0 items-center gap-1.5">
-                                    {showProviderLogo ? (
-                                        <ModelLogo modelId={modelId} providerId={providerId} className="size-3.5 flex-shrink-0" />
-                                    ) : null}
-                                    <span className="typography-meta font-medium text-foreground truncate">
-                                        {getModelDisplayName(model)}
-                                    </span>
-                                    {isSelected ? <Icon name="check" className="size-4 flex-shrink-0 text-primary" /> : null}
-                                </div>
-                                {contextText || indicatorIcons.length > 0 ? (
-                                    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden typography-micro text-muted-foreground">
-                                        {contextText ? (
-                                            <span className="whitespace-nowrap flex-shrink-0">
-                                                {contextText}
-                                            </span>
-                                        ) : null}
-                                        {contextText && indicatorIcons.length > 0 ? (
-                                            <span aria-hidden="true" className="h-3 w-px flex-shrink-0 bg-border/50" />
-                                        ) : null}
-                                        {indicatorIcons.length > 0 ? (
-                                            <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap pl-0.5">
-                                                {indicatorIcons.map(({ key, icon: iconName, label }) => (
-                                                <span
-                                                    key={`meta-${providerId}-${modelId}-${key}`}
-                                                    className="flex size-4 flex-shrink-0 items-center justify-center text-muted-foreground"
-                                                    title={label}
-                                                    aria-label={label}
-                                                >
-                                                    <Icon name={iconName} className="size-3" />
-                                                </span>
-                                            ))}
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                ) : null}
-                            </div>
-                        </button>
-                        {hasVariants ? (
-                            <button
-                                type="button"
-                                onClick={() => setExpandedMobileModelKey((prev) => prev === rowKey ? null : rowKey)}
-                                className="flex items-center gap-0.5 typography-micro font-medium text-muted-foreground hover:text-foreground flex-shrink-0"
-                                aria-expanded={isExpanded}
-                                aria-label={isExpanded ? t('chat.modelControls.hideThinkingModes') : t('chat.modelControls.showThinkingModes')}
-                            >
-                                <span className="whitespace-nowrap">{variantLabel}</span>
-                                {isExpanded ? <Icon name="arrow-down-s" className="size-3.5" /> : <Icon name="arrow-right-s" className="size-3.5" />}
-                            </button>
-                        ) : null}
-                        <div className="flex flex-shrink-0 items-center gap-1.5">
-                            <button
-                                type="button"
-                                onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    toggleFavoriteModel(providerId, modelId);
-                                }}
-                                className={cn(
-                                    'model-favorite-button flex size-5 items-center justify-center hover:text-primary/80 flex-shrink-0',
-                                    isFavoriteModel(providerId, modelId) ? 'text-primary' : 'text-muted-foreground'
-                                )}
-                                aria-label={isFavoriteModel(providerId, modelId)
-                                    ? t('chat.modelControls.unfavoriteAria')
-                                    : t('chat.modelControls.favoriteAria')}
-                                title={isFavoriteModel(providerId, modelId)
-                                    ? t('chat.modelControls.removeFromFavorites')
-                                    : t('chat.modelControls.addToFavorites')}
-                            >
-                                {isFavoriteModel(providerId, modelId) ? (
-                                    <Icon name="star-fill" className="size-4" />
-                                ) : (
-                                    <Icon name="star" className="size-4" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                    {isExpanded && hasVariants ? (
-                        <div className="border-t border-border/30 p-2">
-                            <div className="flex flex-wrap gap-2">
-                                {inlineVariantOptions.map((variantOption) => {
-                                    const isVariantSelected = variantOption === resolvedVariant || (!variantOption && !resolvedVariant);
-                                    return (
-                                        <button
-                                            key={`${rowKey}-variant-${variantOption ?? 'default'}`}
-                                            type="button"
-                                            onClick={() => handleMobileModelApply(providerId, modelId, variantOption)}
-                                            className={cn(
-                                                'inline-flex items-center rounded-full border px-2.5 py-1 typography-meta font-medium',
-                                                isVariantSelected
-                                                    ? 'border-primary/30 bg-primary/10 text-foreground'
-                                                    : 'border-border/40 text-muted-foreground hover:bg-interactive-hover/50'
-                                            )}
-                                            aria-pressed={isVariantSelected}
-                                        >
-                                            {formatEffortLabel(variantOption)}
-                                        </button>
-                                    );
-                                })}
-                                {hasVariantOverflow ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => openMobileVariantOverflow(providerId, modelId)}
-                                        className="inline-flex items-center rounded-full border border-border/40 px-2.5 py-1 typography-meta font-medium text-muted-foreground hover:bg-interactive-hover/50"
-                                        aria-label={t('chat.modelControls.moreThinkingModes')}
-                                    >
-                                        {t('inlineComment.actions.showMore')}
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
-                    ) : null}
-                </div>
-            );
-        };
-
-        const hasResults = filteredFavorites.length > 0 || filteredRecents.length > 0 || filteredProviders.length > 0;
-
-        return (
-            <MobileOverlayPanel
-                open={activeMobilePanel === 'model'}
-                onClose={closeMobilePanel}
-                title={t('chat.modelControls.selectModel')}
-            >
-                <div className="flex flex-col gap-2">
-                    <div>
-                        <div className="relative">
-                            <Icon name="search" className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                            <Input
-                                value={mobileModelQuery}
-                                onChange={(event) => {
-                                    setMobileModelQuery(event.target.value);
-                                    setExpandedMobileModelKey(null);
-                                }}
-                                        placeholder={t('chat.modelControls.searchProvidersOrModels')}
-                                className="pl-7 h-9 rounded-xl border-border/40 bg-[var(--surface-elevated)] typography-meta"
-                            />
-                            {mobileModelQuery && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setMobileModelQuery('');
-                                        setExpandedMobileModelKey(null);
-                                    }}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                    aria-label={t('chat.modelControls.clearSearch')}
-                                >
-                                    <Icon name="close-circle" className="size-4" />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {!hasResults && (
-                        <div className="px-3 py-8 text-center typography-meta text-muted-foreground">
-                            {t('chat.modelControls.noProvidersOrModelsFound')}
-                        </div>
-                    )}
-
-                    {/* Favorites Section for Mobile */}
-                    {filteredFavorites.length > 0 && (
-                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <Icon name="star-fill" className="size-3 inline-block mr-1.5 text-primary" />
-                                {t('chat.modelControls.favorites')}
-                            </div>
-                            <div className="flex flex-col border-t border-border/30">
-                                {filteredFavorites.map(({ model, providerID, modelID }) => renderMobileModelRow({
-                                    model,
-                                    providerId: providerID,
-                                    modelId: modelID,
-                                    showProviderLogo: true,
-                                }))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Recent Section for Mobile */}
-                    {filteredRecents.length > 0 && (
-                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <Icon name="time" className="size-3 inline-block mr-1.5" />
-                                {t('chat.modelControls.recent')}
-                            </div>
-                            <div className="flex flex-col border-t border-border/30">
-                                {filteredRecents.map(({ model, providerID, modelID }) => renderMobileModelRow({
-                                    model,
-                                    providerId: providerID,
-                                    modelId: modelID,
-                                    showProviderLogo: true,
-                                }))}
-                            </div>
-                        </div>
-                    )}
-
-                    {filteredProviders.map(({ provider, providerModels }) => {
-                        if (providerModels.length === 0) {
-                            return null;
-                        }
-
-                        const isActiveProvider = provider.id === currentProviderId;
-                        const isExpanded = expandedMobileProviders.has(provider.id) || normalizedQuery.length > 0;
-
-                         return (
-                             <div key={provider.id} className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (normalizedQuery.length > 0) {
-                                            return;
-                                        }
-                                        toggleMobileProviderExpansion(provider.id);
-                                    }}
-                                    className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 text-left"
-                                    aria-expanded={isExpanded}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <ProviderLogo
-                                            providerId={provider.id}
-                                            className="size-3.5"
-                                        />
-                                        <span className="typography-meta font-medium text-foreground">
-                                            {provider.name}
-                                        </span>
-                                        {isActiveProvider && (
-                                            <span className="typography-micro text-primary/80">{t('chat.modelControls.current')}</span>
-                                        )}
-                                    </div>
-                                    {isExpanded ? (
-                                        <Icon name="arrow-down-s" className="size-3 text-muted-foreground" />
-                                    ) : (
-                                        <Icon name="arrow-right-s" className="size-3 text-muted-foreground" />
-                                    )}
-                                </button>
-
-                                {isExpanded && providerModels.length > 0 && (
-                                    <div className="flex flex-col border-t border-border/30">
-                                        {providerModels.map((model: ProviderModel) => renderMobileModelRow({
-                                            model,
-                                            providerId: provider.id as string,
-                                            modelId: model.id as string,
-                                            showProviderLogo: true,
-                                        }))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </MobileOverlayPanel>
-        );
-    };
-
-    const renderMobileVariantPanel = () => {
-        if (!isCompact) return null;
-
-        const targetProviderId = mobileVariantTarget?.providerId ?? currentProviderId;
-        const targetModelId = mobileVariantTarget?.modelId ?? currentModelId;
-        if (!targetProviderId || !targetModelId) return null;
-
-        const targetVariants = getModelVariantOptions(targetProviderId, targetModelId);
-        if (targetVariants.length === 0) return null;
-
-        const selectedVariant = resolveModelVariantSelection(targetProviderId, targetModelId);
-        const isDefault = !selectedVariant;
-
-        const handleBack = () => {
-            setActiveMobilePanel('model');
-        };
-
-        const handleSelect = (variant: string | undefined) => {
-            const result = applyModelSelectionWithVariant(targetProviderId, targetModelId, variant);
-            if (result !== 'applied') {
-                return;
-            }
-
-            persistAgentModelPreference(resolveLiveAgentName(), targetProviderId, targetModelId, variant);
-            closeMobilePanel();
-            requestAnimationFrame(() => {
-                focusComposerTextarea(composerTextareaRef);
-            });
+            requestAnimationFrame(() => focusComposerTextarea(composerTextareaRef));
         };
 
         return (
-            <MobileOverlayPanel
-                open={activeMobilePanel === 'variant'}
+            <MobileModelPickerPanel
+                open={activeMobilePanel === 'model' || activeMobilePanel === 'variant'}
+                view={activeMobilePanel === 'variant' ? 'variant' : 'model'}
+                onViewChange={(view) => setActiveMobilePanel(view)}
                 onClose={closeMobilePanel}
-                title={t('chat.modelControls.thinking')}
-                renderHeader={mobileVariantTarget ? ((closeButton) => (
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
-                        <button
-                            type="button"
-                            onClick={handleBack}
-                            className="flex items-center gap-1 rounded-lg px-1.5 py-1 typography-meta text-muted-foreground hover:bg-interactive-hover"
-                        >
-                            <Icon name="arrow-go-back" className="size-4" />
-                            <span>{t('onboarding.common.actions.back')}</span>
-                        </button>
-                        <h2 className="typography-ui-label font-semibold text-foreground">{t('chat.modelControls.thinking')}</h2>
-                        {closeButton}
-                    </div>
-                )) : undefined}
-            >
-                <div className="flex flex-col gap-1.5">
-                    <button
-                        type="button"
-                        className={cn(
-                            'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-left',
-                            'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
-                            isDefault ? 'border-primary/30 bg-primary/10' : 'border-border/40'
-                        )}
-                        onClick={() => handleSelect(undefined)}
-                    >
-                        <span className="typography-meta font-medium text-foreground">{t('chat.modelControls.default')}</span>
-                        {isDefault && <Icon name="check" className="size-4 text-primary flex-shrink-0" />}
-                    </button>
-
-                    {targetVariants.map((variant) => {
-                        const selected = selectedVariant === variant;
-                        const label = formatEffortLabel(variant);
-
-                        return (
-                            <button
-                                key={variant}
-                                type="button"
-                                className={cn(
-                                    'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-left',
-                                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
-                                    selected ? 'border-primary/30 bg-primary/10' : 'border-border/40'
-                                )}
-                                onClick={() => handleSelect(variant)}
-                            >
-                                <span className="typography-meta font-medium text-foreground">{label}</span>
-                                {selected && <Icon name="check" className="size-4 text-primary flex-shrink-0" />}
-                            </button>
-                        );
-                    })}
-                </div>
-            </MobileOverlayPanel>
+                selectedProviderID={currentProviderId || ''}
+                selectedModelID={currentModelId || ''}
+                resolveSelectedVariant={resolveModelVariantSelection}
+                onSelect={handleSelect}
+                providers={providers as ModelPickerProvider[]}
+                favoriteModels={favoriteModelsList}
+                recentModels={recentModelsList}
+                modelsMetadata={modelsMetadata}
+                hiddenModels={hiddenModels}
+                providerOrder={providerOrder}
+                isFavorite={isFavoriteModel}
+                onToggleFavorite={toggleFavoriteModel}
+                getMetadata={getModelMetadata}
+            />
         );
     };
 
@@ -3010,8 +2516,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 </div>
             </div>
 
-            {renderMobileModelPanel()}
-            {renderMobileVariantPanel()}
+            {renderSharedMobileModelPanel()}
             {renderMobileAgentPanel()}
             {renderMobileModelTooltip()}
             {renderMobileAgentTooltip()}

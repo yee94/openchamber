@@ -17,7 +17,31 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
     scheduledTasksRuntime,
     getOpenChamberEventClients,
     writeSseEvent,
+    scheduleSyncRetry = (retry) => {
+      const timer = setTimeout(retry, 1_000);
+      timer.unref?.();
+      return timer;
+    },
   } = dependencies;
+
+  const syncAfterMutation = async (projectID) => {
+    try {
+      await scheduledTasksRuntime.syncProject(projectID);
+      return true;
+    } catch (error) {
+      console.error('[ScheduledTasks] scheduler sync failed:', error);
+      try {
+        scheduleSyncRetry(() => {
+          Promise.resolve(scheduledTasksRuntime.syncProject(projectID)).catch((retryError) => {
+            console.error('[ScheduledTasks] scheduler sync retry failed:', retryError);
+          });
+        });
+      } catch (scheduleError) {
+        console.error('[ScheduledTasks] failed to schedule scheduler sync retry:', scheduleError);
+      }
+      return false;
+    }
+  };
 
   const findProjectByID = async (projectID) => {
     const settings = await readSettingsFromDiskMigrated();
@@ -98,14 +122,13 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
       }
 
       const upserted = await projectConfigRuntime.upsertScheduledTask(projectID, taskInput);
-      await scheduledTasksRuntime.syncProject(projectID);
-      const freshTasks = await projectConfigRuntime.listScheduledTasks(projectID);
-      const freshTask = freshTasks.find((task) => task.id === upserted.task.id) || upserted.task;
+      const schedulerSynced = await syncAfterMutation(projectID);
 
       return res.json({
-        tasks: freshTasks,
-        task: freshTask,
+        tasks: upserted.tasks,
+        task: upserted.task,
         created: upserted.created,
+        schedulerSynced,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save scheduled task';
@@ -139,9 +162,8 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
       if (!result.deleted) {
         return res.status(404).json({ error: 'Task not found' });
       }
-      await scheduledTasksRuntime.syncProject(projectID);
-      const freshTasks = await projectConfigRuntime.listScheduledTasks(projectID);
-      return res.json({ tasks: freshTasks });
+      const schedulerSynced = await syncAfterMutation(projectID);
+      return res.json({ tasks: result.tasks, schedulerSynced });
     } catch (error) {
       console.error('[ScheduledTasks] failed to delete task:', error);
       return res.status(500).json({ error: 'Failed to delete scheduled task' });

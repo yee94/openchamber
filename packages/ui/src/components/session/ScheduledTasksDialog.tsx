@@ -525,7 +525,7 @@ export function ScheduledTasksWorkspace({
               size="icon"
               className="size-11 shrink-0 rounded-lg"
               onClick={requestClose}
-              aria-label={t('sessions.scheduledTasks.editor.actions.cancel')}
+              aria-label={t('header.actions.backAria')}
             >
               <Icon name="arrow-left" className="size-5" />
             </Button>
@@ -854,12 +854,12 @@ export function ScheduledTasksWorkspace({
           <motion.div
             key="scheduled-task-details"
             initial={reduceMotion ? { opacity: 1, width: 0 } : { opacity: 0, width: 0, x: 24 }}
-            animate={{ opacity: 1, width: '36vw', x: 0 }}
+            animate={{ opacity: 1, width: 'clamp(380px, 36vw, 480px)', x: 0 }}
             exit={reduceMotion ? { opacity: 0, width: 0 } : { opacity: 0, width: 0, x: 24 }}
             transition={{ duration: reduceMotion ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
             className="h-full min-h-0 max-w-[480px] shrink-0 overflow-hidden"
           >
-            <aside className="h-full min-h-0 w-[36vw] min-w-[380px] max-w-[480px] border-l border-border/60 bg-background">
+            <aside className="h-full min-h-0 w-[clamp(380px,36vw,480px)] border-l border-border/60 bg-background">
               <ScheduledTaskEditorDialog
                 open
                 presentation="panel"

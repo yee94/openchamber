@@ -6,7 +6,7 @@ mock.module('@/lib/runtime-switch', () => ({ getRuntimeTransportIdentity: () => 
 mock.module('@/sync/session-actions', () => ({ getSendFailureKind: () => failure, fetchRecentSendConfirmationRecords: (...args: [_sessionID: string, _messageID: string, _directory: string, options?: { signal?: AbortSignal; timeoutMs?: number }]) => fetchRecords(...args) }));
 mock.module('@/stores/useConfigStore', () => ({ useConfigStore: { getState: () => ({ getVisibleAgents: () => [] }) } }));
 mock.module('@/sync/sync-refs', () => ({ getSyncMessages: () => syncMessages }));
-import { dispatchQueuedMessage, getAutoReviewBlockedSessions, getQueuedAutoSendRetryDelayMs, getTrailingQueueTurnState, planQueueHead, planQueueScheduler, reconcileQueuedMessage } from './useQueuedMessageAutoSend';
+import { dispatchQueuedMessage, getAutoReviewBlockedSessions, getQueueAbortBlockWakeAt, getQueuedAutoSendRetryDelayMs, getTrailingQueueTurnState, planQueueHead, planQueueScheduler, reconcileQueuedMessage } from './useQueuedMessageAutoSend';
 const scope = (): Extract<QueueScope, { state: 'bound' }> => ({ state: 'bound', transportIdentity: runtimeIdentity, directory: '/project', sessionID: 'session-a' });
 const reset = () => useMessageQueueStore.setState({ queuedMessages: {}, followUpBehavior: 'queue' });
 const add = () => useMessageQueueStore.getState().addToQueue(scope(), { content: 'queued', sendConfig: { providerID: 'p', modelID: 'm' } });
@@ -149,6 +149,31 @@ describe('queued dispatch and scheduler', () => {
     const blockedSessions = getAutoReviewBlockedSessions({ 'session-a': { status: 'running', runtimeKey: 'runtime-b' } }, runtimeKey);
     const plan = planQueueScheduler({ queuedMessages: { scope: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle', previous: new Map(), inFlight: new Set(), blockedSessions, now: 0 });
     expect(plan.dispatchScopes).toEqual([item.owner]);
+  });
+  test('an abort block pauses only its exact queue scope', () => {
+    const first = add() as QueueItem;
+    const otherScope = { ...scope(), directory: '/other-project' };
+    const second = useMessageQueueStore.getState().addToQueue(otherScope, { content: 'other', sendConfig: { providerID: 'p', modelID: 'm' } }) as QueueItem;
+    const plan = planQueueScheduler({
+      queuedMessages: { [queueScopeKey(first.owner)]: [first], [queueScopeKey(otherScope)]: [second] },
+      activeTransportIdentity: runtimeIdentity,
+      getStatus: () => 'idle',
+      previous: new Map(),
+      inFlight: new Set(),
+      blockedSessions: new Set(),
+      blockedScopeKeys: new Set([queueScopeKey(first.owner)]),
+      now: 0,
+    });
+    expect(plan.dispatchScopes).toEqual([second.owner]);
+  });
+  test('abort block expiry supplies a scheduler wake and restores planner eligibility', () => {
+    const item = add() as QueueItem;
+    const blocks = new Map([[queueScopeKey(item.owner), { expiresAt: 2000 }]]);
+    expect(getQueueAbortBlockWakeAt(blocks, 1000)).toBe(2000);
+    expect(getQueueAbortBlockWakeAt(blocks, 2000)).toBe(undefined);
+    const args = { queuedMessages: { scope: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle' as const, previous: new Map(), inFlight: new Set<string>(), blockedSessions: new Set<string>(), now: 2000 };
+    expect(planQueueScheduler({ ...args, blockedScopeKeys: new Set([queueScopeKey(item.owner)]) }).dispatchScopes).toEqual([]);
+    expect(planQueueScheduler({ ...args, blockedScopeKeys: new Set() }).dispatchScopes).toEqual([item.owner]);
   });
   test('completed, stopped, error, and legacy unkeyed auto-review records allow an authoritative idle queue', () => {
     const item = add() as QueueItem;

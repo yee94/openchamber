@@ -172,4 +172,66 @@ describe('project-config runtime', () => {
       await cleanup();
     }
   });
+
+  it('patches the latest task while preserving its id and state', async () => {
+    const { runtime, cleanup } = await createRuntime();
+    try {
+      const created = await runtime.upsertScheduledTask('project-test', {
+        name: 'Daily review',
+        enabled: true,
+        schedule: { kind: 'daily', time: '09:00', timezone: 'UTC' },
+        execution: { prompt: 'review', providerID: 'openai', modelID: 'gpt-4.1' },
+      });
+      await runtime.updateScheduledTaskState('project-test', created.task.id, {
+        lastStatus: 'success',
+        lastSessionId: 'session-1',
+      });
+
+      const result = await runtime.patchScheduledTask('project-test', created.task.id, {
+        id: 'replacement-id',
+        state: { lastStatus: 'error' },
+        schedule: { timezone: 'Europe/Kyiv' },
+        execution: { variant: 'high' },
+      });
+
+      expect(result.task.id).toBe(created.task.id);
+      expect(result.task.state.lastStatus).toBe('success');
+      expect(result.task.state.lastSessionId).toBe('session-1');
+      expect(result.task.schedule).toEqual({ kind: 'daily', times: ['09:00'], timezone: 'Europe/Kyiv' });
+      expect(result.task.execution).toMatchObject({ prompt: 'review', variant: 'high' });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('keeps readable tasks available and rejects mutations when stored records are invalid', async () => {
+    const { runtime, cleanup } = await createRuntime();
+    try {
+      const projectID = 'invalid_record';
+      const filePath = runtime.resolveProjectConfigPath(projectID);
+      await writeFile(filePath, JSON.stringify({
+        scheduledTasks: [
+          {
+            id: 'task-valid', name: 'valid', enabled: true,
+            schedule: { kind: 'daily', times: ['09:00'], timezone: 'UTC' },
+            execution: { prompt: 'run', providerID: 'openai', modelID: 'gpt-4.1' },
+            state: { createdAt: 1, updatedAt: 1, lastStatus: 'idle' },
+          },
+          { id: 'task-invalid', name: 'invalid' },
+        ],
+      }), 'utf8');
+
+      await expect(runtime.listScheduledTasks(projectID)).resolves.toHaveLength(1);
+      await expect(runtime.upsertScheduledTask(projectID, {
+        name: 'new', enabled: true,
+        schedule: { kind: 'daily', time: '10:00', timezone: 'UTC' },
+        execution: { prompt: 'run', providerID: 'openai', modelID: 'gpt-4.1' },
+      })).rejects.toThrow('scheduledTasks[1] is invalid');
+      await expect(runtime.deleteScheduledTask(projectID, 'task-valid')).rejects.toThrow('scheduledTasks[1] is invalid');
+      await expect(runtime.patchScheduledTask(projectID, 'task-valid', { name: 'changed' })).rejects.toThrow('scheduledTasks[1] is invalid');
+      await expect(runtime.updateScheduledTaskState(projectID, 'task-valid', { lastStatus: 'success' })).rejects.toThrow('scheduledTasks[1] is invalid');
+    } finally {
+      await cleanup();
+    }
+  });
 });

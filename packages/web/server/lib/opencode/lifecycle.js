@@ -285,61 +285,67 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     managedCapabilitiesRuntime?.recordManagedChildPid(child.pid);
     state.managedCapabilityIdentity = managedCapabilitiesRuntime?.getCapabilityIdentity?.() ?? null;
 
-    const url = await new Promise((resolve, reject) => {
-      let stdout = '';
-      let stderr = '';
-      let done = false;
-      const finish = (handler, value) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        child.stdout?.off('data', onStdout);
-        child.stderr?.off('data', onStderr);
-        child.off('exit', onExit);
-        child.off('error', onError);
-        handler(value);
-      };
+    let url;
+    try {
+      url = await new Promise((resolve, reject) => {
+        let stdout = '';
+        let stderr = '';
+        let done = false;
+        const finish = (handler, value) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          child.stdout?.off('data', onStdout);
+          child.stderr?.off('data', onStderr);
+          child.off('exit', onExit);
+          child.off('error', onError);
+          handler(value);
+        };
 
-      const onStdout = (chunk) => {
-        stdout += chunk.toString();
-        const lines = stdout.split('\n');
-        for (const line of lines) {
-          if (!line.startsWith('opencode server listening')) continue;
-          const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
-          if (!match) {
-            finish(reject, new Error(`Failed to parse server url from output: ${line}`));
+        const onStdout = (chunk) => {
+          stdout += chunk.toString();
+          const lines = stdout.split('\n');
+          for (const line of lines) {
+            if (!line.startsWith('opencode server listening')) continue;
+            const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
+            if (!match) {
+              finish(reject, new Error(`Failed to parse server url from output: ${line}`));
+              return;
+            }
+            finish(resolve, match[1]);
             return;
           }
-          finish(resolve, match[1]);
-          return;
-        }
-      };
+        };
 
-      const onStderr = (chunk) => {
-        stderr += chunk.toString();
-      };
+        const onStderr = (chunk) => {
+          stderr += chunk.toString();
+        };
 
-      const onExit = (code, signal) => {
-        const reason = signal ? `signal ${signal}` : `code ${code}`;
-        const appBundleHint = process.platform === 'darwin' && /\/OpenCode\.app\/Contents\/MacOS\/(?:OpenCode|opencode-cli)$/i.test(binary)
-          ? ' The configured binary appears to point at the macOS desktop app bundle; OpenChamber needs the standalone opencode CLI.'
-          : '';
-        finish(reject, new Error(`OpenCode process exited before serving with ${reason}. Binary used: ${binary}.${appBundleHint} ${formatCapturedOutput({ stdout, stderr })}`));
-      };
+        const onExit = (code, signal) => {
+          const reason = signal ? `signal ${signal}` : `code ${code}`;
+          const appBundleHint = process.platform === 'darwin' && /\/OpenCode\.app\/Contents\/MacOS\/(?:OpenCode|opencode-cli)$/i.test(binary)
+            ? ' The configured binary appears to point at the macOS desktop app bundle; OpenChamber needs the standalone opencode CLI.'
+            : '';
+          finish(reject, new Error(`OpenCode process exited before serving with ${reason}. Binary used: ${binary}.${appBundleHint} ${formatCapturedOutput({ stdout, stderr })}`));
+        };
 
-      const onError = (error) => {
-        finish(reject, error);
-      };
+        const onError = (error) => {
+          finish(reject, error);
+        };
 
-      const timer = setTimeout(() => {
-        finish(reject, new Error(`Timeout waiting for OpenCode to start after ${timeout}ms`));
-      }, timeout);
+        const timer = setTimeout(() => {
+          finish(reject, new Error(`Timeout waiting for OpenCode to start after ${timeout}ms`));
+        }, timeout);
 
-      child.stdout?.on('data', onStdout);
-      child.stderr?.on('data', onStderr);
-      child.on('exit', onExit);
-      child.on('error', onError);
-    });
+        child.stdout?.on('data', onStdout);
+        child.stderr?.on('data', onStderr);
+        child.on('exit', onExit);
+        child.on('error', onError);
+      });
+    } catch (error) {
+      await closeManagedOpenCodeChild(child);
+      throw error;
+    }
 
     // Record this child so a future run can reap it if we crash before teardown.
     // The web-server lifecycle runs in-process inside multiple hosts, so tag the
@@ -791,7 +797,10 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     return { reloaded: !external, external };
   };
 
-  const bootstrapOpenCodeAtStartup = async () => {
+  let bootstrapOpenCodePromise = null;
+  let retryOpenCodePromise = null;
+
+  const runBootstrapOpenCodeAtStartup = async () => {
     try {
       // Before doing anything, reap any OpenCode process WE spawned in a prior
       // run that was orphaned by a crash/hard-exit. Verified + scoped to our own
@@ -807,15 +816,14 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       if (managedCapabilitiesRuntime && state.managedCapabilityIdentity) {
         managedCapabilitiesRuntime.setCapabilityIdentity(state.managedCapabilityIdentity);
       }
-      const reusableManagedChild = managedCapabilitiesRuntime
-        ? managedCapabilitiesRuntime.hasValidIdentity()
-        : true;
-      if (await isOpenCodeProcessHealthy() && reusableManagedChild) {
-        console.log(`[HMR] Reusing existing OpenCode process on port ${state.openCodePort}`);
-      } else if (state.openCodeProcess && !state.isExternalOpenCode && await isOpenCodeProcessHealthy()) {
-        console.log('[HMR] Restarting managed OpenCode because scheduled-task capability identity is stale');
-        await restartOpenCode();
-      } else if (env.ENV_SKIP_OPENCODE_START && env.ENV_EFFECTIVE_PORT) {
+      if (env.ENV_SKIP_OPENCODE_START && env.ENV_EFFECTIVE_PORT) {
+        if (state.openCodeProcess && !state.isExternalOpenCode) {
+          await state.openCodeProcess.close();
+          state.openCodeProcess = null;
+          state.openCodePort = null;
+        }
+        state.managedCapabilityIdentity = null;
+        managedCapabilitiesRuntime?.setCapabilityIdentity(null);
         const label = env.ENV_CONFIGURED_OPENCODE_HOST ? env.ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${env.ENV_EFFECTIVE_PORT}`;
         console.log(`Using external OpenCode server at ${label} (skip-start mode)`);
         state.openCodeBaseUrl = env.ENV_CONFIGURED_OPENCODE_HOST?.origin ?? null;
@@ -825,6 +833,11 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
         state.lastOpenCodeError = null;
         state.openCodeNotReadySince = 0;
         syncToHmrState();
+      } else if (await isOpenCodeProcessHealthy() && (managedCapabilitiesRuntime ? managedCapabilitiesRuntime.hasValidIdentity() : true)) {
+        console.log(`[HMR] Reusing existing OpenCode process on port ${state.openCodePort}`);
+      } else if (state.openCodeProcess && !state.isExternalOpenCode && await isOpenCodeProcessHealthy()) {
+        console.log('[HMR] Restarting managed OpenCode because scheduled-task capability identity is stale');
+        await restartOpenCode();
       } else if (env.ENV_EFFECTIVE_PORT && await probeExternalOpenCode(env.ENV_EFFECTIVE_PORT, env.ENV_CONFIGURED_OPENCODE_HOST?.origin)) {
         const label = env.ENV_CONFIGURED_OPENCODE_HOST ? env.ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${env.ENV_EFFECTIVE_PORT}`;
         console.log(`Auto-detected existing OpenCode server at ${label}`);
@@ -844,6 +857,8 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
         // port 4096 used to hijack a user's separately-running OpenCode (e.g.
         // the OpenCode desktop app), coupling our lifecycle to theirs and
         // breaking init against an unexpected server version/config.
+        state.isExternalOpenCode = false;
+        state.openCodeBaseUrl = null;
         if (env.ENV_EFFECTIVE_PORT) {
           console.log(`Using OpenCode port from environment: ${env.ENV_EFFECTIVE_PORT}`);
           setOpenCodePort(env.ENV_EFFECTIVE_PORT);
@@ -867,6 +882,44 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       console.log('Continuing without OpenCode integration...');
       state.lastOpenCodeError = error.message;
     }
+  };
+
+  const bootstrapOpenCodeAtStartup = () => {
+    if (!bootstrapOpenCodePromise) {
+      bootstrapOpenCodePromise = runBootstrapOpenCodeAtStartup().finally(() => {
+        bootstrapOpenCodePromise = null;
+      });
+    }
+    return bootstrapOpenCodePromise;
+  };
+
+  const retryOpenCodeStartup = () => {
+    if (!retryOpenCodePromise) {
+      retryOpenCodePromise = (async () => {
+        if (bootstrapOpenCodePromise) {
+          await bootstrapOpenCodePromise;
+        }
+        if (state.isOpenCodeReady) return;
+
+        clearResolvedOpenCodeBinary();
+        await applyOpencodeBinaryFromSettings({ strict: true });
+        const resolved = ensureOpencodeCliEnv();
+        if (!resolved) {
+          const error = new Error('OpenCode CLI could not be resolved');
+          state.lastOpenCodeError = error.message;
+          state.openCodeNotReadySince = Date.now();
+          throw error;
+        }
+
+        await bootstrapOpenCodeAtStartup();
+        if (!state.isOpenCodeReady) {
+          throw new Error(state.lastOpenCodeError || 'OpenCode failed to become ready');
+        }
+      })().finally(() => {
+        retryOpenCodePromise = null;
+      });
+    }
+    return retryOpenCodePromise;
   };
 
   /**
@@ -1004,6 +1057,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     waitForAgentPresence,
     refreshOpenCodeAfterConfigChange,
     bootstrapOpenCodeAtStartup,
+    retryOpenCodeStartup,
     startHealthMonitoring,
     triggerHealthCheck,
     waitForPortRelease,

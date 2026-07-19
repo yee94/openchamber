@@ -407,6 +407,30 @@ export const createProjectConfigRuntime = (deps) => {
     };
   };
 
+  const readProjectConfigForMutation = async (projectID) => {
+    const parsed = await readRawProjectConfigFromDisk(projectID);
+    const tasksRaw = Array.isArray(parsed.scheduledTasks) ? parsed.scheduledTasks : [];
+    const now = Date.now();
+    const scheduledTasks = tasksRaw.map((task, index) => {
+      try {
+        return normalizeTaskForStorage(task, {
+          now,
+          createId: taskIDFactory,
+          existingTask: null,
+          allowCreate: true,
+          refreshUpdatedAt: false,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`scheduledTasks[${index}] is invalid and prevents scheduled task changes: ${message}`);
+      }
+    });
+    return {
+      version: PROJECT_CONFIG_VERSION,
+      scheduledTasks,
+    };
+  };
+
   const writeProjectConfigToDisk = async (projectID, config) => {
     const filePath = resolveProjectConfigPath(projectID);
     const parentDirectory = path.dirname(filePath);
@@ -454,7 +478,7 @@ export const createProjectConfigRuntime = (deps) => {
   const upsertScheduledTask = async (projectID, taskInput) => {
     return withProjectWriteLock(projectID, async () => {
       const now = Date.now();
-      const current = await readProjectConfigFromDisk(projectID);
+      const current = await readProjectConfigForMutation(projectID);
       const incomingID = asNonEmptyString(taskInput?.id);
       const existingIndex = incomingID
         ? current.scheduledTasks.findIndex((task) => task.id === incomingID)
@@ -497,7 +521,7 @@ export const createProjectConfigRuntime = (deps) => {
         throw new Error('taskId is required');
       }
 
-      const current = await readProjectConfigFromDisk(projectID);
+      const current = await readProjectConfigForMutation(projectID);
       const nextTasks = current.scheduledTasks.filter((task) => task.id !== normalizedTaskID);
       const deleted = nextTasks.length !== current.scheduledTasks.length;
 
@@ -515,6 +539,51 @@ export const createProjectConfigRuntime = (deps) => {
     });
   };
 
+  const patchScheduledTask = async (projectID, taskID, patch) => {
+    return withProjectWriteLock(projectID, async () => {
+      const normalizedTaskID = asNonEmptyString(taskID);
+      if (!normalizedTaskID) {
+        throw new Error('taskId is required');
+      }
+
+      const current = await readProjectConfigForMutation(projectID);
+      const taskIndex = current.scheduledTasks.findIndex((task) => task.id === normalizedTaskID);
+      if (taskIndex === -1) {
+        return { task: null, tasks: current.scheduledTasks };
+      }
+
+      const currentTask = current.scheduledTasks[taskIndex];
+      const patchObject = patch && typeof patch === 'object' ? patch : {};
+      const nextTask = normalizeTaskForStorage({
+        ...currentTask,
+        ...(Object.hasOwn(patchObject, 'name') ? { name: patchObject.name } : {}),
+        ...(Object.hasOwn(patchObject, 'enabled') ? { enabled: patchObject.enabled } : {}),
+        ...(patchObject.schedule && typeof patchObject.schedule === 'object'
+          ? { schedule: { ...currentTask.schedule, ...patchObject.schedule } }
+          : {}),
+        ...(patchObject.execution && typeof patchObject.execution === 'object'
+          ? { execution: { ...currentTask.execution, ...patchObject.execution } }
+          : {}),
+        id: currentTask.id,
+        state: currentTask.state,
+      }, {
+        now: Date.now(),
+        createId: taskIDFactory,
+        existingTask: currentTask,
+        allowCreate: false,
+      });
+
+      const nextTasks = current.scheduledTasks.slice();
+      nextTasks[taskIndex] = nextTask;
+      await writeProjectConfigToDisk(projectID, {
+        version: PROJECT_CONFIG_VERSION,
+        scheduledTasks: nextTasks,
+      });
+
+      return { task: nextTask, tasks: nextTasks };
+    });
+  };
+
   const updateScheduledTaskState = async (projectID, taskID, statePatch) => {
     return withProjectWriteLock(projectID, async () => {
       const normalizedTaskID = asNonEmptyString(taskID);
@@ -522,7 +591,7 @@ export const createProjectConfigRuntime = (deps) => {
         throw new Error('taskId is required');
       }
 
-      const current = await readProjectConfigFromDisk(projectID);
+      const current = await readProjectConfigForMutation(projectID);
       const taskIndex = current.scheduledTasks.findIndex((task) => task.id === normalizedTaskID);
       if (taskIndex === -1) {
         return { task: null, tasks: current.scheduledTasks };
@@ -561,6 +630,7 @@ export const createProjectConfigRuntime = (deps) => {
     listScheduledTasks,
     upsertScheduledTask,
     deleteScheduledTask,
+    patchScheduledTask,
     updateScheduledTaskState,
     resolveProjectConfigPath,
   };

@@ -31,6 +31,7 @@ export const createBootstrapRuntime = (dependencies) => {
       getServerLabel,
       readSettingsFromDiskMigrated,
       normalizeTunnelSessionTtlMs,
+      authorizeManagedOpenCodeBridgeRequest,
       sayTTSCapability,
       ensurePushInitialized,
       ensureGlobalWatcherStarted,
@@ -101,6 +102,7 @@ export const createBootstrapRuntime = (dependencies) => {
       getServerLabel,
       readSettingsFromDiskMigrated,
       normalizeTunnelSessionTtlMs,
+      authorizeManagedOpenCodeBridgeRequest,
     });
 
     registerTtsRoutes(app, { sayTTSCapability });
