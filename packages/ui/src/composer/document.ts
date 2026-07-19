@@ -153,6 +153,7 @@ export const mapComposerCaretThroughEdit = (caret: number, edit: ComposerEdit): 
 export interface ComposerReconciliation {
     document: ComposerDocument;
     edit: ComposerEdit;
+    requiresTextCorrection: boolean;
     selectionStart: number;
     selectionEnd: number;
     caret: number;
@@ -169,6 +170,7 @@ export const reconcileComposerDocument = (document: ComposerDocument, nextText: 
     while (suffix < current.text.length - prefix && suffix < nextText.length - prefix && current.text[current.text.length - suffix - 1] === nextText[nextText.length - suffix - 1]) suffix += 1;
     const browserEdit = { oldStart: prefix, oldEnd: current.text.length - suffix, newEnd: nextText.length - suffix };
     const range = expandedEditRange(current.references, browserEdit.oldStart, browserEdit.oldEnd);
+    const requiresTextCorrection = range.start !== browserEdit.oldStart || range.end !== browserEdit.oldEnd;
     const removedReferences = current.references.filter((reference) => reference.start < range.end && reference.end > range.start);
     const inserted = nextText.slice(browserEdit.oldStart, browserEdit.newEnd);
     const text = `${current.text.slice(0, range.start)}${inserted}${current.text.slice(range.end)}`;
@@ -189,7 +191,7 @@ export const reconcileComposerDocument = (document: ComposerDocument, nextText: 
     const selectionStart = mapNextPosition(nextSelectionStart, 'start');
     const selectionEnd = Math.max(selectionStart, mapNextPosition(nextSelectionEnd, 'end'));
     const reconciled = normalizeTrustedComposerDocument({ text, references });
-    return { document: reconciled, edit, selectionStart, selectionEnd, caret: selectionEnd, mapCaret: (caret) => clamp(mapComposerCaretThroughEdit(caret, edit), reconciled.text.length), removedReferences };
+    return { document: reconciled, edit, requiresTextCorrection, selectionStart, selectionEnd, caret: selectionEnd, mapCaret: (caret) => clamp(mapComposerCaretThroughEdit(caret, edit), reconciled.text.length), removedReferences };
 };
 
 export const expandComposerReferenceSelection = (selectionStart: number, selectionEnd: number, references: readonly ComposerReference[]): { start: number; end: number } | null => {

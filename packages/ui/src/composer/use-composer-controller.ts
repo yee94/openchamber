@@ -64,9 +64,9 @@ export const normalizeComposerMentionsForCommit = (mentions: readonly DraftMenti
   .sort((left, right) => left.mention.range.start - right.mention.range.start || left.mention.range.end - right.mention.range.end || left.index - right.index)
   .map(({ mention }) => mention)
 
-export const applyBrowserComposerEdit = (document: ComposerDocument, mentions: readonly DraftMention[], nextText: string, selectionStart: number, selectionEnd = selectionStart): { document: ComposerDocument; mentions: DraftMention[]; selectionStart: number; selectionEnd: number; removedReferences: ComposerReference[] } => {
+export const applyBrowserComposerEdit = (document: ComposerDocument, mentions: readonly DraftMention[], nextText: string, selectionStart: number, selectionEnd = selectionStart): { document: ComposerDocument; mentions: DraftMention[]; requiresTextCorrection: boolean; selectionStart: number; selectionEnd: number; removedReferences: ComposerReference[] } => {
   const result = reconcileComposerDocument(document, nextText, selectionStart, selectionEnd)
-  return { document: result.document, mentions: rebaseComposerMentions(mentions, result.document, result.edit), selectionStart: result.selectionStart, selectionEnd: result.selectionEnd, removedReferences: result.removedReferences }
+  return { document: result.document, mentions: rebaseComposerMentions(mentions, result.document, result.edit), requiresTextCorrection: result.requiresTextCorrection, selectionStart: result.selectionStart, selectionEnd: result.selectionEnd, removedReferences: result.removedReferences }
 }
 
 export const enterComposerHistoryPreview = (document: ComposerDocument, mentions: readonly DraftMention[], historyDocument: ComposerDocument): { preview: ComposerPreviewState; document: ComposerDocument; mentions: DraftMention[] } => ({
@@ -208,11 +208,11 @@ export const useComposerController = ({ draftKey, sessionTitles, persistenceEnab
     const parsed = parseDraftComposerDocument(next.text, next.references)
     return parsed ? commit(materializeComposerDocument(parsed, titlesRef.current), mentions) : undefined
   }, [commit, promotePreview])
-  const applyBrowserEdit = useCallback((nextText: string, selectionStart: number, selectionEnd = selectionStart): { start: number; end: number } => {
+  const applyBrowserEdit = useCallback((nextText: string, selectionStart: number, selectionEnd = selectionStart): { start: number; end: number; requiresTextCorrection: boolean } => {
     const preview = promotePreview()
     const result = applyBrowserComposerEdit(documentRef.current, preview ? [] : mentionsRef.current, nextText, selectionStart, selectionEnd)
     commit(result.document, result.mentions)
-    return { start: result.selectionStart, end: result.selectionEnd }
+    return { start: result.selectionStart, end: result.selectionEnd, requiresTextCorrection: result.requiresTextCorrection }
   }, [commit, promotePreview])
   const applyProgrammaticEdit = useCallback((edit: { start: number; end: number; text: string }, mentionsUpdater?: ComposerMentionsUpdater): { start: number; end: number } => {
     const current = documentRef.current

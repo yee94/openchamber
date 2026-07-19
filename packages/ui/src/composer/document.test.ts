@@ -39,6 +39,22 @@ describe('composerReferences', () => {
         expect(reconcileComposerDocument(document, 'x replace z', 9).document).toEqual({ text: 'x replace z', references: [] });
     });
 
+    test('requests DOM text correction only when Session or Paste atomic ranges expand the browser edit', () => {
+        const plainSnapshots = ['这一把', '这一把这一版处理完', '这一把这一版处理完之后'];
+        let previous = '';
+        for (const snapshot of plainSnapshots) {
+            const reconciled = reconcileComposerDocument({ text: previous, references: [] }, snapshot, snapshot.length);
+            expect(reconciled.requiresTextCorrection).toBe(false);
+            previous = snapshot;
+        }
+
+        const document: ComposerDocument = { text: '@A [Paste 1]', references: [session('s', 0, '@A'), paste('p', 3)] };
+        expect(reconcileComposerDocument(document, '@XA [Paste 1]', 2).requiresTextCorrection).toBe(true);
+        expect(reconcileComposerDocument(document, '@A [Paste X1]', 11).requiresTextCorrection).toBe(true);
+        expect(reconcileComposerDocument(document, 'ok @A [Paste 1]', 2).requiresTextCorrection).toBe(false);
+        expect(reconcileComposerDocument(document, ' [Paste 1]', 0).requiresTextCorrection).toBe(false);
+    });
+
     test('reports insertion edits across selection expansion and inline boundaries', () => {
         const document: ComposerDocument = { text: 'left @A right', references: [session('s', 5, '@A')] };
         const inserted = insertComposerReference(document, 6, 6, paste('p', 0, '[Paste 1]'), { inlineBoundaries: true });

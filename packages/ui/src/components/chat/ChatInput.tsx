@@ -3080,9 +3080,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const commitBrowserTextChange = React.useCallback((nextText: string, selectionStart: number, selectionEnd: number, inputSource: FileMentionAutocompleteInputSource = 'manual', insertedText?: string) => {
         const selection = applyBrowserEdit(nextText, selectionStart, selectionEnd);
         const document = getDocument();
+        const shouldCorrectTextarea = selection.requiresTextCorrection
+            || selectionStart !== selection.start
+            || selectionEnd !== selection.end;
         requestAnimationFrame(() => {
             const textarea = textareaRef.current;
-            if (textarea) {
+            // Native dictation and IMEs own an active replacement range. Preserve
+            // it when Composer accepted the browser value and caret unchanged.
+            if (textarea && shouldCorrectTextarea) {
                 textarea.value = document.text;
                 textarea.setSelectionRange(selection.start, selection.end);
             }

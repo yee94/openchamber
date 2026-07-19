@@ -88,7 +88,7 @@ describe("composer controller transitions", () => {
   test("preserves and rebases file mentions through a browser edit", () => {
     const mention = { kind: "file" as const, value: "src/a.ts", path: "src/a.ts", label: "src/a.ts", range: { start: 5, end: 14 } }
     expect(applyBrowserComposerEdit({ text: "open @src/a.ts", references: [] }, [mention], "please open @src/a.ts", 7)).toEqual({
-      document: { text: "please open @src/a.ts", references: [] }, mentions: [{ ...mention, range: { start: 12, end: 21 } }], selectionStart: 7, selectionEnd: 7,
+      document: { text: "please open @src/a.ts", references: [] }, mentions: [{ ...mention, range: { start: 12, end: 21 } }], requiresTextCorrection: false, selectionStart: 7, selectionEnd: 7,
       removedReferences: [],
     })
   })
