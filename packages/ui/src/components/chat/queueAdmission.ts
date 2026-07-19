@@ -8,7 +8,7 @@ type QueueAdmissionConsumption<TDraft> = {
 
 type ChatInputQueueAdmission<TDraft, TQueueItem> = Omit<QueueAdmissionConsumption<TDraft>, 'admit'> & {
     bindLegacy: () => void;
-    addComposer: () => { ok: true; item: TQueueItem } | { ok: false; reason: 'invalid-composer-document' };
+    addComposer: () => { ok: true; item: TQueueItem } | { ok: false; reason: 'invalid-composer-document' | 'invalid-composer-mentions' };
 };
 
 export const admitQueueMessageAndConsumeResources = <TDraft>({
@@ -33,7 +33,7 @@ export const admitChatInputQueueMessageAndConsumeResources = <TDraft, TQueueItem
     consumeDraft,
     consumeBody,
     consumeAttachments,
-}: ChatInputQueueAdmission<TDraft, TQueueItem>): { ok: true; item: TQueueItem } | { ok: false; reason: 'invalid-composer-document' } => {
+}: ChatInputQueueAdmission<TDraft, TQueueItem>): { ok: true; item: TQueueItem } | { ok: false; reason: 'invalid-composer-document' | 'invalid-composer-mentions' } => {
     const result = addComposer();
     if (!result.ok) return result;
     bindLegacy();

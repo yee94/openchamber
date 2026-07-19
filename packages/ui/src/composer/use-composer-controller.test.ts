@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { draftKeyString, type DraftKey, type DraftRecord } from "@/sync/input-draft-types"
-import { applyBrowserComposerEdit, classifyComposerRecordUpdate, composerDocumentFingerprint, composerKeyMatchesRequest, enterComposerHistoryPreview, exitComposerHistoryPreview, planComposerRecovery, rebaseComposerMentions, resolveComposerKeyBinding } from "./use-composer-controller"
+import { applyBrowserComposerEdit, classifyComposerRecordUpdate, composerDocumentFingerprint, composerKeyMatchesRequest, enterComposerHistoryPreview, exitComposerHistoryPreview, normalizeComposerMentionsForCommit, planComposerRecovery, rebaseComposerMentions, resolveComposerKeyBinding } from "./use-composer-controller"
 
 const key: DraftKey = { transportIdentity: "runtime", owner: { kind: "session", ownerID: "session" } }
 const record = (revision: number, text: string, mentions: DraftRecord["mentions"] = []): DraftRecord => ({ version: 1, key, revision, text, attachments: [], syntheticParts: [], mentions })
@@ -28,8 +28,14 @@ describe("composer controller record classification", () => {
     const getDraft = (draftKey: DraftKey) => drafts[draftKeyString(draftKey)]
     const bindingA = resolveComposerKeyBinding(keyA, new Map(), getDraft)
     const bindingB = resolveComposerKeyBinding(keyB, new Map(), getDraft)
-    expect(bindingA).toMatchObject({ document: { text: "A doc", references: [] }, mentions: [], revision: 1, keyID: draftKeyString(keyA) })
-    expect(bindingB).toMatchObject({ document: { text: "B doc", references: [] }, mentions: [], revision: 1, keyID: draftKeyString(keyB) })
+    expect(bindingA.document).toEqual({ text: "A doc", references: [] })
+    expect(bindingA.mentions).toEqual([])
+    expect(bindingA.revision).toBe(1)
+    expect(bindingA.keyID).toBe(draftKeyString(keyA))
+    expect(bindingB.document).toEqual({ text: "B doc", references: [] })
+    expect(bindingB.mentions).toEqual([])
+    expect(bindingB.revision).toBe(1)
+    expect(bindingB.keyID).toBe(draftKeyString(keyB))
     expect(bindingA.key).toEqual(keyA)
     expect(bindingA.key).not.toBe(keyA)
     expect(bindingB.key).toEqual(keyB)
@@ -53,6 +59,18 @@ describe("composer controller record classification", () => {
 })
 
 describe("composer controller transitions", () => {
+  test("sorts programmatic updater mentions for commit without changing the updater array", () => {
+    const existingMention = { kind: "file" as const, value: "later.ts", path: "later.ts", label: "later.ts", range: { start: 10, end: 19 } }
+    const addedMention = { kind: "file" as const, value: "first.ts", path: "first.ts", label: "first.ts", range: { start: 0, end: 9 } }
+    const updaterResult = [existingMention, addedMention]
+
+    const candidate = normalizeComposerMentionsForCommit(updaterResult)
+
+    expect(candidate).toEqual([addedMention, existingMention])
+    expect(updaterResult).toEqual([existingMention, addedMention])
+    expect(candidate).not.toBe(updaterResult)
+  })
+
   test("isolates history preview mentions and restores the durable composer state", () => {
     const mention = { kind: "file" as const, value: "file", path: "file", label: "file", range: { start: 0, end: 5 } }
     const entered = enterComposerHistoryPreview({ text: "@file", references: [] }, [mention], { text: "history", references: [{ id: "session", kind: "session", sessionId: "s", display: "history", start: 0, end: 7 }] })

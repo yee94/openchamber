@@ -59,6 +59,11 @@ export const rebaseComposerMentions = (mentions: readonly DraftMention[], docume
   })
 }
 
+export const normalizeComposerMentionsForCommit = (mentions: readonly DraftMention[]): DraftMention[] => mentions
+  .map((mention, index) => ({ mention, index }))
+  .sort((left, right) => left.mention.range.start - right.mention.range.start || left.mention.range.end - right.mention.range.end || left.index - right.index)
+  .map(({ mention }) => mention)
+
 export const applyBrowserComposerEdit = (document: ComposerDocument, mentions: readonly DraftMention[], nextText: string, selectionStart: number, selectionEnd = selectionStart): { document: ComposerDocument; mentions: DraftMention[]; selectionStart: number; selectionEnd: number; removedReferences: ComposerReference[] } => {
   const result = reconcileComposerDocument(document, nextText, selectionStart, selectionEnd)
   return { document: result.document, mentions: rebaseComposerMentions(mentions, result.document, result.edit), selectionStart: result.selectionStart, selectionEnd: result.selectionEnd, removedReferences: result.removedReferences }
@@ -181,7 +186,7 @@ export const useComposerController = ({ draftKey, sessionTitles, persistenceEnab
     const key = keyRef.current
     if (!composerKeyMatchesRequest(key, requestedKeyIDRef.current) || previewRef.current) return undefined
     const previous = documentRef.current
-    const committed = store.getState().setDraftComposerState(key, { document: next, mentions: nextMentions })
+    const committed = store.getState().setDraftComposerState(key, { document: next, mentions: normalizeComposerMentionsForCommit(nextMentions) })
     if (!committed) return undefined
     const normalized = documentFromRecord(committed)
     localCommitRef.current = { keyID: draftKeyString(key), revision: committed.revision, fingerprint: composerDocumentFingerprint(normalized) }
@@ -198,10 +203,10 @@ export const useComposerController = ({ draftKey, sessionTitles, persistenceEnab
     return true
   }, [])
   const replacePlainDocument = useCallback((text: string): DraftRecord | undefined => { promotePreview(); return commit({ text, references: [] }, []) }, [commit, promotePreview])
-  const replaceMaterializedDocument = useCallback((next: ComposerDocument): DraftRecord | undefined => {
+  const replaceMaterializedDocument = useCallback((next: ComposerDocument, mentions: DraftMention[] = []): DraftRecord | undefined => {
     promotePreview()
     const parsed = parseDraftComposerDocument(next.text, next.references)
-    return parsed ? commit(materializeComposerDocument(parsed, titlesRef.current), []) : undefined
+    return parsed ? commit(materializeComposerDocument(parsed, titlesRef.current), mentions) : undefined
   }, [commit, promotePreview])
   const applyBrowserEdit = useCallback((nextText: string, selectionStart: number, selectionEnd = selectionStart): { start: number; end: number } => {
     const preview = promotePreview()
@@ -260,7 +265,7 @@ export const useComposerController = ({ draftKey, sessionTitles, persistenceEnab
     const recovered = planComposerRecovery(capture, store.getState().getDraft(capture.key))
     const current = documentFromRecord(store.getState().getDraft(capture.key))
     const previous = validateComposerDocument(current.text, current.references).document
-    const committed = store.getState().setDraftComposerState(capture.key, recovered)
+    const committed = store.getState().setDraftComposerState(capture.key, { ...recovered, mentions: normalizeComposerMentionsForCommit(recovered.mentions) })
     if (committed) {
       const next = documentFromRecord(committed)
       notifyResourcesChanged(previous, next)

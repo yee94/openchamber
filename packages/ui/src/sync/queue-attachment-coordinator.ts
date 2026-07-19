@@ -39,7 +39,7 @@ const outcome = (status: QueueAttachmentCoordinatorResult["status"], errors: Que
 const sameIdentity = (item: QueueItemDTO, id: QueueIdentity): boolean => item.queueItemID === id.queueItemID && item.operationID === id.operationID && item.messageID === id.messageID
 const reference = (item: QueueItemDTO, kind: "queue" | "send", occurrence: string): DraftAttachmentReference | undefined => item.owner.state === "bound" ? { transportIdentity: item.owner.transportIdentity, owner: { kind, ownerID: kind === "queue" ? item.queueItemID : item.operationID }, attachmentOccurrenceRefID: occurrence } : undefined
 const stable = (value: unknown): string => JSON.stringify(value)
-const transitionShape = (item: QueueItemDTO): unknown => ({ owner: item.owner, queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID, content: item.content, composerDocument: item.composerDocument, attachments: item.attachments, attachmentIssues: item.attachmentIssues, createdAt: item.createdAt, sendConfig: item.sendConfig })
+const transitionShape = (item: QueueItemDTO): unknown => ({ owner: item.owner, queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID, content: item.content, composerDocument: item.composerDocument, composerMentions: item.composerMentions, attachments: item.attachments, attachmentIssues: item.attachmentIssues, createdAt: item.createdAt, sendConfig: item.sendConfig })
 const identityKey = (id: QueueIdentity): string => `${id.queueItemID}\u0000${id.operationID}\u0000${id.messageID}`
 const integer = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value)
 const transitionValid = (before: QueueItemDTO, next: QueueItemDTO): boolean => {

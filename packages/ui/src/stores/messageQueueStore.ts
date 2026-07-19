@@ -5,7 +5,7 @@ import type { AttachedFile } from './types/sessionTypes';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { ascendingId } from '@/sync/message-id';
 import { createUuid } from '@/lib/uuid';
-import { parseDraftComposerDocument, type DraftComposerDocument } from '@/sync/input-draft-types';
+import { parseDraftComposerDocument, parseDraftMentions, type DraftComposerDocument, type DraftMention } from '@/sync/input-draft-types';
 import { serializeComposerDocument } from '@/composer/document';
 import { describeComposerDocumentResources } from '@/composer/extensions';
 
@@ -24,7 +24,7 @@ export const queueScopeKey = (scope: QueueScope): string => scope.state === 'bou
 export const getQueueForScope = (state: { queuedMessages: Record<string, QueueItem[]> }, scope: QueueScope): QueueItem[] => state.queuedMessages[queueScopeKey(scope)] ?? EMPTY_QUEUE;
 const EMPTY_QUEUE: QueueItem[] = [];
 
-export type QueueRecoveryPayload = { content: string; composerDocument?: DraftComposerDocument; attachments?: AttachedFile[]; sendConfig?: QueuedMessage['sendConfig'] };
+export type QueueRecoveryPayload = { content: string; composerDocument?: DraftComposerDocument; composerMentions?: DraftMention[]; attachments?: AttachedFile[]; sendConfig?: QueuedMessage['sendConfig'] };
 export type QueueFailure = { kind: QueueFailureKind; recovery: QueueRecoveryPayload };
 const RECONCILIATION_DEADLINE_MS = 30_000;
 export const DEFAULT_FOLLOW_UP_BEHAVIOR: FollowUpBehavior = 'queue';
@@ -36,13 +36,13 @@ export const normalizeFollowUpBehavior = (value: unknown, legacyQueueModeEnabled
 };
 
 export interface QueuedMessage {
-  id: string; queueItemID?: string; operationID?: string; messageID?: string; content: string; composerDocument?: DraftComposerDocument; attachments?: AttachedFile[]; createdAt: number;
+  id: string; queueItemID?: string; operationID?: string; messageID?: string; content: string; composerDocument?: DraftComposerDocument; composerMentions?: DraftMention[]; attachments?: AttachedFile[]; createdAt: number;
   sendConfig?: { providerID: string; modelID: string; agent?: string; variant?: string };
   owner?: QueueOwner; status?: QueueItemStatus; attemptCount?: number; nextAttemptAt?: number; failure?: QueueFailure;
   reconciliationStartedAt?: number; reconciliationDeadlineAt?: number; reconciliationChecks?: number; reconciliationNextCheckAt?: number;
 }
 export interface QueueItem extends QueuedMessage { queueItemID: string; operationID: string; messageID: string; owner: QueueOwner; status: QueueItemStatus; attemptCount: number }
-export type QueueAdmissionResult = { ok: true; item: QueueItem } | { ok: false; reason: 'invalid-composer-document' };
+export type QueueAdmissionResult = { ok: true; item: QueueItem } | { ok: false; reason: 'invalid-composer-document' | 'invalid-composer-mentions' };
 type QueueAdmission = Omit<QueuedMessage, 'id' | 'queueItemID' | 'operationID' | 'messageID' | 'createdAt' | 'owner' | 'status' | 'attemptCount' | 'nextAttemptAt' | 'failure' | 'reconciliationStartedAt' | 'reconciliationDeadlineAt' | 'reconciliationChecks' | 'reconciliationNextCheckAt'>;
 type QueueFailureInput = Omit<QueueFailure, 'recovery'> & { recovery?: QueueRecoveryPayload };
 type Identity = { queueItemID: string; operationID: string; messageID?: string };
@@ -80,10 +80,18 @@ const validComposerDocument = (value: unknown, content: string, attachments: rea
   const expressibleAttachmentIDs = new Set(attachments.map((attachment) => attachment.id));
   return describeComposerDocumentResources(parsed).every((resource) => expressibleAttachmentIDs.has(resource.attachmentRefID)) ? parsed : undefined;
 };
+const validComposerMentions = (value: unknown, document: DraftComposerDocument | undefined): DraftMention[] | undefined => {
+  if (value === undefined) return [];
+  if (!document) return undefined;
+  const mentions = parseDraftMentions(document.text, value);
+  if (!mentions) return undefined;
+  return mentions.some((mention) => document.references.some((reference) => mention.range.start < reference.end && reference.start < mention.range.end)) ? undefined : mentions;
+};
 const validRecovery = (value: unknown, fallback: QueuedMessage): QueueRecoveryPayload => {
   const source = isPlainObject(value) && typeof value.content === 'string' ? value : fallback;
   const composerDocument = validComposerDocument(source.composerDocument, source.content as string, Array.isArray(source.attachments) ? source.attachments as AttachedFile[] : []);
-  return { content: source.content as string, ...(composerDocument ? { composerDocument } : {}), ...(Array.isArray(source.attachments) ? { attachments: source.attachments as AttachedFile[] } : {}), ...(isPlainObject(source.sendConfig) ? { sendConfig: source.sendConfig as QueuedMessage['sendConfig'] } : {}) };
+  const composerMentions = validComposerMentions(source.composerMentions, composerDocument);
+  return { content: source.content as string, ...(composerDocument ? { composerDocument } : {}), ...(composerDocument && composerMentions?.length ? { composerMentions } : {}), ...(Array.isArray(source.attachments) ? { attachments: source.attachments as AttachedFile[] } : {}), ...(isPlainObject(source.sendConfig) ? { sendConfig: source.sendConfig as QueuedMessage['sendConfig'] } : {}) };
 };
 const recoveryFor = (item: QueuedMessage): QueueRecoveryPayload => validRecovery(undefined, item);
 const sameIdentity = (item: QueueItem, identity: Identity) => item.queueItemID === identity.queueItemID && item.operationID === identity.operationID && (!identity.messageID || item.messageID === identity.messageID);
@@ -103,7 +111,8 @@ const migrateItem = (sessionID: string, message: QueuedMessage, scope: QueueScop
   const status = unownedAmbiguous ? 'unresolved' : message.status === 'sending' ? 'reconciling' : message.status === 'retrying' || message.status === 'reconciling' || message.status === 'unresolved' || message.status === 'failed' ? message.status : 'queued';
   const messageID = typeof message.messageID === 'string' && message.messageID.startsWith('msg_') ? message.messageID : ascendingId('msg');
   const composerDocument = validComposerDocument(message.composerDocument, message.content, message.attachments);
-  return { ...message, ...(composerDocument ? { composerDocument } : { composerDocument: undefined }), id: queueItemID, queueItemID, operationID: message.operationID ?? createID('operation'), messageID, owner: scope, status, attemptCount: Math.max(0, Math.floor(message.attemptCount ?? 0)), ...(message.status === 'sending' || message.status === 'reconciling' ? reconciliationFields(message) : {}), ...(unownedAmbiguous || (status === 'reconciling' && message.status === 'sending') ? { failure: { kind: 'ambiguous-dispatch' as const, recovery: validRecovery(message.failure?.recovery, message) } } : {}) };
+  const composerMentions = validComposerMentions(message.composerMentions, composerDocument);
+  return { ...message, ...(composerDocument ? { composerDocument } : { composerDocument: undefined }), ...(composerDocument && composerMentions?.length ? { composerMentions } : { composerMentions: undefined }), id: queueItemID, queueItemID, operationID: message.operationID ?? createID('operation'), messageID, owner: scope, status, attemptCount: Math.max(0, Math.floor(message.attemptCount ?? 0)), ...(message.status === 'sending' || message.status === 'reconciling' ? reconciliationFields(message) : {}), ...(unownedAmbiguous || (status === 'reconciling' && message.status === 'sending') ? { failure: { kind: 'ambiguous-dispatch' as const, recovery: validRecovery(message.failure?.recovery, message) } } : {}) };
 };
 
 export const migrateMessageQueueState = (persistedState: unknown): Pick<MessageQueueState, 'queuedMessages' | 'followUpBehavior'> => {
@@ -144,7 +153,11 @@ const update = (set: (fn: (state: Store) => Store | Partial<Store>) => void, sco
 export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) => ({
   queuedMessages: {}, followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
   addToQueue: (scope, message) => {
-    if (message.composerDocument !== undefined && !validComposerDocument(message.composerDocument, message.content, message.attachments)) return { ok: false, reason: 'invalid-composer-document' };
+    const composerDocument = validComposerDocument(message.composerDocument, message.content, message.attachments);
+    if (message.composerDocument !== undefined && !composerDocument) return { ok: false, reason: 'invalid-composer-document' };
+    const composerMentions = validComposerMentions(message.composerMentions, composerDocument);
+    if (message.composerMentions !== undefined && !composerMentions) return { ok: false, reason: 'invalid-composer-mentions' };
+    message = { ...message, ...(composerDocument ? { composerDocument } : {}), ...(composerMentions?.length ? { composerMentions } : {}) };
     const item: QueueItem = { ...message, id: createID('queued'), queueItemID: '', operationID: createID('operation'), messageID: ascendingId('msg'), createdAt: Date.now(), owner: scope, status: 'queued', attemptCount: 0 };
     item.queueItemID = item.id;
     const key = queueScopeKey(scope); set((state) => ({ queuedMessages: { ...state.queuedMessages, [key]: [...(state.queuedMessages[key] ?? []), item] } })); return { ok: true, item };

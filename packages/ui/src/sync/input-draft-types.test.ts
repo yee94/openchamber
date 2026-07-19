@@ -1,17 +1,27 @@
 import { describe, expect, test } from "bun:test"
-import { cloneDraftRecord, DRAFT_COMPOSER_REFERENCE_LIMITS, draftAttachmentRefID, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDraftRecordPersistable, newSessionDraftKey, parseDraftRecord, sessionDraftKey, type DraftRecord } from "./input-draft-types"
+import { cloneDraftRecord, DRAFT_COMPOSER_REFERENCE_LIMITS, draftAttachmentRefID, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDraftRecordPersistable, newSessionDraftKey, parseDraftMentions, parseDraftRecord, sessionDraftKey, type DraftRecord } from "./input-draft-types"
 
 const record = (): DraftRecord => ({
   version: 1,
   key: { transportIdentity: "runtime-a", owner: { kind: "session", ownerID: "same" } },
   revision: 1,
-  text: "draft",
+  text: "@file-a@agent-a",
   attachments: [{ attachmentID: "root-a", attachmentRefID: draftRootAttachmentOccurrenceRefID("root-a"), filename: "a.txt", mimeType: "text/plain", size: 1, locator: { kind: "blob", blobID: "blob-a" }, source: "local" }],
   syntheticParts: [{ partID: "part-a", text: "part", attachments: [{ attachmentID: "part-a", attachmentRefID: draftSyntheticPartAttachmentOccurrenceRefID("part-a", "part-a"), filename: "a.txt", mimeType: "text/plain", size: 1, locator: { kind: "url", url: "https://example.test/a" }, source: "server", serverPath: "/server/a" }] }],
-  mentions: [{ kind: "file", value: "file-a", path: "/a", label: "a", range: { start: 0, end: 1 } }, { kind: "agent", value: "agent-a", path: "agent/a", label: "Agent A", range: { start: 1, end: 2 } }],
+  mentions: [{ kind: "file", value: "file-a", path: "/a", label: "a", range: { start: 0, end: 7 } }, { kind: "agent", value: "agent-a", path: "agent/a", label: "Agent A", range: { start: 7, end: 15 } }],
 })
 
 describe("input draft types", () => {
+  test("strictly parses authored mention ranges", () => {
+    const text = "@README @agent"
+    const mentions = [{ kind: "file", value: "README", path: "README", label: "README", range: { start: 0, end: 7 } }, { kind: "agent", value: "agent", path: "agent", label: "agent", range: { start: 8, end: 14 } }]
+    expect(parseDraftMentions(text, mentions)).toEqual(mentions)
+    expect(parseDraftMentions(text, [{ ...mentions[0]!, range: { start: 0, end: 6 } }])).toBe(undefined)
+    expect(parseDraftMentions(text, [mentions[0], { ...mentions[1]!, range: { start: 6, end: 14 } }])).toBe(undefined)
+    expect(parseDraftMentions("@😀", [{ kind: "file", value: "😀", path: "😀", label: "😀", range: { start: 0, end: 3 } }])).toEqual([{ kind: "file", value: "😀", path: "😀", label: "😀", range: { start: 0, end: 3 } }])
+    expect(parseDraftMentions("@😀", [{ kind: "file", value: "😀", path: "😀", label: "😀", range: { start: 0, end: 2 } }])).toBe(undefined)
+    expect(parseDraftMentions(text, Array.from({ length: 1001 }, () => mentions[0]))).toBe(undefined)
+  })
   test("serializes transport-scoped attachment references and distinguishes occurrences", () => {
     const reference = { transportIdentity: "runtime-a", owner: { kind: "session", ownerID: "same" } as const, attachmentOccurrenceRefID: draftRootAttachmentOccurrenceRefID("attachment-a") }
     expect(draftKeyString(reference)).toBe('["runtime-a","session","same"]')
@@ -111,6 +121,7 @@ describe("input draft types", () => {
     const legacy = record()
     const document = record()
     document.text = "@Session [Paste]"
+    document.mentions = []
     document.composerReferences = [
       { id: "session-1", kind: "session", sessionId: "ses_1", start: 0, end: 8, display: "@Session" },
       { id: "paste-1", kind: "paste", text: "😀x", characterCount: 2, index: 1, start: 9, end: 16, display: "[Paste]" },

@@ -1002,7 +1002,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const composer = useComposerController({ draftKey, sessionTitles, persistenceEnabled: persistChatDraft });
     const composerDocument = composer.document;
     const message = composerDocument.text;
-    const { replacePlainDocument, replaceMaterializedDocument, replaceProgrammaticText, applyBrowserEdit, insertReference, deleteReference, enterHistoryPreview, exitHistoryPreview, captureSubmission, recoverSubmission, confirmedFileMentions } = composer;
+    const { replacePlainDocument, replaceMaterializedDocument, replaceProgrammaticText, applyBrowserEdit, insertReference, deleteReference, enterHistoryPreview, exitHistoryPreview, captureSubmission, recoverSubmission, confirmedFileMentions, mentions: composerMentions } = composer;
     const applyProgrammaticEdit = React.useCallback((nextText: string, mentionsUpdater?: (mentions: readonly DraftMention[], document: ComposerDocument) => DraftMention[]) => replaceProgrammaticText(nextText, mentionsUpdater), [replaceProgrammaticText]);
     const isConfirmedFilePath = React.useCallback((text: string): boolean => !text.startsWith('session:') && (text.includes('/') || text.includes('\\') || text.includes('.') || confirmedFileMentions.some((mention) => mention.value === text)), [confirmedFileMentions]);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -1575,6 +1575,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             addComposer: () => addToQueue(scope, {
                 content: serialized.text,
                 composerDocument: documentToQueue,
+                composerMentions,
                 attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
                 sendConfig: currentProviderId && currentModelId ? {
                     providerID: currentProviderId,
@@ -1601,10 +1602,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t, replacePlainDocument]);
+    }, [getCurrentInputSnapshot, currentSessionId, inputMode, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, currentProviderId, currentModelId, currentAgentName, currentVariant, currentQueueScope, removeInlineCommentDraft, t, replacePlainDocument, composerMentions]);
 
-    const handleQueuedMessageEdit = React.useCallback((content: string, _attachments?: QueuedMessage['attachments'], composerDocument?: QueuedMessage['composerDocument']) => {
-        replaceMaterializedDocument(composerDocument ?? materializeComposerDocument({ text: content, references: [] }, new Map(Array.from(getAllSyncSessionMap(), ([id, session]) => [id, session.title || id]))));
+    const handleQueuedMessageEdit = React.useCallback((content: string, _attachments?: QueuedMessage['attachments'], composerDocument?: QueuedMessage['composerDocument'], composerMentions?: QueuedMessage['composerMentions']) => {
+        replaceMaterializedDocument(composerDocument ?? materializeComposerDocument({ text: content, references: [] }, new Map(Array.from(getAllSyncSessionMap(), ([id, session]) => [id, session.title || id]))), composerMentions);
         setTimeout(() => {
             textareaRef.current?.focus();
         }, 0);
@@ -1753,6 +1754,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 installedSkillNames: queuedSkillNames,
                 directory: queueDirectory,
                 root: queueDirectory,
+                confirmedFilePaths: queuedMsg.composerMentions?.filter((mention) => mention.kind === 'file').map((mention) => mention.path || mention.value),
                 citationAttachments: queuedMsg.attachments,
             });
             semanticReferences.push(...compiled.semantics);

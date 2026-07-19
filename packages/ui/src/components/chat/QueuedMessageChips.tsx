@@ -192,7 +192,7 @@ const QueuedMessageChip = memo(({ message, hasDispatchLock, isMobile, onEdit, on
 QueuedMessageChip.displayName = 'QueuedMessageChip';
 
 interface QueuedMessageChipsProps {
-    onEditMessage: (content: string, attachments?: QueuedMessage['attachments'], composerDocument?: QueuedMessage['composerDocument']) => void;
+    onEditMessage: (content: string, attachments?: QueuedMessage['attachments'], composerDocument?: QueuedMessage['composerDocument'], composerMentions?: QueuedMessage['composerMentions']) => void;
     onSendMessage: (messageId: string) => void;
 }
 
@@ -283,7 +283,7 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                 const currentAttachments = useInputStore.getState().attachedFiles;
                 useInputStore.getState().setAttachedFiles([...currentAttachments, ...attachments]);
             }
-            onEditMessage(content, attachments, recovery?.composerDocument ?? popped.composerDocument);
+            onEditMessage(content, attachments, recovery?.composerDocument ?? popped.composerDocument, recovery?.composerMentions ?? popped.composerMentions);
         }
     }, [popToInput, onEditMessage]);
 

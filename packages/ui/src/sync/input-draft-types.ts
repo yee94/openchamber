@@ -97,6 +97,14 @@ export type DraftMention = {
   range: { start: number; end: number }
 }
 
+/** Authored file/agent identity retained while a composer document is queued. */
+export const DRAFT_MENTION_LIMITS = {
+  mentionCount: 1_000,
+  valueLength: 8_192,
+  pathLength: 8_192,
+  labelLength: 512,
+} as const
+
 type DraftSessionComposerReference = {
   id: string
   kind: "session"
@@ -154,6 +162,29 @@ const isString = (value: unknown): value is string => typeof value === "string" 
 const isStringValue = (value: unknown): value is string => typeof value === "string"
 const isNonNegativeInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0
 const isBoundedString = (value: unknown, maximum: number): value is string => typeof value === "string" && value.length > 0 && value.length <= maximum
+
+const isUTF16Boundary = (text: string, offset: number): boolean => {
+  if (offset <= 0 || offset >= text.length) return true
+  const previous = text.charCodeAt(offset - 1), next = text.charCodeAt(offset)
+  return !(previous >= 0xD800 && previous <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF)
+}
+
+/** Parses complete authored file/agent mention metadata against its visible text. */
+export const parseDraftMentions = (text: string, value: unknown): DraftMention[] | undefined => {
+  if (!Array.isArray(value) || value.length > DRAFT_MENTION_LIMITS.mentionCount) return undefined
+  const mentions: DraftMention[] = []
+  const occurrences = new Set<string>()
+  let previousEnd = 0
+  for (const candidate of value) {
+    if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, ["kind", "value", "path", "label", "range"]) || (candidate.kind !== "file" && candidate.kind !== "agent") || !isBoundedString(candidate.value, DRAFT_MENTION_LIMITS.valueLength) || !isBoundedString(candidate.path, DRAFT_MENTION_LIMITS.pathLength) || !isBoundedString(candidate.label, DRAFT_MENTION_LIMITS.labelLength) || !isPlainObject(candidate.range) || !hasOnlyKeys(candidate.range, ["start", "end"]) || !isNonNegativeInteger(candidate.range.start) || !isNonNegativeInteger(candidate.range.end) || candidate.range.end <= candidate.range.start || candidate.range.end > text.length || candidate.range.start < previousEnd || !isUTF16Boundary(text, candidate.range.start) || !isUTF16Boundary(text, candidate.range.end) || text.slice(candidate.range.start, candidate.range.end) !== `@${candidate.value}`) return undefined
+    const occurrence = JSON.stringify([candidate.kind, candidate.value, candidate.path, candidate.label, candidate.range.start, candidate.range.end])
+    if (occurrences.has(occurrence)) return undefined
+    occurrences.add(occurrence)
+    previousEnd = candidate.range.end
+    mentions.push({ kind: candidate.kind, value: candidate.value, path: candidate.path, label: candidate.label, range: { start: candidate.range.start, end: candidate.range.end } })
+  }
+  return mentions
+}
 
 export const isValidDraftComposerSessionID = (value: unknown): value is string => isBoundedString(value, DRAFT_COMPOSER_REFERENCE_LIMITS.sessionIDLength) && /^[A-Za-z0-9_-]+$/.test(value)
 
@@ -237,11 +268,6 @@ const parseAttachment = (value: unknown, partID?: string): DraftAttachmentMetada
   return { attachmentID: value.attachmentID, attachmentRefID: value.attachmentRefID, filename: value.filename, mimeType: value.mimeType, size: value.size, locator, source: value.source, ...(value.serverPath === undefined ? {} : { serverPath: value.serverPath }), ...(value.vscodePath === undefined ? {} : { vscodePath: value.vscodePath }), ...(value.vscodeSource === undefined ? {} : { vscodeSource: value.vscodeSource }) }
 }
 
-const parseMention = (value: unknown, text: string): DraftMention | undefined => {
-  if (!isPlainObject(value) || !hasOnlyKeys(value, ["kind", "value", "path", "label", "range"]) || (value.kind !== "file" && value.kind !== "agent") || !isString(value.value) || !isString(value.path) || !isString(value.label) || !isPlainObject(value.range) || !hasOnlyKeys(value.range, ["start", "end"]) || !isNonNegativeInteger(value.range.start) || !isNonNegativeInteger(value.range.end) || value.range.start >= value.range.end || value.range.end > text.length) return undefined
-  return { kind: value.kind, value: value.value, path: value.path, label: value.label, range: { start: value.range.start, end: value.range.end } }
-}
-
 export const parseDraftRecord = (value: unknown): DraftRecord | undefined => {
   if (!isSafeValue(value, new Set()) || !isPlainObject(value) || !hasOnlyKeys(value, ["version", "key", "revision", "text", "attachments", "syntheticParts", "mentions", "composerReferences"]) || value.version !== 1 || !isNonNegativeInteger(value.revision) || value.revision < 1 || typeof value.text !== "string" || !Array.isArray(value.attachments) || !Array.isArray(value.syntheticParts) || !Array.isArray(value.mentions)) return undefined
   const text = value.text
@@ -254,9 +280,9 @@ export const parseDraftRecord = (value: unknown): DraftRecord | undefined => {
     const partAttachments = part.attachments.map((attachment) => parseAttachment(attachment, partID))
     return partAttachments.every(Boolean) ? { partID, text: partText, attachments: partAttachments as DraftAttachmentMetadata[], ...(part.synthetic === undefined ? {} : { synthetic: part.synthetic }) } : undefined
   })
-  const mentions = value.mentions.map((mention) => parseMention(mention, text))
+  const mentions = parseDraftMentions(text, value.mentions)
   const composerDocument = value.composerReferences === undefined ? { text, references: [] } : parseDraftComposerDocument(text, value.composerReferences)
-  if (!key || !attachments.every(Boolean) || !syntheticParts.every(Boolean) || !mentions.every(Boolean) || !composerDocument) return undefined
+  if (!key || !attachments.every(Boolean) || !syntheticParts.every(Boolean) || !mentions || !composerDocument) return undefined
   const parsedAttachments = attachments as DraftAttachmentMetadata[]
   const parsedParts = syntheticParts as DraftSyntheticPart[]
   const attachmentRefIDs = new Set<string>()
@@ -265,7 +291,7 @@ export const parseDraftRecord = (value: unknown): DraftRecord | undefined => {
     attachmentRefIDs.add(attachment.attachmentRefID)
   }
   if (new Set(parsedParts.map((part) => part.partID)).size !== parsedParts.length) return undefined
-  return { version: 1, key, revision: value.revision, text, attachments: parsedAttachments, syntheticParts: parsedParts, mentions: mentions as DraftMention[], ...(value.composerReferences === undefined ? {} : { composerReferences: composerDocument.references }) }
+  return { version: 1, key, revision: value.revision, text, attachments: parsedAttachments, syntheticParts: parsedParts, mentions, ...(value.composerReferences === undefined ? {} : { composerReferences: composerDocument.references }) }
 }
 
 export const cloneDraftRecord = (record: DraftRecord): DraftRecord | undefined => parseDraftRecord(record)

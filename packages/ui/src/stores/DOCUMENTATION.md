@@ -243,6 +243,7 @@ issues, content, and legacy byte decoding. Queue items may carry a validated
 Composer sidecar. `content` remains the canonical projection and legacy fallback;
 `composerDocument` owns semantic delivery after strict durable-document parsing
 and exact queue-canonical equality validation.
+`composerMentions` is a bounded authored file/agent identity sidecar for the transition through v3 and v4 queues. Skill and image identity stays with Composer reference strategies.
 Detailed reads preserve raw metadata, normalized valid rows, parse issues, and
 degraded scope keys. Compatibility reads report partial metadata as corrupt, so
 only a complete snapshot becomes authoritative. Queue, operation, and message

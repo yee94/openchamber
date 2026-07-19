@@ -29,6 +29,16 @@ describe('messageQueueStore scoped ledger', () => {
     expect(mismatched).toEqual({ ok: false, reason: 'invalid-composer-document' });
     expect(actions.getQueueForScope(a)).toEqual([]);
   });
+  test('preserves confirmed authored file mentions and rejects invalid mention admission', () => {
+    const document = { text: '@README', references: [] };
+    const accepted = useMessageQueueStore.getState().addToQueue(a, { content: '@README', composerDocument: document, composerMentions: [{ kind: 'file', value: 'README', path: 'README', label: 'README', range: { start: 0, end: 7 } }] });
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) throw new Error(accepted.reason);
+    expect(accepted.item.composerMentions?.[0]?.path).toBe('README');
+    const rejected = useMessageQueueStore.getState().addToQueue(a, { content: '@README', composerDocument: document, composerMentions: [{ kind: 'file', value: 'README', path: 'README', label: 'README', range: { start: 0, end: 6 } }] });
+    expect(rejected).toEqual({ ok: false, reason: 'invalid-composer-mentions' });
+    expect(useMessageQueueStore.getState().getQueueForScope(a)).toHaveLength(1);
+  });
   test('admits Session and Paste sidecars with independent attachments and preserves them through migration', () => {
     const document = { text: '[Paste 1] @session', references: [
       { id: 'paste', kind: 'paste' as const, text: 'payload', characterCount: 7, index: 1, display: '[Paste 1]', start: 0, end: 9 },
