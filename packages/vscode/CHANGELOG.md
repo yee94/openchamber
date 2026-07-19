@@ -1,3 +1,7 @@
+## [1.16.32] - 2026-07-19
+
+- No notable VS Code-specific changes.
+
 ## [1.16.1] - 2026-07-14
 
 - **Performance:** large workspace session lists no longer regroup every session while chats stream. Opening a long chat after an empty or aborted agent turn also no longer repeatedly loads larger portions of its history.

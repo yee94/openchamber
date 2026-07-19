@@ -8,6 +8,10 @@ import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import {
+  createMobileLongPressController,
+  type MobileLongPressController,
+} from '@/components/ui/mobileLongPress';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -38,10 +42,6 @@ import { abortCurrentOperation } from '@/sync/session-actions';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
 import { MobileDeleteWorktreeDialog } from './MobileDeleteWorktreeDialog';
-import {
-  createMobileLongPressController,
-  type MobileLongPressController,
-} from './mobileLongPress';
 import { getMobileSessionPageSize, mergeMobileWorktreeRefreshResults } from './mobileSessionPagination';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
 
