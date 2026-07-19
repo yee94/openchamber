@@ -8,7 +8,7 @@ export type QueueDispatchIdentity = ScopedQueueIdentity
 export type QueueDispatchMode = { mode?: "manual" | "auto"; delivery?: "steer" }
 export type QueueDispatchFailure = "pre-dispatch" | "definitive-rejection" | "ambiguous-dispatched"
 export type QueueReconciliationResult = "confirmed" | "authoritative-miss" | "unavailable"
-export type QueueDispatchPayload = { content: string; sendConfig?: QueueItemDTO["sendConfig"]; attachments: Array<{ attachment: QueueItemDTO["attachments"][number]; value: DraftBlobValue }> }
+export type QueueDispatchPayload = { content: string; composerDocument?: QueueItemDTO["composerDocument"]; sendConfig?: QueueItemDTO["sendConfig"]; attachments: Array<{ attachment: QueueItemDTO["attachments"][number]; value: DraftBlobValue }> }
 export type QueueDispatchResult = "confirmed" | "pending" | "unresolved" | "stale" | "failed" | "skipped"
 
 export type QueueDispatcherDependencies = {
@@ -119,7 +119,7 @@ export const createMessageQueueDispatcher = (deps: QueueDispatcherDependencies) 
       if (messageID === id.messageID) confirmation ??= finishConfirmation()
     }
     try {
-      await deps.post(item.owner as Extract<QueueItemDTO["owner"], { state: "bound" }>, { content: item.content, sendConfig: item.sendConfig, attachments: acquired.values }, { ...options, onSendConfirmed: settleConfirmed })
+      await deps.post(item.owner as Extract<QueueItemDTO["owner"], { state: "bound" }>, { content: item.content, ...(item.composerDocument ? { composerDocument: item.composerDocument } : {}), sendConfig: item.sendConfig, attachments: acquired.values }, { ...options, onSendConfirmed: settleConfirmed })
       settleConfirmed(id.messageID)
       return await confirmation!
     } catch (error) {

@@ -56,6 +56,10 @@ export const SOFT_HOURGLASS_SVG =
 export const SOFT_SWAP_SVG =
   `<path d="M8 7H3v5" /><path d="m3 7 7 7" /><path d="M16 17h5v-5" /><path d="m21 17-7-7" />`
 
+/** Round chat bubble with a compact tail that stays legible at 12–16px. */
+export const ROUND_CHAT_BUBBLE_SVG =
+  `<path d="M12 3a9 9 0 0 1 7.45 14.05L21 21l-4.05-1.55A9 9 0 1 1 12 3Z" />`
+
 /**
  * Remixicon `PushpinFill` — classic diagonal thumbtack. Lucide's upright `pin`
  * reads poorly as a sidebar pinned marker at 12px.
@@ -104,7 +108,7 @@ export const ICON_NAME_MAP = {
   "camera": { lucide: "camera", fill: false },
   "chat-1": { lucide: "message-square", fill: false },
   "chat-3": { lucide: "message-square", fill: false },
-  "chat-4": { lucide: "message-square", fill: false },
+  "chat-4": { custom: ROUND_CHAT_BUBBLE_SVG },
   "chat-ai-3": { lucide: "bot-message-square", fill: false },
   "chat-history": { lucide: "history", fill: false },
   "chat-new": { lucide: "square-pen", fill: false },

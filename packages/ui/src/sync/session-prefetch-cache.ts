@@ -37,11 +37,16 @@ const notify = (id: string) => {
 
 /** Check if a prefetch/sync can be skipped (recently fetched). */
 export function shouldSkipSessionPrefetch(input: {
+  hasSession: boolean
   hasMessages: boolean
   info?: SessionPrefetchMeta
   pageSize: number
   now?: number
 }): boolean {
+  if (!input.hasSession) {
+    return false
+  }
+
   if (!input.hasMessages) {
     return false
   }

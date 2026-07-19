@@ -56,11 +56,13 @@ So:
 
 ### Keyed draft metadata
 
-`input-store.ts` owns memory-first validated `DraftRecord` state keyed by transport identity and draft owner. `DraftRecord` stores attachment metadata only; per-occurrence `AttachedFile` views, missing blob occurrence IDs, and attachment hydration/persistence state remain runtime memory. Local files and VS Code selections use blob locators, while file/http/server URLs use URL locators. Blob put and draft-reference retain complete before a snapshot containing that metadata enters the durability lane; quota and storage failures preserve editable memory views for explicit retry. Removal and replacement persist metadata before releasing old blob references. `moveDraftWithAttachments()` retains destination references, moves metadata, persists, then releases source references; synchronous `moveDraft()` remains URL-only. Hydration isolates transport generation, key epoch, and record identity, so delayed blob reads cannot replace newer attachment views. Disabled persistence keeps drafts and attachment views in memory without IndexedDB work. Legacy session drafts import into the migration's claimed transport; the legacy `new` record remains staged until `claimLegacyNewDraft()` receives its destination key. Queue admission and send ownership transfers remain outside this store.
+`input-store.ts` owns memory-first validated `DraftRecord` state keyed by transport identity and draft owner. `DraftRecord` stores textarea-visible text, Composer Session/Paste sidecars, and attachment metadata; per-occurrence `AttachedFile` views, missing blob occurrence IDs, and attachment hydration/persistence state remain runtime memory. `packages/ui/src/composer/use-composer-controller.ts` projects the active `DraftKey` record into ChatInput and commits document plus file/agent mentions through `setDraftComposerState` as one revision. Persistence enablement controls the durability lane while memory editing remains available. Composer ranges use UTF-16 offsets, and durable sidecars validate sorted non-overlapping ranges, unique IDs, bounded per-reference and cumulative Paste payloads, and stable Session IDs. Blob put and draft-reference retain complete before a snapshot containing that metadata enters the durability lane; quota and storage failures preserve editable memory views for explicit retry. Removal and replacement persist metadata before releasing old blob references. `moveDraftWithAttachments()` retains destination references, moves metadata, persists, then releases source references; synchronous `moveDraft()` remains URL-only. Hydration isolates transport generation, key epoch, and record identity, so delayed blob reads cannot replace newer attachment views. Disabled persistence keeps drafts and attachment views in memory without IndexedDB work. Legacy session drafts import into the migration's claimed transport; legacy Composer envelopes become visible text plus validated sidecars, and the legacy `new` record remains staged until `claimLegacyNewDraft()` receives its destination key. Queue admission and send ownership transfers remain outside this store.
 
 The legacy composer attachment view uses in-memory buckets keyed by runtime `DraftKey`, with an independent unowned bucket. Session selection activates its bucket; every legacy attachment mutation and delayed FileReader completion remains scoped to its captured source key. A clear or replacement invalidates reads for that same bucket.
 
 `input-draft-durability-coordinator.ts` owns serialized draft durability. `input-store.ts` keeps memory-first records and submits scoped candidates through the coordinator; blob materialization, references, metadata ordering, rollback, release cleanup, and move transfers stay behind that boundary. Hydration seeds the coordinator once after migration, persists every touched snapshot, flushes durability before completion, and replays locally dirty keys after the durable baseline is available. Disabled persistence keeps editable memory records and blocks durable admission until re-enabled.
+
+Text and Composer-state bursts use one per-store 40ms latest-wins persistence window. Memory revisions publish synchronously and persistence reports `saving`; flush drains the window before coordinator flush. Attachment, ownership, move, delete, retry, and other durability barriers absorb a pending Composer request for their keys and persist the latest complete record immediately. Disable clears pending timers and preserves dirty memory for a later enabled persistence pass.
 
 Committed draft snapshot and ownership actions use per-key CAS epochs plus a captured runtime generation. The durability lane validates candidate currentness before every blob, cleanup, or metadata operation and validates it again before metadata persistence. A metadata-committed action adopts its durable draft or tombstone keys independently after post-write epoch changes; runtime-stale completions clear attachment views, missing-ref IDs, hydration, and both persistence maps in one publication while preserving newer memory records. Ownership finalization evaluates source and destination epochs independently, so one durable source tombstone can coexist with a newer destination record. Revision increments require positive safe integers, including delete tombstones.
 
@@ -97,6 +99,8 @@ Current consumers:
 Cross-directory selectors subscribe to the narrow child-store field they aggregate. Session aggregation listens to `state.session`; per-session status listens only to that session's `state.session_status` entry. Unrelated streaming events such as `message.part.delta` must not trigger global session/status scans.
 
 `useCurrentSessionEntity(sessionID)` owns current-session entity resolution for the desktop Header and mobile Header. It prioritizes the matching cross-directory live session, then the matching global active session. A resolved entity remains available for two seconds during a brief source gap; clearing or changing the session ID immediately clears that fallback.
+
+Renderable messages and session identity are independent completeness signals. Missing session identity keeps `session.get` eligible even when the message prefetch TTL is current, keeps prompt admission read-only, and receives a bounded current-view retry. Parent navigation derives its target identity from the authoritative child `parentID`; a cached parent entity enriches its title and directory.
 
 `scoped-session-status.ts` owns exact `(directory, sessionID)` status reads and subscriptions. A missing child-store snapshot reads as `unknown`; a successful directory status snapshot with no matching entry reads as `idle`. Its registry subscription rebinds when a requested directory store appears, and status listeners ignore parts plus other session IDs.
 
@@ -175,7 +179,7 @@ becoming the cached startup result consumed by the session coordinator.
 - The direct `?ocPanel=session-chat` embedded entry remains available for compatibility, while ContextPanel chat rendering always selects the in-realm transcript.
 - A panel transcript's domain identity is the normalized `(directory, sessionId)` target. Its geometry/view identity is `JSON.stringify([runtimeKey, surfaceId, normalizedDirectory, sessionId])`; `surfaceId` is scoped to normalized `(directoryKey, tabId)`. Keep these identities separate when changing viewport restoration or retained-view behavior.
 - Nested panel navigation is local to the `(directoryKey, tabId)` surface. It accepts same-directory targets, maintains anchor/current/stack metadata, and never writes the primary `setCurrentSession()` selection.
-- ContextPanel retains a bounded panel-local `React.Activity` cache of four transcript views and 48 MiB. The active view is touched, hidden views pause effects, estimate callbacks update their matching view, and closing a tab removes every retained nested view for that tab.
+- ContextPanel retains a bounded panel-local `React.Activity` cache of three transcript views and 32 MiB. The active view is touched, hidden views pause effects, estimate callbacks update their matching view, and closing a tab removes every retained nested view for that tab.
 - Context panel transcript capabilities are strict read-only: nested-session navigation is available within the panel directory; composer, session mutation, and primary-selection ownership remain outside the surface.
 - Cover planner, navigation, geometry key, cache touch/estimate/close, render-mode, and viewed-session behavior in `components/layout/contextPanelSessionSurface.test.ts`.
 
@@ -203,9 +207,9 @@ becoming the cached startup result consumed by the session coordinator.
   already materialized in the current directory store. Sending a mention reads
   that bounded local message/part snapshot and adds a size-limited hidden context
   part; opening the mention menu and sending perform no referenced-session fetch.
-  The composer stores a stable `@session:<id>` token and renders it as an atomic
-  chat icon plus colored session title. Visible sent text resolves the token to
-  `@<session title>`.
+  The textarea stores visible Session labels plus DraftRecord sidecars containing
+  stable Session IDs. Sending resolves each sidecar at the send boundary into
+  stable Session identity and visible sent text `@<session title>`.
 - A rejected shared request is removed from the coordinator so the next
   explicit/reactive attempt can retry; failure must never be cached as an empty
   authoritative history.
@@ -278,7 +282,10 @@ becoming the cached startup result consumed by the session coordinator.
   queue desired references during hydration/reconciliation. Live reconciliation
   includes active send references; startup reconciliation begins with an empty
   send desired set and clears stale send ownership. Cleanup entries are discarded
-  when the same queue or send reference becomes desired again.
+  when the same queue or send reference becomes desired again. Composer sidecars
+  remain immutable through queue transitions. Admission validates Composer image
+  resource identities against attachment occurrence IDs; Session and Paste
+  references currently have no attachment identity.
 - A metadata write that completes as the runtime becomes stale still becomes the
   controller's durable baseline before the caller receives its `stale` result.
 - Partial or corrupt v4 hydration enters a recovery-required read-only state.

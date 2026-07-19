@@ -71,6 +71,10 @@ describe('buildProjectNavigationTargets', () => {
         '/project': ['root-b', 'root-a'],
         '/project/worktree': ['nested'],
       },
+      sessionOrderActivityByScope: {
+        '/project': { 'root-a': 100, 'root-b': 200 },
+        '/project/worktree': { nested: 300 },
+      },
     });
 
     expect(targets.map((target) => target.sessionId)).toEqual(['root-b', 'root-a', 'nested']);
@@ -95,6 +99,7 @@ describe('buildProjectNavigationTargets', () => {
       getOrderedGroups: (_projectId, groups) => groups,
       pinnedSessionIds: new Set(),
       sessionOrderByScope: {},
+      sessionOrderActivityByScope: {},
     });
 
     expect(targets.map((target) => target.sessionId)).toEqual(['parent']);
@@ -116,9 +121,27 @@ describe('buildProjectNavigationTargets', () => {
         '/project': ['root-a', 'root-b'],
         '/project/worktree': ['worktree-b', 'worktree-a'],
       },
+      sessionOrderActivityByScope: {
+        '/project': { 'root-a': 100, 'root-b': 200 },
+        '/project/worktree': { 'worktree-a': 100, 'worktree-b': 200 },
+      },
     });
 
     expect(targets.map((target) => target.sessionId)).toEqual(['root-a', 'root-b', 'worktree-b', 'worktree-a']);
+  });
+
+  test('restores natural navigation order after activity changes while matching snapshots keep manual order', () => {
+    const buildTargets = (rootAUpdatedAt: number, activity: Record<string, number>) => buildProjectNavigationTargets({
+      sections: [{ project: { id: 'project-a' }, groups: [group('root', [node('a', rootAUpdatedAt), node('b', 100)], { main: true })] }],
+      foldersMap: {},
+      getOrderedGroups: (_projectId, groups) => groups,
+      pinnedSessionIds: new Set(),
+      sessionOrderByScope: { '/project': ['b', 'a'] },
+      sessionOrderActivityByScope: { '/project': activity },
+    });
+
+    expect(buildTargets(200, { a: 200, b: 100 }).map((target) => target.sessionId)).toEqual(['b', 'a']);
+    expect(buildTargets(300, { a: 200, b: 100 }).map((target) => target.sessionId)).toEqual(['a', 'b']);
   });
 
   test('resolves a validated group-virtualizer index without clamping an unavailable target', () => {

@@ -24,17 +24,21 @@ const safeStorage = {
 mock.module('./utils/safeStorage', () => ({
   getDeferredSafeStorage: () => safeStorage,
   getSafeStorage: () => safeStorage,
+  createDeferredSafeJSONStorage: () => undefined,
 }));
 
 mock.module('@/lib/desktop', () => ({
   isVSCodeRuntime: () => false,
+  isDesktopShell: () => false,
+  getDesktopHomeDirectory: async () => null,
 }));
 
 mock.module('@/lib/runtime-fetch', () => ({
   runtimeFetch: mock(async () => new Response('{}', { headers: { 'Content-Type': 'application/json' } })),
+  setRuntimeInteractiveSessionRequestId: () => {},
 }));
 
-const { useSessionFoldersStore } = await import('./useSessionFoldersStore');
+const { sessionOrderActivityMatches, useSessionFoldersStore } = await import('./useSessionFoldersStore');
 
 const waitForPersist = () => new Promise((resolve) => setTimeout(resolve, 350));
 
@@ -46,6 +50,7 @@ describe('useSessionFoldersStore folder assignments', () => {
       foldersMap: {},
       collapsedFolderIds: new Set<string>(),
       sessionOrderByScope: {},
+      sessionOrderActivityByScope: {},
     });
   });
 
@@ -79,27 +84,56 @@ describe('useSessionFoldersStore folder assignments', () => {
     expect(storageSetCount).toBe(0);
   });
 
-  test('cleanup trims stale session order ids for its scope', () => {
-    useSessionFoldersStore.setState({ sessionOrderByScope: { '/workspace/project': ['keep', 'stale'] } });
+  test('cleanup trims stale session order ids and invalidates the activity snapshot for its scope', () => {
+    useSessionFoldersStore.setState({
+      sessionOrderByScope: { '/workspace/project': ['keep', 'stale'] },
+      sessionOrderActivityByScope: { '/workspace/project': { keep: 2, stale: 1 } },
+    });
 
     useSessionFoldersStore.getState().cleanupSessions('/workspace/project', new Set(['keep']));
 
     expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['keep']);
+    expect(useSessionFoldersStore.getState().sessionOrderActivityByScope['/workspace/project']).toBe(undefined);
+    expect(sessionOrderActivityMatches({ keep: 2 }, useSessionFoldersStore.getState().sessionOrderActivityByScope['/workspace/project'])).toBe(false);
   });
 
   test('reorders folder rows by the scope-local visual ids', () => {
     useSessionFoldersStore.setState({ sessionOrderByScope: { '/workspace/project': ['first', 'second'] } });
 
-    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['first', 'second'], 'second', 'first');
+    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['first', 'second'], 'second', 'first', { first: 2, second: 1 });
 
     expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['second', 'first']);
+    expect(useSessionFoldersStore.getState().sessionOrderActivityByScope['/workspace/project']).toEqual({ first: 2, second: 1 });
   });
 
   test('preserves hidden session ranks outside the visible sortable slice', () => {
-    useSessionFoldersStore.setState({ sessionOrderByScope: { '/workspace/project': ['first', 'second', 'hidden'] } });
+    useSessionFoldersStore.setState({
+      sessionOrderByScope: { '/workspace/project': ['first', 'second', 'hidden'] },
+      sessionOrderActivityByScope: { '/workspace/project': { first: 2, second: 1, hidden: 0 } },
+    });
 
-    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['first', 'second'], 'second', 'first');
+    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['first', 'second'], 'second', 'first', { first: 2, second: 1, hidden: 0 });
 
     expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['second', 'first', 'hidden']);
+  });
+
+  test('uses current visible order when the stored activity snapshot is missing or stale', () => {
+    useSessionFoldersStore.setState({
+      sessionOrderByScope: { '/workspace/project': ['first', 'second', 'hidden'] },
+      sessionOrderActivityByScope: {},
+    });
+
+    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['second', 'first'], 'first', 'second', { first: 2, second: 1 });
+
+    expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['first', 'second']);
+
+    useSessionFoldersStore.setState({
+      sessionOrderByScope: { '/workspace/project': ['first', 'second', 'hidden'] },
+      sessionOrderActivityByScope: { '/workspace/project': { first: 1, second: 1, hidden: 0 } },
+    });
+
+    useSessionFoldersStore.getState().reorderSessions('/workspace/project', ['second', 'first'], 'first', 'second', { first: 2, second: 1 });
+
+    expect(useSessionFoldersStore.getState().sessionOrderByScope['/workspace/project']).toEqual(['first', 'second']);
   });
 });

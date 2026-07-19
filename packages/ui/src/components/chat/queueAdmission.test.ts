@@ -8,6 +8,11 @@ const scope: Extract<QueueScope, { state: 'bound' }> = {
     directory: '/project',
     sessionID: 'session-a',
 };
+const add = (target: QueueScope, content: string): QueueItem => {
+    const result = useMessageQueueStore.getState().addToQueue(target, { content });
+    if (!result.ok) throw new Error(result.reason);
+    return result.item;
+};
 
 describe('admitQueueMessageAndConsumeResources', () => {
     test('admits before consuming drafts, body, and attachments', () => {
@@ -52,8 +57,8 @@ describe('admitQueueMessageAndConsumeResources', () => {
         useMessageQueueStore.setState({ queuedMessages: {}, followUpBehavior: 'queue' });
         const actions = useMessageQueueStore.getState();
         const legacyScope = legacyQueueScope(scope.sessionID);
-        const legacy = actions.addToQueue(legacyScope, { content: 'legacy' });
-        const bound = actions.addToQueue(scope, { content: 'bound' });
+        const legacy = add(legacyScope, 'legacy');
+        const bound = add(scope, 'bound');
         const composer = admitChatInputQueueMessageAndConsumeResources({
             bindLegacy: () => actions.bindLegacyQueue(legacyScope, scope),
             addComposer: () => actions.addToQueue(scope, { content: 'composer' }),
@@ -64,8 +69,24 @@ describe('admitQueueMessageAndConsumeResources', () => {
         });
         const queue = actions.getQueueForScope(scope) as QueueItem[];
 
-        expect(queue.map((item) => item.queueItemID)).toEqual([legacy.queueItemID, bound.queueItemID, composer.queueItemID]);
-        expect(queue.map((item) => item.operationID)).toEqual([legacy.operationID, bound.operationID, composer.operationID]);
-        expect(queue.map((item) => item.messageID)).toEqual([legacy.messageID, bound.messageID, composer.messageID]);
+        expect(composer.ok).toBe(true);
+        if (!composer.ok) return;
+        expect(queue.map((item) => item.queueItemID)).toEqual([legacy.queueItemID, bound.queueItemID, composer.item.queueItemID]);
+        expect(queue.map((item) => item.operationID)).toEqual([legacy.operationID, bound.operationID, composer.item.operationID]);
+        expect(queue.map((item) => item.messageID)).toEqual([legacy.messageID, bound.messageID, composer.item.messageID]);
+    });
+
+    test('preserves resources when composer admission fails', () => {
+        const calls: string[] = [];
+        const result = admitChatInputQueueMessageAndConsumeResources({
+            bindLegacy: () => calls.push('bind'),
+            addComposer: () => ({ ok: false as const, reason: 'invalid-composer-document' as const }),
+            drafts: ['draft'],
+            consumeDraft: () => calls.push('draft'),
+            consumeBody: () => calls.push('body'),
+            consumeAttachments: () => calls.push('attachments'),
+        });
+        expect(result).toEqual({ ok: false, reason: 'invalid-composer-document' });
+        expect(calls).toEqual([]);
     });
 });

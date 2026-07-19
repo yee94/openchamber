@@ -56,3 +56,10 @@ test("sending hydration stays within safe integer time and normalized snapshots 
   const invalid = parseQueueLedgerSnapshot(snapshot(overflow), { normalizeSending: true })
   expect(invalid.issues).toHaveLength(1); expect(invalid.snapshot.queues[queueLedgerScopeKey(overflow.owner)]).toBe(undefined)
 })
+test("composer sidecars require strict ranges and matching queue canonical content", () => {
+  const sidecar: NonNullable<QueueItemDTO["composerDocument"]> = { text: "@Session", references: [{ id: "s", kind: "session", sessionId: "session", display: "@Session", start: 0, end: 8 }] }
+  const valid = { ...item(), content: "@session:session", composerDocument: sidecar }
+  expect(parseQueueLedgerSnapshot(snapshot(valid)).issues).toHaveLength(0)
+  expect(parseQueueLedgerSnapshot(snapshot({ ...valid, content: "drift" })).issues).toHaveLength(1)
+  expect(parseQueueLedgerSnapshot(snapshot({ ...valid, composerDocument: { ...sidecar, references: [{ ...sidecar.references[0], end: 9 }] } })).issues).toHaveLength(1)
+})

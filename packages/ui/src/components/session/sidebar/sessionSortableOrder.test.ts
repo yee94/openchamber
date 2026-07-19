@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import type { Session } from '@opencode-ai/sdk/v2';
 import type { SessionFolder } from '@/stores/useSessionFoldersStore';
-import { buildVisibleSortableSessionOrder, canReorderVisibleSessions } from './sessionSortableOrder';
+import { buildEffectiveSessionOrderIndex, buildVisibleSortableSessionOrder, canReorderVisibleSessions, createSessionNodeComparator } from './sessionSortableOrder';
 
 const folder = (id: string, parentId: string | null = null): SessionFolder => ({
   id,
@@ -10,7 +11,7 @@ const folder = (id: string, parentId: string | null = null): SessionFolder => ({
   createdAt: 1,
 });
 
-const node = (id: string) => ({ session: { id } });
+const node = (id: string, updated = 0) => ({ session: { id, time: { created: updated, updated } } as Session });
 
 describe('buildVisibleSortableSessionOrder', () => {
   test('follows folder hierarchy, scope-local folder rank, then the visible ungrouped rows', () => {
@@ -53,5 +54,26 @@ describe('buildVisibleSortableSessionOrder', () => {
     });
 
     expect(result.sessionIds).toEqual(['first-a']);
+  });
+});
+
+describe('session order activity snapshots', () => {
+  test('keeps matching manual order and restores natural order after activity or membership changes', () => {
+    const a = node('a', 200);
+    const b = node('b', 100);
+    const manualOrder = ['b', 'a'];
+    const matchingActivity = { a: 200, b: 100 };
+
+    const compareMatching = createSessionNodeComparator([a, b], manualOrder, matchingActivity, new Set());
+    expect([a, b].sort(compareMatching).map((item) => item.session.id)).toEqual(['b', 'a']);
+
+    const updatedA = node('a', 300);
+    const compareUpdated = createSessionNodeComparator([updatedA, b], manualOrder, matchingActivity, new Set());
+    expect([updatedA, b].sort(compareUpdated).map((item) => item.session.id)).toEqual(['a', 'b']);
+
+    const c = node('c', 400);
+    const compareAdded = createSessionNodeComparator([updatedA, b, c], manualOrder, matchingActivity, new Set());
+    expect([updatedA, b, c].sort(compareAdded).map((item) => item.session.id)).toEqual(['c', 'a', 'b']);
+    expect(buildEffectiveSessionOrderIndex([updatedA, b], manualOrder, matchingActivity)).toEqual(new Map());
   });
 });

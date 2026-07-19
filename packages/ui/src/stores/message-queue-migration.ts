@@ -1,4 +1,6 @@
 import { draftRootAttachmentOccurrenceRefID, isDurableURL, type DraftAttachmentReference } from "@/sync/input-draft-types"
+import { parseDraftComposerDocument } from "@/sync/input-draft-types"
+import { serializeComposerDocument } from "@/composer/document"
 import type { InputDraftBlobStore } from "@/sync/input-draft-blob-store"
 import { LEGACY_MESSAGE_QUEUE_KEY, QUEUE_LEDGER_LIMITS, emptyQueueLedgerSnapshot, parseQueueLedgerScopeKey, queueLedgerScopeKey, readQueueLedgerSnapshotDetailed, type QueueAttachmentIssueDTO, type QueueAttachmentRefDTO, type QueueItemDTO, type QueueLedgerMetadataErrorCode, type QueueLedgerMetadataSink, type QueueLedgerScope, type QueueLedgerSnapshotV4, writeQueueLedgerSnapshot } from "./message-queue-ledger"
 
@@ -10,7 +12,7 @@ export type QueueMigrationResult =
   | { status: "failed"; error: { code: QueueLedgerMetadataErrorCode }; issues: QueueMigrationIssue[]; cleanupErrors: QueueMigrationCleanupError[] }
 
 const MAX_STRING = QUEUE_LEDGER_LIMITS.string, MAX_DATA_URL = QUEUE_LEDGER_LIMITS.dataURL, MAX_BYTES = QUEUE_LEDGER_LIMITS.bytes
-const plain = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value)
+const plain = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype
 const text = (value: unknown, fallback: string, allowEmpty = false): string => typeof value === "string" && value.length <= MAX_STRING && (allowEmpty || value.length > 0) ? value : fallback
 const integer = (value: unknown, fallback = 0): number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : fallback
 const sameScope = (left: QueueLedgerScope, right: QueueLedgerScope): boolean => queueLedgerScopeKey(left) === queueLedgerScopeKey(right)
@@ -122,7 +124,10 @@ export const migrateLegacyMessageQueue = async (sink: QueueLedgerMetadataSink, b
       if (reconciling && providedDeadline < 0 && started > Number.MAX_SAFE_INTEGER - 30_000) issues.push(migrationIssue(scopeKey, queueItemID, `${path}.reconciliationDeadlineAt`, "reconciliation-deadline-overflow"))
       const status: QueueItemDTO["status"] = terminalAttachment ? "unresolved" : ambiguousUnresolved || (owner.state === "unbound-legacy" && reconciling) ? "unresolved" : retrying ? "retrying" : reconciling ? "reconciling" : requested === "failed" || failureKind === "definitive" ? "failed" : "queued"
       const needsReconciliation = status === "reconciling" || (status === "unresolved" && !terminalAttachment)
-      const item: QueueItemDTO = { version: 1, queueItemID, operationID, messageID, owner, content: row.content, attachments, attachmentIssues, createdAt, ...(sendConfig(row.sendConfig) ? { sendConfig: sendConfig(row.sendConfig) } : {}), status, attemptCount: integer(row.attemptCount), ...(status === "retrying" ? { nextAttemptAt: integer(row.nextAttemptAt, createdAt), failureKind: "pre-dispatch" as const } : needsReconciliation ? { reconciliationStartedAt: started, reconciliationDeadlineAt: deadline, reconciliationChecks: checks, reconciliationNextCheckAt: nextCheck, failureKind: "ambiguous-dispatch" as const } : status === "failed" ? { failureKind: "definitive" as const } : {}) }
+      const composerCandidate = plain(row.composerDocument) && typeof row.composerDocument.text === "string" ? parseDraftComposerDocument(row.composerDocument.text, row.composerDocument.references) : undefined
+      const composerSerialized = composerCandidate && serializeComposerDocument(composerCandidate, "queue-canonical")
+      if (row.composerDocument !== undefined && (!composerSerialized || !composerSerialized.ok || composerSerialized.text !== row.content)) issues.push(migrationIssue(scopeKey, queueItemID, `${path}.composerDocument`, "degraded-composer-document"))
+      const item: QueueItemDTO = { version: 1, queueItemID, operationID, messageID, owner, content: row.content, ...(composerSerialized && composerSerialized.ok && composerSerialized.text === row.content ? { composerDocument: composerCandidate! } : {}), attachments, attachmentIssues, createdAt, ...(sendConfig(row.sendConfig) ? { sendConfig: sendConfig(row.sendConfig) } : {}), status, attemptCount: integer(row.attemptCount), ...(status === "retrying" ? { nextAttemptAt: integer(row.nextAttemptAt, createdAt), failureKind: "pre-dispatch" as const } : needsReconciliation ? { reconciliationStartedAt: started, reconciliationDeadlineAt: deadline, reconciliationChecks: checks, reconciliationNextCheckAt: nextCheck, failureKind: "ambiguous-dispatch" as const } : status === "failed" ? { failureKind: "definitive" as const } : {}) }
       ;(snapshot.queues[scopeKey] ??= []).push(item)
     }
   }

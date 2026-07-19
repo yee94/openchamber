@@ -5,13 +5,17 @@ import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { useChildStoreManager, useScopedSessionStatusReader, useScopedSessionStatusRevision } from '@/sync/sync-context';
 import type { ScopedSessionStatus } from '@/sync/scoped-session-status';
 import { getRuntimeGeneration, getRuntimeKey, getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { fetchRecentSendConfirmationRecords, getSendFailureKind, releaseUnconfirmedQueueSend } from '@/sync/session-actions';
 import { ascendingIdAfter } from '@/sync/message-id';
 import { getSyncMessages } from '@/sync/sync-refs';
+import { serializeComposerDocument } from '@/composer/document';
+import { buildComposerSemanticParts, dedupeDeliveryAttachments } from '@/composer/delivery';
+import { queryClient } from '@/lib/queryRuntime';
+import { readInstalledSkillsSnapshot } from '@/queries/installedSkillsQueries';
+import { compileChatComposerDelivery, legacyTextToAuthoredPlan } from '@/components/chat/chatComposerDelivery';
 type SessionStatusType = ScopedSessionStatus;
 const RETRY_BASE = 2000; const RETRY_MAX = 60000; const RECONCILIATION_QUERY_DEADLINE_MS = 5000; const MAX_RECONCILIATION_CHECKS = 3;
 export const getQueuedAutoSendRetryDelayMs = (failures: number) => Math.min(RETRY_BASE * 2 ** Math.max(failures - 1, 0), RETRY_MAX);
@@ -75,8 +79,6 @@ export const getAutoReviewBlockedSessions = (runsByOriginalSessionID: Record<str
 };
 
 type BoundScope = Extract<QueueScope, { state: 'bound' }>;
-type QueueDebugEvent = 'dispatch_prepared' | 'persistence_failed' | 'prompt_accepted' | 'prompt_failed' | 'confirmed' | 'reconcile_result';
-const queueDebug = (event: QueueDebugEvent, fields: Record<string, unknown>) => console.info(`[queue-debug] ${event} ${JSON.stringify(fields)}`);
 const latestMessageID = (sessionID: string, directory: string): string | undefined => {
   let latest: string | undefined;
   for (const message of getSyncMessages(sessionID, directory)) {
@@ -115,12 +117,31 @@ export const planQueueScheduler = ({ queuedMessages, activeTransportIdentity, ge
 
 export const buildQueuedAutoSendPayload = (queue: QueuedMessage[]) => {
   const queued = queue[0]; if (!queued) return null;
-  const { sanitizedText, mention } = parseAgentMentions(queued.content, useConfigStore.getState().getVisibleAgents());
-  return { queuedMessageId: queued.id, messageID: queued.messageID, operationID: queued.operationID, primaryText: sanitizedText, primaryAttachments: queued.attachments ?? [], agentMentionName: mention?.name, sendConfig: queued.sendConfig };
+  const serialized = queued.composerDocument && serializeComposerDocument(queued.composerDocument, 'direct-send-display');
+  const directory = queued.owner?.state === 'bound' ? queued.owner.directory : '';
+  const compiled = compileChatComposerDelivery({
+    plan: serialized?.ok ? { chunks: serialized.chunks ?? [], semantics: serialized.semantics ?? [] } : legacyTextToAuthoredPlan(queued.content),
+    agents: useConfigStore.getState().getVisibleAgents(),
+    installedSkillNames: new Set(readInstalledSkillsSnapshot(queryClient, directory).map((skill) => skill.name)),
+    directory,
+    root: directory,
+    citationAttachments: queued.attachments,
+  });
+  const additionalParts = buildComposerSemanticParts(compiled.semantics, directory);
+  return {
+    queuedMessageId: queued.id,
+    messageID: queued.messageID,
+    operationID: queued.operationID,
+    primaryText: compiled.text,
+    primaryAttachments: dedupeDeliveryAttachments([...(queued.attachments ?? []), ...compiled.attachments]),
+    agentMentionName: compiled.agent,
+    additionalParts,
+    sendConfig: queued.sendConfig,
+  };
 };
 type Payload = NonNullable<ReturnType<typeof buildQueuedAutoSendPayload>>;
 type Resolved = { providerID: string; modelID: string; agent?: string; variant?: string };
-export const sendQueuedAutoSendPayload = (sessionId: string, payload: Payload, resolved: Resolved, options: { directory: string; delivery?: 'steer'; onSendConfirmed?: (messageID: string) => void }) => useSessionUIStore.getState().sendMessage(payload.primaryText, resolved.providerID, resolved.modelID, resolved.agent, payload.primaryAttachments, payload.agentMentionName, undefined, resolved.variant, 'normal', { sessionId, directoryHint: options.directory, delivery: options.delivery, messageID: payload.messageID, preserveOptimisticOnAmbiguous: true, onSendConfirmed: options.onSendConfirmed });
+export const sendQueuedAutoSendPayload = (sessionId: string, payload: Payload, resolved: Resolved, options: { directory: string; delivery?: 'steer'; onSendConfirmed?: (messageID: string) => void }) => useSessionUIStore.getState().sendMessage(payload.primaryText, resolved.providerID, resolved.modelID, resolved.agent, payload.primaryAttachments, payload.agentMentionName, payload.additionalParts, resolved.variant, 'normal', { sessionId, directoryHint: options.directory, delivery: options.delivery, messageID: payload.messageID, preserveOptimisticOnAmbiguous: true, onSendConfirmed: options.onSendConfirmed });
 const resolve = (sessionID: string, captured?: QueuedMessage['sendConfig']): Resolved => {
   const context = useContextStore.getState(); const config = useConfigStore.getState(); const selection = useSelectionStore.getState();
   const agent = captured?.agent ?? context.getSessionAgentSelection(sessionID) ?? context.getCurrentAgent(sessionID) ?? config.currentAgentName ?? undefined;
@@ -182,10 +203,8 @@ export function dispatchQueuedMessage(sessionID: string, options: { delivery?: '
       if (!ready) return;
       item = ready;
       const freshIdentity = { queueItemID: ready.queueItemID, operationID: ready.operationID, messageID: ready.messageID };
-      queueDebug('dispatch_prepared', { timestamp: Date.now(), sessionID, queueItemID: ready.queueItemID, operationID: ready.operationID, messageID: ready.messageID, previousMessageID: identity.messageID, floorMessageID, status: ready.status });
       if (!flushMessageQueuePersistence()) {
         store.markQueueItemPreDispatchRetry(scope, freshIdentity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1));
-        queueDebug('persistence_failed', { timestamp: Date.now(), sessionID, queueItemID: ready.queueItemID, operationID: ready.operationID, messageID: ready.messageID, status: 'retrying', failureKind: 'pre-dispatch' });
         return;
       }
       const generation = getRuntimeGeneration(); const payload = buildQueuedAutoSendPayload([ready]); if (!payload) return;
@@ -196,9 +215,9 @@ export function dispatchQueuedMessage(sessionID: string, options: { delivery?: '
       }
       const confirmationMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return getRuntimeTransportIdentity() === scope.transportIdentity && getRuntimeGeneration() === generation && current?.queueItemID === freshIdentity.queueItemID && current.operationID === freshIdentity.operationID && current.messageID === freshIdentity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
       const failureMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return current?.queueItemID === freshIdentity.queueItemID && current.operationID === freshIdentity.operationID && current.messageID === freshIdentity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
-      const confirm = (messageID: string) => { if (confirmationMatches() && messageID === freshIdentity.messageID) { useMessageQueueStore.getState().confirmQueueItem(scope, freshIdentity); queueDebug('confirmed', { timestamp: Date.now(), sessionID, queueItemID: freshIdentity.queueItemID, operationID: freshIdentity.operationID, messageID, status: 'confirmed' }); } };
-      try { await sendQueuedAutoSendPayload(sessionID, payload, resolved, { directory: scope.directory, delivery: options.delivery, onSendConfirmed: confirm }); queueDebug('prompt_accepted', { timestamp: Date.now(), sessionID, queueItemID: freshIdentity.queueItemID, operationID: freshIdentity.operationID, messageID: freshIdentity.messageID, status: 'sending' }); confirm(freshIdentity.messageID); }
-      catch (error) { if (!failureMatches()) return; const kind = getSendFailureKind(error); if (kind === 'pre-dispatch') store.markQueueItemPreDispatchRetry(scope, freshIdentity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1)); else if (kind === 'definitive-rejection') store.markQueueItemDefinitiveFailure(scope, freshIdentity); else store.markQueueItemReconciling(scope, freshIdentity); queueDebug('prompt_failed', { timestamp: Date.now(), sessionID, queueItemID: freshIdentity.queueItemID, operationID: freshIdentity.operationID, messageID: freshIdentity.messageID, status: kind === 'pre-dispatch' ? 'retrying' : kind === 'definitive-rejection' ? 'failed' : 'reconciling', failureKind: kind }); }
+      const confirm = (messageID: string) => { if (confirmationMatches() && messageID === freshIdentity.messageID) useMessageQueueStore.getState().confirmQueueItem(scope, freshIdentity); };
+      try { await sendQueuedAutoSendPayload(sessionID, payload, resolved, { directory: scope.directory, delivery: options.delivery, onSendConfirmed: confirm }); confirm(freshIdentity.messageID); }
+      catch (error) { if (!failureMatches()) return; const kind = getSendFailureKind(error); if (kind === 'pre-dispatch') store.markQueueItemPreDispatchRetry(scope, freshIdentity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1)); else if (kind === 'definitive-rejection') store.markQueueItemDefinitiveFailure(scope, freshIdentity); else store.markQueueItemReconciling(scope, freshIdentity); }
     } finally {
       let changed = false;
       if (dispatchFlights.get(key) === flight) {
@@ -234,8 +253,8 @@ export async function reconcileQueuedMessage(operation: QueryOperation, generati
     && getRuntimeGeneration() === generation;
   if (!matchesOperation) return;
   const matched = records?.some((record) => record.info.id === operation.item.messageID);
-  if (matched) { notifyConfirmedMessageSent(operation.scope.sessionID, operation.item.messageID); useMessageQueueStore.getState().confirmQueueItem(operation.scope, { queueItemID: current.queueItemID, operationID: current.operationID, messageID: current.messageID }); queueDebug('reconcile_result', { timestamp: Date.now(), sessionID: operation.scope.sessionID, queueItemID: current.queueItemID, operationID: current.operationID, messageID: current.messageID, status: 'confirmed', checks: current.reconciliationChecks }); }
-  else { useMessageQueueStore.getState().recordQueueItemReconciliationCheck(operation.scope, { queueItemID: operation.item.queueItemID, operationID: operation.item.operationID, messageID: operation.item.messageID }); queueDebug('reconcile_result', { timestamp: Date.now(), sessionID: operation.scope.sessionID, queueItemID: operation.item.queueItemID, operationID: operation.item.operationID, messageID: operation.item.messageID, status: 'reconciling', checks: (current.reconciliationChecks ?? 0) + 1 }); }
+  if (matched) { notifyConfirmedMessageSent(operation.scope.sessionID, operation.item.messageID); useMessageQueueStore.getState().confirmQueueItem(operation.scope, { queueItemID: current.queueItemID, operationID: current.operationID, messageID: current.messageID }); }
+  else useMessageQueueStore.getState().recordQueueItemReconciliationCheck(operation.scope, { queueItemID: operation.item.queueItemID, operationID: operation.item.operationID, messageID: operation.item.messageID });
 }
 
 const releaseUnresolvedQueueHead = (scope: BoundScope, item: QueueItem) => {

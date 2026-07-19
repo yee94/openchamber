@@ -1,9 +1,9 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
-import { useModelLogo } from '@/hooks/useModelLogo';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { Icon } from "@/components/icon/Icon";
+import { ModelLogo } from '@/components/ui/ModelLogo';
 
 interface MessageHeaderProps {
     isUser: boolean;
@@ -17,9 +17,6 @@ interface MessageHeaderProps {
 }
 
 const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, isMobile, providerID, modelID, agentName, modelName, variant }) => {
-    // 按模型品牌解析 logo（openrouter+claude → Claude，而非 OpenRouter）
-    const { src: logoSrc, onError: handleLogoError, hasLogo, brand } = useModelLogo(modelID, providerID);
-
     return (
         <div className={cn('mb-1.5')}>
             <div className={cn('flex items-center justify-between gap-2')}>
@@ -31,18 +28,15 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, isMobile, provide
                             </div>
                         ) : (
                             <div className="flex items-center justify-center">
-                                {hasLogo && logoSrc ? (
-                                    <img
-                                        src={logoSrc}
-                                        alt={`${brand || modelID || providerID} logo`}
-                                        // 与 ModelLogo 一致：压成纯色后再按主题反色
-                                        className="h-4 w-4 brightness-0 dark:invert"
-                                        onError={handleLogoError}
-                                    />
-                                ) : (
-                                    <Icon name="brain-ai-3" className="h-4 w-4"
-                                        style={{ color: `var(${getAgentColor(agentName).var})` }}/>
-                                )}
+                                <ModelLogo
+                                    modelId={modelID}
+                                    providerId={providerID}
+                                    className="h-4 w-4"
+                                    fallback={(
+                                        <Icon name="brain-ai-3" className="h-4 w-4"
+                                            style={{ color: `var(${getAgentColor(agentName).var})` }}/>
+                                    )}
+                                />
                             </div>
                         )}
                     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Message, Part, Session } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@opencode-ai/sdk/v2';
 import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 
@@ -29,7 +29,9 @@ import { Button } from '@/components/ui/button';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { Icon } from "@/components/icon/Icon";
 import { cn, formatDirectoryName } from '@/lib/utils';
+import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 
 // New sync system imports
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -44,7 +46,8 @@ import {
     useSessionStatusSnapshotAt,
     useScopedBlockingPermissions,
     useScopedBlockingQuestions,
-    useParentSession,
+    useParentSessionTarget,
+    useSession,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { getSessionPrefetch, subscribeSessionPrefetch } from '@/sync/session-prefetch-cache';
@@ -75,6 +78,7 @@ import { getEmbeddedSessionChatOriginSessionId } from '@/components/layout/conte
 import { isFullySyntheticMessage } from '@/lib/messages/synthetic';
 import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { findShellCommandForMessage, isUserShellMarkerMessage } from './lib/shellBridge';
+import { resolveContextPanelSessionExecution } from '@/components/layout/contextPanelSessionExecution';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
@@ -86,8 +90,8 @@ const SESSION_VIEW_MESSAGE_BUCKET_SIZE = 20;
 const SESSION_VIEW_MESSAGE_BUCKET_BYTES = MEBIBYTE;
 const MAX_SINGLE_SESSION_VIEW_ESTIMATED_BYTES = 16 * MEBIBYTE;
 const DESKTOP_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
-    maxEntries: 4,
-    maxEstimatedBytes: 48 * MEBIBYTE,
+    maxEntries: 3,
+    maxEstimatedBytes: 32 * MEBIBYTE,
 };
 const CONSTRAINED_SESSION_VIEW_CACHE_LIMITS: SessionViewCacheLimits = {
     maxEntries: 2,
@@ -555,6 +559,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const forkTransition = useSessionUIStore((s) => s.forkTransition);
     const projects = useProjectsStore((s) => s.projects);
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+    const providers = useConfigStore((state) => state.providers);
 
     // Sync actions
     const sync = useSync();
@@ -609,12 +614,33 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         ),
         effectiveSessionDirectory,
     );
+    const currentSessionEntity = useSession(currentSessionId, effectiveSessionDirectory);
+    const sessionIdentityPending = Boolean(currentSessionId && !currentSessionEntity);
+    const sessionIdentityEnsureKey = currentSessionId
+        ? JSON.stringify([effectiveSessionDirectory, currentSessionId])
+        : null;
+    const [sessionIdentityEnsureRetry, setSessionIdentityEnsureRetry] = React.useState<{
+        key: string | null;
+        attempt: number;
+    }>({ key: sessionIdentityEnsureKey, attempt: 0 });
     // Messages from sync system
     const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '', effectiveSessionDirectory, {
         suspendPartUpdates: Boolean(streamingMessageId),
         suspendPartUpdatesForMessageId: streamingMessageId,
     });
     const sessionMessages = currentSessionId ? sessionMessageRecords : EMPTY_MESSAGES;
+    const sessionExecution = React.useMemo(
+        () => resolveContextPanelSessionExecution(sessionMessages),
+        [sessionMessages],
+    );
+    const sessionExecutionModelName = React.useMemo(() => {
+        if (!sessionExecution.modelId) return t('common.unavailable');
+        const provider = providers.find((entry) => entry.id === sessionExecution.providerId);
+        const modelExists = provider?.models.some((model) => model.id === sessionExecution.modelId);
+        return modelExists
+            ? getProviderModelDisplayName(provider, sessionExecution.modelId) || sessionExecution.modelId
+            : sessionExecution.modelId;
+    }, [providers, sessionExecution.modelId, sessionExecution.providerId, t]);
     const hasUserBoundary = React.useMemo(
         () => sessionMessages.some(({ info }) => (
             info.role === 'user'
@@ -766,7 +792,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         return project ? getProjectDisplayLabel(project) : null;
     }, [activeProjectId, newSessionDraft?.selectedProjectId, projects]);
 
-    const parentSession = useParentSession(currentSessionId, effectiveSessionDirectory);
+    const parentSessionTarget = useParentSessionTarget(currentSessionId, effectiveSessionDirectory);
 
     // In the embedded session-chat iframe, hide "Return to parent" when
     // viewing the panel's anchor session (the one recorded in the URL). Going
@@ -778,12 +804,12 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         embeddedPanelAnchorSessionId !== null && currentSessionId === embeddedPanelAnchorSessionId;
 
     const handleReturnToParentSession = React.useCallback(() => {
-        if (!parentSession) return;
-        const parentDirectory = (parentSession as Session & { directory?: string | null }).directory ?? null;
-        setCurrentSession(parentSession.id, parentDirectory);
-    }, [parentSession, setCurrentSession]);
+        if (!parentSessionTarget) return;
+        setCurrentSession(parentSessionTarget.id, parentSessionTarget.directory);
+    }, [parentSessionTarget, setCurrentSession]);
 
-    const returnToParentButton = parentSession && !hideReturnToParent ? (
+    const parentSessionTitle = parentSessionTarget?.session?.title;
+    const returnToParentButton = parentSessionTarget && !hideReturnToParent ? (
         <Button
             type="button"
             variant="outline"
@@ -791,15 +817,25 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
             onClick={handleReturnToParentSession}
             className="absolute left-3 top-3 z-20 !font-normal bg-[var(--surface-background)]/95"
             aria-label={t('chat.container.returnToParent.aria')}
-            title={parentSession.title?.trim()
-                ? t('chat.container.returnToParent.titleNamed', { title: parentSession.title })
+            title={parentSessionTitle?.trim()
+                ? t('chat.container.returnToParent.titleNamed', { title: parentSessionTitle })
                 : t('chat.container.returnToParent.title')}
         >
             <Icon name="arrow-left" className="h-4 w-4" />
             {t('chat.container.returnToParent.label')}
         </Button>
     ) : null;
-    const promptReadOnly = parentSession ? !allowPromptingSubagentSessions : readOnly;
+    const promptReadOnly = readOnly
+        || sessionIdentityPending
+        || Boolean(parentSessionTarget && !allowPromptingSubagentSessions);
+    const readOnlyPromptBanner = parentSessionTarget ? (
+        <ReadOnlyPromptBanner
+            agentName={sessionExecution.agentName}
+            providerId={sessionExecution.providerId}
+            modelId={sessionExecution.modelId}
+            modelName={sessionExecutionModelName}
+        />
+    ) : <ReadOnlyPromptBanner />;
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || window.parent === window) {
@@ -1066,11 +1102,42 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     }, [currentSessionId, releaseAutoFollow, restoreSnapshot]);
 
     React.useEffect(() => {
-        if (!currentSessionId) return;
-        if (hasRenderableSessionSnapshot) return;
+        setSessionIdentityEnsureRetry((current) => (
+            current.key === sessionIdentityEnsureKey
+                ? current
+                : { key: sessionIdentityEnsureKey, attempt: 0 }
+        ));
+    }, [sessionIdentityEnsureKey]);
+
+    React.useEffect(() => {
+        if (!currentSessionId || sessionIdentityEnsureRetry.key !== sessionIdentityEnsureKey) return;
+        if (hasRenderableSessionSnapshot && currentSessionEntity) return;
         if (effectiveSessionDirectory !== syncDirectory) return;
+
         void ensureSessionRenderable(currentSessionId);
-    }, [currentSessionId, effectiveSessionDirectory, ensureSessionRenderable, hasRenderableSessionSnapshot, syncDirectory]);
+        if (currentSessionEntity || sessionIdentityEnsureRetry.attempt >= 2) return;
+
+        const nextAttempt = sessionIdentityEnsureRetry.attempt + 1;
+        const timer = window.setTimeout(() => {
+            setSessionIdentityEnsureRetry((current) => (
+                current.key === sessionIdentityEnsureKey
+                    && current.attempt === sessionIdentityEnsureRetry.attempt
+                    ? { key: sessionIdentityEnsureKey, attempt: nextAttempt }
+                    : current
+            ));
+        }, nextAttempt * 1000);
+
+        return () => window.clearTimeout(timer);
+    }, [
+        currentSessionEntity,
+        currentSessionId,
+        effectiveSessionDirectory,
+        ensureSessionRenderable,
+        hasRenderableSessionSnapshot,
+        sessionIdentityEnsureKey,
+        sessionIdentityEnsureRetry,
+        syncDirectory,
+    ]);
 
 	if (forkTransition) {
 		const stageKey =
@@ -1174,7 +1241,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 								: 'flex-1 items-center justify-center bg-background px-0 pb-[6vh]'
 					)}
 				>
-                        {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                        {promptReadOnly ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
 			</div>
         );
@@ -1233,7 +1300,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background',
 					)}
 				>
-					{promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+					{promptReadOnly ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
 			</div>
 		);
@@ -1289,7 +1356,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
-                    {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                    {promptReadOnly ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
             </div>
         );
@@ -1324,7 +1391,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
-                    {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                    {promptReadOnly ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
 				</div>
             </div>
         );
@@ -1382,7 +1449,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
                         onClick={navigation.resumeToLatest}
                     />
                 )}
-                {promptReadOnly ? <ReadOnlyPromptBanner /> : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
+                {promptReadOnly ? readOnlyPromptBanner : <ChatInput scrollToBottom={scrollToBottomOnSend} />}
             </div>
 
             <TimelineDialog

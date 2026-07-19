@@ -63,7 +63,7 @@ import {
   type ScopedSessionStatus,
   type ScopedSessionStatusScope,
 } from "./scoped-session-status"
-import { CURRENT_SESSION_ENTITY_CACHE_TTL_MS, resolveCurrentSessionEntity } from "./current-session-entity"
+import { CURRENT_SESSION_ENTITY_CACHE_TTL_MS, resolveCurrentSessionEntity, resolveParentSessionTarget } from "./current-session-entity"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -2343,7 +2343,7 @@ export function useScopedBlockingQuestions(sessionID: string | null, directory?:
   return useScopedBlockingRequests(sessionID, directory, selectQuestionRequestsBySession, EMPTY_QUESTION_REQUESTS)
 }
 
-export function useParentSession(sessionID: string | null, directory?: string): Session | null {
+export function useParentSessionTarget(sessionID: string | null, directory?: string) {
   const directoryCurrent = useSession(sessionID, directory)
   const liveCurrent = useSession(sessionID)
   const globalCurrent = useGlobalSessionsStore(useCallback((state) => (
@@ -2362,7 +2362,8 @@ export function useParentSession(sessionID: string | null, directory?: string): 
       ?? null
   ), [parentID]))
 
-  return directoryParent ?? liveParent ?? globalParent
+  const parent = directoryParent ?? liveParent ?? globalParent
+  return resolveParentSessionTarget(sessionID, current, parent, directory)
 }
 
 /** Get one session by id for a directory */

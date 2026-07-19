@@ -529,6 +529,7 @@ export function useSync() {
 
           // Skip if recently fetched (TTL)
           if (!force && shouldSkipSessionPrefetch({
+            hasSession,
             hasMessages: cachedReady,
             info: prefetchInfo,
             pageSize: getInitialMessagePageSize(),

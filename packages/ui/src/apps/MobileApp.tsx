@@ -58,7 +58,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SessionStartupCoordinator } from '@/components/session/SessionStartupCoordinator';
 import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
 import { ScheduledTasksDialog } from '@/components/session/ScheduledTasksDialog';
-import { SyncProvider, useCurrentSessionEntity, useParentSession, useSessionMessages } from '@/sync/sync-context';
+import { SyncProvider, useCurrentSessionEntity, useParentSessionTarget, useSessionMessages } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
 import { MobileChangesSurface } from './MobileChangesSurface';
@@ -2257,7 +2257,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const swipeDirectionRef = React.useRef<'prev' | 'next' | null>(null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-  const parentSession = useParentSession(currentSessionId);
+  const currentSessionDirectory = useSessionUIStore(
+    React.useCallback((state) => (currentSessionId ? state.getDirectoryForSession(currentSessionId) : null), [currentSessionId]),
+  );
+  const parentSessionTarget = useParentSessionTarget(currentSessionId, currentSessionDirectory || currentDirectory || undefined);
   // Record the swipe direction; the animation itself runs in the layout effect below, once the
   // new session's content has committed — running it inline in the swipe callback raced the
   // re-render and dropped the animation on roughly every other switch.
@@ -2398,13 +2401,12 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       setUpdateOpen(false);
       return true;
     }
-    if (parentSession) {
-      const parentDirectory = (parentSession as typeof parentSession & { directory?: string | null }).directory ?? null;
-      setCurrentSession(parentSession.id, parentDirectory);
+    if (parentSessionTarget) {
+      setCurrentSession(parentSessionTarget.id, parentSessionTarget.directory);
       return true;
     }
     return false;
-  }, [changesOpen, closeChanges, closeTurnDiff, directoryDialogOpen, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSession, scheduledTasksDialogOpen, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, turnDiffOpen, updateOpen]);
+  }, [changesOpen, closeChanges, closeTurnDiff, directoryDialogOpen, filesOpen, instancesOpen, mcpOpen, mobileSessionPanelOpen, overflowOpen, parentSessionTarget, scheduledTasksDialogOpen, setCurrentSession, setMobileSessionPanelOpen, settingsOpen, turnDiffOpen, updateOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
 

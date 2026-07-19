@@ -1,0 +1,13 @@
+# Composer module
+
+`document.ts` owns normalized document ranges, validation, canonical materialization, and send-plan preparation. `extensions.ts` owns each reference strategy's payload validation, decoration shape, semantics, opaque-payload budget, canonical codec, and resource identity. `use-composer-controller.ts` owns DraftKey-scoped local editing, store commits, history preview, submission capture/recovery, and post-commit resource deltas.
+
+External, recovery, serialization, and materialization boundaries use full Composer validation. Browser-local edits use trusted normalization after the Draft parser or insertion validator has established typed payloads; it validates structural range and budget invariants without another opaque Paste Unicode scan. Unicode metrics use a shared bounded 400k UTF-16 LRU cache.
+
+Add a reference kind by extending the durable draft union, then add its exhaustive strategy in `extensions.ts`. A strategy supplies its decoration and send contribution; ChatInput structurally merges the decoration into `HighlightRange` and keeps rendering, paste labels, and temporary attachment behavior locally.
+
+Resource owners receive `ComposerResourceDelta` identities after successful local commits. Image strategies return `{ type: 'attachment', attachmentRefID }`; Session, Paste, and Skill strategies return no resource. Store hydration and DraftKey switches establish state without a local resource delta.
+
+Generated send chunks use `generated-reference` provenance with strategy semantics. `delivery.ts` owns authored-only chunk aggregation, attachment deduplication by normalized server path or ID, exhaustive semantic partitioning, and Session and Skill synthetic delivery parts from the owner directory snapshot. `components/chat/chatComposerDelivery.ts` is the shared chat authored compiler for direct sends and queue dispatch; it resolves agent, file, skill, session-label, and citation delivery only in authored chunks. Generated references and Paste payload chunks remain byte-for-byte opaque.
+
+Queue admission stores `content` as the queue-canonical projection and an optional `composerDocument` sidecar as the authoritative semantic body. Strict parsing requires queue-canonical sidecar serialization to equal `content`; legacy rows use text-only delivery. `describeComposerDocumentResources()` defines sidecar attachment identities, which form a subset of queue attachments; independent attachments remain valid queue resources.

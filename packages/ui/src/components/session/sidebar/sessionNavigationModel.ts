@@ -1,11 +1,12 @@
 import type { Session } from '@opencode-ai/sdk/v2';
 
-import type { SessionFoldersMap, SessionOrderMap } from '@/stores/useSessionFoldersStore';
+import type { SessionFoldersMap, SessionOrderActivityMap, SessionOrderMap } from '@/stores/useSessionFoldersStore';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { SessionNavigationTarget } from '@/sync/session-navigation';
 
 import type { SessionGroup, SessionNode } from './types';
-import { compareSessionsByPinnedAndTime, normalizePath } from './utils';
+import { normalizePath } from './utils';
+import { createSessionNodeComparator } from './sessionSortableOrder';
 
 type ProjectSection = {
   project: { id: string };
@@ -18,6 +19,7 @@ type BuildProjectNavigationTargetsArgs = {
   getOrderedGroups: (projectId: string, groups: SessionGroup[]) => SessionGroup[];
   pinnedSessionIds: Set<string>;
   sessionOrderByScope: SessionOrderMap;
+  sessionOrderActivityByScope: SessionOrderActivityMap;
 };
 
 type FilterVisibleProjectNavigationTargetsArgs = {
@@ -145,6 +147,7 @@ export const buildProjectNavigationTargets = ({
   getOrderedGroups,
   pinnedSessionIds,
   sessionOrderByScope,
+  sessionOrderActivityByScope,
 }: BuildProjectNavigationTargetsArgs): SessionNavigationTarget[] => {
   const targets: SessionNavigationTarget[] = [];
 
@@ -160,17 +163,12 @@ export const buildProjectNavigationTargets = ({
 
       const groupKey = `${section.project.id}:${group.id}`;
       const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
-      const sessionOrderIndex = new Map((folderScopeKey ? sessionOrderByScope[folderScopeKey] : [])?.map((id, index) => [id, index]));
-      const compareNodes = (a: SessionNode, b: SessionNode): number => {
-        const aIndex = sessionOrderIndex.get(a.session.id);
-        const bIndex = sessionOrderIndex.get(b.session.id);
-        if (aIndex !== undefined || bIndex !== undefined) {
-          if (aIndex === undefined) return 1;
-          if (bIndex === undefined) return -1;
-          if (aIndex !== bIndex) return aIndex - bIndex;
-        }
-        return compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds);
-      };
+      const compareNodes = createSessionNodeComparator(
+        group.sessions,
+        folderScopeKey ? sessionOrderByScope[folderScopeKey] : undefined,
+        folderScopeKey ? sessionOrderActivityByScope[folderScopeKey] : undefined,
+        pinnedSessionIds,
+      );
       const sourceNodes = [...group.sessions]
         .filter((node) => !node.session.time?.archived && !isSubtaskSession(node.session))
         .sort(compareNodes);

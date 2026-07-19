@@ -32,7 +32,7 @@ import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { abortCurrentOperation } from '@/sync/session-actions';
 
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
-import { getMobileSessionPageSize } from './mobileSessionPagination';
+import { getMobileSessionPageSize, mergeMobileWorktreeRefreshResults } from './mobileSessionPagination';
 import { MobileSurfaceShell } from './MobileSurfaceShell';
 
 type MobileSessionsSheetProps = {
@@ -109,6 +109,9 @@ const getSessionTimestamp = (session: Session): number => {
   const value = typeof raw === 'number' ? raw : Number(raw);
   return Number.isFinite(value) && value > 0 ? value : 0;
 };
+
+const setsEqual = (a: Set<string>, b: Set<string>): boolean =>
+  a.size === b.size && [...a].every((value) => b.has(value));
 
 const formatRelativeShort = (timestamp: number): string => {
   if (timestamp <= 0) return '';
@@ -425,6 +428,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const archiveSession = useSessionUIStore((state) => state.archiveSession);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
@@ -445,7 +449,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
-  const [worktreesByProject, setWorktreesByProject] = React.useState<Map<string, WorktreeMetadata[]>>(new Map());
   const [gitProjectPaths, setGitProjectPaths] = React.useState<Set<string>>(new Set());
   const [rootBranchesByProject, setRootBranchesByProject] = React.useState<Map<string, string>>(new Map());
   // Per-bucket count of sessions revealed past the default page. Ephemeral —
@@ -485,48 +488,100 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   }, [open]);
 
   React.useEffect(() => {
-    if (!open || projects.length === 0) return;
+    if (!open) return;
+    if (projects.length === 0) {
+      useSessionUIStore.setState((state) => {
+        const next = mergeMobileWorktreeRefreshResults(state.availableWorktreesByProject, new Set(), []);
+        if (next === state.availableWorktreesByProject) return {};
+        return { availableWorktreesByProject: next, availableWorktrees: [] };
+      });
+      setGitProjectPaths((previous) => (previous.size === 0 ? previous : new Set()));
+      setRootBranchesByProject((previous) => (previous.size === 0 ? previous : new Map()));
+      return;
+    }
     let cancelled = false;
     const run = async () => {
       const entries = await Promise.all(
         projects.map(async (project) => {
           const path = normalizePath(project.path);
           if (!path) return null;
-          const isGitRepo = await git.checkIsGitRepository(path).catch(() => false);
-          let worktrees: WorktreeMetadata[] = [];
-          let rootBranch: string | null = null;
-          if (isGitRepo) {
-            [worktrees, rootBranch] = await Promise.all([
-              listProjectWorktrees({ id: project.id, path }).catch(() => []),
-              getRootBranch(path).catch(() => null),
-            ]);
+          let isGitRepo: boolean;
+          try {
+            isGitRepo = await git.checkIsGitRepository(path);
+          } catch {
+            return { id: project.id, path, gitStatus: 'failed' as const };
           }
-          return { id: project.id, path, worktrees, isGitRepo, rootBranch };
+          if (!isGitRepo) {
+            return {
+              id: project.id,
+              path,
+              gitStatus: 'success' as const,
+              isGitRepo,
+              worktreeStatus: 'success' as const,
+              worktrees: [],
+            };
+          }
+          const [worktreeResult, rootBranchResult] = await Promise.allSettled([
+            listProjectWorktrees({ id: project.id, path }),
+            getRootBranch(path),
+          ]);
+          return {
+            id: project.id,
+            path,
+            gitStatus: 'success' as const,
+            isGitRepo,
+            worktreeStatus: worktreeResult.status === 'fulfilled' ? 'success' as const : 'failed' as const,
+            worktrees: worktreeResult.status === 'fulfilled' ? worktreeResult.value : undefined,
+            rootBranchStatus: rootBranchResult.status === 'fulfilled' ? 'success' as const : 'failed' as const,
+            rootBranch: rootBranchResult.status === 'fulfilled' ? rootBranchResult.value : undefined,
+          };
         }),
       );
       if (cancelled) return;
-      const next = new Map<string, WorktreeMetadata[]>();
-      const nextGitProjectPaths = new Set<string>();
-      for (const entry of entries) {
-        if (entry) {
-          next.set(entry.path, entry.worktrees);
-          if (entry.isGitRepo) nextGitProjectPaths.add(entry.path);
-        }
-      }
-      setWorktreesByProject(next);
-      setGitProjectPaths(nextGitProjectPaths);
-      setRootBranchesByProject((previous) => {
-        const branches = new Map<string, string>();
+      const projectPaths = new Set(projects.map((project) => normalizePath(project.path)).filter(Boolean));
+      const worktreeResults = entries.flatMap((entry) => (
+        entry?.worktreeStatus
+          ? [{ path: entry.path, status: entry.worktreeStatus, worktrees: entry.worktrees }]
+          : []
+      ));
+      useSessionUIStore.setState((state) => {
+        const next = mergeMobileWorktreeRefreshResults(
+          state.availableWorktreesByProject,
+          projectPaths,
+          worktreeResults,
+        );
+        if (next === state.availableWorktreesByProject) return {};
+        return {
+          availableWorktreesByProject: next,
+          availableWorktrees: Array.from(next.values()).flat(),
+        };
+      });
+      setGitProjectPaths((previous) => {
+        const next = new Set([...previous].filter((path) => projectPaths.has(path)));
         for (const entry of entries) {
-          if (!entry?.isGitRepo) continue;
+          if (entry?.gitStatus !== 'success') continue;
+          if (entry.isGitRepo) next.add(entry.path);
+          else next.delete(entry.path);
+        }
+        return setsEqual(next, previous) ? previous : next;
+      });
+      setRootBranchesByProject((previous) => {
+        const projectIds = new Set(projects.map((project) => project.id));
+        const branches = new Map([...previous].filter(([id]) => projectIds.has(id)));
+        for (const entry of entries) {
+          if (!entry || entry.gitStatus !== 'success') continue;
+          if (!entry.isGitRepo) {
+            branches.delete(entry.id);
+            continue;
+          }
+          if (entry.rootBranchStatus !== 'success') continue;
           const branch = entry.rootBranch?.trim();
           if (branch && branch !== 'HEAD') branches.set(entry.id, branch);
-          else if (entry.rootBranch === null) {
-            const previousBranch = previous.get(entry.id);
-            if (previousBranch) branches.set(entry.id, previousBranch);
-          }
+          else branches.delete(entry.id);
         }
-        return branches;
+        return branches.size === previous.size && [...branches].every(([id, branch]) => previous.get(id) === branch)
+          ? previous
+          : branches;
       });
     };
     void run();

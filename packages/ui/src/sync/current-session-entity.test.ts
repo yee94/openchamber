@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
-import { resolveCurrentSessionEntity } from './current-session-entity'
+import { resolveCurrentSessionEntity, resolveParentSessionTarget } from './current-session-entity'
 
 type Session = {
   id: string
   title?: string | null
+  parentID?: string | null
+  directory?: string | null
 }
 
 describe('resolveCurrentSessionEntity', () => {
@@ -42,5 +44,43 @@ describe('resolveCurrentSessionEntity', () => {
     expect(resolveCurrentSessionEntity('', { id: 'ses_current' }, null)).toBeNull()
     expect(resolveCurrentSessionEntity('ses_current', { id: 'ses_other' }, null)).toBeNull()
     expect(resolveCurrentSessionEntity('ses_current', { id: 'ses_other' }, { id: 'ses_another' })).toBeNull()
+  })
+})
+
+describe('resolveParentSessionTarget', () => {
+  test('uses the cached parent entity and its directory', () => {
+    const current: Session = { id: 'ses_child', parentID: 'ses_parent', directory: '/child-directory' }
+    const parent: Session = { id: 'ses_parent', directory: '/parent-directory' }
+
+    expect(resolveParentSessionTarget('ses_child', current, parent, '/fallback')).toEqual({
+      id: 'ses_parent',
+      directory: '/parent-directory',
+      session: parent,
+    })
+  })
+
+  test('keeps a parent navigation target when its entity is missing', () => {
+    const current: Session = { id: 'ses_child', parentID: 'ses_parent', directory: '/child-directory' }
+
+    expect(resolveParentSessionTarget('ses_child', current, null, '/fallback')).toEqual({
+      id: 'ses_parent',
+      directory: '/child-directory',
+      session: null,
+    })
+  })
+
+  test('uses the fallback directory when neither entity provides one', () => {
+    const current: Session = { id: 'ses_child', parentID: 'ses_parent' }
+
+    expect(resolveParentSessionTarget('ses_child', current, null, '/fallback')).toEqual({
+      id: 'ses_parent',
+      directory: '/fallback',
+      session: null,
+    })
+  })
+
+  test('returns null for a mismatched current entity and a root session', () => {
+    expect(resolveParentSessionTarget('ses_child', { id: 'ses_other', parentID: 'ses_parent' }, null, '/fallback')).toBeNull()
+    expect(resolveParentSessionTarget('ses_root', { id: 'ses_root' }, null, '/fallback')).toBeNull()
   })
 })

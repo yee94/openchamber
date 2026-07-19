@@ -401,6 +401,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
   const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
   const sessionOrderByScope = useSessionFoldersStore((state) => state.sessionOrderByScope);
+  const sessionOrderActivityByScope = useSessionFoldersStore((state) => state.sessionOrderActivityByScope);
   const getFoldersForScope = useSessionFoldersStore((state) => state.getFoldersForScope);
   const createFolder = useSessionFoldersStore((state) => state.createFolder);
   const renameFolder = useSessionFoldersStore((state) => state.renameFolder);
@@ -1762,7 +1763,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     getOrderedGroups,
     pinnedSessionIds,
     sessionOrderByScope,
-  }), [foldersMap, getOrderedGroups, navigationProjectSections, pinnedSessionIds, sessionOrderByScope]);
+    sessionOrderActivityByScope,
+  }), [foldersMap, getOrderedGroups, navigationProjectSections, pinnedSessionIds, sessionOrderActivityByScope, sessionOrderByScope]);
 
   const visibleProjectNavigationTargets = React.useMemo(() => (
     filterVisibleProjectNavigationTargets({
@@ -2354,9 +2356,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         pinnedSessionIds={pinnedSessionIds}
         expandedParents={expandedParents}
         sessionOrderByScope={sessionOrderByScope}
-        onReorderSessions={(sessionIds, activeSessionId, overSessionId) => {
+        sessionOrderActivityByScope={sessionOrderActivityByScope}
+        onReorderSessions={(sessionIds, activeSessionId, overSessionId, activityBySessionId) => {
           const scopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
-          if (scopeKey) reorderSessions(scopeKey, sessionIds, activeSessionId, overSessionId);
+          if (scopeKey) reorderSessions(scopeKey, sessionIds, activeSessionId, overSessionId, activityBySessionId);
         }}
         currentSessionId={currentSessionId}
         shortcutTargetSessionId={
@@ -2416,6 +2419,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       pinnedSessionIds,
       expandedParents,
       sessionOrderByScope,
+      sessionOrderActivityByScope,
       reorderSessions,
       currentSessionId,
       focusedProjectTarget,

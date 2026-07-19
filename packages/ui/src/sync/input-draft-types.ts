@@ -1,3 +1,5 @@
+import { countUnicodeCodePoints } from "@/lib/unicodeMetrics"
+
 export type DraftOwner =
   | { kind: "session"; ownerID: string }
   | { kind: "draft"; ownerID: string }
@@ -95,6 +97,39 @@ export type DraftMention = {
   range: { start: number; end: number }
 }
 
+type DraftSessionComposerReference = {
+  id: string
+  kind: "session"
+  start: number
+  end: number
+  display: string
+  sessionId: string
+}
+
+type DraftPasteComposerReference = {
+  id: string
+  kind: "paste"
+  start: number
+  end: number
+  display: string
+  text: string
+  characterCount: number
+  index: number
+}
+
+/** Add image and skill branches here as durable Composer sidecars gain ownership. */
+export type DraftComposerReference = DraftSessionComposerReference | DraftPasteComposerReference
+export type DraftComposerDocument = { text: string; references: DraftComposerReference[] }
+
+export const DRAFT_COMPOSER_REFERENCE_LIMITS = {
+  referenceCount: 1_000,
+  idLength: 512,
+  displayLength: 512,
+  sessionIDLength: 128,
+  pastePayloadLength: 100_000,
+  totalPastePayloadLength: 200_000,
+} as const
+
 export type DraftRecord = {
   version: 1
   key: DraftKey
@@ -103,6 +138,8 @@ export type DraftRecord = {
   attachments: DraftAttachmentMetadata[]
   syntheticParts: DraftSyntheticPart[]
   mentions: DraftMention[]
+  /** v1 records without this field remain durable and hydrate as an empty sidecar. */
+  composerReferences?: DraftComposerReference[]
 }
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -116,6 +153,37 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]): b
 const isString = (value: unknown): value is string => typeof value === "string" && value.length > 0
 const isStringValue = (value: unknown): value is string => typeof value === "string"
 const isNonNegativeInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+const isBoundedString = (value: unknown, maximum: number): value is string => typeof value === "string" && value.length > 0 && value.length <= maximum
+
+export const isValidDraftComposerSessionID = (value: unknown): value is string => isBoundedString(value, DRAFT_COMPOSER_REFERENCE_LIMITS.sessionIDLength) && /^[A-Za-z0-9_-]+$/.test(value)
+
+const parseComposerReference = (value: unknown): DraftComposerReference | undefined => {
+  if (!isPlainObject(value) || !isBoundedString(value.id, DRAFT_COMPOSER_REFERENCE_LIMITS.idLength) || !isBoundedString(value.display, DRAFT_COMPOSER_REFERENCE_LIMITS.displayLength) || !isNonNegativeInteger(value.start) || !isNonNegativeInteger(value.end) || value.end <= value.start) return undefined
+  if (value.kind === "session" && hasOnlyKeys(value, ["id", "kind", "start", "end", "display", "sessionId"]) && isValidDraftComposerSessionID(value.sessionId)) return { id: value.id, kind: "session", start: value.start, end: value.end, display: value.display, sessionId: value.sessionId }
+  if (value.kind === "paste" && hasOnlyKeys(value, ["id", "kind", "start", "end", "display", "text", "characterCount", "index"]) && typeof value.text === "string" && value.text.length <= DRAFT_COMPOSER_REFERENCE_LIMITS.pastePayloadLength && isNonNegativeInteger(value.characterCount) && value.characterCount === countUnicodeCodePoints(value.text) && isNonNegativeInteger(value.index) && value.index >= 1) return { id: value.id, kind: "paste", start: value.start, end: value.end, display: value.display, text: value.text, characterCount: value.characterCount, index: value.index }
+  return undefined
+}
+
+/** Parses one complete durable sidecar. A rejected reference rejects the document. */
+export const parseDraftComposerDocument = (text: string, value: unknown): DraftComposerDocument | undefined => {
+  if (!Array.isArray(value) || value.length > DRAFT_COMPOSER_REFERENCE_LIMITS.referenceCount) return undefined
+  const references = value.map(parseComposerReference)
+  if (!references.every(Boolean)) return undefined
+  const parsed = references as DraftComposerReference[]
+  const ids = new Set<string>()
+  let previousEnd = 0
+  let totalPastePayloadLength = 0
+  for (const reference of parsed) {
+    if (ids.has(reference.id) || reference.start < previousEnd || reference.end > text.length || text.slice(reference.start, reference.end) !== reference.display) return undefined
+    ids.add(reference.id)
+    previousEnd = reference.end
+    if (reference.kind === "paste") {
+      totalPastePayloadLength += reference.text.length
+      if (totalPastePayloadLength > DRAFT_COMPOSER_REFERENCE_LIMITS.totalPastePayloadLength) return undefined
+    }
+  }
+  return { text, references: parsed }
+}
 
 const isSafeValue = (value: unknown, seen: Set<object>): boolean => {
   if (value === null || ["string", "number", "boolean", "undefined"].includes(typeof value)) return true
@@ -175,7 +243,7 @@ const parseMention = (value: unknown, text: string): DraftMention | undefined =>
 }
 
 export const parseDraftRecord = (value: unknown): DraftRecord | undefined => {
-  if (!isSafeValue(value, new Set()) || !isPlainObject(value) || !hasOnlyKeys(value, ["version", "key", "revision", "text", "attachments", "syntheticParts", "mentions"]) || value.version !== 1 || !isNonNegativeInteger(value.revision) || value.revision < 1 || typeof value.text !== "string" || !Array.isArray(value.attachments) || !Array.isArray(value.syntheticParts) || !Array.isArray(value.mentions)) return undefined
+  if (!isSafeValue(value, new Set()) || !isPlainObject(value) || !hasOnlyKeys(value, ["version", "key", "revision", "text", "attachments", "syntheticParts", "mentions", "composerReferences"]) || value.version !== 1 || !isNonNegativeInteger(value.revision) || value.revision < 1 || typeof value.text !== "string" || !Array.isArray(value.attachments) || !Array.isArray(value.syntheticParts) || !Array.isArray(value.mentions)) return undefined
   const text = value.text
   const key = parseKey(value.key)
   const attachments = value.attachments.map((attachment) => parseAttachment(attachment))
@@ -187,7 +255,8 @@ export const parseDraftRecord = (value: unknown): DraftRecord | undefined => {
     return partAttachments.every(Boolean) ? { partID, text: partText, attachments: partAttachments as DraftAttachmentMetadata[], ...(part.synthetic === undefined ? {} : { synthetic: part.synthetic }) } : undefined
   })
   const mentions = value.mentions.map((mention) => parseMention(mention, text))
-  if (!key || !attachments.every(Boolean) || !syntheticParts.every(Boolean) || !mentions.every(Boolean)) return undefined
+  const composerDocument = value.composerReferences === undefined ? { text, references: [] } : parseDraftComposerDocument(text, value.composerReferences)
+  if (!key || !attachments.every(Boolean) || !syntheticParts.every(Boolean) || !mentions.every(Boolean) || !composerDocument) return undefined
   const parsedAttachments = attachments as DraftAttachmentMetadata[]
   const parsedParts = syntheticParts as DraftSyntheticPart[]
   const attachmentRefIDs = new Set<string>()
@@ -196,7 +265,7 @@ export const parseDraftRecord = (value: unknown): DraftRecord | undefined => {
     attachmentRefIDs.add(attachment.attachmentRefID)
   }
   if (new Set(parsedParts.map((part) => part.partID)).size !== parsedParts.length) return undefined
-  return { version: 1, key, revision: value.revision, text, attachments: parsedAttachments, syntheticParts: parsedParts, mentions: mentions as DraftMention[] }
+  return { version: 1, key, revision: value.revision, text, attachments: parsedAttachments, syntheticParts: parsedParts, mentions: mentions as DraftMention[], ...(value.composerReferences === undefined ? {} : { composerReferences: composerDocument.references }) }
 }
 
 export const cloneDraftRecord = (record: DraftRecord): DraftRecord | undefined => parseDraftRecord(record)

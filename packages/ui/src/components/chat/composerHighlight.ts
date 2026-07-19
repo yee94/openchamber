@@ -106,12 +106,12 @@ const STYLE_PRIORITY: Record<AnyStyle, number> = {
 
 // Paint-only styles — never anything that affects layout.
 const STYLE_CLASS: Record<AnyStyle, string> = {
-    mentionFile: 'text-[var(--status-info)]',
-    mentionAgent: 'text-[var(--status-success)]',
-    mentionSession: 'relative inline-block text-transparent',
+    mentionFile: 'text-[var(--primary)]',
+    mentionAgent: 'text-[var(--primary)]',
+    mentionSession: 'text-[var(--primary)]',
     mentionCommand: 'text-[var(--primary)]',
-    mentionSnippet: 'text-[var(--status-warning)]',
-    mentionPaste: 'text-[var(--status-info)]',
+    mentionSnippet: 'text-[var(--primary)]',
+    mentionPaste: 'text-[var(--primary)]',
     code: 'rounded-[3px] bg-[var(--surface-subtle)] text-[var(--markdown-inline-code)]',
     codeFence: 'bg-[var(--surface-subtle)] text-[var(--markdown-inline-code)]',
     link: 'text-[var(--status-info)] underline',

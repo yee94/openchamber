@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { cloneDraftRecord, draftAttachmentRefID, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDraftRecordPersistable, newSessionDraftKey, parseDraftRecord, sessionDraftKey, type DraftRecord } from "./input-draft-types"
+import { cloneDraftRecord, DRAFT_COMPOSER_REFERENCE_LIMITS, draftAttachmentRefID, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDraftRecordPersistable, newSessionDraftKey, parseDraftRecord, sessionDraftKey, type DraftRecord } from "./input-draft-types"
 
 const record = (): DraftRecord => ({
   version: 1,
@@ -105,5 +105,33 @@ describe("input draft types", () => {
     expect(parseDraftRecord(invalidVscodeSource)).toBe(undefined)
     expect(parseDraftRecord(missingVscodeFields)).toBe(undefined)
     expect(parseDraftRecord(missingServerPath)).toBe(undefined)
+  })
+
+  test("keeps old records readable and round-trips session and paste sidecars", () => {
+    const legacy = record()
+    const document = record()
+    document.text = "@Session [Paste]"
+    document.composerReferences = [
+      { id: "session-1", kind: "session", sessionId: "ses_1", start: 0, end: 8, display: "@Session" },
+      { id: "paste-1", kind: "paste", text: "😀x", characterCount: 2, index: 1, start: 9, end: 16, display: "[Paste]" },
+    ]
+    expect(parseDraftRecord(legacy)?.composerReferences).toBe(undefined)
+    expect(cloneDraftRecord(document)).toEqual(document)
+  })
+
+  test("rejects invalid durable composer sidecars as a complete record", () => {
+    const document = record()
+    document.text = "@one @two"
+    document.composerReferences = [
+      { id: "same", kind: "session", sessionId: "ses_1", start: 0, end: 4, display: "@one" },
+      { id: "same", kind: "session", sessionId: "ses_2", start: 3, end: 8, display: "e @tw" },
+    ]
+    expect(parseDraftRecord(document)).toBe(undefined)
+    document.composerReferences = [{ id: "bad-session", kind: "session", sessionId: "bad id", start: 0, end: 4, display: "@one" }]
+    expect(parseDraftRecord(document)).toBe(undefined)
+    document.text = "[a][b][c]"
+    document.composerReferences = Array.from({ length: 3 }, (_, index) => ({ id: `paste-${index}`, kind: "paste" as const, text: "x".repeat(80_000), characterCount: 80_000, index: index + 1, start: index * 3, end: index * 3 + 3, display: `[${String.fromCharCode(97 + index)}]` }))
+    expect(parseDraftRecord(document)).toBe(undefined)
+    expect(DRAFT_COMPOSER_REFERENCE_LIMITS.totalPastePayloadLength).toBeGreaterThan(0)
   })
 })

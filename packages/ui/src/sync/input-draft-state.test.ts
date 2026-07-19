@@ -76,12 +76,13 @@ describe("keyed input draft state", () => {
     await hydrated
     store.getState().setDraftText(key("runtime"), "one")
     store.getState().setDraftText(key("runtime"), "two")
+    const flushed = store.getState().flushDraftPersistence()
     await tick()
     pending[0]({ ok: true, value: undefined })
-    await tick()
+    await flushed
     expect(store.getState().draftPersistence[draftKeyString(key("runtime"))]?.status).toBe("saved")
     for (const resolve of pending.slice(1)) resolve({ ok: true, value: undefined })
-    await tick()
+    await store.getState().flushDraftPersistence()
     expect(store.getState().draftPersistence[draftKeyString(key("runtime"))]?.status).toBe("saved")
 
     const storage = new MemoryStorage()
@@ -89,7 +90,7 @@ describe("keyed input draft state", () => {
     await quotaStore.getState().hydrateDraftMetadata("quota")
     storage.quota = true
     quotaStore.getState().setDraftText(key("quota"), "editable")
-    await tick()
+    await quotaStore.getState().flushDraftPersistence()
     expect(quotaStore.getState().getDraft(key("quota"))?.text).toBe("editable")
     expect(quotaStore.getState().draftPersistence[draftKeyString(key("quota"))]?.errorCode).toBe("quota")
   })
@@ -128,6 +129,78 @@ describe("keyed input draft state", () => {
     const blob = { ...attachment, attachmentID: "blob", attachmentRefID: '["root","blob"]', locator: { kind: "blob" as const, blobID: "blob" } }
     store.getState().setDraftAttachments(draftKey, [blob])
     expect(store.getState().moveDraft(draftKey, key("runtime", "destination"))).toBe(undefined)
+  })
+
+  test("commits composer documents atomically, clears them for plain text, and preserves them through ownership finalization", async () => {
+    const storage = new MemoryStorage()
+    const store = createInputStore({ sink: createInputDraftMetadataStorageSink(storage as unknown as Storage), blobStore: blobStore(), runtimeCapture: () => ({ transportIdentity: "runtime", generation: 1 }) })
+    await store.getState().hydrateDraftMetadata("runtime")
+    const source = { transportIdentity: "runtime", owner: { kind: "draft" as const, ownerID: "new" } }
+    const destination = key("runtime", "session")
+    store.getState().ensureDraft(source)
+    const committed = store.getState().setDraftComposerDocument(source, { text: "@Session", references: [{ id: "s", kind: "session", sessionId: "ses_1", start: 0, end: 8, display: "@Session" }] })
+    expect(committed?.revision).toBe(2)
+    expect(committed?.composerReferences).toHaveLength(1)
+    const finalized = await store.getState().finalizeDraftOwnership({ source, destination, expectedSourceRevision: 2, disposition: "preserve", runtime: store.getState().captureDraftRuntime() })
+    expect(finalized.destination?.composerReferences).toHaveLength(1)
+    expect(store.getState().setDraftText(destination, "plain").composerReferences).toEqual([])
+  })
+
+  test("coalesces a 200k Paste document burst into one latest durable snapshot", async () => {
+    const snapshots: unknown[] = []
+    const coordinator: InputDraftMetadataPersistenceCoordinator = { persist: async (snapshot) => { snapshots.push(snapshot); return { ok: true, value: undefined } } }
+    const store = createInputStore({ coordinator, sink: createInputDraftMetadataStorageSink(new MemoryStorage() as unknown as Storage), blobStore: blobStore(), runtimeCapture: () => ({ transportIdentity: "runtime", generation: 1 }) })
+    await store.getState().hydrateDraftMetadata("runtime")
+    const baseline = snapshots.length
+    const payload = "x".repeat(100_000)
+    const draft = key("runtime", "paste")
+    for (let index = 0; index < 20; index += 1) {
+      const first = "@Paste 1"
+      const second = "@Paste 2"
+      const text = `${first} ${second}${index}`
+      store.getState().setDraftComposerState(draft, {
+        document: {
+          text,
+          references: [
+            { id: "first", kind: "paste", display: first, start: 0, end: first.length, text: payload, characterCount: payload.length, index: 1 },
+            { id: "second", kind: "paste", display: second, start: first.length + 1, end: first.length + 1 + second.length, text: payload, characterCount: payload.length, index: 2 },
+          ],
+        },
+        mentions: [],
+      })
+    }
+    expect(snapshots).toHaveLength(baseline)
+    await store.getState().flushDraftPersistence()
+    expect(snapshots).toHaveLength(baseline + 1)
+    expect(store.getState().getDraft(draft)?.text).toBe("@Paste 1 @Paste 219")
+    expect(store.getState().getDraft(draft)?.composerReferences?.[1]).toEqual({ id: "second", kind: "paste", display: "@Paste 2", start: 9, end: 17, text: payload, characterCount: payload.length, index: 2 })
+  })
+
+  test("commits composer documents and file mentions in one revision", () => {
+    const store = createInputStore({ persistenceEnabled: false })
+    const draft = key("runtime")
+    const mention = { kind: "file" as const, value: "src/a.ts", path: "src/a.ts", label: "src/a.ts", range: { start: 0, end: 9 } }
+    const committed = store.getState().setDraftComposerState(draft, { document: { text: "@src/a.ts", references: [] }, mentions: [mention] })
+    expect(committed?.revision).toBe(2)
+    expect(committed?.mentions).toEqual([mention])
+    expect(store.getState().setDraftComposerState(draft, { document: { text: "plain", references: [] }, mentions: [{ ...mention, range: { start: 0, end: 99 } }] })).toBe(undefined)
+  })
+
+  test("keeps composer sidecars in memory after persistence failure and isolates keys", async () => {
+    const storage = new MemoryStorage()
+    const store = createInputStore({ sink: createInputDraftMetadataStorageSink(storage as unknown as Storage), blobStore: blobStore(), runtimeCapture: () => ({ transportIdentity: "runtime-a", generation: 1 }) })
+    await store.getState().hydrateDraftMetadata("runtime-a")
+    storage.quota = true
+    const first = key("runtime-a", "one")
+    const second = key("runtime-a", "two")
+    const firstDocument = { text: "@One", references: [{ id: "one", kind: "session" as const, sessionId: "ses_1", start: 0, end: 4, display: "@One" }] }
+    const secondDocument = { text: "@Two", references: [{ id: "two", kind: "session" as const, sessionId: "ses_2", start: 0, end: 4, display: "@Two" }] }
+    store.getState().setDraftComposerDocument(first, firstDocument)
+    store.getState().setDraftComposerDocument(second, secondDocument)
+    await store.getState().flushDraftPersistence()
+    expect(store.getState().getDraft(first)?.composerReferences).toEqual(firstDocument.references)
+    expect(store.getState().getDraft(second)?.composerReferences).toEqual(secondDocument.references)
+    expect(store.getState().draftPersistence[draftKeyString(first)]?.status).toBe("error")
   })
 
   test("keeps local revision 2 edit ahead of a slow disk revision 100 hydrate", async () => {

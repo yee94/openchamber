@@ -8,15 +8,6 @@ type SessionMentionRange = {
     id: string;
 };
 
-export type SessionMentionContext = {
-    id: string;
-    title: string;
-    messages: Array<{
-        role: string;
-        text: string;
-    }>;
-};
-
 export const getSessionMentionToken = (sessionId: string): string => `session:${sessionId}`;
 
 export const findSessionMentionRanges = (text: string): SessionMentionRange[] => {
@@ -74,73 +65,6 @@ export const resolveSessionMentionDeletion = (
         text: `${text.slice(0, range.start)}${text.slice(removeEnd)}`,
         caret: range.start,
     };
-};
-
-export const buildSessionMentionInstruction = (
-    contexts: SessionMentionContext[],
-    maxChars = 36_000,
-): string | null => {
-    if (contexts.length === 0) return null;
-
-    const prefix = 'The user explicitly referenced these loaded OpenCode sessions. Use their conversation content as context for this request. Some content may be omitted to fit the context limit.\n';
-    const payloadBudget = maxChars - prefix.length;
-    if (payloadBudget < 2) return prefix.slice(0, maxChars);
-
-    const separatorsLength = contexts.length + 1;
-    const contextBudget = Math.max(2, Math.floor((payloadBudget - separatorsLength) / contexts.length));
-    const payloads = contexts.map((context) => {
-        const fitted: SessionMentionContext = {
-            id: context.id,
-            title: context.title,
-            messages: [],
-        };
-
-        if (JSON.stringify(fitted).length > contextBudget) {
-            let low = 0;
-            let high = fitted.title.length;
-            let fittedTitle = '';
-            while (low <= high) {
-                const middle = Math.floor((low + high) / 2);
-                const candidateTitle = `${fitted.title.slice(0, middle)}...`;
-                if (JSON.stringify({ ...fitted, title: candidateTitle }).length <= contextBudget) {
-                    fittedTitle = candidateTitle;
-                    low = middle + 1;
-                } else {
-                    high = middle - 1;
-                }
-            }
-            fitted.title = fittedTitle;
-        }
-
-        for (const message of context.messages) {
-            const nextMessages = [...fitted.messages, message];
-            if (JSON.stringify({ ...fitted, messages: nextMessages }).length <= contextBudget) {
-                fitted.messages = nextMessages;
-                continue;
-            }
-
-            let low = 0;
-            let high = message.text.length;
-            let truncatedText = '';
-            while (low <= high) {
-                const middle = Math.floor((low + high) / 2);
-                const candidateText = `${message.text.slice(0, middle)}\n[Message truncated]`;
-                const candidate = { ...fitted, messages: [...fitted.messages, { ...message, text: candidateText }] };
-                if (JSON.stringify(candidate).length <= contextBudget) {
-                    truncatedText = candidateText;
-                    low = middle + 1;
-                } else {
-                    high = middle - 1;
-                }
-            }
-            if (truncatedText) fitted.messages.push({ ...message, text: truncatedText });
-            break;
-        }
-
-        return JSON.stringify(fitted);
-    });
-    const instruction = `${prefix}[${payloads.join(',')}]`;
-    return instruction.slice(0, maxChars);
 };
 
 export const getFileMentionAutocompleteQuery = ({

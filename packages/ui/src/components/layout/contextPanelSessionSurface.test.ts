@@ -156,21 +156,21 @@ describe('context panel transcript state', () => {
 });
 
 describe('context panel session cache', () => {
-    test('enforces four mounted views and evicts by LRU order', () => {
+    test('enforces three mounted views and evicts by LRU order', () => {
         let state = emptyCache();
-        for (let index = 1; index <= 4; index += 1) state = touch(state, `tab-${index}`, `view-${index}`, index);
-        state = reduceContextPanelSessionCache(state, { type: 'activate', viewKey: 'view-1', now: 5 });
-        state = touch(state, 'tab-5', 'view-5', 6);
+        for (let index = 1; index <= 3; index += 1) state = touch(state, `tab-${index}`, `view-${index}`, index);
+        state = reduceContextPanelSessionCache(state, { type: 'activate', viewKey: 'view-1', now: 4 });
+        state = touch(state, 'tab-4', 'view-4', 5);
 
-        expect(Object.keys(state.mountedViews)).toHaveLength(4);
+        expect(Object.keys(state.mountedViews)).toHaveLength(3);
         expect(state.mountedViews['view-1']).toBeDefined();
         expect(state.mountedViews['view-2']).toBe(undefined);
     });
 
-    test('evicts inactive views directly by the 48 MiB byte limit while preserving active', () => {
+    test('evicts inactive views directly by the 32 MiB byte limit while preserving active', () => {
         let state = touch(touch(emptyCache(), 'tab-1', 'view-1', 1), 'tab-2', 'view-2', 2);
-        state = reduceContextPanelSessionCache(state, { type: 'estimate', viewKey: 'view-1', estimatedBytes: 30 * 1024 * 1024 });
-        state = reduceContextPanelSessionCache(state, { type: 'estimate', viewKey: 'view-2', estimatedBytes: 30 * 1024 * 1024 });
+        state = reduceContextPanelSessionCache(state, { type: 'estimate', viewKey: 'view-1', estimatedBytes: 20 * 1024 * 1024 });
+        state = reduceContextPanelSessionCache(state, { type: 'estimate', viewKey: 'view-2', estimatedBytes: 20 * 1024 * 1024 });
 
         expect(state.mountedViews['view-2']).toBeDefined();
         expect(state.mountedViews['view-1']).toBe(undefined);

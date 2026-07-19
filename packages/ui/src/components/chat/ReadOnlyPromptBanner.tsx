@@ -18,10 +18,17 @@ const ExecutionModelIcon: React.FC<{
     label: string;
 }> = ({ providerId, modelId, label }) => {
     return (
-        <span role="img" aria-label={label} className="relative inline-flex size-4 shrink-0 items-center justify-center">
-            <Icon name="brain-ai-3" className="size-4" />
-            <ModelLogo modelId={modelId} providerId={providerId} alt={label} className="absolute inset-0 size-4" />
-        </span>
+        <ModelLogo
+            modelId={modelId}
+            providerId={providerId}
+            alt={label}
+            className="size-4 shrink-0"
+            fallback={(
+                <span role="img" aria-label={label} className="inline-flex size-4 shrink-0 items-center justify-center">
+                    <Icon name="brain-ai-3" className="size-4" />
+                </span>
+            )}
+        />
     );
 };
 
@@ -39,7 +46,9 @@ export const ReadOnlyPromptBanner: React.FC<ReadOnlyPromptBannerProps> = (props)
     }
 
     const unavailable = t('common.unavailable');
-    const agentName = props.agentName || unavailable;
+    const agentName = props.agentName
+        ? props.agentName.charAt(0).toUpperCase() + props.agentName.slice(1)
+        : unavailable;
     const modelName = props.modelName || unavailable;
     const agentLabel = `${t('chat.leaderKey.action.agent')}: ${agentName}`;
     const modelLabel = `${t('chat.leaderKey.action.model')}: ${modelName}`;

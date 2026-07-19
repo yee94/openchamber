@@ -8,6 +8,7 @@ interface ModelLogoProps {
   alt?: string;
   className?: string;
   onError?: () => void;
+  fallback?: React.ReactNode;
 }
 
 /**
@@ -19,6 +20,7 @@ export const ModelLogo: React.FC<ModelLogoProps> = ({
   alt,
   className,
   onError: externalOnError,
+  fallback,
 }) => {
   const { src, onError: handleInternalError, hasLogo, brand } = useModelLogo(modelId, providerId);
 
@@ -28,7 +30,7 @@ export const ModelLogo: React.FC<ModelLogoProps> = ({
   }, [handleInternalError, externalOnError]);
 
   if (!hasLogo || !src) {
-    return null;
+    return <>{fallback ?? null}</>;
   }
 
   return (

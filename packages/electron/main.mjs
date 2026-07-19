@@ -2405,10 +2405,6 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
       log.warn(`[renderer:${browserWindow.__ocLabel}] ${message}`);
       return;
     }
-    if (message.includes('[queue-debug]')) {
-      log.info(`[renderer:${browserWindow.__ocLabel}] ${message}`);
-      return;
-    }
     if (isDev && message.includes('[session-load]')) {
       console.log(`[renderer:${browserWindow.__ocLabel}] ${message}`);
     }

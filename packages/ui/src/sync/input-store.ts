@@ -10,7 +10,8 @@ import { createUuid } from "@/lib/uuid"
 import { createDefaultInputDraftMetadataSink, createInputDraftMetadataPersistenceCoordinator, createInputDraftMetadataRepository, type InputDraftMetadataErrorCode, type InputDraftMetadataMigration, type InputDraftMetadataPersistenceCoordinator, type InputDraftMetadataRepository, type InputDraftMetadataSink, type LegacyInputDraft } from "./input-draft-metadata-store"
 import { createInputDraftBlobStore, type DraftBlobErrorCode, type InputDraftBlobStore } from "./input-draft-blob-store"
 import { createInputDraftDurabilityCoordinator, type InputDraftDurabilityCoordinator, type InputDraftDurabilityResult } from "./input-draft-durability-coordinator"
-import { cloneDraftRecord, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDurableURL, parseDraftRecord, type DraftAttachmentMetadata, type DraftKey, type DraftMention, type DraftRecord, type DraftSyntheticPart } from "./input-draft-types"
+import { cloneDraftRecord, draftKeyString, draftRootAttachmentOccurrenceRefID, draftSyntheticPartAttachmentOccurrenceRefID, isDurableURL, parseDraftRecord, type DraftAttachmentMetadata, type DraftComposerDocument, type DraftKey, type DraftMention, type DraftRecord, type DraftSyntheticPart } from "./input-draft-types"
+import { parseLegacyDraftComposerDocument } from "./input-draft-composer-parser"
 
 const FILE_URI_PREFIX = "file://"
 const encodeFilePath = (filepath: string): string => {
@@ -104,7 +105,7 @@ export type DraftCommitResult = {
   durable: boolean
 }
 export type DraftOwnershipCommitResult = Omit<DraftCommitResult, "record"> & { source?: DraftRecord; destination?: DraftRecord }
-export type DraftSnapshot = Pick<DraftRecord, "text" | "attachments" | "syntheticParts" | "mentions">
+export type DraftSnapshot = Pick<DraftRecord, "text" | "attachments" | "syntheticParts" | "mentions" | "composerReferences">
 export type DraftCommitInput = { key: DraftKey; expectedRevision: number | "absent"; snapshot: DraftSnapshot; values?: ReadonlyMap<string, Blob | string>; runtime: InputDraftRuntimeCapture }
 export type InputDraftServices = {
   sink?: InputDraftMetadataSink
@@ -151,6 +152,8 @@ export type InputState = {
   ensureDraft: (key: DraftKey) => DraftRecord
   getDraft: (key: DraftKey) => DraftRecord | undefined
   setDraftText: (key: DraftKey, text: string) => DraftRecord
+  setDraftComposerState: (key: DraftKey, state: { document: DraftComposerDocument; mentions: DraftMention[] }) => DraftRecord | undefined
+  setDraftComposerDocument: (key: DraftKey, document: DraftComposerDocument) => DraftRecord | undefined
   replaceDraft: (key: DraftKey, expectedRevision: number, record: Omit<DraftRecord, "key" | "revision" | "version">) => DraftRecord | undefined
   setDraftMentions: (key: DraftKey, mentions: DraftMention[]) => DraftRecord | undefined
   addDraftMention: (key: DraftKey, mention: DraftMention) => DraftRecord | undefined
@@ -217,6 +220,9 @@ export const createInputStore = (services: InputDraftServices = {}) => {
   const attachmentHydrateEpoch = new Map<string, number>()
   const attachmentHydrationTasks = new Map<string, Promise<void>>()
   const pendingPersists = new Set<Promise<InputDraftDurabilityResult>>()
+  const deferredComposerPersistIDs = new Set<string>()
+  let deferredComposerPersistTimer: ReturnType<typeof setTimeout> | undefined
+  let deferredComposerPersistRuntime: InputDraftRuntimeCapture | undefined
   let persistenceGeneration = 0
   let legacyEpoch = 0
   let legacyNewClaimed = false
@@ -258,11 +264,17 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       if (error?.phase === "metadata") return error.error.code
       return error?.phase === "blob" && ["blob-id-conflict", "database-unavailable", "invalid-value", "missing-blob", "quota-exceeded", "transaction-aborted", "transaction-failed"].includes(error.error.code) ? error.error.code as DraftBlobErrorCode : "unavailable"
     }
-    const persist = (touchedIDs: Iterable<string>): Promise<InputDraftDurabilityResult> => {
+    const persist = (touchedIDs: Iterable<string>, capturedRuntime?: InputDraftRuntimeCapture): Promise<InputDraftDurabilityResult> => {
       const current = get()
       const generation = persistenceGeneration
-      const runtime = runtimeCapture()
+      const runtime = capturedRuntime ?? runtimeCapture()
       const ids = [...new Set(touchedIDs)]
+      ids.forEach((id) => deferredComposerPersistIDs.delete(id))
+      if (deferredComposerPersistTimer && deferredComposerPersistIDs.size === 0) {
+        clearTimeout(deferredComposerPersistTimer)
+        deferredComposerPersistTimer = undefined
+        deferredComposerPersistRuntime = undefined
+      }
       if (!current.persistenceEnabled) {
         ids.forEach((id) => dirtyKeys.add(id))
         return Promise.resolve({ status: "disabled", keys: ids, errors: [], cleanupErrors: [] })
@@ -319,7 +331,45 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       void task.then(() => pendingPersists.delete(task), () => pendingPersists.delete(task))
       return task
     }
-    const mutate = (key: DraftKey, change: (record: DraftRecord) => DraftRecord, expectedRevision?: number): DraftRecord | undefined => {
+    const markComposerPersistSaving = (ids: readonly string[]): void => {
+      const state = get()
+      const saving = Object.fromEntries(ids.flatMap((id) => {
+        const record = state.drafts[id]
+        return record ? [[id, { status: "saving" as const, revision: record.revision }]] : []
+      }))
+      if (Object.keys(saving).length) set((current) => ({ draftPersistence: { ...current.draftPersistence, ...saving } }))
+    }
+    const flushDeferredComposerPersists = (): Promise<void> => {
+      if (deferredComposerPersistTimer) clearTimeout(deferredComposerPersistTimer)
+      deferredComposerPersistTimer = undefined
+      const ids = [...deferredComposerPersistIDs]
+      deferredComposerPersistIDs.clear()
+      const runtime = deferredComposerPersistRuntime
+      deferredComposerPersistRuntime = undefined
+      return ids.length ? persist(ids, runtime).then(() => undefined) : Promise.resolve()
+    }
+    const scheduleComposerPersist = (id: string): void => {
+      if (!get().persistenceEnabled) {
+        dirtyKeys.add(id)
+        return
+      }
+      deferredComposerPersistIDs.add(id)
+      markComposerPersistSaving([id])
+      if (deferredComposerPersistTimer) return
+      deferredComposerPersistRuntime = runtimeCapture()
+      deferredComposerPersistTimer = setTimeout(() => { void flushDeferredComposerPersists() }, 40)
+    }
+    const persistImmediate = (ids: Iterable<string>): Promise<InputDraftDurabilityResult> => {
+      const values = [...ids]
+      values.forEach((id) => deferredComposerPersistIDs.delete(id))
+      if (deferredComposerPersistTimer && deferredComposerPersistIDs.size === 0) {
+        clearTimeout(deferredComposerPersistTimer)
+        deferredComposerPersistTimer = undefined
+        deferredComposerPersistRuntime = undefined
+      }
+      return persist(values)
+    }
+    const mutate = (key: DraftKey, change: (record: DraftRecord) => DraftRecord, expectedRevision?: number, persistence: "immediate" | "deferred" = "immediate"): DraftRecord | undefined => {
       const id = draftKeyString(key)
       const existing = get().drafts[id]
       if (!existing || (expectedRevision !== undefined && existing.revision !== expectedRevision)) return undefined
@@ -327,7 +377,8 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       if (!next || draftKeyString(next.key) !== id) return undefined
       bump(id)
       set((state) => ({ drafts: { ...state.drafts, [id]: next }, ...pruneAttachmentState(state, id, next) }))
-      persist([id])
+      if (persistence === "deferred") scheduleComposerPersist(id)
+      else persistImmediate([id])
       return next
     }
     const cloneRecord = (record: DraftRecord | undefined): DraftRecord | undefined => record ? cloneDraftRecord(record) : undefined
@@ -493,6 +544,7 @@ export const createInputStore = (services: InputDraftServices = {}) => {
     return ownershipResult(committed ? "committed" : "stale", result, source, destinationRecord, committed, true)
   },
   flushDraftPersistence: async () => {
+    await flushDeferredComposerPersists()
     while (pendingPersists.size) await Promise.all([...pendingPersists])
     await durability.flush()
   },
@@ -504,15 +556,23 @@ export const createInputStore = (services: InputDraftServices = {}) => {
     if (!record) throw new Error("Invalid empty draft")
     bump(id)
     set((state) => ({ drafts: { ...state.drafts, [id]: record } }))
-    persist([id])
+    persistImmediate([id])
     return record
   },
   getDraft: (key) => get().drafts[draftKeyString(key)],
   setDraftText: (key, text) => {
     const current = get().getDraft(key) ?? get().ensureDraft(key)
-    return mutate(key, (record) => ({ ...record, revision: record.revision + 1, text, mentions: record.mentions.filter((mention) => mention.range.end <= text.length && text.slice(mention.range.start, mention.range.end) === `@${mention.value}`) }), current.revision) ?? current
+    return mutate(key, (record) => ({ ...record, revision: record.revision + 1, text, mentions: record.mentions.filter((mention) => mention.range.end <= text.length && text.slice(mention.range.start, mention.range.end) === `@${mention.value}`), composerReferences: [] }), current.revision, "deferred") ?? current
   },
-  replaceDraft: (key, expectedRevision, record) => mutate(key, (current) => ({ version: 1, key: current.key, revision: current.revision + 1, text: record.text, attachments: record.attachments, syntheticParts: record.syntheticParts, mentions: record.mentions }), expectedRevision),
+  setDraftComposerDocument: (key, document) => {
+    const current = get().getDraft(key) ?? get().ensureDraft(key)
+    return get().setDraftComposerState(key, { document, mentions: current.mentions })
+  },
+  setDraftComposerState: (key, state) => {
+    const current = get().getDraft(key) ?? get().ensureDraft(key)
+    return mutate(key, (record) => ({ ...record, revision: record.revision + 1, text: state.document.text, composerReferences: state.document.references, mentions: state.mentions }), current.revision, "deferred")
+  },
+  replaceDraft: (key, expectedRevision, record) => mutate(key, (current) => ({ version: 1, key: current.key, revision: current.revision + 1, text: record.text, attachments: record.attachments, syntheticParts: record.syntheticParts, mentions: record.mentions, ...(record.composerReferences === undefined ? {} : { composerReferences: record.composerReferences }) }), expectedRevision),
   setDraftMentions: (key, mentions) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, mentions })),
   addDraftMention: (key, mention) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, mentions: [...record.mentions, mention] })),
   removeDraftMention: (key, value) => mutate(key, (record) => ({ ...record, revision: record.revision + 1, mentions: record.mentions.filter((mention) => mention.value !== value) })),
@@ -735,6 +795,10 @@ export const createInputStore = (services: InputDraftServices = {}) => {
   setDraftPersistenceEnabled: async (enabled) => {
     persistenceGeneration += 1
     if (!enabled) {
+      if (deferredComposerPersistTimer) clearTimeout(deferredComposerPersistTimer)
+      deferredComposerPersistTimer = undefined
+      deferredComposerPersistIDs.clear()
+      deferredComposerPersistRuntime = undefined
       set({ persistenceEnabled: false, draftPersistence: {} })
       await durability.setEnabled(false)
       await durability.flush()
@@ -801,7 +865,8 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       for (const [suffix, entry] of Object.entries(entries)) {
         const key: DraftKey = { transportIdentity, owner: { kind: "session", ownerID: suffix } }
         const id = draftKeyString(key)
-        const record = valid({ ...emptyDraft(key), text: entry.text, mentions: legacyMentions(entry.text, entry.mentions) })
+        const document = parseLegacyDraftComposerDocument(entry.text)
+        const record = valid({ ...emptyDraft(key), text: document.text, composerReferences: document.references, mentions: legacyMentions(document.text, entry.mentions) })
         if (record && !drafts[id] && !tombstones[id] && (keyEpoch.get(id) ?? 0) === (startEpochs.get(id) ?? 0)) drafts[id] = record
         delete entries[suffix]
         touched.add(id)
@@ -826,7 +891,8 @@ export const createInputStore = (services: InputDraftServices = {}) => {
       persist([id])
       return current
     }
-    const record = valid({ ...emptyDraft(key), text: entry.text, mentions: legacyMentions(entry.text, entry.mentions) })
+    const document = parseLegacyDraftComposerDocument(entry.text)
+    const record = valid({ ...emptyDraft(key), text: document.text, composerReferences: document.references, mentions: legacyMentions(document.text, entry.mentions) })
     if (!record) return undefined
     bump(id)
     set((state) => ({ drafts: { ...state.drafts, [id]: record }, legacyNewDraft: undefined }))

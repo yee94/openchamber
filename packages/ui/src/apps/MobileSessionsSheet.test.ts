@@ -1,6 +1,57 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getMobileSessionPageSize } from './mobileSessionPagination';
+import { getMobileSessionPageSize, mergeMobileWorktreeRefreshResults } from './mobileSessionPagination';
+import type { WorktreeMetadata } from '@/types/worktree';
+
+const worktree = (path: string): WorktreeMetadata => ({
+  path,
+  projectDirectory: path.split('/').slice(0, -1).join('/'),
+  branch: path,
+  name: path,
+  label: path,
+});
+
+describe('MobileSessionsSheet worktree refresh', () => {
+  test('uses the shared cache immediately before refresh results arrive', () => {
+    const previous = new Map([['/project', [worktree('/project/feature')]]]);
+    const next = mergeMobileWorktreeRefreshResults(previous, new Set(['/project']), []);
+
+    expect(next).toBe(previous);
+    expect(next.get('/project')).toEqual([worktree('/project/feature')]);
+  });
+
+  test('clears a project after a successful empty worktree result', () => {
+    const previous = new Map([['/project', [worktree('/project/feature')]]]);
+    const next = mergeMobileWorktreeRefreshResults(previous, new Set(['/project']), [
+      { path: '/project', status: 'success', worktrees: [] },
+    ]);
+
+    expect(next.get('/project')).toEqual([]);
+  });
+
+  test('preserves a project worktrees after a refresh failure', () => {
+    const previous = new Map([['/project', [worktree('/project/feature')]]]);
+    const next = mergeMobileWorktreeRefreshResults(previous, new Set(['/project']), [
+      { path: '/project', status: 'failed' },
+    ]);
+
+    expect(next).toBe(previous);
+  });
+
+  test('commits successful projects while retaining a failed project', () => {
+    const previous = new Map([
+      ['/failed', [worktree('/failed/feature')]],
+      ['/success', [worktree('/success/old')]],
+    ]);
+    const next = mergeMobileWorktreeRefreshResults(previous, new Set(['/failed', '/success']), [
+      { path: '/failed', status: 'failed' },
+      { path: '/success', status: 'success', worktrees: [worktree('/success/new')] },
+    ]);
+
+    expect(next.get('/failed')).toEqual([worktree('/failed/feature')]);
+    expect(next.get('/success')).toEqual([worktree('/success/new')]);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Test the core stop logic that MobileSessionsSheet uses without requiring

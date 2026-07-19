@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { legacyQueueScope, useMessageQueueStore, type QueueScope } from '@/stores/messageQueueStore';
+import { legacyQueueScope, useMessageQueueStore, type QueueItem, type QueueScope } from '@/stores/messageQueueStore';
 import { canSendQueuedMessage, mergeQueuedMessageScopes, popQueuedMessageForEdit } from './queuedMessageChipsState';
 
 const scope: Extract<QueueScope, { state: 'bound' }> = {
@@ -7,6 +7,11 @@ const scope: Extract<QueueScope, { state: 'bound' }> = {
     transportIdentity: 'runtime-a',
     directory: '/project',
     sessionID: 'session-a',
+};
+const add = (target: QueueScope, content: string): QueueItem => {
+    const result = useMessageQueueStore.getState().addToQueue(target, { content });
+    if (!result.ok) throw new Error(result.reason);
+    return result.item;
 };
 
 describe('QueuedMessageChips production queue boundary', () => {
@@ -17,8 +22,8 @@ describe('QueuedMessageChips production queue boundary', () => {
     test('merges a visible legacy row before bound rows and edits from its owner scope', () => {
         const actions = useMessageQueueStore.getState();
         const legacyScope = legacyQueueScope(scope.sessionID);
-        const legacy = actions.addToQueue(legacyScope, { content: 'legacy' });
-        const bound = actions.addToQueue(scope, { content: 'bound' });
+        const legacy = add(legacyScope, 'legacy');
+        const bound = add(scope, 'bound');
         const visible = mergeQueuedMessageScopes(
             actions.getQueueForScope(legacyScope),
             actions.getQueueForScope(scope),
@@ -30,7 +35,7 @@ describe('QueuedMessageChips production queue boundary', () => {
         expect(actions.getQueueForScope(scope)).toEqual([bound]);
     });
     test('enables Send for each recoverable row and disables all rows for a visible dispatch lock', () => {
-        const item = useMessageQueueStore.getState().addToQueue(scope, { content: 'queued' });
+        const item = add(scope, 'queued');
         expect(canSendQueuedMessage(item, false)).toBe(true);
         expect(canSendQueuedMessage({ ...item, status: 'retrying' }, false)).toBe(true);
         expect(canSendQueuedMessage({ ...item, status: 'failed' }, false)).toBe(true);

@@ -5,20 +5,13 @@ type Harness = ReturnType<typeof createHarness>;
 
 const createHarness = () => {
     let message = '/compact';
-    let persisted = '/compact';
-    let timerActive = true;
     const attachments = ['file.txt'];
     const inlineDrafts = ['comment'];
     const messageRef = { current: message };
     const consume = () => consumeImmediateCommandText({
         currentSessionId: 'source',
-        cancelDraftPersist: () => { timerActive = false; },
         messageRef,
-        setMessage: (next) => { message = next; },
-        persistDraftImmediately: (sessionId, draft) => {
-            expect(sessionId).toBe('source');
-            persisted = draft;
-        },
+        replacePlainDocument: (next) => { message = next; },
     });
     return {
         attachments,
@@ -26,16 +19,12 @@ const createHarness = () => {
         get inlineDrafts() { return inlineDrafts; },
         get message() { return message; },
         messageRef,
-        get persisted() { return persisted; },
-        get timerActive() { return timerActive; },
     };
 };
 
 const assertConsumed = (harness: Harness) => {
     expect(harness.message).toBe('');
     expect(harness.messageRef.current).toBe('');
-    expect(harness.persisted).toBe('');
-    expect(harness.timerActive).toBe(false);
     expect(harness.attachments).toEqual(['file.txt']);
     expect(harness.inlineDrafts).toEqual(['comment']);
 };
@@ -55,14 +44,6 @@ describe('consumeImmediateCommandText', () => {
         assertConsumed(harness);
     });
 
-    test('prevents the pending draft timer from restoring command text', () => {
-        const harness = createHarness();
-        harness.consume();
-        if (harness.timerActive) {
-            throw new Error('stale draft timer fired');
-        }
-        expect(harness.persisted).toBe('');
-    });
 
     test('leaves fork restoration available for the target session', () => {
         const harness = createHarness();

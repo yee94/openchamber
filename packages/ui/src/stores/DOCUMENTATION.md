@@ -239,7 +239,10 @@ Attachment references and recovery issues carry complete display metadata.
 Local, server, and VS Code sources have mutually exclusive path fields, and
 the parser enforces canonical scope keys plus global queue, operation, and
 message identity uniqueness. Shared limits bound scopes, rows, attachments,
-issues, content, and legacy byte decoding.
+issues, content, and legacy byte decoding. Queue items may carry a validated
+Composer sidecar. `content` remains the canonical projection and legacy fallback;
+`composerDocument` owns semantic delivery after strict durable-document parsing
+and exact queue-canonical equality validation.
 Detailed reads preserve raw metadata, normalized valid rows, parse issues, and
 degraded scope keys. Compatibility reads report partial metadata as corrupt, so
 only a complete snapshot becomes authoritative. Queue, operation, and message

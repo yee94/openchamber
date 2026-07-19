@@ -1,6 +1,9 @@
-import type { SessionFolder } from '@/stores/useSessionFoldersStore';
+import type { Session } from '@opencode-ai/sdk/v2';
+import { sessionOrderActivityMatches, type SessionFolder } from '@/stores/useSessionFoldersStore';
+import { getSessionActivityUpdatedAt } from '@/lib/sessionActivity';
+import { compareSessionsByPinnedAndTime } from './utils';
 
-type SessionNodeLike = { session: { id: string } };
+type SessionNodeLike = { session: Session };
 
 type Args = {
   folders: Array<{ folder: SessionFolder; nodes: SessionNodeLike[] }>;
@@ -12,6 +15,41 @@ type Args = {
 export type VisibleSortableSessionOrder = {
   sessionIds: string[];
   folderIdBySessionId: Map<string, string | null>;
+};
+
+export const buildSessionActivitySnapshot = (
+  sessions: readonly Session[],
+): Record<string, number> => Object.fromEntries(
+  sessions.map((session) => [session.id, getSessionActivityUpdatedAt(session)]),
+);
+
+export const buildEffectiveSessionOrderIndex = (
+  nodes: readonly SessionNodeLike[],
+  sessionOrder: readonly string[] | undefined,
+  savedActivity: Readonly<Record<string, number>> | undefined,
+): Map<string, number> => {
+  const activity = buildSessionActivitySnapshot(nodes.map((node) => node.session));
+  if (!sessionOrderActivityMatches(activity, savedActivity)) return new Map();
+  return new Map((sessionOrder ?? []).map((id, index) => [id, index]));
+};
+
+export const createSessionNodeComparator = (
+  nodes: readonly SessionNodeLike[],
+  sessionOrder: readonly string[] | undefined,
+  savedActivity: Readonly<Record<string, number>> | undefined,
+  pinnedSessionIds: Set<string>,
+): ((a: SessionNodeLike, b: SessionNodeLike) => number) => {
+  const sessionOrderIndex = buildEffectiveSessionOrderIndex(nodes, sessionOrder, savedActivity);
+  return (a, b) => {
+    const aIndex = sessionOrderIndex.get(a.session.id);
+    const bIndex = sessionOrderIndex.get(b.session.id);
+    if (aIndex !== undefined || bIndex !== undefined) {
+      if (aIndex === undefined) return 1;
+      if (bIndex === undefined) return -1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+    }
+    return compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds);
+  };
 };
 
 /** Mirrors the folder-first DOM order used by SessionGroupSection. */

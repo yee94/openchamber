@@ -22,16 +22,16 @@ import { SessionFolderItem } from '../SessionFolderItem';
 import { DroppableFolderWrapper, SessionFolderDndScope } from './sessionFolderDnd';
 import type { SortableDragHandleProps } from './sortableItems';
 import type { GroupSearchData, SessionGroup, SessionNode } from './types';
-import { compareSessionsByPinnedAndTime, getSidebarRowPaddingLeft, isBranchDifferentFromLabel, normalizePath, renderHighlightedText, SIDEBAR_MUTED_HINT_CLASS, SIDEBAR_ROW_HOVER_CLASS } from './utils';
+import { getSidebarRowPaddingLeft, isBranchDifferentFromLabel, normalizePath, renderHighlightedText, SIDEBAR_MUTED_HINT_CLASS, SIDEBAR_ROW_HOVER_CLASS } from './utils';
 import {
   collectSubtreeContainingId,
   computeNodeStructureKey,
   nodeContainsSessionId,
   resolveMenuOpenSessionId,
 } from './sessionNodeItemUtils';
-import { buildVisibleSortableSessionOrder } from './sessionSortableOrder';
+import { buildSessionActivitySnapshot, buildVisibleSortableSessionOrder, createSessionNodeComparator } from './sessionSortableOrder';
 import type { SessionNodeRenderExtras } from './sessionNodeItemUtils';
-import type { SessionFolder, SessionOrderMap } from '@/stores/useSessionFoldersStore';
+import type { SessionFolder, SessionOrderActivityMap, SessionOrderMap } from '@/stores/useSessionFoldersStore';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -99,7 +99,8 @@ type Props = {
   pinnedSessionIds: Set<string>;
   expandedParents: Set<string>;
   sessionOrderByScope: SessionOrderMap;
-  onReorderSessions: (sessionIds: string[], activeSessionId: string, overSessionId: string) => void;
+  sessionOrderActivityByScope: SessionOrderActivityMap;
+  onReorderSessions: (sessionIds: string[], activeSessionId: string, overSessionId: string, activityBySessionId: Readonly<Record<string, number>>) => void;
   currentSessionId: string | null;
   shortcutTargetSessionId?: string | null;
   shortcutTargetVisibleIndex?: number | null;
@@ -190,6 +191,15 @@ const groupHasSessionOrderChange = (
   return group.sessions.some(visit);
 };
 
+const groupHasSessionOrderActivityChange = (
+  group: SessionGroup,
+  prevSessionOrderActivityByScope: SessionOrderActivityMap,
+  nextSessionOrderActivityByScope: SessionOrderActivityMap,
+): boolean => {
+  const scopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
+  return Boolean(scopeKey && prevSessionOrderActivityByScope[scopeKey] !== nextSessionOrderActivityByScope[scopeKey]);
+};
+
 const groupHasExpansionMembershipChange = (
   group: SessionGroup,
   prevExpandedParents: Set<string>,
@@ -261,6 +271,11 @@ const areGroupPropsEqual = (prev: Props, next: Props): boolean => {
 
   if (prev.sessionOrderByScope !== next.sessionOrderByScope
     && groupHasSessionOrderChange(next.group, prev.sessionOrderByScope, next.sessionOrderByScope)) {
+    return false;
+  }
+
+  if (prev.sessionOrderActivityByScope !== next.sessionOrderActivityByScope
+    && groupHasSessionOrderActivityChange(next.group, prev.sessionOrderActivityByScope, next.sessionOrderActivityByScope)) {
     return false;
   }
 
@@ -386,6 +401,7 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
     pinnedSessionIds,
     expandedParents,
     sessionOrderByScope,
+    sessionOrderActivityByScope,
     onReorderSessions,
     currentSessionId,
     shortcutTargetSessionId = null,
@@ -401,20 +417,12 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   } = props;
 
   const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
-  const sessionOrderIndex = React.useMemo(
-    () => new Map((folderScopeKey ? sessionOrderByScope[folderScopeKey] : [])?.map((id, index) => [id, index])),
-    [folderScopeKey, sessionOrderByScope],
-  );
-  const compareSessionNodes = React.useCallback((a: SessionNode, b: SessionNode) => {
-    const aIndex = sessionOrderIndex.get(a.session.id);
-    const bIndex = sessionOrderIndex.get(b.session.id);
-    if (aIndex !== undefined || bIndex !== undefined) {
-      if (aIndex === undefined) return 1;
-      if (bIndex === undefined) return -1;
-      if (aIndex !== bIndex) return aIndex - bIndex;
-    }
-    return compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds);
-  }, [pinnedSessionIds, sessionOrderIndex]);
+  const compareSessionNodes = React.useMemo(() => createSessionNodeComparator(
+    group.sessions,
+    folderScopeKey ? sessionOrderByScope[folderScopeKey] : undefined,
+    folderScopeKey ? sessionOrderActivityByScope[folderScopeKey] : undefined,
+    pinnedSessionIds,
+  ), [folderScopeKey, group.sessions, pinnedSessionIds, sessionOrderActivityByScope, sessionOrderByScope]);
 
   const searchData = hasSessionSearchQuery ? groupSearchDataByGroup.get(group) : null;
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
@@ -1042,7 +1050,12 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
         if (folderScopeKey) addSessionToFolder(folderScopeKey, folderId, sessionId);
       }}
       onSessionsReordered={(activeSessionId, overSessionId) => {
-        onReorderSessions(visibleSortableSessionOrder.sessionIds, activeSessionId, overSessionId);
+        onReorderSessions(
+          visibleSortableSessionOrder.sessionIds,
+          activeSessionId,
+          overSessionId,
+          buildSessionActivitySnapshot(group.sessions.map((node) => node.session)),
+        );
       }}
     >
       {renderFolderItems()}

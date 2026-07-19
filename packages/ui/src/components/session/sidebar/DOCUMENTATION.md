@@ -155,8 +155,8 @@
 - `hooks/useProjectSessionLists.ts`: Reads live and archived project buckets from the shared ownership index.
 - `hooks/useSessionFolderCleanup.ts`: Cleans stale folder session IDs by reconciling known sessions/archived scopes.
 - Persistent pinned, folder, and session-order cleanup consumes the store's complete-catalog ID snapshot (`fullCatalogSessionIds` + generation). Bounded directory snapshots only drive visible rows.
-- Session order is keyed by each group's `folderScopeKey`; root rows, folder rows, navigation, and sortable items consume the same scope-local order.
-- `sessionSortableOrder.ts` derives the visible sortable IDs from the rendered folder tree, collapsed/search state, and Show-more slice. Reordering stays within one folder or the ungrouped scope; folder drops own cross-folder moves.
+- Session order is keyed by each group's `folderScopeKey` and bound to the activity/member snapshot captured at drag time. Later activity or membership changes restore natural sorting; visual rows, navigation, and sortable items consume the same scope-local rule.
+- `sessionSortableOrder.ts` derives visible sortable IDs and the shared scope-local comparator from the rendered folder tree, collapsed/search state, Show-more slice, and order activity snapshot. Reordering stays within one folder or the ungrouped scope; folder drops own cross-folder moves.
 - `hooks/useStickyProjectHeaders.ts`: Tracks which project headers are sticky/stuck via `IntersectionObserver`.
 
 ### Types and utilities

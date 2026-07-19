@@ -18,11 +18,24 @@ export interface SessionFolder {
 
 export type SessionFoldersMap = Record<string, SessionFolder[]>;
 export type SessionOrderMap = Record<string, string[]>;
+export type SessionOrderActivityMap = Record<string, Record<string, number>>;
+
+export const sessionOrderActivityMatches = (
+  current: Readonly<Record<string, number>>,
+  saved: Readonly<Record<string, number>> | undefined,
+): boolean => {
+  if (!saved) return false;
+  const currentIds = Object.keys(current);
+  const savedIds = Object.keys(saved);
+  return currentIds.length === savedIds.length
+    && currentIds.every((id) => saved[id] === current[id]);
+};
 
 interface SessionFoldersState {
   foldersMap: SessionFoldersMap;
   collapsedFolderIds: Set<string>;
   sessionOrderByScope: SessionOrderMap;
+  sessionOrderActivityByScope: SessionOrderActivityMap;
 }
 
 interface SessionFoldersActions {
@@ -37,7 +50,7 @@ interface SessionFoldersActions {
   toggleFolderCollapse: (folderId: string) => void;
   cleanupSessions: (scopeKey: string, existingSessionIds: Set<string>) => void;
   getSessionFolderId: (scopeKey: string, sessionId: string) => string | null;
-  reorderSessions: (scopeKey: string, sessionIds: string[], activeSessionId: string, overSessionId: string) => void;
+  reorderSessions: (scopeKey: string, sessionIds: string[], activeSessionId: string, overSessionId: string, activityBySessionId: Readonly<Record<string, number>>) => void;
 }
 
 type SessionFoldersStore = SessionFoldersState & SessionFoldersActions;
@@ -47,6 +60,7 @@ type SessionFoldersStore = SessionFoldersState & SessionFoldersActions;
 const FOLDERS_STORAGE_KEY = 'oc.sessions.folders';
 const COLLAPSED_STORAGE_KEY = 'oc.sessions.folderCollapse';
 const SESSION_ORDER_STORAGE_KEY = 'oc.sessions.order';
+const SESSION_ORDER_ACTIVITY_STORAGE_KEY = 'oc.sessions.orderActivity';
 const SESSION_FOLDERS_API_PATH = '/api/session-folders';
 const DISK_WRITE_DEBOUNCE_MS = 250;
 const ARCHIVED_SCOPE_PREFIX = '__archived__:';
@@ -177,6 +191,36 @@ const readPersistedSessionOrder = (): SessionOrderMap => {
   }
 };
 
+const readPersistedSessionOrderActivity = (): SessionOrderActivityMap => {
+  try {
+    const raw = safeStorage.getItem(SESSION_ORDER_ACTIVITY_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).flatMap(([scopeKey, value]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+      const activity = Object.fromEntries(Object.entries(value).flatMap(([id, updatedAt]) => (
+        typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? [[id, updatedAt]] : []
+      )));
+      return Object.keys(activity).length > 0 ? [[scopeKey, activity]] : [];
+    }));
+  } catch {
+    return {};
+  }
+};
+
+const persistSessionOrderState = (
+  sessionOrderByScope: SessionOrderMap,
+  sessionOrderActivityByScope: SessionOrderActivityMap,
+): void => {
+  try {
+    safeStorage.setItem(SESSION_ORDER_STORAGE_KEY, JSON.stringify(sessionOrderByScope));
+    safeStorage.setItem(SESSION_ORDER_ACTIVITY_STORAGE_KEY, JSON.stringify(sessionOrderActivityByScope));
+  } catch {
+    // Storage can be unavailable in restricted browser contexts.
+  }
+};
+
 const persistFolders = (foldersMap: SessionFoldersMap): void => {
   pendingFoldersMap = foldersMap;
   clearTimeout(persistFoldersTimer);
@@ -268,6 +312,7 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
       foldersMap: readPersistedFolders(),
       collapsedFolderIds: readPersistedCollapsed(),
       sessionOrderByScope: readPersistedSessionOrder(),
+      sessionOrderActivityByScope: readPersistedSessionOrderActivity(),
 
       getFoldersForScope: (scopeKey: string): SessionFolder[] => {
         if (!scopeKey) return [];
@@ -504,7 +549,8 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         const current = get().foldersMap;
         const scopeFolders = current[scopeKey];
         const currentOrder = get().sessionOrderByScope[scopeKey] ?? [];
-        if ((!scopeFolders || scopeFolders.length === 0) && currentOrder.length === 0) return;
+        const currentActivity = get().sessionOrderActivityByScope[scopeKey] ?? {};
+        if ((!scopeFolders || scopeFolders.length === 0) && currentOrder.length === 0 && Object.keys(currentActivity).length === 0) return;
 
         let changed = false;
         const filteredFolders = (scopeFolders ?? []).map((folder) => {
@@ -523,22 +569,22 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
 
         const nextOrder = currentOrder.filter((id) => existingSessionIds.has(id));
         const orderChanged = nextOrder.length !== currentOrder.length;
-        if (!changed && !orderChanged) return;
+        const activityChanged = Object.keys(currentActivity).some((id) => !existingSessionIds.has(id));
+        if (!changed && !orderChanged && !activityChanged) return;
         const nextMap: SessionFoldersMap = { ...current, [scopeKey]: nextFolders };
         const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders ?? [], nextFolders, get().collapsedFolderIds);
         const nextSessionOrderByScope = orderChanged
           ? { ...get().sessionOrderByScope, [scopeKey]: nextOrder }
           : get().sessionOrderByScope;
+        const nextSessionOrderActivityByScope = (orderChanged || activityChanged)
+          ? Object.fromEntries(Object.entries(get().sessionOrderActivityByScope).filter(([key]) => key !== scopeKey))
+          : get().sessionOrderActivityByScope;
 
         set(nextCollapsed
-          ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed, sessionOrderByScope: nextSessionOrderByScope }
-          : { foldersMap: nextMap, sessionOrderByScope: nextSessionOrderByScope });
+          ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed, sessionOrderByScope: nextSessionOrderByScope, sessionOrderActivityByScope: nextSessionOrderActivityByScope }
+          : { foldersMap: nextMap, sessionOrderByScope: nextSessionOrderByScope, sessionOrderActivityByScope: nextSessionOrderActivityByScope });
         persistState(nextMap, nextCollapsed ?? get().collapsedFolderIds);
-        try {
-          safeStorage.setItem(SESSION_ORDER_STORAGE_KEY, JSON.stringify(nextSessionOrderByScope));
-        } catch {
-          // Storage can be unavailable in restricted browser contexts.
-        }
+        persistSessionOrderState(nextSessionOrderByScope, nextSessionOrderActivityByScope);
       },
 
       getSessionFolderId: (scopeKey: string, sessionId: string): string | null => {
@@ -553,7 +599,7 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         return null;
       },
 
-      reorderSessions: (scopeKey, sessionIds, activeSessionId, overSessionId): void => {
+      reorderSessions: (scopeKey, sessionIds, activeSessionId, overSessionId, activityBySessionId): void => {
         if (!scopeKey || activeSessionId === overSessionId) return;
         const visibleIds = Array.from(new Set(sessionIds));
         const activeIndex = visibleIds.indexOf(activeSessionId);
@@ -561,10 +607,14 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         if (activeIndex === -1 || overIndex === -1) return;
 
         const currentOrder = get().sessionOrderByScope[scopeKey] ?? [];
-        const orderedVisibleIds = [
-          ...currentOrder.filter((id) => visibleIds.includes(id)),
-          ...visibleIds.filter((id) => !currentOrder.includes(id)),
-        ];
+        const currentActivity = get().sessionOrderActivityByScope[scopeKey];
+        const currentOrderIsActive = sessionOrderActivityMatches(activityBySessionId, currentActivity);
+        const orderedVisibleIds = currentOrderIsActive
+          ? [
+              ...currentOrder.filter((id) => visibleIds.includes(id)),
+              ...visibleIds.filter((id) => !currentOrder.includes(id)),
+            ]
+          : visibleIds;
         const fromIndex = orderedVisibleIds.indexOf(activeSessionId);
         const toIndex = orderedVisibleIds.indexOf(overSessionId);
         if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
@@ -573,14 +623,16 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         nextOrder.splice(fromIndex, 1);
         nextOrder.splice(toIndex, 0, activeSessionId);
         const visibleIdSet = new Set(visibleIds);
-        const hiddenOrder = currentOrder.filter((id) => !visibleIdSet.has(id));
+        const hiddenOrder = currentOrderIsActive
+          ? currentOrder.filter((id) => !visibleIdSet.has(id))
+          : [];
         const nextSessionOrderByScope = { ...get().sessionOrderByScope, [scopeKey]: [...nextOrder, ...hiddenOrder] };
-        set({ sessionOrderByScope: nextSessionOrderByScope });
-        try {
-          safeStorage.setItem(SESSION_ORDER_STORAGE_KEY, JSON.stringify(nextSessionOrderByScope));
-        } catch {
-          // Storage can be unavailable in restricted browser contexts.
-        }
+        const nextSessionOrderActivityByScope = {
+          ...get().sessionOrderActivityByScope,
+          [scopeKey]: { ...activityBySessionId },
+        };
+        set({ sessionOrderByScope: nextSessionOrderByScope, sessionOrderActivityByScope: nextSessionOrderActivityByScope });
+        persistSessionOrderState(nextSessionOrderByScope, nextSessionOrderActivityByScope);
       },
     }),
     { name: 'session-folders-store' },

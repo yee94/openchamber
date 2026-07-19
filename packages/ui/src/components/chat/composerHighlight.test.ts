@@ -44,14 +44,30 @@ describe('buildHighlightParts', () => {
         ]);
     });
 
-    test('renders pasted text references with metric-safe informational text', () => {
+    test('renders pasted text references with the shared primary color', () => {
         const ranges: HighlightRange[] = [{ start: 6, end: 15, style: 'mentionPaste' }];
 
         expect(buildHighlightParts('hello [Paste 5] world', ranges)).toEqual([
             { text: 'hello ', className: 'text-foreground', attachmentName: undefined, skillName: undefined },
-            { text: '[Paste 5]', className: 'text-[var(--status-info)]', attachmentName: undefined, skillName: undefined },
+            { text: '[Paste 5]', className: 'text-[var(--primary)]', attachmentName: undefined, skillName: undefined },
             { text: ' world', className: 'text-foreground', attachmentName: undefined, skillName: undefined },
         ]);
+    });
+
+    test('uses one primary color for every composer reference kind', () => {
+        const styles: HighlightRange['style'][] = [
+            'mentionFile',
+            'mentionAgent',
+            'mentionSession',
+            'mentionCommand',
+            'mentionSnippet',
+            'mentionPaste',
+        ];
+
+        for (const style of styles) {
+            expect(buildHighlightParts('reference', [{ start: 0, end: 9, style }])?.[0]?.className)
+                .toBe('text-[var(--primary)]');
+        }
     });
 });
 

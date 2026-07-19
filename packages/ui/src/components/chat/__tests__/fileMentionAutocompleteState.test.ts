@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-    buildSessionMentionInstruction,
     collectSessionMentionIds,
     findSessionMentionRanges,
     getFileMentionAutocompleteQuery,
     getSessionMentionToken,
     replaceSessionMentionTokens,
     resolveSessionMentionDeletion,
-    type SessionMentionContext,
 } from '../fileMentionAutocompleteState';
+import { buildSessionMentionInstruction, type SessionMentionContext } from '@/composer/delivery';
 
 describe('getFileMentionAutocompleteQuery', () => {
     test('opens file mention autocomplete for manually typed boundary @ text', () => {

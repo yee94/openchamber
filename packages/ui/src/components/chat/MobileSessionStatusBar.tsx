@@ -19,11 +19,21 @@ import { Icon } from "@/components/icon/Icon";
 import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
 import { SessionBusyIndicator } from '@/components/session/SessionBusyIndicator';
 import { Button } from '@/components/ui/button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { toast } from '@/components/ui/toast';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useNotificationStore } from '@/sync/notification-store';
 import { useI18n } from '@/lib/i18n';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
+import { copyTextToClipboard } from '@/lib/clipboard';
+import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { MobileWindowMotion } from '@/components/ui/MobileWindowMotion';
 import {
@@ -317,65 +327,123 @@ function UnreadIndicator({ count }: { count: number }) {
 }
 
 // A single session row sized for comfortable touch.
-function SessionItem({
+export function SessionItem({
   session,
   isCurrent,
+  isPinned,
   contextLabel,
   getSessionTitle,
   onClick,
+  onTogglePinned,
+  onShare,
+  onCopyShareUrl,
+  onUnshare,
+  onArchive,
   needsAttention,
 }: {
   session: SessionWithStatus;
   isCurrent: boolean;
+  isPinned: boolean;
   contextLabel?: string;
   getSessionTitle: (s: Session) => string;
   onClick: () => void;
+  onTogglePinned: () => void;
+  onShare: () => void;
+  onCopyShareUrl: (url: string) => void;
+  onUnshare: () => void;
+  onArchive: () => void;
   needsAttention: (sessionId: string) => boolean;
 }) {
+  const { t } = useI18n();
+  const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
   const attention = needsAttention(session.id);
+  const shareUrl = session.share?.url;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors min-h-[56px]",
-        "active:bg-[var(--interactive-selection)]",
-        isCurrent ? "bg-[color-mix(in_srgb,var(--interactive-selection)_40%,transparent)]" : "hover:bg-[var(--interactive-hover)]"
-      )}
-    >
-      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
-        <StatusIndicator
-          isRunning={session._statusType !== 'idle'}
-          showUnread={attention && !isCurrent}
-        />
-      </span>
-
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className={cn(
-          "truncate text-[15px] leading-tight",
-          isCurrent ? "font-semibold text-[var(--surface-foreground)]" : "text-[var(--surface-foreground)]"
-        )}>
-          {getSessionTitle(session)}
+    <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+      <ContextMenuTrigger
+        render={
+          <button
+            type="button"
+            data-mobile-session-context-trigger={session.id}
+            onClick={(event) => {
+              if (contextMenuOpen) {
+                event.preventDefault();
+                return;
+              }
+              onClick();
+            }}
+            className={cn(
+              "flex w-full min-h-[56px] items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors select-none",
+              "active:bg-[var(--interactive-selection)]",
+              isCurrent ? "bg-[color-mix(in_srgb,var(--interactive-selection)_40%,transparent)]" : "hover:bg-[var(--interactive-hover)]"
+            )}
+          />
+        }
+      >
+        <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+          <StatusIndicator
+            isRunning={session._statusType !== 'idle'}
+            showUnread={attention && !isCurrent}
+          />
         </span>
-        {contextLabel ? (
-          <span className="truncate text-[12px] leading-none text-[var(--surface-mutedForeground)]">
-            {contextLabel}
+
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className={cn(
+            "truncate text-[15px] leading-tight",
+            isCurrent ? "font-semibold text-[var(--surface-foreground)]" : "text-[var(--surface-foreground)]"
+          )}>
+            {getSessionTitle(session)}
           </span>
-        ) : null}
-      </span>
-
-      {(session._runningChildrenCount ?? 0) > 0 && (
-        <span className="flex flex-shrink-0 items-center gap-1 text-[12px] text-[var(--surface-mutedForeground)]">
-          <SessionBusyIndicator size={12} />
-          {session._runningChildrenCount}
+          {contextLabel ? (
+            <span className="truncate text-[12px] leading-none text-[var(--surface-mutedForeground)]">
+              {contextLabel}
+            </span>
+          ) : null}
         </span>
-      )}
 
-      {isCurrent && (
-        <Icon name="check" className="h-4 w-4 flex-shrink-0 text-[var(--primary-base)]" />
-      )}
-    </button>
+        {(session._runningChildrenCount ?? 0) > 0 && (
+          <span className="flex flex-shrink-0 items-center gap-1 text-[12px] text-[var(--surface-mutedForeground)]">
+            <SessionBusyIndicator size={12} />
+            {session._runningChildrenCount}
+          </span>
+        )}
+
+        {isCurrent && (
+          <Icon name="check" className="h-4 w-4 flex-shrink-0 text-[var(--primary-base)]" />
+        )}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-[200px] p-1.5">
+        <ContextMenuItem className="min-h-10 px-3" onClick={onTogglePinned}>
+          <Icon name={isPinned ? 'unpin' : 'pushpin'} className="size-4" />
+          {isPinned
+            ? t('sessions.sidebar.session.menu.unpin')
+            : t('sessions.sidebar.session.menu.pin')}
+        </ContextMenuItem>
+        {shareUrl ? (
+          <>
+            <ContextMenuItem className="min-h-10 px-3" onClick={() => onCopyShareUrl(shareUrl)}>
+              <Icon name="file-copy" className="size-4" />
+              {t('sessions.sidebar.session.menu.copyLink')}
+            </ContextMenuItem>
+            <ContextMenuItem className="min-h-10 px-3" onClick={onUnshare}>
+              <Icon name="link-unlink-m" className="size-4" />
+              {t('sessions.sidebar.session.menu.unshare')}
+            </ContextMenuItem>
+          </>
+        ) : (
+          <ContextMenuItem className="min-h-10 px-3" onClick={onShare}>
+            <Icon name="share-2" className="size-4" />
+            {t('sessions.sidebar.session.menu.share')}
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        <ContextMenuItem className="min-h-10 px-3" onClick={onArchive}>
+          <Icon name="inbox-archive" className="size-4" />
+          {t('sessions.sidebar.bulkActions.archive')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -460,6 +528,9 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const sessionStatus = useAllSessionStatuses();
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
+  const archiveSession = useSessionUIStore((state) => state.archiveSession);
+  const shareSession = useSessionUIStore((state) => state.shareSession);
+  const unshareSession = useSessionUIStore((state) => state.unshareSession);
   const open = useUIStore((state) => state.mobileSessionPanelOpen);
   const setOpen = useUIStore((state) => state.setMobileSessionPanelOpen);
   const sessionSheetSnap = useMobileSheetSnap({ onDismiss: () => setOpen(false) });
@@ -468,6 +539,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
+  const togglePinnedSession = useSessionPinnedStore((state) => state.toggle);
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const activePaginationByDirectory = useGlobalSessionsStore((state) => state.activePaginationByDirectory);
 
@@ -651,6 +723,58 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     onSessionSwitch?.(session.id);
   }, [closeSessionPanel, onSessionSwitch, setCurrentSession]);
 
+  const handleShareSession = React.useCallback(async (session: Session) => {
+    try {
+      const shared = await shareSession(session.id);
+      if (!shared?.share?.url) {
+        toast.error(t('sessions.sidebar.session.share.error'));
+        return;
+      }
+      toast.success(t('sessions.sidebar.session.share.successTitle'), {
+        description: t('sessions.sidebar.session.share.successDescription'),
+      });
+    } catch {
+      toast.error(t('sessions.sidebar.session.share.error'));
+    }
+  }, [shareSession, t]);
+
+  const handleCopyShareUrl = React.useCallback(async (url: string) => {
+    const result = await copyTextToClipboard(url);
+    if (result.ok) {
+      toast.success(t('sessions.sidebar.session.menu.copied'));
+      return;
+    }
+    toast.error(t('sessions.sidebar.session.share.copyUrlError'));
+  }, [t]);
+
+  const handleUnshareSession = React.useCallback(async (sessionId: string) => {
+    try {
+      const unshared = await unshareSession(sessionId);
+      if (!unshared) {
+        toast.error(t('sessions.sidebar.session.unshare.error'));
+        return;
+      }
+      toast.success(t('sessions.sidebar.session.unshare.success'));
+    } catch {
+      toast.error(t('sessions.sidebar.session.unshare.error'));
+    }
+  }, [t, unshareSession]);
+
+  const handleArchiveSession = React.useCallback(async (sessionId: string) => {
+    const archived = await archiveSession(sessionId);
+    if (!archived) {
+      toast.error(t('sessions.sidebar.session.archive.error'));
+      return;
+    }
+    showArchivedSessionsUndoToast({
+      sessionIds: [sessionId],
+      message: t('sessions.sidebar.session.archive.success'),
+      undoLabel: t('sessions.sidebar.undo'),
+      settingsLabel: t('settings.openchamber.archivedSessions.actions.view'),
+      undoFailedMessage: t('sessions.sidebar.session.archive.undoFailed'),
+    });
+  }, [archiveSession, t]);
+
   // "+" — start a new session draft. Target the project selected in the filter;
   // for "All", use the most recently active session's directory, falling back to
   // the store's own default target when there are no sessions.
@@ -778,8 +902,14 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
                 key={session.id}
                 session={session}
                 isCurrent={session.id === currentSessionId}
+                isPinned={pinnedSessionIds.has(session.id)}
                 getSessionTitle={getSessionTitle}
                 onClick={() => handleSessionClick(session)}
+                onTogglePinned={() => togglePinnedSession(session.id)}
+                onShare={() => { void handleShareSession(session); }}
+                onCopyShareUrl={(url) => { void handleCopyShareUrl(url); }}
+                onUnshare={() => { void handleUnshareSession(session.id); }}
+                onArchive={() => { void handleArchiveSession(session.id); }}
                 needsAttention={needsAttention}
               />
             ))}
@@ -817,13 +947,19 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     currentSessionId,
     expandedWorktreeGroups,
     getSessionTitle,
+    handleArchiveSession,
+    handleCopyShareUrl,
     handleSessionClick,
+    handleShareSession,
+    handleUnshareSession,
     needsAttention,
+    pinnedSessionIds,
     rootBranchesByProject,
     selectedProject,
     showFewerGroupSessions,
     showMoreGroupSessions,
     t,
+    togglePinnedSession,
     toggleWorktreeGroup,
     visibleCountByGroup,
   ]);
@@ -962,9 +1098,15 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
                     key={session.id}
                     session={session}
                     isCurrent={session.id === currentSessionId}
+                    isPinned={pinnedSessionIds.has(session.id)}
                     contextLabel={sessionContextLabel(session)}
                     getSessionTitle={getSessionTitle}
                     onClick={() => handleSessionClick(session)}
+                    onTogglePinned={() => togglePinnedSession(session.id)}
+                    onShare={() => { void handleShareSession(session); }}
+                    onCopyShareUrl={(url) => { void handleCopyShareUrl(url); }}
+                    onUnshare={() => { void handleUnshareSession(session.id); }}
+                    onArchive={() => { void handleArchiveSession(session.id); }}
                     needsAttention={needsAttention}
                   />
                 ))

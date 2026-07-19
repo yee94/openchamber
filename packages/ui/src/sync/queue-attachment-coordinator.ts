@@ -1,4 +1,5 @@
 import { draftAttachmentRefID, type DraftAttachmentReference } from "./input-draft-types"
+import { describeComposerDocumentResources } from "@/composer/extensions"
 import type { DraftBlobValue, InputDraftBlobStore } from "./input-draft-blob-store"
 import { emptyQueueLedgerSnapshot, parseQueueLedgerSnapshot, queueLedgerScopeKey, type QueueItemDTO, type QueueLedgerDetailedRead, type QueueLedgerRepository, type QueueLedgerSnapshotV4 } from "@/stores/message-queue-ledger"
 
@@ -38,7 +39,7 @@ const outcome = (status: QueueAttachmentCoordinatorResult["status"], errors: Que
 const sameIdentity = (item: QueueItemDTO, id: QueueIdentity): boolean => item.queueItemID === id.queueItemID && item.operationID === id.operationID && item.messageID === id.messageID
 const reference = (item: QueueItemDTO, kind: "queue" | "send", occurrence: string): DraftAttachmentReference | undefined => item.owner.state === "bound" ? { transportIdentity: item.owner.transportIdentity, owner: { kind, ownerID: kind === "queue" ? item.queueItemID : item.operationID }, attachmentOccurrenceRefID: occurrence } : undefined
 const stable = (value: unknown): string => JSON.stringify(value)
-const transitionShape = (item: QueueItemDTO): unknown => ({ owner: item.owner, queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID, content: item.content, attachments: item.attachments, attachmentIssues: item.attachmentIssues, createdAt: item.createdAt, sendConfig: item.sendConfig })
+const transitionShape = (item: QueueItemDTO): unknown => ({ owner: item.owner, queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID, content: item.content, composerDocument: item.composerDocument, attachments: item.attachments, attachmentIssues: item.attachmentIssues, createdAt: item.createdAt, sendConfig: item.sendConfig })
 const identityKey = (id: QueueIdentity): string => `${id.queueItemID}\u0000${id.operationID}\u0000${id.messageID}`
 const integer = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value)
 const transitionValid = (before: QueueItemDTO, next: QueueItemDTO): boolean => {
@@ -53,6 +54,12 @@ const transitionValid = (before: QueueItemDTO, next: QueueItemDTO): boolean => {
     if (next.reconciliationStartedAt !== before.reconciliationStartedAt || next.reconciliationDeadlineAt !== before.reconciliationDeadlineAt || (next.reconciliationChecks ?? 0) < (before.reconciliationChecks ?? 0)) return false
   }
   return true
+}
+const composerAttachmentsMatch = (item: QueueItemDTO): boolean => {
+  if (!item.composerDocument) return true
+  const referenced = new Set(item.composerDocument ? describeComposerDocumentResources(item.composerDocument).flatMap((resource) => resource.type === "attachment" ? [resource.attachmentRefID] : []) : [])
+  const attached = new Set(item.attachments.map((attachment) => attachment.occurrenceRefID))
+  return [...referenced].every((id) => attached.has(id))
 }
 
 export const createQueueAttachmentCoordinator = (blobStore: InputDraftBlobStore, metadata: QueueLedgerRepository, options: { enabled?: boolean } = {}): QueueAttachmentCoordinator => {
@@ -158,6 +165,7 @@ export const createQueueAttachmentCoordinator = (blobStore: InputDraftBlobStore,
       const key = queueLedgerScopeKey(item.owner)
       const candidate = clone(snapshot); candidate.queues[key] = [...(candidate.queues[key] ?? []), item]
       const parsed = parseQueueLedgerSnapshot(candidate)
+      if (!composerAttachmentsMatch(item)) return outcome("failed", [error("identity", "composer-attachment-mismatch", item)])
       if (parsed.status === "corrupt" || parsed.issues.length) return outcome("failed", parsed.issues.map((issue) => ({ phase: "identity", code: issue.reason, ...issue })))
       const captured = capture(runtime, item)
       if (!await current(runtime, captured)) return stale()

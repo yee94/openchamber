@@ -200,8 +200,8 @@ export const shouldConsumeContextPanelPrepend = (
     && pending.viewportKey === viewportKey,
 );
 
-export const CONTEXT_PANEL_SESSION_CACHE_MAX_VIEWS = 4;
-export const CONTEXT_PANEL_SESSION_CACHE_MAX_BYTES = 48 * 1024 * 1024;
+export const CONTEXT_PANEL_SESSION_CACHE_MAX_VIEWS = 3;
+export const CONTEXT_PANEL_SESSION_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 
 export type ContextPanelSessionTabMetadata = ContextPanelSessionTarget & { tabId: string; title?: string };
 
