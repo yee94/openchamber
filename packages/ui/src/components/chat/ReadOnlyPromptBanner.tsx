@@ -13,7 +13,7 @@ type ReadOnlyPromptBannerProps = {
 };
 
 /** Mobile needs an explicit size: `.typography-*` is unset on mobile-pointer. */
-const BANNER_TEXT_CLASS = 'text-xs leading-4 sm:text-[length:var(--text-micro)] sm:leading-5';
+const BANNER_TEXT_CLASS = 'text-[13px] leading-4 sm:text-[length:var(--text-micro)] sm:leading-5';
 
 const ExecutionModelIcon: React.FC<{
     providerId?: string;
