@@ -58,14 +58,17 @@ export const ReadOnlyPromptBanner: React.FC<ReadOnlyPromptBannerProps> = (props)
             <div className="rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-4 py-3">
                 <div className="typography-micro text-muted-foreground">{t('chat.container.readOnlySubagentPromptBanner')}</div>
                 {showExecutionMetadata ? (
-                    <div className="mt-2 flex min-w-0 flex-nowrap items-center gap-4 border-t border-border/70 pt-2 typography-micro">
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <div
+                        data-testid="read-only-prompt-banner-meta"
+                        className="mt-2 grid min-w-0 grid-cols-2 items-center gap-x-3 border-t border-border/70 pt-2 typography-micro"
+                    >
+                        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                             <AgentAvatar name={props.agentName} size={14} label={agentLabel} />
-                            <span className="min-w-0 truncate text-foreground" title={agentName}>{agentName}</span>
+                            <span className="min-w-0 flex-1 truncate text-foreground" title={agentName}>{agentName}</span>
                         </div>
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                             <ExecutionModelIcon providerId={props.providerId} modelId={props.modelId} label={modelLabel} />
-                            <span className="min-w-0 truncate text-foreground" title={modelName}>{modelName}</span>
+                            <span className="min-w-0 flex-1 truncate text-foreground" title={modelName}>{modelName}</span>
                         </div>
                     </div>
                 ) : null}
