@@ -6,7 +6,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
 } from '@/components/ui/command';
 import {
   Dialog,
@@ -39,6 +38,7 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { buildCommandPaletteFileSearchKey, scoreCommandPaletteFiles } from './commandPaletteFilesState';
 import { openAndCreateTerminalTab } from '@/lib/terminalTabShortcuts';
+import { Kbd } from '@/components/ui/kbd';
 
 type CommandEntry = {
   id: string;
@@ -58,21 +58,33 @@ type CommandPaletteResultProps = {
 
 const CommandPaletteResult: React.FC<CommandPaletteResultProps> = ({ title, description, trailing }) => (
   <>
-    <div className="min-w-0 flex-1">
-      <span className="block truncate typography-ui-label font-medium leading-6">{title}</span>
+    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+      <span
+        className={
+          description
+            ? 'min-w-0 max-w-[58%] shrink-0 truncate typography-meta font-medium leading-4 text-foreground'
+            : 'min-w-0 flex-1 truncate typography-meta font-medium leading-4 text-foreground'
+        }
+      >
+        {title}
+      </span>
       {description ? (
-        <span className="mt-0.5 block truncate typography-meta leading-5 text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate typography-micro leading-4 text-muted-foreground/65">
           {description}
         </span>
       ) : null}
     </div>
     {trailing ? (
-      <div className="ml-auto flex max-w-[40%] shrink-0 items-center gap-2 self-start pt-0.5 text-muted-foreground">
+      <div className="ml-auto flex shrink-0 items-center pl-2 text-muted-foreground/50">
         {trailing}
       </div>
     ) : null}
   </>
 );
+
+const ITEM_CLASS = 'h-8 gap-2 rounded-md px-2.5 py-0 typography-meta';
+const GROUP_CLASS =
+  'py-0 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-0.5 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:!text-[12px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:leading-4 [&_[cmdk-group-heading]]:text-muted-foreground/65';
 
 const normalizePath = (value: string): string => {
   if (!value) return '';
@@ -267,6 +279,7 @@ export const CommandPalette: React.FC = () => {
         }),
       });
     }
+
     return list;
   }, [
     t,
@@ -498,41 +511,41 @@ export const CommandPalette: React.FC = () => {
         <DialogDescription>{t('commandPalette.description')}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        overlayClassName="backdrop-blur-[8px] backdrop-saturate-[.8]"
-        className="h-[min(44rem,calc(100vh-2rem))] max-h-[calc(100vh-2rem)] w-[min(72rem,calc(100vw-2rem))] max-w-none gap-0 overflow-hidden rounded-[2rem] border-[var(--interactive-border)]/70 bg-[color:color-mix(in_srgb,var(--surface-elevated)_88%,transparent)] p-0 shadow-2xl backdrop-blur-2xl supports-[backdrop-filter]:bg-[color:color-mix(in_srgb,var(--surface-elevated)_78%,transparent)] sm:h-[min(46rem,calc(100vh-4rem))] sm:max-h-[calc(100vh-4rem)] sm:w-[min(72rem,calc(100vw-4rem))]"
+        className="max-h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-1.5rem))] max-w-none gap-0 overflow-hidden rounded-2xl border border-[var(--interactive-border)]/55 bg-[color:color-mix(in_srgb,var(--surface-elevated)_80%,transparent)] p-0 shadow-2xl backdrop-blur-2xl supports-[backdrop-filter]:bg-[color:color-mix(in_srgb,var(--surface-elevated)_72%,transparent)] sm:max-h-[min(32rem,calc(100vh-4rem))] sm:w-[min(40rem,calc(100vw-3rem))]"
+        containerClassName="items-start pt-[12vh] sm:pt-[14vh]"
         showCloseButton={false}
       >
         <Command
           shouldFilter={false}
-          className="rounded-[inherit] bg-transparent [&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:pb-2 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:typography-ui-label [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-0 [&_[cmdk-input-wrapper]]:h-auto [&_[cmdk-input-wrapper]]:border-0 [&_[cmdk-input-wrapper]]:px-7 [&_[cmdk-input-wrapper]]:pb-5 [&_[cmdk-input-wrapper]]:pt-7 sm:[&_[cmdk-input-wrapper]]:px-8 sm:[&_[cmdk-input-wrapper]]:pt-8 [&_[cmdk-input-wrapper]>svg]:hidden [&_[cmdk-input]]:h-12 [&_[cmdk-input]]:py-0 [&_[cmdk-input]]:text-xl [&_[cmdk-input]]:font-semibold [&_[cmdk-input]]:leading-8 sm:[&_[cmdk-input]]:text-2xl"
+          className="max-h-full min-h-0 rounded-[inherit] bg-transparent [&_[cmdk-group]]:px-0 [&_[data-slot=command-input-wrapper]]:h-auto [&_[data-slot=command-input-wrapper]]:border-0 [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:px-4 [&_[data-slot=command-input-wrapper]]:pb-2 [&_[data-slot=command-input-wrapper]]:pt-3 [&_[data-slot=command-input-wrapper]>svg]:hidden [&_[data-slot=command-input]]:h-7 [&_[data-slot=command-input]]:py-0 [&_[data-slot=command-input]]:typography-meta [&_[data-slot=command-input]]:font-normal [&_[data-slot=command-input]]:leading-5 [&_[data-slot=command-input]]:placeholder:text-muted-foreground/55"
         >
           <CommandInput
             value={query}
             onValueChange={setQuery}
             placeholder={t('commandPalette.input.placeholder')}
           />
-          <CommandList className="px-5 pb-6 sm:px-7">
-            <CommandEmpty className="py-20 text-muted-foreground">
+          <CommandList className="px-1.5 pb-2">
+            <CommandEmpty className="py-10 text-muted-foreground">
               {t('commandPalette.empty.noResults')}
             </CommandEmpty>
 
             {groupOrder.map((groupKey) => {
               if (groupKey === 'commands' && visibleCommands.length > 0) {
                 return (
-                  <CommandGroup key="commands" heading={t('settings.page.commands.title')} className="py-1">
+                  <CommandGroup key="commands" heading={t('settings.page.commands.title')} className={GROUP_CLASS}>
                     {visibleCommands.map((cmd) => (
                       <CommandItem
                         key={cmd.id}
                         value={cmd.id}
                         onSelect={cmd.onSelect}
-                        className="min-h-14 items-start gap-4 rounded-2xl px-4 py-2.5"
+                        className={ITEM_CLASS}
                       >
                         <CommandPaletteResult
                           title={cmd.title}
                           trailing={cmd.shortcutId ? (
-                            <CommandShortcut className="rounded-full bg-interactive-active px-2 py-1 text-foreground/70">
+                            <Kbd className="h-3.5 min-w-0 shrink-0 rounded-full border-0 bg-[color-mix(in_srgb,var(--surface-foreground)_6%,transparent)] px-1.5 font-sans text-[10px] font-medium tracking-tight text-muted-foreground/65 shadow-none">
                               {shortcut(cmd.shortcutId)}
-                            </CommandShortcut>
+                            </Kbd>
                           ) : undefined}
                         />
                       </CommandItem>
@@ -542,13 +555,13 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === 'settings' && visibleSettings.length > 0) {
                 return (
-                  <CommandGroup key="settings" heading={t('settings.view.home.title')} className="py-1">
+                  <CommandGroup key="settings" heading={t('settings.view.home.title')} className={GROUP_CLASS}>
                     {visibleSettings.map((cmd) => (
                       <CommandItem
                         key={cmd.id}
                         value={cmd.id}
                         onSelect={cmd.onSelect}
-                        className="min-h-14 items-start gap-4 rounded-2xl px-4 py-2.5"
+                        className={ITEM_CLASS}
                       >
                         <CommandPaletteResult title={cmd.title} />
                       </CommandItem>
@@ -558,24 +571,24 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === 'sessions' && visibleSessions.length > 0) {
                 return (
-                  <CommandGroup key="sessions" heading={t('header.sessions.title')} className="py-1">
+                  <CommandGroup key="sessions" heading={t('header.sessions.title')} className={GROUP_CLASS}>
                     {visibleSessions.map((session) => {
                       const title = session.title || t('commandPalette.session.untitled');
                       const dir = resolveGlobalSessionDirectory(session);
                       const branch = branchForSession(session.id, dir);
-                      const description = dir ? truncatePathMiddle(dir, { maxLength: 96 }) : undefined;
                       return (
                         <CommandItem
                           key={session.id}
                           value={`session:${session.id}`}
                           onSelect={() => handleOpenSession(session)}
-                          className="min-h-14 items-start gap-4 rounded-2xl px-4 py-2.5"
+                          className={ITEM_CLASS}
                         >
                           <CommandPaletteResult
                             title={title}
-                            description={description}
                             trailing={branch ? (
-                              <span className="max-w-48 truncate typography-meta">{branch}</span>
+                              <span className="max-w-40 truncate typography-micro leading-none opacity-70">
+                                {branch}
+                              </span>
                             ) : undefined}
                           />
                         </CommandItem>
@@ -586,7 +599,7 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === 'files' && visibleFiles.length > 0) {
                 return (
-                  <CommandGroup key="files" heading={t('layout.mainTab.files')} className="py-1">
+                  <CommandGroup key="files" heading={t('layout.mainTab.files')} className={GROUP_CLASS}>
                     {visibleFiles.map((file) => {
                       const display = truncatePathMiddle(file.relativePath || file.name, {
                         maxLength: 80,
@@ -598,7 +611,7 @@ export const CommandPalette: React.FC = () => {
                           onSelect={() => {
                             void handleOpenFile(file.path);
                           }}
-                          className="min-h-14 items-start gap-4 rounded-2xl px-4 py-2.5"
+                          className={ITEM_CLASS}
                         >
                           <CommandPaletteResult
                             title={file.name}
@@ -612,7 +625,7 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === 'projects' && visibleProjects.length > 0) {
                 return (
-                  <CommandGroup key="projects" heading={t('sessions.sidebar.projectsTitle')} className="py-1">
+                  <CommandGroup key="projects" heading={t('sessions.sidebar.projectsTitle')} className={GROUP_CLASS}>
                     {visibleProjects.map((project) => {
                       const displayName = project.displayName;
                       return (
@@ -620,7 +633,7 @@ export const CommandPalette: React.FC = () => {
                           key={`project:${project.id}`}
                           value={`project:${project.id}`}
                           onSelect={() => handleOpenProject(project.id, project.path)}
-                          className="min-h-14 items-start gap-4 rounded-2xl px-4 py-2.5"
+                          className={ITEM_CLASS}
                         >
                           <CommandPaletteResult title={displayName} description={project.path} />
                         </CommandItem>
@@ -633,7 +646,7 @@ export const CommandPalette: React.FC = () => {
             })}
 
             {isFileSearchStale ? (
-              <div className="px-4 py-3 typography-meta text-muted-foreground">
+              <div className="px-3 py-2 typography-micro text-muted-foreground/70">
                 {t('commandPalette.empty.searchingFiles')}
               </div>
             ) : null}

@@ -75,12 +75,15 @@ DialogOverlay.displayName = "DialogOverlay";
 type DialogContentProps = Omit<React.ComponentProps<typeof BaseDialog.Popup>, "children"> & {
   showCloseButton?: boolean
   overlayClassName?: string
+  /** Extra classes for the fixed centering wrapper (e.g. top-offset command palettes). */
+  containerClassName?: string
   children?: React.ReactNode
 }
 
 function DialogContent({
   className,
   overlayClassName,
+  containerClassName,
   children,
   showCloseButton = true,
   ...props
@@ -90,7 +93,12 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay className={cn("rounded-none", overlayClassName)} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
+      <div
+        className={cn(
+          "fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4",
+          containerClassName,
+        )}
+      >
         <BaseDialog.Popup
           data-slot="dialog-content"
           data-state-slot="dialog"
