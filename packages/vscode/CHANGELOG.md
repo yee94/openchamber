@@ -1,3 +1,7 @@
+## [1.16.32] - 2026-07-19
+
+- Chat: the read-only subagent prompt banner keeps agent and model on one row and uses a smaller shared type size.
+
 ## [1.16.1] - 2026-07-14
 
 - **Performance:** large workspace session lists no longer regroup every session while chats stream. Opening a long chat after an empty or aborted agent turn also no longer repeatedly loads larger portions of its history.

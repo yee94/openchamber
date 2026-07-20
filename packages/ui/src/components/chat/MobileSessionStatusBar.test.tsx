@@ -4,7 +4,11 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { I18nProvider } from '@/lib/i18n';
-import { SessionItem } from './MobileSessionStatusBar';
+import {
+  handleMobileSessionContextMenu,
+  preventMobileSessionTouchStartBaseUIHandler,
+  SessionItem,
+} from './MobileSessionStatusBar';
 
 const session = {
   id: 'ses-touch-menu',
@@ -14,7 +18,61 @@ const session = {
 } as Session & { _statusType: 'idle' };
 
 describe('MobileSessionStatusBar SessionItem', () => {
-  test('renders the session row as a touch context-menu trigger', () => {
+  test('blocks Base UI touch long-press handling', () => {
+    let preventBaseUIHandlerCalls = 0;
+
+    preventMobileSessionTouchStartBaseUIHandler({
+      preventBaseUIHandler: () => {
+        preventBaseUIHandlerCalls += 1;
+      },
+    });
+
+    expect(preventBaseUIHandlerCalls).toBe(1);
+  });
+
+  test('leaves mouse and keyboard context menus to Base UI when no touch long-press is active', () => {
+    let preventBaseUIHandlerCalls = 0;
+    let customContextMenuCalls = 0;
+    const event = {
+      preventBaseUIHandler: () => {
+        preventBaseUIHandlerCalls += 1;
+      },
+    } as React.MouseEvent<HTMLElement> & { preventBaseUIHandler: () => void };
+
+    handleMobileSessionContextMenu(event, false, () => {
+      customContextMenuCalls += 1;
+    });
+
+    expect(preventBaseUIHandlerCalls).toBe(0);
+    expect(customContextMenuCalls).toBe(0);
+  });
+
+  test('routes contextmenu generated during a touch long-press to the action sheet', () => {
+    let preventBaseUIHandlerCalls = 0;
+    let customContextMenuCalls = 0;
+    const event = {
+      preventBaseUIHandler: () => {
+        preventBaseUIHandlerCalls += 1;
+      },
+    } as React.MouseEvent<HTMLElement> & { preventBaseUIHandler: () => void };
+
+    handleMobileSessionContextMenu(event, true, () => {
+      customContextMenuCalls += 1;
+    });
+
+    expect(preventBaseUIHandlerCalls).toBe(1);
+    expect(customContextMenuCalls).toBe(1);
+  });
+
+  test('renders the screenshot session row as both a long-press and context-menu trigger', () => {
+    const longPressHandlers = {
+      pressed: false,
+      onPointerDown: () => undefined,
+      onPointerMove: () => undefined,
+      onPointerUp: () => undefined,
+      onPointerCancel: () => undefined,
+      onContextMenu: () => undefined,
+    };
     const markup = renderToStaticMarkup(
       <I18nProvider>
         <SessionItem
@@ -29,12 +87,16 @@ describe('MobileSessionStatusBar SessionItem', () => {
           onUnshare={() => undefined}
           onArchive={() => undefined}
           needsAttention={() => false}
+          longPressHandlers={longPressHandlers}
         />
       </I18nProvider>,
     );
 
     expect(markup).toContain('data-mobile-session-context-trigger="ses-touch-menu"');
+    expect(markup).toContain('data-mobile-long-press-trigger="session:ses-touch-menu"');
     expect(markup).toContain('-webkit-touch-callout:none');
+    expect(markup).toContain('-webkit-user-select:none');
+    expect(markup).toContain('user-select:none');
     expect(markup).toContain('Touch menu session');
   });
 });

@@ -12,6 +12,9 @@ type ReadOnlyPromptBannerProps = {
     modelName?: string;
 };
 
+/** Mobile needs an explicit size: `.typography-*` is unset on mobile-pointer. */
+const BANNER_TEXT_CLASS = 'text-[13px] leading-4 sm:text-[length:var(--text-micro)] sm:leading-5';
+
 const ExecutionModelIcon: React.FC<{
     providerId?: string;
     modelId?: string;
@@ -22,10 +25,10 @@ const ExecutionModelIcon: React.FC<{
             modelId={modelId}
             providerId={providerId}
             alt={label}
-            className="size-4 shrink-0"
+            className="size-3.5 shrink-0"
             fallback={(
-                <span role="img" aria-label={label} className="inline-flex size-4 shrink-0 items-center justify-center">
-                    <Icon name="brain-ai-3" className="size-4" />
+                <span role="img" aria-label={label} className="inline-flex size-3.5 shrink-0 items-center justify-center">
+                    <Icon name="brain-ai-3" className="size-3.5" />
                 </span>
             )}
         />
@@ -38,7 +41,7 @@ export const ReadOnlyPromptBanner: React.FC<ReadOnlyPromptBannerProps> = (props)
     if (!showExecutionMetadata) {
         return (
             <div className="p-3">
-                <div className="rounded-2xl border border-border/70 bg-[var(--surface-background)] px-4 py-3 typography-ui-label text-muted-foreground">
+                <div className={`rounded-2xl border border-border/70 bg-[var(--surface-background)] px-4 py-3 text-muted-foreground ${BANNER_TEXT_CLASS}`}>
                     {t('chat.container.readOnlySubagentPromptBanner')}
                 </div>
             </div>
@@ -55,17 +58,22 @@ export const ReadOnlyPromptBanner: React.FC<ReadOnlyPromptBannerProps> = (props)
 
     return (
         <aside className="shrink-0 border-t border-border/70 bg-[var(--surface-background)] p-3">
-            <div className="rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-4 py-3">
-                <div className="typography-ui-label text-muted-foreground">{t('chat.container.readOnlySubagentPromptBanner')}</div>
+            <div className="rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-3 py-2.5 sm:px-4 sm:py-3">
+                <div className={`text-muted-foreground ${BANNER_TEXT_CLASS}`}>
+                    {t('chat.container.readOnlySubagentPromptBanner')}
+                </div>
                 {showExecutionMetadata ? (
-                    <div className="mt-2 flex min-w-0 flex-wrap gap-x-4 gap-y-2 border-t border-border/70 pt-2 typography-meta">
-                        <div className="flex min-w-0 flex-1 basis-36 items-center gap-2">
-                            <AgentAvatar name={props.agentName} size={16} label={agentLabel} />
+                    <div
+                        data-testid="read-only-prompt-banner-meta"
+                        className={`mt-1.5 flex min-w-0 items-center justify-between gap-3 border-t border-border/70 pt-1.5 ${BANNER_TEXT_CLASS}`}
+                    >
+                        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                            <AgentAvatar name={props.agentName} size={14} label={agentLabel} />
                             <span className="min-w-0 truncate text-foreground" title={agentName}>{agentName}</span>
                         </div>
-                        <div className="flex min-w-0 flex-1 basis-36 items-center gap-2">
+                        <div className="flex min-w-0 max-w-[55%] items-center justify-end gap-1.5 overflow-hidden">
                             <ExecutionModelIcon providerId={props.providerId} modelId={props.modelId} label={modelLabel} />
-                            <span className="min-w-0 truncate text-foreground" title={modelName}>{modelName}</span>
+                            <span className="min-w-0 truncate text-right text-foreground" title={modelName}>{modelName}</span>
                         </div>
                     </div>
                 ) : null}

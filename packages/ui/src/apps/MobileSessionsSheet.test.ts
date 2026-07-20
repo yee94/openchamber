@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { getMobileSessionPageSize, mergeMobileWorktreeRefreshResults } from './mobileSessionPagination';
-import { createMobileLongPressController } from './mobileLongPress';
+import { createMobileLongPressController } from '@/components/ui/mobileLongPress';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 const worktree = (path: string): WorktreeMetadata => ({

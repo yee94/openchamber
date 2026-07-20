@@ -6,6 +6,7 @@ import {
   mergeLiveSessionWithGlobalSession,
   useGlobalSessionsStore,
   refreshGlobalSessionsForDirectories,
+  syncGlobalSessionsForDirectories,
 } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -36,6 +37,12 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 import { showArchivedSessionsUndoToast } from '@/lib/sessionMutationUndo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { MobileWindowMotion } from '@/components/ui/MobileWindowMotion';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import {
+  createMobileLongPressController,
+  type MobileLongPressController,
+} from '@/components/ui/mobileLongPress';
+import { MobileDeleteWorktreeDialog } from '@/apps/MobileDeleteWorktreeDialog';
 import {
   MOBILE_SHEET_EXPANDED_SNAP,
   useMobileSheetSnap,
@@ -110,6 +117,66 @@ interface ProjectSessionGroup {
   label: string;
   worktree: WorktreeMetadata | null;
   sessions: SessionWithStatus[];
+}
+
+type MobileActionTarget =
+  | { key: string; kind: 'project'; project: ProjectEntry; worktrees: WorktreeMetadata[]; isGitRepository: boolean }
+  | { key: string; kind: 'worktree'; project: ProjectEntry; worktree: WorktreeMetadata }
+  | { key: string; kind: 'session'; session: SessionWithStatus };
+
+type LongPressHandlers = {
+  pressed: boolean;
+  onPointerDown: React.PointerEventHandler<HTMLElement>;
+  onPointerMove: React.PointerEventHandler<HTMLElement>;
+  onPointerUp: React.PointerEventHandler<HTMLElement>;
+  onPointerCancel: React.PointerEventHandler<HTMLElement>;
+  onContextMenu: React.MouseEventHandler<HTMLElement>;
+};
+
+type BaseUIHandlerEvent = {
+  preventBaseUIHandler: () => void;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components -- Pure event handler is tested directly.
+export function preventMobileSessionTouchStartBaseUIHandler(event: BaseUIHandlerEvent): void {
+  event.preventBaseUIHandler();
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- Pure event handler is tested directly.
+export function handleMobileSessionContextMenu(
+  event: React.MouseEvent<HTMLElement> & BaseUIHandlerEvent,
+  pressed: boolean,
+  onContextMenu: React.MouseEventHandler<HTMLElement>,
+): void {
+  if (!pressed) return;
+  event.preventBaseUIHandler();
+  onContextMenu(event);
+}
+
+function MobileActionButton({
+  icon,
+  label,
+  onClick,
+  destructive = false,
+}: {
+  icon: React.ComponentProps<typeof Icon>['name'];
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={destructive ? 'destructive' : 'ghost'}
+      size="default"
+      className="min-h-12 w-full justify-start gap-3 rounded-xl px-3"
+      onClick={onClick}
+      style={{ touchAction: 'manipulation' }}
+    >
+      <Icon name={icon} className="size-5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </Button>
+  );
 }
 
 function useSessionGrouping(
@@ -326,6 +393,19 @@ function UnreadIndicator({ count }: { count: number }) {
   );
 }
 
+const clearBrowserTextSelection = (): void => {
+  if (typeof window === 'undefined') return;
+  const selection = window.getSelection();
+  if (selection?.rangeCount) selection.removeAllRanges();
+};
+
+const MOBILE_LONG_PRESS_STYLE: React.CSSProperties = {
+  touchAction: 'manipulation',
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+  WebkitTouchCallout: 'none',
+};
+
 // A single session row sized for comfortable touch.
 export function SessionItem({
   session,
@@ -340,6 +420,7 @@ export function SessionItem({
   onUnshare,
   onArchive,
   needsAttention,
+  longPressHandlers,
 }: {
   session: SessionWithStatus;
   isCurrent: boolean;
@@ -353,6 +434,7 @@ export function SessionItem({
   onUnshare: () => void;
   onArchive: () => void;
   needsAttention: (sessionId: string) => boolean;
+  longPressHandlers: LongPressHandlers;
 }) {
   const { t } = useI18n();
   const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
@@ -362,10 +444,19 @@ export function SessionItem({
   return (
     <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
       <ContextMenuTrigger
+        onTouchStart={preventMobileSessionTouchStartBaseUIHandler}
+        onContextMenu={(event) => {
+          handleMobileSessionContextMenu(event, longPressHandlers.pressed, longPressHandlers.onContextMenu);
+        }}
         render={
           <button
             type="button"
             data-mobile-session-context-trigger={session.id}
+            data-mobile-long-press-trigger={`session:${session.id}`}
+            onPointerDown={longPressHandlers.onPointerDown}
+            onPointerMove={longPressHandlers.onPointerMove}
+            onPointerUp={longPressHandlers.onPointerUp}
+            onPointerCancel={longPressHandlers.onPointerCancel}
             onClick={(event) => {
               if (contextMenuOpen) {
                 event.preventDefault();
@@ -376,8 +467,10 @@ export function SessionItem({
             className={cn(
               "flex w-full min-h-[56px] items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors select-none",
               "active:bg-[var(--interactive-selection)]",
+              longPressHandlers.pressed && "bg-[var(--interactive-active)] scale-[0.99]",
               isCurrent ? "bg-[color-mix(in_srgb,var(--interactive-selection)_40%,transparent)]" : "hover:bg-[var(--interactive-hover)]"
             )}
+            style={MOBILE_LONG_PRESS_STYLE}
           />
         }
       >
@@ -552,6 +645,18 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const [rootBranchesByProject, setRootBranchesByProject] = React.useState<Map<string, string>>(new Map());
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
+  const [actionTarget, setActionTarget] = React.useState<MobileActionTarget | null>(null);
+  const [pressedActionKey, setPressedActionKey] = React.useState<string | null>(null);
+  const [worktreeToDelete, setWorktreeToDelete] = React.useState<{
+    project: ProjectEntry;
+    worktree: WorktreeMetadata;
+  } | null>(null);
+  const longPressControllerRef = React.useRef<MobileLongPressController | null>(null);
+  if (!longPressControllerRef.current) {
+    longPressControllerRef.current = createMobileLongPressController({
+      onPressedKeyChange: setPressedActionKey,
+    });
+  }
   const worktreeTargetCacheRef = React.useRef<{ git: typeof git; path: string; isGitRepository: boolean } | null>(null);
   const [worktreeTargetIsGitRepository, setWorktreeTargetIsGitRepository] = React.useState(false);
   // Project filter persists across sheet openings. The pinned sentinel shares
@@ -568,6 +673,29 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       setFilterProjectId(null);
     }
   }, [filterProjectId, hasPinnedSessions, setFilterProjectId]);
+
+  React.useEffect(() => {
+    if (open) return;
+    setActionTarget(null);
+    setWorktreeToDelete(null);
+    longPressControllerRef.current?.reset();
+  }, [open]);
+
+  React.useEffect(() => () => {
+    longPressControllerRef.current?.reset();
+  }, []);
+
+  React.useEffect(() => {
+    if (!actionTarget) return;
+    clearBrowserTextSelection();
+    const frame = window.requestAnimationFrame(clearBrowserTextSelection);
+    document.addEventListener('selectionchange', clearBrowserTextSelection);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('selectionchange', clearBrowserTextSelection);
+      clearBrowserTextSelection();
+    };
+  }, [actionTarget]);
 
   const selectedProject = React.useMemo(
     () => filterProjectId && filterProjectId !== PINNED_SESSION_FILTER_ID
@@ -714,8 +842,52 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   }, [availableWorktreesByProject, formatProjectLabel, projects, rootBranchesByProject]);
 
   const closeSessionPanel = React.useCallback(() => {
+    setActionTarget(null);
+    longPressControllerRef.current?.reset();
     setOpen(false);
   }, [setOpen]);
+
+  const closeActionMenu = () => {
+    setActionTarget(null);
+    longPressControllerRef.current?.reset();
+  };
+
+  const getLongPressHandlers = (target: MobileActionTarget): LongPressHandlers => ({
+    pressed: pressedActionKey === target.key || actionTarget?.key === target.key,
+    onPointerDown: (event) => {
+      if ((event.pointerType !== 'touch' && event.pointerType !== 'pen') || event.button !== 0) return;
+      longPressControllerRef.current?.start({
+        pointerId: event.pointerId,
+        key: target.key,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        onTrigger: () => {
+          clearBrowserTextSelection();
+          setActionTarget(target);
+        },
+      });
+    },
+    onPointerMove: (event) => {
+      longPressControllerRef.current?.move(event.pointerId, event.clientX, event.clientY);
+    },
+    onPointerUp: (event) => {
+      longPressControllerRef.current?.end(event.pointerId);
+    },
+    onPointerCancel: (event) => {
+      longPressControllerRef.current?.cancel(event.pointerId);
+    },
+    onContextMenu: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearBrowserTextSelection();
+      longPressControllerRef.current?.openFromContextMenu(target.key, () => setActionTarget(target));
+    },
+  });
+
+  const runRowClick = (key: string, action: () => void) => {
+    if (longPressControllerRef.current?.consumeClick(key)) return;
+    action();
+  };
 
   const handleSessionClick = React.useCallback((session: SessionWithStatus) => {
     closeSessionPanel();
@@ -803,6 +975,24 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     setNewWorktreeDialogOpen(true);
   }, [setActiveProjectIdOnly, worktreeTargetIsGitRepository, worktreeTargetProject]);
 
+  const startSessionDraftForDirectory = (project: ProjectEntry, directory: string) => {
+    closeActionMenu();
+    setOpen(false);
+    openNewSessionDraft({
+      selectedProjectId: project.id,
+      directoryOverride: directory,
+      preserveDirectoryOverride: true,
+    });
+  };
+
+  const syncProjectSessions = (target: Extract<MobileActionTarget, { kind: 'project' }>) => {
+    closeActionMenu();
+    void syncGlobalSessionsForDirectories(
+      [target.project.path, ...target.worktrees.map((worktree) => worktree.path)],
+      sessions,
+    );
+  };
+
   const toggleWorktreeGroup = React.useCallback((groupKey: string) => {
     setExpandedWorktreeGroups((previous) => {
       const next = new Set(previous);
@@ -842,7 +1032,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     });
   }, []);
 
-  const renderProjectGroup = React.useCallback((group: ProjectSessionGroup) => {
+  const renderProjectGroup = (group: ProjectSessionGroup) => {
     const isRoot = group.worktree === null;
     const expanded = isRoot || expandedWorktreeGroups.has(group.key);
     const visibleCount = visibleCountByGroup.get(group.key) ?? DEFAULT_GROUP_SESSION_COUNT;
@@ -853,11 +1043,42 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       && visibleCount > DEFAULT_GROUP_SESSION_COUNT;
     const branch = isRoot && selectedProject ? rootBranchesByProject.get(selectedProject.id) : null;
     const groupLabel = group.label;
+    const actionKey = isRoot
+      ? `project:${selectedProject?.id ?? group.key}`
+      : `worktree:${selectedProject?.id ?? group.key}:${group.directory}`;
+    const longPressHandlers = selectedProject
+      ? getLongPressHandlers(isRoot
+        ? {
+            key: actionKey,
+            kind: 'project',
+            project: selectedProject,
+            worktrees: projectSessionGroups.flatMap((entry) => entry.worktree ? [entry.worktree] : []),
+            isGitRepository: worktreeTargetIsGitRepository,
+          }
+        : {
+            key: actionKey,
+            kind: 'worktree',
+            project: selectedProject,
+            worktree: group.worktree!,
+          })
+      : null;
 
     return (
       <section key={group.key} className="overflow-hidden rounded-xl">
         {isRoot ? (
-          <div className="flex min-h-12 items-center gap-2 px-3 py-2 text-left">
+          <div
+            data-mobile-long-press-trigger={actionKey}
+            className={cn(
+              "flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-left transition-all select-none",
+              longPressHandlers?.pressed && "bg-[var(--interactive-active)] scale-[0.99]",
+            )}
+            onPointerDown={longPressHandlers?.onPointerDown}
+            onPointerMove={longPressHandlers?.onPointerMove}
+            onPointerUp={longPressHandlers?.onPointerUp}
+            onPointerCancel={longPressHandlers?.onPointerCancel}
+            onContextMenu={longPressHandlers?.onContextMenu}
+            style={MOBILE_LONG_PRESS_STYLE}
+          >
             <Icon name="folder-open" className="size-4 shrink-0 text-[var(--surface-mutedForeground)]" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-[14px] font-semibold text-[var(--surface-foreground)]">{groupLabel}</span>
@@ -875,13 +1096,22 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         ) : (
           <button
             type="button"
-            onClick={() => toggleWorktreeGroup(group.key)}
+            data-mobile-long-press-trigger={actionKey}
+            onClick={() => runRowClick(actionKey, () => toggleWorktreeGroup(group.key))}
+            onPointerDown={longPressHandlers?.onPointerDown}
+            onPointerMove={longPressHandlers?.onPointerMove}
+            onPointerUp={longPressHandlers?.onPointerUp}
+            onPointerCancel={longPressHandlers?.onPointerCancel}
+            onContextMenu={longPressHandlers?.onContextMenu}
             aria-expanded={expanded}
             aria-label={expanded
               ? t('sessions.sidebar.group.collapseAria', { label: groupLabel })
               : t('sessions.sidebar.group.expandAria', { label: groupLabel })}
-            className="flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
-            style={{ touchAction: 'manipulation' }}
+            className={cn(
+              "flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-all hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] select-none",
+              longPressHandlers?.pressed && "bg-[var(--interactive-active)] scale-[0.99]",
+            )}
+            style={MOBILE_LONG_PRESS_STYLE}
           >
             <Icon
               name="arrow-down-s"
@@ -904,13 +1134,14 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
                 isCurrent={session.id === currentSessionId}
                 isPinned={pinnedSessionIds.has(session.id)}
                 getSessionTitle={getSessionTitle}
-                onClick={() => handleSessionClick(session)}
+                onClick={() => runRowClick(`session:${session.id}`, () => handleSessionClick(session))}
                 onTogglePinned={() => togglePinnedSession(session.id)}
                 onShare={() => { void handleShareSession(session); }}
                 onCopyShareUrl={(url) => { void handleCopyShareUrl(url); }}
                 onUnshare={() => { void handleUnshareSession(session.id); }}
                 onArchive={() => { void handleArchiveSession(session.id); }}
                 needsAttention={needsAttention}
+                longPressHandlers={getLongPressHandlers({ key: `session:${session.id}`, kind: 'session', session })}
               />
             ))}
             {showMore || showFewer ? (
@@ -942,27 +1173,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         ) : null}
       </section>
     );
-  }, [
-    activePaginationByDirectory,
-    currentSessionId,
-    expandedWorktreeGroups,
-    getSessionTitle,
-    handleArchiveSession,
-    handleCopyShareUrl,
-    handleSessionClick,
-    handleShareSession,
-    handleUnshareSession,
-    needsAttention,
-    pinnedSessionIds,
-    rootBranchesByProject,
-    selectedProject,
-    showFewerGroupSessions,
-    showMoreGroupSessions,
-    t,
-    togglePinnedSession,
-    toggleWorktreeGroup,
-    visibleCountByGroup,
-  ]);
+  };
 
   const renderHeader = React.useCallback(() => (
     <div className="shrink-0">
@@ -1050,6 +1261,115 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     </div>
   ), [t, totalRunning, totalUnread, projects, hasPinnedSessions, filterProjectId, setFilterProjectId, formatProjectLabel, currentTheme, getProjectStatus, handleNewChat, handleNewWorktree, closeSessionPanel, worktreeTargetIsGitRepository, worktreeTargetProject, sessionSheetSnap]);
 
+  const actionTargetTitle = actionTarget?.kind === 'project'
+    ? formatProjectLabel(actionTarget.project)
+    : actionTarget?.kind === 'worktree'
+      ? actionTarget.worktree.branch || actionTarget.worktree.label || formatDirectoryName(actionTarget.worktree.path)
+      : actionTarget?.kind === 'session'
+        ? getSessionTitle(actionTarget.session)
+        : '';
+
+  const actionMenuContent = actionTarget?.kind === 'project' ? (
+    <div className="flex flex-col gap-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-mobile-session-action-sheet="project">
+      <MobileActionButton
+        icon="add"
+        label={t('sessions.sidebar.project.actions.newSession')}
+        onClick={() => startSessionDraftForDirectory(actionTarget.project, actionTarget.project.path)}
+      />
+      {actionTarget.isGitRepository ? (
+        <MobileActionButton
+          icon="node-tree"
+          label={t('sessions.sidebar.project.actions.newWorktree')}
+          onClick={() => {
+            const projectId = actionTarget.project.id;
+            closeActionMenu();
+            setActiveProjectIdOnly(projectId);
+            setWorktreeDialogProjectId(projectId);
+            setNewWorktreeDialogOpen(true);
+          }}
+        />
+      ) : null}
+      <MobileActionButton
+        icon="refresh"
+        label={t('sessions.sidebar.project.actions.syncSessions')}
+        onClick={() => syncProjectSessions(actionTarget)}
+      />
+    </div>
+  ) : actionTarget?.kind === 'worktree' ? (
+    <div className="flex flex-col gap-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-mobile-session-action-sheet="worktree">
+      <MobileActionButton
+        icon="add"
+        label={t('sessions.sidebar.project.actions.newSession')}
+        onClick={() => startSessionDraftForDirectory(actionTarget.project, actionTarget.worktree.path)}
+      />
+      <MobileActionButton
+        icon="delete-bin"
+        label={t('mobile.projectEdit.deleteWorktreeConfirmButton')}
+        destructive
+        onClick={() => {
+          const target = { project: actionTarget.project, worktree: actionTarget.worktree };
+          closeActionMenu();
+          setWorktreeToDelete(target);
+        }}
+      />
+    </div>
+  ) : actionTarget?.kind === 'session' ? (
+    <div className="flex flex-col gap-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]" data-mobile-session-action-sheet="session">
+      <MobileActionButton
+        icon={pinnedSessionIds.has(actionTarget.session.id) ? 'unpin' : 'pushpin'}
+        label={pinnedSessionIds.has(actionTarget.session.id)
+          ? t('sessions.sidebar.session.menu.unpin')
+          : t('sessions.sidebar.session.menu.pin')}
+        onClick={() => {
+          const sessionId = actionTarget.session.id;
+          closeActionMenu();
+          togglePinnedSession(sessionId);
+        }}
+      />
+      {actionTarget.session.share?.url ? (
+        <>
+          <MobileActionButton
+            icon="file-copy"
+            label={t('sessions.sidebar.session.menu.copyLink')}
+            onClick={() => {
+              const url = actionTarget.session.share?.url;
+              closeActionMenu();
+              if (url) void handleCopyShareUrl(url);
+            }}
+          />
+          <MobileActionButton
+            icon="link-unlink-m"
+            label={t('sessions.sidebar.session.menu.unshare')}
+            onClick={() => {
+              const sessionId = actionTarget.session.id;
+              closeActionMenu();
+              void handleUnshareSession(sessionId);
+            }}
+          />
+        </>
+      ) : (
+        <MobileActionButton
+          icon="share-2"
+          label={t('sessions.sidebar.session.menu.share')}
+          onClick={() => {
+            const session = actionTarget.session;
+            closeActionMenu();
+            void handleShareSession(session);
+          }}
+        />
+      )}
+      <MobileActionButton
+        icon="archive"
+        label={t('sessions.sidebar.bulkActions.archive')}
+        onClick={() => {
+          const sessionId = actionTarget.session.id;
+          closeActionMenu();
+          void handleArchiveSession(sessionId);
+        }}
+      />
+    </div>
+  ) : null;
+
   if (!isMobile) {
     return null;
   }
@@ -1101,13 +1421,14 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
                     isPinned={pinnedSessionIds.has(session.id)}
                     contextLabel={sessionContextLabel(session)}
                     getSessionTitle={getSessionTitle}
-                    onClick={() => handleSessionClick(session)}
+                    onClick={() => runRowClick(`session:${session.id}`, () => handleSessionClick(session))}
                     onTogglePinned={() => togglePinnedSession(session.id)}
                     onShare={() => { void handleShareSession(session); }}
                     onCopyShareUrl={(url) => { void handleCopyShareUrl(url); }}
                     onUnshare={() => { void handleUnshareSession(session.id); }}
                     onArchive={() => { void handleArchiveSession(session.id); }}
                     needsAttention={needsAttention}
+                    longPressHandlers={getLongPressHandlers({ key: `session:${session.id}`, kind: 'session', session })}
                   />
                 ))
               )}
@@ -1115,6 +1436,15 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
           </ScrollableOverlay>
         </div>
       </MobileWindowMotion>
+      <MobileOverlayPanel
+        open={Boolean(actionTarget)}
+        title={actionTargetTitle}
+        onClose={closeActionMenu}
+        className="select-none"
+        contentMaxHeightClassName="max-h-[min(68dvh,560px)]"
+      >
+        {actionMenuContent}
+      </MobileOverlayPanel>
       <NewWorktreeDialog
         open={newWorktreeDialogOpen}
         onOpenChange={(value) => {
@@ -1135,6 +1465,27 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
           }
         }}
       />
+      {worktreeToDelete ? (
+        <MobileDeleteWorktreeDialog
+          open
+          project={{ id: worktreeToDelete.project.id, path: worktreeToDelete.project.path }}
+          worktree={worktreeToDelete.worktree}
+          onClose={() => setWorktreeToDelete(null)}
+          onDeleted={() => {
+            const projectPath = normalize(worktreeToDelete.project.path);
+            const worktreePath = normalize(worktreeToDelete.worktree.path);
+            useSessionUIStore.setState((state) => {
+              const next = new Map(state.availableWorktreesByProject);
+              next.set(projectPath, (next.get(projectPath) ?? []).filter((entry) => normalize(entry.path) !== worktreePath));
+              return {
+                availableWorktreesByProject: next,
+                availableWorktrees: Array.from(next.values()).flat(),
+              };
+            });
+            setWorktreeToDelete(null);
+          }}
+        />
+      ) : null}
     </>
   );
 };
