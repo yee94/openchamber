@@ -132,7 +132,7 @@ import type { Part } from '@opencode-ai/sdk/v2/client';
 import { consumesImmediateCommandText, getLocalChatCommand, preservesComposerResources } from './localCommandClassifier';
 import { consumeImmediateCommandText } from './immediateCommandTextConsumption';
 import { runImmediateSessionCommand } from './immediateSessionCommandAction';
-import { admitChatInputQueueMessageAndConsumeResources, admitServerQueueMessageAndConsumeResources, attachedFilesToQueueCandidates, createServerQueueAdmissionCapture, createServerQueueAdmissionIdentity } from './queueAdmission';
+import { admitChatInputQueueMessageAndConsumeResources, admitServerQueueMessageAndConsumeResources, attachedFilesToQueueCandidates, createServerQueueAdmissionCapture, createServerQueueAdmissionIdentity, resolveQueueSendConfig } from './queueAdmission';
 import { shouldShowPermissionAutoAcceptControl, togglePermissionAutoAccept } from './permissionAutoAccept';
 import { canCompactPastedText, createPastedTextReference, getNextPastedTextReferenceIndex } from './pastedTextReferences';
 import { decorateComposerReference, materializeComposerDocument, serializeComposerDocument, validateComposerDocument, type ComposerDocument, type SessionComposerReference } from '@/composer/document';
@@ -1579,6 +1579,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (submissionBlocked || queueFrozen) return;
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId) return;
+        const sendConfig = resolveQueueSendConfig({
+            currentConfig: useConfigStore.getState(),
+            sessionID: currentSessionId,
+            selection: useSelectionStore.getState(),
+        });
 
         const initialSerialization = serializeComposerDocument(inputSnapshot.document);
         if (!initialSerialization.ok) { toast.error(t('chat.chatInput.toast.messageSendFailed')); return; }
@@ -1632,12 +1637,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         content: serialized.text,
                         composerDocument: documentToQueue,
                         composerMentions,
-                        sendConfig: currentProviderId && currentModelId ? {
-                            providerID: currentProviderId,
-                            modelID: currentModelId,
-                            agent: currentAgentName ?? undefined,
-                            variant: currentVariant ?? undefined,
-                        } : undefined,
+                        sendConfig,
                         attachmentIssues: [],
                         createdAt: identity.createdAt,
                     },
@@ -1671,12 +1671,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 composerDocument: documentToQueue,
                 composerMentions,
                 attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
-                sendConfig: currentProviderId && currentModelId ? {
-                    providerID: currentProviderId,
-                    modelID: currentModelId,
-                    agent: currentAgentName ?? undefined,
-                    variant: currentVariant ?? undefined,
-                } : undefined,
+                sendConfig,
             }),
             drafts,
             consumeDraft: (draft) => removeInlineCommentDraft(currentSessionId, draft.id),
@@ -1797,10 +1792,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (!currentSessionId && draftSubmitting) return;
 
         const capturedSendConfig = queuedOnly ? queuedMessagesToSend[0]?.sendConfig : undefined;
-        const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
-        const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
-        const agentNameToSend = capturedSendConfig?.agent ?? currentAgentName;
-        const variantToSend = capturedSendConfig?.variant ?? currentVariant;
+        const sendConfig = capturedSendConfig
+            ? { ...capturedSendConfig }
+            : resolveQueueSendConfig({
+                currentConfig: useConfigStore.getState(),
+                sessionID: currentSessionId,
+                selection: useSelectionStore.getState(),
+            });
+        const providerIdToSend = sendConfig?.providerID;
+        const modelIdToSend = sendConfig?.modelID;
+        const agentNameToSend = sendConfig?.agent;
+        const variantToSend = sendConfig?.variant;
 
         if (!providerIdToSend || !modelIdToSend) {
             console.warn('Cannot send message: provider or model not selected');

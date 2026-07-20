@@ -8,6 +8,57 @@ import type { ComposerDocument } from '@/composer/document';
 import { createUuid } from '@/lib/uuid';
 import { ascendingId } from '@/sync/message-id';
 
+export type QueueSendConfig = {
+    providerID: string;
+    modelID: string;
+    agent?: string;
+    variant?: string;
+};
+
+type QueueAdmissionCurrentConfig = {
+    currentProviderId?: string | null;
+    currentModelId?: string | null;
+    currentAgentName?: string | null;
+    currentVariant?: string | null;
+};
+
+type QueueAdmissionSelectionReader = {
+    getSessionAgentSelection: (sessionID: string) => string | null;
+    getAgentModelForSession: (sessionID: string, agentName: string) => { providerId: string; modelId: string } | null;
+    getSessionModelSelection: (sessionID: string) => { providerId: string; modelId: string } | null;
+    getAgentModelVariantForSession: (sessionID: string, agentName: string, providerID: string, modelID: string) => string | undefined;
+};
+
+const nonEmptyString = (value: string | null | undefined): string | undefined => value?.trim() || undefined;
+
+export const resolveQueueSendConfig = ({
+    currentConfig,
+    sessionID,
+    selection,
+}: {
+    currentConfig: QueueAdmissionCurrentConfig;
+    sessionID: string | null | undefined;
+    selection: QueueAdmissionSelectionReader;
+}): QueueSendConfig | undefined => {
+    const currentAgent = nonEmptyString(currentConfig.currentAgentName);
+    const agent = sessionID ? nonEmptyString(selection.getSessionAgentSelection(sessionID)) ?? currentAgent : currentAgent;
+    const agentModel = sessionID && agent ? selection.getAgentModelForSession(sessionID, agent) : null;
+    const sessionModel = sessionID ? selection.getSessionModelSelection(sessionID) : null;
+    const providerID = nonEmptyString(agentModel?.providerId) ?? nonEmptyString(sessionModel?.providerId) ?? nonEmptyString(currentConfig.currentProviderId);
+    const modelID = nonEmptyString(agentModel?.modelId) ?? nonEmptyString(sessionModel?.modelId) ?? nonEmptyString(currentConfig.currentModelId);
+    if (!providerID || !modelID) return undefined;
+
+    const variant = sessionID && agent
+        ? nonEmptyString(selection.getAgentModelVariantForSession(sessionID, agent, providerID, modelID)) ?? nonEmptyString(currentConfig.currentVariant)
+        : nonEmptyString(currentConfig.currentVariant);
+    return {
+        providerID,
+        modelID,
+        ...(agent ? { agent } : {}),
+        ...(variant ? { variant } : {}),
+    };
+};
+
 type QueueAdmissionConsumption<TDraft> = {
     admit: () => void;
     drafts: readonly TDraft[];

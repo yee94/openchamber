@@ -3,7 +3,6 @@ import { flushMessageQueuePersistence, useMessageQueueStore, queueScopeKey, type
 import { notifyConfirmedMessageSent, useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useContextStore } from '@/stores/contextStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useChildStoreManager, useScopedSessionStatusReader, useScopedSessionStatusRevision } from '@/sync/sync-context';
 import type { ScopedSessionStatus } from '@/sync/scoped-session-status';
@@ -16,6 +15,7 @@ import { buildComposerSemanticParts, dedupeDeliveryAttachments } from '@/compose
 import { queryClient } from '@/lib/queryRuntime';
 import { readInstalledSkillsSnapshot } from '@/queries/installedSkillsQueries';
 import { compileChatComposerDelivery, legacyTextToAuthoredPlan } from '@/components/chat/chatComposerDelivery';
+import { resolveQueueSendConfig } from '@/components/chat/queueAdmission';
 type SessionStatusType = ScopedSessionStatus;
 export type QueuedMessageOwnershipGate = 'blocked' | 'legacy-enabled';
 let ownershipGate: QueuedMessageOwnershipGate = 'blocked';
@@ -168,11 +168,8 @@ type Payload = NonNullable<ReturnType<typeof buildQueuedAutoSendPayload>>;
 type Resolved = { providerID: string; modelID: string; agent?: string; variant?: string };
 export const sendQueuedAutoSendPayload = (sessionId: string, payload: Payload, resolved: Resolved, options: { directory: string; delivery?: 'steer'; onSendConfirmed?: (messageID: string) => void }) => useSessionUIStore.getState().sendMessage(payload.primaryText, resolved.providerID, resolved.modelID, resolved.agent, payload.primaryAttachments, payload.agentMentionName, payload.additionalParts, resolved.variant, 'normal', { sessionId, directoryHint: options.directory, delivery: options.delivery, messageID: payload.messageID, preserveOptimisticOnAmbiguous: true, onSendConfirmed: options.onSendConfirmed });
 const resolve = (sessionID: string, captured?: QueuedMessage['sendConfig']): Resolved => {
-  const context = useContextStore.getState(); const config = useConfigStore.getState(); const selection = useSelectionStore.getState();
-  const agent = captured?.agent ?? context.getSessionAgentSelection(sessionID) ?? context.getCurrentAgent(sessionID) ?? config.currentAgentName ?? undefined;
-  const model = context.getAgentModelForSession(sessionID, agent ?? '') ?? context.getSessionModelSelection(sessionID);
-  const providerID = captured?.providerID ?? model?.providerId ?? config.currentProviderId ?? selection.lastUsedProvider?.providerID ?? ''; const modelID = captured?.modelID ?? model?.modelId ?? config.currentModelId ?? selection.lastUsedProvider?.modelID ?? '';
-  return { providerID, modelID, agent, variant: captured?.variant ?? selection.getAgentModelVariantForSession(sessionID, agent ?? '', providerID, modelID) };
+  if (captured) return { ...captured };
+  return resolveQueueSendConfig({ currentConfig: useConfigStore.getState(), sessionID, selection: useSelectionStore.getState() }) ?? { providerID: '', modelID: '' };
 };
 export const queueScopeForSession = (sessionID: string): BoundScope | null => { const directory = useSessionUIStore.getState().getDirectoryForSession(sessionID); return directory ? { state: 'bound', transportIdentity: getRuntimeTransportIdentity(), directory, sessionID } : null; };
 

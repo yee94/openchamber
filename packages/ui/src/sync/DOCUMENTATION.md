@@ -205,8 +205,8 @@ becoming the cached startup result consumed by the session coordinator.
 - Message loading status is runtime-scoped. Reactive request de-duplication is
   local to the owning directory-store lifecycle, so a remounted provider still
   commits a shared transport response into its own store.
-- Older history is user-driven pagination (`loadMore`) only. Desktop and VS Code
-  must not automatically prepend a 100-message page after initial render.
+- Older history is user-driven pagination (`loadMore`) only. Each request loads
+  a 30-message page across all surfaces.
 - Composer session mentions list only other global active sessions whose owning
   directory store is already initialized and has materialized that session's
   identity and message snapshot. Sending a mention reads that bounded owning
