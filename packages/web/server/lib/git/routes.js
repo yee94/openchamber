@@ -1,4 +1,4 @@
-export function registerGitRoutes(app, { messageQueueService = null, createRequestID = () => globalThis.crypto.randomUUID() } = {}) {
+export function registerGitRoutes(app, { messageQueueService = null, createRequestID = () => globalThis.crypto.randomUUID(), broadcastWorktreeTopologyChanged = () => {} } = {}) {
   const normalizeWorktreePath = (value) => typeof value === 'string' ? value.trim().replace(/\\/g, '/').replace(/\/+$/, '') : '';
   const lifecycleOperations = new Map();
   const acquireWorktreeLifecycleOperation = (runtimeKey, directory) => {
@@ -23,6 +23,21 @@ export function registerGitRoutes(app, { messageQueueService = null, createReque
     path: '/api/git/worktrees/queue-activation',
     body: { projectDirectory, directory },
   });
+  const notifyWorktreeTopologyChanged = (projectDirectory, directory, operation) => {
+    try {
+      broadcastWorktreeTopologyChanged({
+        type: 'openchamber:worktree-topology-changed',
+        properties: {
+          projectDirectory,
+          directory,
+          operation,
+          occurredAt: Date.now(),
+        },
+      });
+    } catch {
+      console.warn('Failed to broadcast worktree topology change');
+    }
+  };
   let gitLibraries = null;
   const getGitLibraries = async () => {
     if (!gitLibraries) {
@@ -994,12 +1009,9 @@ export function registerGitRoutes(app, { messageQueueService = null, createReque
 
       const worktrees = await getWorktrees(directory);
       res.json(worktrees);
-    } catch (error) {
-      // Worktrees are an optional feature. Avoid repeated 500s (and repeated client retries)
-      // when the directory isn't a git repo or uses shell shorthand like "~/".
-      console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
-      res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
-      res.json([]);
+    } catch {
+      console.warn('Failed to get worktree catalog');
+      res.status(503).json({ code: 'worktree_catalog_unavailable' });
     }
   });
 
@@ -1036,7 +1048,9 @@ export function registerGitRoutes(app, { messageQueueService = null, createReque
       }
 
       const queueRuntimeKey = messageQueueService?.getRuntimeKey();
-      const created = await createWorktree(directory, req.body || {});
+      const created = await createWorktree(directory, req.body || {}, {
+        onWorktreeAdded: (worktreeDirectory) => notifyWorktreeTopologyChanged(directory, worktreeDirectory, 'added'),
+      });
       if (messageQueueService) {
         try {
           await messageQueueService.markWorktreeActive({
@@ -1227,23 +1241,21 @@ export function registerGitRoutes(app, { messageQueueService = null, createReque
           throw error;
         }
 
-        if (!result) {
-          if (messageQueueService) {
-            try {
-              const worktrees = await getWorktrees(directory);
-              const target = normalizeWorktreePath(worktreeDirectory);
-              const stillExists = Array.isArray(worktrees) && worktrees.some((worktree) => normalizeWorktreePath(worktree?.path ?? worktree?.directory) === target);
-              if (!stillExists) {
-                await messageQueueService.commitWorktreeDeletion({ requestID: createRequestID(), directory: worktreeDirectory, projectDirectory: directory, token: deletionToken }, { runtimeKey: queueRuntimeKey });
-                return res.json({ success: true });
-              }
-            } catch (error) {
-              if (messageQueueService) {
-                try { await messageQueueService.rollbackWorktreeDeletion({ requestID: createRequestID(), directory: worktreeDirectory, token: deletionToken }, { runtimeKey: queueRuntimeKey }); } catch { console.warn('Failed to roll back message queue worktree deletion'); }
-              }
-              throw error;
+        let removed = Boolean(result);
+        if (!removed) {
+          try {
+            const worktrees = await getWorktrees(directory);
+            const target = normalizeWorktreePath(worktreeDirectory);
+            removed = Array.isArray(worktrees) && !worktrees.some((worktree) => normalizeWorktreePath(worktree?.path ?? worktree?.directory) === target);
+          } catch (error) {
+            if (messageQueueService) {
+              try { await messageQueueService.rollbackWorktreeDeletion({ requestID: createRequestID(), directory: worktreeDirectory, token: deletionToken }, { runtimeKey: queueRuntimeKey }); } catch { console.warn('Failed to roll back message queue worktree deletion'); }
             }
+            throw error;
           }
+        }
+
+        if (!removed) {
           if (messageQueueService) {
             try {
               await messageQueueService.rollbackWorktreeDeletion({
@@ -1257,6 +1269,8 @@ export function registerGitRoutes(app, { messageQueueService = null, createReque
           }
           return res.json({ success: false });
         }
+
+        notifyWorktreeTopologyChanged(directory, worktreeDirectory, 'removed');
 
         if (messageQueueService) {
           try {

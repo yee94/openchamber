@@ -153,6 +153,38 @@ describe("materializeSessionSnapshots", () => {
     expect(mergedPart.state?.time?.start).toBe(1000)
     expect(mergedPart.state?.time?.end).toBe(2000)
   })
+
+  test("recovery replaces fetched message metadata while retaining older local history and live parts", () => {
+    const incomplete = message("msg_2")
+    const older = userMessage("msg_1")
+    const livePart = part("prt_2", "msg_2", "text", "live output")
+    const completed = {
+      ...incomplete,
+      finish: "stop",
+      tokens: { input: 10, output: 20 },
+      time: { created: 1, completed: 2 },
+    } as Message
+    const result = materializeSessionSnapshots(
+      { message: { ses_1: [older, incomplete] }, part: { msg_2: [livePart] } },
+      "ses_1",
+      [{ info: completed, parts: [part("prt_2", "msg_2", "text", "")] }],
+      { mode: "recovery" },
+    )
+
+    expect(result.message.ses_1).toEqual([older, completed])
+    expect(result.message.ses_1[0]).toBe(older)
+    expect(result.message.ses_1[1]).toBe(completed)
+    expect(result.part.msg_2[0]).toBe(livePart)
+  })
+
+  test("recovery preserves references for equivalent fetched messages", () => {
+    const existing = message("msg_1")
+    const state = { message: { ses_1: [existing] }, part: {} }
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: { ...existing }, parts: [] }], { mode: "recovery" })
+
+    expect(result.message).toBe(state.message)
+    expect(result.messagesChanged).toBe(false)
+  })
 })
 
 describe("getSessionMaterializationStatus", () => {

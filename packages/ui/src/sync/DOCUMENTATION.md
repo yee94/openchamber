@@ -43,6 +43,10 @@ So:
 
 ## Ownership map
 
+### Worktree topology catalog reconciliation
+
+`worktreeTopologySync.ts` owns renderer-level worktree catalog reconciliation. It starts from `AppEffects`, remains shared through a realm ref-count, and skips VS Code. Event-stream ready envelopes, topology changes, registry topology changes, and deduplicated unknown session directories force per-project catalog enumeration. Successful empty results authoritatively clear that project, failed reads preserve its prior catalog, and only added worktree directories start global session synchronization. Unknown-directory suppression begins only after every registered project completes successfully for its recovery epoch; failures retain bounded retry and lifecycle/runtime changes discard stale work.
+
 | Layer / Store | Owns | Scope |
 |---|---|---|
 | child directory stores in `sync-context.tsx` | `session`, `message`, `part`, `permission`, `question`, etc. | One directory |
@@ -217,6 +221,25 @@ becoming the cached startup result consumed by the session coordinator.
   but it materializes `session.get + session.messages` only for the currently
   viewed session. Background busy/incomplete sessions wait until selection and
   continue receiving live events without fetching their bodies.
+- The client stall timer starts before SSE response headers arrive. Transport
+  activity includes SSE comments and heartbeats, iterator events, and every
+  WebSocket message frame. A transport stale watchdog reconnects after this
+  activity expires; quiet heartbeat streams remain healthy.
+- A viewed `busy` or `retry` session records message and part domain activity.
+  Fresh transport with no such activity for 60 seconds triggers one directory
+  recovery per minute. Recovery reuses reconnect materialization, so only the
+  viewed session receives `session.get + session.messages(30)`.
+- Domain activity and recovery revisions resolve only from an event's explicit
+  session identity or an indexed message identity. Orphan materialization keeps
+  its active-session fallback without affecting domain health or recovery
+  freshness. Recovery captures a monotonic per-session live revision and skips
+  its session/message commit when a newer live event arrives before HTTP settles.
+- Recovery replaces fetched-tail message metadata with the authoritative server
+  snapshot, including completion, finish, and token fields. Local messages
+  outside the bounded tail remain intact, and part merging retains live streaming
+  fields until an authoritative completed part arrives.
+- A WebSocket-to-SSE fallback enters connecting or reconnecting state. Connected
+  state publishes after the fallback SSE stream reports its real connection.
 - A successful directory status snapshot records its conservative request-start
   time. Historical assistant/tool activity that started before that boundary and
   is absent from the active-only snapshot resolves as idle. Activity created

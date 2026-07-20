@@ -47,6 +47,17 @@ import { installSkillsFromRepository } from '../skills-catalog/install.js';
 import { scanClawdHubPage } from '../skills-catalog/clawdhub/scan.js';
 import { installSkillsFromClawdHub } from '../skills-catalog/clawdhub/install.js';
 
+export const createWorktreeTopologyBroadcaster = ({ getOpenChamberEventClients, writeSseEvent }) => (event) => {
+  const clients = getOpenChamberEventClients();
+  for (const client of clients) {
+    try {
+      writeSseEvent(client, event);
+    } catch {
+      clients.delete(client);
+    }
+  }
+};
+
 export const createFeatureRoutesRuntime = (dependencies) => {
   const {
     clientReloadDelayMs,
@@ -274,7 +285,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSmallModelRoutes(app, { getSmallModelService });
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
-    registerGitRoutes(app, { messageQueueService });
+    registerGitRoutes(app, {
+      messageQueueService,
+      broadcastWorktreeTopologyChanged: createWorktreeTopologyBroadcaster({
+        getOpenChamberEventClients,
+        writeSseEvent,
+      }),
+    });
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,

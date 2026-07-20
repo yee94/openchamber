@@ -702,3 +702,248 @@ describe('git worktree queue lifecycle integration', () => {
     expect(response.body).toEqual({ success: true });
   });
 });
+
+describe('git worktree topology broadcasts', () => {
+  beforeEach(() => {
+    gitLibraries.createWorktree.mockReset();
+    gitLibraries.removeWorktree.mockReset();
+    gitLibraries.getWorktrees.mockReset();
+  });
+
+  const registerWithBroadcaster = (broadcastWorktreeTopologyChanged, messageQueueService = null) => {
+    const registry = createRouteRegistry();
+    registerGitRoutes(registry.app, { broadcastWorktreeTopologyChanged, messageQueueService, createRequestID: () => 'request-1' });
+    return registry;
+  };
+
+  it('broadcasts an added event before reporting queue activation pending', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    const queue = {
+      getRuntimeKey: vi.fn(() => 'runtime-A'),
+      markWorktreeActive: vi.fn().mockRejectedValue(new Error('queue unavailable')),
+    };
+    gitLibraries.createWorktree.mockImplementation(async (directory, input, { onWorktreeAdded }) => {
+      await onWorktreeAdded('/created-worktree');
+      return { path: '/created-worktree' };
+    });
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged, queue);
+    const response = createMockResponse();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await getRoute('POST', '/api/git/worktrees')({ query: { directory: '/repo' }, body: {} }, response);
+    } finally {
+      errorLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(503);
+    expect(broadcastWorktreeTopologyChanged).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'openchamber:worktree-topology-changed',
+      properties: expect.objectContaining({ projectDirectory: '/repo', directory: '/created-worktree', operation: 'added', occurredAt: expect.any(Number) }),
+    }));
+  });
+
+  it('waits for the fast-create service callback before broadcasting an added event', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    let onWorktreeAdded;
+    gitLibraries.createWorktree.mockImplementation(async (directory, input, options) => {
+      onWorktreeAdded = options.onWorktreeAdded;
+      return { path: '/fast-worktree', directoryCreated: true };
+    });
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged);
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/worktrees')(
+      { query: { directory: '/repo' }, body: { returnAfterDirectoryCreated: true } },
+      response,
+    );
+
+    expect(broadcastWorktreeTopologyChanged).not.toHaveBeenCalled();
+    await onWorktreeAdded('/fast-worktree');
+    expect(broadcastWorktreeTopologyChanged).toHaveBeenCalledOnce();
+  });
+
+  it('emits no topology event when worktree creation fails', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    gitLibraries.createWorktree.mockRejectedValue(new Error('git add failed'));
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged);
+    const response = createMockResponse();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await getRoute('POST', '/api/git/worktrees')({ query: { directory: '/repo' }, body: {} }, response);
+    } finally {
+      errorLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(500);
+    expect(broadcastWorktreeTopologyChanged).not.toHaveBeenCalled();
+  });
+
+  it('broadcasts a removed event before a queue deletion commit failure', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    const queue = {
+      getRuntimeKey: vi.fn(() => 'runtime-A'),
+      prepareWorktreeDeletion: vi.fn().mockResolvedValue({ token: 'deletion-token' }),
+      commitWorktreeDeletion: vi.fn().mockRejectedValue(new Error('queue unavailable')),
+    };
+    gitLibraries.removeWorktree.mockResolvedValue(true);
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged, queue);
+    const response = createMockResponse();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await getRoute('DELETE', '/api/git/worktrees')(
+        { query: { directory: '/repo' }, body: { directory: '/worktree' } },
+        response,
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(500);
+    expect(broadcastWorktreeTopologyChanged).toHaveBeenCalledWith(expect.objectContaining({
+      properties: expect.objectContaining({ projectDirectory: '/repo', directory: '/worktree', operation: 'removed' }),
+    }));
+  });
+
+  it('broadcasts a removed event when the authoritative catalog confirms a falsy removal is already absent', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    gitLibraries.removeWorktree.mockResolvedValue(false);
+    gitLibraries.getWorktrees.mockResolvedValue([{ path: '/other-worktree' }]);
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged);
+    const response = createMockResponse();
+
+    await getRoute('DELETE', '/api/git/worktrees')(
+      { query: { directory: '/repo' }, body: { directory: '/worktree' } },
+      response,
+    );
+
+    expect(response.body).toEqual({ success: true });
+    expect(broadcastWorktreeTopologyChanged).toHaveBeenCalledOnce();
+  });
+
+  it('returns a structured 503 when the worktree catalog is unavailable', async () => {
+    gitLibraries.getWorktrees.mockRejectedValue(new Error('git unavailable'));
+    const { getRoute } = registerWithBroadcaster(vi.fn());
+    const response = createMockResponse();
+    const warningLog = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      await getRoute('GET', '/api/git/worktrees')({ query: { directory: '/repo' } }, response);
+    } finally {
+      warningLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(503);
+    expect(response.body).toEqual({ code: 'worktree_catalog_unavailable' });
+  });
+
+  it('emits no removed event when the worktree is still present after a falsy removal', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    gitLibraries.removeWorktree.mockResolvedValue(false);
+    gitLibraries.getWorktrees.mockResolvedValue([{ path: '/worktree' }]);
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged);
+    const response = createMockResponse();
+
+    await getRoute('DELETE', '/api/git/worktrees')(
+      { query: { directory: '/repo' }, body: { directory: '/worktree' } },
+      response,
+    );
+
+    expect(response.body).toEqual({ success: false });
+    expect(broadcastWorktreeTopologyChanged).not.toHaveBeenCalled();
+  });
+
+  it('emits no removed event when the authoritative catalog read fails during deletion', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    const queue = {
+      getRuntimeKey: vi.fn(() => 'runtime-A'),
+      prepareWorktreeDeletion: vi.fn().mockResolvedValue({ token: 'deletion-token' }),
+      rollbackWorktreeDeletion: vi.fn(),
+      commitWorktreeDeletion: vi.fn(),
+    };
+    gitLibraries.removeWorktree.mockResolvedValue(false);
+    gitLibraries.getWorktrees.mockRejectedValue(new Error('git unavailable'));
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged, queue);
+    const response = createMockResponse();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await getRoute('DELETE', '/api/git/worktrees')(
+        { query: { directory: '/repo' }, body: { directory: '/worktree' } },
+        response,
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(500);
+    expect(broadcastWorktreeTopologyChanged).not.toHaveBeenCalled();
+  });
+
+  it('emits no removed event when queue deletion preparation fails before git removal', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn();
+    const queue = {
+      getRuntimeKey: vi.fn(() => 'runtime-A'),
+      prepareWorktreeDeletion: vi.fn().mockRejectedValue(new Error('queue unavailable')),
+    };
+    gitLibraries.removeWorktree.mockResolvedValue(true);
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged, queue);
+    const response = createMockResponse();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await getRoute('DELETE', '/api/git/worktrees')(
+        { query: { directory: '/repo' }, body: { directory: '/worktree' } },
+        response,
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(500);
+    expect(gitLibraries.removeWorktree).not.toHaveBeenCalled();
+    expect(broadcastWorktreeTopologyChanged).not.toHaveBeenCalled();
+  });
+
+  it('leaves a successful create response unchanged when the broadcaster throws', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn(() => { throw new Error('sse unavailable'); });
+    gitLibraries.createWorktree.mockImplementation(async (directory, input, { onWorktreeAdded }) => {
+      await onWorktreeAdded('/created-worktree');
+      return { path: '/created-worktree' };
+    });
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged);
+    const response = createMockResponse();
+    const warnLog = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      await getRoute('POST', '/api/git/worktrees')({ query: { directory: '/repo' }, body: {} }, response);
+    } finally {
+      warnLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ path: '/created-worktree' });
+  });
+
+  it('leaves a successful delete response unchanged when the broadcaster throws', async () => {
+    const broadcastWorktreeTopologyChanged = vi.fn(() => { throw new Error('sse unavailable'); });
+    gitLibraries.removeWorktree.mockResolvedValue(true);
+    const { getRoute } = registerWithBroadcaster(broadcastWorktreeTopologyChanged);
+    const response = createMockResponse();
+    const warnLog = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      await getRoute('DELETE', '/api/git/worktrees')(
+        { query: { directory: '/repo' }, body: { directory: '/worktree' } },
+        response,
+      );
+    } finally {
+      warnLog.mockRestore();
+    }
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ success: true });
+  });
+});

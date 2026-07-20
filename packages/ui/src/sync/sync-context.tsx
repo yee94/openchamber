@@ -232,8 +232,10 @@ const SESSION_MATERIALIZATION_MESSAGE_LIMIT = 30
 const RECONNECT_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const ACTIVE_SESSION_WATCHDOG_INTERVAL_MS = 5_000
 const ACTIVE_SESSION_STATUS_POLL_INTERVAL_MS = 5_000
-const ACTIVE_SESSION_STALE_EVENT_MS = 20_000
+const ACTIVE_SESSION_STALE_EVENT_MS = 40_000
 const ACTIVE_SESSION_FULL_RESYNC_COOLDOWN_MS = 15_000
+const ACTIVE_SESSION_DOMAIN_STALE_MS = 60_000
+const ACTIVE_SESSION_DOMAIN_RECOVERY_COOLDOWN_MS = 60_000
 const requestSignature = (items: Array<{ id: string }> | undefined): string => {
   if (!items || items.length === 0) return ""
   return items
@@ -644,6 +646,34 @@ export function shouldTriggerStaleResync(
   return true
 }
 
+export function shouldTriggerDomainRecovery({
+  isViewed,
+  status,
+  lastTransportActivityAt,
+  lastDomainActivityAt,
+  lastFullResyncAt,
+  now,
+  transportStaleThresholdMs = ACTIVE_SESSION_STALE_EVENT_MS,
+  domainStaleThresholdMs = ACTIVE_SESSION_DOMAIN_STALE_MS,
+  recoveryCooldownMs = ACTIVE_SESSION_DOMAIN_RECOVERY_COOLDOWN_MS,
+}: {
+  isViewed: boolean
+  status: SessionStatus | undefined
+  lastTransportActivityAt: number
+  lastDomainActivityAt: number
+  lastFullResyncAt: number
+  now: number
+  transportStaleThresholdMs?: number
+  domainStaleThresholdMs?: number
+  recoveryCooldownMs?: number
+}): boolean {
+  if (!isViewed || (status?.type !== "busy" && status?.type !== "retry")) return false
+  if (lastTransportActivityAt <= 0 || now - lastTransportActivityAt >= transportStaleThresholdMs) return false
+  if (lastDomainActivityAt <= 0 || now - lastDomainActivityAt < domainStaleThresholdMs) return false
+  if (now - lastFullResyncAt < recoveryCooldownMs) return false
+  return true
+}
+
 type EventRoutingIndex = {
   sessionDirectoryById: Map<string, string>
   messageSessionById: Map<string, string>
@@ -1047,6 +1077,34 @@ const resolveMaterializationSessionID = (
   return undefined
 }
 
+export function resolveStrictDomainSessionID(
+  payload: Event,
+  messageSessionById: ReadonlyMap<string, string>,
+): string | undefined {
+  const sessionID = getSessionIdFromPayload(payload)
+    ?? (payload.type === "session.deleted"
+      ? (payload.properties as { info?: { id?: string } }).info?.id
+      : undefined)
+  if (sessionID) return sessionID
+  const messageID = getMessageIdFromPayload(payload)
+  return messageID ? messageSessionById.get(messageID) : undefined
+}
+
+export function isLiveRevisionCurrent(capturedRevision: number, currentRevision: number): boolean {
+  return capturedRevision === currentRevision
+}
+
+const isSnapshotRevisionEvent = (payload: Event): boolean => (
+  payload.type === "session.created"
+  || payload.type === "session.updated"
+  || payload.type === "session.deleted"
+  || payload.type === "message.updated"
+  || payload.type === "message.removed"
+  || payload.type === "message.part.updated"
+  || payload.type === "message.part.removed"
+  || payload.type === "message.part.delta"
+)
+
 const updateRoutingIndexFromEvent = (
   routingIndex: EventRoutingIndex,
   directory: string,
@@ -1315,6 +1373,7 @@ async function resyncDirectoryAfterReconnect(
   store: StoreApi<DirectoryStore>,
   routingIndex: EventRoutingIndex,
   reason: SessionMaterializationReason,
+  getLiveRevision: (sessionID: string) => number,
 ) {
   const current = store.getState()
   const candidateSessionIds = getActiveSessionCandidateIds(directory, current)
@@ -1330,6 +1389,7 @@ async function resyncDirectoryAfterReconnect(
 
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
   await Promise.all(materializationSessionIds.map(async (sessionId) => {
+    const capturedRevision = getLiveRevision(sessionId)
     syncDebug.recovery.materializing({ reason, directory, sessionID: sessionId })
     const [sessionResponse, messageResponse] = await Promise.all([
       retry(async () => {
@@ -1346,6 +1406,7 @@ async function resyncDirectoryAfterReconnect(
     const session = sessionResponse?.data
     const records = messageResponse?.data
     if (!session || !records) return
+    if (!isLiveRevisionCurrent(capturedRevision, getLiveRevision(sessionId))) return
     const cursor = messageResponse.response?.headers?.get?.("x-next-cursor") ?? undefined
     setSessionPrefetch({
       directory,
@@ -1388,7 +1449,7 @@ async function resyncDirectoryAfterReconnect(
           info: stripMessageDiffSnapshots(record.info),
           parts: record.parts ?? [],
         })),
-        { skipPartTypes: RECONNECT_SKIP_PARTS },
+        { skipPartTypes: RECONNECT_SKIP_PARTS, mode: "recovery" },
       )
       const messagesChanged = materialized.messagesChanged
       const partsChanged = materialized.partsChanged
@@ -1797,6 +1858,8 @@ export function SyncProvider(props: {
   if (!routingIndexRef.current) routingIndexRef.current = createEventRoutingIndex()
   const routingIndex = routingIndexRef.current
   const lastStreamActivityAtRef = useRef(0)
+  const lastDomainActivityAtBySessionRef = useRef(new Map<string, number>())
+  const liveRevisionBySessionRef = useRef(new Map<string, number>())
   const lastStatusPollAtByDirectoryRef = useRef(new Map<string, number>())
   const lastFullResyncAtByDirectoryRef = useRef(new Map<string, number>())
   const resyncingDirectoriesRef = useRef(new Set<string>())
@@ -1824,7 +1887,9 @@ export function SyncProvider(props: {
 
     lastFullResyncAtByDirectoryRef.current.set(directory, Date.now())
     resyncing.add(directory)
-    void resyncDirectoryAfterReconnect(directory, store, routingIndex, reason)
+    void resyncDirectoryAfterReconnect(directory, store, routingIndex, reason, (sessionID) => (
+      liveRevisionBySessionRef.current.get(viewedSessionKey(directory, sessionID)) ?? 0
+    ))
       .catch(() => {
         // Transient failure — the watchdog, next SSE event, or reconnect will catch up.
       })
@@ -1923,13 +1988,38 @@ export function SyncProvider(props: {
         return resolveDirectoryFromRoutingIndex(routingIndex, directory, payload, childStores)
       },
       onEvent: (directory, payload) => {
-        // Track ALL stream activity (including heartbeats) as proof of
-        // connection health. The watchdog stale check uses this to distinguish
-        // a genuinely dead stream (no heartbeats for 20s) from a quiet-but-
-        // connected session that is only receiving heartbeats. Excluding
-        // heartbeats here caused issue #1656: the stale timer fired for any
-        // quiet session, triggering redundant full resyncs every ~15s.
-        lastStreamActivityAtRef.current = Date.now()
+        const sessionID = resolveStrictDomainSessionID(payload, routingIndex.messageSessionById) ?? null
+        if (sessionID && isSnapshotRevisionEvent(payload)) {
+          const revisionKey = viewedSessionKey(directory, sessionID)
+          liveRevisionBySessionRef.current.set(revisionKey, (liveRevisionBySessionRef.current.get(revisionKey) ?? 0) + 1)
+        }
+        if (
+          sessionID
+          && directory === _activeDirectory
+          && sessionID === _activeSession
+          && (payload.type === "message.updated"
+            || payload.type === "message.removed"
+            || payload.type === "message.part.updated"
+            || payload.type === "message.part.removed"
+            || payload.type === "message.part.delta")
+        ) {
+          lastDomainActivityAtBySessionRef.current.set(viewedSessionKey(directory, sessionID), Date.now())
+        }
+        if (sessionID && directory === _activeDirectory && sessionID === _activeSession && payload.type === "session.status") {
+          const status = (payload.properties as { status?: SessionStatus }).status
+          if (status?.type === "busy" || status?.type === "retry") {
+            const key = viewedSessionKey(directory, sessionID)
+            if (!lastDomainActivityAtBySessionRef.current.has(key)) {
+              lastDomainActivityAtBySessionRef.current.set(key, Date.now())
+            }
+          }
+          if (status?.type === "idle") {
+            lastDomainActivityAtBySessionRef.current.delete(viewedSessionKey(directory, sessionID))
+          }
+        }
+        if (sessionID && (payload.type === "session.idle" || payload.type === "session.deleted")) {
+          lastDomainActivityAtBySessionRef.current.delete(viewedSessionKey(directory, sessionID))
+        }
         dispatchVSCodeRuntimeNotificationEvent(directory, payload)
         if (payload.type === "installation.update-available") {
           const version = typeof (payload.properties as { version?: unknown })?.version === "string"
@@ -1940,6 +2030,9 @@ export function SyncProvider(props: {
           }
         }
         handleEvent(directory, payload, childStores, routingIndex)
+      },
+      onTransportActivity: () => {
+        lastStreamActivityAtRef.current = Date.now()
       },
       onReconnect: () => {
         console.warn("[refresh-debug] stream-reconnect", {
@@ -1979,10 +2072,10 @@ export function SyncProvider(props: {
         console.warn("[refresh-debug] stream-transport-switch")
         // Transport changes are gap-prone in real networks. Treat them like a
         // reconnect and refresh active session snapshots from HTTP.
+        const { hasEverConnected } = useConfigStore.getState()
         useConfigStore.setState({
-          isConnected: true,
-          hasEverConnected: true,
-          connectionPhase: "connected",
+          isConnected: false,
+          connectionPhase: hasEverConnected ? "reconnecting" : "connecting",
         })
         for (const dir of childStores.children.keys()) {
           triggerDirectoryResync(dir, "transport-switch")
@@ -2050,6 +2143,30 @@ export function SyncProvider(props: {
             if (shouldTriggerStaleResync(lastStreamActivityAtRef.current, lastFullResyncAt, now)) {
               pipelineReconnectRef.current?.("active_stream_stale")
               triggerDirectoryResync(directory, "stale-status-resync")
+            }
+
+            const viewed = getViewedSessionMaterializationTarget(directory)
+            if (!viewed) continue
+            const viewedStatus = state.session_status?.[viewed.sessionId]
+            const domainKey = viewedSessionKey(directory, viewed.sessionId)
+            const lastDomainActivityAt = lastDomainActivityAtBySessionRef.current.get(domainKey)
+            if ((viewedStatus?.type === "busy" || viewedStatus?.type === "retry") && !lastDomainActivityAt) {
+              lastDomainActivityAtBySessionRef.current.set(domainKey, now)
+              continue
+            }
+            if (viewedStatus?.type === "idle" || !viewedStatus) {
+              lastDomainActivityAtBySessionRef.current.delete(domainKey)
+              continue
+            }
+            if (shouldTriggerDomainRecovery({
+              isViewed: true,
+              status: viewedStatus,
+              lastTransportActivityAt: lastStreamActivityAtRef.current,
+              lastDomainActivityAt: lastDomainActivityAt ?? 0,
+              lastFullResyncAt,
+              now,
+            })) {
+              triggerDirectoryResync(directory, "domain-stale-resync")
             }
 
           }

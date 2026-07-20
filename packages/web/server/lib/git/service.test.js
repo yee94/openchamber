@@ -2,13 +2,14 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import simpleGit from 'simple-git';
 
 import {
   checkoutCommit,
   cherryPick,
   createWorktree,
+  getWorktreeBootstrapStatus,
   getStatus,
   removeWorktree,
   resolvePrimaryWorktreeRoot,
@@ -359,6 +360,130 @@ describe('createWorktree', () => {
       } else {
         process.env.XDG_DATA_HOME = previousXdgDataHome;
       }
+    }
+  });
+
+  // Create a committed main repo so worktree add can resolve HEAD.
+  const createCommittedRepo = () => {
+    const repo = createTempDir();
+    runGit(repo, ['init', '-b', 'main']);
+    runGit(repo, ['config', 'user.email', 'test@example.com']);
+    runGit(repo, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
+    runGit(repo, ['add', 'README.md']);
+    runGit(repo, ['commit', '-m', 'Initial commit']);
+    const projectID = runGit(repo, ['rev-list', '--max-parents=0', '--all']).trim();
+    return { repo, projectID };
+  };
+
+  const withDataHome = () => {
+    const dataHome = createTempDir();
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = dataHome;
+    return { dataHome, restore: () => {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    } };
+  };
+
+  it('invokes the added callback once after a normal git worktree add succeeds', async () => {
+    if (!canRunGit()) return;
+
+    const { dataHome, restore } = withDataHome();
+    try {
+      const { repo, projectID } = createCommittedRepo();
+      const callback = vi.fn();
+
+      const created = await createWorktree(repo, { worktreeName: 'normal-add', branchName: 'feature/normal-add' }, { onWorktreeAdded: callback });
+
+      expect(created.path).toBeTruthy();
+      expect(callback).toHaveBeenCalledOnce();
+      expect(callback).toHaveBeenCalledWith(created.path);
+
+      // The worktree must actually exist on disk and in the git worktree catalog.
+      expect(fs.existsSync(created.path)).toBe(true);
+      const listed = runGit(repo, ['worktree', 'list', '--porcelain']);
+      expect(listed).toContain(created.path);
+      const expectedRoot = path.join(dataHome, 'opencode', 'worktree', projectID, 'normal-add');
+      expect(expectedRoot).toBe(created.path);
+    } finally {
+      restore();
+    }
+  });
+
+  it('defers the added callback for fast create until the background git worktree add succeeds', async () => {
+    if (!canRunGit()) return;
+
+    const { restore } = withDataHome();
+    try {
+      const { repo } = createCommittedRepo();
+      // Resolve the callback from the background attach so the test can observe ordering.
+      let resolveAttached;
+      const attached = new Promise((resolve) => { resolveAttached = resolve; });
+      const callback = vi.fn((directory) => { resolveAttached(directory); });
+
+      const created = await createWorktree(repo, {
+        worktreeName: 'fast-add',
+        branchName: 'feature/fast-add',
+        returnAfterDirectoryCreated: true,
+      }, { onWorktreeAdded: callback });
+
+      // Fast create returns before the background git worktree add runs.
+      expect(created.directoryCreated).toBe(true);
+      expect(callback).not.toHaveBeenCalled();
+      // Directory exists but the git worktree is not registered yet.
+      expect(fs.existsSync(created.path)).toBe(true);
+      expect(runGit(repo, ['worktree', 'list', '--porcelain'])).not.toContain(created.path);
+
+      const attachedDirectory = await attached;
+      // Background add succeeded: callback fired exactly once with the candidate directory.
+      expect(callback).toHaveBeenCalledOnce();
+      expect(attachedDirectory).toBe(created.path);
+      expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain(created.path);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not invoke the added callback for fast create when the background git worktree add fails', async () => {
+    if (!canRunGit()) return;
+
+    const { restore } = withDataHome();
+    try {
+      const { repo } = createCommittedRepo();
+      const callback = vi.fn();
+
+      // Preflight passes: the branch does not exist yet and is not checked out anywhere.
+      const created = await createWorktree(repo, {
+        worktreeName: 'fast-fail',
+        branchName: 'feature/fast-fail',
+        returnAfterDirectoryCreated: true,
+      }, { onWorktreeAdded: callback });
+
+      expect(created.directoryCreated).toBe(true);
+      expect(callback).not.toHaveBeenCalled();
+
+      // Poison the background add: create the branch on the primary repo after fast create
+      // returned but before the background `git worktree add -b feature/fast-fail` runs. The
+      // synchronous execFileSync below completes while the background attach is still awaiting
+      // its earlier async resolve/context steps, so the background add later fails with
+      // "branch already exists" without ever invoking the callback.
+      runGit(repo, ['branch', 'feature/fast-fail']);
+
+      // Wait for the background attach to settle on a failed bootstrap state.
+      await vi.waitFor(async () => {
+        const status = await getWorktreeBootstrapStatus(created.path);
+        expect(status.status).toBe('failed');
+      });
+
+      expect(callback).not.toHaveBeenCalled();
+      // The failed candidate must not be registered as a git worktree.
+      expect(runGit(repo, ['worktree', 'list', '--porcelain'])).not.toContain(created.path);
+    } finally {
+      restore();
     }
   });
 });

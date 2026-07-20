@@ -12,6 +12,7 @@ import { setExternallyViewedSession } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { useWorktreeOrderSync } from '@/sync/worktree-order-sync';
 import { restoreWebviewZoomFactor } from '@/lib/webviewZoom';
+import { startWorktreeTopologySync } from '@/lib/worktrees/worktreeTopologySync';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -38,6 +39,8 @@ const SyncOptimisticBridge: React.FC = () => {
       (input) => confirmRef.current(input),
     );
   }, []);
+
+  React.useEffect(() => startWorktreeTopologySync(), []);
 
   return null;
 };

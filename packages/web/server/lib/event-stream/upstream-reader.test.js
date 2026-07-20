@@ -139,6 +139,85 @@ describe('createUpstreamSseReader', () => {
     expect(reader.getLastEventId()).toBe('evt-2');
   });
 
+  it('reconnects when empty chunks arrive after the upstream stall timeout begins', async () => {
+    const disconnects = [];
+    let attempt = 0;
+    let reader;
+
+    reader = createUpstreamSseReader({
+      buildUrl: () => 'http://127.0.0.1:4096/global/event',
+      stallTimeoutMs: 10,
+      reconnectDelayMs: 0,
+      fetchImpl: async (_url, options) => {
+        attempt += 1;
+        if (attempt === 1) {
+          return createSseResponse({
+            signal: options.signal,
+            holdOpen: true,
+            blocks: ['', ''],
+          });
+        }
+        return createSseResponse({
+          signal: options.signal,
+          blocks: ['id: evt-1\ndata: {"type":"server.connected","properties":{}}\n\n'],
+        });
+      },
+      onDisconnect(event) {
+        disconnects.push(event.reason);
+      },
+      onEvent() {
+        reader.stop();
+      },
+    });
+
+    await reader.start();
+
+    expect(attempt).toBe(2);
+    expect(disconnects).toContain('upstream_stalled');
+  });
+
+  it('reconnects after a pending upstream fetch exceeds the connection timeout', async () => {
+    const disconnects = [];
+    const fetchLastEventIds = [];
+    let attempt = 0;
+    let reader;
+
+    reader = createUpstreamSseReader({
+      buildUrl: () => 'http://127.0.0.1:4096/global/event',
+      connectTimeoutMs: 10,
+      reconnectDelayMs: 0,
+      fetchImpl: (_url, options) => {
+        attempt += 1;
+        fetchLastEventIds.push(options.headers['Last-Event-ID'] ?? null);
+        if (attempt === 1) {
+          return new Promise((_resolve, reject) => {
+            options.signal.addEventListener('abort', () => {
+              const error = new Error('Aborted');
+              error.name = 'AbortError';
+              reject(error);
+            }, { once: true });
+          });
+        }
+        return Promise.resolve(createSseResponse({
+          signal: options.signal,
+          blocks: ['id: evt-1\ndata: {"type":"server.connected","properties":{}}\n\n'],
+        }));
+      },
+      onDisconnect(event) {
+        disconnects.push(event.reason);
+      },
+      onEvent() {
+        reader.stop();
+      },
+    });
+
+    await reader.start();
+
+    expect(attempt).toBe(2);
+    expect(fetchLastEventIds).toEqual([null, null]);
+    expect(disconnects).toContain('upstream_connect_timeout');
+  });
+
   it('resolves the stall timeout for each upstream read window', async () => {
     const events = [];
     let attempt = 0;
@@ -270,6 +349,32 @@ describe('createUpstreamSseReader', () => {
     await reader.start();
 
     expect(attempt).toBe(2);
+    expect(tracked.getListenerCount()).toBe(0);
+  });
+
+  it('stops a pending upstream fetch and removes abort listeners', async () => {
+    const tracked = createTrackedSignal();
+    let fetchStarted = false;
+    const reader = createUpstreamSseReader({
+      buildUrl: () => 'http://127.0.0.1:4096/global/event',
+      signal: tracked.signal,
+      fetchImpl: (_url, options) => new Promise((_resolve, reject) => {
+        fetchStarted = true;
+        options.signal.addEventListener('abort', () => {
+          const error = new Error('Aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }, { once: true });
+      }),
+    });
+
+    const running = reader.start();
+    await Promise.resolve();
+    expect(fetchStarted).toBe(true);
+
+    reader.stop();
+    await running;
+
     expect(tracked.getListenerCount()).toBe(0);
   });
 });

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createWorktreeTopologyBroadcaster } from './feature-routes-runtime.js';
 
 describe('feature routes runtime composition', () => {
   it('registers the managed scheduled-task tool route with its required dependencies', async () => {
@@ -14,5 +15,23 @@ describe('feature routes runtime composition', () => {
     expect(source).toContain("import { registerMessageQueueRoutes } from '../message-queue/routes.js';");
     expect(source).toMatch(/const \{[\s\S]*messageQueueService,[\s\S]*\} = routeDependencies;/);
     expect(source).toContain('registerMessageQueueRoutes(app, { messageQueueService, messageQueueRuntime });');
+  });
+
+  it('removes broken SSE clients while continuing worktree topology broadcasts', () => {
+    const brokenClient = {};
+    const healthyClient = {};
+    const clients = new Set([brokenClient, healthyClient]);
+    const writeSseEvent = vi.fn((client) => {
+      if (client === brokenClient) throw new Error('closed stream');
+    });
+    const broadcast = createWorktreeTopologyBroadcaster({
+      getOpenChamberEventClients: () => clients,
+      writeSseEvent,
+    });
+
+    broadcast({ type: 'openchamber:worktree-topology-changed', properties: {} });
+
+    expect(clients).toEqual(new Set([healthyClient]));
+    expect(writeSseEvent).toHaveBeenCalledTimes(2);
   });
 });

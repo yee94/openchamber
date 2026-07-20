@@ -82,6 +82,59 @@ describe('OpenCode proxy SSE forwarding', () => {
     expect(seenAuthorization).toBe('Bearer test-token');
   });
 
+  it('returns 504 when the upstream SSE response headers exceed the connection timeout', async () => {
+    const upstream = express();
+    upstream.get('/global/event', (_req, _res) => {});
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      SSE_UPSTREAM_CONNECT_TIMEOUT_MS: 25,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+    });
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/global/event`, {
+      signal: AbortSignal.timeout(2000),
+    });
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toMatchObject({ error: 'OpenCode upstream timed out' });
+  });
+
+  it('ends an established SSE response when upstream remains idle', async () => {
+    const upstream = express();
+    upstream.get('/global/event', (_req, res) => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.flushHeaders();
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      SSE_UPSTREAM_STALL_TIMEOUT_MS: 25,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+    });
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/global/event`, {
+      signal: AbortSignal.timeout(2000),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('');
+  });
+
   it('holds a request through OpenCode warmup and succeeds once ready (no 503/backoff)', async () => {
     const upstream = express();
     upstream.get('/config/providers', (_req, res) => {

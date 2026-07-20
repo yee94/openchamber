@@ -15,7 +15,9 @@ This module contains the OpenChamber message-stream WebSocket protocol and runti
 - `packages/web/server/lib/event-stream/upstream-reader.test.js`: unit tests for upstream SSE reader behavior.
 - `packages/web/server/lib/event-stream/runtime.test.js`: unit tests for runtime-side broadcaster behavior.
 
-## Public exports
+## Module direct exports
+
+The following APIs are exported by their owning modules. `event-stream/index.js` aggregates `createGlobalUiEventBroadcaster`, `createMessageStreamWsRuntime`, `createGlobalMessageStreamHub`, `DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS`, `DEFAULT_UPSTREAM_STALL_TIMEOUT_MS`, and `UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS`.
 
 ### Protocol helpers
 - `MESSAGE_STREAM_GLOBAL_WS_PATH`: `/api/global/event/ws`
@@ -32,6 +34,7 @@ This module contains the OpenChamber message-stream WebSocket protocol and runti
 
 ### Upstream reader helpers
 - `DEFAULT_UPSTREAM_STALL_TIMEOUT_MS`: default idle timeout before an attached upstream SSE fetch is aborted for reconnect.
+- `DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS`: default response-header timeout before an upstream SSE fetch is aborted for reconnect.
 - `DEFAULT_UPSTREAM_RECONNECT_DELAY_MS`: default delay between upstream reconnect attempts.
 - `createUpstreamSseReader(...)`: creates a start/stop reader for OpenCode SSE streams. The reader parses SSE blocks, tracks the latest `Last-Event-ID`, reconnects after closed or stalled upstream streams, and reports events through callbacks.
 
@@ -41,7 +44,8 @@ This module contains the OpenChamber message-stream WebSocket protocol and runti
 - The web server creates one shared global message-stream hub. OpenCode watcher side effects and global WS clients subscribe to that hub, so there is one upstream `/global/event` SSE reader for both server-side processing and browser fan-out.
 - The global hub keeps a bounded replay buffer keyed by SSE `eventId` so reconnecting browser clients can receive buffered events after their requested `Last-Event-ID`.
 - Directory WS clients still attach one upstream `/event?directory=...` SSE reader per connection because directory streams are scoped.
-- If an upstream SSE stream stalls after the browser WS is already ready, the reader aborts that upstream fetch and reconnects upstream with `Last-Event-ID`, keeping the browser WS alive when recovery is fast.
+- If an upstream SSE connection delays response headers or an attached stream stalls, the reader aborts that upstream fetch and reconnects upstream with `Last-Event-ID`, keeping the browser WS alive when recovery is fast.
+- Direct SSE proxy timing uses a 10-second downstream heartbeat, a 20-second upstream idle timeout, a 30-second client reconnect window, and a 40-second transport stale threshold. This order lets upstream recovery end the downstream response before client and transport liveness recovery activate.
 - When the shared global upstream reconnects after it was previously ready, the global WS bridge sends a fresh `ready` frame to already-ready browser clients. The browser treats this as a reconnect edge and can run scoped state repair without requiring the browser WS to close.
 - Health checks are reserved for initial upstream connect failures and explicit upstream-unavailable responses, not for ordinary stall recovery on an already-established stream.
 - Global synthetic events such as `openchamber:session-status`, `openchamber:session-activity`, `openchamber:notification`, and `openchamber:heartbeat` are preserved on the WS path, but heartbeat frames are emitted only while an upstream SSE stream is actively attached.

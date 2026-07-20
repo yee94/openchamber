@@ -1,6 +1,7 @@
 import { parseSseEventEnvelope } from './protocol.js';
 
 export const DEFAULT_UPSTREAM_STALL_TIMEOUT_MS = 20_000;
+export const DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS = 15_000;
 export const UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS = DEFAULT_UPSTREAM_STALL_TIMEOUT_MS * 3;
 export const DEFAULT_UPSTREAM_RECONNECT_DELAY_MS = 250;
 
@@ -52,6 +53,7 @@ export function createUpstreamSseReader({
   parseBlock = parseSseEventEnvelope,
   initialLastEventId = '',
   signal,
+  connectTimeoutMs = DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS,
   stallTimeoutMs = DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
   reconnectDelayMs = DEFAULT_UPSTREAM_RECONNECT_DELAY_MS,
   onEvent,
@@ -100,7 +102,25 @@ export function createUpstreamSseReader({
         signal?.addEventListener('abort', abortActive, { once: true });
 
         let abortReason = null;
+        let connectTimer = null;
         let stallTimer = null;
+        const clearConnectTimer = () => {
+          if (connectTimer) {
+            clearTimeout(connectTimer);
+            connectTimer = null;
+          }
+        };
+        const startConnectTimer = () => {
+          const currentConnectTimeoutMs = resolveTimeoutMs(connectTimeoutMs, DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS);
+          if (currentConnectTimeoutMs <= 0) {
+            return;
+          }
+
+          connectTimer = setTimeout(() => {
+            abortReason = 'upstream_connect_timeout';
+            controller.abort();
+          }, currentConnectTimeoutMs);
+        };
         const clearStallTimer = () => {
           if (stallTimer) {
             clearTimeout(stallTimer);
@@ -132,10 +152,16 @@ export function createUpstreamSseReader({
             headers['Last-Event-ID'] = lastEventId;
           }
 
-          const response = await fetchImpl(url.toString(), {
-            headers,
-            signal: controller.signal,
-          });
+          startConnectTimer();
+          let response;
+          try {
+            response = await fetchImpl(url.toString(), {
+              headers,
+              signal: controller.signal,
+            });
+          } finally {
+            clearConnectTimer();
+          }
 
           if (!response?.ok || !response.body) {
             onError?.({
@@ -160,6 +186,10 @@ export function createUpstreamSseReader({
             const { value, done } = await reader.read();
             if (done) {
               break;
+            }
+
+            if (!value?.length) {
+              continue;
             }
 
             resetStallTimer();
@@ -205,13 +235,14 @@ export function createUpstreamSseReader({
             }
           }
         } catch (error) {
-          if (!stopped && !signal?.aborted && abortReason !== 'upstream_stalled') {
+          if (!stopped && !signal?.aborted && abortReason !== 'upstream_stalled' && abortReason !== 'upstream_connect_timeout') {
             onError?.({
               type: 'stream_error',
               error,
             });
           }
         } finally {
+          clearConnectTimer();
           clearStallTimer();
           signal?.removeEventListener('abort', abortActive);
           if (activeController === controller) {
